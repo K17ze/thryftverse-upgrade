@@ -37,6 +37,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { searchListingsFromApi } from '../services/feedApi';
 import { friendlyBackendError } from '../services/listingMapper';
 import { ProductAnalytics } from '../platform/product/productAnalytics';
+import { useSavedSearchAlerts } from '../hooks/useSavedSearchAlerts';
 
 /* ── New Discover Components ── */
 import { HeroCarousel, HeroItem } from '../components/discover/HeroCarousel';
@@ -82,6 +83,11 @@ const TOP_SEARCH_CARDS = [
   { label: 'Vintage', color: '#FADBD8', textColor: '#6E2C3D', image: '' },
   { label: 'Techwear', color: '#D6EAF8', textColor: '#1B4F72', image: '' },
   { label: 'Minimal', color: '#E8DAEF', textColor: '#4A235A', image: '' },
+];
+
+// Trending searches — curated popular terms shown in the focus state (Depop/Vinted pattern)
+const TRENDING_SEARCHES: string[] = [
+  'Nike', 'Vintage', 'Y2K', 'Streetwear', 'Designer', 'Minimal', 'Summer', 'Denim',
 ];
 
 /* ── Editorial seed data ── */
@@ -229,9 +235,16 @@ export default function GlobalSearchScreen({ navigation }: Props) {
   const updateBrowseFilters = useStore((state) => state.updateBrowseFilters);
   const resetBrowseFilters = useStore((state) => state.resetBrowseFilters);
   const wishlistIds = useStore((state) => state.wishlist);
+  const savedSearches = useStore((state) => state.savedSearches);
+  const addSavedSearch = useStore((state) => state.addSavedSearch);
+  const removeSavedSearch = useStore((state) => state.removeSavedSearch);
+  const toggleSavedSearchAlerts = useStore((state) => state.toggleSavedSearchAlerts);
   const { listings, source, isSyncing, lastError, refreshListings } = useBackendData();
   const { formatFromFiat } = useFormattedPrice();
   const focusProgress = useSharedValue(0);
+
+  // Evaluate saved search alerts against current listings
+  useSavedSearchAlerts();
 
   const normalizedQuery = query.trim().toLowerCase();
   const queryTokens = useMemo(
@@ -474,6 +487,42 @@ export default function GlobalSearchScreen({ navigation }: Props) {
     await AsyncStorage.removeItem(RECENT_SEARCHES_KEY);
   };
 
+  // Live search suggestions — derived from listing titles, brands, and categories
+  // that partially match the current query. Shown as a dropdown while typing.
+  const searchSuggestions = useMemo(() => {
+    const partial = query.trim().toLowerCase();
+    if (partial.length < 2 || !isSearchFocused) return [];
+
+    const brandSet = new Set<string>();
+    const categorySet = new Set<string>();
+    const titleSet = new Set<string>();
+
+    for (const listing of listings) {
+      const brand = (listing.brand ?? '').trim();
+      if (brand && brand.toLowerCase().includes(partial)) brandSet.add(brand);
+
+      const category = (listing.category ?? '').trim();
+      if (category && category.toLowerCase().includes(partial)) categorySet.add(category);
+
+      const title = (listing.title ?? '').trim();
+      if (title && title.toLowerCase().includes(partial)) titleSet.add(title);
+    }
+
+    const suggestions: Array<{ text: string; type: 'brand' | 'category' | 'item' }> = [];
+    for (const brand of brandSet) suggestions.push({ text: brand, type: 'brand' });
+    for (const category of categorySet) suggestions.push({ text: category, type: 'category' });
+    for (const title of titleSet) suggestions.push({ text: title, type: 'item' });
+
+    // Also include matches from recent searches
+    for (const recent of recentSearches) {
+      if (recent.toLowerCase().includes(partial) && !suggestions.some((s) => s.text.toLowerCase() === recent.toLowerCase())) {
+        suggestions.push({ text: recent, type: 'item' });
+      }
+    }
+
+    return suggestions.slice(0, 6);
+  }, [query, isSearchFocused, listings, recentSearches]);
+
   const handleSearchSubmit = () => {
     const trimmedQuery = query.trim();
     if (!trimmedQuery) return;
@@ -533,6 +582,44 @@ export default function GlobalSearchScreen({ navigation }: Props) {
     const preservedQuery = normalizedQuery;
     resetBrowseFilters();
     updateBrowseFilters({ query: preservedQuery });
+  };
+
+  const isCurrentQuerySaved = useMemo(() => {
+    const normalized = normalizedQuery;
+    return savedSearches.some((s) => s.query.trim().toLowerCase() === normalized);
+  }, [savedSearches, normalizedQuery]);
+
+  const handleSaveSearch = () => {
+    const trimmed = query.trim();
+    if (!trimmed) return;
+    addSavedSearch({
+      query: trimmed,
+      filters: {
+        brands: browseFilters.brands,
+        sizes: browseFilters.sizes,
+        condition: browseFilters.condition,
+        sort: browseFilters.sort,
+      },
+      alertsEnabled: true,
+    });
+  };
+
+  const handleRemoveSavedSearch = (id: string) => {
+    removeSavedSearch(id);
+  };
+
+  const handleToggleAlerts = (id: string) => {
+    toggleSavedSearchAlerts(id);
+  };
+
+  const handleSavedSearchPress = (searchQuery: string) => {
+    setQuery(searchQuery);
+    updateBrowseFilters({ query: searchQuery });
+    navigation.navigate('Browse', {
+      categoryId: 'search',
+      title: `Search: "${searchQuery}"`,
+      searchQuery,
+    });
   };
 
   const handleOpenRecommendation = (listingId: string) => {
@@ -616,6 +703,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
               </AnimatedPressable>
             }
             inputProps={{
+              autoFocus: true,
               onSubmitEditing: handleSearchSubmit,
               onFocus: () => setIsSearchFocused(true),
               onBlur: () => setIsSearchFocused(false),
@@ -633,6 +721,46 @@ export default function GlobalSearchScreen({ navigation }: Props) {
         </View>
       )}
 
+      {/* Live search suggestions dropdown */}
+      {searchSuggestions.length > 0 && (
+        <Reanimated.View
+          entering={FadeInDown.duration(150)}
+          style={styles.suggestionsWrap}
+        >
+          <Text style={styles.suggestionsHeader}>Suggestions</Text>
+          {searchSuggestions.map((suggestion, idx) => (
+            <AnimatedPressable
+              key={`${suggestion.type}_${idx}`}
+              style={styles.suggestionRow}
+              activeOpacity={0.7}
+              onPress={() => {
+                setQuery(suggestion.text);
+                inputRef.current?.blur();
+                handlePillPress(suggestion.text);
+              }}
+              accessibilityLabel={`Search for ${suggestion.text}`}
+              accessibilityRole="button"
+            >
+              <Ionicons
+                name={
+                  suggestion.type === 'brand'
+                    ? 'pricetag-outline'
+                    : suggestion.type === 'category'
+                    ? 'grid-outline'
+                    : 'search-outline'
+                }
+                size={16}
+                color={Colors.textMuted}
+              />
+              <Text style={styles.suggestionText} numberOfLines={1}>
+                {suggestion.text}
+              </Text>
+              <Ionicons name="arrow-forward" size={14} color={Colors.textMuted} />
+            </AnimatedPressable>
+          ))}
+        </Reanimated.View>
+      )}
+
       <ScrollView
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -645,6 +773,88 @@ export default function GlobalSearchScreen({ navigation }: Props) {
             {/* ═══════ DISCOVER LANDING (no query) ═══════ */}
             {isDiscoverLanding && (
               <>
+                {/* ── FOCUS STATE: Clean recent + trending when search is focused ── */}
+                {isSearchFocused ? (
+                  <Reanimated.View entering={FadeInDown.duration(200).springify().damping(20)}>
+                    {/* Recent searches */}
+                    {recentSearches.length > 0 && (
+                      <EditorialSection kicker="Your history" title="Recent searches">
+                        <View style={styles.recentPillsWrap}>
+                          {recentSearches.map((term, idx) => (
+                            <AnimatedPressable
+                              key={idx}
+                              style={styles.recentPill}
+                              activeOpacity={0.8}
+                              onPress={() => handlePillPress(term)}
+                            >
+                              <Ionicons name="time-outline" size={12} color={Colors.textMuted} style={{ marginRight: 4 }} />
+                              <Text style={styles.recentPillText}>{term}</Text>
+                            </AnimatedPressable>
+                          ))}
+                          <AnimatedPressable style={[styles.recentPill, styles.clearRecentPill]} activeOpacity={0.8} onPress={clearRecentSearches}>
+                            <Ionicons name="close-circle" size={14} color={Colors.textMuted} />
+                            <Text style={[styles.recentPillText, { color: Colors.textMuted }]}>Clear</Text>
+                          </AnimatedPressable>
+                        </View>
+                      </EditorialSection>
+                    )}
+
+                    {/* Saved searches with alerts */}
+                    {savedSearches.length > 0 && (
+                      <EditorialSection
+                        kicker="Never miss a drop"
+                        title="Saved searches"
+                        onSearchPress={() => navigation.navigate('SavedSearches')}
+                      >
+                        <View style={styles.savedSearchListWrap}>
+                          {savedSearches.slice(0, 3).map((search) => (
+                            <View key={search.id} style={styles.savedSearchRow}>
+                              <AnimatedPressable
+                                style={styles.savedSearchMain}
+                                activeOpacity={0.8}
+                                onPress={() => handleSavedSearchPress(search.query)}
+                                accessibilityLabel={`Search for ${search.query}`}
+                                accessibilityRole="button"
+                              >
+                                <View style={styles.savedSearchIconWrap}>
+                                  <Ionicons
+                                    name={search.alertsEnabled ? 'notifications' : 'bookmark-outline'}
+                                    size={16}
+                                    color={search.alertsEnabled ? Colors.brand : Colors.textMuted}
+                                  />
+                                </View>
+                                <View style={styles.savedSearchTextWrap}>
+                                  <Text style={styles.savedSearchQuery} numberOfLines={1}>{search.query}</Text>
+                                  {search.alertsEnabled ? (
+                                    <Text style={styles.savedSearchMeta}>Alerts on</Text>
+                                  ) : null}
+                                </View>
+                              </AnimatedPressable>
+                            </View>
+                          ))}
+                        </View>
+                      </EditorialSection>
+                    )}
+
+                    {/* Popular searches */}
+                    <EditorialSection kicker="What others are searching" title="Popular searches">
+                      <View style={styles.trendingFocusWrap}>
+                        {TRENDING_SEARCHES.map((term, idx) => (
+                          <AnimatedPressable
+                            key={idx}
+                            style={styles.trendingFocusPill}
+                            activeOpacity={0.8}
+                            onPress={() => handlePillPress(term)}
+                          >
+                            <Ionicons name="flame" size={12} color={Colors.danger} style={{ marginRight: 4 }} />
+                            <Text style={styles.trendingFocusText}>{term}</Text>
+                          </AnimatedPressable>
+                        ))}
+                      </View>
+                    </EditorialSection>
+                  </Reanimated.View>
+                ) : (
+                <>
                 {/* Hero Carousel — only when real imagery exists */}
                 {HERO_ITEMS.some((h) => h.uri.trim().length > 0) && (
                   <HeroCarousel items={HERO_ITEMS.filter((h) => h.uri.trim().length > 0)} autoPlayInterval={6000} />
@@ -693,6 +903,68 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                         <Ionicons name="close-circle" size={14} color={Colors.textMuted} />
                         <Text style={[styles.recentPillText, { color: Colors.textMuted }]}>Clear</Text>
                       </AnimatedPressable>
+                    </View>
+                  </EditorialSection>
+                )}
+
+                {/* Saved searches with alerts */}
+                {savedSearches.length > 0 && (
+                  <EditorialSection
+                    kicker="Never miss a drop"
+                    title="Saved searches"
+                    onSearchPress={() => navigation.navigate('SavedSearches')}
+                  >
+                    <View style={styles.savedSearchListWrap}>
+                      {savedSearches.map((search) => (
+                        <View key={search.id} style={styles.savedSearchRow}>
+                          <AnimatedPressable
+                            style={styles.savedSearchMain}
+                            activeOpacity={0.8}
+                            onPress={() => handleSavedSearchPress(search.query)}
+                            accessibilityLabel={`Search for ${search.query}`}
+                            accessibilityRole="button"
+                          >
+                            <View style={styles.savedSearchIconWrap}>
+                              <Ionicons
+                                name={search.alertsEnabled ? 'notifications' : 'bookmark-outline'}
+                                size={16}
+                                color={search.alertsEnabled ? Colors.brand : Colors.textMuted}
+                              />
+                            </View>
+                            <View style={styles.savedSearchTextWrap}>
+                              <Text style={styles.savedSearchQuery} numberOfLines={1}>{search.query}</Text>
+                              <Text style={styles.savedSearchMeta}>
+                                {search.alertsEnabled ? 'Alerts on' : 'Alerts off'}
+                                {search.lastMatchCount != null && search.lastMatchCount > 0
+                                  ? ` · ${search.lastMatchCount} new`
+                                  : ''}
+                              </Text>
+                            </View>
+                          </AnimatedPressable>
+                          <AnimatedPressable
+                            style={styles.savedSearchToggle}
+                            activeOpacity={0.8}
+                            onPress={() => handleToggleAlerts(search.id)}
+                            accessibilityLabel={search.alertsEnabled ? 'Disable alerts' : 'Enable alerts'}
+                            accessibilityRole="button"
+                          >
+                            <Ionicons
+                              name={search.alertsEnabled ? 'notifications' : 'notifications-off-outline'}
+                              size={18}
+                              color={search.alertsEnabled ? Colors.brand : Colors.textMuted}
+                            />
+                          </AnimatedPressable>
+                          <AnimatedPressable
+                            style={styles.savedSearchRemove}
+                            activeOpacity={0.8}
+                            onPress={() => handleRemoveSavedSearch(search.id)}
+                            accessibilityLabel="Remove saved search"
+                            accessibilityRole="button"
+                          >
+                            <Ionicons name="close" size={16} color={Colors.textMuted} />
+                          </AnimatedPressable>
+                        </View>
+                      ))}
                     </View>
                   </EditorialSection>
                 )}
@@ -802,6 +1074,8 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                     </View>
                   )}
                 </EditorialSection>
+                </>
+                )}
               </>
             )}
 
@@ -856,11 +1130,39 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                     <Text style={styles.recoHeaderTitle}>
                       {normalizedQuery ? `Search: ${normalizedQuery}` : 'Discover'}
                     </Text>
-                    {!normalizedQuery && (
-                      <AnimatedPressable style={styles.topicSearchBtn} activeOpacity={0.8} onPress={handleSearchSubmit}>
-                        <Ionicons name="search" size={18} color={Colors.textPrimary} />
-                      </AnimatedPressable>
-                    )}
+                    <View style={styles.recoHeaderActions}>
+                      {normalizedQuery && (
+                        <AnimatedPressable
+                          style={[
+                            styles.saveSearchBtn,
+                            isCurrentQuerySaved && styles.saveSearchBtnActive,
+                          ]}
+                          activeOpacity={0.8}
+                          onPress={isCurrentQuerySaved ? undefined : handleSaveSearch}
+                          accessibilityLabel={isCurrentQuerySaved ? 'Search saved with alerts' : 'Save this search with alerts'}
+                          accessibilityRole="button"
+                        >
+                          <Ionicons
+                            name={isCurrentQuerySaved ? 'notifications' : 'notifications-outline'}
+                            size={16}
+                            color={isCurrentQuerySaved ? Colors.brand : Colors.textSecondary}
+                          />
+                          <Text
+                            style={[
+                              styles.saveSearchText,
+                              isCurrentQuerySaved && styles.saveSearchTextActive,
+                            ]}
+                          >
+                            {isCurrentQuerySaved ? 'Saved' : 'Save search'}
+                          </Text>
+                        </AnimatedPressable>
+                      )}
+                      {!normalizedQuery && (
+                        <AnimatedPressable style={styles.topicSearchBtn} activeOpacity={0.8} onPress={handleSearchSubmit}>
+                          <Ionicons name="search" size={18} color={Colors.textPrimary} />
+                        </AnimatedPressable>
+                      )}
+                    </View>
                   </View>
                 </Reanimated.View>
 
@@ -969,6 +1271,47 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
 
+  // Live search suggestions
+  suggestionsWrap: {
+    marginHorizontal: 12,
+    marginBottom: 8,
+    borderRadius: 16,
+    backgroundColor: Colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  suggestionsHeader: {
+    fontSize: 11,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textMuted,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 4,
+  },
+  suggestionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
+  },
+  suggestionText: {
+    flex: 1,
+    fontSize: 15,
+    fontFamily: Typography.family.regular,
+    color: Colors.textPrimary,
+  },
+
   // Loading
   loadingStateWrap: {
     paddingTop: 16,
@@ -1072,6 +1415,29 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
   },
 
+  // Focus state — trending pills (wrap layout, not horizontal scroll)
+  trendingFocusWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingHorizontal: 16,
+  },
+  trendingFocusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  trendingFocusText: {
+    fontSize: 13,
+    fontFamily: Typography.family.medium,
+    color: Colors.textPrimary,
+  },
+
   // Featured boards
   boardsScroll: {
     paddingHorizontal: 16,
@@ -1161,17 +1527,102 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     gap: 8,
   },
+  recoHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   recoHeaderTitle: {
     fontSize: 22,
     fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
     letterSpacing: -0.5,
+    flexShrink: 1,
   },
   topicSearchBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
     backgroundColor: Colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveSearchBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+  },
+  saveSearchBtnActive: {
+    borderColor: Colors.brand,
+    backgroundColor: Colors.surfaceAlt,
+  },
+  saveSearchText: {
+    fontSize: 12,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textSecondary,
+  },
+  saveSearchTextActive: {
+    color: Colors.brand,
+  },
+  savedSearchListWrap: {
+    paddingHorizontal: 20,
+    gap: 8,
+  },
+  savedSearchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    backgroundColor: Colors.surface,
+    borderWidth: 0.5,
+    borderColor: Colors.border,
+  },
+  savedSearchMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  savedSearchIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  savedSearchTextWrap: {
+    flex: 1,
+    gap: 2,
+  },
+  savedSearchQuery: {
+    fontSize: 14,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+  },
+  savedSearchMeta: {
+    fontSize: 11,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+  },
+  savedSearchToggle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  savedSearchRemove: {
+    width: 32,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
   },

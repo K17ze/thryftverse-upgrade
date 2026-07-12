@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, StatusBar, ScrollView, useWindowDimensions, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, useWindowDimensions, Keyboard } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
@@ -37,6 +37,7 @@ import {
   CoOwnStickyActionDock,
   CoOwnRiskDisclosure,
 } from '../components/coown';
+import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'Trade'>;
@@ -150,7 +151,7 @@ export default function TradeScreen() {
   if (isLoading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar style={isDark ? 'light' : 'dark'} />
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
         <CoOwnMarketHeader
           title="Trade"
           subtitle="Buy or sell Co-Own units"
@@ -165,7 +166,7 @@ export default function TradeScreen() {
   if (isError || !asset) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar style={isDark ? 'light' : 'dark'} />
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
         <CoOwnMarketHeader
           title="Trade"
           subtitle="Buy or sell Co-Own units"
@@ -189,7 +190,7 @@ export default function TradeScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       <CoOwnMarketHeader
         title={side === 'buy' ? 'Buy units' : 'Sell units'}
@@ -197,15 +198,12 @@ export default function TradeScreen() {
         onBack={handleBack}
       />
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      <KeyboardAwareScrollView
         style={{ flex: 1 }}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-      >
-      <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: scrollBottomPadding }]}
-        showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        showsVerticalScrollIndicator={false}
         onScrollBeginDrag={Keyboard.dismiss}
       >
         {/* Buy/Sell selector */}
@@ -250,6 +248,32 @@ export default function TradeScreen() {
             sellableUnits={yourUnits}
             maxUnits={maxUnits}
           />
+        </Reanimated.View>
+
+        {/* Market context summary */}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(100)}>
+          <View style={[styles.contextCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.contextRow}>
+              <View style={styles.contextItem}>
+                <Text style={[styles.contextLabel, { color: colors.textMuted }]}>Available</Text>
+                <Text style={[styles.contextValue, { color: colors.textPrimary }]}>
+                  {availableUnits} {availableUnits === 1 ? 'unit' : 'units'}
+                </Text>
+              </View>
+              <View style={[styles.contextDivider, { backgroundColor: colors.border }]} />
+              <View style={styles.contextItem}>
+                <Text style={[styles.contextLabel, { color: colors.textMuted }]}>Your units</Text>
+                <Text style={[styles.contextValue, { color: yourUnits > 0 ? colors.brand : colors.textPrimary }]}>
+                  {yourUnits}
+                </Text>
+              </View>
+              <View style={[styles.contextDivider, { backgroundColor: colors.border }]} />
+              <View style={styles.contextItem}>
+                <Text style={[styles.contextLabel, { color: colors.textMuted }]}>Fee</Text>
+                <Text style={[styles.contextValue, { color: colors.textPrimary }]}>1%</Text>
+              </View>
+            </View>
+          </View>
         </Reanimated.View>
 
         {/* Quantity selector */}
@@ -308,8 +332,7 @@ export default function TradeScreen() {
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(200)}>
           <CoOwnRiskDisclosure />
         </Reanimated.View>
-      </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
 
       {/* Sticky action dock */}
       <CoOwnStickyActionDock>
@@ -371,6 +394,37 @@ const styles = StyleSheet.create({
     padding: Space.md,
     gap: Space.sm,
     marginBottom: Space.md,
+  },
+  contextCard: {
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm + 2,
+    marginBottom: Space.md,
+  },
+  contextRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  contextItem: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 2,
+  },
+  contextDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 28,
+  },
+  contextLabel: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.medium,
+    letterSpacing: 0.2,
+    textTransform: 'uppercase',
+  },
+  contextValue: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
   },
   inputLabel: {
     fontSize: Type.meta.size,

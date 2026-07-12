@@ -2,11 +2,14 @@ import React from 'react';
 import {
   buildDefaultPushNotificationToggles,
   countEnabledPushNotificationToggles,
+  DEFAULT_QUIET_HOURS,
+  FilterPreset,
   getStoredPushNotificationToggles,
   getStoredSettingsPreferences,
   LANGUAGE_OPTIONS,
   PUSH_NOTIFICATION_DEFINITIONS,
   PushNotificationToggles,
+  QuietHoursSettings,
   setStoredPushNotificationToggles,
   setStoredSettingsPreferences,
   SupportedLanguageOption,
@@ -16,6 +19,8 @@ import { mapLanguageOptionToLocale, setI18nLocale } from '../i18n';
 interface SettingsPreferencesContextValue {
   language: SupportedLanguageOption;
   emailNotificationsEnabled: boolean;
+  quietHours: QuietHoursSettings;
+  mySizes: string[];
   pushNotificationToggles: PushNotificationToggles;
   pushEnabledCount: number;
   pushTotalCount: number;
@@ -23,6 +28,12 @@ interface SettingsPreferencesContextValue {
   setLanguage: (language: SupportedLanguageOption) => void;
   setEmailNotificationsEnabled: (enabled: boolean) => void;
   toggleEmailNotifications: () => void;
+  setQuietHours: (settings: Partial<QuietHoursSettings>) => void;
+  setMySizes: (sizes: string[]) => void;
+  toggleMySize: (size: string) => void;
+  filterPresets: FilterPreset[];
+  saveFilterPreset: (preset: Omit<FilterPreset, 'id' | 'createdAt'>) => void;
+  removeFilterPreset: (id: string) => void;
   setPushNotificationToggle: (key: string, enabled: boolean) => void;
   setAllPushNotificationToggles: (enabled: boolean) => void;
 }
@@ -37,6 +48,9 @@ const SettingsPreferencesContext = React.createContext<SettingsPreferencesContex
 export function SettingsPreferencesProvider({ children }: { children: React.ReactNode }) {
   const [language, setLanguage] = React.useState<SupportedLanguageOption>(DEFAULT_LANGUAGE);
   const [emailNotificationsEnabled, setEmailNotificationsEnabled] = React.useState(true);
+  const [quietHours, setQuietHoursState] = React.useState<QuietHoursSettings>(DEFAULT_QUIET_HOURS);
+  const [mySizes, setMySizesState] = React.useState<string[]>([]);
+  const [filterPresets, setFilterPresets] = React.useState<FilterPreset[]>([]);
   const [pushNotificationToggles, setPushNotificationToggles] = React.useState<PushNotificationToggles>(
     DEFAULT_PUSH_NOTIFICATION_TOGGLES
   );
@@ -56,6 +70,9 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
 
         setLanguage(settingsPreferences.language);
         setEmailNotificationsEnabled(settingsPreferences.emailNotificationsEnabled);
+        setQuietHoursState(settingsPreferences.quietHours);
+        setMySizesState(settingsPreferences.mySizes);
+        setFilterPresets(settingsPreferences.filterPresets);
         setPushNotificationToggles(storedPushToggles);
       })
       .catch(() => {
@@ -84,10 +101,13 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
     setStoredSettingsPreferences({
       language,
       emailNotificationsEnabled,
+      quietHours,
+      mySizes,
+      filterPresets,
     }).catch(() => {
       // Best-effort persistence should not block preferences updates.
     });
-  }, [language, emailNotificationsEnabled, isHydrated]);
+  }, [language, emailNotificationsEnabled, quietHours, mySizes, filterPresets, isHydrated]);
 
   React.useEffect(() => {
     if (!isHydrated) {
@@ -101,6 +121,43 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
 
   const toggleEmailNotifications = React.useCallback(() => {
     setEmailNotificationsEnabled((prev) => !prev);
+  }, []);
+
+  const setQuietHours = React.useCallback((settings: Partial<QuietHoursSettings>) => {
+    setQuietHoursState((prev) => ({ ...prev, ...settings }));
+  }, []);
+
+  const setMySizes = React.useCallback((sizes: string[]) => {
+    setMySizesState(sizes);
+  }, []);
+
+  const toggleMySize = React.useCallback((size: string) => {
+    setMySizesState((prev) =>
+      prev.includes(size) ? prev.filter((s) => s !== size) : [...prev, size]
+    );
+  }, []);
+
+  const saveFilterPreset = React.useCallback((preset: Omit<FilterPreset, 'id' | 'createdAt'>) => {
+    setFilterPresets((prev) => {
+      // Deduplicate by name — update existing preset with same name
+      const normalized = preset.name.trim().toLowerCase();
+      const existing = prev.find((p) => p.name.trim().toLowerCase() === normalized);
+      if (existing) {
+        return prev.map((p) =>
+          p.id === existing.id ? { ...preset, id: existing.id, createdAt: existing.createdAt } : p
+        );
+      }
+      const newPreset: FilterPreset = {
+        ...preset,
+        id: `filter_preset_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        createdAt: new Date().toISOString(),
+      };
+      return [newPreset, ...prev].slice(0, 12);
+    });
+  }, []);
+
+  const removeFilterPreset = React.useCallback((id: string) => {
+    setFilterPresets((prev) => prev.filter((p) => p.id !== id));
   }, []);
 
   const setPushNotificationToggle = React.useCallback((key: string, enabled: boolean) => {
@@ -139,6 +196,9 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
     () => ({
       language,
       emailNotificationsEnabled,
+      quietHours,
+      mySizes,
+      filterPresets,
       pushNotificationToggles,
       pushEnabledCount,
       pushTotalCount: PUSH_NOTIFICATION_DEFINITIONS.length,
@@ -146,18 +206,31 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
       setLanguage,
       setEmailNotificationsEnabled,
       toggleEmailNotifications,
+      setQuietHours,
+      setMySizes,
+      toggleMySize,
+      saveFilterPreset,
+      removeFilterPreset,
       setPushNotificationToggle,
       setAllPushNotificationToggles,
     }),
     [
       emailNotificationsEnabled,
+      filterPresets,
       isHydrated,
       language,
+      mySizes,
       pushEnabledCount,
       pushNotificationToggles,
+      quietHours,
+      removeFilterPreset,
+      saveFilterPreset,
       setAllPushNotificationToggles,
+      setMySizes,
       setPushNotificationToggle,
+      setQuietHours,
       toggleEmailNotifications,
+      toggleMySize,
     ]
   );
 

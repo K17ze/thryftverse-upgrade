@@ -7,10 +7,7 @@ import { View,
   Text,
   StyleSheet,
   TextInput,
-  StatusBar,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView
+  StatusBar
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -33,6 +30,7 @@ import {
 import { getUserCountryCapabilities, UserCountryCapabilities } from '../services/capabilitiesApi';
 import { Typography, Space, Radius, Elevation } from '../theme/designTokens';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
+import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import {
   convertDisplayToGbpAmount,
   getDefaultWithdrawDisplayAmount,
@@ -392,8 +390,13 @@ export default function WithdrawScreen() {
         <View style={{ width: 44 }} />
       </View>
 
-      <KeyboardAvoidingView style={styles.content} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+      <KeyboardAwareScrollView
+        style={styles.content}
+        contentContainerStyle={{ paddingBottom: 100 }}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        showsVerticalScrollIndicator={false}
+      >
 
           <Reanimated.View entering={FadeInDown.duration(300).delay(30)}>
             <View style={styles.amountWrap}>
@@ -461,8 +464,6 @@ export default function WithdrawScreen() {
           )}
           </Reanimated.View>
 
-        </ScrollView>
-
         <View style={styles.footer}>
           <Text style={styles.feeText}>Withdrawals are processed from completed sale proceeds in 3-5 working days.</Text>
           <AppButton
@@ -484,7 +485,7 @@ export default function WithdrawScreen() {
             accessibilityHint="Submits your withdrawal request"
           />
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

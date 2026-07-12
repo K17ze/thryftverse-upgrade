@@ -5,7 +5,7 @@ import {
   StyleSheet,
   StatusBar,
   Dimensions,
-  Alert,
+  Pressable,
   ActivityIndicator,
 } from 'react-native';
 import Reanimated, {
@@ -51,6 +51,7 @@ export default function AuthLandingScreen() {
   const reducedMotionEnabled = useReducedMotion();
   const [socialLoading, setSocialLoading] = useState<'google' | 'apple' | null>(null);
   const [isMagicLinkLoading, setIsMagicLinkLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   // UI-21P: Prevent crash when OAuth client IDs are not configured in dev builds
   const hasGoogleOAuth = Boolean(
@@ -97,7 +98,7 @@ export default function AuthLandingScreen() {
         setTwoFactorEnabled(result.user.twoFactorEnabled);
         navigation.replace('MainTabs');
       } catch (error) {
-        Alert.alert('Magic link failed', (error as Error).message);
+        setAuthError(`Magic link failed: ${(error as Error).message}`);
       } finally {
         setIsMagicLinkLoading(false);
       }
@@ -138,7 +139,7 @@ export default function AuthLandingScreen() {
 
     if (!idToken) {
       setSocialLoading(null);
-      Alert.alert('Google sign-in failed', 'Unable to get Google identity token.');
+      setAuthError('Google sign-in failed: Unable to get Google identity token.');
       return;
     }
 
@@ -149,7 +150,7 @@ export default function AuthLandingScreen() {
         setTwoFactorEnabled(result.user.twoFactorEnabled);
         navigation.replace('MainTabs');
       } catch (error) {
-        Alert.alert('Google sign-in failed', (error as Error).message);
+        setAuthError(`Google sign-in failed: ${(error as Error).message}`);
       } finally {
         setSocialLoading(null);
       }
@@ -162,10 +163,7 @@ export default function AuthLandingScreen() {
     }
 
     if (!googleRequest) {
-      Alert.alert(
-        'Google sign-in unavailable',
-        'Configure Google OAuth client IDs in your Expo public environment variables.'
-      );
+      setAuthError('Google sign-in unavailable. Configure Google OAuth client IDs in your Expo environment.');
       return;
     }
 
@@ -178,7 +176,7 @@ export default function AuthLandingScreen() {
       }
     } catch (error) {
       setSocialLoading(null);
-      Alert.alert('Google sign-in failed', (error as Error).message);
+      setAuthError(`Google sign-in failed: ${(error as Error).message}`);
     }
   };
 
@@ -189,7 +187,7 @@ export default function AuthLandingScreen() {
 
     const available = await AppleAuthentication.isAvailableAsync();
     if (!available) {
-      Alert.alert('Apple sign-in unavailable', 'Apple sign-in is only available on supported iOS devices.');
+      setAuthError('Apple sign-in is only available on supported iOS devices.');
       return;
     }
 
@@ -214,7 +212,7 @@ export default function AuthLandingScreen() {
     } catch (error) {
       const code = (error as { code?: string }).code;
       if (code !== 'ERR_REQUEST_CANCELED') {
-        Alert.alert('Apple sign-in failed', (error as Error).message);
+        setAuthError(`Apple sign-in failed: ${(error as Error).message}`);
       }
     } finally {
       setSocialLoading(null);
@@ -260,7 +258,47 @@ export default function AuthLandingScreen() {
           >
             buy, sell, trade. no noise.
           </Reanimated.Text>
+
+          {/* Trust signals — compact value props */}
+          <Reanimated.View
+            entering={reducedMotionEnabled ? undefined : FadeInDown.delay(750).duration(500)}
+            style={styles.trustRow}
+          >
+            <View style={styles.trustItem}>
+              <Ionicons name="shield-checkmark-outline" size={16} color="rgba(245,239,230,0.6)" />
+              <Text style={styles.trustText}>Buyer protection</Text>
+            </View>
+            <View style={styles.trustDot} />
+            <View style={styles.trustItem}>
+              <Ionicons name="pricetag-outline" size={16} color="rgba(245,239,230,0.6)" />
+              <Text style={styles.trustText}>Make offers</Text>
+            </View>
+            <View style={styles.trustDot} />
+            <View style={styles.trustItem}>
+              <Ionicons name="swap-horizontal-outline" size={16} color="rgba(245,239,230,0.6)" />
+              <Text style={styles.trustText}>Co-Own trading</Text>
+            </View>
+          </Reanimated.View>
         </View>
+
+        {/* Inline auth error banner */}
+        {authError ? (
+          <Reanimated.View
+            entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}
+            style={styles.errorBanner}
+          >
+            <Ionicons name="alert-circle-outline" size={16} color={Colors.danger} />
+            <Text style={styles.errorBannerText}>{authError}</Text>
+            <Pressable
+              onPress={() => setAuthError(null)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Dismiss error"
+            >
+              <Ionicons name="close" size={16} color="rgba(245,239,230,0.6)" />
+            </Pressable>
+          </Reanimated.View>
+        ) : null}
 
         {/* Bottom - CTAs in glass cards */}
         <Reanimated.View
@@ -395,25 +433,69 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     letterSpacing: 0.24,
   },
+  trustRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 20,
+    flexWrap: 'wrap',
+  },
+  trustItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  trustText: {
+    fontSize: 11,
+    fontFamily: Typography.family.medium,
+    color: 'rgba(245,239,230,0.6)',
+    letterSpacing: 0.2,
+  },
+  trustDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: 'rgba(245,239,230,0.25)',
+  },
   footer: {
     paddingHorizontal: 22,
     paddingBottom: 14,
     gap: 10,
   },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginHorizontal: 22,
+    marginBottom: 6,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,107,107,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,107,107,0.25)',
+  },
+  errorBannerText: {
+    flex: 1,
+    fontSize: 12,
+    fontFamily: Typography.family.medium,
+    color: Colors.danger,
+    lineHeight: 16,
+  },
   primaryBtn: {
-    backgroundColor: '#F4F0E8',
+    backgroundColor: Colors.brand,
     height: 56,
     borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#F4F0E8',
+    shadowColor: Colors.brand,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.2,
     shadowRadius: 16,
     elevation: 8,
   },
   primaryText: {
-    color: '#111111',
+    color: Colors.textInverse,
     fontSize: 16,
     fontFamily: Typography.family.bold,
     letterSpacing: 0.2,
@@ -496,7 +578,7 @@ const styles = StyleSheet.create({
   devBypassText: {
     fontSize: 12,
     fontFamily: Typography.family.medium,
-    color: '#34C759',
+    color: Colors.success,
     textAlign: 'center',
   },
 });

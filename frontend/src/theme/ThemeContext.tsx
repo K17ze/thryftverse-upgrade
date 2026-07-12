@@ -9,7 +9,7 @@ import {
 
 export type ThemeMode = 'dark' | 'light';
 
-interface ThemeColors {
+export interface ThemeColors {
   background: string;
   surface: string;
   surfaceAlt: string;

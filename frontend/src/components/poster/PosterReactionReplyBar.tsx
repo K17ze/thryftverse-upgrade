@@ -5,12 +5,11 @@ import {
   StyleSheet,
   TextInput,
   Pressable,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 import { Colors } from '../../constants/colors';
+import { KeyboardStickyView } from '../../platform/keyboard/KeyboardProvider';
 import type { PosterReactionType } from '../../services/postersApi';
 
 const REACTIONS: Array<{ type: PosterReactionType; icon: string; label: string }> = [
@@ -67,8 +66,7 @@ export function PosterReactionReplyBar({
   }
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    <KeyboardStickyView
       style={styles.container}
     >
       {showReactions && allowReactions && (
@@ -128,7 +126,7 @@ export function PosterReactionReplyBar({
           </Pressable>
         )}
       </View>
-    </KeyboardAvoidingView>
+    </KeyboardStickyView>
   );
 }
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   AnimatedPressable } from '../components/AnimatedPressable';
 import { View,
@@ -89,6 +89,8 @@ export default function BrowseScreen() {
   const toggleWishlist = useStore((state) => state.toggleWishlist);
   const browseFilters = useStore((state) => state.browseFilters);
   const updateBrowseFilters = useStore((state) => state.updateBrowseFilters);
+  const addSavedSearch = useStore((state) => state.addSavedSearch);
+  const savedSearches = useStore((state) => state.savedSearches);
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
   const { listings, source, isSyncing, lastError, refreshListings } = useBackendData();
@@ -176,6 +178,31 @@ export default function BrowseScreen() {
     browseFilters.brands.length > 0 ||
     browseFilters.sizes.length > 0 ||
     browseFilters.condition !== 'Any';
+
+  // Save search — only available when there's a query or category to save
+  const saveSearchLabel = searchQuery || title;
+  const isCurrentSaved = savedSearches.some(
+    (s) => s.query === saveSearchLabel &&
+    s.filters.brands.join(',') === browseFilters.brands.join(',') &&
+    s.filters.sizes.join(',') === browseFilters.sizes.join(',') &&
+    s.filters.condition === browseFilters.condition
+  );
+
+  const handleSaveSearch = useCallback(() => {
+    if (!saveSearchLabel || saveSearchLabel === 'Browse All') return;
+    addSavedSearch({
+      query: saveSearchLabel,
+      filters: {
+        brands: browseFilters.brands,
+        sizes: browseFilters.sizes,
+        condition: browseFilters.condition,
+        sort: browseFilters.sort,
+        category: categoryId !== 'search' && categoryId !== 'all' ? categoryId : undefined,
+      },
+      alertsEnabled: true,
+    });
+    show('Search saved with alerts enabled', 'success');
+  }, [saveSearchLabel, browseFilters, categoryId, addSavedSearch, show]);
 
   const dataToRender = useMemo(() => {
     const normalizedCategory = toKey(categoryId);
@@ -283,9 +310,7 @@ export default function BrowseScreen() {
 
       <Reanimated.View entering={FadeInDown.duration(300).delay(60)} style={styles.titleContainer}>
         <Text style={styles.hugeTitle}>{title}</Text>
-        <View style={styles.titleMetaRow}>
-          <Text style={styles.itemCountText}>{backendLoading ? 'Loading…' : `${displayCount} items`}</Text>
-        </View>
+        <Text style={styles.itemCountText}>{backendLoading ? 'Loading…' : `${displayCount} items`}</Text>
       </Reanimated.View>
 
       <Reanimated.View entering={FadeInDown.duration(300).delay(90)} style={styles.filterBar}>
@@ -326,6 +351,24 @@ export default function BrowseScreen() {
             <Text style={styles.filterPillText}>{browseFilters.condition !== 'Any' ? browseFilters.condition : 'Condition'}</Text>
             <Ionicons name="chevron-down" size={12} color={Colors.textMuted} />
           </AnimatedPressable>
+          {saveSearchLabel && saveSearchLabel !== 'Browse All' && (
+            <AnimatedPressable
+              style={[styles.filterPillOutline, isCurrentSaved && styles.saveSearchPillActive]}
+              activeOpacity={0.85}
+              onPress={isCurrentSaved ? undefined : handleSaveSearch}
+              accessibilityLabel={isCurrentSaved ? 'Search saved with alerts' : 'Save this search with alerts'}
+              accessibilityRole="button"
+            >
+              <Ionicons
+                name={isCurrentSaved ? 'notifications' : 'notifications-outline'}
+                size={14}
+                color={isCurrentSaved ? Colors.brand : Colors.textSecondary}
+              />
+              <Text style={[styles.filterPillText, isCurrentSaved && styles.saveSearchTextActive]}>
+                {isCurrentSaved ? 'Saved' : 'Save search'}
+              </Text>
+            </AnimatedPressable>
+          )}
         </ScrollView>
       </Reanimated.View>
 
@@ -426,13 +469,6 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     marginTop: 6,
   },
-  titleMetaRow: {
-    marginTop: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
 
   filterBar: { paddingBottom: 16 },
   filterRow: { paddingHorizontal: 20, gap: 8, alignItems: 'center' },
@@ -464,6 +500,14 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   filterPillText: { color: Colors.textPrimary, fontSize: 13, fontFamily: Typography.family.medium },
+  saveSearchPillActive: {
+    borderColor: Colors.brand,
+    backgroundColor: `${Colors.brand}08`,
+  },
+  saveSearchTextActive: {
+    color: Colors.brand,
+    fontFamily: Typography.family.semibold,
+  },
   syncRetryBanner: {
     marginHorizontal: 20,
     marginBottom: 14,
@@ -510,9 +554,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 10,
     right: 10,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: 'rgba(0,0,0,0.3)',
     alignItems: 'center',
     justifyContent: 'center',

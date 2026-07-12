@@ -77,7 +77,8 @@ describe('i18n helper', () => {
     expect(t('checkout.header.title')).toBe('Kasse');
 
     setI18nLocale('es');
-    expect(t('tradeHub.header.title')).toBe('Trade Hub');
+    // Now fully translated (was previously falling back to EN)
+    expect(t('tradeHub.header.title')).toBe('Centro de Intercambio');
   });
 
   it('tracks the active locale', () => {

@@ -30,6 +30,8 @@ interface MessageBubbleProps {
   isFirstInCluster?: boolean;
   isLastInCluster?: boolean;
   showAvatar?: boolean;
+  /** When true, shows a "Translated" badge above the message text */
+  isTranslated?: boolean;
   onLongPress?: () => void;
   onReactionPress?: () => void;
   onRetry?: () => void;
@@ -51,6 +53,7 @@ export function MessageBubble({
   isFirstInCluster = true,
   isLastInCluster = true,
   showAvatar = false,
+  isTranslated = false,
   onLongPress,
   onReactionPress,
   onRetry,
@@ -144,7 +147,15 @@ export function MessageBubble({
           ) : null}
 
           {text ? (
-            <Text style={[styles.messageText, { color: bubbleText }]}>{text}</Text>
+            <>
+              {isTranslated ? (
+                <View style={styles.translatedBadge}>
+                  <Ionicons name="language" size={9} color={metaColor} />
+                  <Text style={[styles.translatedLabel, { color: metaColor }]}>Translated</Text>
+                </View>
+              ) : null}
+              <Text style={[styles.messageText, { color: bubbleText }]}>{text}</Text>
+            </>
           ) : null}
 
           <View style={[styles.metaRow, isMe && styles.metaRowMe]}>
@@ -259,6 +270,16 @@ const styles = StyleSheet.create({
     fontFamily: TypeStyles.body.fontFamily,
     lineHeight: Type.body.lineHeight + 2,
     letterSpacing: Type.body.letterSpacing,
+  },
+  translatedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginBottom: 4,
+  },
+  translatedLabel: {
+    fontSize: 10,
+    fontFamily: TypeStyles.metadata.fontFamily,
   },
   metaRow: {
     flexDirection: 'row',

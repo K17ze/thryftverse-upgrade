@@ -4,9 +4,6 @@ import {
   Text,
   StyleSheet,
   StatusBar,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ActivityIndicator,
 } from 'react-native';
@@ -21,6 +18,7 @@ import { useAppTheme } from '../theme/ThemeContext';
 import { Colors } from '../constants/colors';
 import { Space, Radius, Type, Typography, Elevation } from '../theme/designTokens';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
@@ -166,11 +164,13 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
         onBack={() => navigation.goBack()}
       />
 
-      <KeyboardAvoidingView
+      <KeyboardAwareScrollView
         style={styles.content}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        showsVerticalScrollIndicator={false}
       >
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
           {/* Order Context Card */}
           {order && (
             <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
@@ -261,6 +261,41 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
             </View>
           </Reanimated.View>
 
+          {/* What happens next — contextual guidance after topic selection */}
+          {selectedTopic && !isSubmitted && (() => {
+            const topic = ALL_SUPPORT_TOPICS.find((t) => t.id === selectedTopic);
+            if (!topic) return null;
+            const isEscrowHeld = orderStatus === 'paid' || orderStatus === 'shipped' || orderStatus === 'in transit' || orderStatus === 'out for delivery';
+            const guidance: Record<string, string> = {
+              not_received: 'We will contact the seller to confirm dispatch and tracking. If the item cannot be located, you may be eligible for a full refund from escrow.',
+              not_as_described: 'Provide photos showing the discrepancy. We will compare against the listing and mediate a partial or full refund from escrow.',
+              damaged: 'Attach photos of the damage and original packaging. We will assess liability and arrange a refund from escrow or a seller remedy.',
+              wrong_item: 'Attach photos of the received item. We will arrange a return label and refund from escrow once the item is returned.',
+              return: 'We will review your return eligibility. If approved, you will receive a return label and a refund from escrow once the item is received by the seller.',
+              payment_issue: 'We will investigate the payment and billing discrepancy and correct any erroneous charges.',
+              other: 'Describe the issue in detail below. Our support team will review and respond.',
+            };
+            return (
+              <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
+                <View style={styles.guidanceCard}>
+                  <View style={styles.guidanceHeader}>
+                    <Ionicons name="information-circle-outline" size={16} color={Colors.brand} />
+                    <Text style={styles.guidanceTitle}>What happens next</Text>
+                  </View>
+                  <Text style={styles.guidanceBody}>{guidance[topic.id] ?? guidance.other}</Text>
+                  {isEscrowHeld && (
+                    <View style={styles.escrowNoticeRow}>
+                      <Ionicons name="lock-closed" size={12} color={Colors.success} />
+                      <Text style={styles.escrowNoticeText}>
+                        Your funds remain held in escrow while this request is open.
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </Reanimated.View>
+            );
+          })()}
+
           <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
             <Meta color={Colors.textMuted} style={styles.sectionLabel}>DETAILS</Meta>
             <View style={styles.detailsCard}>
@@ -350,7 +385,6 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
               </Caption>
             </Reanimated.View>
           )}
-        </ScrollView>
 
         <View style={styles.footer}>
           {isSubmitted ? (
@@ -375,7 +409,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
             />
           )}
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }
@@ -404,6 +438,44 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     overflow: 'hidden',
     ...Elevation.subtle,
+  },
+  guidanceCard: {
+    marginTop: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm + 2,
+    borderRadius: Radius.md,
+    backgroundColor: `${Colors.brand}08`,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: `${Colors.brand}25`,
+    gap: 6,
+  },
+  guidanceHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  guidanceTitle: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+  },
+  guidanceBody: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: Colors.textSecondary,
+    lineHeight: 17,
+  },
+  escrowNoticeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 2,
+  },
+  escrowNoticeText: {
+    flex: 1,
+    fontSize: 11,
+    fontFamily: Typography.family.medium,
+    color: Colors.success,
   },
   topicRow: {
     flexDirection: 'row',

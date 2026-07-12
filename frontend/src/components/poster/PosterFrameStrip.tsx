@@ -168,7 +168,7 @@ export function PosterFrameStrip({
               )}
               {pubState === 'failed' && (
                 <View style={styles.pubStateBadge}>
-                  <Ionicons name="warning" size={14} color="#ff6b6b" />
+                  <Ionicons name="warning" size={14} color={Colors.danger} />
                 </View>
               )}
 
@@ -234,8 +234,8 @@ export function PosterFrameStrip({
               accessibilityLabel="Remove frame"
               accessibilityRole="button"
             >
-              <Ionicons name="trash-outline" size={18} color="#ff6b6b" />
-              <Text style={[styles.frameOpLabel, { color: '#ff6b6b' }]}>Remove</Text>
+              <Ionicons name="trash-outline" size={18} color={Colors.danger} />
+              <Text style={[styles.frameOpLabel, { color: Colors.danger }]}>Remove</Text>
             </Pressable>
           )}
         </View>
@@ -294,8 +294,8 @@ export function PosterFrameStrip({
                 accessibilityLabel="Remove frame"
                 accessibilityRole="button"
               >
-                <Ionicons name="trash-outline" size={20} color="#ff6b6b" />
-                <Text style={[styles.contextItemText, { color: '#ff6b6b' }]}>Remove</Text>
+                <Ionicons name="trash-outline" size={20} color={Colors.danger} />
+                <Text style={[styles.contextItemText, { color: Colors.danger }]}>Remove</Text>
               </Pressable>
             )}
             <Pressable

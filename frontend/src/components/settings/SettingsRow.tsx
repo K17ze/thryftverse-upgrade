@@ -111,6 +111,7 @@ const styles = StyleSheet.create({
   },
   textWrap: {
     flex: 1,
+    minWidth: 0,
     justifyContent: 'center',
   },
   title: {
@@ -129,12 +130,17 @@ const styles = StyleSheet.create({
   right: {
     flexDirection: 'row',
     alignItems: 'center',
+    minWidth: 0,
+    flexShrink: 1,
+    justifyContent: 'flex-end',
     gap: Space.xs,
   },
   value: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    maxWidth: 140,
+    flexShrink: 1,
+    maxWidth: '100%',
+    textAlign: 'right',
     letterSpacing: Type.body.letterSpacing,
   },
 });

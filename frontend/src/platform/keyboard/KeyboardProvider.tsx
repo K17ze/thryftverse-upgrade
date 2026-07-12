@@ -7,6 +7,7 @@ import {
   useKeyboardContext,
   type KeyboardAwareScrollViewProps,
   type KeyboardStickyViewProps,
+  type KeyboardAwareScrollViewRef,
 } from 'react-native-keyboard-controller';
 
 export function KeyboardProvider({ children }: { children: React.ReactNode }) {
@@ -14,4 +15,4 @@ export function KeyboardProvider({ children }: { children: React.ReactNode }) {
 }
 
 export { KeyboardAwareScrollView, KeyboardStickyView, useKeyboardHandler, useKeyboardContext };
-export type { KeyboardAwareScrollViewProps, KeyboardStickyViewProps };
+export type { KeyboardAwareScrollViewProps, KeyboardStickyViewProps, KeyboardAwareScrollViewRef };

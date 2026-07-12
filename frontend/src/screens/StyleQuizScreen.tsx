@@ -109,8 +109,9 @@ export default function StyleQuizScreen() {
       categoriesAndSizesPref: selectedStyles.length > 0 ? selectedStyles.join(', ') : 'Balanced',
       brandsPref: selectedPrice ? selectedPrice : 'Any',
     });
-    show('Preferences saved', 'success');
-    navigation.goBack();
+    show('Feed personalised — your Explore and Home feeds now reflect your preferences.', 'success');
+    // Navigate to Home tab to show the personalised feed
+    navigation.navigate('MainTabs', { screen: 'Home' });
   };
 
   const progress = ((step + 1) / 4) * 100;

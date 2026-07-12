@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { Typography, Space, Radius } from '../../theme/designTokens';
-import type { SellerTrustSummary } from '../../platform/product';
+import type { SellerTrustSummary, VerificationTier } from '../../platform/product';
+import { VERIFICATION_TIERS, deriveSellerBadges, SELLER_BADGES } from '../../platform/product';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
@@ -123,9 +124,19 @@ export function SellerTrustCard({
               <Text style={styles.username} numberOfLines={1}>
                 {seller.username}
               </Text>
-              {seller.verified && (
-                <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
-              )}
+              {(() => {
+                const tier: VerificationTier | null = seller.verificationTier ?? (seller.verified ? 'email' : null);
+                if (!tier) return null;
+                const info = VERIFICATION_TIERS[tier];
+                return (
+                  <Ionicons
+                    name={info.icon as keyof typeof Ionicons.glyphMap}
+                    size={16}
+                    color={info.color === 'brand' ? Colors.brand : Colors.success}
+                    accessibilityLabel={info.label}
+                  />
+                );
+              })()}
             </View>
             {seller.location ? (
               <Text style={styles.location} numberOfLines={1}>
@@ -141,6 +152,25 @@ export function SellerTrustCard({
                 ))}
               </View>
             ) : null}
+            {/* Seller standards badges — derived from trust metrics */}
+            {(() => {
+              const earned = deriveSellerBadges(seller);
+              if (earned.length === 0) return null;
+              return (
+                <View style={styles.badgeRow}>
+                  {earned.slice(0, 3).map((type) => {
+                    const badge = SELLER_BADGES[type];
+                    if (!badge) return null;
+                    return (
+                      <View key={type} style={styles.standardsBadge}>
+                        <Ionicons name={badge.icon as keyof typeof Ionicons.glyphMap} size={10} color={Colors.brand} />
+                        <Text style={styles.standardsBadgeText} numberOfLines={1}>{badge.label}</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              );
+            })()}
           </View>
         </AnimatedPressable>
 
@@ -274,6 +304,22 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontFamily: Typography.family.medium,
     color: Colors.textSecondary,
+  },
+  standardsBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    backgroundColor: `${Colors.brand}10`,
+    borderRadius: Radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: `${Colors.brand}25`,
+  },
+  standardsBadgeText: {
+    fontSize: 10,
+    fontFamily: Typography.family.semibold,
+    color: Colors.brand,
   },
   actionRow: {
     flexDirection: 'row',

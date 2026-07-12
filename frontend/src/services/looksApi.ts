@@ -21,6 +21,8 @@ export interface LookApiItem {
   title: string;
   caption: string;
   mediaUrl: string;
+  /** Media type — defaults to 'image' when absent for backward compatibility */
+  mediaType?: 'image' | 'video';
   visibility: 'public' | 'private';
   status: 'draft' | 'published' | 'archived';
   createdAt: string;

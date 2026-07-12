@@ -3,11 +3,8 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TextInput,
   Pressable,
-  KeyboardAvoidingView,
-  Platform,
   Dimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,7 +14,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 
 import { Colors } from '../constants/colors';
-import { Space, Typography } from '../theme/designTokens';
+import { Space, Typography, DockConstants } from '../theme/designTokens';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
@@ -36,6 +33,12 @@ import { createListingOnApi, createListingImageOnApi } from '../services/listing
 import { ListingMediaStudio } from '../components/listing/ListingMediaStudio';
 import { ListingModeSelector, ListingMode } from '../components/listing/ListingModeSelector';
 import { ListingPublishFooter } from '../components/listing/ListingPublishFooter';
+import { ListingQualityMeter } from '../components/listing/ListingQualityMeter';
+import { calculateListingQuality } from '../utils/listingQuality';
+import { useListingAutofill } from '../hooks/useListingAutofill';
+import { useSoldComps } from '../hooks/useSoldComps';
+import { useBackendData } from '../context/BackendDataContext';
+import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -97,6 +100,29 @@ export default function SellScreen() {
 
   const currency = useCurrencyPref();
   const currencySymbol = CURRENCIES[currency.currencyCode].symbol;
+
+  // AI autofill suggestions from first photo filename
+  const autofillSuggestion = useListingAutofill(mediaDraftItems);
+  const [autofillDismissed, setAutofillDismissed] = useState(false);
+
+  // Reset dismiss when photos change (new photo → new suggestions)
+  useEffect(() => {
+    if (mediaDraftItems.length === 0) {
+      setAutofillDismissed(false);
+    }
+  }, [mediaDraftItems.length]);
+
+  const handleApplyAutofill = useCallback(() => {
+    if (autofillSuggestion.title && !title) setTitle(autofillSuggestion.title);
+    if (autofillSuggestion.brand && !brand) setBrand(autofillSuggestion.brand);
+    if (autofillSuggestion.category && !category) setCategory(autofillSuggestion.category);
+    setAutofillDismissed(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, [autofillSuggestion, title, brand, category]);
+
+  // Sold comparables for pricing guidance — derived from real backend data
+  const { listings: backendListings } = useBackendData();
+  const soldComps = useSoldComps(backendListings, category || undefined, brand || undefined);
 
   /* ── draft sync on mount ── */
   useEffect(() => {
@@ -676,7 +702,6 @@ export default function SellScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
-      <KeyboardAvoidingView style={styles.keyboardView} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {/* ── 1. COMPACT NAVIGATION HEADER ── */}
         <View style={[styles.navHeader, { paddingTop: 0 }]}>
           <Pressable
@@ -693,10 +718,11 @@ export default function SellScreen() {
           </View>
         </View>
 
-        <ScrollView
+        <KeyboardAwareScrollView
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
           {/* ── 2. LARGE LISTING MEDIA STUDIO ── */}
@@ -712,11 +738,83 @@ export default function SellScreen() {
             onRetryItem={handleRetryItem}
           />
 
+          {/* ── 2b. AI AUTOFILL SUGGESTIONS ── */}
+          {autofillSuggestion.hasSuggestions && !autofillDismissed && (
+            <View style={styles.autofillCard}>
+              <View style={styles.autofillHeader}>
+                <Ionicons name="sparkles" size={16} color={Colors.brand} />
+                <Text style={styles.autofillTitle}>Suggested fields</Text>
+                <Pressable
+                  hitSlop={8}
+                  onPress={() => setAutofillDismissed(true)}
+                  accessibilityLabel="Dismiss suggestions"
+                  accessibilityRole="button"
+                >
+                  <Ionicons name="close" size={16} color={Colors.textMuted} />
+                </Pressable>
+              </View>
+              <Text style={styles.autofillDesc}>
+                Based on your photo filename. Tap to fill empty fields.
+              </Text>
+              <View style={styles.autofillChips}>
+                {autofillSuggestion.title && (
+                  <View style={styles.autofillChip}>
+                    <Text style={styles.autofillChipLabel}>Title</Text>
+                    <Text style={styles.autofillChipValue} numberOfLines={1}>{autofillSuggestion.title}</Text>
+                  </View>
+                )}
+                {autofillSuggestion.brand && (
+                  <View style={styles.autofillChip}>
+                    <Text style={styles.autofillChipLabel}>Brand</Text>
+                    <Text style={styles.autofillChipValue} numberOfLines={1}>{autofillSuggestion.brand}</Text>
+                  </View>
+                )}
+                {autofillSuggestion.category && (
+                  <View style={styles.autofillChip}>
+                    <Text style={styles.autofillChipLabel}>Category</Text>
+                    <Text style={styles.autofillChipValue} numberOfLines={1}>{autofillSuggestion.category}</Text>
+                  </View>
+                )}
+              </View>
+              <Pressable
+                style={styles.autofillApplyBtn}
+                onPress={handleApplyAutofill}
+                accessibilityLabel="Apply suggested fields"
+                accessibilityRole="button"
+              >
+                <Ionicons name="checkmark-circle" size={16} color={Colors.brand} />
+                <Text style={styles.autofillApplyText}>Apply to empty fields</Text>
+              </Pressable>
+            </View>
+          )}
+
           {/* ── 3. LISTING MODE SELECTOR ── */}
           <View style={styles.sectionSpacing}>
             <ListingModeSelector
               mode={listingMode}
               onChange={(m) => { setListingMode(m); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+            />
+          </View>
+
+          {/* ── 3b. LISTING QUALITY METER ── */}
+          <View style={styles.sectionSpacing}>
+            <ListingQualityMeter
+              result={useMemo(() => calculateListingQuality({
+                photos,
+                title,
+                brand,
+                category,
+                size,
+                condition,
+                description: desc,
+                price,
+                originalPrice,
+                tags,
+                shippingMethod,
+                shippingPayer,
+                listingMode,
+                startingBid,
+              }), [photos, title, brand, category, size, condition, desc, price, originalPrice, tags, shippingMethod, shippingPayer, listingMode, startingBid])}
             />
           </View>
 
@@ -827,6 +925,31 @@ export default function SellScreen() {
                     />
                   </View>
                   {errors.price ? <Text style={styles.fieldError}>{errors.price}</Text> : null}
+
+                  {/* Sold comparables hint — truthful pricing guidance from real data */}
+                  {soldComps.hasComps && soldComps.minPrice != null && soldComps.maxPrice != null && (
+                    <Pressable
+                      style={styles.soldCompsHint}
+                      onPress={() => {
+                        if (!price && soldComps.medianPrice != null) {
+                          handlePriceChange(soldComps.medianPrice.toFixed(2));
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        }
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Similar items sold for ${currencySymbol}${soldComps.minPrice.toFixed(0)} to ${currencySymbol}${soldComps.maxPrice.toFixed(0)}. Tap to set median price ${currencySymbol}${soldComps.medianPrice?.toFixed(0) ?? ''}.`}
+                    >
+                      <Ionicons name="pricetag-outline" size={13} color={Colors.textMuted} />
+                      <Text style={styles.soldCompsText}>
+                        Similar sold: {currencySymbol}{soldComps.minPrice.toFixed(0)}–{currencySymbol}{soldComps.maxPrice.toFixed(0)}
+                        {' '}({soldComps.sampleSize} sold)
+                      </Text>
+                      {!price && soldComps.medianPrice != null && (
+                        <Text style={styles.soldCompsAction}>Tap for median</Text>
+                      )}
+                    </Pressable>
+                  )}
+
                   <View style={styles.hairline} />
                 </View>
 
@@ -1127,9 +1250,8 @@ export default function SellScreen() {
             </View>
           )}
 
-          <View style={{ height: 120 }} />
-        </ScrollView>
-      </KeyboardAvoidingView>
+          <View style={{ height: DockConstants.singleActionHeight }} />
+        </KeyboardAwareScrollView>
 
       {/* ── 9. RECOVERABLE PUBLICATION FEEDBACK + 10. STICKY PREVIEW / PUBLISH FOOTER ── */}
       <ListingPublishFooter
@@ -1207,6 +1329,77 @@ const styles = StyleSheet.create({
   },
 
   /* ── sections ── */
+  autofillCard: {
+    marginHorizontal: Space.md,
+    marginTop: Space.sm,
+    padding: Space.md,
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: `${Colors.brand}20`,
+  },
+  autofillHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  autofillTitle: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: Typography.family.semibold,
+    color: Colors.brand,
+  },
+  autofillDesc: {
+    fontSize: 12,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    marginBottom: Space.sm,
+  },
+  autofillChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: Space.sm,
+  },
+  autofillChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    minWidth: 80,
+    maxWidth: 180,
+  },
+  autofillChipLabel: {
+    fontSize: 10,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  autofillChipValue: {
+    fontSize: 13,
+    fontFamily: Typography.family.medium,
+    color: Colors.textPrimary,
+    marginTop: 2,
+  },
+  autofillApplyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: `${Colors.brand}10`,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  autofillApplyText: {
+    fontSize: 13,
+    fontFamily: Typography.family.semibold,
+    color: Colors.brand,
+  },
   sectionSpacing: {
     paddingTop: Space.md,
   },
@@ -1307,6 +1500,24 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
     color: Colors.danger,
     marginTop: 4,
+  },
+  soldCompsHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 6,
+    paddingVertical: 2,
+  },
+  soldCompsText: {
+    fontSize: 12,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    flex: 1,
+  },
+  soldCompsAction: {
+    fontSize: 12,
+    fontFamily: Typography.family.semibold,
+    color: Colors.brand,
   },
 
   /* ── toggles ── */

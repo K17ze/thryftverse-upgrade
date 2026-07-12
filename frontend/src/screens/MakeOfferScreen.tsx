@@ -29,6 +29,7 @@ import { AppButton } from '../components/ui/AppButton';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { CachedImage } from '../components/CachedImage';
 import { fetchListingByIdFromApi } from '../services/listingsApi';
+import { haptics } from '../utils/haptics';
 
 type Props = StackScreenProps<RootStackParamList, 'MakeOffer'>;
 
@@ -54,6 +55,10 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
   const [errorMsg, setErrorMsg] = useState('');
   const [listing, setListing] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [expiryHours, setExpiryHours] = useState(48);
+  const isCounterOffer = route.params.counterOffer ?? false;
+  const previousOffer = route.params.previousOffer;
+  const counterRound = route.params.counterRound ?? 0;
 
   React.useEffect(() => {
     let mounted = true;
@@ -69,9 +74,11 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
   }, [itemId, show]);
 
   React.useEffect(() => {
-    const defaultOffer = convertGbpToDisplayAmount(price, currencyCode, goldRates);
-    setOfferPrice((Number.isFinite(defaultOffer) ? defaultOffer : price).toFixed(2));
-  }, [currencyCode, goldRates, price]);
+    // For counter-offers, default to halfway between previous offer and asking price
+    const basePrice = isCounterOffer && previousOffer ? (previousOffer + price) / 2 : price;
+    const defaultOffer = convertGbpToDisplayAmount(basePrice, currencyCode, goldRates);
+    setOfferPrice((Number.isFinite(defaultOffer) ? defaultOffer : basePrice).toFixed(2));
+  }, [currencyCode, goldRates, price, isCounterOffer, previousOffer]);
 
   const numericOffer = parseFloat(offerPrice) || 0;
   const {
@@ -94,8 +101,44 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
       setErrorMsg('Offer seems too high. Please review the amount.');
       return;
     }
-    setErrorMsg('Offers require backend offer support. Message the seller instead.');
+    // Check against seller's minimum offer floor (if set on the listing)
+    const sellerMinOffer = listing?.minimumOfferGbp ?? listing?.minimum_offer_gbp ?? 0;
+    if (sellerMinOffer > 0 && numericOfferGbp < sellerMinOffer) {
+      setErrorMsg(`Seller's minimum offer is ${formatFromFiat(sellerMinOffer, 'GBP')}.`);
+      return;
+    }
+    // No backend offer API yet — send offer context via chat
+    if (!listing?.sellerId) {
+      setErrorMsg('Could not load seller info. Please try again.');
+      return;
+    }
+    const offerText = isCounterOffer
+      ? `Counter-offer: ${formatFromFiat(numericOfferGbp, 'GBP')} (was ${formatFromFiat(previousOffer ?? 0, 'GBP')}). Valid for ${expiryHours}h.`
+      : `Offer: ${formatFromFiat(numericOfferGbp, 'GBP')} for ${title}. Valid for ${expiryHours}h.`;
+    const expiresAt = new Date(Date.now() + expiryHours * 3600000).toISOString();
+    navigation.navigate('Chat', {
+      conversationId: `offer_${listing.sellerId}_${itemId}`,
+      focusQuery: offerText,
+      partnerUserId: listing.sellerId,
+      offerPayload: {
+        price: numericOfferGbp,
+        originalPrice: price,
+        expiresAt,
+        counterRound,
+      },
+    });
+    show('Opening chat to send your offer.', 'info');
   };
+
+  const quickOfferPercentages = [0.8, 0.9, 0.95];
+  const applyQuickOffer = (percentage: number) => {
+    const gbpAmount = price * percentage;
+    const displayAmount = convertGbpToDisplayAmount(gbpAmount, currencyCode, goldRates);
+    setOfferPrice((Number.isFinite(displayAmount) ? displayAmount : gbpAmount).toFixed(2));
+    if (errorMsg) setErrorMsg('');
+  };
+
+  const expiryOptions = [24, 48, 72];
 
   const handleMessageSeller = React.useCallback(() => {
     if (!listing?.sellerId) return;
@@ -144,7 +187,9 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
 
         {/* Floating Input Block */}
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Your offer</Text>
+          <Text style={styles.sectionLabel}>
+            {isCounterOffer ? 'Your counter-offer' : 'Your offer'}
+          </Text>
           <View style={styles.priceInputRow}>
             <Text style={styles.currencySymbol}>{currencySymbol}</Text>
             <TextInput
@@ -157,6 +202,78 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
               placeholder="0.00"
             />
           </View>
+
+          {/* Quick offer chips */}
+          <View style={styles.quickOfferRow}>
+            {quickOfferPercentages.map((pct) => {
+              const gbpAmount = price * pct;
+              const displayAmount = convertGbpToDisplayAmount(gbpAmount, currencyCode, goldRates);
+              const label = Number.isFinite(displayAmount)
+                ? `${Math.round(pct * 100)}% · ${currencySymbol}${displayAmount.toFixed(0)}`
+                : `${Math.round(pct * 100)}%`;
+              return (
+                <AnimatedPressable
+                  key={pct}
+                  style={styles.quickOfferChip}
+                  onPress={() => applyQuickOffer(pct)}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Quick offer: ${Math.round(pct * 100)}% of asking price`}
+                >
+                  <Text style={styles.quickOfferChipText}>{label}</Text>
+                </AnimatedPressable>
+              );
+            })}
+          </View>
+
+          {/* Counter-offer context */}
+          {isCounterOffer && previousOffer && (
+            <View style={styles.counterContextRow}>
+              <Ionicons name="arrow-undo-outline" size={14} color={MUTED} />
+              <Text style={styles.counterContextText}>
+                Previous offer was {formatFromFiat(previousOffer, 'GBP')}
+              </Text>
+            </View>
+          )}
+
+          {/* Seller minimum offer floor notice */}
+          {(() => {
+            const sellerMinOffer = listing?.minimumOfferGbp ?? listing?.minimum_offer_gbp ?? 0;
+            if (sellerMinOffer <= 0) return null;
+            return (
+              <View style={styles.counterContextRow}>
+                <Ionicons name="information-circle-outline" size={14} color={BRAND} />
+                <Text style={styles.counterContextText}>
+                  Seller's minimum offer: {formatFromFiat(sellerMinOffer, 'GBP')}
+                </Text>
+              </View>
+            );
+          })()}
+        </View>
+
+        {/* Offer expiry selector */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Offer valid for</Text>
+          <View style={styles.expiryRow}>
+            {expiryOptions.map((hours) => (
+              <AnimatedPressable
+                key={hours}
+                style={[styles.expiryChip, expiryHours === hours && styles.expiryChipActive]}
+                onPress={() => { setExpiryHours(hours); haptics.tap(); }}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel={`Offer valid for ${hours} hours`}
+                accessibilityState={{ selected: expiryHours === hours }}
+              >
+                <Text style={[styles.expiryChipText, expiryHours === hours && styles.expiryChipTextActive]}>
+                  {hours}h
+                </Text>
+              </AnimatedPressable>
+            ))}
+          </View>
+          <Text style={styles.expiryHint}>
+            Seller has {expiryHours} hours to respond. After that, the offer expires automatically.
+          </Text>
         </View>
 
         {/* Spaced Anti-list Platform Charge */}
@@ -195,14 +312,14 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
       <View style={styles.footer}>
         <AppButton
           style={styles.sendBtn}
-          title="Send offer"
+          title={isCounterOffer ? "Send counter-offer" : "Send offer via chat"}
           subtitle={formatFromFiat(total, 'GBP')}
           icon={<Ionicons name="paper-plane-outline" size={16} color={Colors.textInverse} />}
           variant="primary"
           size="lg"
           onPress={handleSendOffer}
           disabled={numericOffer <= 0}
-          accessibilityLabel={`Send offer totaling ${formatFromFiat(total, 'GBP')}`}
+          accessibilityLabel={`Send ${isCounterOffer ? 'counter-offer' : 'offer'} totaling ${formatFromFiat(total, 'GBP')} via chat`}
         />
       </View>
     </SafeAreaView>
@@ -274,9 +391,9 @@ const styles = StyleSheet.create({
     color: MUTED,
   },
   sellerMessageBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     borderWidth: 1,
     borderColor: BORDER,
     backgroundColor: CARD,
@@ -313,6 +430,71 @@ const styles = StyleSheet.create({
     color: TEXT,
     paddingVertical: 12,
     letterSpacing: -2,
+  },
+
+  quickOfferRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 16,
+  },
+  quickOfferChip: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    backgroundColor: CARD_ALT,
+    borderWidth: 1,
+    borderColor: BORDER,
+    alignItems: 'center',
+  },
+  quickOfferChipText: {
+    fontSize: 12,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textSecondary,
+  },
+  counterContextRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 12,
+  },
+  counterContextText: {
+    fontSize: 12,
+    fontFamily: Typography.family.regular,
+    color: MUTED,
+  },
+  expiryRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+  },
+  expiryChip: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: CARD_ALT,
+    borderWidth: 1,
+    borderColor: BORDER,
+    alignItems: 'center',
+  },
+  expiryChipActive: {
+    backgroundColor: `${BRAND}15`,
+    borderColor: BRAND,
+  },
+  expiryChipText: {
+    fontSize: 14,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textSecondary,
+  },
+  expiryChipTextActive: {
+    color: BRAND,
+  },
+  expiryHint: {
+    fontSize: 12,
+    fontFamily: Typography.family.regular,
+    color: MUTED,
+    marginTop: 10,
+    lineHeight: 16,
   },
 
   protectionCard: {

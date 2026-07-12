@@ -145,8 +145,8 @@ describe('VQ-09D: Profile tab avatar', () => {
   });
 
   it('Avatar has active ring border when focused', () => {
-    expect(tabNavSrc).toContain('avatarWrapActive');
     expect(tabNavSrc).toContain('borderWidth: 2');
+    expect(tabNavSrc).toContain('borderColor: colors.textPrimary');
   });
 });
 
@@ -210,7 +210,7 @@ describe('VQ-09D: Badges', () => {
   });
 
   it('Badge has surface-colored border for separation from icon', () => {
-    expect(tabNavSrc).toContain('borderColor: Colors.surface');
+    expect(tabNavSrc).toContain('borderColor: colors.surface');
   });
 
   it('Badge has accessibility label with unread count', () => {

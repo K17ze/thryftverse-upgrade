@@ -11,7 +11,7 @@ export type ResolvedRoute =
   | { screen: 'OrderDetail'; params: { orderId: string } }
   | { screen: 'ItemDetail'; params: { itemId: string } }
   | { screen: 'SupportTicketDetail'; params: { ticketId: string } }
-  | { screen: 'AuctionDetail'; params: { auctionId: string } }
+  | { screen: 'AuctionDetail'; params: { auctionId: string; openBidSheet?: boolean; initialBidAmount?: number } }
   | { screen: 'Wallet' }
   | { screen: 'BalanceHistory' }
   | { screen: 'NotificationsList' }
@@ -76,7 +76,21 @@ export function resolveNotificationRoute(
       };
     }
     if (screen === 'AuctionDetail' && typeof params.auctionId === 'string') {
-      return { screen: 'AuctionDetail', params: { auctionId: params.auctionId } };
+      return {
+        screen: 'AuctionDetail',
+        params: {
+          auctionId: params.auctionId,
+          openBidSheet: params.openBidSheet === true || payload?.openBidSheet === true,
+          initialBidAmount:
+            typeof params.initialBidAmount === 'number'
+              ? params.initialBidAmount
+              : typeof payload?.initialBidAmount === 'number'
+                ? payload.initialBidAmount
+                : typeof payload?.minimumNextBidGbp === 'number'
+                  ? payload.minimumNextBidGbp
+                  : undefined,
+        },
+      };
     }
     if (screen === 'AuctionHome') {
       return { screen: 'AuctionHome' };
@@ -108,7 +122,19 @@ export function resolveNotificationRoute(
 
     const auctionId = typeof payload.auctionId === 'string' ? payload.auctionId : null;
     if (auctionId) {
-      return { screen: 'AuctionDetail', params: { auctionId } };
+      return {
+        screen: 'AuctionDetail',
+        params: {
+          auctionId,
+          openBidSheet: payload.openBidSheet === true,
+          initialBidAmount:
+            typeof payload.initialBidAmount === 'number'
+              ? payload.initialBidAmount
+              : typeof payload.minimumNextBidGbp === 'number'
+                ? payload.minimumNextBidGbp
+                : undefined,
+        },
+      };
     }
 
     const assetId = typeof payload.assetId === 'string' ? payload.assetId : null;

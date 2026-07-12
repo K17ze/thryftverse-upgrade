@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, StatusBar } from 'react-native';
+
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -79,6 +80,9 @@ export default function CoOwnOnboardingScreen() {
         >
           <Ionicons name="close" size={22} color={colors.textPrimary} />
         </AnimatedPressable>
+        <Text style={[styles.progressLabel, { color: colors.textMuted }]}>
+          {index + 1} of {SLIDES.length}
+        </Text>
         <AnimatedPressable
           onPress={handleSkip}
           scaleValue={0.96}
@@ -101,8 +105,33 @@ export default function CoOwnOnboardingScreen() {
           <View style={[styles.iconRing, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
             <Ionicons name={slide.icon} size={64} color={colors.brand} />
           </View>
+
+          {/* Welcome badge — shown only on the first slide */}
+          {index === 0 && (
+            <View style={[styles.welcomeBadge, { backgroundColor: `${colors.brand}15` }]}>
+              <Text style={[styles.welcomeBadgeText, { color: colors.brand }]}>Welcome to Co-Own</Text>
+            </View>
+          )}
+
           <Text style={[styles.title, { color: colors.textPrimary }]}>{slide.title}</Text>
           <Text style={[styles.body, { color: colors.textSecondary }]}>{slide.body}</Text>
+
+          {/* First-slide checklist — what you'll learn */}
+          {index === 0 && (
+            <View style={[styles.checklist, { borderColor: colors.border }]}>
+              <Text style={[styles.checklistTitle, { color: colors.textSecondary }]}>What you'll learn</Text>
+              {[
+                'How Co-Own fractional ownership works',
+                'Buying and selling units at your pace',
+                'Trust, protection, and risk disclosure',
+              ].map((item, i) => (
+                <View key={i} style={styles.checklistItem}>
+                  <Ionicons name="checkmark-circle-outline" size={14} color={colors.brand} />
+                  <Text style={[styles.checklistText, { color: colors.textSecondary }]}>{item}</Text>
+                </View>
+              ))}
+            </View>
+          )}
         </Reanimated.View>
       </View>
 
@@ -150,6 +179,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  progressLabel: {
+    fontSize: 13,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: 0.3,
+  },
   headerBtn: {
     width: 40,
     height: 40,
@@ -187,6 +221,18 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 36,
   },
+  welcomeBadge: {
+    marginTop: Space.md,
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+    borderRadius: Radius.full,
+  },
+  welcomeBadgeText: {
+    fontSize: 11,
+    fontFamily: Typography.family.bold,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
   body: {
     marginTop: Space.sm,
     fontSize: Type.body.size,
@@ -194,6 +240,34 @@ const styles = StyleSheet.create({
     lineHeight: 23,
     textAlign: 'center',
     paddingHorizontal: Space.md,
+  },
+  checklist: {
+    marginTop: Space.lg,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.md,
+    gap: 8,
+    alignSelf: 'stretch',
+    maxWidth: 320,
+  },
+  checklistTitle: {
+    fontSize: 11,
+    fontFamily: Typography.family.semibold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 2,
+  },
+  checklistItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  checklistText: {
+    flex: 1,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    lineHeight: 18,
   },
   footer: {
     paddingTop: Space.lg,

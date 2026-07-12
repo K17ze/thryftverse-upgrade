@@ -22,7 +22,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { ActiveTheme, Colors } from '../constants/colors';
-import { Type, Space, Radius } from '../theme/designTokens';
+import { Type, Space, Radius, DockConstants } from '../theme/designTokens';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
@@ -37,6 +37,7 @@ import { Typography } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { BoardEmptyGraphic } from '../components/profile/BoardEmptyGraphic';
+import { ShareSheet } from '../components/ShareSheet';
 const { width: SCREEN_W } = Dimensions.get('window');
 const COVER_H = 180;
 type NavT = StackNavigationProp<RootStackParamList>;
@@ -48,6 +49,8 @@ export default function CollectionDetailScreen() {
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
   const [refreshing, setRefreshing] = useState(false);
+  const [shareVisible, setShareVisible] = useState(false);
+  const [isFollowing, setIsFollowing] = useState(false);
   const scrollY = useSharedValue(0);
 
   const collectionId = route.params?.collectionId;
@@ -111,6 +114,20 @@ export default function CollectionDetailScreen() {
       ]
     );
   }, [collection, collectionId, deleteCollectionOnApi, haptic, show, handleGoBack]);
+
+  const handleShare = useCallback(() => {
+    haptic.light();
+    setShareVisible(true);
+  }, [haptic]);
+
+  const handleToggleFollow = useCallback(() => {
+    haptic.light();
+    setIsFollowing((prev) => {
+      const next = !prev;
+      show(next ? `Following "${collection?.name}"` : `Unfollowed "${collection?.name}"`, 'info');
+      return next;
+    });
+  }, [haptic, show, collection]);
 
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (event) => {
@@ -206,7 +223,33 @@ export default function CollectionDetailScreen() {
             <View style={styles.coverActions} pointerEvents="box-none">
               <View style={{ width: 40 }} />
               <View style={styles.actionRow}>
-                <AnimatedPressable style={styles.actionBtnOverlay} onPress={() => { haptic.light(); navigation.navigate('EditCollection', { collectionId }); }} activeOpacity={0.85} accessibilityLabel="Edit collection">
+                {!collection.isPrivate && (
+                  <AnimatedPressable
+                    style={[styles.actionBtnOverlay, isFollowing && styles.actionBtnOverlayActive]}
+                    onPress={handleToggleFollow}
+                    activeOpacity={0.85}
+                    accessibilityLabel={isFollowing ? 'Unfollow collection' : 'Follow collection'}
+                    accessibilityRole="button"
+                  >
+                    <Ionicons name={isFollowing ? 'heart' : 'heart-outline'} size={18} color={isFollowing ? Colors.brand : '#fff'} />
+                  </AnimatedPressable>
+                )}
+                <AnimatedPressable
+                  style={styles.actionBtnOverlay}
+                  onPress={handleShare}
+                  activeOpacity={0.85}
+                  accessibilityLabel="Share collection"
+                  accessibilityRole="button"
+                >
+                  <Ionicons name="share-outline" size={18} color="#fff" />
+                </AnimatedPressable>
+                <AnimatedPressable
+                  style={styles.actionBtnOverlay}
+                  onPress={() => { haptic.light(); navigation.navigate('EditCollection', { collectionId }); }}
+                  activeOpacity={0.85}
+                  accessibilityLabel="Edit collection"
+                  accessibilityRole="button"
+                >
                   <Ionicons name="settings-outline" size={18} color="#fff" />
                 </AnimatedPressable>
               </View>
@@ -233,7 +276,33 @@ export default function CollectionDetailScreen() {
               <Text style={styles.noCoverMeta}>{count} {count === 1 ? 'item' : 'items'}</Text>
             </View>
             <View style={styles.actionRow}>
-              <AnimatedPressable style={styles.actionBtn} onPress={() => { haptic.light(); navigation.navigate('EditCollection', { collectionId }); }} activeOpacity={0.85}>
+              {!collection.isPrivate && (
+                <AnimatedPressable
+                  style={[styles.actionBtn, isFollowing && styles.actionBtnActive]}
+                  onPress={handleToggleFollow}
+                  activeOpacity={0.85}
+                  accessibilityLabel={isFollowing ? 'Unfollow collection' : 'Follow collection'}
+                  accessibilityRole="button"
+                >
+                  <Ionicons name={isFollowing ? 'heart' : 'heart-outline'} size={20} color={isFollowing ? Colors.brand : Colors.textPrimary} />
+                </AnimatedPressable>
+              )}
+              <AnimatedPressable
+                style={styles.actionBtn}
+                onPress={handleShare}
+                activeOpacity={0.85}
+                accessibilityLabel="Share collection"
+                accessibilityRole="button"
+              >
+                <Ionicons name="share-outline" size={20} color={Colors.textPrimary} />
+              </AnimatedPressable>
+              <AnimatedPressable
+                style={styles.actionBtn}
+                onPress={() => { haptic.light(); navigation.navigate('EditCollection', { collectionId }); }}
+                activeOpacity={0.85}
+                accessibilityLabel="Edit collection"
+                accessibilityRole="button"
+              >
                 <Ionicons name="settings-outline" size={20} color={Colors.textPrimary} />
               </AnimatedPressable>
             </View>
@@ -280,8 +349,17 @@ export default function CollectionDetailScreen() {
         {/* More like this */}
         <MoreLikeThisRow collectionItems={collectionItems} listings={listings} navigation={navigation} formatFromFiat={formatFromFiat} />
 
-        <View style={{ height: 120 }} />
+        <View style={{ height: DockConstants.singleActionHeight }} />
       </Reanimated.ScrollView>
+
+      {/* Share sheet */}
+      <ShareSheet
+        visible={shareVisible}
+        onDismiss={() => setShareVisible(false)}
+        url={`https://thryftverse.app/collection/${collectionId}`}
+        title={collection.name}
+        imageUri={coverImage ?? undefined}
+      />
 
     </SafeAreaView>
   );
@@ -444,6 +522,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  actionBtnOverlayActive: {
+    backgroundColor: 'rgba(255,255,255,0.9)',
+  },
   noCoverHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -517,6 +598,10 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  actionBtnActive: {
+    borderColor: Colors.brand,
+    backgroundColor: `${Colors.brand}15`,
   },
   manageRow: {
     flexDirection: 'row',

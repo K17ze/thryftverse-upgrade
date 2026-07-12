@@ -21,6 +21,7 @@ import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { getOrder, type CommerceOrder } from '../services/commerceApi';
 import { CachedImage } from '../components/CachedImage';
+import { SkeletonLoader } from '../components/SkeletonLoader';
 import { normaliseOrderStatus, humaniseStatus, isTerminalStatus } from '../components/orders/orderCapabilities';
 
 type OrderReceiptRoute = RouteProp<{ OrderReceipt: { orderId: string } }, 'OrderReceipt'>;
@@ -121,9 +122,26 @@ export default function OrderReceiptScreen() {
           <Text style={styles.headerTitle}>Receipt</Text>
           <View style={styles.headerSpacer} />
         </View>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.textSecondary} />
-          <Text style={styles.loadingText}>Loading receipt…</Text>
+        <View style={styles.skeletonContainer}>
+          {/* Receipt header skeleton */}
+          <SkeletonLoader width={100} height={12} borderRadius={6} />
+          <SkeletonLoader width={140} height={20} borderRadius={10} style={{ marginTop: 8 }} />
+          <SkeletonLoader width="80%" height={14} borderRadius={7} style={{ marginTop: 6 }} />
+          {/* Item row skeleton */}
+          <View style={styles.skeletonItemRow}>
+            <SkeletonLoader width={56} height={56} borderRadius={8} />
+            <View style={{ flex: 1, gap: 6 }}>
+              <SkeletonLoader width="70%" height={14} borderRadius={7} />
+              <SkeletonLoader width="40%" height={12} borderRadius={6} />
+            </View>
+          </View>
+          {/* Transaction rows skeleton */}
+          {Array.from({ length: 5 }).map((_, i) => (
+            <View key={i} style={styles.skeletonTxRow}>
+              <SkeletonLoader width="50%" height={12} borderRadius={6} />
+              <SkeletonLoader width={70} height={12} borderRadius={6} />
+            </View>
+          ))}
         </View>
       </View>
     );
@@ -205,6 +223,19 @@ export default function OrderReceiptScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 40 + insets.bottom }]}
       >
+        {/* Success header for completed orders */}
+        {isReceiptFinal && normalisedStatus !== 'cancelled' && normalisedStatus !== 'refunded' ? (
+          <View style={styles.successHeader}>
+            <View style={styles.successIconWrap}>
+              <Ionicons name="checkmark" size={28} color={Colors.success} />
+            </View>
+            <Text style={styles.successTitle}>
+              {isBuyer ? 'Order complete' : 'Payment received'}
+            </Text>
+            <Text style={styles.successSubtitle}>Receipt #{shortOrderId}</Text>
+          </View>
+        ) : null}
+
         <View style={styles.receiptCard}>
           <View style={styles.receiptHeader}>
             <Text style={styles.receiptTitle}>Order Receipt</Text>
@@ -276,6 +307,25 @@ export default function OrderReceiptScreen() {
               </Text>
             </View>
           )}
+
+          {/* What happens next — contextual next-step hint for pending orders */}
+          {!isReceiptFinal && isBuyer && (
+            <View style={styles.nextStepsCard}>
+              <Text style={styles.nextStepsTitle}>What happens next</Text>
+              <View style={styles.nextStepItem}>
+                <View style={[styles.nextStepDot, styles.nextStepDotActive]} />
+                <Text style={styles.nextStepText}>Seller prepares and dispatches your item</Text>
+              </View>
+              <View style={styles.nextStepItem}>
+                <View style={[styles.nextStepDot, styles.nextStepDotPending]} />
+                <Text style={styles.nextStepTextMuted}>Carrier delivers to your address</Text>
+              </View>
+              <View style={styles.nextStepItem}>
+                <View style={[styles.nextStepDot, styles.nextStepDotPending]} />
+                <Text style={styles.nextStepTextMuted}>You confirm receipt and can leave a review</Text>
+              </View>
+            </View>
+          )}
         </View>
 
         <Pressable
@@ -345,6 +395,24 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
     color: Colors.textMuted,
   },
+  skeletonContainer: {
+    flex: 1,
+    paddingHorizontal: Space.md,
+    paddingTop: Space.md,
+    gap: Space.md,
+  },
+  skeletonItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+    paddingVertical: Space.sm,
+  },
+  skeletonTxRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
   errorContainer: {
     flex: 1,
     alignItems: 'center',
@@ -375,6 +443,31 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
+  },
+  successHeader: {
+    alignItems: 'center',
+    paddingVertical: Space.lg,
+    gap: 6,
+  },
+  successIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: `${Colors.success}15`,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  successTitle: {
+    fontSize: 18,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
+    letterSpacing: -0.3,
+  },
+  successSubtitle: {
+    fontSize: 13,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
   },
   receiptCard: {
     backgroundColor: Colors.surface,
@@ -472,6 +565,52 @@ const styles = StyleSheet.create({
     marginTop: Space.xs,
   },
   pendingText: {
+    flex: 1,
+    fontSize: 12,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    lineHeight: 16,
+  },
+  nextStepsCard: {
+    marginTop: Space.md,
+    padding: Space.md,
+    backgroundColor: `${Colors.brand}08`,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: `${Colors.brand}20`,
+  },
+  nextStepsTitle: {
+    fontSize: 13,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+    marginBottom: Space.sm,
+    letterSpacing: -0.2,
+  },
+  nextStepItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 4,
+  },
+  nextStepDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  nextStepDotActive: {
+    backgroundColor: Colors.brand,
+  },
+  nextStepDotPending: {
+    backgroundColor: Colors.border,
+  },
+  nextStepText: {
+    flex: 1,
+    fontSize: 12,
+    fontFamily: Typography.family.medium,
+    color: Colors.textPrimary,
+    lineHeight: 16,
+  },
+  nextStepTextMuted: {
     flex: 1,
     fontSize: 12,
     fontFamily: Typography.family.regular,

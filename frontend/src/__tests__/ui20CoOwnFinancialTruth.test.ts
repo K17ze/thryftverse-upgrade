@@ -35,9 +35,11 @@ describe('UI-20 co-own financial truth and UX', () => {
     expect(src).toContain('fetchCoOwnOrderBook');
   });
 
-  it('AssetDetailScreen shows honest unavailable state for price history', () => {
+  it('AssetDetailScreen shows real price chart from truthful data sources', () => {
     const src = read(resolve(SCREENS, 'AssetDetailScreen.tsx'));
-    expect(src).toContain('Price history is not available');
+    // Price chart is now powered by real order data, not a placeholder
+    expect(src).toContain('CoOwnPriceChart');
+    expect(src).not.toContain('Price history is not available');
     expect(src).not.toContain('getPriceSeries');
     expect(src).not.toContain('getOrderBookSnapshot');
   });

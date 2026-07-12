@@ -7,10 +7,7 @@ import {
   Text,
   StyleSheet,
   TextInput,
-  ScrollView,
-  StatusBar,
-  KeyboardAvoidingView,
-  Platform
+  StatusBar
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,6 +21,7 @@ import { buildBankAccountPaymentMethod } from '../utils/checkoutFlow';
 import { createUserPaymentMethod } from '../services/commerceApi';
 import { getUserCountryCapabilities, UserCountryCapabilities } from '../services/capabilitiesApi';
 import { parseApiError } from '../lib/apiClient';
+import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 
 type Props = StackScreenProps<RootStackParamList, 'AddBankAccount'>;
 
@@ -159,8 +157,13 @@ export default function AddBankAccountScreen({ navigation }: Props) {
 
       {policyLabel ? <Text style={styles.policyLabel}>Policy scope: {policyLabel}</Text> : null}
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <KeyboardAwareScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        showsVerticalScrollIndicator={false}
+      >
           {!bankAllowed ? (
             <View style={styles.blockedCard}>
               <Text style={styles.blockedTitle}>Bank payouts unavailable in your region</Text>
@@ -233,7 +236,6 @@ export default function AddBankAccountScreen({ navigation }: Props) {
               Withdrawals typically take 1-3 business days. You'll receive a confirmation email once initiated.
             </Text>
           </View>
-        </ScrollView>
 
         <View style={styles.footer}>
           <AppButton
@@ -245,7 +247,7 @@ export default function AddBankAccountScreen({ navigation }: Props) {
             accessibilityHint="Saves this bank account for withdrawals"
           />
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

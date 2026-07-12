@@ -3,18 +3,18 @@ import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
+  useWindowDimensions,
   ActivityIndicator,
   Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../../constants/colors';
 import { Typography, Space } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 
-const { width: SCREEN_W } = Dimensions.get('window');
-const COVER_H = 150;
-const AVATAR_SIZE = 86;
+const COVER_H = 120;
+const AVATAR_SIZE = 76;
 
 interface EditProfilePreviewProps {
   coverUri: string;
@@ -43,41 +43,56 @@ export function EditProfilePreview({
   isUploadingCover,
   isUploadingAvatar,
 }: EditProfilePreviewProps) {
+  const { width: SCREEN_W } = useWindowDimensions();
   const contextParts: string[] = [];
   if (location) contextParts.push(location);
   if (memberSince) contextParts.push(`Member since ${memberSince}`);
 
   return (
-    <View style={styles.container}>
-      {/* Cover */}
-      <View style={styles.coverWrap}>
+    <View style={[styles.container, { width: SCREEN_W }]}>
+      {/* Cover — compact, deterministic. Subtle surface when no cover exists. */}
+      <View style={[styles.coverWrap, { width: SCREEN_W }]}>
         {coverUri ? (
           <CachedImage
             uri={coverUri}
-            style={styles.coverImage}
+            style={[styles.coverImage, { width: SCREEN_W }]}
             contentFit="cover"
             transition={300}
           />
         ) : (
-          <View style={[styles.coverImage, styles.coverFallback]} />
+          <View style={[styles.coverImage, styles.coverFallback, { width: SCREEN_W }]}>
+            <View style={styles.coverFallbackInner}>
+              <Ionicons name="image-outline" size={20} color={Colors.textMuted} />
+              <Text style={styles.coverFallbackText}>Add a cover photo</Text>
+            </View>
+          </View>
         )}
 
-        {/* Edit cover button */}
+        {/* Bottom gradient for button legibility (only over real media) */}
+        {coverUri ? (
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.35)']}
+            style={styles.coverGradient}
+          />
+        ) : null}
+
+        {/* Edit cover button — primary control on the preview */}
         <Pressable
-          style={styles.editCoverBtn}
+          style={[styles.editCoverBtn, !coverUri && styles.editCoverBtnEmpty]}
           onPress={onEditCover}
           accessibilityRole="button"
           accessibilityLabel="Change cover photo"
+          disabled={isUploadingCover}
         >
           {isUploadingCover ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
-            <Ionicons name="camera" size={18} color="#fff" />
+            <Ionicons name="camera" size={18} color={coverUri ? '#fff' : Colors.textSecondary} />
           )}
         </Pressable>
       </View>
 
-      {/* Avatar row */}
+      {/* Avatar row — stable negative overlap */}
       <View style={styles.avatarRow}>
         <View style={styles.avatarWrap}>
           {avatarUri ? (
@@ -89,21 +104,23 @@ export function EditProfilePreview({
             />
           ) : (
             <View style={[styles.avatarImage, styles.avatarFallback]}>
-              <Ionicons name="person" size={28} color={Colors.textMuted} />
+              <Ionicons name="person" size={26} color={Colors.textMuted} />
             </View>
           )}
 
-          {/* Edit avatar button */}
+          {/* Edit avatar button — primary control on the preview */}
           <Pressable
             style={styles.editAvatarBtn}
             onPress={onEditAvatar}
             accessibilityRole="button"
             accessibilityLabel="Change avatar photo"
+            disabled={isUploadingAvatar}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             {isUploadingAvatar ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
-              <Ionicons name="camera" size={14} color="#fff" />
+              <Ionicons name="camera" size={13} color="#fff" />
             )}
           </Pressable>
         </View>
@@ -118,7 +135,7 @@ export function EditProfilePreview({
           @{username || 'username'}
         </Text>
         {bio ? (
-          <Text style={styles.bio} numberOfLines={3}>{bio}</Text>
+          <Text style={styles.bio} numberOfLines={2}>{bio}</Text>
         ) : null}
         {contextParts.length > 0 ? (
           <Text style={styles.contextText} numberOfLines={1}>
@@ -132,22 +149,37 @@ export function EditProfilePreview({
 
 const styles = StyleSheet.create({
   container: {
-    width: SCREEN_W,
     backgroundColor: Colors.background,
   },
   coverWrap: {
-    width: SCREEN_W,
     height: COVER_H,
     position: 'relative',
     overflow: 'hidden',
     backgroundColor: Colors.surfaceAlt,
   },
   coverImage: {
-    width: SCREEN_W,
     height: COVER_H,
   },
   coverFallback: {
-    backgroundColor: Colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  coverFallbackInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  coverFallbackText: {
+    fontSize: 12,
+    fontFamily: Typography.family.medium,
+    color: Colors.textMuted,
+  },
+  coverGradient: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 50,
   },
   editCoverBtn: {
     position: 'absolute',
@@ -161,6 +193,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
+  },
+  editCoverBtnEmpty: {
+    backgroundColor: Colors.surface,
+    borderColor: Colors.border,
   },
   avatarRow: {
     flexDirection: 'row',
@@ -191,9 +227,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: -2,
     bottom: -2,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     backgroundColor: Colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
@@ -205,7 +241,7 @@ const styles = StyleSheet.create({
     paddingTop: Space.sm,
   },
   displayName: {
-    fontSize: 20,
+    fontSize: 19,
     fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
     letterSpacing: -0.3,

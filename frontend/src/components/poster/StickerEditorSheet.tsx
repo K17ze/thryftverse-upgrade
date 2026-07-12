@@ -8,13 +8,12 @@ import {
   ScrollView,
   FlatList,
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 import { Colors } from '../../constants/colors';
+import { KeyboardAwareScrollView } from '../../platform/keyboard/KeyboardProvider';
 import { useToast } from '../../context/ToastContext';
 import { searchUsers, type UserSearchResult } from '../../services/profileApi';
 import { fetchListingsFromApi } from '../../services/listingsApi';
@@ -164,9 +163,11 @@ function SheetShell({
   canDelete?: boolean;
 }) {
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    <KeyboardAwareScrollView
       style={styles.overlay}
+      contentContainerStyle={{ flex: 1 }}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
     >
       <Pressable style={styles.backdrop} onPress={onClose} />
       <View style={styles.sheet}>
@@ -181,7 +182,7 @@ function SheetShell({
                 accessibilityLabel="Delete sticker"
                 accessibilityRole="button"
               >
-                <Ionicons name="trash-outline" size={20} color="#ff6b6b" />
+                <Ionicons name="trash-outline" size={20} color={Colors.danger} />
               </Pressable>
             )}
             <Pressable
@@ -196,7 +197,7 @@ function SheetShell({
         </View>
         {children}
       </View>
-    </KeyboardAvoidingView>
+    </KeyboardAwareScrollView>
   );
 }
 
@@ -1308,7 +1309,7 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    color: '#ff6b6b',
+    color: Colors.danger,
     marginTop: Space.xs,
   },
   footerBar: {

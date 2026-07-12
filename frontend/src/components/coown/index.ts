@@ -35,6 +35,12 @@ export { CoOwnLedgerSummary } from './CoOwnLedgerSummary';
 export type { CoOwnLedgerSummaryProps } from './CoOwnLedgerSummary';
 export { CoOwnEducationCard } from './CoOwnEducationCard';
 export type { CoOwnEducationCardProps, CoOwnEducationTopic } from './CoOwnEducationCard';
+export { CoOwnPriceChart } from './CoOwnPriceChart';
+export type { CoOwnPriceChartProps } from './CoOwnPriceChart';
+export { CoOwnWatchButton } from './CoOwnWatchButton';
+export type { CoOwnWatchButtonProps } from './CoOwnWatchButton';
+export { CoOwnFirstTradeGuide } from './CoOwnFirstTradeGuide';
+export type { CoOwnFirstTradeGuideProps } from './CoOwnFirstTradeGuide';
 export {
   CoOwnHubSkeleton,
   CoOwnAssetDetailSkeleton,

@@ -4,10 +4,7 @@ import {
   Text,
   StyleSheet,
   StatusBar,
-  ScrollView,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,6 +21,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { useHaptic } from '../hooks/useHaptic';
+import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 
 type Props = StackScreenProps<RootStackParamList, 'EditCollection'>;
 
@@ -137,11 +135,13 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
         }
       />
 
-      <KeyboardAvoidingView
+      <KeyboardAwareScrollView
         style={styles.content}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        showsVerticalScrollIndicator={false}
       >
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
           <Reanimated.View entering={FadeInDown.duration(300).delay(40)} style={styles.card}>
             <Text style={styles.label}>Name</Text>
             <AppInput
@@ -217,8 +217,7 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
               This action cannot be undone. Your saved items will remain in Saved.
             </Text>
           </Reanimated.View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

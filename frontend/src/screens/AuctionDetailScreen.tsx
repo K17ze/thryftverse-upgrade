@@ -80,11 +80,13 @@ import {
   formatBidActivityRow,
   detectLifecycleTransition,
   type AuctionDetailInput,
+  resolveReserveStatus,
 } from '../utils/auctionDetailLogic';
 import {
   AuctionStateBadge,
   AuctionStickyBidDock,
   AuctionCountdown,
+  ReserveStatusBadge,
 } from '../components/auction';
 
 type NavT = StackNavigationProp<RootStackParamList>;
@@ -93,7 +95,7 @@ type RouteT = RouteProp<RootStackParamList, 'AuctionDetail'>;
 export default function AuctionDetailScreen() {
   const navigation = useNavigation<NavT>();
   const route = useRoute<RouteT>();
-  const { auctionId } = route.params;
+  const { auctionId, openBidSheet, initialBidAmount } = route.params;
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
   const { currencyCode, goldRates, displayMode } = useCurrencyContext();
@@ -231,7 +233,7 @@ export default function AuctionDetailScreen() {
     return fetchDetail();
   }, [fetchDetail]);
 
-  const openBidSheet = () => {
+  const handleOpenBidSheet = () => {
     if (!auction) return;
     setBidSheetVisible(true);
   };
@@ -239,6 +241,18 @@ export default function AuctionDetailScreen() {
   const closeBidSheet = () => {
     setBidSheetVisible(false);
   };
+
+  // Auto-open BidSheet when arriving from an outbid notification
+  React.useEffect(() => {
+    if (openBidSheet && auction && !loading && !bidSheetVisible) {
+      // Only auto-open if the auction is still live (bidding is possible)
+      const effectiveState = auction.lifecycle;
+      if (effectiveState === 'live') {
+        setBidSheetVisible(true);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openBidSheet, auction, loading]);
 
   // PASS 6: Sheet owns transaction feedback. Parent only calls API and returns typed result.
   // No duplicate toast — sheet handles inline error/success presentation.
@@ -315,6 +329,7 @@ export default function AuctionDetailScreen() {
       currentBidGbp: auction.currentBidGbp,
       minimumNextBidGbp: auction.minimumNextBidGbp,
       buyNowPriceGbp: auction.buyNowPriceGbp,
+      reservePriceGbp: auction.reservePriceGbp,
       bidCount: auction.bidCount,
       viewerState: auction.viewerState,
       isWatched: auction.isWatched,
@@ -357,9 +372,17 @@ export default function AuctionDetailScreen() {
   }, [priceLabel, priceAmount, formatFromFiat]);
 
   const countdown = React.useMemo(() => {
-    if (!timing) return { text: '', isFinalMinutes: false };
+    if (!timing) return { text: '', isFinalMinutes: false, stage: 'plenty' as const };
     return resolveDetailCountdown(timing, secondClock, minuteClock);
   }, [timing, secondClock, minuteClock]);
+
+  const countdownProgress = React.useMemo(() => {
+    if (!auction || !timing) return undefined;
+    const totalMs = new Date(auction.endsAt).getTime() - new Date(auction.startsAt).getTime();
+    if (totalMs <= 0) return undefined;
+    const elapsedMs = minuteClock - new Date(auction.startsAt).getTime();
+    return Math.max(0, Math.min(1, elapsedMs / totalMs));
+  }, [auction, timing, minuteClock]);
 
   const viewerContext = React.useMemo(() => {
     if (!detailInput || !timing) return null;
@@ -380,6 +403,7 @@ export default function AuctionDetailScreen() {
   const viewerState = auction?.viewerState ?? 'not_participating';
   const isSeller = viewerState === 'seller';
   const buyNowAvailable = detailInput ? isBuyNowAvailable(detailInput, effectiveState ?? 'upcoming') : false;
+  const reserveStatus = detailInput ? resolveReserveStatus(detailInput) : 'none';
   const showBidControls = !isTerminal && !isSeller;
   const treatmentStyle = stateAction?.viewerTreatment ?? 'none';
 
@@ -650,11 +674,26 @@ export default function AuctionDetailScreen() {
             </View>
           )}
 
-          {/* Countdown — tabular-nums, urgency color */}
+          {/* Reserve price status — only when reserve is set and auction is live or upcoming */}
+          {reserveStatus !== 'none' && !isTerminal && (
+            <View style={styles.transactionReserveRow}>
+              <ReserveStatusBadge status={reserveStatus} showExplanation />
+              {reserveStatus === 'not-met' && isLive && (
+                <Text style={styles.transactionReserveHint} numberOfLines={1}>
+                  Bidding continues until reserve is met
+                </Text>
+              )}
+            </View>
+          )}
+
+          {/* Countdown — tabular-nums, urgency color, progress bar */}
           <View style={styles.transactionCountdownRow}>
             <AuctionCountdown
               text={countdown.text}
               urgent={countdown.isFinalMinutes}
+              stage={countdown.stage}
+              progress={isLive ? countdownProgress : undefined}
+              showProgress={isLive}
             />
           </View>
         </View>
@@ -664,7 +703,7 @@ export default function AuctionDetailScreen() {
           <View style={styles.outbidActionBlock}>
             <AppButton
               style={styles.outbidAction}
-              onPress={openBidSheet}
+              onPress={handleOpenBidSheet}
               variant="primary"
               size="md"
               align="center"
@@ -790,7 +829,51 @@ export default function AuctionDetailScreen() {
               <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
             </View>
           </Pressable>
-          {auction.bidCount > 0 && (
+          {auction.bidCount > 0 && bidActivity.length > 0 && (
+            <View style={styles.bidPreviewList}>
+              {bidActivity.slice(0, 3).map((bid, index) => {
+                const row = formatBidActivityRow(bid, index, formatFromFiat, serverNowRef.current);
+                return (
+                  <View
+                    key={bid.id}
+                    style={[styles.bidPreviewRow, row.isTopBid && styles.bidPreviewRowTop]}
+                  >
+                    <View style={styles.bidPreviewLeft}>
+                      <Text style={styles.bidPreviewRank}>{index + 1}</Text>
+                      <Text style={styles.bidPreviewBidder} numberOfLines={1}>
+                        {row.bidderLabel}
+                      </Text>
+                      {row.isTopBid && (
+                        <View style={styles.bidPreviewTopBadge}>
+                          <Text style={styles.bidPreviewTopBadgeText}>LEADING</Text>
+                        </View>
+                      )}
+                    </View>
+                    <View style={styles.bidPreviewRight}>
+                      <Text style={styles.bidPreviewAmount}>{row.amountText}</Text>
+                      {row.relativeTime && (
+                        <Text style={styles.bidPreviewTime}>{row.relativeTime}</Text>
+                      )}
+                    </View>
+                  </View>
+                );
+              })}
+              {bidActivity.length > 3 && (
+                <Pressable
+                  style={styles.bidPreviewMore}
+                  onPress={() => setBidHistorySheetVisible(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`View all ${auction.bidCount} bids`}
+                >
+                  <Text style={styles.bidPreviewMoreText}>
+                    View all {auction.bidCount} bids
+                  </Text>
+                  <Ionicons name="chevron-forward" size={14} color={Colors.brand} />
+                </Pressable>
+              )}
+            </View>
+          )}
+          {auction.bidCount > 0 && bidActivity.length === 0 && (
             <View style={styles.bidSummaryRow}>
               <Text style={styles.bidSummaryLabel}>Highest bid</Text>
               <Text style={styles.bidSummaryValue}>{formatFromFiat(auction.currentBidGbp, 'GBP')}</Text>
@@ -912,7 +995,7 @@ export default function AuctionDetailScreen() {
           primaryLabel={stateAction.primary.label}
           onPrimary={() => {
             if (stateAction.primary.type === 'placeBid' || stateAction.primary.type === 'increaseBid' || stateAction.primary.type === 'bidAgain') {
-              openBidSheet();
+              handleOpenBidSheet();
             } else if (stateAction.primary.type === 'watchAuction') {
               void handleToggleWatch();
             } else if (stateAction.primary.type === 'viewSimilar') {
@@ -996,6 +1079,7 @@ export default function AuctionDetailScreen() {
             setBuyNowSheetVisible(true);
           }}
           serverClockMs={minuteClock}
+          initialBidAmount={initialBidAmount}
         />
       )}
 
@@ -1050,7 +1134,7 @@ export default function AuctionDetailScreen() {
           <ScrollView style={styles.sheetScroll} showsVerticalScrollIndicator={false}>
             <View style={styles.bidList}>
               {bidActivity.map((bid, index) => {
-                const row = formatBidActivityRow(bid, index, formatFromFiat);
+                const row = formatBidActivityRow(bid, index, formatFromFiat, serverNowRef.current);
                 return (
                   <View
                     key={bid.id}
@@ -1062,10 +1146,17 @@ export default function AuctionDetailScreen() {
                           <Text style={styles.viewerBadgeText}>YOU</Text>
                         </View>
                       )}
-                      <Text style={styles.bidderName}>{row.bidderLabel}</Text>
-                      {row.isTopBid && (
-                        <Text style={styles.topBidLabel}>Top bid</Text>
-                      )}
+                      <View style={styles.bidRowInfo}>
+                        <View style={styles.bidRowNameLine}>
+                          <Text style={styles.bidderName}>{row.bidderLabel}</Text>
+                          {row.isTopBid && (
+                            <Text style={styles.topBidLabel}>Top bid</Text>
+                          )}
+                        </View>
+                        {row.relativeTime && (
+                          <Text style={styles.bidRelativeTime}>{row.relativeTime}</Text>
+                        )}
+                      </View>
                     </View>
                     <View style={styles.bidRowRight}>
                       <Text style={styles.bidAmount}>{row.amountText}</Text>
@@ -1140,6 +1231,18 @@ export default function AuctionDetailScreen() {
             <View style={styles.ruleItem}>
               <View style={styles.ruleNumber}>
                 <Text style={styles.ruleNumberText}>5</Text>
+              </View>
+              <View style={styles.ruleContent}>
+                <BodyEmphasis style={styles.ruleTitle}>Reserve prices</BodyEmphasis>
+                <Text style={styles.ruleDescription}>
+                  Some auctions have a hidden reserve price set by the seller. If the highest bid hasn't met the reserve when the auction ends, the seller isn't obligated to sell. The "Reserve met" badge means the current top bid has reached or exceeded this threshold.
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.ruleItem}>
+              <View style={styles.ruleNumber}>
+                <Text style={styles.ruleNumberText}>6</Text>
               </View>
               <View style={styles.ruleContent}>
                 <BodyEmphasis style={styles.ruleTitle}>Currency & payments</BodyEmphasis>
@@ -1311,7 +1414,7 @@ const styles = StyleSheet.create({
   },
   outbidMinText: {
     fontSize: 13,
-    color: '#ff6b6b',
+    color: Colors.danger,
     marginTop: 4,
     fontFamily: Typography.family.medium,
   },
@@ -1341,7 +1444,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.medium,
   },
   countdownTextUrgent: {
-    color: '#ff6b6b',
+    color: Colors.danger,
     fontWeight: '700',
     fontSize: 16,
     fontFamily: Typography.family.bold,
@@ -1780,6 +1883,18 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.bold,
     fontVariant: ['tabular-nums'],
   },
+  transactionReserveRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    flexWrap: 'wrap',
+  },
+  transactionReserveHint: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    fontFamily: Typography.family.regular,
+    flexShrink: 1,
+  },
   transactionCountdownRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1913,6 +2028,86 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontFamily: Typography.family.semibold,
   },
+  bidPreviewList: {
+    marginTop: Space.xs,
+    borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    overflow: 'hidden',
+  },
+  bidPreviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+  },
+  bidPreviewRowTop: {
+    backgroundColor: `${Colors.brand}08`,
+  },
+  bidPreviewLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    flex: 1,
+  },
+  bidPreviewRank: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.textMuted,
+    fontFamily: Typography.family.bold,
+    minWidth: 14,
+  },
+  bidPreviewBidder: {
+    color: Colors.textSecondary,
+    fontSize: 13,
+    fontFamily: Typography.family.regular,
+    flexShrink: 1,
+  },
+  bidPreviewTopBadge: {
+    backgroundColor: Colors.success,
+    borderRadius: 3,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  bidPreviewTopBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 8,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  bidPreviewRight: {
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    gap: 1,
+  },
+  bidPreviewAmount: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+    fontFamily: Typography.family.semibold,
+    fontVariant: ['tabular-nums'],
+  },
+  bidPreviewTime: {
+    fontSize: 10,
+    color: Colors.textMuted,
+    fontFamily: Typography.family.regular,
+  },
+  bidPreviewMore: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: Space.sm,
+  },
+  bidPreviewMoreText: {
+    color: Colors.brand,
+    fontSize: 13,
+    fontFamily: Typography.family.medium,
+  },
   bidList: {
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
@@ -1952,6 +2147,20 @@ const styles = StyleSheet.create({
   bidderName: {
     color: Colors.textSecondary,
     fontSize: 13,
+    fontFamily: Typography.family.regular,
+  },
+  bidRowInfo: {
+    flexDirection: 'column',
+    gap: 1,
+  },
+  bidRowNameLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  bidRelativeTime: {
+    fontSize: 11,
+    color: Colors.textMuted,
     fontFamily: Typography.family.regular,
   },
   bidRowRight: {

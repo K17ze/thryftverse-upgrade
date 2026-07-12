@@ -3,13 +3,10 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   Pressable,
   TextInput,
   Alert,
   Keyboard,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,7 +23,9 @@ import {
   deleteUserAddress,
   CreateAddressInput,
 } from '../services/commerceApi';
+import { lookupUKPostcode, isUKPostcode } from '../utils/postcodeLookup';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 
 type Props = StackScreenProps<RootStackParamList, 'AddressForm'>;
 
@@ -193,6 +192,32 @@ export default function AddressFormScreen({ navigation, route }: Props) {
     },
     []
   );
+
+  // Postcode autocomplete suggestion — shows when UK postcode is detected
+  // and the suggested city/region differs from what's already entered
+  const postcodeSuggestion = useMemo(() => {
+    if (!form.postalCode || form.postalCode.trim().length < 2) return null;
+    if (!isUKPostcode(form.postalCode)) return null;
+    if (form.countryCode && form.countryCode !== 'GB') return null;
+    const result = lookupUKPostcode(form.postalCode);
+    if (!result) return null;
+    // Only show if city or region is empty or different from suggestion
+    const cityDiffers = form.city.trim().toLowerCase() !== result.city.toLowerCase();
+    const regionDiffers = form.region.trim().toLowerCase() !== result.region.toLowerCase();
+    if (!cityDiffers && !regionDiffers) return null;
+    return result;
+  }, [form.postalCode, form.city, form.region, form.countryCode]);
+
+  const applyPostcodeSuggestion = useCallback(() => {
+    if (!postcodeSuggestion) return;
+    haptic.light();
+    updateField('city', postcodeSuggestion.city);
+    updateField('region', postcodeSuggestion.region);
+    if (!form.countryCode) {
+      updateField('countryCode', 'GB');
+      updateField('country', 'United Kingdom');
+    }
+  }, [postcodeSuggestion, updateField, haptic, form.countryCode]);
 
   const validateField = useCallback(
     (field: keyof FieldErrors) => {
@@ -438,20 +463,16 @@ export default function AddressFormScreen({ navigation, route }: Props) {
       scrollEnabled={false}
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
     >
-      <KeyboardAvoidingView
+      <KeyboardAwareScrollView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + 80 },
+        ]}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        showsVerticalScrollIndicator={false}
       >
-        <ScrollView
-          style={styles.flex}
-          contentContainerStyle={[
-            styles.scrollContent,
-            { paddingBottom: insets.bottom + 80 },
-          ]}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
           {/* 2. Editorial introduction */}
           <View style={styles.intro}>
             <Text style={styles.introTitle}>
@@ -596,6 +617,21 @@ export default function AddressFormScreen({ navigation, route }: Props) {
                 <Text style={styles.errorText}>{errors.postalCode}</Text>
               </View>
             )}
+            {postcodeSuggestion && (
+              <Pressable
+                style={styles.postcodeSuggestion}
+                onPress={applyPostcodeSuggestion}
+                accessibilityRole="button"
+                accessibilityLabel={`Use ${postcodeSuggestion.city}, ${postcodeSuggestion.region} for this postcode`}
+              >
+                <Ionicons name="location-outline" size={14} color={Colors.brand} />
+                <Text style={styles.postcodeSuggestionText}>
+                  Use <Text style={styles.postcodeSuggestionBold}>{postcodeSuggestion.city}</Text>
+                  {postcodeSuggestion.region ? `, ${postcodeSuggestion.region}` : ''}
+                </Text>
+                <Ionicons name="arrow-forward-circle" size={16} color={Colors.brand} />
+              </Pressable>
+            )}
           </View>
 
           <View style={styles.section}>
@@ -648,8 +684,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
               <Text style={styles.removeBtnText}>Remove address</Text>
             </Pressable>
           )}
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
 
       {/* Save error display */}
       {saveError ? (
@@ -787,6 +822,28 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: Typography.family.regular,
     color: Colors.danger,
+  },
+  postcodeSuggestion: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: `${Colors.brand}08`,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: `${Colors.brand}30`,
+  },
+  postcodeSuggestionText: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: Typography.family.regular,
+    color: Colors.textSecondary,
+  },
+  postcodeSuggestionBold: {
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
   },
   saveErrorRow: {
     flexDirection: 'row',

@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TextInput, ScrollView, Platform } from 'react-n
 import { BottomSheet } from '../BottomSheet';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Ionicons } from '@expo/vector-icons';
-import { ActiveTheme, Colors } from '../../constants/colors';
+import { Colors } from '../../constants/colors';
 import { useStore } from '../../store/useStore';
 import { useToast } from '../../context/ToastContext';
 import { buildCardPaymentMethod } from '../../utils/checkoutFlow';
@@ -14,16 +14,15 @@ import { parseApiError } from '../../lib/apiClient';
 import * as Haptics from 'expo-haptics';
 import { Typography } from '../../theme/designTokens';
 
-const IS_LIGHT = ActiveTheme === 'light';
 const BG = Colors.background;
-const CARD = IS_LIGHT ? '#ffffff' : '#111111';
-const BORDER = IS_LIGHT ? '#d8d1c6' : '#2a2a2a';
-const DIVIDER = IS_LIGHT ? '#e4ded3' : '#1c1c1c';
+const CARD = Colors.background;
+const BORDER = Colors.border;
+const DIVIDER = Colors.borderLight;
+const BRAND = Colors.brand;
+const CARD_PREVIEW_BG = Colors.surface;
+const CARD_PREVIEW_BORDER = Colors.border;
 const MUTED = Colors.textMuted;
 const TEXT = Colors.textPrimary;
-const BRAND = IS_LIGHT ? '#2f251b' : '#d7b98f';
-const CARD_PREVIEW_BG = IS_LIGHT ? '#f1ede6' : '#1a2a1a';
-const CARD_PREVIEW_BORDER = IS_LIGHT ? '#d0c3af' : `${BRAND}44`;
 
 interface Props {
   visible: boolean;

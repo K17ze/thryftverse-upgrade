@@ -3,12 +3,9 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TextInput,
   Pressable,
   Dimensions,
-  KeyboardAvoidingView,
-  Platform,
   Alert,
   ActivityIndicator,
 } from 'react-native';
@@ -20,7 +17,7 @@ import * as Haptics from 'expo-haptics';
 
 import { RootStackParamList } from '../navigation/types';
 import { Colors } from '../constants/colors';
-import { Space, Typography } from '../theme/designTokens';
+import { Space, Typography, DockConstants } from '../theme/designTokens';
 import { useToast } from '../context/ToastContext';
 import { useCurrencyPref } from '../hooks/useCurrencyPref';
 import { CURRENCIES } from '../constants/currencies';
@@ -34,6 +31,7 @@ import { fetchListingByIdFromApi, patchListingOnApi, createListingImageOnApi } f
 import { MediaUploadQueue } from '../services/mediaUploadQueue';
 import { ListingMediaStudio } from '../components/listing/ListingMediaStudio';
 import { EditListingFooter } from '../components/listing/EditListingFooter';
+import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -579,7 +577,6 @@ export default function EditListingScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
-      <KeyboardAvoidingView style={styles.keyboardView} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {/* ── 1. COMPACT NAVIGATION HEADER ── */}
         <View style={styles.navHeader}>
           <Pressable
@@ -599,10 +596,11 @@ export default function EditListingScreen() {
           </View>
         </View>
 
-        <ScrollView
+        <KeyboardAwareScrollView
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
           {/* ── 2. LISTING MEDIA STUDIO ── */}
@@ -838,9 +836,8 @@ export default function EditListingScreen() {
             </View>
           )}
 
-          <View style={{ height: 100 }} />
-        </ScrollView>
-      </KeyboardAvoidingView>
+          <View style={{ height: DockConstants.singleActionHeight }} />
+        </KeyboardAwareScrollView>
 
       {/* ── 9. STICKY PREVIEW/SAVE FOOTER ── */}
       {isOwner && (

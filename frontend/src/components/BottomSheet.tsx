@@ -5,8 +5,6 @@ import {
   Dimensions,
   Pressable,
   BackHandler,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import Reanimated, {
@@ -22,6 +20,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Colors } from '../constants/colors';
 import { Motion } from '../constants/motion';
+import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SHEET_BG = Colors.surface;
@@ -157,12 +156,14 @@ export function BottomSheet({
             <View style={styles.handle} />
           </View>
 
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          <KeyboardAwareScrollView
             style={styles.contentWrap}
+            contentContainerStyle={{ flex: 1 }}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
           >
             {children}
-          </KeyboardAvoidingView>
+          </KeyboardAwareScrollView>
         </Reanimated.View>
       </GestureDetector>
     </View>

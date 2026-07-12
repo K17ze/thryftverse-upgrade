@@ -724,7 +724,7 @@ const productStyles = StyleSheet.create({
     fontSize: Type.body.size,
   },
   soldPrice: {
-    color: '#ff6b6b',
+    color: Colors.danger,
   },
   deletedPrice: {
     color: '#888',
@@ -764,7 +764,7 @@ const productStyles = StyleSheet.create({
     position: 'absolute',
     top: Space.sm,
     right: Space.sm,
-    backgroundColor: '#ff6b6b',
+    backgroundColor: Colors.danger,
     borderRadius: Radius.sm,
     paddingHorizontal: 6,
     paddingVertical: 2,

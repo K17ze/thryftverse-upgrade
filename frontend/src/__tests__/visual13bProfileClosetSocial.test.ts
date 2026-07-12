@@ -13,10 +13,10 @@ function fileExists(rel: string) {
 }
 
 describe('VISUAL-13B Profile Closet Social Upgrade', () => {
-  it('1. MyProfileScreen uses ProfileVisualHeader or ProfileTabRail', () => {
+  it('1. MyProfileScreen uses canonical identity hero and tab rail', () => {
     const src = readFile('screens/MyProfileScreen.tsx');
-    expect(src).toContain('ProfileVisualHeader');
-    expect(src).toContain('ProfileTabRail');
+    expect(src).toContain('MyProfileIdentityHero');
+    expect(src).toContain('MyProfileTabRail');
   });
 
   it('2. UserProfileScreen uses ProfileHero (FlagshipProfileMedia) and TabRail', () => {
@@ -42,14 +42,19 @@ describe('VISUAL-13B Profile Closet Social Upgrade', () => {
     expect(src).toContain('BoardEmptyGraphic');
   });
 
-  it('6. LooksTab uses LookPreviewCard', () => {
+  it('6. LooksTab renders looks with CachedImage (no fabricated placeholders)', () => {
     const src = readFile('components/explore/LooksTab.tsx');
-    expect(src).toContain('LookPreviewCard');
+    // LooksTab renders look cards inline with CachedImage (LookPreviewCard is not
+    // imported here — the canonical explore surface composes its own card).
+    expect(src).toContain('CachedImage');
+    expect(src).not.toMatch(/https?:\/\/(picsum|unsplash|placeholder|loremflickr)/i);
   });
 
-  it('7. EditProfileScreen preserves uploadMedia/updateMyProfile/fetchMyProfile flow', () => {
+  it('7. EditProfileScreen preserves updateMyProfile/fetchMyProfile flow (media moved to profile surface)', () => {
     const src = readFile('screens/EditProfileScreen.tsx');
-    expect(src).toContain('uploadMedia');
+    // Media editing was moved to MyProfileScreen/FlagshipProfileMedia.
+    // EditProfileScreen is now a text/account form — no media upload hook.
+    expect(src).not.toContain('useProfileMediaUpload');
     expect(src).toContain('updateMyProfile');
     expect(src).toContain('fetchMyProfile');
     expect(src).not.toContain('file://');
@@ -115,14 +120,20 @@ describe('VISUAL-13B Profile Closet Social Upgrade', () => {
     expect(fileExists('components/ImageEmptyGraphic.tsx')).toBe(true);
   });
 
-  it('12. No dead unused visual components', () => {
-    expect(readFile('screens/MyProfileScreen.tsx')).toContain('ProfileVisualHeader');
-    expect(readFile('screens/MyProfileScreen.tsx')).toContain('ProfileTabRail');
+  it('12. Canonical visual components are wired into their screens', () => {
+    // MyProfileScreen uses the canonical My-profile identity hero + tab rail.
+    expect(readFile('screens/MyProfileScreen.tsx')).toContain('MyProfileIdentityHero');
+    expect(readFile('screens/MyProfileScreen.tsx')).toContain('MyProfileTabRail');
+    // UserProfileScreen uses ProfileHero + TabRail (shared profile tab rail).
+    expect(readFile('screens/UserProfileScreen.tsx')).toContain('ProfileHero');
     expect(readFile('screens/UserProfileScreen.tsx')).toContain('TabRail');
+    // Closet + Collection surfaces keep their board visual language.
     expect(readFile('screens/ClosetScreen.tsx')).toContain('MoodboardCollectionGrid');
     expect(readFile('screens/ClosetScreen.tsx')).toContain('BoardEmptyGraphic');
     expect(readFile('screens/CollectionDetailScreen.tsx')).toContain('BoardEmptyGraphic');
-    expect(readFile('components/explore/LooksTab.tsx')).toContain('LookPreviewCard');
+    // LooksTab renders with CachedImage (canonical image primitive).
+    expect(readFile('components/explore/LooksTab.tsx')).toContain('CachedImage');
+    // CachedImage renders an honest empty graphic when uri is missing.
     expect(readFile('components/CachedImage.tsx')).toContain('ImageEmptyGraphic');
   });
 

@@ -1,12 +1,12 @@
 import React from 'react';
-import { View, StyleSheet, StatusBar, ScrollView, Text, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, StyleSheet, StatusBar, Text, Platform } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { Colors } from '../constants/colors';
+import { Colors, ActiveTheme } from '../constants/colors';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -28,6 +28,7 @@ import { Meta, BodyEmphasis, Body, Headline } from '../components/ui/Text';
 import { createAuction } from '../services/marketApi';
 import { createStableId } from '../utils/createStableId';
 import { EmptyState } from '../components/EmptyState';
+import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -245,11 +246,13 @@ export default function CreateAuctionScreen() {
         })}
       </View>
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      <KeyboardAwareScrollView
         style={{ flex: 1 }}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        showsVerticalScrollIndicator={false}
       >
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         {!sellerListings.length ? (
           <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration)}>
             <EmptyState
@@ -529,13 +532,12 @@ export default function CreateAuctionScreen() {
             )}
           </>
         )}
-      </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
 
       {/* ── Result overlay — crafted success moment ── */}
       {resultData && (
         <View style={styles.resultOverlay}>
-          <StatusBar barStyle="light-content" />
+          <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} />
           <Reanimated.View
             entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400)}
             style={styles.resultCard}

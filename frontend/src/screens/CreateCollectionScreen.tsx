@@ -5,8 +5,6 @@ import {
   StyleSheet,
   StatusBar,
   TextInput,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,6 +22,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { useHaptic } from '../hooks/useHaptic';
+import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -81,9 +80,12 @@ export default function CreateCollectionScreen() {
         }
       />
 
-      <KeyboardAvoidingView
+      <KeyboardAwareScrollView
         style={styles.content}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        contentContainerStyle={styles.contentContainer}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        showsVerticalScrollIndicator={false}
       >
         <Reanimated.View entering={FadeInDown.duration(300).delay(40)} style={styles.card}>
           <Text style={styles.label}>Name</Text>
@@ -151,7 +153,7 @@ export default function CreateCollectionScreen() {
             accessibilityLabel="Create collection"
           />
         </Reanimated.View>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }
@@ -164,6 +166,8 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: Space.md,
+  },
+  contentContainer: {
     paddingTop: Space.md,
     paddingBottom: Space.xl,
     gap: Space.md,

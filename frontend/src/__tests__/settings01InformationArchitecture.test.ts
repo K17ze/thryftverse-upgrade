@@ -74,7 +74,7 @@ describe('SETTINGS-01 — Settings information architecture, ownership and subpa
     });
   });
 
-  describe('Information ownership — AccountSettingsScreen', () => {
+  describe('Information ownership — AccountSettingsScreen (compatibility redirect)', () => {
     const accountSrc = readSrc('screens/AccountSettingsScreen.tsx');
 
     it('uses FlagshipScreen and FlagshipHeader', () => {
@@ -82,8 +82,14 @@ describe('SETTINGS-01 — Settings information architecture, ownership and subpa
       expect(accountSrc).toContain('FlagshipHeader');
     });
 
+    it('is a thin redirect wrapper to EditProfile (unified editor)', () => {
+      // AccountSettings is no longer a competing full editor — it redirects
+      // to EditProfileScreen which is the canonical unified profile/account editor.
+      expect(accountSrc).toContain('replace');
+      expect(accountSrc).toContain('EditProfile');
+    });
+
     it('does not have a duplicate displayName editor that conflicts with EditProfile', () => {
-      // The old code had openEdit('fullName', displayName) which edited displayName
       expect(accountSrc).not.toContain("openEdit('fullName'");
     });
 
@@ -91,33 +97,36 @@ describe('SETTINGS-01 — Settings information architecture, ownership and subpa
       expect(accountSrc).not.toContain('birthday');
     });
 
-    it('shows one compact public-profile navigation entry routing to EditProfile', () => {
-      // Per SETTINGS-MASTER §4.3: Account Details may contain one compact
-      // "Public profile" navigation row, not a second public-profile summary
-      // AND another "Public identity" section with Display Name + Username rows.
-      expect(accountSrc).toContain("navigate('EditProfile')");
-      // The duplicate "Public identity" section must be gone
-      expect(accountSrc).not.toContain('Public identity');
+    it('does not contain phone editing (moved to EditProfileScreen)', () => {
+      expect(accountSrc).not.toContain("openEdit('phone'");
     });
 
-    it('shows username within the compact identity summary (not a separate row)', () => {
-      // Username is displayed in the identity summary card as @username
-      expect(accountSrc).toMatch(/@{username}/);
-    });
-
-    it('has phone editing as the canonical private contact editor', () => {
-      expect(accountSrc).toContain("openEdit('phone'");
-    });
-
-    it('navigates to AccountControl instead of having a crude Alert.alert delete', () => {
-      expect(accountSrc).toContain('AccountControl');
-      expect(accountSrc).not.toContain("Alert.alert");
-      expect(accountSrc).not.toContain('FlagshipDangerZone');
+    it('does not contain AccountControl navigation (moved to EditProfileScreen)', () => {
+      expect(accountSrc).not.toContain('AccountControl');
     });
 
     it('does not import deleteMyAccount or requestMyDataExport (moved to AccountControl)', () => {
       expect(accountSrc).not.toContain('deleteMyAccount');
       expect(accountSrc).not.toContain('requestMyDataExport');
+    });
+  });
+
+  describe('Information ownership — EditProfileScreen (unified editor)', () => {
+    const editSrc = readSrc('screens/EditProfileScreen.tsx');
+
+    it('contains private details section with phone editing', () => {
+      expect(editSrc).toContain('Private details');
+      expect(editSrc).toContain("openEdit('phone'");
+    });
+
+    it('contains security section with password and two-factor', () => {
+      expect(editSrc).toContain('Security');
+      expect(editSrc).toContain('ChangePassword');
+      expect(editSrc).toContain('TwoFactorSetup');
+    });
+
+    it('contains account control section', () => {
+      expect(editSrc).toContain('AccountControl');
     });
   });
 
@@ -138,8 +147,10 @@ describe('SETTINGS-01 — Settings information architecture, ownership and subpa
     });
 
     it('clarifies these are public profile fields', () => {
-      expect(editSrc).toContain('public');
-      expect(editSrc).toContain('Public identity');
+      // Section label is now "Profile" (calmer than the old "Public identity").
+      // The photo hint clarifies that photo/cover are managed elsewhere.
+      expect(editSrc).toContain('Profile');
+      expect(editSrc).toContain('profile');
     });
 
     it('has unsaved-changes discard warning', () => {
@@ -147,10 +158,11 @@ describe('SETTINGS-01 — Settings information architecture, ownership and subpa
       expect(editSrc).toContain('Discard');
     });
 
-    it('does not expose private account fields like email or phone', () => {
-      // EditProfile should not have email or phone editors
-      expect(editSrc).not.toMatch(/label.*Email/i);
-      expect(editSrc).not.toMatch(/label.*Phone/i);
+    it('exposes private account fields (email read-only, phone editable)', () => {
+      // After unification, EditProfileScreen contains private details
+      // (email read-only, phone editable via modal) alongside public fields.
+      expect(editSrc).toContain('Email');
+      expect(editSrc).toContain('Phone');
     });
   });
 

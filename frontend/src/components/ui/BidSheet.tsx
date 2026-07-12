@@ -59,6 +59,8 @@ interface BidSheetProps {
   onRefreshDetail: () => Promise<AuctionDetailResponse | null>;
   onReviewBuyNow?: () => void;
   serverClockMs: number;
+  /** Pre-fill the bid input with this amount (GBP) — e.g. from an outbid notification */
+  initialBidAmount?: number;
 }
 
 export function BidSheet({
@@ -72,6 +74,7 @@ export function BidSheet({
   onRefreshDetail,
   onReviewBuyNow,
   serverClockMs,
+  initialBidAmount,
 }: BidSheetProps) {
   const [stage, setStage] = React.useState<BidSheetStage>('entry');
   const [bidInput, setBidInput] = React.useState('');
@@ -111,7 +114,10 @@ export function BidSheet({
   // Reset on open
   React.useEffect(() => {
     if (visible) {
-      const suggested = getSuggestedBid(auction.minimumNextBidGbp, currencyCode, goldRates);
+      // Use pre-filled amount from notification if provided, otherwise calculate suggested bid
+      const suggested = initialBidAmount
+        ? initialBidAmount.toFixed(2)
+        : getSuggestedBid(auction.minimumNextBidGbp, currencyCode, goldRates);
       setBidInput(suggested);
       setStage('entry');
       setError(null);
@@ -121,7 +127,7 @@ export function BidSheet({
       setSheetOpenedAtMs(Date.now());
       idempotencyKeyRef.current = null;
     }
-  }, [visible, auction.minimumNextBidGbp, currencyCode, goldRates]);
+  }, [visible, auction.minimumNextBidGbp, currencyCode, goldRates, initialBidAmount]);
 
   // Lifecycle guard â€” close sheet if auction transitions to terminal
   React.useEffect(() => {
@@ -403,6 +409,25 @@ export function BidSheet({
                 </Pressable>
               ))}
             </View>
+
+            {/* Bid confidence indicator — shows if the current amount would lead */}
+            {(() => {
+              const bidGbp = gbpAmount ?? 0;
+              const wouldLead = bidGbp >= currentMinimum && bidGbp > 0;
+              if (bidGbp <= 0) return null;
+              return (
+                <View style={[styles.confidenceRow, { backgroundColor: wouldLead ? `${Colors.success}10` : `${Colors.danger}10` }]}>
+                  <Ionicons
+                    name={wouldLead ? 'checkmark-circle-outline' : 'alert-circle-outline'}
+                    size={14}
+                    color={wouldLead ? Colors.success : Colors.danger}
+                  />
+                  <Text style={[styles.confidenceText, { color: wouldLead ? Colors.success : Colors.danger }]}>
+                    {wouldLead ? 'This bid would put you in the lead' : 'Below minimum to lead — increase your bid'}
+                  </Text>
+                </View>
+              );
+            })()}
 
             {error && (
               <View style={styles.errorRow}>
@@ -851,6 +876,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: Typography.family.medium,
     color: Colors.textPrimary,
+  },
+  confidenceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.md,
+    marginBottom: Space.sm,
+  },
+  confidenceText: {
+    flex: 1,
+    fontSize: 12,
+    fontFamily: Typography.family.medium,
+    lineHeight: 16,
   },
   errorRow: {
     flexDirection: 'row',

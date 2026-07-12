@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Platform,
   RefreshControl,
+  ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,7 +28,7 @@ import Reanimated, {
 import { useStore } from '../store/useStore';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { Space, Typography } from '../theme/designTokens';
+import { Space, Typography, DockConstants } from '../theme/designTokens';
 import {
   type PublicProfileStats,
   type PublicProfileViewer,
@@ -42,6 +43,7 @@ import {
   useBlockMutation,
   useReportUserMutation,
 } from '../platform/server';
+import { useSellerTrust } from '../platform/product';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useToast } from '../context/ToastContext';
 import { RootStackParamList } from '../navigation/types';
@@ -57,6 +59,8 @@ import { TabRail, SegmentedControl, type TabKey, type SegmentKey } from '../comp
 import { ProfileShopTile } from '../components/profile/ProfileShopTile';
 import { ProfileLookTile } from '../components/profile/ProfileLookTile';
 import { ReviewSummaryBlock, ProfileReviewRow } from '../components/profile/ProfileReviews';
+import { SellerResponseComposer } from '../components/profile/SellerResponseComposer';
+import { respondToReview } from '../services/reviewApi';
 import { ProfileMoreSheet, ProfileReportSheet, ProfileBlockConfirmSheet } from '../components/profile/ProfileSheets';
 import { PublicProfileConnectionsSheet } from '../components/profile/PublicProfileConnectionsSheet';
 
@@ -113,6 +117,12 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const [blockConfirmVisible, setBlockConfirmVisible] = useState(false);
   const [collapsedVisible, setCollapsedVisible] = useState(false);
   const [stickyRailVisible, setStickyRailVisible] = useState(false);
+  const [responseComposerState, setResponseComposerState] = useState<{
+    visible: boolean;
+    reviewId: string;
+    reviewerName?: string;
+    rating?: number;
+  }>({ visible: false, reviewId: '' });
 
   const isMe = route.params?.isMe ?? false;
   const userId = route.params?.userId;
@@ -124,6 +134,9 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const soldListingsQuery = useUserListingsInfinite(isSelfProfile ? null : targetUserId, 'sold');
   const looksQuery = useUserLooksInfinite(isSelfProfile ? null : targetUserId);
   const reviewsQuery = useSellerReviewsInfinite(isSelfProfile ? null : targetUserId);
+
+  // Seller trust summary — verified badge, response time, dispatch time, completed sales
+  const { data: sellerTrust } = useSellerTrust(targetUserId ?? undefined);
 
   const followMutation = useFollowMutation(targetUserId ?? '');
   const blockMutation = useBlockMutation(targetUserId ?? '');
@@ -346,8 +359,18 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     if (activeTab === 'Looks') {
       return <ProfileLookTile item={item as LookApiItem} onPress={() => navigation.navigate('LookDetail', { lookId: (item as LookApiItem).id })} cardWidth={lookTileWidth} cardHeight={lookTileHeight} gap={LOOK_GAP} />;
     }
-    return <ProfileReviewRow item={item as SellerReviewItem} onOpenReviewer={(uid) => navigation.push('UserProfile', { userId: uid })} onOpenListing={(lid) => navigation.navigate('ItemDetail', { itemId: lid })} />;
-  }, [activeTab, shopSegment, navigation, formatFromFiat, cardWidth, cardHeight, lookTileWidth, lookTileHeight]);
+    const reviewItem = item as SellerReviewItem;
+    return (
+      <ProfileReviewRow
+        item={reviewItem}
+        onOpenReviewer={(uid) => navigation.push('UserProfile', { userId: uid })}
+        onOpenListing={(lid) => navigation.navigate('ItemDetail', { itemId: lid })}
+        onRespond={isSelfProfile && !reviewItem.sellerResponse ? (reviewId, reviewerName, rating) => {
+          setResponseComposerState({ visible: true, reviewId, reviewerName, rating });
+        } : undefined}
+      />
+    );
+  }, [activeTab, shopSegment, navigation, formatFromFiat, cardWidth, cardHeight, lookTileWidth, lookTileHeight, isSelfProfile]);
 
   // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   // DERIVED RENDER STATE â€” after all hooks
@@ -399,6 +422,8 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         soldCount={soldCount}
         reviewCount={reviewCount}
         memberSince={memberSince}
+        sellerTrust={sellerTrust}
+        emailVerified={targetProfile?.emailVerified}
         followPending={followMutation.isPending}
         isBlocked={isBlocked}
         scrollY={scrollY}
@@ -412,6 +437,23 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         onTabSelect={(t) => setActiveTab(t)}
         onShopSegmentSelect={(s) => setShopSegment(s)}
       />
+
+      {/* Away-mode banner — shown when seller has holiday mode enabled */}
+      {sellerTrust?.holidayMode === true ? (
+        <View style={styles.awayBanner}>
+          <Ionicons name="pause-circle" size={18} color={Colors.textMuted} />
+          <View style={styles.awayBannerTextWrap}>
+            <Text style={styles.awayBannerTitle}>
+              {isSelfProfile ? 'Your shop is on holiday' : 'This shop is on holiday'}
+            </Text>
+            <Text style={styles.awayBannerSub}>
+              {sellerTrust.awayMessage?.trim()
+                ? sellerTrust.awayMessage.trim()
+                : 'The seller is away right now. Listings are paused and will return when they are back.'}
+            </Text>
+          </View>
+        </View>
+      ) : null}
 
       {/* Tab rail â€” measures Y for sticky threshold */}
       <View onLayout={(e) => onTabRailLayout(e.nativeEvent.layout.y)}>
@@ -441,6 +483,72 @@ export default function UserProfileScreen({ navigation, route }: Props) {
       {activeTab === 'Reviews' && reviewSummary && reviewCount > 0 ? (
         <ReviewSummaryBlock summary={reviewSummary} />
       ) : null}
+
+      {/* Shop policies — shown on Shop tab, derived from seller trust data */}
+      {activeTab === 'Shop' && sellerTrust ? (
+        <View style={styles.shopPoliciesSection}>
+          <Text style={styles.shopPoliciesTitle}>Shop policies</Text>
+          <View style={styles.shopPoliciesGrid}>
+            {sellerTrust.dispatchTimeLabel ? (
+              <View style={styles.shopPolicyItem}>
+                <Ionicons name="cube-outline" size={14} color={MUTED} />
+                <Text style={styles.shopPolicyText}>{sellerTrust.dispatchTimeLabel}</Text>
+              </View>
+            ) : null}
+            {sellerTrust.responseTimeLabel ? (
+              <View style={styles.shopPolicyItem}>
+                <Ionicons name="time-outline" size={14} color={MUTED} />
+                <Text style={styles.shopPolicyText}>Replies {sellerTrust.responseTimeLabel}</Text>
+              </View>
+            ) : null}
+            <View style={styles.shopPolicyItem}>
+              <Ionicons name="shield-checkmark-outline" size={14} color={MUTED} />
+              <Text style={styles.shopPolicyText}>Buyer protection</Text>
+            </View>
+            <View style={styles.shopPolicyItem}>
+              <Ionicons name="return-down-back-outline" size={14} color={MUTED} />
+              <Text style={styles.shopPolicyText}>Returns accepted</Text>
+            </View>
+          </View>
+        </View>
+      ) : null}
+
+      {/* Featured listings — pinned top items from the seller's active inventory */}
+      {activeTab === 'Shop' && shopSegment === 'forsale' && listData.length > 0 && (
+        <View style={styles.featuredSection}>
+          <View style={styles.featuredHeader}>
+            <Ionicons name="star-outline" size={14} color={Colors.brand} />
+            <Text style={styles.featuredTitle}>Featured</Text>
+          </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.featuredScroll}
+          >
+            {listData.slice(0, 5).map((item) => {
+              const listing = item as ListingApiItem;
+              return (
+                <Pressable
+                  key={listing.id}
+                  style={styles.featuredCard}
+                  onPress={() => navigation.push('ItemDetail', { itemId: listing.id })}
+                  accessibilityRole="button"
+                  accessibilityLabel={`View ${listing.title}`}
+                >
+                  {listing.images?.[0] ? (
+                    <CachedImage uri={listing.images[0]} style={styles.featuredImage} contentFit="cover" />
+                  ) : (
+                    <View style={[styles.featuredImage, styles.featuredImagePlaceholder]}>
+                      <Ionicons name="shirt-outline" size={20} color={MUTED} />
+                    </View>
+                  )}
+                  <Text style={styles.featuredPrice}>{formatFromFiat(listing.priceGbp, 'GBP', { displayMode: 'fiat' })}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
     </View>
   );
 
@@ -487,7 +595,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
 
   const listFooter = isFetchingNextPage ? (
     <View style={styles.loadMoreIndicator}><ActivityIndicator size="small" color={MUTED} /></View>
-  ) : <View style={{ height: 120 }} />;
+  ) : <View style={{ height: DockConstants.singleActionHeight }} />;
 
   return (
     <View style={styles.container}>
@@ -689,6 +797,20 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         followingCount={stats?.followingCount ?? 0}
         onOpenProfile={(id) => navigation.push('UserProfile', { userId: id })}
       />
+
+      {/* Seller response composer — for own profile reviews */}
+      <SellerResponseComposer
+        visible={responseComposerState.visible}
+        reviewId={responseComposerState.reviewId}
+        reviewerName={responseComposerState.reviewerName}
+        rating={responseComposerState.rating}
+        onClose={() => setResponseComposerState(s => ({ ...s, visible: false }))}
+        onSubmit={async (reviewId, text) => {
+          await respondToReview(reviewId, text);
+          // Refresh reviews to show the new response
+          reviewsQuery.refetch();
+        }}
+      />
     </View>
   );
 }
@@ -699,7 +821,7 @@ const styles = StyleSheet.create({
   topUtilityRow: { position: 'absolute', left: 12, right: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   topUtilityRight: { flexDirection: 'row', gap: 8 },
   topUtilityIconBtn: {
-    width: 36, height: 36, borderRadius: 10,
+    width: 44, height: 44, borderRadius: 12,
     backgroundColor: 'rgba(0,0,0,0.22)',
     alignItems: 'center', justifyContent: 'center',
   },
@@ -710,25 +832,126 @@ const styles = StyleSheet.create({
     backgroundColor: BG, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: BORDER,
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowRadius: 8, elevation: 4,
   },
-  collapsedBackBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  collapsedBackBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   collapsedCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4 },
   collapsedAvatar: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   collapsedAvatarMonogram: { backgroundColor: SURFACE_ALT },
   collapsedAvatarInitials: { fontSize: 12, fontFamily: Typography.family.bold, color: MUTED },
   collapsedTitle: { fontSize: 16, fontFamily: Typography.family.semibold, color: TEXT, letterSpacing: -0.3, flexShrink: 1 },
   collapsedRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  collapsedFollowBtn: { height: 32, paddingHorizontal: 14, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  collapsedFollowBtn: { height: 44, paddingHorizontal: 18, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   collapsedFollowingBtn: { borderWidth: StyleSheet.hairlineWidth, borderColor: BORDER, backgroundColor: BG },
   collapsedFollowActiveBtn: { backgroundColor: BRAND },
   collapsedFollowText: { fontSize: 13, fontFamily: Typography.family.semibold, color: TEXT },
   collapsedFollowActiveText: { color: TEXT_INVERSE },
-  collapsedIconBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  collapsedIconBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   stickyRailWrap: {
     position: 'absolute', left: 0, right: 0, zIndex: 9,
     backgroundColor: BG, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: BORDER,
   },
   stickySegmentWrap: { paddingHorizontal: Space.md, paddingVertical: Space.sm },
   segmentWrap: { paddingHorizontal: Space.md, paddingVertical: Space.sm, flexDirection: 'row' },
+  awayBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm + 2,
+    borderRadius: 12,
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+  },
+  awayBannerTextWrap: {
+    flex: 1,
+    gap: 2,
+  },
+  awayBannerTitle: {
+    fontSize: 13,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+  },
+  awayBannerSub: {
+    fontSize: 12,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    lineHeight: 17,
+  },
+  shopPoliciesSection: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
+    paddingBottom: Space.sm,
+  },
+  shopPoliciesTitle: {
+    fontSize: 11,
+    fontFamily: Typography.family.semibold,
+    color: MUTED,
+    textTransform: 'uppercase',
+    letterSpacing: 0.7,
+    marginBottom: Space.xs,
+  },
+  shopPoliciesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Space.xs,
+  },
+  shopPolicyItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: 8,
+  },
+  shopPolicyText: {
+    fontSize: 11,
+    fontFamily: Typography.family.medium,
+    color: TEXT,
+  },
+  featuredSection: {
+    paddingTop: Space.sm,
+    paddingBottom: Space.sm,
+  },
+  featuredHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: Space.md,
+    marginBottom: Space.xs,
+  },
+  featuredTitle: {
+    fontSize: 11,
+    fontFamily: Typography.family.semibold,
+    color: Colors.brand,
+    textTransform: 'uppercase',
+    letterSpacing: 0.7,
+  },
+  featuredScroll: {
+    paddingHorizontal: Space.md,
+    gap: Space.sm,
+  },
+  featuredCard: {
+    width: 100,
+    gap: 4,
+  },
+  featuredImage: {
+    width: 100,
+    height: 120,
+    borderRadius: 8,
+    backgroundColor: Colors.surfaceAlt,
+  },
+  featuredImagePlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  featuredPrice: {
+    fontSize: 12,
+    fontFamily: Typography.family.semibold,
+    color: TEXT,
+  },
   listState: { alignItems: 'center', justifyContent: 'center', paddingVertical: Space.xl * 2, paddingHorizontal: Space.md, gap: 8 },
   listStateTitle: { fontSize: 15, fontFamily: Typography.family.semibold, color: TEXT },
   listStateSub: { fontSize: 13, fontFamily: Typography.family.regular, color: MUTED, textAlign: 'center' },

@@ -18,6 +18,9 @@ import { Space, Typography, Radius } from '../../theme/designTokens';
 import { FlagshipProfileMedia } from '../flagship';
 import { isVideoUri } from '../../utils/media';
 import type { PublicProfileStats, PublicProfileViewer } from '../../services/profileApi';
+import type { SellerTrustSummary, VerificationTier } from '../../platform/product';
+import { VERIFICATION_TIERS } from '../../platform/product';
+import { ProfileTrustSignals } from './ProfileTrustSignals';
 
 const BG = Colors.background;
 const BORDER = Colors.border;
@@ -46,6 +49,10 @@ interface ProfileHeroProps {
   soldCount: number;
   reviewCount: number;
   memberSince?: string;
+  /** Seller trust summary from /sellers/:id — provides verified badge, response time, dispatch time. */
+  sellerTrust?: SellerTrustSummary | null;
+  /** Email-verified flag from the user profile (fallback for verified badge). */
+  emailVerified?: boolean;
   followPending: boolean;
   isBlocked: boolean;
   scrollY: SharedValue<number>;
@@ -89,6 +96,8 @@ export function ProfileHero({
   soldCount,
   reviewCount,
   memberSince,
+  sellerTrust,
+  emailVerified,
   followPending,
   isBlocked,
   scrollY,
@@ -114,6 +123,8 @@ export function ProfileHero({
   const followingCount = stats?.followingCount ?? 0;
   const ratingValue = stats?.ratingAverage;
   const hasRating = ratingValue !== null && ratingValue !== undefined && reviewCount > 0;
+  const isVerified = sellerTrust?.verified === true || emailVerified === true;
+  const verificationTier: VerificationTier | null = sellerTrust?.verificationTier ?? (isVerified ? 'email' : null);
 
   // Trust line: "4.9 ★ · 47 sold · Joined June 2026"
   const trustParts: string[] = [];
@@ -205,9 +216,20 @@ export function ProfileHero({
           </View>
 
           {/* Identity — full-width, left-aligned, no avatar indentation */}
-          <Text style={styles.displayName} numberOfLines={2}>
-            {targetProfile?.displayName || displayUsername}
-          </Text>
+          <View style={styles.displayNameRow}>
+            <Text style={styles.displayName} numberOfLines={2}>
+              {targetProfile?.displayName || displayUsername}
+            </Text>
+            {verificationTier ? (
+              <Ionicons
+                name={VERIFICATION_TIERS[verificationTier].icon as keyof typeof Ionicons.glyphMap}
+                size={18}
+                color={VERIFICATION_TIERS[verificationTier].color === 'brand' ? Colors.brand : Colors.success}
+                style={styles.verifiedBadge}
+                accessibilityLabel={VERIFICATION_TIERS[verificationTier].label}
+              />
+            ) : null}
+          </View>
           <Text style={styles.username} numberOfLines={1}>
             @{targetProfile?.username ?? 'thryft'}
           </Text>
@@ -260,6 +282,16 @@ export function ProfileHero({
               {memberSince ? <Text style={styles.trustStatic}>Joined {memberSince}</Text> : null}
             </View>
           ) : null}
+
+          {/* Trust signal chips — verified, response time, dispatch time, response rate */}
+          <ProfileTrustSignals
+            sellerTrust={sellerTrust}
+            emailVerified={emailVerified}
+            ratingAverage={ratingValue}
+            reviewCount={reviewCount}
+            soldCount={soldCount}
+            align="left"
+          />
         </View>
 
         {/* Actions — flat 11pt radius, restrained, content-first */}
@@ -437,12 +469,22 @@ const styles = StyleSheet.create({
   },
 
   // Identity — full-width, left-aligned
+  displayNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
   displayName: {
     fontSize: 20,
     fontFamily: Typography.family.bold,
     color: TEXT,
     letterSpacing: -0.4,
     marginBottom: 2,
+    flexShrink: 1,
+  },
+  verifiedBadge: {
+    flexShrink: 0,
+    marginTop: 2,
   },
   username: {
     fontSize: 14,

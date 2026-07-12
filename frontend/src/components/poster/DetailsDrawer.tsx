@@ -8,8 +8,6 @@ import {
   ScrollView,
   Animated,
   Dimensions,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
@@ -17,6 +15,7 @@ import type { Listing } from '../../data/mockData';
 import { CachedImage } from '../CachedImage';
 import { getListingCoverUri } from '../../utils/media';
 import { Typography } from '../../theme/designTokens';
+import { KeyboardAwareScrollView } from '../../platform/keyboard/KeyboardProvider';
 
 const { height: SCREEN_H } = Dimensions.get('window');
 const DRAWER_HEIGHT = SCREEN_H * 0.55;
@@ -132,18 +131,17 @@ export default function DetailsDrawer({
           { transform: [{ translateY }] },
         ]}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.keyboardWrap}
-        >
+        <View style={styles.keyboardWrap}>
           {/* Handle */}
           <View style={styles.handleRow}>
             <View style={styles.handle} />
           </View>
 
-          <ScrollView
+          <KeyboardAwareScrollView
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
           >
             {/* Listings */}
             <View style={styles.section}>
@@ -213,8 +211,8 @@ export default function DetailsDrawer({
                 </>
               )}
             </Pressable>
-          </ScrollView>
-        </KeyboardAvoidingView>
+          </KeyboardAwareScrollView>
+        </View>
       </Animated.View>
     </View>
   );

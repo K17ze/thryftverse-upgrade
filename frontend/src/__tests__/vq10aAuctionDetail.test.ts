@@ -33,6 +33,7 @@ function makeAuction(overrides: Partial<AuctionDetailInput> = {}): AuctionDetail
     currentBidGbp: 100,
     minimumNextBidGbp: 105,
     buyNowPriceGbp: 200,
+    reservePriceGbp: null,
     bidCount: 5,
     viewerState: 'not_participating',
     isWatched: false,
@@ -504,8 +505,9 @@ describe('PASS 4.10: Bid activity formatting', () => {
     };
     const row = formatBidActivityRow(bid, 1, formatFromFiat);
     expect(row.isViewer).toBe(false);
-    expect(row.bidderLabel).toBe('Bidder');
+    expect(row.bidderLabel).not.toBe('Bidder');
     expect(row.bidderLabel).not.toContain('otheruser');
+    expect(row.bidderLabel).toContain('•••');
     expect(row.isTopBid).toBe(false);
   });
 });
@@ -957,8 +959,9 @@ describe('PASS 4.1: Bid activity privacy', () => {
       isViewer: false,
     };
     const row = formatBidActivityRow(bid, 0, formatFromFiat);
-    expect(row.bidderLabel).toBe('Bidder');
+    expect(row.bidderLabel).not.toBe('Bidder');
     expect(row.bidderLabel).not.toContain('privateuser');
+    expect(row.bidderLabel).toContain('•••');
   });
 
   it('preserves You for viewer bids', () => {

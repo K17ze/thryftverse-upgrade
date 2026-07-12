@@ -49,6 +49,9 @@ import {
   CoOwnStickyActionDock,
   CoOwnAssetDetailSkeleton,
   CoOwnStateCanvas,
+  CoOwnPriceChart,
+  CoOwnWatchButton,
+  CoOwnFirstTradeGuide,
 } from '../components/coown';
 
 type RouteT = RouteProp<RootStackParamList, 'AssetDetail'>;
@@ -88,6 +91,11 @@ export default function AssetDetailScreen() {
   const [fullscreenIndex, setFullscreenIndex] = React.useState(0);
   const [fullscreenVisible, setFullscreenVisible] = React.useState(false);
   const [orderBookExpanded, setOrderBookExpanded] = React.useState(false);
+  const [guideVisible, setGuideVisible] = React.useState(false);
+  const [pendingTradeSide, setPendingTradeSide] = React.useState<'buy' | 'sell' | null>(null);
+
+  const coOwnCompliance = useStore((s) => s.coOwnCompliance);
+  const updateCoOwnCompliance = useStore((s) => s.updateCoOwnCompliance);
 
   const handleOpenFullscreen = (index: number) => {
     setFullscreenIndex(index);
@@ -224,6 +232,27 @@ export default function AssetDetailScreen() {
       : DockConstants.singleActionHeight;
   const scrollBottomPadding = Math.max(insets.bottom, Space.md) + dockHeight;
 
+  const handleTradePress = (side: 'buy' | 'sell') => {
+    if (!coOwnCompliance.educationCompleted) {
+      setPendingTradeSide(side);
+      setGuideVisible(true);
+      return;
+    }
+    navigation.navigate('Trade', { assetId: asset.id, side });
+  };
+
+  const handleGuideComplete = () => {
+    updateCoOwnCompliance({ educationCompleted: true });
+    setGuideVisible(false);
+  };
+
+  const handleGuideContinueToTrade = () => {
+    if (pendingTradeSide) {
+      navigation.navigate('Trade', { assetId: asset.id, side: pendingTradeSide });
+    }
+    setPendingTradeSide(null);
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar translucent backgroundColor="transparent" style={isDark ? 'light' : 'dark'} />
@@ -289,8 +318,13 @@ export default function AssetDetailScreen() {
           entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(80)}
           style={styles.identityStage}
         >
-          <Text style={[styles.eyebrow, { color: colors.textSecondary }]}>Co-Own item</Text>
-          <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={2}>{asset.title}</Text>
+          <View style={styles.identityHeaderRow}>
+            <View style={styles.identityHeaderLeft}>
+              <Text style={[styles.eyebrow, { color: colors.textSecondary }]}>Co-Own item</Text>
+              <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={2}>{asset.title}</Text>
+            </View>
+            <CoOwnWatchButton assetId={asset.id} assetTitle={asset.title} />
+          </View>
           {asset.description ? (
             <Text style={[styles.description, { color: colors.textSecondary }]} numberOfLines={4}>{asset.description}</Text>
           ) : null}
@@ -359,21 +393,17 @@ export default function AssetDetailScreen() {
           />
         </Reanimated.View>
 
-        {/* Price history — honest unavailable state */}
+        {/* Price chart — sparkline with period selector */}
         <Reanimated.View
           entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(170)}
           style={styles.sectionWrap}
         >
-          <View style={[styles.priceHistoryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={styles.priceHistoryRow}>
-              <Ionicons name="analytics-outline" size={16} color={colors.textMuted} />
-              <Text style={[styles.priceHistoryTitle, { color: colors.textPrimary }]}>Price history</Text>
-            </View>
-            <Text style={[styles.priceHistoryBody, { color: colors.textSecondary }]} numberOfLines={4}>
-              Price history is not available for this Co-Own item. Historical pricing data requires
-              backend aggregation and is not yet supported.
-            </Text>
-          </View>
+          <CoOwnPriceChart
+            assetId={asset.id}
+            unitPriceGbp={asset.unitPriceGbp}
+            marketMovePct24h={asset.marketMovePct24h ?? 0}
+            volume24hGbp={asset.volume24hGbp ?? 0}
+          />
         </Reanimated.View>
 
         {/* Category evidence — editorial details when available */}
@@ -597,7 +627,7 @@ export default function AssetDetailScreen() {
                     { borderColor: colors.border },
                     isVeryCompact && styles.dockSecondaryBtnStacked,
                   ]}
-                  onPress={() => navigation.navigate('Trade', { assetId: asset.id, side: 'sell' })}
+                  onPress={() => handleTradePress('sell')}
                   accessibilityLabel="Sell your units"
                   accessibilityRole="button"
                   scaleValue={0.97}
@@ -610,7 +640,7 @@ export default function AssetDetailScreen() {
                 title={isHolder ? 'Buy more' : 'Buy units'}
                 variant="primary"
                 size="md"
-                onPress={() => navigation.navigate('Trade', { assetId: asset.id, side: 'buy' })}
+                onPress={() => handleTradePress('buy')}
                 accessibilityLabel={isHolder ? 'Buy more units' : 'Buy units in this Co-Own'}
                 style={[
                   styles.dockPrimaryBtn,
@@ -643,6 +673,14 @@ export default function AssetDetailScreen() {
         initialIndex={fullscreenIndex}
         visible={fullscreenVisible}
         onClose={() => setFullscreenVisible(false)}
+      />
+
+      {/* First-trade guided education */}
+      <CoOwnFirstTradeGuide
+        visible={guideVisible}
+        onClose={() => { setGuideVisible(false); setPendingTradeSide(null); }}
+        onComplete={handleGuideComplete}
+        onContinueToTrade={pendingTradeSide ? handleGuideContinueToTrade : undefined}
       />
     </View>
   );
@@ -688,6 +726,16 @@ const styles = StyleSheet.create({
     paddingTop: Space.lg,
     gap: Space.xs,
   },
+  identityHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: Space.sm,
+  },
+  identityHeaderLeft: {
+    flex: 1,
+    gap: Space.xs,
+  },
   eyebrow: {
     fontSize: Type.metaElevated.size,
     fontFamily: Typography.family.semibold,
@@ -709,27 +757,6 @@ const styles = StyleSheet.create({
   sectionWrap: {
     paddingHorizontal: Space.md,
     marginTop: Space.lg,
-  },
-  priceHistoryCard: {
-    borderRadius: Radius.lg,
-    borderWidth: 0.5,
-    padding: Space.md,
-    gap: Space.sm,
-  },
-  priceHistoryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-  },
-  priceHistoryTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: -0.3,
-  },
-  priceHistoryBody: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: 20,
   },
   sectionTitle: {
     fontSize: Type.subtitle.size,

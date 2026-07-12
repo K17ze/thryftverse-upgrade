@@ -23,6 +23,8 @@ export function ProfileMediaEditor({
   onRetry,
   onRevert,
 }: ProfileMediaEditorProps) {
+  // Only render for active states — idle/confirmed is handled by the preview's camera buttons.
+  // This eliminates duplicate "Change cover" / "Change avatar" text rows.
   if (status === 'uploading') {
     return (
       <View style={styles.row}>
@@ -63,19 +65,8 @@ export function ProfileMediaEditor({
     );
   }
 
-  return (
-    <View style={styles.row}>
-      <Pressable
-        style={styles.changeBtn}
-        onPress={onChange}
-        accessibilityRole="button"
-        accessibilityLabel={`Change ${label.toLowerCase()}`}
-      >
-        <Ionicons name="image-outline" size={14} color={Colors.textSecondary} />
-        <Text style={styles.changeText}>Change {label.toLowerCase()}</Text>
-      </Pressable>
-    </View>
-  );
+  // idle / confirmed — no duplicate text row; preview camera buttons are the primary control.
+  return null;
 }
 
 const styles = StyleSheet.create({
@@ -90,17 +81,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: Typography.family.regular,
     color: Colors.textMuted,
-  },
-  changeBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 4,
-  },
-  changeText: {
-    fontSize: 13,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
   },
   failedContainer: {
     paddingHorizontal: Space.md,

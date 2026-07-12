@@ -19,6 +19,7 @@ import PosterArchiveScreen from '../screens/PosterArchiveScreen';
 
 import SellScreen from '../screens/SellScreen';
 import TradeHubScreen from '../screens/TradeHubScreen';
+import VerificationScreen from '../screens/VerificationScreen';
 import AuctionHomeScreen from '../screens/AuctionHomeScreen';
 import SellerAuctionCentreScreen from '../screens/SellerAuctionCentreScreen';
 import CreateAuctionScreen from '../screens/CreateAuctionScreen';
@@ -31,6 +32,9 @@ import TradeScreen from '../screens/TradeScreen';
 import PortfolioScreen from '../screens/PortfolioScreen';
 import MyBidsScreen from '../screens/MyBidsScreen';
 import MyListingsScreen from '../screens/MyListingsScreen';
+import SellerHubScreen from '../screens/SellerHubScreen';
+import SellerAnalyticsScreen from '../screens/SellerAnalyticsScreen';
+import BundleBagScreen from '../screens/BundleBagScreen';
 import CoOwnOrderHistoryScreen from '../screens/SyndicateOrderHistoryScreen';
 import AssetLeaderboardScreen from '../screens/AssetLeaderboardScreen';
 import BuyoutScreen from '../screens/BuyoutScreen';
@@ -92,6 +96,7 @@ import ListingSuccessScreen from '../screens/ListingSuccessScreen';
 
 // Phase 27
 import NotificationsScreen from '../screens/NotificationsScreen';
+import SavedSearchesScreen from '../screens/SavedSearchesScreen';
 
 // Phase 28
 import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
@@ -128,6 +133,7 @@ import ChatMediaPreviewScreen from '../screens/ChatMediaPreviewScreen';
 // UI-18 — Reference-perfect product UX
 import EditCollectionScreen from '../screens/EditCollectionScreen';
 import SupportTicketDetailScreen from '../screens/SupportTicketDetailScreen';
+import ResolutionCentreScreen from '../screens/ResolutionCentreScreen';
 // UI-19 — Sell / Co-own / Chat marketplace UX
 import ListingPreviewScreen from '../screens/ListingPreviewScreen';
 import TradeConfirmScreen from '../screens/TradeConfirmScreen';
@@ -227,6 +233,7 @@ export default function AppNavigator() {
 
       <Stack.Screen name="Sell" component={SellScreen} options={modalScreenOptions} />
       <Stack.Screen name="TradeHub" component={TradeHubScreen} />
+      <Stack.Screen name="Verification" component={VerificationScreen} />
       <Stack.Screen name="AuctionHome" component={AuctionHomeScreen} />
       <Stack.Screen name="SellerAuctionCentre" component={SellerAuctionCentreScreen} />
       <Stack.Screen name="CreateAuction" component={CreateAuctionScreen} options={modalScreenOptions} />
@@ -239,6 +246,9 @@ export default function AppNavigator() {
       <Stack.Screen name="Portfolio" component={PortfolioScreen} />
       <Stack.Screen name="MyBids" component={MyBidsScreen} />
       <Stack.Screen name="MyListings" component={MyListingsScreen} />
+      <Stack.Screen name="SellerHub" component={SellerHubScreen} />
+      <Stack.Screen name="SellerAnalytics" component={SellerAnalyticsScreen} />
+      <Stack.Screen name="BundleBag" component={BundleBagScreen} />
       <Stack.Screen name="CoOwnOrderHistory" component={CoOwnOrderHistoryScreen} />
       <Stack.Screen name="AssetLeaderboard" component={AssetLeaderboardScreen} />
       <Stack.Screen name="Buyout" component={BuyoutScreen} />
@@ -306,6 +316,7 @@ export default function AppNavigator() {
       <Stack.Screen name="TwoFactorSetup" component={TwoFactorSetupScreen} />
       <Stack.Screen name="WriteReview" component={WriteReviewScreen} options={modalScreenOptions} />
       <Stack.Screen name="Report" component={ReportScreen} options={modalScreenOptions} />
+      <Stack.Screen name="SavedSearches" component={SavedSearchesScreen} />
 
       {/* Visual Search */}
       <Stack.Screen name="VisualSearch" component={VisualSearchScreen} />
@@ -344,6 +355,7 @@ export default function AppNavigator() {
       {/* UI-18 — Reference-perfect product UX */}
       <Stack.Screen name="EditCollection" component={EditCollectionScreen} options={modalScreenOptions} />
       <Stack.Screen name="SupportTicketDetail" component={SupportTicketDetailScreen} />
+      <Stack.Screen name="ResolutionCentre" component={ResolutionCentreScreen} />
       {/* UI-19 — Sell / Co-own / Chat marketplace UX */}
       <Stack.Screen name="ListingPreview" component={ListingPreviewScreen} options={modalScreenOptions} />
       <Stack.Screen name="TradeConfirm" component={TradeConfirmScreen} options={modalScreenOptions} />

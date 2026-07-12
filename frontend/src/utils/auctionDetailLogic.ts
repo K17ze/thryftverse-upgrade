@@ -23,6 +23,7 @@ export interface AuctionDetailInput {
   currentBidGbp: number;
   minimumNextBidGbp: number;
   buyNowPriceGbp: number | null;
+  reservePriceGbp: number | null;
   bidCount: number;
   viewerState: AuctionViewerState;
   isWatched: boolean;
@@ -225,6 +226,16 @@ export function isBuyNowAvailable(auction: AuctionDetailInput, effectiveState: A
   return auction.buyNowPriceGbp !== null && auction.buyNowPriceGbp > 0;
 }
 
+// ── Reserve price status ──
+
+export type ReserveStatus = 'none' | 'not-met' | 'met';
+
+export function resolveReserveStatus(auction: { reservePriceGbp: number | null; currentBidGbp: number; bidCount: number }): ReserveStatus {
+  if (auction.reservePriceGbp === null || auction.reservePriceGbp <= 0) return 'none';
+  if (auction.bidCount === 0) return 'not-met';
+  return auction.currentBidGbp >= auction.reservePriceGbp ? 'met' : 'not-met';
+}
+
 // ── Seller cannot bid ──
 
 export function isSellerBlocked(viewerState: AuctionViewerState): boolean {
@@ -262,23 +273,29 @@ export function resolveDetailPriceAmount(auction: AuctionDetailInput): number {
 
 // ── Countdown display with urgency-based precision ──
 
+export type CountdownStage = 'upcoming' | 'plenty' | 'moderate' | 'urgent' | 'final' | 'ended';
+
 export function resolveDetailCountdown(
   timing: { effectiveState: AuctionEffectiveState; msToStart: number; msToEnd: number },
   secondClockMs: number,
   minuteClockMs: number,
-): { text: string; isFinalMinutes: boolean } {
-  if (timing.effectiveState === 'cancelled') return { text: 'Cancelled', isFinalMinutes: false };
-  if (timing.effectiveState === 'settled') return { text: 'Settled', isFinalMinutes: false };
-  if (timing.effectiveState === 'ended') return { text: 'Ended', isFinalMinutes: false };
+): { text: string; isFinalMinutes: boolean; stage: CountdownStage } {
+  if (timing.effectiveState === 'cancelled') return { text: 'Cancelled', isFinalMinutes: false, stage: 'ended' };
+  if (timing.effectiveState === 'settled') return { text: 'Settled', isFinalMinutes: false, stage: 'ended' };
+  if (timing.effectiveState === 'ended') return { text: 'Ended', isFinalMinutes: false, stage: 'ended' };
   if (timing.effectiveState === 'upcoming') {
-    return { text: `Starts in ${formatCountdown(timing.msToStart)}`, isFinalMinutes: false };
+    return { text: `Starts in ${formatCountdown(timing.msToStart)}`, isFinalMinutes: false, stage: 'upcoming' };
   }
   // live
   const isFinalMinutes = timing.msToEnd <= 5 * 60 * 1000;
   if (isFinalMinutes) {
-    return { text: formatFinalMinutesCountdown(timing.msToEnd), isFinalMinutes: true };
+    return { text: formatFinalMinutesCountdown(timing.msToEnd), isFinalMinutes: true, stage: 'final' };
   }
-  return { text: formatCountdown(timing.msToEnd), isFinalMinutes: false };
+  // moderate: under 1 hour
+  if (timing.msToEnd <= 60 * 60 * 1000) {
+    return { text: formatCountdown(timing.msToEnd), isFinalMinutes: false, stage: 'moderate' };
+  }
+  return { text: formatCountdown(timing.msToEnd), isFinalMinutes: false, stage: 'plenty' };
 }
 
 // ── Lifecycle transition detection ──
@@ -401,6 +418,33 @@ export interface BidActivityDisplayRow {
   relativeTime: string | null;
 }
 
+function formatRelativeTime(createdAt: string, serverNow: string | null): string | null {
+  const created = new Date(createdAt).getTime();
+  if (isNaN(created)) return null;
+  const now = serverNow ? new Date(serverNow).getTime() : Date.now();
+  const diffMs = now - created;
+  if (diffMs < 0) return null;
+  const seconds = Math.floor(diffMs / 1000);
+  if (seconds < 60) return 'just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  const weeks = Math.floor(days / 7);
+  if (weeks < 4) return `${weeks}w ago`;
+  return null;
+}
+
+function anonymizeBidder(username: string, isViewer: boolean): string {
+  if (isViewer) return 'You';
+  if (!username) return 'Anonymous';
+  // Show first 2 chars + "•••" to preserve privacy while giving a sense of identity
+  if (username.length <= 2) return `${username[0]}•••`;
+  return `${username.slice(0, 2)}•••`;
+}
+
 export function formatBidActivityRow(
   bid: {
     id: number;
@@ -411,13 +455,14 @@ export function formatBidActivityRow(
   },
   index: number,
   formatFromFiat: (amount: number, currency?: any, opts?: any) => string,
+  serverNow?: string | null,
 ): BidActivityDisplayRow {
   return {
     id: bid.id,
     amountText: formatFromFiat(bid.amountGbp, 'GBP'),
-    bidderLabel: bid.isViewer ? 'You' : 'Bidder',
+    bidderLabel: anonymizeBidder(bid.bidderUsername, bid.isViewer),
     isViewer: bid.isViewer,
     isTopBid: index === 0,
-    relativeTime: null,
+    relativeTime: formatRelativeTime(bid.createdAt, serverNow ?? null),
   };
 }

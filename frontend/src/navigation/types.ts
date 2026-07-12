@@ -21,7 +21,13 @@ export type RootStackParamList = {
   AuctionHome: undefined;
   SellerAuctionCentre: undefined;
   CreateAuction: { listingId?: string } | undefined;
-  AuctionDetail: { auctionId: string };
+  AuctionDetail: {
+    auctionId: string;
+    /** Auto-open the BidSheet on arrival (e.g. from an outbid notification) */
+    openBidSheet?: boolean;
+    /** Pre-fill the bid input with this amount (GBP) */
+    initialBidAmount?: number;
+  };
   CreateCoOwn:
     | {
         listingId?: string;
@@ -45,6 +51,13 @@ export type RootStackParamList = {
     focusQuery?: string;
     partnerUserId?: string;
     itemId?: string;
+    /** Offer metadata to attach when navigating from MakeOfferScreen */
+    offerPayload?: {
+      price: number;
+      originalPrice: number;
+      expiresAt: string;
+      counterRound: number;
+    };
   };
   CreateGroupChat: undefined;
   GroupBotDirectory: { conversationId: string };
@@ -69,7 +82,7 @@ export type RootStackParamList = {
   SavedAddresses: undefined;
   Payments: undefined;
   // Phase 16 new screens
-  MakeOffer: { itemId: string; price: number; title: string };
+  MakeOffer: { itemId: string; price: number; title: string; counterOffer?: boolean; previousOffer?: number; counterRound?: number };
   PushNotifications: undefined;
   Postage: undefined;
   InviteFriends: undefined;
@@ -126,6 +139,7 @@ export type RootStackParamList = {
   Report: { type: 'item' | 'user' };
   MyBids: undefined;
   MyListings: { type?: 'coown' | 'auction' | 'standard' } | undefined;
+  SavedSearches: undefined;
   // Explore / Creator screens
   CreateLook: undefined;
   CreatorStudio: {
@@ -175,6 +189,7 @@ export type RootStackParamList = {
   // UI-18 — Reference-perfect product UX
   EditCollection: { collectionId: string };
   SupportTicketDetail: { ticketId: string };
+  ResolutionCentre: undefined;
   // UI-19 — Sell / Co-own / Chat marketplace UX
   ListingPreview: {
     preview: {
@@ -209,6 +224,12 @@ export type RootStackParamList = {
   RuntimeSmokeTest: undefined;
   Sell: undefined;
   TradeHub: { destination?: 'auction' | 'co_own' } | undefined;
+  // Trust & Verification
+  Verification: undefined;
+  // Seller Hub
+  SellerHub: undefined;
+  SellerAnalytics: undefined;
+  BundleBag: { sellerId: string; sellerName?: string } | undefined;
 };
 
 export type TabParamList = {

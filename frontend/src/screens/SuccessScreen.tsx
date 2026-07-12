@@ -24,6 +24,7 @@ import { getListingCoverUri } from '../utils/media';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
+import { Elevation } from '../theme/designTokens';
 
 type RouteT = RouteProp<RootStackParamList, 'Success'>;
 
@@ -119,6 +120,41 @@ export default function SuccessScreen() {
             </Reanimated.View>
           )}
 
+          {/* What happens next — timeline */}
+          {!isLoading && !hasError && order && (
+            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(160)} style={styles.timelineWrap}>
+              <Text style={styles.timelineTitle}>What happens next?</Text>
+              <View style={styles.timeline}>
+                <TimelineStep
+                  icon="checkmark-circle"
+                  label="Order placed"
+                  detail="We've notified the seller"
+                  isComplete
+                />
+                <TimelineStep
+                  icon="cube-outline"
+                  label="Seller prepares item"
+                  detail="Usually within 1-2 business days"
+                  isComplete={false}
+                  isActive
+                />
+                <TimelineStep
+                  icon="airplane-outline"
+                  label="Item shipped"
+                  detail="You'll get tracking updates in chat"
+                  isComplete={false}
+                />
+                <TimelineStep
+                  icon="home-outline"
+                  label="Delivered"
+                  detail="Leave a review once you receive it"
+                  isComplete={false}
+                  isLast
+                />
+              </View>
+            </Reanimated.View>
+          )}
+
           {/* Support Action */}
           <Reanimated.View
             entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(160)}
@@ -157,6 +193,99 @@ export default function SuccessScreen() {
   );
 }
 
+// ── Timeline step ────────────────────────────────────────────────────────────
+
+function TimelineStep({
+  icon,
+  label,
+  detail,
+  isComplete,
+  isActive,
+  isLast,
+}: {
+  icon: string;
+  label: string;
+  detail: string;
+  isComplete: boolean;
+  isActive?: boolean;
+  isLast?: boolean;
+}) {
+  const color = isComplete ? Colors.success : isActive ? Colors.brand : Colors.textMuted;
+  return (
+    <View style={timelineStyles.step}>
+      <View style={timelineStyles.iconCol}>
+        <View style={[
+          timelineStyles.iconWrap,
+          isComplete && timelineStyles.iconWrapComplete,
+          isActive && timelineStyles.iconWrapActive,
+        ]}>
+          <Ionicons name={icon as any} size={14} color={isComplete || isActive ? Colors.background : Colors.textMuted} />
+        </View>
+        {!isLast && <View style={[
+          timelineStyles.connector,
+          isComplete && timelineStyles.connectorComplete,
+        ]} />}
+      </View>
+      <View style={timelineStyles.textCol}>
+        <Text style={[timelineStyles.label, { color: isComplete || isActive ? Colors.textPrimary : Colors.textMuted }]}>
+          {label}
+        </Text>
+        <Text style={timelineStyles.detail}>{detail}</Text>
+      </View>
+    </View>
+  );
+}
+
+const timelineStyles = StyleSheet.create({
+  step: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingBottom: 16,
+  },
+  iconCol: {
+    alignItems: 'center',
+  },
+  iconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: Colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconWrapComplete: {
+    backgroundColor: Colors.success,
+  },
+  iconWrapActive: {
+    backgroundColor: Colors.brand,
+  },
+  connector: {
+    width: 2,
+    flex: 1,
+    backgroundColor: Colors.border,
+    marginTop: 4,
+    minHeight: 20,
+  },
+  connectorComplete: {
+    backgroundColor: Colors.success,
+  },
+  textCol: {
+    flex: 1,
+    gap: 2,
+    paddingBottom: 4,
+  },
+  label: {
+    fontSize: 14,
+    fontFamily: Typography.family.semibold,
+  },
+  detail: {
+    fontSize: 12,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+    lineHeight: 16,
+  },
+});
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   scrollContent: { flexGrow: 1, paddingHorizontal: 24 },
@@ -185,6 +314,22 @@ const styles = StyleSheet.create({
   orderTitle: { fontSize: 15, fontFamily: Typography.family.semibold, color: Colors.textPrimary },
   orderSeller: { fontSize: 13, fontFamily: Typography.family.regular, color: Colors.textSecondary },
   orderAmount: { fontSize: 15, fontFamily: Typography.family.bold, color: Colors.textPrimary, marginTop: 2 },
+
+  timelineWrap: {
+    width: '100%',
+    marginTop: 28,
+    paddingHorizontal: 4,
+  },
+  timelineTitle: {
+    fontSize: 16,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+    marginBottom: 14,
+    textAlign: 'left',
+  },
+  timeline: {
+    paddingLeft: 4,
+  },
 
   supportRowWrap: { marginTop: 24, width: '100%' },
   supportIdentity: {

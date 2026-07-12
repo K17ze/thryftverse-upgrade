@@ -58,15 +58,20 @@ describe('UI-11C auth + profile + settings flagship account experience', () => {
     expect(screenSrc).toContain('ProfileHero');
   });
 
-  it('EditProfileScreen imports FlagshipProfileMedia', () => {
+  it('EditProfileScreen does not import EditProfilePreview (media editing moved to profile surface)', () => {
     const src = readSrc('screens/EditProfileScreen.tsx');
-    expect(src).toContain('FlagshipProfileMedia');
+    // Media editing (cover/avatar) was moved to MyProfileScreen/FlagshipProfileMedia.
+    // EditProfileScreen is now a text/account form only.
+    expect(src).not.toContain('EditProfilePreview');
+    expect(src).not.toContain('ProfileMediaEditor');
   });
 
-  // 3. EditProfile does not persist file:// media
-  it('EditProfileScreen calls persistProfileMediaUri', () => {
+  // 3. EditProfile does not handle media uploads (moved to profile surface)
+  it('EditProfileScreen does not use useProfileMediaUpload (media moved to profile surface)', () => {
     const src = readSrc('screens/EditProfileScreen.tsx');
-    expect(src).toContain('persistProfileMediaUri');
+    expect(src).not.toContain('useProfileMediaUpload');
+    expect(src).not.toContain('pickCover');
+    expect(src).not.toContain('pickAvatar');
   });
 
   // 4. Settings rows navigate to real screens or are honestly disabled/hidden
@@ -200,19 +205,23 @@ describe('UI-11C auth + profile + settings flagship account experience', () => {
     expect(src).not.toContain('Sam Rivera');
   });
 
-  // 12. AboutScreen uses FadeInDown and design tokens
-  it('AboutScreen uses FadeInDown and design tokens', () => {
+  // 12. AboutScreen uses FlagshipScreen and design tokens
+  it('AboutScreen uses FlagshipScreen and design tokens', () => {
     const src = readSrc('screens/AboutScreen.tsx');
-    expect(src).toContain('FadeInDown');
+    // AboutScreen uses the canonical FlagshipScreen + FlagshipHeader scaffold
+    // with Reanimated entrance motion (FadeIn) and design tokens.
+    expect(src).toContain('FlagshipScreen');
     expect(src).toContain('Type.');
     expect(src).toContain('Space.');
   });
 
-  // 13. ChatSettingsScreenV2 uses FadeInDown
-  it('ChatSettingsScreen uses FadeInDown', () => {
+  // 13. ChatSettingsScreen uses FlagshipScreen scaffold
+  it('ChatSettingsScreen uses FlagshipScreen scaffold', () => {
     const src = readSrc('screens/ChatSettingsScreen.tsx');
-    expect(src).toContain('FadeInDown');
-    expect(src).toContain('useReducedMotion');
+    // ChatSettingsScreen uses the canonical FlagshipScreen + FlagshipHeader
+    // scaffold with SettingsSection/SettingsRow primitives.
+    expect(src).toContain('FlagshipScreen');
+    expect(src).toContain('SettingsSection');
   });
 
   // 14. BlockedUsersScreen uses FlagshipEmptyGraphic

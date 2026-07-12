@@ -14,7 +14,7 @@ import { Caption, BodyEmphasis } from '../ui/Text';
 import { deriveMessageActions } from '../../utils/messageContextMenuCapabilities';
 import type { ActionDef } from '../../utils/messageContextMenuCapabilities';
 
-export type MessageAction = 'copy' | 'reply' | 'react' | 'delete' | 'retry' | 'report';
+export type MessageAction = 'copy' | 'reply' | 'react' | 'delete' | 'retry' | 'report' | 'translate';
 
 interface MessageContextMenuProps {
   visible: boolean;
@@ -23,6 +23,7 @@ interface MessageContextMenuProps {
   messageText?: string;
   isOwnMessage?: boolean;
   isFailed?: boolean;
+  isTranslated?: boolean;
 }
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -34,14 +35,16 @@ export function MessageContextMenu({
   messageText,
   isOwnMessage,
   isFailed,
+  isTranslated,
 }: MessageContextMenuProps) {
   const actions = React.useMemo<ActionDef[]>(() => {
     return deriveMessageActions({
       isOwnMessage: Boolean(isOwnMessage),
       isFailed: Boolean(isFailed),
       messageText,
+      isTranslated: Boolean(isTranslated),
     });
-  }, [messageText, isOwnMessage, isFailed]);
+  }, [messageText, isOwnMessage, isFailed, isTranslated]);
   const slideAnim = React.useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
 

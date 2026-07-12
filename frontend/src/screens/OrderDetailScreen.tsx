@@ -38,6 +38,10 @@ import { OrderDetailSummary } from '../components/orders/OrderDetailSummary';
 import { OrderTrackingTimeline, TimelineEntry } from '../components/orders/OrderTrackingTimeline';
 import { OrderActionFooter, OrderActionConfig } from '../components/orders/OrderActionFooter';
 import { OrderActionsSheet, OrderActionItem } from '../components/orders/OrderActionsSheet';
+import { DispatchCountdown } from '../components/orders/DispatchCountdown';
+import { OrderStatusStepper, OrderStepperStage } from '../components/orders/OrderStatusStepper';
+import { ReviewPromptSheet } from '../components/orders/ReviewPromptSheet';
+import { OrderDetailSkeleton } from '../components/orders/OrderDetailSkeleton';
 
 type RouteT = RouteProp<RootStackParamList, 'OrderDetail'>;
 
@@ -131,6 +135,27 @@ function getStatusExplanation(normalised: string): string {
   }
 
   return 'The current status of this order is not fully recognised.';
+}
+
+type StatusTone = 'pending' | 'active' | 'success' | 'danger' | 'muted';
+
+function getStatusTone(normalised: string): StatusTone {
+  if (normalised === 'created') return 'pending';
+  if (normalised === 'paid' || normalised === 'processing' || normalised === 'preparing') return 'active';
+  if (normalised === 'shipped' || normalised === 'in transit' || normalised === 'out for delivery') return 'active';
+  if (normalised === 'delivered' || normalised === 'completed') return 'success';
+  if (normalised === 'cancelled' || normalised === 'refunded' || normalised === 'delivery failed' || normalised === 'returned') return 'danger';
+  return 'muted';
+}
+
+function resolveStatusColor(tone: StatusTone): string {
+  switch (tone) {
+    case 'success': return Colors.success;
+    case 'active': return Colors.brand;
+    case 'danger': return Colors.danger;
+    case 'pending': return Colors.warning;
+    default: return Colors.textMuted;
+  }
 }
 
 // --- Date formatting ---
@@ -383,6 +408,8 @@ export default function OrderDetailScreen() {
   const [parcelError, setParcelError] = useState<string | null>(null);
   const [orderMutation, setOrderMutation] = useState<OrderMutation>(null);
   const [actionsSheetVisible, setActionsSheetVisible] = useState(false);
+  const [reviewPromptVisible, setReviewPromptVisible] = useState(false);
+  const [reviewPromptShown, setReviewPromptShown] = useState(false);
 
   const isMountedRef = useRef(true);
   const refreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -496,6 +523,23 @@ export default function OrderDetailScreen() {
   const supportTickets = getSupportTicketsForOrder(orderId);
   const openTicket = supportTickets.find((t) => t.status === 'open');
 
+  // --- Auto-surface review prompt once after delivery ---
+  useEffect(() => {
+    if (!backendOrder || reviewPromptShown) return;
+    const normalised = normaliseOrderStatus(backendOrder.status);
+    const isDelivered = normalised === 'delivered' || normalised === 'completed';
+    const buyerId = backendOrder.buyerId;
+    if (isDelivered && currentUser?.id === buyerId) {
+      const timer = setTimeout(() => {
+        if (isMountedRef.current && !reviewPromptShown) {
+          setReviewPromptVisible(true);
+          setReviewPromptShown(true);
+        }
+      }, 1200);
+      return () => clearTimeout(timer);
+    }
+  }, [backendOrder, reviewPromptShown, currentUser?.id]);
+
   // --- Derived data ---
   const normalisedStatus = backendOrder ? normaliseOrderStatus(backendOrder.status) : '';
   const isKnown = isKnownStatus(normalisedStatus);
@@ -505,6 +549,8 @@ export default function OrderDetailScreen() {
 
   const isBuyer = currentUser?.id === backendOrder?.buyerId;
   const isSeller = currentUser?.id === backendOrder?.sellerId;
+  const statusTone = getStatusTone(normalisedStatus);
+  const statusColor = resolveStatusColor(statusTone);
 
   const listingId = backendOrder?.listingId;
   const existingListing = listingId ? listings.find((item) => item.id === listingId) : undefined;
@@ -577,6 +623,65 @@ export default function OrderDetailScreen() {
     if (!backendOrder) return [];
     return buildTimelineEntries(normalisedStatus, backendOrder, parcelEvents);
   }, [backendOrder, normalisedStatus, parcelEvents]);
+
+  // --- Stepper stage ---
+  const stepperStage = useMemo<OrderStepperStage>(() => {
+    const key = getStatusSemanticKey(normalisedStatus);
+    switch (key) {
+      case 'created':
+        return 'placed';
+      case 'paid':
+      case 'processing':
+      case 'preparing':
+        return 'paid';
+      case 'shipped':
+      case 'picked_up':
+        return 'shipped';
+      case 'in_transit':
+      case 'out_for_delivery':
+        return 'in_transit';
+      case 'delivered':
+      case 'completed':
+      case 'collection_confirmed':
+        return 'delivered';
+      default:
+        // For cancelled/refunded/returned/delivery_failed, show as paid (the furthest confirmed stage)
+        return 'paid';
+    }
+  }, [normalisedStatus]);
+
+  const stepperIsFailure = useMemo(() => {
+    const key = getStatusSemanticKey(normalisedStatus);
+    return key === 'cancelled' || key === 'refunded' || key === 'returned' || key === 'delivery_failed';
+  }, [normalisedStatus]);
+
+  const stepperFailureLabel = useMemo(() => {
+    const key = getStatusSemanticKey(normalisedStatus);
+    if (key === 'cancelled') return 'Order cancelled';
+    if (key === 'refunded') return 'Refunded';
+    if (key === 'returned') return 'Returned to sender';
+    if (key === 'delivery_failed') return 'Delivery failed';
+    return 'Cancelled';
+  }, [normalisedStatus]);
+
+  const stepperTimestamps = useMemo(() => {
+    if (!backendOrder) return undefined;
+    const ts: Partial<Record<OrderStepperStage, string>> = {};
+    if (backendOrder.createdAt) ts.placed = backendOrder.createdAt;
+    // Paid timestamp — use createdAt as proxy if no separate paidAt
+    if (backendOrder.shippedAt) {
+      ts.shipped = backendOrder.shippedAt;
+    }
+    if (backendOrder.deliveredAt) {
+      ts.delivered = backendOrder.deliveredAt;
+    }
+    // In-transit timestamp from first in_transit parcel event
+    const inTransitEvent = parcelEvents.find((e) => e.eventType === 'in_transit' || e.eventType === 'picked_up');
+    if (inTransitEvent) {
+      ts.in_transit = inTransitEvent.occurredAt ?? inTransitEvent.receivedAt;
+    }
+    return ts;
+  }, [backendOrder, parcelEvents]);
 
   // --- Shipment details ---
   const latestParcelEvent = parcelEvents.length > 0
@@ -716,11 +821,21 @@ export default function OrderDetailScreen() {
       return {
         primary: {
           label: 'Confirm delivery',
-          onPress: () => { haptics.heavyPress(); handleDeliver(); },
+          onPress: () => {
+            haptics.heavyPress();
+            Alert.alert(
+              'Confirm receipt?',
+              'By confirming, you confirm the item matches the listing. This releases the held funds to the seller. If something is wrong, report an issue instead.',
+              [
+                { text: 'Not yet', style: 'cancel' },
+                { text: 'Confirm receipt', style: 'default', onPress: handleDeliver },
+              ]
+            );
+          },
           variant: 'primary',
           loading: orderMutation === 'deliver',
           disabled: mutationLocked && orderMutation !== 'deliver',
-          accessibilityLabel: 'Confirm delivery',
+          accessibilityLabel: 'Confirm delivery — releases funds to seller',
         },
       };
     }
@@ -763,7 +878,7 @@ export default function OrderDetailScreen() {
       return {
         primary: {
           label: 'Leave a review',
-          onPress: () => { haptics.tap(); navigation.navigate('WriteReview', { orderId }); },
+          onPress: () => { haptics.tap(); setReviewPromptVisible(true); },
           variant: 'primary',
           accessibilityLabel: 'Write a review for this order',
         },
@@ -798,6 +913,37 @@ export default function OrderDetailScreen() {
       show('Unable to open shipping label', 'error');
     }
   }, [show]);
+
+  // --- Track on carrier site ---
+  const carrierTrackingUrl = useMemo(() => {
+    if (!backendOrder?.trackingNumber || !backendOrder?.shippingProvider) return null;
+    const tn = backendOrder.trackingNumber;
+    const carrier = backendOrder.shippingProvider.toLowerCase();
+    // Map common carriers to their public tracking pages
+    if (carrier.includes('royal mail')) return `https://www.royalmail.com/track-your-item/?trackNumber=${encodeURIComponent(tn)}`;
+    if (carrier.includes('dpd')) return `https://www.dpd.co.uk/tracking?trackingRef=${encodeURIComponent(tn)}`;
+    if (carrier.includes('evri') || carrier.includes('hermes')) return `https://www.evri.com/track-a-parcel/${encodeURIComponent(tn)}`;
+    if (carrier.includes('yodel')) return `https://www.yodel.co.uk/track?trackingReference=${encodeURIComponent(tn)}`;
+    if (carrier.includes('ups')) return `https://www.ups.com/track?tracknum=${encodeURIComponent(tn)}`;
+    if (carrier.includes('dhl')) return `https://www.dhl.com/en/express/tracking.html?AWB=${encodeURIComponent(tn)}`;
+    if (carrier.includes('fedex')) return `https://www.fedex.com/fedextrack/?trknbr=${encodeURIComponent(tn)}`;
+    return null;
+  }, [backendOrder?.trackingNumber, backendOrder?.shippingProvider]);
+
+  const handleTrackOnCarrierSite = useCallback(async () => {
+    if (!carrierTrackingUrl) return;
+    haptics.tap();
+    try {
+      const supported = await Linking.canOpenURL(carrierTrackingUrl);
+      if (!supported) {
+        show('Unable to open carrier tracking page', 'error');
+        return;
+      }
+      await Linking.openURL(carrierTrackingUrl);
+    } catch {
+      show('Unable to open carrier tracking page', 'error');
+    }
+  }, [carrierTrackingUrl, show]);
 
   // --- Manual refresh ---
   const handleManualRefresh = useCallback(() => {
@@ -861,7 +1007,7 @@ export default function OrderDetailScreen() {
         key: 'review',
         label: 'Write a review',
         icon: 'star-outline',
-        onPress: () => navigation.navigate('WriteReview', { orderId }),
+        onPress: () => { haptics.tap(); setReviewPromptVisible(true); },
         variant: 'primary',
       });
     }
@@ -888,10 +1034,7 @@ export default function OrderDetailScreen() {
           <Text style={styles.headerTitle}>Order</Text>
           <View style={styles.headerSpacer} />
         </View>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.brand} />
-          <Text style={styles.loadingText}>Loading order…</Text>
-        </View>
+        <OrderDetailSkeleton />
       </SafeAreaView>
     );
   }
@@ -1007,18 +1150,28 @@ export default function OrderDetailScreen() {
         {/* 2. Current order status and order number */}
         <View style={styles.statusHeader}>
           <Text style={styles.orderNumber}>ORDER #{shortOrderId}</Text>
-          <Text
-            style={styles.statusLabel}
-            accessibilityLabel={`Status: ${statusLabel}. ${statusExplanation}`}
-          >
-            {statusLabel}
-          </Text>
+          <View style={styles.statusBadgeRow}>
+            <View style={[styles.statusBadge, { backgroundColor: `${statusColor}15` }]}>
+              <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+              <Text style={[styles.statusBadgeText, { color: statusColor }]}>
+                {statusLabel}
+              </Text>
+            </View>
+          </View>
           <Text style={styles.statusExplanation}>{statusExplanation}</Text>
           {backendOrder.updatedAt ? (
             <Text style={styles.lastUpdated}>
               Last updated {formatTimelineDate(backendOrder.updatedAt)}
             </Text>
           ) : null}
+
+          {/* Dispatch countdown for seller when order needs shipping */}
+          {canShip && backendOrder.createdAt && (
+            <DispatchCountdown
+              createdAt={backendOrder.createdAt}
+              shipped={!!backendOrder.shippedAt}
+            />
+          )}
         </View>
 
         {loadError && backendOrder ? (
@@ -1104,6 +1257,50 @@ export default function OrderDetailScreen() {
 
         <View style={styles.sectionDivider} />
 
+        {/* 4b. Visual status stepper */}
+        <View style={styles.timelineSection}>
+          <Text style={styles.sectionLabel}>Progress</Text>
+          <OrderStatusStepper
+            currentStage={stepperStage}
+            isFailure={stepperIsFailure}
+            failureLabel={stepperFailureLabel}
+            stageTimestamps={stepperTimestamps}
+          />
+        </View>
+
+        {/* 4c. Escrow status indicator — shows when funds are held */}
+        {isBuyer && (normalisedStatus === 'paid' || normalisedStatus === 'shipped' || normalisedStatus === 'in transit' || normalisedStatus === 'out for delivery') ? (
+          <View style={styles.escrowBanner}>
+            <View style={styles.escrowIconWrap}>
+              <Ionicons name="lock-closed" size={14} color={Colors.success} />
+            </View>
+            <View style={styles.escrowTextWrap}>
+              <Text style={styles.escrowTitle}>Funds held in escrow</Text>
+              <Text style={styles.escrowSub}>
+                {normalisedStatus === 'paid'
+                  ? 'Your payment is safely held until the seller dispatches your item.'
+                  : 'Your payment is safely held. Confirm receipt to release funds to the seller.'}
+              </Text>
+              {(() => {
+                if (!backendOrder?.shippedAt) return null;
+                const shippedTime = new Date(backendOrder.shippedAt).getTime();
+                const autoReleaseMs = 14 * 24 * 60 * 60 * 1000; // 14 days
+                const releaseTime = shippedTime + autoReleaseMs;
+                const now = Date.now();
+                if (now >= releaseTime) return null;
+                const daysLeft = Math.ceil((releaseTime - now) / (24 * 60 * 60 * 1000));
+                return (
+                  <Text style={styles.escrowCountdown}>
+                    Auto-releases to seller in {daysLeft} day{daysLeft === 1 ? '' : 's'} if not confirmed
+                  </Text>
+                );
+              })()}
+            </View>
+          </View>
+        ) : null}
+
+        <View style={styles.sectionDivider} />
+
         {/* 5. Tracking or order timeline */}
         <View style={styles.timelineSection}>
           <Text style={styles.sectionLabel}>Timeline</Text>
@@ -1135,6 +1332,17 @@ export default function OrderDetailScreen() {
                     <Ionicons name="copy-outline" size={16} color={Colors.brand} />
                   </Pressable>
                 </View>
+              ) : null}
+              {carrierTrackingUrl ? (
+                <Pressable
+                  style={styles.shippingLabelBtn}
+                  onPress={handleTrackOnCarrierSite}
+                  accessibilityRole="button"
+                  accessibilityLabel="Track on carrier website"
+                >
+                  <Ionicons name="navigate-outline" size={16} color={Colors.brand} />
+                  <Text style={styles.shippingLabelBtnText}>Track on carrier site</Text>
+                </Pressable>
               ) : null}
               {shipmentLastUpdated ? (
                 <DetailRow label="Last carrier update" value={shipmentLastUpdated} />
@@ -1224,6 +1432,19 @@ export default function OrderDetailScreen() {
         listingAvailable={listingExists}
         actions={overflowActions}
         onClose={() => setActionsSheetVisible(false)}
+      />
+
+      {/* Review prompt — appears for delivered orders without a review */}
+      <ReviewPromptSheet
+        visible={reviewPromptVisible}
+        itemTitle={backendOrder?.listingTitle}
+        itemImage={backendOrder?.listingImageUrl ?? null}
+        sellerName={counterparty?.username}
+        onClose={() => setReviewPromptVisible(false)}
+        onWriteReview={(_rating) => {
+          setReviewPromptVisible(false);
+          navigation.navigate('WriteReview', { orderId });
+        }}
       />
     </SafeAreaView>
   );
@@ -1370,6 +1591,29 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     textTransform: 'uppercase',
   },
+  statusBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 100,
+  },
+  statusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  statusBadgeText: {
+    fontSize: 15,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: 0.1,
+  },
   statusLabel: {
     fontSize: 22,
     fontFamily: Typography.family.bold,
@@ -1464,6 +1708,48 @@ const styles = StyleSheet.create({
   },
   timelineSection: {
     paddingVertical: Space.sm,
+  },
+  escrowBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm + 2,
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
+    borderRadius: 12,
+    backgroundColor: `${Colors.success}08`,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: `${Colors.success}25`,
+  },
+  escrowIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: `${Colors.success}15`,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  escrowTextWrap: {
+    flex: 1,
+    gap: 2,
+  },
+  escrowTitle: {
+    fontSize: 13,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+  },
+  escrowSub: {
+    fontSize: 12,
+    fontFamily: Typography.family.regular,
+    color: Colors.textSecondary,
+    lineHeight: 16,
+  },
+  escrowCountdown: {
+    fontSize: 11,
+    fontFamily: Typography.family.medium,
+    color: Colors.textMuted,
+    marginTop: 2,
   },
   shipmentSection: {
     paddingVertical: Space.sm,

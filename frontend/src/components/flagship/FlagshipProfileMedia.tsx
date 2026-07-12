@@ -156,6 +156,7 @@ export function FlagshipProfileMedia({
                 activeOpacity={0.85}
                 hapticFeedback="light"
                 disabled={isUploadingAvatar}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 accessibilityLabel="Change profile avatar"
                 accessibilityRole="button"
               >
@@ -228,18 +229,18 @@ const styles = StyleSheet.create({
   coverErrorText: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    color: '#ff6b6b',
+    color: Colors.danger,
   },
   coverErrorActions: {
     flexDirection: 'row',
     gap: 8,
   },
   coverErrorBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: 8,
     backgroundColor: 'rgba(255,255,255,0.15)',
-    minHeight: 36,
+    minHeight: 44,
     justifyContent: 'center',
   },
   coverErrorBtnText: {

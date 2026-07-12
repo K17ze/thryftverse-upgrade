@@ -40,6 +40,8 @@ import { LookPreviewCard } from '../components/profile';
 import { MyProfileIdentityHero } from '../components/profile/MyProfileIdentityHero';
 import { ProfileUtilityRail } from '../components/profile/ProfileUtilityRail';
 import { MyProfileTabRail } from '../components/profile/MyProfileTabRail';
+import { ProfileCompletenessIndicator } from '../components/profile/ProfileCompletenessIndicator';
+import { useSellerTrust } from '../platform/product';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useProfileMediaUpload } from '../hooks/useProfileMediaUpload';
 import { isVideoUri } from '../utils/media';
@@ -69,8 +71,12 @@ export default function MyProfileScreen() {
   const updateUserProfile = useStore((state) => state.updateUserProfile);
 
   const currentUser = useStore((state) => state.currentUser);
+  const holidayMode = useStore((state) => state.accountPreferences?.holidayMode === true);
 
   const [coOwnHoldings, setCoOwnHoldings] = React.useState<any[]>([]);
+
+  // Seller trust summary — verified badge, response time, dispatch time, completed sales
+  const { data: sellerTrust } = useSellerTrust(currentUser?.id);
 
   React.useEffect(() => {
     if (!currentUser?.id) return;
@@ -292,6 +298,13 @@ export default function MyProfileScreen() {
         accessibilityLabel: 'View your closet',
       },
       {
+        icon: 'storefront-outline' as const,
+        label: 'Seller Hub',
+        value: allOwnedListings.length > 0 ? `${allOwnedListings.length} listings` : undefined,
+        onPress: () => { haptic.light(); navigation.navigate('SellerHub'); },
+        accessibilityLabel: 'Open seller hub',
+      },
+      {
         icon: 'wallet-outline' as const,
         label: 'Wallet',
         onPress: () => { haptic.light(); navigation.navigate('Wallet'); },
@@ -311,7 +324,7 @@ export default function MyProfileScreen() {
         accessibilityLabel: 'Browse co-own market',
       },
     ],
-    [coOwnHoldings.length, savedCount, wishlistCount, haptic, navigation]
+    [coOwnHoldings.length, savedCount, wishlistCount, allOwnedListings.length, haptic, navigation]
   );
 
   const memberSince = user.createdAt
@@ -393,9 +406,44 @@ export default function MyProfileScreen() {
             bio={user.bio}
             location={user.location}
             memberSince={memberSince}
+            sellerTrust={sellerTrust}
+            emailVerified={user.emailVerified}
             onEditAvatar={pickAvatar}
             onEditProfile={() => (navigation as any).navigate('EditProfile')}
             onShare={handleShare}
+          />
+
+          {/* Away-mode indicator — shown when holiday mode is enabled */}
+          {holidayMode ? (
+            <Pressable
+              style={myProfileStyles.awayBanner}
+              onPress={() => (navigation as any).navigate('PrivacySettings')}
+              accessibilityRole="button"
+              accessibilityLabel="Holiday mode is on — tap to manage"
+            >
+              <Ionicons name="pause-circle" size={18} color={Colors.textMuted} />
+              <View style={myProfileStyles.awayBannerTextWrap}>
+                <Text style={myProfileStyles.awayBannerTitle}>Holiday mode is on</Text>
+                <Text style={myProfileStyles.awayBannerSub}>
+                  Your shop is paused. Tap to manage.
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+            </Pressable>
+          ) : null}
+
+          {/* Profile completeness indicator — only shows when incomplete */}
+          <ProfileCompletenessIndicator
+            input={{
+              avatar: confirmedAvatarRemote,
+              coverPhoto: confirmedCoverRemote,
+              bio: user.bio,
+              location: user.location,
+              website: user.website,
+              emailVerified: user.emailVerified,
+              hasListings: allOwnedListings.length > 0,
+            }}
+            onCompleteProfile={() => (navigation as any).navigate('EditProfile')}
           />
 
           {/* ── 8. COMPACT MARKETPLACE UTILITY RAIL ── */}
@@ -561,12 +609,116 @@ export default function MyProfileScreen() {
                 <Text style={styles.aboutEmpty}>No profile details added yet.</Text>
               )}
             </View>
+
+            {/* Shop stats — derived from seller trust data */}
+            {sellerTrust ? (
+              <View style={styles.aboutContainer}>
+                <Text style={styles.aboutSectionTitle}>Shop stats</Text>
+                {sellerTrust.rating !== null && sellerTrust.rating !== undefined && sellerTrust.reviewCount ? (
+                  <View style={styles.aboutRow}>
+                    <Text style={styles.aboutLabel}>Rating</Text>
+                    <Text style={styles.aboutValue}>
+                      {sellerTrust.rating.toFixed(1)} ★ ({sellerTrust.reviewCount} review{sellerTrust.reviewCount === 1 ? '' : 's'})
+                    </Text>
+                  </View>
+                ) : null}
+                {sellerTrust.completedSales !== null && sellerTrust.completedSales !== undefined ? (
+                  <View style={styles.aboutRow}>
+                    <Text style={styles.aboutLabel}>Completed sales</Text>
+                    <Text style={styles.aboutValue}>{sellerTrust.completedSales}</Text>
+                  </View>
+                ) : null}
+                {sellerTrust.responseTimeLabel ? (
+                  <View style={styles.aboutRow}>
+                    <Text style={styles.aboutLabel}>Response time</Text>
+                    <Text style={styles.aboutValue}>Replies {sellerTrust.responseTimeLabel}</Text>
+                  </View>
+                ) : null}
+                {sellerTrust.dispatchTimeLabel ? (
+                  <View style={styles.aboutRow}>
+                    <Text style={styles.aboutLabel}>Dispatch time</Text>
+                    <Text style={styles.aboutValue}>{sellerTrust.dispatchTimeLabel}</Text>
+                  </View>
+                ) : null}
+                {sellerTrust.responseRate !== null && sellerTrust.responseRate !== undefined ? (
+                  <View style={styles.aboutRow}>
+                    <Text style={styles.aboutLabel}>Response rate</Text>
+                    <Text style={styles.aboutValue}>{sellerTrust.responseRate}%</Text>
+                  </View>
+                ) : null}
+                {sellerTrust.activeListingCount !== null && sellerTrust.activeListingCount !== undefined ? (
+                  <View style={[styles.aboutRow, styles.aboutRowLast]}>
+                    <Text style={styles.aboutLabel}>Active listings</Text>
+                    <Text style={styles.aboutValue}>{sellerTrust.activeListingCount}</Text>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
+
+            {/* Shop policies — derived from trust + account data */}
+            <View style={styles.aboutContainer}>
+              <Text style={styles.aboutSectionTitle}>Shop policies</Text>
+              <View style={styles.aboutRow}>
+                <Text style={styles.aboutLabel}>Payments</Text>
+                <Text style={styles.aboutValue}>Secure checkout with buyer protection</Text>
+              </View>
+              <View style={styles.aboutRow}>
+                <Text style={styles.aboutLabel}>Shipping</Text>
+                <Text style={styles.aboutValue}>
+                  {sellerTrust?.dispatchTimeLabel
+                    ? `Seller ${sellerTrust.dispatchTimeLabel.toLowerCase()}. Tracking provided on dispatch.`
+                    : 'Tracking provided on dispatch.'}
+                </Text>
+              </View>
+              <View style={styles.aboutRow}>
+                <Text style={styles.aboutLabel}>Returns</Text>
+                <Text style={styles.aboutValue}>Returns accepted for items not as described.</Text>
+              </View>
+              <View style={[styles.aboutRow, styles.aboutRowLast]}>
+                <Text style={styles.aboutLabel}>Response</Text>
+                <Text style={styles.aboutValue}>
+                  {sellerTrust?.responseTimeLabel
+                    ? `Seller typically replies ${sellerTrust.responseTimeLabel.toLowerCase()}.`
+                    : 'Seller aims to respond promptly.'}
+                </Text>
+              </View>
+            </View>
           </View>
         )}
       </Reanimated.ScrollView>
     </View>
   );
 }
+
+const myProfileStyles = StyleSheet.create({
+  awayBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm + 2,
+    borderRadius: 12,
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+  },
+  awayBannerTextWrap: {
+    flex: 1,
+    gap: 2,
+  },
+  awayBannerTitle: {
+    fontSize: 13,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+  },
+  awayBannerSub: {
+    fontSize: 12,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+  },
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background, overflow: 'hidden' },
@@ -738,6 +890,13 @@ const styles = StyleSheet.create({
   // About — flat editorial rows
   aboutContainer: {
     paddingHorizontal: Space.md,
+  },
+  aboutSectionTitle: {
+    fontSize: 13,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
+    paddingTop: Space.md + 2,
+    paddingBottom: Space.xs,
   },
   aboutRow: {
     paddingVertical: 14,

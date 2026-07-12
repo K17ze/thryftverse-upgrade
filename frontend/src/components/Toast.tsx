@@ -6,13 +6,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AnimatedPressable } from './AnimatedPressable';
 import { Typography } from '../theme/designTokens';
 import { Motion } from '../constants/motion';
+import { Colors } from '../constants/colors';
 import Reanimated, { useSharedValue, useAnimatedStyle, withSpring, withTiming, runOnJS } from 'react-native-reanimated';
 
+// Info toast uses a warm brand-gold accent (#d7b98f) — a ThryftVerse signature color
+// not yet in the token system. Success and error use theme tokens.
+const INFO_ACCENT = '#d7b98f';
 
 const TYPE_CONFIG: Record<ToastType, { borderColor: string; icon: keyof typeof Ionicons.glyphMap; iconColor: string }> = {
-  success: { borderColor: '#4CAF50', icon: 'checkmark-circle', iconColor: '#4CAF50' },
-  error: { borderColor: '#FF4D4D', icon: 'alert-circle', iconColor: '#FF4D4D' },
-  info: { borderColor: '#d7b98f', icon: 'information-circle', iconColor: '#d7b98f' },
+  success: { borderColor: Colors.success, icon: 'checkmark-circle', iconColor: Colors.success },
+  error: { borderColor: Colors.danger, icon: 'alert-circle', iconColor: Colors.danger },
+  info: { borderColor: INFO_ACCENT, icon: 'information-circle', iconColor: INFO_ACCENT },
 };
 
 interface ToastItemProps {
@@ -96,6 +100,7 @@ const styles = StyleSheet.create({
   toast: {
     flexDirection: 'row',
     alignItems: 'center',
+    // Toast is always dark with warm tint — intentional design for transient overlay
     backgroundColor: '#191714',
     borderRadius: 14,
     paddingHorizontal: 16,
@@ -112,6 +117,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: Typography.size.body,
     fontFamily: Typography.family.medium,
+    // Warm off-white text on always-dark toast — intentional
     color: '#f3ede3',
     letterSpacing: Typography.tracking.normal,
     lineHeight: 19,

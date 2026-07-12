@@ -2,8 +2,6 @@ import React from 'react';
 import {
   View,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
   ViewStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,6 +15,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space } from '../../theme/designTokens';
+import { KeyboardStickyView } from '../../platform/keyboard/KeyboardProvider';
 
 export interface FlagshipScreenProps {
   children: React.ReactNode;
@@ -28,6 +27,10 @@ export interface FlagshipScreenProps {
   contentStyle?: ViewStyle;
   onScroll?: (y: number) => void;
   scrollRef?: React.RefObject<any>;
+  /** Extra bottom padding for scroll content when a sticky footer is present.
+   *  Use this when the child screen owns its own ScrollView (scrollEnabled={false})
+   *  and needs to ensure the last form field clears the footer. */
+  footerInsetHeight?: number;
 }
 
 export function FlagshipScreen({
@@ -40,6 +43,7 @@ export function FlagshipScreen({
   contentStyle,
   onScroll,
   scrollRef,
+  footerInsetHeight,
 }: FlagshipScreenProps) {
   const { colors, isDark } = useAppTheme();
   const scrollY = useSharedValue(0);
@@ -86,7 +90,7 @@ export function FlagshipScreen({
           scrollEventThrottle={16}
         >
           {children}
-          <View style={{ height: stickyFooter ? Space.xxl : Space.xl }} />
+          <View style={{ height: footerInsetHeight ?? (stickyFooter ? Space.xxl : Space.xl) }} />
         </Reanimated.ScrollView>
       ) : (
         <View style={[styles.content, contentStyle]}>{children}</View>
@@ -102,10 +106,10 @@ export function FlagshipScreen({
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
-      {keyboardAvoiding && Platform.OS === 'ios' ? (
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+      {keyboardAvoiding ? (
+        <KeyboardStickyView style={{ flex: 1 }}>
           {innerContent}
-        </KeyboardAvoidingView>
+        </KeyboardStickyView>
       ) : (
         innerContent
       )}
