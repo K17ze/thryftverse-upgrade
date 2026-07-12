@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Typography } from '../../theme/designTokens';
 
 export type AuctionHeaderActionKey = 'search' | 'filter' | 'create' | 'seller' | 'activity';
@@ -39,6 +39,7 @@ export function AuctionMarketHeader({
 }: Props) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const { colors } = useAppTheme();
   const isSmall = width < SMALL_WIDTH_THRESHOLD;
   const isVerySmall = width < VERY_SMALL_THRESHOLD;
 
@@ -71,14 +72,14 @@ export function AuctionMarketHeader({
             accessibilityLabel="Go back"
             style={styles.iconBtn}
           >
-            <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
           </Pressable>
         ) : null}
 
         <View style={styles.titleWrap}>
-          <Text style={styles.title} numberOfLines={1}>{title}</Text>
+          <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>{title}</Text>
           {displayContext ? (
-            <Text style={styles.context} numberOfLines={1}>{displayContext}</Text>
+            <Text style={[styles.context, { color: colors.textSecondary }]} numberOfLines={1}>{displayContext}</Text>
           ) : null}
         </View>
 
@@ -92,7 +93,7 @@ export function AuctionMarketHeader({
               accessibilityLabel={searchAction.label}
               style={styles.iconBtn}
             >
-              <Ionicons name={searchAction.icon} size={22} color={Colors.textPrimary} />
+              <Ionicons name={searchAction.icon} size={22} color={colors.textPrimary} />
             </Pressable>
           )}
           {showFilter && (
@@ -103,7 +104,7 @@ export function AuctionMarketHeader({
               accessibilityLabel={filterAction!.label}
               style={styles.iconBtn}
             >
-              <Ionicons name={filterAction!.icon} size={22} color={Colors.textPrimary} />
+              <Ionicons name={filterAction!.icon} size={22} color={colors.textPrimary} />
             </Pressable>
           )}
           {sellerAction && (
@@ -114,7 +115,7 @@ export function AuctionMarketHeader({
               accessibilityLabel={sellerAction.label}
               style={styles.iconBtn}
             >
-              <Ionicons name={sellerAction.icon} size={22} color={Colors.textPrimary} />
+              <Ionicons name={sellerAction.icon} size={22} color={colors.textPrimary} />
             </Pressable>
           )}
           {showActivity && (
@@ -125,9 +126,9 @@ export function AuctionMarketHeader({
               accessibilityLabel={activityAction!.label}
               style={styles.iconBtn}
             >
-              <Ionicons name={activityAction!.icon} size={22} color={Colors.textPrimary} />
+              <Ionicons name={activityAction!.icon} size={22} color={colors.textPrimary} />
               {activityAction!.badgeCount != null && activityAction!.badgeCount > 0 && (
-                <View style={styles.badge}>
+                <View style={[styles.badge, { backgroundColor: colors.danger, borderColor: colors.background }]}>
                   <Text style={styles.badgeText}>
                     {activityAction!.badgeCount > 9 ? '9+' : activityAction!.badgeCount}
                   </Text>
@@ -145,7 +146,7 @@ export function AuctionMarketHeader({
               accessibilityLabel={createAction.label}
               style={styles.createBtn}
             >
-              <Ionicons name={createAction.icon} size={22} color={Colors.brand} />
+              <Ionicons name={createAction.icon} size={22} color={colors.brand} />
             </Pressable>
           )}
         </View>
@@ -187,13 +188,11 @@ const styles = StyleSheet.create({
   title: {
     fontFamily: Typography.family.bold,
     fontSize: 30,
-    color: Colors.textPrimary,
     letterSpacing: -0.8,
   },
   context: {
     fontFamily: Typography.family.regular,
     fontSize: 13,
-    color: Colors.textSecondary,
     marginTop: 0,
     letterSpacing: -0.1,
   },
@@ -209,12 +208,10 @@ const styles = StyleSheet.create({
     minWidth: 16,
     height: 16,
     borderRadius: Radius.full,
-    backgroundColor: Colors.danger,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
     borderWidth: 2,
-    borderColor: Colors.background,
   },
   badgeText: {
     fontFamily: Typography.family.bold,
