@@ -15,7 +15,7 @@ import {
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { EmptyState } from '../components/EmptyState';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -174,6 +174,7 @@ const STAGE_LABELS: Record<CheckoutStage, string> = {
 };
 
 export default function CheckoutScreen() {
+  const { colors, isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const route = useRoute<RouteT>();
@@ -888,8 +889,8 @@ export default function CheckoutScreen() {
 
   if (!item) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
         <View style={[styles.header, { paddingTop: insets.top }]}>
           <Pressable
             style={styles.closeBtn}
@@ -898,9 +899,9 @@ export default function CheckoutScreen() {
             accessibilityRole="button"
             accessibilityLabel="Close"
           >
-            <Ionicons name="close" size={24} color={Colors.textPrimary} />
+            <Ionicons name="close" size={24} color={colors.textPrimary} />
           </Pressable>
-          <Text style={styles.headerTitle}>Checkout</Text>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Checkout</Text>
           <View style={styles.headerSpacer} />
         </View>
         <EmptyState
@@ -916,8 +917,8 @@ export default function CheckoutScreen() {
 
   if (!currentUser) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
         <View style={[styles.header, { paddingTop: insets.top }]}>
           <Pressable
             style={styles.closeBtn}
@@ -926,24 +927,24 @@ export default function CheckoutScreen() {
             accessibilityRole="button"
             accessibilityLabel="Close"
           >
-            <Ionicons name="close" size={24} color={Colors.textPrimary} />
+            <Ionicons name="close" size={24} color={colors.textPrimary} />
           </Pressable>
-          <Text style={styles.headerTitle}>Checkout</Text>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Checkout</Text>
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.signedOutContainer}>
-          <Ionicons name="lock-closed-outline" size={36} color={Colors.textMuted} />
-          <Text style={styles.signedOutTitle}>Sign in to checkout</Text>
-          <Text style={styles.signedOutBody}>
+          <Ionicons name="lock-closed-outline" size={36} color={colors.textMuted} />
+          <Text style={[styles.signedOutTitle, { color: colors.textPrimary }]}>Sign in to checkout</Text>
+          <Text style={[styles.signedOutBody, { color: colors.textMuted }]}>
             You need to be signed in to complete your purchase.
           </Text>
           <Pressable
-            style={styles.signedOutBtn}
+            style={[styles.signedOutBtn, { backgroundColor: colors.brand }]}
             onPress={() => navigation.navigate('Login')}
             accessibilityRole="button"
             accessibilityLabel="Sign in"
           >
-            <Text style={styles.signedOutBtnText}>Sign in</Text>
+            <Text style={[styles.signedOutBtnText, { color: colors.textInverse }]}>Sign in</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -952,8 +953,8 @@ export default function CheckoutScreen() {
 
   if (isSelfPurchase) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
         <View style={[styles.header, { paddingTop: insets.top }]}>
           <Pressable
             style={styles.closeBtn}
@@ -962,24 +963,24 @@ export default function CheckoutScreen() {
             accessibilityRole="button"
             accessibilityLabel="Close"
           >
-            <Ionicons name="close" size={24} color={Colors.textPrimary} />
+            <Ionicons name="close" size={24} color={colors.textPrimary} />
           </Pressable>
-          <Text style={styles.headerTitle}>Checkout</Text>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Checkout</Text>
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.signedOutContainer}>
-          <Ionicons name="person-circle-outline" size={36} color={Colors.textMuted} />
-          <Text style={styles.signedOutTitle}>Cannot purchase your own listing</Text>
-          <Text style={styles.signedOutBody}>
+          <Ionicons name="person-circle-outline" size={36} color={colors.textMuted} />
+          <Text style={[styles.signedOutTitle, { color: colors.textPrimary }]}>Cannot purchase your own listing</Text>
+          <Text style={[styles.signedOutBody, { color: colors.textMuted }]}>
             You cannot buy an item you listed for sale.
           </Text>
           <Pressable
-            style={styles.signedOutBtn}
+            style={[styles.signedOutBtn, { backgroundColor: colors.brand }]}
             onPress={() => navigation.goBack()}
             accessibilityRole="button"
             accessibilityLabel="Go back"
           >
-            <Text style={styles.signedOutBtnText}>Go back</Text>
+            <Text style={[styles.signedOutBtnText, { color: colors.textInverse }]}>Go back</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -1017,11 +1018,11 @@ export default function CheckoutScreen() {
         : 'Pay securely';
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
       {/* 1. Compact close header */}
-      <View style={[styles.header, { paddingTop: insets.top }]}>
+      <View style={[styles.header, { paddingTop: insets.top, borderBottomColor: colors.border }]}>
         <Pressable
           style={styles.closeBtn}
           onPress={handleClose}
@@ -1029,9 +1030,9 @@ export default function CheckoutScreen() {
           accessibilityRole="button"
           accessibilityLabel="Close checkout"
         >
-          <Ionicons name="close" size={24} color={Colors.textPrimary} />
+          <Ionicons name="close" size={24} color={colors.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>Checkout</Text>
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Checkout</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -1058,7 +1059,7 @@ export default function CheckoutScreen() {
           onPressMessage={resolvedSeller.id ? () => { haptics.tap(); handleMessageSeller(); } : undefined}
         />
 
-        <View style={styles.sectionDivider} />
+        <View style={[styles.sectionDivider, { backgroundColor: colors.border }]} />
 
         {/* 3. Delivery address */}
         <CheckoutSelectionRow
@@ -1140,13 +1141,13 @@ export default function CheckoutScreen() {
           accessibilityHint="Add or change your payment method"
         />
 
-        <View style={styles.sectionDivider} />
+        <View style={[styles.sectionDivider, { backgroundColor: colors.border }]} />
 
         {/* 6. Price breakdown */}
-        <View style={styles.priceBreakdownCard}>
+        <View style={[styles.priceBreakdownCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.priceBreakdownHeader}>
-            <Ionicons name="receipt-outline" size={14} color={Colors.textMuted} />
-            <Text style={styles.priceBreakdownTitle}>Order summary</Text>
+            <Ionicons name="receipt-outline" size={14} color={colors.textMuted} />
+            <Text style={[styles.priceBreakdownTitle, { color: colors.textMuted }]}>Order summary</Text>
           </View>
           <PriceRow label="Item" value={formatFromFiat(item.price, 'GBP')} />
           <PriceRow label="Platform charge" value={formatFromFiat(PLATFORM_CHARGE, 'GBP')} />
@@ -1155,19 +1156,19 @@ export default function CheckoutScreen() {
             value={formatFromFiat(POSTAGE_FEE, 'GBP')}
           />
           <View style={styles.protectionIncludedRow}>
-            <Ionicons name="shield-checkmark-outline" size={12} color={Colors.success} />
-            <Text style={styles.protectionIncludedText}>
+            <Ionicons name="shield-checkmark-outline" size={12} color={colors.success} />
+            <Text style={[styles.protectionIncludedText, { color: colors.success }]}>
               Includes buyer protection — funds held in escrow until you confirm
             </Text>
           </View>
-          <View style={styles.priceDivider} />
+          <View style={[styles.priceDivider, { backgroundColor: colors.border }]} />
           <PriceRow label="Total" value={formatFromFiat(GROSS_TOTAL, 'GBP')} bold />
 
           {/* 6a. Balance-at-checkout toggle */}
           {walletBalance > 0 && !balanceLoading && (
             <View style={styles.balanceRow}>
               <Pressable
-                style={styles.balanceToggle}
+                style={[styles.balanceToggle, { backgroundColor: colors.surface, borderColor: colors.border }]}
                 onPress={() => {
                   haptics.tap();
                   setUseBalance((v) => !v);
@@ -1176,12 +1177,12 @@ export default function CheckoutScreen() {
                 accessibilityLabel="Use wallet balance"
                 accessibilityState={{ checked: useBalance }}
               >
-                <View style={[styles.balanceSwitch, useBalance && styles.balanceSwitchOn]}>
-                  <View style={[styles.balanceKnob, useBalance && styles.balanceKnobOn]} />
+                <View style={[styles.balanceSwitch, useBalance && { backgroundColor: colors.success, borderColor: colors.success }, !useBalance && { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+                  <View style={[styles.balanceKnob, useBalance ? styles.balanceKnobOn : { backgroundColor: colors.textMuted }]} />
                 </View>
                 <View style={styles.balanceTextCol}>
-                  <Text style={styles.balanceLabel}>Use wallet balance</Text>
-                  <Text style={styles.balanceAmount} numberOfLines={1}>
+                  <Text style={[styles.balanceLabel, { color: colors.textPrimary }]}>Use wallet balance</Text>
+                  <Text style={[styles.balanceAmount, { color: colors.textMuted }]} numberOfLines={1}>
                     {formatFromFiat(walletBalance, 'GBP')} available
                   </Text>
                 </View>
@@ -1195,11 +1196,11 @@ export default function CheckoutScreen() {
                 label="Wallet balance applied"
                 value={`-${formatFromFiat(balanceApplied, 'GBP')}`}
               />
-              <View style={styles.priceDivider} />
+              <View style={[styles.priceDivider, { backgroundColor: colors.border }]} />
               <PriceRow label="To pay" value={formatFromFiat(TOTAL, 'GBP')} bold />
-              <View style={styles.savingsBadge}>
-                <Ionicons name="wallet-outline" size={11} color={Colors.success} />
-                <Text style={styles.savingsText}>
+              <View style={[styles.savingsBadge, { backgroundColor: `${colors.success}12` }]}>
+                <Ionicons name="wallet-outline" size={11} color={colors.success} />
+                <Text style={[styles.savingsText, { color: colors.success }]}>
                   Saving {formatFromFiat(balanceApplied, 'GBP')} with wallet balance
                 </Text>
               </View>
@@ -1216,16 +1217,17 @@ export default function CheckoutScreen() {
         {stage !== 'idle' ? (
           <View style={styles.feedbackRow}>
             {isSubmitting ? (
-              <ActivityIndicator size="small" color={Colors.brand} />
+              <ActivityIndicator size="small" color={colors.brand} />
             ) : stage === 'payment_failed' ? (
-              <Ionicons name="alert-circle" size={16} color={Colors.danger} />
+              <Ionicons name="alert-circle" size={16} color={colors.danger} />
             ) : stage === 'payment_pending' ? (
-              <Ionicons name="time-outline" size={16} color={Colors.textMuted} />
+              <Ionicons name="time-outline" size={16} color={colors.textMuted} />
             ) : null}
             <Text
               style={[
                 styles.feedbackText,
-                stage === 'payment_failed' && styles.feedbackTextError,
+                { color: colors.textSecondary },
+                stage === 'payment_failed' && { color: colors.danger },
               ]}
             >
               {STAGE_LABELS[stage]}
@@ -1234,27 +1236,28 @@ export default function CheckoutScreen() {
         ) : null}
 
         {orderError ? (
-          <Text style={styles.orderErrorText}>{orderError}</Text>
+          <Text style={[styles.orderErrorText, { color: colors.danger }]}>{orderError}</Text>
         ) : null}
 
         {capabilityError ? (
-          <Text style={styles.hintText}>{capabilityError}</Text>
+          <Text style={[styles.hintText, { color: colors.textMuted }]}>{capabilityError}</Text>
         ) : null}
 
-        <Text style={styles.termsText}>
+        <Text style={[styles.termsText, { color: colors.textMuted }]}>
           By tapping "Pay", you agree to our Terms of Sale and Privacy Policy.
         </Text>
       </ScrollView>
 
       {/* 8. Sticky total + Pay footer */}
-      <View style={[styles.footer, { paddingBottom: insets.bottom > 0 ? insets.bottom : 16 }]}>
+      <View style={[styles.footer, { paddingBottom: insets.bottom > 0 ? insets.bottom : 16, borderTopColor: colors.border, backgroundColor: colors.background }]}>
         <View style={styles.footerTotalCol}>
-          <Text style={styles.footerTotalLabel}>Total</Text>
-          <Text style={styles.footerTotalPrice}>{formatFromFiat(TOTAL, 'GBP')}</Text>
+          <Text style={[styles.footerTotalLabel, { color: colors.textSecondary }]}>Total</Text>
+          <Text style={[styles.footerTotalPrice, { color: colors.textPrimary }]}>{formatFromFiat(TOTAL, 'GBP')}</Text>
         </View>
         <Pressable
           style={[
             styles.payBtn,
+            { backgroundColor: colors.brand },
             (!checkoutEligible || isInteractionLocked) && styles.payBtnDisabled,
           ]}
           onPress={() => { haptics.press(); handlePay(); }}
@@ -1267,11 +1270,11 @@ export default function CheckoutScreen() {
           }}
         >
           {isSubmitting ? (
-            <ActivityIndicator size="small" color={Colors.textInverse} />
+            <ActivityIndicator size="small" color={colors.textInverse} />
           ) : (
-            <Ionicons name="lock-closed" size={16} color={Colors.textInverse} />
+            <Ionicons name="lock-closed" size={16} color={colors.textInverse} />
           )}
-          <Text style={styles.payBtnText}>{payLabel}</Text>
+          <Text style={[styles.payBtnText, { color: colors.textInverse }]}>{payLabel}</Text>
         </Pressable>
       </View>
 
@@ -1303,10 +1306,11 @@ export default function CheckoutScreen() {
 }
 
 function PriceRow({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
+  const { colors } = useAppTheme();
   return (
     <View style={priceStyles.row}>
-      <Text style={[priceStyles.label, bold && priceStyles.labelBold]}>{label}</Text>
-      <Text style={[priceStyles.value, bold && priceStyles.valueBold]}>{value}</Text>
+      <Text style={[priceStyles.label, { color: colors.textSecondary }, bold && { color: colors.textPrimary }]}>{label}</Text>
+      <Text style={[priceStyles.value, { color: colors.textPrimary }, bold && { fontSize: 18, fontFamily: Typography.family.bold }]}>{value}</Text>
     </View>
   );
 }
@@ -1320,29 +1324,24 @@ const priceStyles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
   },
   labelBold: {
     fontSize: 16,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   value: {
     fontSize: 14,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
   },
   valueBold: {
     fontSize: 18,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
   },
 });
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -1351,7 +1350,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingBottom: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
   },
   closeBtn: {
     width: 44,
@@ -1362,7 +1360,6 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 17,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   headerSpacer: {
     width: 44,
@@ -1373,16 +1370,13 @@ const styles = StyleSheet.create({
   },
   sectionDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
     marginVertical: Space.sm,
   },
   priceBreakdownCard: {
     paddingVertical: Space.md,
     paddingHorizontal: Space.md,
-    backgroundColor: Colors.surface,
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
     marginTop: Space.sm,
   },
   priceBreakdownHeader: {
@@ -1394,13 +1388,11 @@ const styles = StyleSheet.create({
   priceBreakdownTitle: {
     fontSize: 11,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
   },
   priceDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
     marginVertical: Space.sm,
   },
   savingsBadge: {
@@ -1410,14 +1402,12 @@ const styles = StyleSheet.create({
     marginTop: Space.xs,
     paddingVertical: 4,
     paddingHorizontal: 8,
-    backgroundColor: `${Colors.success}12`,
     borderRadius: 6,
     alignSelf: 'flex-start',
   },
   savingsText: {
     fontSize: 11,
     fontFamily: Typography.family.semibold,
-    color: Colors.success,
   },
   protectionStripWrap: {
     marginTop: Space.sm,
@@ -1432,7 +1422,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 11,
     fontFamily: Typography.family.regular,
-    color: Colors.success,
     lineHeight: 15,
   },
   balanceRow: {
@@ -1444,30 +1433,21 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingVertical: 10,
     paddingHorizontal: 12,
-    backgroundColor: Colors.surface,
     borderRadius: 10,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
   },
   balanceSwitch: {
     width: 40,
     height: 24,
     borderRadius: 12,
-    backgroundColor: Colors.surfaceAlt,
     borderWidth: 1,
-    borderColor: Colors.border,
     justifyContent: 'center',
     padding: 2,
-  },
-  balanceSwitchOn: {
-    backgroundColor: Colors.success,
-    borderColor: Colors.success,
   },
   balanceKnob: {
     width: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: Colors.textMuted,
     alignSelf: 'flex-start',
   },
   balanceKnobOn: {
@@ -1481,12 +1461,10 @@ const styles = StyleSheet.create({
   balanceLabel: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   balanceAmount: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
   },
   feedbackRow: {
     flexDirection: 'row',
@@ -1497,27 +1475,20 @@ const styles = StyleSheet.create({
   feedbackText: {
     fontSize: 14,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
-  },
-  feedbackTextError: {
-    color: Colors.danger,
   },
   orderErrorText: {
     fontSize: 14,
     fontFamily: Typography.family.medium,
-    color: Colors.danger,
     paddingVertical: Space.sm,
   },
   hintText: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     paddingVertical: Space.xs,
   },
   termsText: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     lineHeight: 18,
     textAlign: 'center',
     paddingTop: Space.md,
@@ -1531,8 +1502,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
-    backgroundColor: Colors.background,
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
   },
@@ -1542,12 +1511,10 @@ const styles = StyleSheet.create({
   footerTotalLabel: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
   },
   footerTotalPrice: {
     fontSize: 22,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
   },
   payBtn: {
     flexDirection: 'row',
@@ -1558,7 +1525,6 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: Space.lg,
     borderRadius: 10,
-    backgroundColor: Colors.brand,
     minHeight: 48,
   },
   payBtnDisabled: {
@@ -1567,7 +1533,6 @@ const styles = StyleSheet.create({
   payBtnText: {
     fontSize: 16,
     fontFamily: Typography.family.semibold,
-    color: Colors.textInverse,
   },
   signedOutContainer: {
     flex: 1,
@@ -1579,13 +1544,11 @@ const styles = StyleSheet.create({
   signedOutTitle: {
     fontSize: 18,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
     textAlign: 'center',
   },
   signedOutBody: {
     fontSize: 14,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     textAlign: 'center',
     lineHeight: 20,
   },
@@ -1594,7 +1557,6 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: Space.xl,
     borderRadius: 10,
-    backgroundColor: Colors.brand,
     minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1602,6 +1564,5 @@ const styles = StyleSheet.create({
   signedOutBtnText: {
     fontSize: 16,
     fontFamily: Typography.family.semibold,
-    color: Colors.textInverse,
   },
 });
