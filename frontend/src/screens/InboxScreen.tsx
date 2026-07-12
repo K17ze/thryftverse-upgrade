@@ -850,7 +850,7 @@ export default function InboxScreen() {
 
       {!!syncError && (
 
-        <View style={[styles.errorBanner, { borderBottomColor: colors.border }]}>
+        <View style={[styles.errorBanner, { borderBottomColor: colors.border, backgroundColor: `${colors.danger}10` }]}>
 
           <Ionicons name="alert-circle-outline" size={16} color={colors.danger} />
 
@@ -1869,7 +1869,7 @@ const styles = StyleSheet.create({
 
     gap: Space.sm,
 
-    backgroundColor: '#FFF5F5',
+    backgroundColor: 'transparent',
 
     paddingVertical: Space.sm,
 
