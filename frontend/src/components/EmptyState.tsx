@@ -4,7 +4,7 @@ import Reanimated, {
   FadeIn,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Typography } from '../theme/designTokens';
 import { AnimatedPressable } from './AnimatedPressable';
 
@@ -27,7 +27,8 @@ interface Props {
   iconColor?: string;
   graphic?: React.ReactNode;
 }
-export function EmptyState({ icon, title, subtitle, hint, ctaLabel, onCtaPress, secondaryCtaLabel, onSecondaryCtaPress, suggestedActions, iconColor = Colors.brand, graphic }: Props) {
+export function EmptyState({ icon, title, subtitle, hint, ctaLabel, onCtaPress, secondaryCtaLabel, onSecondaryCtaPress, suggestedActions, iconColor, graphic }: Props) {
+  const { colors } = useAppTheme();
   const enter = FadeIn.duration(300);
 
   return (
@@ -39,15 +40,15 @@ export function EmptyState({ icon, title, subtitle, hint, ctaLabel, onCtaPress, 
       ) : (
         <Reanimated.View
           entering={enter}
-          style={styles.iconRing}
+          style={[styles.iconRing, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
         >
-          <Ionicons name={icon ?? 'cube-outline'} size={38} color={iconColor} />
+          <Ionicons name={icon ?? 'cube-outline'} size={38} color={iconColor ?? colors.brand} />
         </Reanimated.View>
       )}
 
       <Reanimated.Text
         entering={enter}
-        style={styles.title}
+        style={[styles.title, { color: colors.textPrimary }]}
       >
         {title}
       </Reanimated.Text>
@@ -55,7 +56,7 @@ export function EmptyState({ icon, title, subtitle, hint, ctaLabel, onCtaPress, 
       {subtitle && (
         <Reanimated.Text
           entering={enter}
-          style={styles.subtitle}
+          style={[styles.subtitle, { color: colors.textMuted }]}
         >
           {subtitle}
         </Reanimated.Text>
@@ -63,40 +64,40 @@ export function EmptyState({ icon, title, subtitle, hint, ctaLabel, onCtaPress, 
 
       {hint ? (
         <Reanimated.View entering={enter} style={styles.hintWrap}>
-          <Ionicons name="bulb-outline" size={12} color={Colors.textMuted} />
-          <Text style={styles.hintText}>{hint}</Text>
+          <Ionicons name="bulb-outline" size={12} color={colors.textMuted} />
+          <Text style={[styles.hintText, { color: colors.textMuted }]}>{hint}</Text>
         </Reanimated.View>
       ) : null}
 
       {ctaLabel && onCtaPress && (
         <Reanimated.View entering={enter}>
-          <AnimatedPressable style={styles.cta} onPress={onCtaPress} activeOpacity={0.8} hapticFeedback="selection">
-            <Text style={styles.ctaText}>{ctaLabel}</Text>
+          <AnimatedPressable style={[styles.cta, { backgroundColor: colors.textPrimary }]} onPress={onCtaPress} activeOpacity={0.8} hapticFeedback="selection">
+            <Text style={[styles.ctaText, { color: colors.background }]}>{ctaLabel}</Text>
           </AnimatedPressable>
         </Reanimated.View>
       )}
 
       {secondaryCtaLabel && onSecondaryCtaPress && (
         <Reanimated.View entering={enter}>
-          <AnimatedPressable style={styles.ctaSecondary} onPress={onSecondaryCtaPress} activeOpacity={0.8} hapticFeedback="light">
-            <Text style={styles.ctaSecondaryText}>{secondaryCtaLabel}</Text>
+          <AnimatedPressable style={[styles.ctaSecondary, { borderColor: colors.border }]} onPress={onSecondaryCtaPress} activeOpacity={0.8} hapticFeedback="light">
+            <Text style={[styles.ctaSecondaryText, { color: colors.textPrimary }]}>{secondaryCtaLabel}</Text>
           </AnimatedPressable>
         </Reanimated.View>
       )}
 
       {suggestedActions && suggestedActions.length > 0 && (
         <Reanimated.View entering={enter} style={styles.suggestedWrap}>
-          <Text style={styles.suggestedLabel}>Suggested</Text>
+          <Text style={[styles.suggestedLabel, { color: colors.textMuted }]}>Suggested</Text>
           <View style={styles.chipRow}>
             {suggestedActions.map((action, i) => (
               <AnimatedPressable
                 key={i}
-                style={styles.chip}
+                style={[styles.chip, { backgroundColor: colors.surface, borderColor: colors.border }]}
                 onPress={action.onPress}
                 activeOpacity={0.8}
                 hapticFeedback="light"
               >
-                <Text style={styles.chipText}>{action.label}</Text>
+                <Text style={[styles.chipText, { color: colors.textPrimary }]}>{action.label}</Text>
               </AnimatedPressable>
             ))}
           </View>
@@ -120,8 +121,6 @@ const styles = StyleSheet.create({
     height: 96,
     borderRadius: 48,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
@@ -130,14 +129,12 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.2,
-    color: Colors.textPrimary,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 14,
     fontFamily: Typography.family.regular,
     letterSpacing: 0.08,
-    color: Colors.textMuted,
     textAlign: 'center',
     lineHeight: 21,
     maxWidth: 260,
@@ -153,12 +150,10 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 12,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
     lineHeight: 17,
   },
   cta: {
     marginTop: 20,
-    backgroundColor: Colors.textPrimary,
     paddingHorizontal: 32,
     paddingVertical: 14,
     borderRadius: 24,
@@ -167,7 +162,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: Typography.family.bold,
     letterSpacing: 0.3,
-    color: Colors.background,
   },
   ctaSecondary: {
     marginTop: 10,
@@ -175,12 +169,10 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: Colors.border,
   },
   ctaSecondaryText: {
     fontSize: 14,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   suggestedWrap: {
     marginTop: 20,
@@ -190,7 +182,6 @@ const styles = StyleSheet.create({
   suggestedLabel: {
     fontSize: 11,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
@@ -205,13 +196,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: Colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
   },
   chipText: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
 });

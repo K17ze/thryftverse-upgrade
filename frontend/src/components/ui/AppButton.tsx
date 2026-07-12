@@ -1,6 +1,6 @@
 import React from 'react';
 import { AccessibilityRole, ActivityIndicator, StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, ThemeColors } from '../../theme/ThemeContext';
 import { Type, Typography } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 
@@ -46,39 +46,39 @@ type VariantTokens = {
   iconBackgroundColor: string;
 };
 
-function resolveVariantTokens(variant: AppButtonVariant): VariantTokens {
+function resolveVariantTokens(variant: AppButtonVariant, colors: ThemeColors): VariantTokens {
   switch (variant) {
     case 'secondary':
       return {
-        backgroundColor: Colors.surface,
-        borderColor: Colors.border,
-        titleColor: Colors.textPrimary,
-        subtitleColor: Colors.textSecondary,
+        backgroundColor: colors.surface,
+        borderColor: colors.border,
+        titleColor: colors.textPrimary,
+        subtitleColor: colors.textSecondary,
         iconBackgroundColor: 'transparent',
       };
     case 'ghost':
       return {
         backgroundColor: 'transparent',
         borderColor: 'transparent',
-        titleColor: Colors.textPrimary,
-        subtitleColor: Colors.textSecondary,
+        titleColor: colors.textPrimary,
+        subtitleColor: colors.textSecondary,
         iconBackgroundColor: 'transparent',
       };
     case 'danger':
       return {
-        backgroundColor: Colors.danger,
-        borderColor: Colors.danger,
-        titleColor: Colors.background,
-        subtitleColor: Colors.background,
+        backgroundColor: colors.danger,
+        borderColor: colors.danger,
+        titleColor: colors.background,
+        subtitleColor: colors.background,
         iconBackgroundColor: 'rgba(0,0,0,0.15)',
       };
     case 'primary':
     default:
       return {
-        backgroundColor: Colors.brand,
-        borderColor: Colors.brand,
-        titleColor: Colors.background,
-        subtitleColor: Colors.background,
+        backgroundColor: colors.brand,
+        borderColor: colors.brand,
+        titleColor: colors.background,
+        subtitleColor: colors.background,
         iconBackgroundColor: 'rgba(0,0,0,0.15)',
       };
   }
@@ -119,7 +119,8 @@ export function AppButton({
   accessibilityHint,
   accessibilityRole,
 }: AppButtonProps) {
-  const tokens = resolveVariantTokens(variant);
+  const { colors } = useAppTheme();
+  const tokens = resolveVariantTokens(variant, colors);
   const resolvedAlign = align ?? (subtitle ? 'start' : 'center');
 
   return (

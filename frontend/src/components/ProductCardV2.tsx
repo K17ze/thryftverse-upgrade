@@ -6,7 +6,7 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Space, Radius } from '../theme/designTokens';
 import { T, Price } from './ui/Text';
 import { AnimatedPressable } from './AnimatedPressable';
@@ -61,6 +61,7 @@ export function ProductCardV2({
   const haptic = useHaptic();
   const { formatFromFiat } = useFormattedPrice();
   const reducedMotionEnabled = useReducedMotion();
+  const { colors } = useAppTheme();
 
   const [imageFailed, setImageFailed] = useState(false);
   const aspectRatio = mediaAspectRatio ?? resolveListingMediaAspectRatio(item);
@@ -98,7 +99,7 @@ export function ProductCardV2({
       {/* Image - Full bleed, subtle radius for modern feel */}
       <AnimatedPressable
         onPress={onPress}
-        style={styles.imageWrap}
+        style={[styles.imageWrap, { backgroundColor: colors.surfaceAlt }]}
         {...PressPresets.card}
         accessibilityRole="button"
         accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}`}
@@ -125,7 +126,7 @@ export function ProductCardV2({
         {/* Sold overlay */}
         {item.isSold && (
           <View style={styles.soldOverlay}>
-            <Text style={styles.soldText}>SOLD</Text>
+            <Text style={[styles.soldText, { color: colors.textPrimary }]}>SOLD</Text>
           </View>
         )}
 
@@ -166,7 +167,7 @@ export function ProductCardV2({
               accessibilityLabel={isSaved ? 'Remove from saved' : 'Save product'}
               accessibilityHint="Toggles this product in your saved page"
             >
-              <Ionicons name={isSaved ? 'bookmark' : 'bookmark-outline'} size={18} color={isSaved ? Colors.brand : '#FFFFFF'} />
+              <Ionicons name={isSaved ? 'bookmark' : 'bookmark-outline'} size={18} color={isSaved ? colors.brand : '#FFFFFF'} />
             </AnimatedPressable>
           ) : null}
           <View style={styles.favBtn}>
@@ -174,7 +175,7 @@ export function ProductCardV2({
               isActive={isFav}
               onToggle={handleToggleFav}
               size={20}
-              activeColor={Colors.danger}
+              activeColor={colors.danger}
               inactiveColor="#FFFFFF"
             />
           </View>
@@ -186,20 +187,20 @@ export function ProductCardV2({
         <View style={styles.info}>
           <View style={styles.priceRow}>
             <View style={styles.priceWrap}>
-              <Price amount={item.price} />
+              <Price amount={item.price} color={colors.textPrimary} />
               {hasPriceDrop && (
-                <Text style={styles.originalPrice}>{formatFromFiat(item.originalPrice!, 'GBP', { displayMode: 'fiat' })}</Text>
+                <Text style={[styles.originalPrice, { color: colors.textMuted }]}>{formatFromFiat(item.originalPrice!, 'GBP', { displayMode: 'fiat' })}</Text>
               )}
             </View>
             {item.likes > 0 ? (
               <View style={styles.likes}>
-                <Ionicons name="heart" size={9} color={Colors.textMuted} />
-                <T.Caption style={styles.likesText}>{item.likes}</T.Caption>
+                <Ionicons name="heart" size={9} color={colors.textMuted} />
+                <T.Caption color={colors.textMuted} style={styles.likesText}>{item.likes}</T.Caption>
               </View>
             ) : null}
           </View>
 
-          {item.size ? <T.Caption numberOfLines={1} style={{ marginTop: 1 }}>{item.size}</T.Caption> : null}
+          {item.size ? <T.Caption color={colors.textSecondary} numberOfLines={1} style={{ marginTop: 1 }}>{item.size}</T.Caption> : null}
           {sellerUsername ? (
             <View style={styles.sellerRow}>
               {sellerAvatar ? (
@@ -211,11 +212,11 @@ export function ProductCardV2({
               ) : (
                 // Premium compact seller placeholder — keeps alignment and
                 // avoids awkward whitespace when avatar is missing.
-                <View style={styles.sellerAvatarPlaceholder}>
-                  <Ionicons name="person" size={9} color={Colors.textMuted} />
+                <View style={[styles.sellerAvatarPlaceholder, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+                  <Ionicons name="person" size={9} color={colors.textMuted} />
                 </View>
               )}
-              <Text style={styles.sellerName} numberOfLines={1}>@{sellerUsername}</Text>
+              <Text style={[styles.sellerName, { color: colors.textSecondary }]} numberOfLines={1}>@{sellerUsername}</Text>
             </View>
           ) : null}
         </View>
@@ -306,7 +307,6 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'hidden',
     borderRadius: Radius.lg,
-    backgroundColor: Colors.surfaceAlt,
   },
   image: {
     width: '100%',
@@ -322,7 +322,6 @@ const styles = StyleSheet.create({
   soldText: {
     fontSize: 13,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
     letterSpacing: 1.5,
     textTransform: 'uppercase',
   },
@@ -381,7 +380,6 @@ const styles = StyleSheet.create({
   originalPrice: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     textDecorationLine: 'line-through',
   },
   likes: {
@@ -408,16 +406,13 @@ const styles = StyleSheet.create({
     width: 14,
     height: 14,
     borderRadius: 7,
-    backgroundColor: Colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   sellerName: {
     fontSize: 11,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
     flex: 1,
   },
   // Condition & price-drop badges

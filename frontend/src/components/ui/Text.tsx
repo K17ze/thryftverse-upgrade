@@ -7,7 +7,7 @@
 import React from 'react';
 import { Text as RNText, TextProps as RNTextProps, StyleSheet, StyleProp, TextStyle } from 'react-native';
 import { Type, Typography } from '../../theme/designTokens';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 
 interface TextComponentProps extends RNTextProps {
   children: React.ReactNode;
@@ -22,39 +22,45 @@ interface TextComponentProps extends RNTextProps {
 
 export const Caption: React.FC<TextComponentProps> = ({
   children,
-  color = Colors.textSecondary,
+  color,
   style,
   ...props
-}) => (
-  <RNText
-    style={[
-      styles.caption,
-      { color },
-      style,
-    ]}
-    {...props}
-  >
-    {children}
-  </RNText>
-);
+}) => {
+  const { colors } = useAppTheme();
+  return (
+    <RNText
+      style={[
+        styles.caption,
+        { color: color ?? colors.textSecondary },
+        style,
+      ]}
+      {...props}
+    >
+      {children}
+    </RNText>
+  );
+};
 
 export const CaptionEmphasis: React.FC<TextComponentProps> = ({
   children,
-  color = Colors.textPrimary,
+  color,
   style,
   ...props
-}) => (
-  <RNText
-    style={[
-      styles.captionEmphasis,
-      { color },
-      style,
-    ]}
-    {...props}
-  >
-    {children}
-  </RNText>
-);
+}) => {
+  const { colors } = useAppTheme();
+  return (
+    <RNText
+      style={[
+        styles.captionEmphasis,
+        { color: color ?? colors.textPrimary },
+        style,
+      ]}
+      {...props}
+    >
+      {children}
+    </RNText>
+  );
+};
 
 // ============================================================================
 // BODY TEXT (14px)
@@ -62,39 +68,45 @@ export const CaptionEmphasis: React.FC<TextComponentProps> = ({
 
 export const Body: React.FC<TextComponentProps> = ({
   children,
-  color = Colors.textPrimary,
+  color,
   style,
   ...props
-}) => (
-  <RNText
-    style={[
-      styles.body,
-      { color },
-      style,
-    ]}
-    {...props}
-  >
-    {children}
-  </RNText>
-);
+}) => {
+  const { colors } = useAppTheme();
+  return (
+    <RNText
+      style={[
+        styles.body,
+        { color: color ?? colors.textPrimary },
+        style,
+      ]}
+      {...props}
+    >
+      {children}
+    </RNText>
+  );
+};
 
 export const BodyEmphasis: React.FC<TextComponentProps> = ({
   children,
-  color = Colors.textPrimary,
+  color,
   style,
   ...props
-}) => (
-  <RNText
-    style={[
-      styles.bodyEmphasis,
-      { color },
-      style,
-    ]}
-    {...props}
-  >
-    {children}
-  </RNText>
-);
+}) => {
+  const { colors } = useAppTheme();
+  return (
+    <RNText
+      style={[
+        styles.bodyEmphasis,
+        { color: color ?? colors.textPrimary },
+        style,
+      ]}
+      {...props}
+    >
+      {children}
+    </RNText>
+  );
+};
 
 // ============================================================================
 // HEADLINES (17px - iOS style)
@@ -102,21 +114,24 @@ export const BodyEmphasis: React.FC<TextComponentProps> = ({
 
 export const Headline: React.FC<TextComponentProps> = ({
   children,
-  color = Colors.textPrimary,
+  color,
   style,
   ...props
-}) => (
-  <RNText
-    style={[
-      styles.headline,
-      { color },
-      style,
-    ]}
-    {...props}
-  >
-    {children}
-  </RNText>
-);
+}) => {
+  const { colors } = useAppTheme();
+  return (
+    <RNText
+      style={[
+        styles.headline,
+        { color: color ?? colors.textPrimary },
+        style,
+      ]}
+      {...props}
+    >
+      {children}
+    </RNText>
+  );
+};
 
 // ============================================================================
 // TITLES (20px, 24px, 32px)
@@ -124,57 +139,66 @@ export const Headline: React.FC<TextComponentProps> = ({
 
 export const Title3: React.FC<TextComponentProps> = ({
   children,
-  color = Colors.textPrimary,
+  color,
   style,
   ...props
-}) => (
-  <RNText
-    style={[
-      styles.title3,
-      { color },
-      style,
-    ]}
-    {...props}
-  >
-    {children}
-  </RNText>
-);
+}) => {
+  const { colors } = useAppTheme();
+  return (
+    <RNText
+      style={[
+        styles.title3,
+        { color: color ?? colors.textPrimary },
+        style,
+      ]}
+      {...props}
+    >
+      {children}
+    </RNText>
+  );
+};
 
 export const Title2: React.FC<TextComponentProps> = ({
   children,
-  color = Colors.textPrimary,
+  color,
   style,
   ...props
-}) => (
-  <RNText
-    style={[
-      styles.title2,
-      { color },
-      style,
-    ]}
-    {...props}
-  >
-    {children}
-  </RNText>
-);
+}) => {
+  const { colors } = useAppTheme();
+  return (
+    <RNText
+      style={[
+        styles.title2,
+        { color: color ?? colors.textPrimary },
+        style,
+      ]}
+      {...props}
+    >
+      {children}
+    </RNText>
+  );
+};
 
 export const Title1: React.FC<TextComponentProps> = ({
   children,
-  color = Colors.textPrimary,
+  color,
   style,
   ...props
-}) => (
-  <RNText
-    style={[
-      styles.title1,
-      { color },
-      style,
-    ]}
-    {...props}
-  >
-    {children}
-  </RNText>
-);
+}) => {
+  const { colors } = useAppTheme();
+  return (
+    <RNText
+      style={[
+        styles.title1,
+        { color: color ?? colors.textPrimary },
+        style,
+      ]}
+      {...props}
+    >
+      {children}
+    </RNText>
+  );
+};
 
 // ============================================================================
 // SPECIALTY TEXT
@@ -188,59 +212,68 @@ interface PriceProps extends Omit<TextComponentProps, 'children'> {
 export const Price: React.FC<PriceProps> = ({
   amount,
   currency = '£',
-  color = Colors.textPrimary,
+  color,
   style,
   ...props
-}) => (
-  <RNText
-    style={[
-      styles.price,
-      { color },
-      style,
-    ]}
-    {...props}
-  >
-    {currency}{amount.toFixed(2)}
-  </RNText>
-);
+}) => {
+  const { colors } = useAppTheme();
+  return (
+    <RNText
+      style={[
+        styles.price,
+        { color: color ?? colors.textPrimary },
+        style,
+      ]}
+      {...props}
+    >
+      {currency}{amount.toFixed(2)}
+    </RNText>
+  );
+};
 
 export const PriceCompact: React.FC<PriceProps> = ({
   amount,
   currency = '£',
-  color = Colors.textPrimary,
+  color,
   style,
   ...props
-}) => (
-  <RNText
-    style={[
-      styles.priceCompact,
-      { color },
-      style,
-    ]}
-    {...props}
-  >
-    {currency}{amount.toFixed(0)}
-  </RNText>
-);
+}) => {
+  const { colors } = useAppTheme();
+  return (
+    <RNText
+      style={[
+        styles.priceCompact,
+        { color: color ?? colors.textPrimary },
+        style,
+      ]}
+      {...props}
+    >
+      {currency}{amount.toFixed(0)}
+    </RNText>
+  );
+};
 
 export const PriceLarge: React.FC<PriceProps> = ({
   amount,
   currency = '£',
-  color = Colors.textPrimary,
+  color,
   style,
   ...props
-}) => (
-  <RNText
-    style={[
-      styles.priceLarge,
-      { color },
-      style,
-    ]}
-    {...props}
-  >
-    {currency}{amount.toFixed(2)}
-  </RNText>
-);
+}) => {
+  const { colors } = useAppTheme();
+  return (
+    <RNText
+      style={[
+        styles.priceLarge,
+        { color: color ?? colors.textPrimary },
+        style,
+      ]}
+      {...props}
+    >
+      {currency}{amount.toFixed(2)}
+    </RNText>
+  );
+};
 
 // ============================================================================
 // META - Small metadata text (ELEVATED)
@@ -248,21 +281,24 @@ export const PriceLarge: React.FC<PriceProps> = ({
 
 export const Meta: React.FC<TextComponentProps> = ({
   children,
-  color = Colors.textSecondary,
+  color,
   style,
   ...props
-}) => (
-  <RNText
-    style={[
-      styles.meta,
-      { color },
-      style,
-    ]}
-    {...props}
-  >
-    {children}
-  </RNText>
-);
+}) => {
+  const { colors } = useAppTheme();
+  return (
+    <RNText
+      style={[
+        styles.meta,
+        { color: color ?? colors.textSecondary },
+        style,
+      ]}
+      {...props}
+    >
+      {children}
+    </RNText>
+  );
+};
 
 // ============================================================================
 // STYLES
