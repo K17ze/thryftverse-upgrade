@@ -20,7 +20,7 @@ import Reanimated, {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Type, Space, Radius, DockConstants } from '../theme/designTokens';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -49,6 +49,7 @@ type NavT = StackNavigationProp<RootStackParamList>;
 const SORT_OPTIONS: SortOption[] = ['Default', 'Recently saved', 'Price: Low to High', 'Price: High to Low', 'Newest'];
 
 export default function ClosetScreen() {
+  const { colors, isDark } = useAppTheme();
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
   const { formatFromFiat } = useFormattedPrice();
@@ -277,19 +278,19 @@ export default function ClosetScreen() {
         contentContainerStyle={styles.brandChipContent}
       >
         <AnimatedPressable
-          style={[styles.brandChip, !activeBrand && styles.brandChipActive]}
+          style={[styles.brandChip, { backgroundColor: colors.surface, borderColor: colors.border }, !activeBrand && { backgroundColor: colors.brand, borderColor: colors.brand }]}
           onPress={() => { haptic.light(); setActiveBrand(null); }}
           activeOpacity={0.85}
           accessibilityRole="button"
           accessibilityState={{ selected: !activeBrand }}
           accessibilityLabel="All brands"
         >
-          <Text style={[styles.brandChipText, !activeBrand && styles.brandChipTextActive]}>All</Text>
+          <Text style={[styles.brandChipText, { color: !activeBrand ? colors.background : colors.textSecondary }]}>All</Text>
         </AnimatedPressable>
         {availableBrands.map((brand) => (
           <AnimatedPressable
             key={brand}
-            style={[styles.brandChip, activeBrand === brand && styles.brandChipActive]}
+            style={[styles.brandChip, { backgroundColor: colors.surface, borderColor: colors.border }, activeBrand === brand && { backgroundColor: colors.brand, borderColor: colors.brand }]}
             onPress={() => {
               haptic.light();
               setActiveBrand((prev) => (prev === brand ? null : brand));
@@ -299,7 +300,7 @@ export default function ClosetScreen() {
             accessibilityState={{ selected: activeBrand === brand }}
             accessibilityLabel={`Filter by brand ${brand}`}
           >
-            <Text style={[styles.brandChipText, activeBrand === brand && styles.brandChipTextActive]}>{brand}</Text>
+            <Text style={[styles.brandChipText, { color: activeBrand === brand ? colors.background : colors.textSecondary }]}>{brand}</Text>
           </AnimatedPressable>
         ))}
       </ScrollView>
@@ -308,17 +309,17 @@ export default function ClosetScreen() {
 
   const renderCompactFilterBar = () => (
     <View style={styles.sortBar}>
-      <Text style={styles.resultCount}>{tabCount} {tabCount === 1 ? 'item' : 'items'}</Text>
+      <Text style={[styles.resultCount, { color: colors.textSecondary }]}>{tabCount} {tabCount === 1 ? 'item' : 'items'}</Text>
       {activeTab !== 'COLLECTIONS' && (
         <AnimatedPressable
-          style={[styles.sortBtn, activeFilterCount > 0 && styles.sortBtnActive]}
+          style={[styles.sortBtn, { backgroundColor: colors.surfaceAlt, borderColor: activeFilterCount > 0 ? colors.brand : colors.border }]}
           onPress={() => setShowFilterSheet(true)}
           activeOpacity={0.85}
           accessibilityRole="button"
           accessibilityLabel={`Filter and sort${activeFilterCount > 0 ? `, ${activeFilterCount} active` : ''}`}
         >
-          <Ionicons name="options-outline" size={14} color={activeFilterCount > 0 ? Colors.brand : Colors.textMuted} />
-          <Text style={[styles.sortLabel, activeFilterCount > 0 && styles.sortLabelActive]}>
+          <Ionicons name="options-outline" size={14} color={activeFilterCount > 0 ? colors.brand : colors.textMuted} />
+          <Text style={[styles.sortLabel, { color: activeFilterCount > 0 ? colors.brand : colors.textSecondary }]}>
             {activeFilterCount > 0 ? `Filters (${activeFilterCount})` : 'Filter'}
           </Text>
         </AnimatedPressable>
@@ -333,7 +334,7 @@ export default function ClosetScreen() {
     >
       {/* Sheet title */}
       <View style={styles.sheetTitleRow}>
-        <Text style={styles.sheetTitle}>Filter & Sort</Text>
+        <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>Filter & Sort</Text>
         <AnimatedPressable
           onPress={() => setShowFilterSheet(false)}
           activeOpacity={0.85}
@@ -341,24 +342,24 @@ export default function ClosetScreen() {
           accessibilityLabel="Close filter sheet"
           accessibilityRole="button"
         >
-          <Ionicons name="close" size={20} color={Colors.textMuted} />
+          <Ionicons name="close" size={20} color={colors.textMuted} />
         </AnimatedPressable>
       </View>
 
       {/* Sort section */}
       <View style={styles.sheetSection}>
-        <Text style={styles.sheetSectionTitle}>Sort by</Text>
+        <Text style={[styles.sheetSectionTitle, { color: colors.textSecondary }]}>Sort by</Text>
         {SORT_OPTIONS.map((opt) => (
           <AnimatedPressable
             key={opt}
-            style={[styles.sheetOption, sortBy === opt && styles.sheetOptionActive]}
+            style={[styles.sheetOption, { borderBottomColor: colors.border }, sortBy === opt && { backgroundColor: colors.surfaceAlt }]}
             onPress={() => { haptic.light(); setSortBy(opt); }}
             activeOpacity={0.85}
             accessibilityRole="button"
             accessibilityState={{ selected: sortBy === opt }}
           >
-            <Text style={[styles.sheetOptionText, sortBy === opt && styles.sheetOptionTextActive]}>{opt}</Text>
-            {sortBy === opt && <Ionicons name="checkmark" size={16} color={Colors.brand} />}
+            <Text style={[styles.sheetOptionText, { color: sortBy === opt ? colors.brand : colors.textPrimary }]}>{opt}</Text>
+            {sortBy === opt && <Ionicons name="checkmark" size={16} color={colors.brand} />}
           </AnimatedPressable>
         ))}
       </View>
@@ -366,22 +367,22 @@ export default function ClosetScreen() {
       {/* Brand filter section — only for SAVED and WISHLIST tabs */}
       {availableBrands.length > 1 && (
         <View style={styles.sheetSection}>
-          <Text style={styles.sheetSectionTitle}>Brand</Text>
+          <Text style={[styles.sheetSectionTitle, { color: colors.textSecondary }]}>Brand</Text>
           <View style={styles.sheetChipWrap}>
             <AnimatedPressable
-              style={[styles.sheetChip, !activeBrand && styles.sheetChipActive]}
+              style={[styles.sheetChip, { backgroundColor: colors.surface, borderColor: colors.border }, !activeBrand && { backgroundColor: colors.brand, borderColor: colors.brand }]}
               onPress={() => { haptic.light(); setActiveBrand(null); }}
               activeOpacity={0.85}
               accessibilityRole="button"
               accessibilityState={{ selected: !activeBrand }}
               accessibilityLabel="All brands"
             >
-              <Text style={[styles.sheetChipText, !activeBrand && styles.sheetChipTextActive]}>All</Text>
+              <Text style={[styles.sheetChipText, { color: !activeBrand ? colors.background : colors.textSecondary }]}>All</Text>
             </AnimatedPressable>
             {availableBrands.map((brand) => (
               <AnimatedPressable
                 key={brand}
-                style={[styles.sheetChip, activeBrand === brand && styles.sheetChipActive]}
+                style={[styles.sheetChip, { backgroundColor: colors.surface, borderColor: colors.border }, activeBrand === brand && { backgroundColor: colors.brand, borderColor: colors.brand }]}
                 onPress={() => {
                   haptic.light();
                   setActiveBrand((prev) => (prev === brand ? null : brand));
@@ -391,7 +392,7 @@ export default function ClosetScreen() {
                 accessibilityState={{ selected: activeBrand === brand }}
                 accessibilityLabel={`Filter by brand ${brand}`}
               >
-                <Text style={[styles.sheetChipText, activeBrand === brand && styles.sheetChipTextActive]}>{brand}</Text>
+                <Text style={[styles.sheetChipText, { color: activeBrand === brand ? colors.background : colors.textSecondary }]}>{brand}</Text>
               </AnimatedPressable>
             ))}
           </View>
@@ -401,9 +402,9 @@ export default function ClosetScreen() {
       {/* Price drop toggle — only on wishlist */}
       {activeTab === 'WISHLIST' && priceDropCount > 0 && (
         <View style={styles.sheetSection}>
-          <Text style={styles.sheetSectionTitle}>Availability</Text>
+          <Text style={[styles.sheetSectionTitle, { color: colors.textSecondary }]}>Availability</Text>
           <AnimatedPressable
-            style={[styles.sheetOption, showPriceDropsOnly && styles.sheetOptionActive]}
+            style={[styles.sheetOption, { borderBottomColor: colors.border }, showPriceDropsOnly && { backgroundColor: colors.surfaceAlt }]}
             onPress={() => { haptic.light(); setShowPriceDropsOnly((v) => !v); }}
             activeOpacity={0.85}
             accessibilityRole="button"
@@ -411,12 +412,12 @@ export default function ClosetScreen() {
             accessibilityLabel={`Filter price drops: ${priceDropCount} items on sale`}
           >
             <View style={styles.sheetOptionLeft}>
-              <Ionicons name="pricetag-outline" size={15} color={Colors.brand} />
-              <Text style={[styles.sheetOptionText, showPriceDropsOnly && styles.sheetOptionTextActive]}>
+              <Ionicons name="pricetag-outline" size={15} color={colors.brand} />
+              <Text style={[styles.sheetOptionText, { color: showPriceDropsOnly ? colors.brand : colors.textPrimary }]}>
                 Price drops ({priceDropCount})
               </Text>
             </View>
-            {showPriceDropsOnly && <Ionicons name="checkmark" size={16} color={Colors.brand} />}
+            {showPriceDropsOnly && <Ionicons name="checkmark" size={16} color={colors.brand} />}
           </AnimatedPressable>
         </View>
       )}
@@ -536,7 +537,7 @@ export default function ClosetScreen() {
         {/* FAB-style create button on Collections tab */}
         <AppButton
           title="Create Collection"
-          icon={<Ionicons name="add" size={16} color={Colors.background} />}
+          icon={<Ionicons name="add" size={16} color={colors.background} />}
           onPress={handleCreateCollection}
           style={styles.createCollectionBtn}
         />
@@ -546,32 +547,32 @@ export default function ClosetScreen() {
 
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
       {/* Animated Header Border */}
-      <Reanimated.View style={[styles.headerBorder, headerBgStyle]} pointerEvents="none" />
+      <Reanimated.View style={[styles.headerBorder, headerBgStyle, { backgroundColor: colors.background, borderBottomColor: colors.border }]} pointerEvents="none" />
 
       {/* Header */}
       <View style={styles.header}>
-        <AnimatedPressable style={styles.backBtn} onPress={handleGoBack} activeOpacity={0.85}>
-          <Ionicons name="arrow-back" size={22} color={Colors.textPrimary} />
+        <AnimatedPressable style={[styles.backBtn, { borderColor: colors.border, backgroundColor: colors.surface }]} onPress={handleGoBack} activeOpacity={0.85}>
+          <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
         </AnimatedPressable>
         <View style={{ flex: 1 }}>
-          <Text style={styles.headerTitle}>Closet</Text>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Closet</Text>
         </View>
         <AnimatedPressable
-          style={styles.shareBtn}
+          style={[styles.shareBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
           onPress={handleShareCloset}
           activeOpacity={0.85}
           accessibilityRole="button"
           accessibilityLabel="Share closet"
         >
-          <Ionicons name="share-outline" size={20} color={Colors.textPrimary} />
+          <Ionicons name="share-outline" size={20} color={colors.textPrimary} />
         </AnimatedPressable>
-        <View style={styles.countPill}>
-          <Ionicons name={TAB_ICONS[activeTab]} size={12} color={Colors.textMuted} />
-          <Text style={styles.countBadge}>{tabCount}</Text>
+        <View style={[styles.countPill, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+          <Ionicons name={TAB_ICONS[activeTab]} size={12} color={colors.textMuted} />
+          <Text style={[styles.countBadge, { color: colors.textMuted }]}>{tabCount}</Text>
         </View>
       </View>
 
@@ -598,11 +599,11 @@ export default function ClosetScreen() {
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder={searchPlaceholder}
-            prefix={<Ionicons name="search" size={18} color={Colors.textMuted} />}
+            prefix={<Ionicons name="search" size={18} color={colors.textMuted} />}
             suffix={
               searchQuery.length > 0 ? (
                 <AnimatedPressable onPress={() => setSearchQuery('')} accessibilityLabel="Clear search">
-                  <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
+                  <Ionicons name="close-circle" size={18} color={colors.textMuted} />
                 </AnimatedPressable>
               ) : null
             }
@@ -624,7 +625,7 @@ export default function ClosetScreen() {
 
         {/* Tabs */}
         <View style={styles.tabsWrap}>
-          <View style={styles.tabBar}>
+          <View style={[styles.tabBar, { borderBottomColor: colors.border }]}>
             {(['SAVED', 'WISHLIST', 'COLLECTIONS'] as TabKey[]).map((tab) => {
               const isActive = activeTab === tab;
               const tabCounts = {
@@ -642,10 +643,10 @@ export default function ClosetScreen() {
                   accessibilityState={{ selected: isActive }}
                   accessibilityLabel={`${tab.toLowerCase()} tab, ${tabCounts[tab]} items`}
                 >
-                  <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
+                  <Text style={[styles.tabLabel, { color: isActive ? colors.textPrimary : colors.textSecondary }]}>
                     {tab === 'SAVED' ? 'Saved' : tab === 'WISHLIST' ? 'Wishlist' : 'Collections'}
                   </Text>
-                  {isActive && <View style={styles.tabIndicator} />}
+                  {isActive && <View style={[styles.tabIndicator, { backgroundColor: colors.textPrimary }]} />}
                 </AnimatedPressable>
               );
             })}
@@ -659,28 +660,28 @@ export default function ClosetScreen() {
 
         {/* Closet stats summary — behind media per audit 8.7 */}
         {closetStats.totalItems > 0 ? (
-          <View style={styles.statsCardBehind}>
-            <Text style={styles.statsSectionTitle}>Closet summary</Text>
+          <View style={[styles.statsCardBehind, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.statsSectionTitle, { color: colors.textSecondary }]}>Closet summary</Text>
             <View style={styles.statsRow}>
               <View style={styles.statItem}>
-                <Text style={styles.statValue}>{closetStats.totalItems}</Text>
-                <Text style={styles.statLabel}>Items</Text>
+                <Text style={[styles.statValue, { color: colors.textPrimary }]}>{closetStats.totalItems}</Text>
+                <Text style={[styles.statLabel, { color: colors.textMuted }]}>Items</Text>
               </View>
-              <View style={styles.statDivider} />
+              <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
               <View style={styles.statItem}>
-                <Text style={styles.statValue}>{formatFromFiat(closetStats.totalValue, 'GBP')}</Text>
-                <Text style={styles.statLabel}>Total value</Text>
+                <Text style={[styles.statValue, { color: colors.textPrimary }]}>{formatFromFiat(closetStats.totalValue, 'GBP')}</Text>
+                <Text style={[styles.statLabel, { color: colors.textMuted }]}>Total value</Text>
               </View>
-              <View style={styles.statDivider} />
+              <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
               <View style={styles.statItem}>
-                <Text style={styles.statValue}>{closetStats.collectionsCount}</Text>
-                <Text style={styles.statLabel}>Collections</Text>
+                <Text style={[styles.statValue, { color: colors.textPrimary }]}>{closetStats.collectionsCount}</Text>
+                <Text style={[styles.statLabel, { color: colors.textMuted }]}>Collections</Text>
               </View>
             </View>
             {closetStats.totalSavings > 0 ? (
-              <View style={styles.savingsRow}>
-                <Ionicons name="trending-down" size={12} color={Colors.success} />
-                <Text style={styles.savingsText}>
+              <View style={[styles.savingsRow, { borderTopColor: colors.border }]}>
+                <Ionicons name="trending-down" size={12} color={colors.success} />
+                <Text style={[styles.savingsText, { color: colors.success }]}>
                   {formatFromFiat(closetStats.totalSavings, 'GBP')} in price drops tracked
                 </Text>
               </View>
@@ -700,7 +701,6 @@ export default function ClosetScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   headerBorder: {
     position: 'absolute',
@@ -708,8 +708,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 90,
-    backgroundColor: Colors.background,
-    borderBottomColor: Colors.border,
     zIndex: 1,
   },
   header: {
@@ -726,8 +724,6 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -736,21 +732,17 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
     fontSize: 22,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
   },
   tabBar: {
     flexDirection: 'row',
     gap: Space.lg,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
   },
   tabItem: {
     paddingVertical: Space.sm,
@@ -759,11 +751,9 @@ const styles = StyleSheet.create({
   tabLabel: {
     fontSize: 15,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
   },
   tabLabelActive: {
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
   },
   tabIndicator: {
     position: 'absolute',
@@ -771,7 +761,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 2,
-    backgroundColor: Colors.textPrimary,
     borderTopLeftRadius: 1,
     borderTopRightRadius: 1,
   },
@@ -782,14 +771,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
     borderWidth: 1,
-    borderColor: Colors.border,
   },
   countBadge: {
     fontSize: 12,
     fontFamily: Typography.family.bold,
-    color: Colors.textMuted,
   },
   searchWrap: {
     paddingHorizontal: Space.md,
@@ -812,7 +798,6 @@ const styles = StyleSheet.create({
   resultCount: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
   },
   sortBtn: {
     flexDirection: 'row',
@@ -821,22 +806,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
     borderWidth: 1,
-    borderColor: Colors.border,
   },
   sortLabel: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
   },
   sortMenu: {
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
-    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
     overflow: 'hidden',
   },
   sortOption: {
@@ -846,19 +826,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
   },
   sortOptionActive: {
-    backgroundColor: Colors.surfaceAlt,
   },
   sortOptionText: {
     fontSize: 14,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
   },
   sortOptionTextActive: {
     fontFamily: Typography.family.bold,
-    color: Colors.brand,
   },
   filterChipRow: {
     flexDirection: 'row',
@@ -873,22 +849,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
     minHeight: 32,
   },
   filterChipActive: {
-    backgroundColor: Colors.brand,
-    borderColor: Colors.brand,
   },
   filterChipText: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
   },
   filterChipTextActive: {
-    color: Colors.background,
   },
   collectionsList: {
     paddingHorizontal: Space.md,
@@ -910,10 +880,8 @@ const styles = StyleSheet.create({
   statsCard: {
     marginHorizontal: Space.md,
     marginBottom: Space.md,
-    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
     padding: Space.md,
   },
   statsRow: {
@@ -928,18 +896,15 @@ const styles = StyleSheet.create({
   statDivider: {
     width: 1,
     height: 28,
-    backgroundColor: Colors.border,
   },
   statValue: {
     fontSize: 17,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
     letterSpacing: -0.3,
   },
   statLabel: {
     fontSize: 11,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
@@ -950,12 +915,10 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
     paddingTop: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
   },
   savingsText: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    color: Colors.success,
   },
   brandChipScroll: {
     marginBottom: Space.sm,
@@ -968,46 +931,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
     minHeight: 32,
     justifyContent: 'center',
   },
   brandChipActive: {
-    backgroundColor: Colors.brand,
-    borderColor: Colors.brand,
   },
   brandChipText: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
   },
   brandChipTextActive: {
-    color: Colors.background,
   },
   // Compact filter bar — active state
   sortBtnActive: {
-    borderColor: Colors.brand,
   },
   sortLabelActive: {
-    color: Colors.brand,
   },
   // Stats card behind media
   statsCardBehind: {
     marginHorizontal: Space.md,
     marginTop: Space.xl,
     marginBottom: Space.md,
-    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
     padding: Space.md,
   },
   statsSectionTitle: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
     marginBottom: Space.sm,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
@@ -1022,7 +974,6 @@ const styles = StyleSheet.create({
   sheetTitle: {
     fontSize: 18,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
   },
   sheetSection: {
     marginBottom: Space.md,
@@ -1030,7 +981,6 @@ const styles = StyleSheet.create({
   sheetSectionTitle: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
     marginBottom: Space.sm,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
@@ -1041,10 +991,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
   },
   sheetOptionActive: {
-    backgroundColor: Colors.surfaceAlt,
     paddingHorizontal: Space.sm,
     borderRadius: Radius.md,
     marginHorizontal: -Space.sm,
@@ -1057,11 +1005,9 @@ const styles = StyleSheet.create({
   sheetOptionText: {
     fontSize: 14,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
   },
   sheetOptionTextActive: {
     fontFamily: Typography.family.bold,
-    color: Colors.brand,
   },
   sheetChipWrap: {
     flexDirection: 'row',
@@ -1072,23 +1018,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
     minHeight: 36,
     justifyContent: 'center',
   },
   sheetChipActive: {
-    backgroundColor: Colors.brand,
-    borderColor: Colors.brand,
   },
   sheetChipText: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
   },
   sheetChipTextActive: {
-    color: Colors.background,
   },
   clearFiltersBtn: {
     marginTop: Space.sm,
