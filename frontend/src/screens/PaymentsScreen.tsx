@@ -7,7 +7,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
-import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Space, Radius, Type } from '../theme/designTokens';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
@@ -31,6 +31,7 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 type Props = StackScreenProps<RootStackParamList, 'Payments'>;
 
 export default function PaymentsScreen({ navigation }: Props) {
+  const { colors } = useAppTheme();
   const reducedMotionEnabled = useReducedMotion();
   const paymentPreferences = useStore((state) => state.paymentPreferences);
   const updatePaymentPreferences = useStore((state) => state.updatePaymentPreferences);
@@ -52,7 +53,7 @@ export default function PaymentsScreen({ navigation }: Props) {
     if (lower.includes('mastercard') || lower.includes('master')) return { name: 'Mastercard', icon: 'card' as const, color: '#EB001B' };
     if (lower.includes('amex') || lower.includes('american')) return { name: 'Amex', icon: 'card' as const, color: '#2E77BC' };
     if (lower.includes('discover')) return { name: 'Discover', icon: 'card' as const, color: '#FF6000' };
-    return { name: 'Card', icon: 'card' as const, color: Colors.textPrimary };
+    return { name: 'Card', icon: 'card' as const, color: colors.textPrimary };
   };
 
   const syncPaymentMethods = useCallback(
@@ -224,8 +225,8 @@ export default function PaymentsScreen({ navigation }: Props) {
         <View
           style={styles.paymentRow}
         >
-          <View style={styles.iconCircle}>
-            <Ionicons name={iconOutline as any} size={20} color={Colors.textPrimary} />
+          <View style={[styles.iconCircle, { backgroundColor: colors.surfaceAlt }]}>
+            <Ionicons name={iconOutline as any} size={20} color={colors.textPrimary} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.paymentTitle}>{unavailableTitle}</Text>
@@ -236,11 +237,11 @@ export default function PaymentsScreen({ navigation }: Props) {
     }
     if (methods.length > 0) {
       return methods.map((method, idx) => {
-        const brand = method.type === 'card' ? getCardBrand(method.label) : { name: 'Bank', icon: 'business' as const, color: Colors.textPrimary };
+        const brand = method.type === 'card' ? getCardBrand(method.label) : { name: 'Bank', icon: 'business' as const, color: colors.textPrimary };
         return (
           <AnimatedPressable
             key={method.id}
-            style={[styles.paymentRow, idx < methods.length - 1 && styles.paymentRowBorder]}
+            style={[styles.paymentRow, idx < methods.length - 1 && [styles.paymentRowBorder, { borderBottomColor: colors.border }]]}
             onPress={() => handlePaymentMethodPress(method)}
             scaleValue={0.98}
             hapticFeedback="light"
@@ -250,13 +251,13 @@ export default function PaymentsScreen({ navigation }: Props) {
               <Ionicons name={brand.icon as any} size={20} color={brand.color} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.paymentTitle}>{method.label}</Text>
-              <Text style={styles.paymentSub}>{method.details ?? (method.type === 'card' ? 'Saved card' : 'Bank account')}</Text>
+              <Text style={[styles.paymentTitle, { color: colors.textPrimary }]}>{method.label}</Text>
+              <Text style={[styles.paymentSub, { color: colors.textSecondary }]}>{method.details ?? (method.type === 'card' ? 'Saved card' : 'Bank account')}</Text>
             </View>
             {method.isDefault ? (
-              <View style={[styles.defaultBadge, { backgroundColor: `${Colors.success}12` }]}>
-                <Ionicons name="checkmark-circle" size={12} color={Colors.success} />
-                <Text style={[styles.defaultText, { color: Colors.success }]}>Default</Text>
+              <View style={[styles.defaultBadge, { backgroundColor: `${colors.success}12` }]}>
+                <Ionicons name="checkmark-circle" size={12} color={colors.success} />
+                <Text style={[styles.defaultText, { color: colors.success }]}>Default</Text>
               </View>
             ) : null}
           </AnimatedPressable>
@@ -264,7 +265,7 @@ export default function PaymentsScreen({ navigation }: Props) {
       });
     }
     if (fallback) {
-      const fbBrand = fallback.type === 'card' ? getCardBrand(fallback.label) : { name: 'Bank', icon: 'business' as const, color: Colors.textPrimary };
+      const fbBrand = fallback.type === 'card' ? getCardBrand(fallback.label) : { name: 'Bank', icon: 'business' as const, color: colors.textPrimary };
       return (
         <AnimatedPressable
           style={styles.paymentRow}
@@ -277,17 +278,17 @@ export default function PaymentsScreen({ navigation }: Props) {
             <Ionicons name={fbBrand.icon as any} size={20} color={fbBrand.color} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.paymentTitle}>{fallback.label}</Text>
-            <Text style={styles.paymentSub}>{fallback.details ?? (fallback.type === 'card' ? 'Saved card' : 'Bank account')}</Text>
+            <Text style={[styles.paymentTitle, { color: colors.textPrimary }]}>{fallback.label}</Text>
+            <Text style={[styles.paymentSub, { color: colors.textSecondary }]}>{fallback.details ?? (fallback.type === 'card' ? 'Saved card' : 'Bank account')}</Text>
           </View>
         </AnimatedPressable>
       );
     }
     return (
       <View style={styles.emptyState}>
-        <Ionicons name={iconOutline as any} size={40} color={Colors.textMuted} />
-        <Text style={styles.emptyStateTitle}>{emptyTitle}</Text>
-        <Text style={styles.emptyStateSub}>{emptySub}</Text>
+        <Ionicons name={iconOutline as any} size={40} color={colors.textMuted} />
+        <Text style={[styles.emptyStateTitle, { color: colors.textSecondary }]}>{emptyTitle}</Text>
+        <Text style={[styles.emptyStateSub, { color: colors.textMuted }]}>{emptySub}</Text>
       </View>
     );
   };
@@ -307,20 +308,20 @@ export default function PaymentsScreen({ navigation }: Props) {
               scaleValue={0.92}
               hapticFeedback="light"
             >
-              <Ionicons name="add-circle" size={28} color={Colors.brand} />
+              <Ionicons name="add-circle" size={28} color={colors.brand} />
             </AnimatedPressable>
           }
         />
       }
     >
       {policyLabel ? (
-        <Text style={styles.policyLabel}>Payment policy: {policyLabel}</Text>
+        <Text style={[styles.policyLabel, { color: colors.textMuted }]}>Payment policy: {policyLabel}</Text>
       ) : null}
 
       <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
-        <View style={[styles.trustBanner, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
-          <Ionicons name="shield-checkmark-outline" size={18} color={Colors.success} />
-          <Text style={[styles.trustBannerText, { color: Colors.textSecondary }]}>
+        <View style={[styles.trustBanner, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Ionicons name="shield-checkmark-outline" size={18} color={colors.success} />
+          <Text style={[styles.trustBannerText, { color: colors.textSecondary }]}>
             Your payment details are protected by industry-standard encryption.
           </Text>
         </View>
@@ -343,12 +344,12 @@ export default function PaymentsScreen({ navigation }: Props) {
           {/* Primary Payment Method Summary */}
           <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
             {defaultMethod ? (
-              <View style={[styles.primaryCard, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
+              <View style={[styles.primaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <View style={styles.primaryCardHeader}>
-                  <Text style={[styles.primaryCardLabel, { color: Colors.textMuted }]}>PRIMARY METHOD</Text>
-                  <View style={[styles.defaultBadge, { backgroundColor: `${Colors.success}12` }]}>
-                    <Ionicons name="checkmark-circle" size={12} color={Colors.success} />
-                    <Text style={[styles.defaultText, { color: Colors.success }]}>Default</Text>
+                  <Text style={[styles.primaryCardLabel, { color: colors.textMuted }]}>PRIMARY METHOD</Text>
+                  <View style={[styles.defaultBadge, { backgroundColor: `${colors.success}12` }]}>
+                    <Ionicons name="checkmark-circle" size={12} color={colors.success} />
+                    <Text style={[styles.defaultText, { color: colors.success }]}>Default</Text>
                   </View>
                 </View>
                 <View style={styles.primaryCardBody}>
@@ -356,12 +357,12 @@ export default function PaymentsScreen({ navigation }: Props) {
                     <Ionicons
                       name={defaultMethod.type === 'card' ? 'card' : 'business'}
                       size={22}
-                      color={defaultMethod.type === 'card' ? getCardBrand(defaultMethod.label).color : Colors.textPrimary}
+                      color={defaultMethod.type === 'card' ? getCardBrand(defaultMethod.label).color : colors.textPrimary}
                     />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.primaryCardTitle}>{defaultMethod.label}</Text>
-                    <Text style={styles.primaryCardSub}>{defaultMethod.details ?? (defaultMethod.type === 'card' ? 'Card ending in ••••' : 'Bank account')}</Text>
+                    <Text style={[styles.primaryCardTitle, { color: colors.textPrimary }]}>{defaultMethod.label}</Text>
+                    <Text style={[styles.primaryCardSub, { color: colors.textSecondary }]}>{defaultMethod.details ?? (defaultMethod.type === 'card' ? 'Card ending in ••••' : 'Bank account')}</Text>
                   </View>
                 </View>
                 <AnimatedPressable
@@ -370,25 +371,25 @@ export default function PaymentsScreen({ navigation }: Props) {
                   activeOpacity={0.8}
                   hapticFeedback="light"
                 >
-                  <Text style={[styles.primaryCardActionText, { color: Colors.brand }]}>Manage</Text>
-                  <Ionicons name="chevron-forward" size={14} color={Colors.brand} />
+                  <Text style={[styles.primaryCardActionText, { color: colors.brand }]}>Manage</Text>
+                  <Ionicons name="chevron-forward" size={14} color={colors.brand} />
                 </AnimatedPressable>
               </View>
             ) : (
-              <View style={[styles.primaryCard, styles.primaryCardEmpty, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
-                <View style={[styles.brandIconCircle, { backgroundColor: Colors.surfaceAlt }]}>
-                  <Ionicons name="card-outline" size={24} color={Colors.textMuted} />
+              <View style={[styles.primaryCard, styles.primaryCardEmpty, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <View style={[styles.brandIconCircle, { backgroundColor: colors.surfaceAlt }]}>
+                  <Ionicons name="card-outline" size={24} color={colors.textMuted} />
                 </View>
-                <Text style={styles.primaryCardTitle}>No payment method</Text>
-                <Text style={styles.primaryCardSub}>Add a card or bank account to checkout faster</Text>
+                <Text style={[styles.primaryCardTitle, { color: colors.textPrimary }]}>No payment method</Text>
+                <Text style={[styles.primaryCardSub, { color: colors.textSecondary }]}>Add a card or bank account to checkout faster</Text>
                 <AnimatedPressable
-                  style={[styles.primaryCardCta, { backgroundColor: Colors.brand }]}
+                  style={[styles.primaryCardCta, { backgroundColor: colors.brand }]}
                   onPress={() => setAddCardSheetVisible(true)}
                   activeOpacity={0.85}
                   hapticFeedback="medium"
                 >
-                  <Ionicons name="add" size={16} color={Colors.background} />
-                  <Text style={[styles.primaryCardCtaText, { color: Colors.background }]}>Add payment method</Text>
+                  <Ionicons name="add" size={16} color={colors.background} />
+                  <Text style={[styles.primaryCardCtaText, { color: colors.background }]}>Add payment method</Text>
                 </AnimatedPressable>
               </View>
             )}
@@ -399,7 +400,7 @@ export default function PaymentsScreen({ navigation }: Props) {
             <PremiumListSection title="Preferences">
               <SettingsCell
                 icon="wallet-outline"
-                iconColor={Colors.brand}
+                iconColor={colors.brand}
                 title="Use Thryftverse Balance"
                 subtitle="Automatically apply your available balance to purchases"
                 variant="toggle"
@@ -428,11 +429,11 @@ export default function PaymentsScreen({ navigation }: Props) {
               {allowCards ? (
                 <AppButton
                   title="Add new card"
-                  icon={<Ionicons name="add" size={18} color={Colors.textPrimary} />}
+                  icon={<Ionicons name="add" size={18} color={colors.textPrimary} />}
                   style={styles.addBtn}
                   variant="secondary"
                   size="sm"
-                  titleStyle={styles.addText}
+                  titleStyle={[styles.addText, { color: colors.textPrimary }]}
                   contentStyle={styles.addBtnContent}
                   iconContainerStyle={styles.addIconWrap}
                   onPress={() => setAddCardSheetVisible(true)}
@@ -445,9 +446,9 @@ export default function PaymentsScreen({ navigation }: Props) {
 
           {/* Security Note */}
           <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
-            <View style={[styles.trustNote, { backgroundColor: Colors.surfaceAlt }]}>
-              <Ionicons name="shield-checkmark-outline" size={16} color={Colors.success} />
-              <Text style={styles.trustNoteText}>
+            <View style={[styles.trustNote, { backgroundColor: colors.surfaceAlt }]}>
+              <Ionicons name="shield-checkmark-outline" size={16} color={colors.success} />
+              <Text style={[styles.trustNoteText, { color: colors.textSecondary }]}>
                 Your payment details are protected by industry-standard encryption.
               </Text>
             </View>
@@ -470,11 +471,11 @@ export default function PaymentsScreen({ navigation }: Props) {
               {allowBankAccounts ? (
                 <AppButton
                   title="Add new bank account"
-                  icon={<Ionicons name="add" size={18} color={Colors.textPrimary} />}
+                  icon={<Ionicons name="add" size={18} color={colors.textPrimary} />}
                   style={styles.addBtn}
                   variant="secondary"
                   size="sm"
-                  titleStyle={styles.addText}
+                  titleStyle={[styles.addText, { color: colors.textPrimary }]}
                   contentStyle={styles.addBtnContent}
                   iconContainerStyle={styles.addIconWrap}
                   onPress={() => navigation.navigate('AddBankAccount')}
@@ -519,7 +520,6 @@ const styles = StyleSheet.create({
   policyLabel: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     marginTop: Space.xs,
     marginBottom: Space.sm,
     marginLeft: Space.xs,
@@ -555,13 +555,11 @@ const styles = StyleSheet.create({
   primaryCardTitle: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
     letterSpacing: Type.body.letterSpacing,
   },
   primaryCardSub: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
     marginTop: 2,
     letterSpacing: Type.caption.letterSpacing,
     lineHeight: Type.caption.lineHeight,
@@ -611,7 +609,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
     lineHeight: Type.caption.lineHeight,
     letterSpacing: Type.caption.letterSpacing,
   },
@@ -625,13 +622,11 @@ const styles = StyleSheet.create({
   },
   paymentRowBorder: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
   },
   iconCircle: {
     width: 44,
     height: 44,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: Space.sm + Space.xs,
@@ -639,20 +634,17 @@ const styles = StyleSheet.create({
   paymentTitle: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
     marginBottom: 4,
     letterSpacing: Type.body.letterSpacing,
   },
   paymentSub: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
     paddingRight: 10,
     letterSpacing: Type.caption.letterSpacing,
     lineHeight: Type.caption.lineHeight,
   },
   defaultBadge: {
-    backgroundColor: Colors.surfaceAlt,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: Radius.md,
@@ -660,7 +652,6 @@ const styles = StyleSheet.create({
   defaultText: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
     letterSpacing: Type.meta.letterSpacing,
   },
   addBtn: {
@@ -680,7 +671,6 @@ const styles = StyleSheet.create({
   addText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   emptyState: {
     alignItems: 'center',
@@ -690,7 +680,6 @@ const styles = StyleSheet.create({
   emptyStateTitle: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
     marginTop: Space.md,
     textAlign: 'center',
     letterSpacing: Type.body.letterSpacing,
@@ -698,7 +687,6 @@ const styles = StyleSheet.create({
   emptyStateSub: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     marginTop: Space.xs,
     textAlign: 'center',
     letterSpacing: Type.caption.letterSpacing,
