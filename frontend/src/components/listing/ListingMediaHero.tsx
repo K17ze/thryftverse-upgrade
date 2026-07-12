@@ -8,7 +8,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
-import { Typography } from '../../theme/designTokens';
+import { Space, Typography } from '../../theme/designTokens';
 import { isVideoUri } from '../../utils/media';
 import { ImageViewer } from '../ImageViewer';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -189,7 +189,7 @@ const styles = StyleSheet.create({
     bottom: 32,
     left: 20,
     backgroundColor: Colors.success,
-    paddingHorizontal: 16,
+    paddingHorizontal: Space.md,
     paddingVertical: 8,
     borderRadius: 8,
   },

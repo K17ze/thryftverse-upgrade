@@ -5,7 +5,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Typography } from '../theme/designTokens';
+import { Space, Typography } from '../theme/designTokens';
 import { AnimatedPressable } from './AnimatedPressable';
 
 interface SuggestedAction {
@@ -123,7 +123,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginBottom: Space.md,
   },
   title: {
     fontSize: 20,
@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
   },
   cta: {
     marginTop: 20,
-    paddingHorizontal: 32,
+    paddingHorizontal: Space.xl,
     paddingVertical: 14,
     borderRadius: 24,
   },

@@ -14,7 +14,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import * as Clipboard from 'expo-clipboard';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useBackendData } from '../context/BackendDataContext';
@@ -146,16 +146,6 @@ function getStatusTone(normalised: string): StatusTone {
   if (normalised === 'delivered' || normalised === 'completed') return 'success';
   if (normalised === 'cancelled' || normalised === 'refunded' || normalised === 'delivery failed' || normalised === 'returned') return 'danger';
   return 'muted';
-}
-
-function resolveStatusColor(tone: StatusTone): string {
-  switch (tone) {
-    case 'success': return Colors.success;
-    case 'active': return Colors.brand;
-    case 'danger': return Colors.danger;
-    case 'pending': return Colors.warning;
-    default: return Colors.textMuted;
-  }
 }
 
 // --- Date formatting ---
@@ -388,6 +378,7 @@ function buildTimelineEntries(
 // --- Component ---
 
 export default function OrderDetailScreen() {
+  const { colors, isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const route = useRoute<RouteT>();
@@ -550,7 +541,15 @@ export default function OrderDetailScreen() {
   const isBuyer = currentUser?.id === backendOrder?.buyerId;
   const isSeller = currentUser?.id === backendOrder?.sellerId;
   const statusTone = getStatusTone(normalisedStatus);
-  const statusColor = resolveStatusColor(statusTone);
+  const statusColor = (() => {
+    switch (statusTone) {
+      case 'success': return colors.success;
+      case 'active': return colors.brand;
+      case 'danger': return colors.danger;
+      case 'pending': return colors.warning;
+      default: return colors.textMuted;
+    }
+  })();
 
   const listingId = backendOrder?.listingId;
   const existingListing = listingId ? listings.find((item) => item.id === listingId) : undefined;
@@ -1019,9 +1018,9 @@ export default function OrderDetailScreen() {
 
   if (isInitialLoading) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
-        <View style={[styles.header, { paddingTop: insets.top }]}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
+        <View style={[styles.header, { paddingTop: insets.top, borderBottomColor: colors.border }]}>
           <Pressable
             style={styles.headerBtn}
             onPress={() => navigation.goBack()}
@@ -1029,9 +1028,9 @@ export default function OrderDetailScreen() {
             accessibilityRole="button"
             accessibilityLabel="Go back"
           >
-            <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
           </Pressable>
-          <Text style={styles.headerTitle}>Order</Text>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Order</Text>
           <View style={styles.headerSpacer} />
         </View>
         <OrderDetailSkeleton />
@@ -1041,9 +1040,9 @@ export default function OrderDetailScreen() {
 
   if (!backendOrder && loadError) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
-        <View style={[styles.header, { paddingTop: insets.top }]}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
+        <View style={[styles.header, { paddingTop: insets.top, borderBottomColor: colors.border }]}>
           <Pressable
             style={styles.headerBtn}
             onPress={() => navigation.goBack()}
@@ -1051,22 +1050,22 @@ export default function OrderDetailScreen() {
             accessibilityRole="button"
             accessibilityLabel="Go back"
           >
-            <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
           </Pressable>
-          <Text style={styles.headerTitle}>Order</Text>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Order</Text>
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.errorContainer}>
-          <Ionicons name="cloud-offline-outline" size={36} color={Colors.textMuted} />
-          <Text style={styles.errorTitle}>Order could not be loaded</Text>
-          <Text style={styles.errorBody}>Check your connection and try again.</Text>
+          <Ionicons name="cloud-offline-outline" size={36} color={colors.textMuted} />
+          <Text style={[styles.errorTitle, { color: colors.textPrimary }]}>Order could not be loaded</Text>
+          <Text style={[styles.errorBody, { color: colors.textMuted }]}>Check your connection and try again.</Text>
           <Pressable
-            style={styles.retryBtn}
+            style={[styles.retryBtn, { backgroundColor: colors.brand }]}
             onPress={() => { haptics.tap(); void refreshOrder(false); }}
             accessibilityRole="button"
             accessibilityLabel="Retry loading order"
           >
-            <Text style={styles.retryBtnText}>Retry</Text>
+            <Text style={[styles.retryBtnText, { color: colors.textInverse }]}>Retry</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -1075,9 +1074,9 @@ export default function OrderDetailScreen() {
 
   if (!backendOrder) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
-        <View style={[styles.header, { paddingTop: insets.top }]}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
+        <View style={[styles.header, { paddingTop: insets.top, borderBottomColor: colors.border }]}>
           <Pressable
             style={styles.headerBtn}
             onPress={() => navigation.goBack()}
@@ -1085,14 +1084,14 @@ export default function OrderDetailScreen() {
             accessibilityRole="button"
             accessibilityLabel="Go back"
           >
-            <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
           </Pressable>
-          <Text style={styles.headerTitle}>Order</Text>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Order</Text>
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.errorContainer}>
-          <Ionicons name="document-outline" size={36} color={Colors.textMuted} />
-          <Text style={styles.errorTitle}>Order not found</Text>
+          <Ionicons name="document-outline" size={36} color={colors.textMuted} />
+          <Text style={[styles.errorTitle, { color: colors.textPrimary }]}>Order not found</Text>
         </View>
       </SafeAreaView>
     );
@@ -1101,11 +1100,11 @@ export default function OrderDetailScreen() {
   const fiatOpts = { displayMode: 'fiat' as const };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
       {/* 1. Compact navigation header */}
-      <View style={[styles.header, { paddingTop: insets.top }]}>
+      <View style={[styles.header, { paddingTop: insets.top, borderBottomColor: colors.border }]}>
         <Pressable
           style={styles.headerBtn}
           onPress={() => navigation.goBack()}
@@ -1113,9 +1112,9 @@ export default function OrderDetailScreen() {
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>Order</Text>
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Order</Text>
         <View style={styles.headerRight}>
           <Pressable
             style={styles.headerBtn}
@@ -1126,9 +1125,9 @@ export default function OrderDetailScreen() {
             accessibilityState={{ busy: isRefreshing }}
           >
             {isRefreshing ? (
-              <ActivityIndicator size="small" color={Colors.textPrimary} />
+              <ActivityIndicator size="small" color={colors.textPrimary} />
             ) : (
-              <Ionicons name="refresh-outline" size={22} color={Colors.textPrimary} />
+              <Ionicons name="refresh-outline" size={22} color={colors.textPrimary} />
             )}
           </Pressable>
           <Pressable
@@ -1138,7 +1137,7 @@ export default function OrderDetailScreen() {
             accessibilityRole="button"
             accessibilityLabel="More options"
           >
-            <Ionicons name="ellipsis-horizontal" size={22} color={Colors.textPrimary} />
+            <Ionicons name="ellipsis-horizontal" size={22} color={colors.textPrimary} />
           </Pressable>
         </View>
       </View>
@@ -1149,7 +1148,7 @@ export default function OrderDetailScreen() {
       >
         {/* 2. Current order status and order number */}
         <View style={styles.statusHeader}>
-          <Text style={styles.orderNumber}>ORDER #{shortOrderId}</Text>
+          <Text style={[styles.orderNumber, { color: colors.textMuted }]}>ORDER #{shortOrderId}</Text>
           <View style={styles.statusBadgeRow}>
             <View style={[styles.statusBadge, { backgroundColor: `${statusColor}15` }]}>
               <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
@@ -1158,9 +1157,9 @@ export default function OrderDetailScreen() {
               </Text>
             </View>
           </View>
-          <Text style={styles.statusExplanation}>{statusExplanation}</Text>
+          <Text style={[styles.statusExplanation, { color: colors.textSecondary }]}>{statusExplanation}</Text>
           {backendOrder.updatedAt ? (
-            <Text style={styles.lastUpdated}>
+            <Text style={[styles.lastUpdated, { color: colors.textMuted }]}>
               Last updated {formatTimelineDate(backendOrder.updatedAt)}
             </Text>
           ) : null}
@@ -1176,20 +1175,20 @@ export default function OrderDetailScreen() {
 
         {loadError && backendOrder ? (
           <View style={styles.refreshErrorRow}>
-            <Ionicons name="alert-circle-outline" size={14} color={Colors.textMuted} />
-            <Text style={styles.refreshErrorText}>{loadError}</Text>
+            <Ionicons name="alert-circle-outline" size={14} color={colors.textMuted} />
+            <Text style={[styles.refreshErrorText, { color: colors.textMuted }]}>{loadError}</Text>
             <Pressable
               onPress={() => { haptics.tap(); void refreshOrder(false); }}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               accessibilityRole="button"
               accessibilityLabel="Retry refresh"
             >
-              <Text style={styles.retryLink}>Retry</Text>
+              <Text style={[styles.retryLink, { color: colors.brand }]}>Retry</Text>
             </Pressable>
           </View>
         ) : null}
 
-        <View style={styles.sectionDivider} />
+        <View style={[styles.sectionDivider, { backgroundColor: colors.border }]} />
 
         {/* 3. Historical item summary */}
         <OrderDetailSummary
@@ -1204,12 +1203,12 @@ export default function OrderDetailScreen() {
           } : undefined}
         />
 
-        <View style={styles.sectionDivider} />
+        <View style={[styles.sectionDivider, { backgroundColor: colors.border }]} />
 
         {/* 4. Role-aware counterparty */}
         {counterparty ? (
           <View style={styles.counterpartySection}>
-            <Text style={styles.sectionLabel}>{counterparty.role}</Text>
+            <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>{counterparty.role}</Text>
             <View style={styles.counterpartyRow}>
               <Pressable
                 style={styles.counterpartyIdentity}
@@ -1222,13 +1221,13 @@ export default function OrderDetailScreen() {
                   style={styles.counterpartyAvatar}
                   contentFit="cover"
                 />
-                <Text style={styles.counterpartyName} numberOfLines={1}>
+                <Text style={[styles.counterpartyName, { color: colors.textPrimary }]} numberOfLines={1}>
                   @{counterparty.username}
                 </Text>
               </Pressable>
               <View style={styles.counterpartyActions}>
                 <Pressable
-                  style={styles.counterpartyBtn}
+                  style={[styles.counterpartyBtn, { borderColor: colors.border }]}
                   onPress={() => {
                     haptics.tap();
                     navigation.navigate('Chat', {
@@ -1240,26 +1239,26 @@ export default function OrderDetailScreen() {
                   accessibilityRole="button"
                   accessibilityLabel={`Message ${counterparty.role.toLowerCase()}`}
                 >
-                  <Text style={styles.counterpartyBtnText}>Message</Text>
+                  <Text style={[styles.counterpartyBtnText, { color: colors.brand }]}>Message</Text>
                 </Pressable>
                 <Pressable
-                  style={styles.counterpartyBtn}
+                  style={[styles.counterpartyBtn, { borderColor: colors.border }]}
                   onPress={() => { haptics.tap(); navigation.navigate('UserProfile', { userId: counterparty.id }); }}
                   accessibilityRole="button"
                   accessibilityLabel={`View ${counterparty.role.toLowerCase()} profile`}
                 >
-                  <Text style={styles.counterpartyBtnText}>View profile</Text>
+                  <Text style={[styles.counterpartyBtnText, { color: colors.brand }]}>View profile</Text>
                 </Pressable>
               </View>
             </View>
           </View>
         ) : null}
 
-        <View style={styles.sectionDivider} />
+        <View style={[styles.sectionDivider, { backgroundColor: colors.border }]} />
 
         {/* 4b. Visual status stepper */}
         <View style={styles.timelineSection}>
-          <Text style={styles.sectionLabel}>Progress</Text>
+          <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>Progress</Text>
           <OrderStatusStepper
             currentStage={stepperStage}
             isFailure={stepperIsFailure}
@@ -1270,13 +1269,13 @@ export default function OrderDetailScreen() {
 
         {/* 4c. Escrow status indicator — shows when funds are held */}
         {isBuyer && (normalisedStatus === 'paid' || normalisedStatus === 'shipped' || normalisedStatus === 'in transit' || normalisedStatus === 'out for delivery') ? (
-          <View style={styles.escrowBanner}>
-            <View style={styles.escrowIconWrap}>
-              <Ionicons name="lock-closed" size={14} color={Colors.success} />
+          <View style={[styles.escrowBanner, { backgroundColor: `${colors.success}08`, borderColor: `${colors.success}25` }]}>
+            <View style={[styles.escrowIconWrap, { backgroundColor: `${colors.success}15` }]}>
+              <Ionicons name="lock-closed" size={14} color={colors.success} />
             </View>
             <View style={styles.escrowTextWrap}>
-              <Text style={styles.escrowTitle}>Funds held in escrow</Text>
-              <Text style={styles.escrowSub}>
+              <Text style={[styles.escrowTitle, { color: colors.textPrimary }]}>Funds held in escrow</Text>
+              <Text style={[styles.escrowSub, { color: colors.textSecondary }]}>
                 {normalisedStatus === 'paid'
                   ? 'Your payment is safely held until the seller dispatches your item.'
                   : 'Your payment is safely held. Confirm receipt to release funds to the seller.'}
@@ -1290,7 +1289,7 @@ export default function OrderDetailScreen() {
                 if (now >= releaseTime) return null;
                 const daysLeft = Math.ceil((releaseTime - now) / (24 * 60 * 60 * 1000));
                 return (
-                  <Text style={styles.escrowCountdown}>
+                  <Text style={[styles.escrowCountdown, { color: colors.textMuted }]}>
                     Auto-releases to seller in {daysLeft} day{daysLeft === 1 ? '' : 's'} if not confirmed
                   </Text>
                 );
@@ -1299,11 +1298,11 @@ export default function OrderDetailScreen() {
           </View>
         ) : null}
 
-        <View style={styles.sectionDivider} />
+        <View style={[styles.sectionDivider, { backgroundColor: colors.border }]} />
 
         {/* 5. Tracking or order timeline */}
         <View style={styles.timelineSection}>
-          <Text style={styles.sectionLabel}>Timeline</Text>
+          <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>Timeline</Text>
           <OrderTrackingTimeline
             entries={timelineEntries}
             warningText={parcelError ?? undefined}
@@ -1313,9 +1312,9 @@ export default function OrderDetailScreen() {
         {/* 6. Shipment details */}
         {showShipmentDetails ? (
           <>
-            <View style={styles.sectionDivider} />
+            <View style={[styles.sectionDivider, { backgroundColor: colors.border }]} />
             <View style={styles.shipmentSection}>
-              <Text style={styles.sectionLabel}>Shipment details</Text>
+              <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>Shipment details</Text>
               {backendOrder.shippingProvider ? (
                 <DetailRow label="Carrier" value={backendOrder.shippingProvider} />
               ) : null}
@@ -1328,8 +1327,8 @@ export default function OrderDetailScreen() {
                     accessibilityRole="button"
                     accessibilityLabel={`Copy tracking number ${backendOrder.trackingNumber}`}
                   >
-                    <Text style={styles.detailValueLink}>{backendOrder.trackingNumber}</Text>
-                    <Ionicons name="copy-outline" size={16} color={Colors.brand} />
+                    <Text style={[styles.detailValueLink, { color: colors.brand }]}>{backendOrder.trackingNumber}</Text>
+                    <Ionicons name="copy-outline" size={16} color={colors.brand} />
                   </Pressable>
                 </View>
               ) : null}
@@ -1340,8 +1339,8 @@ export default function OrderDetailScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Track on carrier website"
                 >
-                  <Ionicons name="navigate-outline" size={16} color={Colors.brand} />
-                  <Text style={styles.shippingLabelBtnText}>Track on carrier site</Text>
+                  <Ionicons name="navigate-outline" size={16} color={colors.brand} />
+                  <Text style={[styles.shippingLabelBtnText, { color: colors.brand }]}>Track on carrier site</Text>
                 </Pressable>
               ) : null}
               {shipmentLastUpdated ? (
@@ -1354,19 +1353,19 @@ export default function OrderDetailScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Open shipping label"
                 >
-                  <Ionicons name="open-outline" size={16} color={Colors.brand} />
-                  <Text style={styles.shippingLabelBtnText}>Open shipping label</Text>
+                  <Ionicons name="open-outline" size={16} color={colors.brand} />
+                  <Text style={[styles.shippingLabelBtnText, { color: colors.brand }]}>Open shipping label</Text>
                 </Pressable>
               ) : null}
             </View>
           </>
         ) : null}
 
-        <View style={styles.sectionDivider} />
+        <View style={[styles.sectionDivider, { backgroundColor: colors.border }]} />
 
         {/* 7. Transaction breakdown */}
         <View style={styles.transactionSection}>
-          <Text style={styles.sectionLabel}>Transaction</Text>
+          <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>Transaction</Text>
           <TxRow label="Item" value={formatFromFiat(subtotal, 'GBP', fiatOpts)} />
           <TxRow label="Platform charge" value={formatFromFiat(platformCharge, 'GBP', fiatOpts)} />
           {buyerProtectionFee != null && buyerProtectionFee !== 0 && buyerProtectionFee !== platformCharge ? (
@@ -1376,11 +1375,11 @@ export default function OrderDetailScreen() {
             label="Delivery"
             value={postageFee != null ? formatFromFiat(postageFee, 'GBP', fiatOpts) : 'Not recorded'}
           />
-          <View style={styles.txDivider} />
+          <View style={[styles.txDivider, { backgroundColor: colors.border }]} />
           <TxRow label="Total" value={formatFromFiat(totalPaid, 'GBP', fiatOpts)} bold />
         </View>
 
-        <View style={styles.sectionDivider} />
+        <View style={[styles.sectionDivider, { backgroundColor: colors.border }]} />
 
         {/* 8. Support state */}
         <View style={styles.supportSection}>
@@ -1391,12 +1390,12 @@ export default function OrderDetailScreen() {
               accessibilityRole="button"
               accessibilityLabel={`Open support request: ${openTicket.topicLabel}`}
             >
-              <Ionicons name="help-circle-outline" size={20} color={Colors.brand} />
+              <Ionicons name="help-circle-outline" size={20} color={colors.brand} />
               <View style={styles.supportInfo}>
-                <Text style={styles.supportLabel}>Support request open</Text>
-                <Text style={styles.supportSub}>{openTicket.topicLabel}</Text>
+                <Text style={[styles.supportLabel, { color: colors.textPrimary }]}>Support request open</Text>
+                <Text style={[styles.supportSub, { color: colors.textMuted }]}>{openTicket.topicLabel}</Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </Pressable>
           ) : (
             <Pressable
@@ -1405,12 +1404,12 @@ export default function OrderDetailScreen() {
               accessibilityRole="button"
               accessibilityLabel="Get support for this order"
             >
-              <Ionicons name="help-circle-outline" size={20} color={Colors.brand} />
+              <Ionicons name="help-circle-outline" size={20} color={colors.brand} />
               <View style={styles.supportInfo}>
-                <Text style={styles.supportLabel}>Need help with this order?</Text>
-                <Text style={styles.supportSub}>Get support</Text>
+                <Text style={[styles.supportLabel, { color: colors.textPrimary }]}>Need help with this order?</Text>
+                <Text style={[styles.supportSub, { color: colors.textMuted }]}>Get support</Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </Pressable>
           )}
         </View>
@@ -1453,19 +1452,21 @@ export default function OrderDetailScreen() {
 // --- Helper components ---
 
 function TxRow({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
+  const { colors } = useAppTheme();
   return (
     <View style={txStyles.row}>
-      <Text style={[txStyles.label, bold && txStyles.labelBold]}>{label}</Text>
-      <Text style={[txStyles.value, bold && txStyles.valueBold]}>{value}</Text>
+      <Text style={[txStyles.label, bold && txStyles.labelBold, { color: bold ? colors.textPrimary : colors.textSecondary }]}>{label}</Text>
+      <Text style={[txStyles.value, bold && txStyles.valueBold, { color: colors.textPrimary }]}>{value}</Text>
     </View>
   );
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {
+  const { colors } = useAppTheme();
   return (
     <View style={styles.detailRow}>
-      <Text style={styles.detailLabel}>{label}</Text>
-      <Text style={styles.detailValue}>{value}</Text>
+      <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>{label}</Text>
+      <Text style={[styles.detailValue, { color: colors.textPrimary }]}>{value}</Text>
     </View>
   );
 }
@@ -1479,29 +1480,24 @@ const txStyles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
   },
   labelBold: {
     fontSize: 16,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   value: {
     fontSize: 14,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
   },
   valueBold: {
     fontSize: 18,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
   },
 });
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -1510,7 +1506,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingBottom: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
   },
   headerBtn: {
     width: 44,
@@ -1521,7 +1516,6 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 17,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   headerRight: {
     flexDirection: 'row',
@@ -1544,7 +1538,6 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 14,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
   },
   errorContainer: {
     flex: 1,
@@ -1556,13 +1549,11 @@ const styles = StyleSheet.create({
   errorTitle: {
     fontSize: 18,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
     textAlign: 'center',
   },
   errorBody: {
     fontSize: 14,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     textAlign: 'center',
     lineHeight: 20,
   },
@@ -1570,7 +1561,6 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: Space.xl,
     borderRadius: 10,
-    backgroundColor: Colors.brand,
     minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1578,7 +1568,6 @@ const styles = StyleSheet.create({
   retryBtnText: {
     fontSize: 16,
     fontFamily: Typography.family.semibold,
-    color: Colors.textInverse,
   },
   statusHeader: {
     paddingVertical: Space.sm,
@@ -1587,7 +1576,6 @@ const styles = StyleSheet.create({
   orderNumber: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
   },
@@ -1617,18 +1605,15 @@ const styles = StyleSheet.create({
   statusLabel: {
     fontSize: 22,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
   },
   statusExplanation: {
     fontSize: 14,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
     lineHeight: 20,
   },
   lastUpdated: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     marginTop: 2,
   },
   refreshErrorRow: {
@@ -1641,22 +1626,18 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
   },
   retryLink: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
   },
   sectionDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
     marginVertical: Space.sm,
   },
   sectionLabel: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 1.2,
     marginBottom: Space.sm,
@@ -1685,7 +1666,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   counterpartyActions: {
     flexDirection: 'row',
@@ -1696,7 +1676,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: Colors.border,
     minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1704,7 +1683,6 @@ const styles = StyleSheet.create({
   counterpartyBtnText: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
   },
   timelineSection: {
     paddingVertical: Space.sm,
@@ -1718,15 +1696,12 @@ const styles = StyleSheet.create({
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
     borderRadius: 12,
-    backgroundColor: `${Colors.success}08`,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: `${Colors.success}25`,
   },
   escrowIconWrap: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: `${Colors.success}15`,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1737,18 +1712,15 @@ const styles = StyleSheet.create({
   escrowTitle: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   escrowSub: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
     lineHeight: 16,
   },
   escrowCountdown: {
     fontSize: 11,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
     marginTop: 2,
   },
   shipmentSection: {
@@ -1764,19 +1736,16 @@ const styles = StyleSheet.create({
   detailLabel: {
     fontSize: 14,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
   },
   detailValue: {
     fontSize: 14,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
     textAlign: 'right',
     flex: 1,
   },
   detailValueLink: {
     fontSize: 14,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
   },
   copyRow: {
     flexDirection: 'row',
@@ -1794,14 +1763,12 @@ const styles = StyleSheet.create({
   shippingLabelBtnText: {
     fontSize: 14,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
   },
   transactionSection: {
     paddingVertical: Space.sm,
   },
   txDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
     marginVertical: Space.sm,
   },
   supportSection: {
@@ -1820,12 +1787,10 @@ const styles = StyleSheet.create({
   supportLabel: {
     fontSize: 15,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   supportSub: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     marginTop: 2,
   },
 });

@@ -302,7 +302,7 @@ const styles = StyleSheet.create({
   avatarWrap: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
@@ -311,7 +311,7 @@ const styles = StyleSheet.create({
   avatar: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
   },
   commentBody: {
     flex: 1,
@@ -396,7 +396,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     height: 44,
-    paddingHorizontal: 24,
+    paddingHorizontal: Space.lg,
     borderRadius: 22,
     borderWidth: 1,
     borderColor: Colors.brand,

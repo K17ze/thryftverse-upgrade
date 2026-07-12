@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { Colors } from '../../constants/colors';
-import { Typography } from '../../theme/designTokens';
+import { Radius, Typography } from '../../theme/designTokens';
 
 export interface FeaturedBoard {
   id: string;
@@ -79,7 +79,7 @@ const styles = StyleSheet.create({
   collage: {
     flexDirection: 'row',
     height: 150,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
     overflow: 'hidden',
     gap: 3,
     marginBottom: 12,

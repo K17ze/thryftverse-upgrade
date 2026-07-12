@@ -3,6 +3,7 @@ import { View, FlatList, StyleSheet, Dimensions } from 'react-native';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { SharedTransitionView } from '../SharedTransitionView';
+import { Space, Radius } from '../../theme/designTokens';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const H_GAP = 3;
@@ -74,7 +75,7 @@ export function EditorialImageRow({ images, onPressImage, sharedTransitionPrefix
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: 16,
+    paddingHorizontal: Space.md,
   },
   columnWrapper: {
     gap: H_GAP,
@@ -82,7 +83,7 @@ const styles = StyleSheet.create({
   },
   cell: {
     width: COL_WIDTH,
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
     backgroundColor: 'transparent',
   },

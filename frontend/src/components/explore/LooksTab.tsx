@@ -274,7 +274,7 @@ const styles = StyleSheet.create({
   },
   retryBtn: {
     marginTop: Space.sm,
-    paddingHorizontal: 24,
+    paddingHorizontal: Space.lg,
     paddingVertical: 10,
     backgroundColor: Colors.brand,
     borderRadius: 20,
@@ -394,7 +394,7 @@ const styles = StyleSheet.create({
     left: 20,
     top: -6,
     backgroundColor: 'rgba(0,0,0,0.8)',
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     paddingHorizontal: 10,
     paddingVertical: 5,
     flexDirection: 'row',

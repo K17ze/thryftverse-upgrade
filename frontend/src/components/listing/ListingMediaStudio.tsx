@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
-import { Space, Typography } from '../../theme/designTokens';
+import { Space, Radius, Typography } from '../../theme/designTokens';
 import { SortablePhotoStrip } from '../SortablePhotoStrip';
 import { ListingMediaDraftItem } from '../../utils/mediaUploadAsset';
 import { UploadQueueItem, UploadQueueItemState } from '../../services/mediaUploadQueue';
@@ -500,7 +500,7 @@ const styles = StyleSheet.create({
     right: Space.sm,
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
     backgroundColor: 'rgba(0,0,0,0.4)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -572,7 +572,7 @@ const styles = StyleSheet.create({
   thumbContent: {
     width: THUMB_SIZE,
     height: THUMB_SIZE,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
     overflow: 'hidden',
     position: 'relative',
     backgroundColor: Colors.surfaceAlt,
@@ -580,12 +580,12 @@ const styles = StyleSheet.create({
   thumbImage: {
     width: THUMB_SIZE,
     height: THUMB_SIZE,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
   },
   thumbVideoTile: {
     width: THUMB_SIZE,
     height: THUMB_SIZE,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
     backgroundColor: Colors.surface,
     alignItems: 'center',
     justifyContent: 'center',

@@ -349,7 +349,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 24,
     height: 24,
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     backgroundColor: Colors.danger,
     opacity: 0.25,
   },
