@@ -12,7 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Space, Typography, Radius, Type } from '../theme/designTokens';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
@@ -32,6 +32,7 @@ const UNVERIFIED_LABEL = 'Not verified';
 
 export default function EditProfileScreen() {
   const navigation = useNavigation();
+  const { colors } = useAppTheme();
   const { show } = useToast();
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
@@ -189,12 +190,22 @@ export default function EditProfileScreen() {
       hapticFeedback="light"
       accessibilityRole="button"
       accessibilityLabel={isSaving ? 'Saving' : 'Save changes'}
-      style={[styles.saveBtn, canSave && styles.saveBtnActive]}
+      style={[
+        styles.saveBtn,
+        { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
+        canSave && { backgroundColor: colors.brand, borderColor: colors.brand },
+      ]}
     >
       {isSaving ? (
         <ActivityIndicator size="small" color="#fff" />
       ) : (
-        <Text style={[styles.saveBtnText, canSave && styles.saveBtnTextActive]}>
+        <Text
+          style={[
+            styles.saveBtnText,
+            { color: colors.textMuted },
+            canSave && styles.saveBtnTextActive,
+          ]}
+        >
           Done
         </Text>
       )}
@@ -227,25 +238,25 @@ export default function EditProfileScreen() {
               contentFit="cover"
             />
           ) : (
-            <View style={[styles.identityAvatar, { backgroundColor: Colors.surfaceAlt }]}>
-              <Text style={styles.identityAvatarText}>
+            <View style={[styles.identityAvatar, { backgroundColor: colors.surfaceAlt }]}>
+              <Text style={[styles.identityAvatarText, { color: colors.textPrimary }]}>
                 {(user?.username ?? '?').charAt(0).toUpperCase()}
               </Text>
             </View>
           )}
           <View style={styles.identityText}>
-            <Text style={styles.identityName} numberOfLines={1}>{name || username}</Text>
-            <Text style={styles.identityHandle} numberOfLines={1}>@{username}</Text>
+            <Text style={[styles.identityName, { color: colors.textPrimary }]} numberOfLines={1}>{name || username}</Text>
+            <Text style={[styles.identityHandle, { color: colors.textMuted }]} numberOfLines={1}>@{username}</Text>
           </View>
         </View>
 
-        <Text style={styles.photoHint}>
+        <Text style={[styles.photoHint, { color: colors.textMuted }]}>
           Photo and cover are managed from your profile.
         </Text>
 
         {/* ── Profile fields ── */}
         <View style={styles.sectionGroup}>
-          <Text style={styles.sectionLabel}>Profile</Text>
+          <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Profile</Text>
 
           <ProfileEditField
             label="Name"
@@ -268,7 +279,7 @@ export default function EditProfileScreen() {
 
         {/* ── About fields ── */}
         <View style={styles.sectionGroup}>
-          <Text style={styles.sectionLabel}>About</Text>
+          <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>About</Text>
 
           <ProfileEditField
             label="Bio"
@@ -295,41 +306,51 @@ export default function EditProfileScreen() {
 
         {/* ── Private details — integrated as form fields, not settings dump ── */}
         <View style={styles.sectionGroup}>
-          <Text style={styles.sectionLabel}>Private details</Text>
+          <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Private details</Text>
 
-          <View style={styles.detailCard}>
+          <View style={[styles.detailCard, { borderColor: colors.border, backgroundColor: colors.surface }]}>
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Email</Text>
-              <Text style={styles.detailValue} numberOfLines={1}>{email || '—'}</Text>
+              <Text style={[styles.detailLabel, { color: colors.textPrimary }]}>Email</Text>
+              <Text style={[styles.detailValue, { color: colors.textMuted }]} numberOfLines={1}>{email || '—'}</Text>
             </View>
-            <View style={styles.detailDivider} />
+            <View style={[styles.detailDivider, { backgroundColor: colors.border }]} />
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Email status</Text>
+              <Text style={[styles.detailLabel, { color: colors.textPrimary }]}>Email status</Text>
               <View style={styles.detailStatusWrap}>
                 {emailVerified ? (
-                  <View style={[styles.statusPill, styles.statusPillVerified]}>
-                    <Ionicons name="checkmark-circle" size={12} color={Colors.success} />
-                    <Text style={[styles.statusPillText, { color: Colors.success }]}>Verified</Text>
+                  <View
+                    style={[
+                      styles.statusPill,
+                      { backgroundColor: `${colors.success}12`, borderColor: `${colors.success}30` },
+                    ]}
+                  >
+                    <Ionicons name="checkmark-circle" size={12} color={colors.success} />
+                    <Text style={[styles.statusPillText, { color: colors.success }]}>Verified</Text>
                   </View>
                 ) : (
-                  <View style={[styles.statusPill, styles.statusPillUnverified]}>
-                    <Ionicons name="alert-circle" size={12} color={Colors.textMuted} />
-                    <Text style={[styles.statusPillText, { color: Colors.textMuted }]}>Not verified</Text>
+                  <View
+                    style={[
+                      styles.statusPill,
+                      { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
+                    ]}
+                  >
+                    <Ionicons name="alert-circle" size={12} color={colors.textMuted} />
+                    <Text style={[styles.statusPillText, { color: colors.textMuted }]}>Not verified</Text>
                   </View>
                 )}
               </View>
             </View>
-            <View style={styles.detailDivider} />
+            <View style={[styles.detailDivider, { backgroundColor: colors.border }]} />
             <Pressable
               onPress={() => openEdit('phone', phone)}
               style={styles.detailRowTouchable}
               accessibilityRole="button"
               accessibilityLabel="Edit phone number"
             >
-              <Text style={styles.detailLabel}>Phone</Text>
+              <Text style={[styles.detailLabel, { color: colors.textPrimary }]}>Phone</Text>
               <View style={styles.detailRight}>
-                <Text style={styles.detailValue} numberOfLines={1}>{phone || '—'}</Text>
-                <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+                <Text style={[styles.detailValue, { color: colors.textMuted }]} numberOfLines={1}>{phone || '—'}</Text>
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
               </View>
             </Pressable>
           </View>
@@ -337,31 +358,41 @@ export default function EditProfileScreen() {
 
         {/* ── Security — stronger hierarchy with icon chips ── */}
         <View style={styles.sectionGroup}>
-          <Text style={styles.sectionLabel}>Security</Text>
+          <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Security</Text>
 
-          <View style={styles.detailCard}>
+          <View style={[styles.detailCard, { borderColor: colors.border, backgroundColor: colors.surface }]}>
             <PressableRow
               icon="lock-closed-outline"
-              iconColor={Colors.brand}
+              iconColor={colors.brand}
               title="Password"
               subtitle="Change your password"
               onPress={() => (navigation as any).navigate('ChangePassword')}
               isFirst
             />
-            <View style={styles.detailDivider} />
+            <View style={[styles.detailDivider, { backgroundColor: colors.border }]} />
             <PressableRow
               icon="shield-checkmark-outline"
-              iconColor={twoFactorEnabled ? Colors.success : Colors.textMuted}
+              iconColor={twoFactorEnabled ? colors.success : colors.textMuted}
               title="Two-factor authentication"
               subtitle={twoFactorEnabled ? 'Enabled' : 'Add an extra layer of security'}
               statusPill={
                 twoFactorEnabled ? (
-                  <View style={[styles.statusPill, styles.statusPillVerified]}>
-                    <Text style={[styles.statusPillText, { color: Colors.success }]}>On</Text>
+                  <View
+                    style={[
+                      styles.statusPill,
+                      { backgroundColor: `${colors.success}12`, borderColor: `${colors.success}30` },
+                    ]}
+                  >
+                    <Text style={[styles.statusPillText, { color: colors.success }]}>On</Text>
                   </View>
                 ) : (
-                  <View style={[styles.statusPill, styles.statusPillUnverified]}>
-                    <Text style={[styles.statusPillText, { color: Colors.textMuted }]}>Off</Text>
+                  <View
+                    style={[
+                      styles.statusPill,
+                      { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
+                    ]}
+                  >
+                    <Text style={[styles.statusPillText, { color: colors.textMuted }]}>Off</Text>
                   </View>
                 )
               }
@@ -373,25 +404,26 @@ export default function EditProfileScreen() {
 
         {/* ── Account — prominent, not buried ── */}
         <View style={styles.sectionGroup}>
-          <Text style={styles.sectionLabel}>Account</Text>
+          <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Account</Text>
 
           <Pressable
             onPress={() => (navigation as any).navigate('AccountControl')}
             style={({ pressed }) => [
               styles.accountCard,
-              pressed && styles.accountCardPressed,
+              { borderColor: `${colors.danger}30`, backgroundColor: `${colors.danger}06` },
+              pressed && { backgroundColor: `${colors.danger}10` },
             ]}
             accessibilityRole="button"
             accessibilityLabel="Account control — download data or delete account"
           >
-            <View style={[styles.accountIconWrap, { backgroundColor: `${Colors.danger}12` }]}>
-              <Ionicons name="warning-outline" size={20} color={Colors.danger} />
+            <View style={[styles.accountIconWrap, { backgroundColor: `${colors.danger}12` }]}>
+              <Ionicons name="warning-outline" size={20} color={colors.danger} />
             </View>
             <View style={styles.accountText}>
-              <Text style={styles.accountTitle}>Account control</Text>
-              <Text style={styles.accountSubtitle}>Download your data or delete your account</Text>
+              <Text style={[styles.accountTitle, { color: colors.danger }]}>Account control</Text>
+              <Text style={[styles.accountSubtitle, { color: colors.textMuted }]}>Download your data or delete your account</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </Pressable>
         </View>
       </KeyboardAwareScrollView>
@@ -399,12 +431,12 @@ export default function EditProfileScreen() {
       {/* ── Phone Edit Modal — premium bottom sheet ── */}
       <Modal visible={editingField !== null} transparent animationType="slide" onRequestClose={closeEdit}>
         <Pressable style={styles.modalOverlay} onPress={closeEdit}>
-          <Pressable style={[styles.modalCard, { backgroundColor: Colors.surface }]} onPress={(e) => e.stopPropagation()}>
-            <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>
+          <Pressable style={[styles.modalCard, { backgroundColor: colors.surface }]} onPress={(e) => e.stopPropagation()}>
+            <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
+            <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
               {editingField === 'phone' ? 'Phone number' : editingField}
             </Text>
-            <Text style={styles.modalSubtitle}>
+            <Text style={[styles.modalSubtitle, { color: colors.textMuted }]}>
               Used for account security and order updates.
             </Text>
             <AppInput
@@ -418,17 +450,20 @@ export default function EditProfileScreen() {
             <View style={styles.modalActions}>
               <AnimatedPressable
                 onPress={() => { haptic.light(); closeEdit(); }}
-                style={styles.modalBtnSecondary}
+                style={[
+                  styles.modalBtnSecondary,
+                  { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
+                ]}
                 activeOpacity={0.8}
               >
-                <Text style={styles.modalBtnSecondaryText}>Cancel</Text>
+                <Text style={[styles.modalBtnSecondaryText, { color: colors.textPrimary }]}>Cancel</Text>
               </AnimatedPressable>
               <AnimatedPressable
                 onPress={() => {
                   if (editingField === 'phone') setPhone(editValue);
                   closeEdit();
                 }}
-                style={styles.modalBtnPrimary}
+                style={[styles.modalBtnPrimary, { backgroundColor: colors.brand }]}
                 activeOpacity={0.8}
               >
                 <Text style={styles.modalBtnPrimaryText}>Save</Text>
@@ -454,12 +489,13 @@ interface PressableRowProps {
 }
 
 function PressableRow({ icon, iconColor, title, subtitle, statusPill, onPress, isLast }: PressableRowProps) {
+  const { colors } = useAppTheme();
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         styles.pressableRow,
-        pressed && styles.pressableRowPressed,
+        pressed && { backgroundColor: colors.surfaceAlt },
       ]}
       accessibilityRole="button"
       accessibilityLabel={title}
@@ -468,14 +504,14 @@ function PressableRow({ icon, iconColor, title, subtitle, statusPill, onPress, i
         <Ionicons name={icon as any} size={18} color={iconColor} />
       </View>
       <View style={styles.rowText}>
-        <Text style={styles.rowTitle} numberOfLines={1}>{title}</Text>
+        <Text style={[styles.rowTitle, { color: colors.textPrimary }]} numberOfLines={1}>{title}</Text>
         {subtitle ? (
-          <Text style={styles.rowSubtitle} numberOfLines={1}>{subtitle}</Text>
+          <Text style={[styles.rowSubtitle, { color: colors.textMuted }]} numberOfLines={1}>{subtitle}</Text>
         ) : null}
       </View>
       <View style={styles.rowRight}>
         {statusPill}
-        <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+        <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
       </View>
     </Pressable>
   );
@@ -513,6 +549,7 @@ function ProfileEditField({
   returnKeyType = 'next',
   isLast,
 }: ProfileEditFieldProps) {
+  const { colors } = useAppTheme();
   const [isFocused, setIsFocused] = useState(false);
   const hasError = Boolean(error);
   const showCounter = maxLength !== undefined;
@@ -521,42 +558,49 @@ function ProfileEditField({
 
   return (
     <View style={[styles.fieldGroup, isLast && styles.fieldGroupLast]}>
-      <Text style={styles.fieldLabel}>{label}</Text>
+      <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{label}</Text>
       <View
         style={[
           styles.fieldSurface,
-          isFocused && !hasError && styles.fieldSurfaceFocused,
-          hasError && styles.fieldSurfaceError,
+          { borderColor: colors.border, backgroundColor: colors.surface },
+          isFocused && !hasError && [styles.fieldSurfaceFocused, { borderColor: colors.brand }],
+          hasError && { borderColor: colors.danger },
           multiline && styles.fieldSurfaceMultiline,
         ]}
       >
         <TextInput
-          style={[styles.fieldInput, multiline && styles.fieldInputMultiline]}
+          style={[styles.fieldInput, { color: colors.textPrimary }, multiline && styles.fieldInputMultiline]}
           value={value}
           onChangeText={onChangeText}
           onFocus={() => setIsFocused(true)}
           onBlur={() => { setIsFocused(false); onBlur?.(); }}
           placeholder={placeholder}
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={colors.textMuted}
           autoCapitalize={autoCapitalize}
           keyboardType={keyboardType}
           returnKeyType={returnKeyType}
           multiline={multiline}
           maxLength={maxLength}
           textAlignVertical={multiline ? 'top' : 'center'}
-          selectionColor={Colors.brand}
+          selectionColor={colors.brand}
         />
         {showCounter && (
-          <Text style={[styles.fieldCounter, isNearLimit && styles.fieldCounterError]}>
+          <Text
+            style={[
+              styles.fieldCounter,
+              { color: colors.textMuted },
+              isNearLimit && { color: colors.danger },
+            ]}
+          >
             {counterText}
           </Text>
         )}
       </View>
       {helper && !showCounter ? (
-        <Text style={styles.fieldHelper}>{helper}</Text>
+        <Text style={[styles.fieldHelper, { color: colors.textMuted }]}>{helper}</Text>
       ) : null}
       {hasError ? (
-        <Text style={styles.fieldError}>{error}</Text>
+        <Text style={[styles.fieldError, { color: colors.danger }]}>{error}</Text>
       ) : null}
     </View>
   );
@@ -571,18 +615,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     minWidth: 44,
-    backgroundColor: Colors.surfaceAlt,
     borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  saveBtnActive: {
-    backgroundColor: Colors.brand,
-    borderColor: Colors.brand,
   },
   saveBtnText: {
     fontSize: 14,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
   },
   saveBtnTextActive: {
     color: '#fff',
@@ -604,7 +641,6 @@ const styles = StyleSheet.create({
   identityAvatarText: {
     fontSize: 16,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
     textAlign: 'center',
     lineHeight: 44,
   },
@@ -616,19 +652,16 @@ const styles = StyleSheet.create({
   identityName: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
     letterSpacing: -0.2,
   },
   identityHandle: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     letterSpacing: Type.caption.letterSpacing,
   },
   photoHint: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     paddingHorizontal: Space.md,
     paddingTop: Space.xs,
     paddingBottom: 0,
@@ -642,7 +675,6 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
     marginBottom: Space.sm - 2,
   },
 
@@ -656,14 +688,11 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 13,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
     marginBottom: 4,
   },
   fieldSurface: {
     borderRadius: Radius.md + 2,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
     paddingHorizontal: Space.md - 2,
     minHeight: 48,
     flexDirection: 'row',
@@ -671,11 +700,7 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   fieldSurfaceFocused: {
-    borderColor: Colors.brand,
     borderWidth: 1.5,
-  },
-  fieldSurfaceError: {
-    borderColor: Colors.danger,
   },
   fieldSurfaceMultiline: {
     alignItems: 'flex-end',
@@ -686,7 +711,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
     paddingVertical: 8,
     paddingHorizontal: 0,
   },
@@ -699,23 +723,17 @@ const styles = StyleSheet.create({
   fieldCounter: {
     fontSize: 11,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
     paddingBottom: 2,
-  },
-  fieldCounterError: {
-    color: Colors.danger,
   },
   fieldHelper: {
     fontSize: 11,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     marginTop: 5,
     lineHeight: 15,
   },
   fieldError: {
     fontSize: 11,
     fontFamily: Typography.family.semibold,
-    color: Colors.danger,
     marginTop: 5,
     lineHeight: 15,
   },
@@ -724,8 +742,6 @@ const styles = StyleSheet.create({
   detailCard: {
     borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
     overflow: 'hidden',
   },
   detailRow: {
@@ -747,12 +763,10 @@ const styles = StyleSheet.create({
   detailLabel: {
     fontSize: 15,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
   },
   detailValue: {
     fontSize: 15,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     flexShrink: 1,
     textAlign: 'right',
     maxWidth: 180,
@@ -768,7 +782,6 @@ const styles = StyleSheet.create({
   },
   detailDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
     marginHorizontal: Space.md - 2,
   },
 
@@ -781,14 +794,6 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: Radius.full,
     borderWidth: 1,
-  },
-  statusPillVerified: {
-    backgroundColor: `${Colors.success}12`,
-    borderColor: `${Colors.success}30`,
-  },
-  statusPillUnverified: {
-    backgroundColor: Colors.surfaceAlt,
-    borderColor: Colors.border,
   },
   statusPillText: {
     fontSize: 12,
@@ -803,9 +808,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md - 2,
     minHeight: 52,
     gap: Space.sm,
-  },
-  pressableRowPressed: {
-    backgroundColor: Colors.surfaceAlt,
   },
   rowIconChip: {
     width: 32,
@@ -822,12 +824,10 @@ const styles = StyleSheet.create({
   rowTitle: {
     fontSize: 15,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   rowSubtitle: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
   },
   rowRight: {
     flexDirection: 'row',
@@ -844,12 +844,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md - 2,
     borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: `${Colors.danger}30`,
-    backgroundColor: `${Colors.danger}06`,
     minHeight: 56,
-  },
-  accountCardPressed: {
-    backgroundColor: `${Colors.danger}10`,
   },
   accountIconWrap: {
     width: 36,
@@ -866,12 +861,10 @@ const styles = StyleSheet.create({
   accountTitle: {
     fontSize: 15,
     fontFamily: Typography.family.semibold,
-    color: Colors.danger,
   },
   accountSubtitle: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
   },
 
   // ── Phone edit modal — premium bottom sheet ──
@@ -891,21 +884,18 @@ const styles = StyleSheet.create({
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: Colors.border,
     alignSelf: 'center',
     marginBottom: Space.md,
   },
   modalTitle: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
     marginBottom: 2,
     letterSpacing: Type.subtitle.letterSpacing,
   },
   modalSubtitle: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     marginBottom: Space.md + 2,
   },
   modalActions: {
@@ -918,9 +908,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.surfaceAlt,
     borderWidth: 1,
-    borderColor: Colors.border,
   },
   modalBtnPrimary: {
     flex: 1,
@@ -928,12 +916,10 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.brand,
   },
   modalBtnSecondaryText: {
     fontSize: 15,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   modalBtnPrimaryText: {
     fontSize: 15,
