@@ -172,7 +172,7 @@ export default function VisualSearchScreen({ navigation }: Props) {
                 style={styles.removeBtn}
                 onPress={handleRemoveImage}
                 activeOpacity={0.85}
-                hitSlop={6}
+                hitSlop={8}
                 accessibilityRole="button"
                 accessibilityLabel="Remove selected photo"
               >

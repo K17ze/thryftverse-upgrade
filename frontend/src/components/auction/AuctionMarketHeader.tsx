@@ -89,7 +89,7 @@ export function AuctionMarketHeader({
           {searchAction && (
             <Pressable
               onPress={searchAction.onPress}
-              hitSlop={6}
+              hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel={searchAction.label}
               style={styles.iconBtn}
@@ -102,7 +102,7 @@ export function AuctionMarketHeader({
           {showActivity && (
             <Pressable
               onPress={activityAction!.onPress}
-              hitSlop={6}
+              hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel={activityAction!.label}
               style={styles.iconBtn}
@@ -122,7 +122,7 @@ export function AuctionMarketHeader({
           {overflowActions.length > 0 && (
             <Pressable
               onPress={() => setOverflowOpen(true)}
-              hitSlop={6}
+              hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel="More actions"
               style={styles.iconBtn}
@@ -135,7 +135,7 @@ export function AuctionMarketHeader({
           {createAction && (
             <Pressable
               onPress={createAction.onPress}
-              hitSlop={6}
+              hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel={createAction.label}
               style={styles.createBtn}

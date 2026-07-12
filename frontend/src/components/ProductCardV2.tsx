@@ -160,7 +160,7 @@ export function ProductCardV2({
               style={styles.saveBtn}
               onPress={handleToggleSave}
               {...PressPresets.iconButton}
-              hitSlop={6}
+              hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel={isSaved ? 'Remove from saved' : 'Save product'}
               accessibilityHint="Toggles this product in your saved page"

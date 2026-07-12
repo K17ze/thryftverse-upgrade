@@ -1,27 +1,28 @@
-fix(motion): reduced-motion support + cap list stagger to above-fold items
+fix(a11y): touch targets, reduced-motion on decorative pulses & skeletons
 
-Per audit section 5.4: "31 of 58 Reanimated screens have no visible
-reduced-motion handling" and "Many lists apply index-based
-FadeInDown.springify() to every item."
+Per audit section 5.4: "Visual Search runs a JavaScript setInterval
+every 16ms to animate a fake scan line, with no reduced-motion
+alternative" and "Confirmed ProductCard save/favourite controls are
+visually 32x32pt without an explicit 44/48pt hit region."
 
-Changes:
-- Added useReducedMotion() to 6 remaining screens with entrance
-  animations: AboutScreen, ActiveSessionsScreen, HelpSupportScreen,
-  PaymentsScreen, PostageScreen, SavedAddressesScreen. All entrance
-  animations now return undefined when reduced motion is enabled.
-- Added useReducedMotion() to 7 components with entrance animations
-  that lacked it: PulseTab (2 cards), LooksTab, EditTab,
-  LookPreviewCard, ClosetBoardCard, FlagshipAssetCard,
-  FlagshipOrderCard, LookCommentsSheet, RecommendationRail.
-- Capped list entrance stagger to above-fold items (max index 6-8)
-  across all staggered components. Item 20+ no longer waits a full
-  second to appear.
-- Removed springify() from list item entrance animations per Design.md
-  motion rules ("Press scale 0.97-0.985 with no bounce"). Spring
-  bounce on list items causes visual jitter and contradicts the
-  snappy-timing motion contract. Replaced with timing-based fades.
-- Capped SavedAddressesScreen, OutfitBuilderScreen, TwoFactorSetupScreen
-  stagger delays to Math.min(index, 8).
+Touch target fixes:
+- Bumped hitSlop from 4 to 8 on 5 AuctionDetailScreen floating
+  controls (back, share, save, like, watch) for 50pt+ effective area.
+- Bumped hitSlop from 6 to 8 on ProductCardV2 save button,
+  VisualSearchScreen close button, and 4 AuctionMarketHeader actions.
+- Bumped LookSocialActions button paddingVertical from 10 to 12 for
+  46pt minimum height (was 42pt — below 44pt minimum).
+
+Reduced-motion fixes on continuous animations:
+- ActivityBadge PulsingDot: static opacity when reduced motion enabled.
+- PulseDot (chat presence indicator): no pulse animation when reduced
+  motion enabled.
+- AvatarRing (unread glow): no pulse animation when reduced motion
+  enabled; ring still shows as solid border.
+- PremiumSkeletonTile shimmer: static position when reduced motion.
+- SkeletonChatLoader breathing: static opacity when reduced motion.
+- RefreshIndicator rotation: no spin when reduced motion; indicator
+  still shows but without continuous rotation.
 
 Generated with [Devin](https://devin.ai)
 

@@ -523,7 +523,7 @@ export default function AuctionDetailScreen() {
               activeOpacity={0.85}
               accessibilityRole="button"
               accessibilityLabel="Go back"
-              hitSlop={4}
+              hitSlop={8}
             >
               <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
             </AnimatedPressable>
@@ -535,7 +535,7 @@ export default function AuctionDetailScreen() {
                 activeOpacity={0.85}
                 accessibilityRole="button"
                 accessibilityLabel="Share auction"
-                hitSlop={4}
+                hitSlop={8}
               >
                 <Ionicons name="share-outline" size={20} color="#FFFFFF" />
               </AnimatedPressable>
@@ -546,7 +546,7 @@ export default function AuctionDetailScreen() {
                 activeOpacity={0.85}
                 accessibilityRole="button"
                 accessibilityLabel={social.isSavedToCollection ? 'Saved to collection' : 'Save to collection'}
-                hitSlop={4}
+                hitSlop={8}
               >
                 <Ionicons
                   name={social.isSavedToCollection ? 'bookmark' : 'bookmark-outline'}
@@ -561,7 +561,7 @@ export default function AuctionDetailScreen() {
                 activeOpacity={0.85}
                 accessibilityRole="button"
                 accessibilityLabel={social.isLiked ? 'Remove from wishlist' : 'Add to wishlist'}
-                hitSlop={4}
+                hitSlop={8}
               >
                 <Ionicons
                   name={social.isLiked ? 'heart' : 'heart-outline'}
@@ -578,7 +578,7 @@ export default function AuctionDetailScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={auction.isWatched ? 'Remove from watchlist' : 'Add to watchlist'}
                 accessibilityHint={watchToggling ? 'Updating' : undefined}
-                hitSlop={4}
+                hitSlop={8}
               >
                 <Ionicons
                   name={auction.isWatched ? 'eye' : 'eye-outline'}

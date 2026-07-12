@@ -12,6 +12,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 interface Props {
   scrollY: SharedValue<number>;
@@ -21,9 +22,10 @@ interface Props {
 
 export function RefreshIndicator({ scrollY, isRefreshing, topInset = 60 }: Props) {
   const rotation = useSharedValue(0);
+  const reducedMotionEnabled = useReducedMotion();
 
   useEffect(() => {
-    if (isRefreshing) {
+    if (isRefreshing && !reducedMotionEnabled) {
       rotation.value = withRepeat(
         withTiming(360, { duration: 800, easing: Easing.linear }),
         -1
@@ -31,7 +33,7 @@ export function RefreshIndicator({ scrollY, isRefreshing, topInset = 60 }: Props
     } else {
       rotation.value = 0;
     }
-  }, [isRefreshing]);
+  }, [isRefreshing, reducedMotionEnabled]);
 
   const animStyle = useAnimatedStyle(() => {
     // When pulldown Y is negative

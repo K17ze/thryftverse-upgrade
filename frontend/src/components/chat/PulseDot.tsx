@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Colors } from '../../constants/colors';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -20,8 +21,13 @@ export function PulseDot({
   color = Colors.brand,
 }: PulseDotProps) {
   const pulse = useSharedValue(0);
+  const reducedMotionEnabled = useReducedMotion();
 
   React.useEffect(() => {
+    if (reducedMotionEnabled) {
+      pulse.value = 0;
+      return;
+    }
     pulse.value = withRepeat(
       withTiming(1, {
         duration: 1800,
@@ -30,7 +36,7 @@ export function PulseDot({
       -1,
       true
     );
-  }, [pulse]);
+  }, [pulse, reducedMotionEnabled]);
 
   const dotStyle = useAnimatedStyle(() => {
     const scale = interpolate(pulse.value, [0, 1], [1, 1.6]);

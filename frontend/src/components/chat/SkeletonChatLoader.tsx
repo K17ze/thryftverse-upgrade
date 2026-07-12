@@ -8,20 +8,26 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { Colors } from '../../constants/colors';
 import { Space, Radius } from '../../theme/designTokens';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 // Deterministic bubble-width fractions so the skeleton layout does not jump between renders.
 const BUBBLE_FRACTIONS = [0.62, 0.44, 0.7, 0.38, 0.55, 0.48, 0.66, 0.42];
 
 function SkeletonBar({ width, height = 14, style }: { width: number | string; height?: number; style?: any }) {
   const opacity = useSharedValue(0.3);
+  const reducedMotionEnabled = useReducedMotion();
 
   React.useEffect(() => {
+    if (reducedMotionEnabled) {
+      opacity.value = 0.5;
+      return;
+    }
     opacity.value = withRepeat(
       withTiming(0.7, { duration: 1200 }),
       -1,
       true
     );
-  }, []);
+  }, [reducedMotionEnabled]);
 
   const animStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,

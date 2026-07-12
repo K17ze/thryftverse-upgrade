@@ -16,6 +16,7 @@ import Reanimated, {
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { Space, Radius, Type } from '../../theme/designTokens';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 export type ActivityBadgeVariant =
   | 'viewers'
@@ -102,14 +103,19 @@ const VARIANT_CONFIG: Record<ActivityBadgeVariant, {
 
 function PulsingDot({ color }: { color: string }) {
   const pulse = useSharedValue(1);
+  const reducedMotionEnabled = useReducedMotion();
 
   React.useEffect(() => {
+    if (reducedMotionEnabled) {
+      pulse.value = 0.7;
+      return;
+    }
     pulse.value = withRepeat(
       withTiming(0.3, { duration: 1000 }),
       -1,
       true
     );
-  }, [pulse]);
+  }, [pulse, reducedMotionEnabled]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: pulse.value,
