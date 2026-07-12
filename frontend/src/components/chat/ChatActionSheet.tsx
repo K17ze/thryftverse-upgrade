@@ -5,7 +5,7 @@ import { Colors } from "../../constants/colors";
 import { Space, Radius, Type, Typography } from "../../theme/designTokens";
 import { AnimatedPressable } from "../AnimatedPressable";
 
-export type ChatAction = "gallery" | "camera" | "document";
+export type ChatAction = "gallery" | "camera";
 
 interface ChatActionSheetProps {
   visible: boolean;
@@ -40,14 +40,6 @@ export function ChatActionSheet({
         icon: "camera-outline",
         label: "Camera",
         description: "Take a new photo or video",
-      },
-      {
-        id: "document",
-        icon: "document-outline",
-        label: "Document",
-        description: "Backend support required",
-        disabled: true,
-        disabledReason: "Coming soon",
       },
     ],
     [],

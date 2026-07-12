@@ -336,7 +336,11 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
           </View>
         ) : qrDataUrl ? (
           <View style={[styles.qrFrame, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
-            <Image source={{ uri: qrDataUrl }} style={styles.qrImage} />
+            <Image
+              source={{ uri: qrDataUrl }}
+              style={styles.qrImage}
+              onError={() => setQrDataUrl('')}
+            />
           </View>
         ) : (
           <View style={[styles.qrError, { borderColor: `${Colors.danger}30` }]}>

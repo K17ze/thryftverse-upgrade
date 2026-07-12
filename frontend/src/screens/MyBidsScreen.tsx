@@ -231,24 +231,26 @@ export default function MyBidsScreen() {
               {WATCHING_FILTER.label}
             </Text>
           </Pressable>
+          {/* Ending-soonest sort toggle — integrated into filter rail */}
+          {(filter === 'all' || filter === 'outbid' || filter === 'leading') && items.length > 1 && (
+            <>
+              <View style={styles.filterDivider} />
+              <Pressable
+                style={[styles.stateRailChip, styles.sortChip, endingSoonest && styles.sortToggleActive]}
+                onPress={() => setEndingSoonest((v) => !v)}
+                accessibilityRole="button"
+                accessibilityLabel={endingSoonest ? 'Stop sorting by ending soonest' : 'Sort by ending soonest'}
+                accessibilityState={{ checked: endingSoonest }}
+              >
+                <Ionicons name="time-outline" size={13} color={endingSoonest ? Colors.textInverse : Colors.textMuted} />
+                <Text style={[styles.stateRailText, endingSoonest && styles.stateRailTextActive]}>
+                  Ending soonest
+                </Text>
+              </Pressable>
+            </>
+          )}
         </ScrollView>
       </Reanimated.View>
-
-      {/* Ending-soonest sort toggle — only relevant for active bids */}
-      {(filter === 'all' || filter === 'outbid' || filter === 'leading') && items.length > 1 && (
-        <Pressable
-          style={[styles.sortToggle, endingSoonest && styles.sortToggleActive]}
-          onPress={() => setEndingSoonest((v) => !v)}
-          accessibilityRole="button"
-          accessibilityLabel={endingSoonest ? 'Stop sorting by ending soonest' : 'Sort by ending soonest'}
-          accessibilityState={{ checked: endingSoonest }}
-        >
-          <Ionicons name="time-outline" size={14} color={endingSoonest ? Colors.brand : Colors.textMuted} />
-          <Text style={[styles.sortToggleText, endingSoonest && styles.sortToggleTextActive]}>
-            Ending soonest
-          </Text>
-        </Pressable>
-      )}
 
       <FlashList
         data={sortedItems}
@@ -428,32 +430,14 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.border,
     alignSelf: 'center',
   },
-  sortToggle: {
+  sortChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginHorizontal: 16,
-    marginTop: 8,
-    alignSelf: 'flex-start',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
   },
   sortToggleActive: {
+    backgroundColor: Colors.brand,
     borderColor: Colors.brand,
-    backgroundColor: `${Colors.brand}08`,
-  },
-  sortToggleText: {
-    fontSize: 12,
-    fontFamily: 'Inter_500Medium',
-    color: Colors.textMuted,
-  },
-  sortToggleTextActive: {
-    color: Colors.brand,
-    fontFamily: 'Inter_600SemiBold',
   },
   listContent: {
     paddingHorizontal: Space.md,

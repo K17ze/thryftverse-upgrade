@@ -391,9 +391,9 @@ const styles = StyleSheet.create({
     color: MUTED,
   },
   sellerMessageBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     borderWidth: 1,
     borderColor: BORDER,
     backgroundColor: CARD,

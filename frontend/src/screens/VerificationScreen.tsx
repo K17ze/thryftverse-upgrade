@@ -299,6 +299,8 @@ export default function VerificationScreen({ navigation }: Props) {
                   style={styles.flowBackBtn}
                   onPress={() => setKycStep('identity')}
                   hapticFeedback="light"
+                  accessibilityRole="button"
+                  accessibilityLabel="Back to identity step"
                 >
                   <Text style={styles.flowBackBtnText}>Back</Text>
                 </AnimatedPressable>
@@ -306,6 +308,8 @@ export default function VerificationScreen({ navigation }: Props) {
                   style={styles.flowPrimaryBtn}
                   onPress={() => setKycStep('review')}
                   hapticFeedback="medium"
+                  accessibilityRole="button"
+                  accessibilityLabel="Continue to review"
                 >
                   <Text style={styles.flowPrimaryBtnText}>Continue</Text>
                 </AnimatedPressable>
@@ -344,6 +348,8 @@ export default function VerificationScreen({ navigation }: Props) {
                   style={styles.flowBackBtn}
                   onPress={() => setKycStep('document')}
                   hapticFeedback="light"
+                  accessibilityRole="button"
+                  accessibilityLabel="Back to document upload"
                 >
                   <Text style={styles.flowBackBtnText}>Back</Text>
                 </AnimatedPressable>
@@ -458,6 +464,8 @@ export default function VerificationScreen({ navigation }: Props) {
                   style={styles.flowBackBtn}
                   onPress={() => setDac7Step('status')}
                   hapticFeedback="light"
+                  accessibilityRole="button"
+                  accessibilityLabel="Cancel tax information entry"
                 >
                   <Text style={styles.flowBackBtnText}>Cancel</Text>
                 </AnimatedPressable>

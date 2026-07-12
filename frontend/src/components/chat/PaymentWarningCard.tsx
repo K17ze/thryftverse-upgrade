@@ -31,7 +31,7 @@ export function PaymentWarningCard({ dismissed, onDismiss, onReport, isMe }: Pay
   return (
     <View style={[styles.container, isMe && styles.containerMe]}>
       <View style={styles.iconWrap}>
-        <Ionicons name="warning-outline" size={16} color={Colors.danger} />
+        <Ionicons name="warning" size={16} color={Colors.danger} />
       </View>
       <View style={styles.textCol}>
         <Text style={styles.title}>Keep payments on ThryftVerse</Text>
@@ -39,20 +39,18 @@ export function PaymentWarningCard({ dismissed, onDismiss, onReport, isMe }: Pay
           Off-platform payments aren't covered by Buyer Protection. If this is a
           legitimate transaction, complete it in the app to stay protected.
         </Text>
-        <View style={styles.actionsRow}>
-          {onReport && (
-            <Pressable
-              style={styles.reportBtn}
-              onPress={onReport}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              accessibilityRole="button"
-              accessibilityLabel="Report this conversation"
-            >
-              <Ionicons name="flag-outline" size={12} color={Colors.danger} />
-              <Text style={styles.reportBtnText}>Report</Text>
-            </Pressable>
-          )}
-        </View>
+        {onReport && (
+          <Pressable
+            style={styles.reportBtn}
+            onPress={onReport}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="Report this conversation"
+          >
+            <Ionicons name="flag-outline" size={12} color={Colors.danger} />
+            <Text style={styles.reportBtnText}>Report</Text>
+          </Pressable>
+        )}
       </View>
       <Pressable
         style={styles.closeBtn}
@@ -70,15 +68,15 @@ export function PaymentWarningCard({ dismissed, onDismiss, onReport, isMe }: Pay
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
     marginTop: 6,
     marginHorizontal: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: Radius.md,
-    backgroundColor: `${Colors.danger}08`,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: Radius.lg,
+    backgroundColor: `${Colors.danger}12`,
     borderWidth: 1,
-    borderColor: `${Colors.danger}30`,
+    borderColor: `${Colors.danger}50`,
   },
   containerMe: {
     marginHorizontal: 0,
@@ -86,7 +84,8 @@ const styles = StyleSheet.create({
     maxWidth: '85%',
   },
   iconWrap: {
-    paddingTop: 2,
+    paddingTop: 1,
+    flexShrink: 0,
   },
   textCol: {
     flex: 1,
@@ -103,15 +102,12 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     lineHeight: 17,
   },
-  actionsRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 4,
-  },
   reportBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    marginTop: 6,
+    alignSelf: 'flex-start',
   },
   reportBtnText: {
     fontSize: 12,
@@ -120,5 +116,6 @@ const styles = StyleSheet.create({
   },
   closeBtn: {
     paddingTop: 2,
+    flexShrink: 0,
   },
 });

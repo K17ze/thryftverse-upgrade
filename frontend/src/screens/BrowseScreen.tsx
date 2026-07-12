@@ -310,27 +310,7 @@ export default function BrowseScreen() {
 
       <Reanimated.View entering={FadeInDown.duration(300).delay(60)} style={styles.titleContainer}>
         <Text style={styles.hugeTitle}>{title}</Text>
-        <View style={styles.titleMetaRow}>
-          <Text style={styles.itemCountText}>{backendLoading ? 'Loading…' : `${displayCount} items`}</Text>
-          {saveSearchLabel && saveSearchLabel !== 'Browse All' && (
-            <AnimatedPressable
-              style={[styles.saveSearchPill, isCurrentSaved && styles.saveSearchPillActive]}
-              activeOpacity={0.8}
-              onPress={isCurrentSaved ? undefined : handleSaveSearch}
-              accessibilityLabel={isCurrentSaved ? 'Search saved with alerts' : 'Save this search with alerts'}
-              accessibilityRole="button"
-            >
-              <Ionicons
-                name={isCurrentSaved ? 'notifications' : 'notifications-outline'}
-                size={13}
-                color={isCurrentSaved ? Colors.brand : Colors.textSecondary}
-              />
-              <Text style={[styles.saveSearchText, isCurrentSaved && styles.saveSearchTextActive]}>
-                {isCurrentSaved ? 'Saved' : 'Save search'}
-              </Text>
-            </AnimatedPressable>
-          )}
-        </View>
+        <Text style={styles.itemCountText}>{backendLoading ? 'Loading…' : `${displayCount} items`}</Text>
       </Reanimated.View>
 
       <Reanimated.View entering={FadeInDown.duration(300).delay(90)} style={styles.filterBar}>
@@ -371,6 +351,24 @@ export default function BrowseScreen() {
             <Text style={styles.filterPillText}>{browseFilters.condition !== 'Any' ? browseFilters.condition : 'Condition'}</Text>
             <Ionicons name="chevron-down" size={12} color={Colors.textMuted} />
           </AnimatedPressable>
+          {saveSearchLabel && saveSearchLabel !== 'Browse All' && (
+            <AnimatedPressable
+              style={[styles.filterPillOutline, isCurrentSaved && styles.saveSearchPillActive]}
+              activeOpacity={0.85}
+              onPress={isCurrentSaved ? undefined : handleSaveSearch}
+              accessibilityLabel={isCurrentSaved ? 'Search saved with alerts' : 'Save this search with alerts'}
+              accessibilityRole="button"
+            >
+              <Ionicons
+                name={isCurrentSaved ? 'notifications' : 'notifications-outline'}
+                size={14}
+                color={isCurrentSaved ? Colors.brand : Colors.textSecondary}
+              />
+              <Text style={[styles.filterPillText, isCurrentSaved && styles.saveSearchTextActive]}>
+                {isCurrentSaved ? 'Saved' : 'Save search'}
+              </Text>
+            </AnimatedPressable>
+          )}
         </ScrollView>
       </Reanimated.View>
 
@@ -471,37 +469,6 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     marginTop: 6,
   },
-  titleMetaRow: {
-    marginTop: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  saveSearchPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-  },
-  saveSearchPillActive: {
-    borderColor: Colors.brand,
-    backgroundColor: `${Colors.brand}08`,
-  },
-  saveSearchText: {
-    fontSize: 12,
-    fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
-  },
-  saveSearchTextActive: {
-    color: Colors.brand,
-    fontFamily: Typography.family.semibold,
-  },
 
   filterBar: { paddingBottom: 16 },
   filterRow: { paddingHorizontal: 20, gap: 8, alignItems: 'center' },
@@ -533,6 +500,14 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   filterPillText: { color: Colors.textPrimary, fontSize: 13, fontFamily: Typography.family.medium },
+  saveSearchPillActive: {
+    borderColor: Colors.brand,
+    backgroundColor: `${Colors.brand}08`,
+  },
+  saveSearchTextActive: {
+    color: Colors.brand,
+    fontFamily: Typography.family.semibold,
+  },
   syncRetryBanner: {
     marginHorizontal: 20,
     marginBottom: 14,
@@ -579,9 +554,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 10,
     right: 10,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: 'rgba(0,0,0,0.3)',
     alignItems: 'center',
     justifyContent: 'center',

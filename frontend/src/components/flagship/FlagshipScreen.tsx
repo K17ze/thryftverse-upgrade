@@ -2,8 +2,6 @@ import React from 'react';
 import {
   View,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
   ViewStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,6 +15,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space } from '../../theme/designTokens';
+import { KeyboardStickyView } from '../../platform/keyboard/KeyboardProvider';
 
 export interface FlagshipScreenProps {
   children: React.ReactNode;
@@ -107,10 +106,10 @@ export function FlagshipScreen({
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
-      {keyboardAvoiding && Platform.OS === 'ios' ? (
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+      {keyboardAvoiding ? (
+        <KeyboardStickyView style={{ flex: 1 }}>
           {innerContent}
-        </KeyboardAvoidingView>
+        </KeyboardStickyView>
       ) : (
         innerContent
       )}

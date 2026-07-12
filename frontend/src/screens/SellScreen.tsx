@@ -939,10 +939,10 @@ export default function SellScreen() {
                       accessibilityRole="button"
                       accessibilityLabel={`Similar items sold for ${currencySymbol}${soldComps.minPrice.toFixed(0)} to ${currencySymbol}${soldComps.maxPrice.toFixed(0)}. Tap to set median price ${currencySymbol}${soldComps.medianPrice?.toFixed(0) ?? ''}.`}
                     >
-                      <Ionicons name="pricetag-outline" size={14} color={Colors.brand} />
+                      <Ionicons name="pricetag-outline" size={13} color={Colors.textMuted} />
                       <Text style={styles.soldCompsText}>
                         Similar sold: {currencySymbol}{soldComps.minPrice.toFixed(0)}–{currencySymbol}{soldComps.maxPrice.toFixed(0)}
-                        {'  '}({soldComps.sampleSize} sold)
+                        {' '}({soldComps.sampleSize} sold)
                       </Text>
                       {!price && soldComps.medianPrice != null && (
                         <Text style={styles.soldCompsAction}>Tap for median</Text>
@@ -1504,19 +1504,14 @@ const styles = StyleSheet.create({
   soldCompsHint: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: `${Colors.brand}08`,
-    borderWidth: 1,
-    borderColor: `${Colors.brand}25`,
+    gap: 5,
+    marginTop: 6,
+    paddingVertical: 2,
   },
   soldCompsText: {
     fontSize: 12,
-    fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
     flex: 1,
   },
   soldCompsAction: {

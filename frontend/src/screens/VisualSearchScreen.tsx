@@ -30,6 +30,7 @@ export default function VisualSearchScreen({ navigation }: Props) {
   const { show } = useToast();
   const { listings } = useBackendData();
   const [imageUri, setImageUri] = useState<string | null>(null);
+  const [previewFailed, setPreviewFailed] = useState(false);
 
   const handleCapture = useCallback(async () => {
     try {
@@ -146,7 +147,18 @@ export default function VisualSearchScreen({ navigation }: Props) {
         {imageUri && (
           <Reanimated.View entering={FadeInDown.duration(300)} style={styles.previewWrap}>
             <View style={styles.previewCard}>
-              <Image source={{ uri: imageUri }} style={styles.previewImg} resizeMode="cover" />
+              {previewFailed ? (
+                <View style={styles.previewImg}>
+                  <Ionicons name="image-outline" size={32} color={Colors.textMuted} />
+                </View>
+              ) : (
+                <Image
+                  source={{ uri: imageUri }}
+                  style={styles.previewImg}
+                  resizeMode="cover"
+                  onError={() => setPreviewFailed(true)}
+                />
+              )}
 
               {/* Framing shows the intended crop without implying active analysis. */}
               <View style={[styles.cornerBracket, styles.cornerTL]} />

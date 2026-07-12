@@ -19,6 +19,10 @@ export interface BuyerProtectionStripProps {
  * Communicates the escrow narrative: "Your money is held until you confirm receipt."
  * This is the single most important trust signal for stranger-to-stranger commerce
  * (Vinted/eBay model).
+ *
+ * Visual language: surface card with success-tinted background, rounded corners,
+ * shield icon in a circular success-tinted badge. Feels like an authored trust
+ * element, not a pasted text block.
  */
 export function BuyerProtectionStrip({
   policyLabel,
@@ -50,6 +54,7 @@ export function BuyerProtectionStrip({
           {text}
         </Text>
       </View>
+      <Ionicons name="lock-closed" size={14} color={Colors.success} style={styles.endIcon} />
     </View>
   );
 }
@@ -57,17 +62,22 @@ export function BuyerProtectionStrip({
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: Space.sm + 2,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
-    marginTop: Space.xs,
+    marginTop: Space.sm,
+    marginHorizontal: Space.md,
+    borderRadius: Radius.lg,
+    backgroundColor: `${Colors.success}0A`,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: `${Colors.success}20`,
   },
   iconWrap: {
-    width: 32,
-    height: 32,
+    width: 36,
+    height: 36,
     borderRadius: Radius.full,
-    backgroundColor: `${Colors.success}15`,
+    backgroundColor: `${Colors.success}18`,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -88,16 +98,20 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     lineHeight: 16,
   },
+  endIcon: {
+    flexShrink: 0,
+    opacity: 0.6,
+  },
   compactContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    backgroundColor: `${Colors.success}08`,
+    backgroundColor: `${Colors.success}0A`,
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: `${Colors.success}25`,
+    borderColor: `${Colors.success}20`,
   },
   compactText: {
     flex: 1,

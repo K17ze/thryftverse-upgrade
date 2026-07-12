@@ -418,8 +418,7 @@ export default function AuctionHomeScreen() {
       }
     } catch (err) {
       if (reqId === requestIdRef.current) {
-        const devHint = __DEV__ && err instanceof Error ? err.message : null;
-        setError(devHint ? `Unable to load auctions: ${devHint}` : 'Unable to load auctions');
+        setError('Unable to load auctions');
         markResyncFailed();
       }
     } finally {
@@ -1096,7 +1095,7 @@ export default function AuctionHomeScreen() {
         <EmptyState
           icon="cloud-offline-outline"
           title="Unable to load"
-          subtitle={__DEV__ && error !== 'Unable to load auctions' ? error : 'Pull to refresh'}
+          subtitle="Pull to refresh"
           ctaLabel="Retry"
           onCtaPress={() => void fetchHome()}
         />
