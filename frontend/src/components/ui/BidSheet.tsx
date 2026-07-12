@@ -348,7 +348,7 @@ export function BidSheet({
 
         <View style={styles.divider} />
 
-        {/* â”€â”€ Entry stage — large centered amount â”€â”€ */}
+        {/* ── Entry stage — large centered amount ── */}
         {stage === 'entry' && (
           <View style={styles.stageContent}>
             <Text style={styles.entryHeading}>PLACE YOUR BID</Text>
@@ -459,7 +459,7 @@ export function BidSheet({
           </View>
         )}
 
-        {/* â”€â”€ Review stage — clean confirmation receipt â”€â”€ */}
+        {/* ── Review stage — clean confirmation receipt ── */}
         {stage === 'review' && (
           <View style={styles.stageContent}>
             <Text style={styles.reviewHeading}>CONFIRM YOUR BID</Text>
@@ -534,7 +534,7 @@ export function BidSheet({
           </View>
         )}
 
-        {/* â”€â”€ Submitting stage â”€â”€ */}
+        {/* ── Submitting stage ── */}
         {stage === 'submitting' && (
           <View style={styles.centerStage}>
             <View style={styles.submittingSpinnerWrap}>
@@ -545,7 +545,7 @@ export function BidSheet({
           </View>
         )}
 
-        {/* â”€â”€ Success stage â”€â”€ */}
+        {/* ── Success stage ── */}
         {stage === 'success' && (
           <View style={styles.centerStage}>
             <View style={styles.successIcon}>
@@ -567,7 +567,7 @@ export function BidSheet({
           </View>
         )}
 
-        {/* â”€â”€ Recoverable conflict stage â”€â”€ */}
+        {/* ── Recoverable conflict stage ── */}
         {stage === 'recoverable_conflict' && error && error.kind === 'buy_now_review_required' && (
           <View style={styles.stageContent}>
             <View style={styles.conflictIconRow}>
@@ -607,7 +607,7 @@ export function BidSheet({
           </View>
         )}
 
-        {/* â”€â”€ Error (terminal) stage â”€â”€ */}
+        {/* ── Error (terminal) stage ── */}
         {stage === 'error' && error && (
           <View style={styles.stageContent}>
             <View style={styles.errorIconSmall}>
@@ -693,7 +693,7 @@ const styles = StyleSheet.create({
   stageContent: {
     gap: Space.sm,
   },
-  // â”€â”€ Entry stage — large centered amount â”€â”€
+  // ── Entry stage — large centered amount ──
   entryHeading: {
     fontSize: 11,
     color: Colors.textMuted,
@@ -771,7 +771,7 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontFamily: Typography.family.regular,
   },
-  // â”€â”€ Review stage — receipt â”€â”€
+  // ── Review stage — receipt ──
   reviewHeading: {
     fontSize: 11,
     fontFamily: Typography.family.semibold,

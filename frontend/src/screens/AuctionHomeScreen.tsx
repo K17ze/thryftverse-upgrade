@@ -279,7 +279,7 @@ const ResultRow = memo(function ResultRow({
   );
 });
 
-// â”€â”€ Home data shape from /auctions/home â”€â”€
+// ── Home data shape from /auctions/home ──
 interface HomeData {
   attentionItem: AuctionHomeItem | null;
   attentionReason: AttentionReason;
@@ -309,7 +309,7 @@ const EMPTY_HOME_DATA: HomeData = {
   serverNow: null,
 };
 
-// â”€â”€ Main screen â”€â”€
+// ── Main screen ──
 export default function AuctionHomeScreen() {
   const navigation = useNavigation<NavT>();
   const { currencyCode, displayMode, goldRates } = useFormattedPrice();
@@ -319,11 +319,11 @@ export default function AuctionHomeScreen() {
   const [refreshing, setRefreshing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  // â”€â”€ Segment state â”€â”€
+  // ── Segment state ──
   const [activeSegment, setActiveSegment] = useState<MarketSegment>('live');
   const hasSetDefaultSegment = useRef(false);
 
-  // â”€â”€ Search overlay â”€â”€
+  // ── Search overlay ──
   const [searchOverlayVisible, setSearchOverlayVisible] = React.useState(false);
   const [searchState, setSearchState] = React.useState<AuctionSearchState>(IDLE_SEARCH_STATE);
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -331,7 +331,7 @@ export default function AuctionHomeScreen() {
   const [isLoadingMoreSearch, setIsLoadingMoreSearch] = React.useState(false);
   const [paginationError, setPaginationError] = React.useState<string | null>(null);
 
-  // â”€â”€ Filter result mode â”€â”€
+  // ── Filter result mode ──
   const [filterResult, setFilterResult] = React.useState<{
     status: 'idle' | 'loading' | 'ready' | 'empty' | 'error';
     items: AuctionHomeItem[];
@@ -341,13 +341,13 @@ export default function AuctionHomeScreen() {
   const filterReqIdRef = React.useRef(0);
   const [filterRefreshTick, setFilterRefreshTick] = React.useState(0);
 
-  // â”€â”€ Filter state â”€â”€
+  // ── Filter state ──
   const [filterStatus, setFilterStatus] = useState<'all' | 'live' | 'scheduled' | 'ended'>('all');
   const [filterSort, setFilterSort] = useState<'endingSoon' | 'newest' | 'mostBids' | 'priceLow' | 'priceHigh'>('endingSoon');
   const [filterCategory, setFilterCategory] = useState<string | null>(null);
   const [filterSheetVisible, setFilterSheetVisible] = React.useState(false);
 
-  // â”€â”€ Draft filter state â”€â”€
+  // ── Draft filter state ──
   const [draftStatus, setDraftStatus] = useState<'all' | 'live' | 'scheduled' | 'ended'>('all');
   const [draftSort, setDraftSort] = useState<'endingSoon' | 'newest' | 'mostBids' | 'priceLow' | 'priceHigh'>('endingSoon');
   const [draftCategory, setDraftCategory] = useState<string | null>(null);
@@ -439,7 +439,7 @@ export default function AuctionHomeScreen() {
     }
   }, [needsResync, fetchHome]);
 
-  // â”€â”€ Search â”€â”€
+  // ── Search ──
   const searchReqIdRef = useRef(0);
 
   const handleRefresh = React.useCallback(() => {
@@ -542,7 +542,7 @@ export default function AuctionHomeScreen() {
     }
   }, [searchState.cursor, isLoadingMoreSearch, debouncedQuery]);
 
-  // â”€â”€ Filter results fetching â”€â”€
+  // ── Filter results fetching ──
   React.useEffect(() => {
     if (!isFiltering) {
       setFilterResult({ status: 'idle', items: [], cursor: null });
@@ -626,7 +626,7 @@ export default function AuctionHomeScreen() {
     setFilterSort('endingSoon');
   }, []);
 
-  // â”€â”€ 1ZE + local semantic display â”€â”€
+  // ── 1ZE + local semantic display ──
   const formatDualPrice = useCallback((amountGbp: number): DualPriceResult => {
     const izeAmount = toIze(amountGbp, 'GBP', goldRates);
     const izeText = formatIzeAmount(izeAmount, 2);
@@ -637,7 +637,7 @@ export default function AuctionHomeScreen() {
     return { primaryText: izeText, secondaryText: fiatText };
   }, [goldRates, currencyCode, displayMode]);
 
-  // â”€â”€ Separate 1ZE + local text for the value lockup primitive â”€â”€
+  // ── Separate 1ZE + local text for the value lockup primitive ──
   // Always returns the canonical 1ZE text as izeText and local as localText.
   // In fiat-only display mode, izeText holds the local value and localText is null,
   // preserving the user's display preference.
@@ -651,7 +651,7 @@ export default function AuctionHomeScreen() {
     return { izeText, localText: fiatText };
   }, [goldRates, currencyCode, displayMode]);
 
-  // â”€â”€ Renderers for search/filter â”€â”€
+  // ── Renderers for search/filter ──
   const renderSearchItem = useCallback(({ item }: { item: AuctionHomeItem }) => {
     const timing = resolveAuctionTiming(item, secondClock);
     const urgency = resolveUrgency(timing);
@@ -706,7 +706,7 @@ export default function AuctionHomeScreen() {
     );
   }, [secondClock, navigateToDetail, formatValueLockup]);
 
-  // â”€â”€ Category options for filter sheet â”€â”€
+  // ── Category options for filter sheet ──
   const categoryOptions = useMemo(() => {
     const cats = new Set<string>();
     [...homeData.live, ...homeData.upcoming, ...homeData.recentlyClosed].forEach((a) => {
@@ -715,7 +715,7 @@ export default function AuctionHomeScreen() {
     return Array.from(cats).sort();
   }, [homeData]);
 
-  // â”€â”€ Active filter chips â”€â”€
+  // ── Active filter chips ──
   const activeFilterChips = useMemo(() => {
     const chips: string[] = [];
     if (filterStatus !== 'all') {
@@ -737,7 +737,7 @@ export default function AuctionHomeScreen() {
     <AuctionSkeletons />
   ), []);
 
-  // â”€â”€ Derived values (MUST be before any conditional return) â”€â”€
+  // ── Derived values (MUST be before any conditional return) ──
   const hasActiveMarket =
     homeData.closingSoon.length > 0 ||
     homeData.live.length > 0 ||
@@ -767,7 +767,7 @@ export default function AuctionHomeScreen() {
     homeData.categoryWorlds.length > 0 ||
     dedupedWatchlist.length > 0;
 
-  // â”€â”€ Default segment selection â”€â”€
+  // ── Default segment selection ──
   React.useEffect(() => {
     if (loading || hasSetDefaultSegment.current) return;
     if (homeData.closingSoon.length > 0) setActiveSegment('endingSoon');
@@ -777,7 +777,7 @@ export default function AuctionHomeScreen() {
     hasSetDefaultSegment.current = true;
   }, [loading, homeData, dedupedWatchlist]);
 
-  // â”€â”€ Segment rail â”€â”€
+  // ── Segment rail ──
   const segments: Segment[] = useMemo(() => {
     const segs: Segment[] = [{ key: 'live', label: 'Live', count: homeData.live.length }];
     if (homeData.closingSoon.length > 0) segs.push({ key: 'endingSoon', label: 'Ending soon', count: homeData.closingSoon.length });
@@ -786,7 +786,7 @@ export default function AuctionHomeScreen() {
     return segs;
   }, [homeData.live.length, homeData.closingSoon.length, homeData.upcoming.length, dedupedWatchlist.length]);
 
-  // â”€â”€ Compact header context â”€â”€
+  // ── Compact header context ──
   const headerContext = useMemo(() => {
     const parts: string[] = [];
     if (homeData.live.length > 0) parts.push(`${homeData.live.length} live`);
@@ -800,7 +800,7 @@ export default function AuctionHomeScreen() {
     return total > 0 ? `${total} active auctions` : undefined;
   }, [homeData.live.length, homeData.closingSoon.length, homeData.upcoming.length]);
 
-  // â”€â”€ Header actions â”€â”€
+  // ── Header actions ──
   const headerActions: AuctionHeaderAction[] = useMemo(() => [
     { key: 'search', icon: 'search-outline', label: 'Search auctions', onPress: () => { haptics.tap(); setSearchOverlayVisible(true); }, priority: 'primary' },
     { key: 'filter', icon: 'options-outline', label: 'Filter auctions', onPress: () => { haptics.tap(); openFilterSheet(); }, priority: 'secondary' },
@@ -809,7 +809,7 @@ export default function AuctionHomeScreen() {
     { key: 'activity', icon: 'pulse-outline', label: 'View auction activity', onPress: () => { haptics.tap(); handleActivity(); }, badgeCount: homeData.activity.needsAttentionCount, priority: 'secondary' },
   ], [openFilterSheet, navigation, handleActivity, homeData.activity.needsAttentionCount]);
 
-  // â”€â”€ Personal attention strip props â”€â”€
+  // ── Personal attention strip props ──
   const attentionProps = useMemo(() => {
     if (homeData.attentionReason === 'outbid' && homeData.attentionItem) {
       const timing = resolveAuctionTiming(homeData.attentionItem, secondClock);
@@ -868,7 +868,7 @@ export default function AuctionHomeScreen() {
     return null;
   }, [homeData.attentionReason, homeData.attentionItem, dedupedWatchlist, navigateToDetail, handleActivity, secondClock]);
 
-  // â”€â”€ Selected segment data â”€â”€
+  // ── Selected segment data ──
   const segmentItems = useMemo(() => {
     switch (activeSegment) {
       case 'live': return homeData.live;
@@ -879,7 +879,7 @@ export default function AuctionHomeScreen() {
     }
   }, [activeSegment, homeData.live, homeData.closingSoon, homeData.upcoming, dedupedWatchlist]);
 
-  // â”€â”€ Continuous "More to explore" feed â”€â”€
+  // ── Continuous "More to explore" feed ──
   // Combines all auction items across every segment + recently closed,
   // excluding those already shown in the active segment composition above.
   // This is the feed layer — scrolling down keeps revealing more auctions.
@@ -906,7 +906,7 @@ export default function AuctionHomeScreen() {
   // RENDER
   // ════════════════════════════════════════════════════════════════
 
-  // â”€â”€ Search overlay â”€â”€
+  // ── Search overlay ──
   if (searchOverlayVisible) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -978,7 +978,7 @@ export default function AuctionHomeScreen() {
     );
   }
 
-  // â”€â”€ Filter result mode â”€â”€
+  // ── Filter result mode ──
   if (isFiltering && !isSearching) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -1071,7 +1071,7 @@ export default function AuctionHomeScreen() {
     );
   }
 
-  // â”€â”€ Loading state â”€â”€
+  // ── Loading state ──
   if (loading && !homeData.attentionItem) {
     return (
       <View style={[styles.container, { backgroundColor: Colors.background }]}>
@@ -1084,7 +1084,7 @@ export default function AuctionHomeScreen() {
     );
   }
 
-  // â”€â”€ Error state â”€â”€
+  // ── Error state ──
   if (error && !homeData.attentionItem) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -1103,7 +1103,7 @@ export default function AuctionHomeScreen() {
     );
   }
 
-  // â”€â”€ Empty market state â”€â”€
+  // ── Empty market state ──
   if (!hasActiveMarket && !hasAnyContent) {
     return (
       <View style={styles.container}>
@@ -1165,7 +1165,7 @@ export default function AuctionHomeScreen() {
     );
   }
 
-  // â”€â”€ Default: restructured Auction Home â”€â”€
+  // ── Default: restructured Auction Home ──
   const fullWidth = width - Space.md * 2;
   const gridCardWidth = (width - Space.md * 2 - Space.sm) / 2;
   const categoryCardWidth = (width - Space.md * 2 - Space.sm * 2) / 3;
@@ -1173,7 +1173,7 @@ export default function AuctionHomeScreen() {
   const featuredWidth = isSmallWidth ? fullWidth : fullWidth * 0.62;
   const supportingColumnWidth = isSmallWidth ? 0 : fullWidth - featuredWidth - Space.sm;
 
-  // â”€â”€ Render selected market composition â”€â”€
+  // ── Render selected market composition ──
   const renderComposition = () => {
     if (segmentItems.length === 0) {
       return (
@@ -1185,7 +1185,7 @@ export default function AuctionHomeScreen() {
 
     switch (activeSegment) {
       case 'live': {
-        // â”€â”€ Horizontal discovery rail — swipe left for more live auctions â”€â”€
+        // ── Horizontal discovery rail — swipe left for more live auctions ──
         // Each card ~82% viewport with a deliberate peek of the next card.
         // Built ON TOP of the existing asymmetric editorial composition below.
         const railCardWidth = Math.round(width * 0.82);
@@ -1524,7 +1524,7 @@ export default function AuctionHomeScreen() {
       }
 
       case 'endingSoon': {
-        // â”€â”€ Horizontal discovery rail — swipe left for more ending-soon auctions â”€â”€
+        // ── Horizontal discovery rail — swipe left for more ending-soon auctions ──
         const endingRailCardWidth = Math.round(width * 0.82);
         const endingRailImageHeight = Math.round(Math.min(380, width * 0.9));
         const renderEndingRailItem = ({ item }: { item: AuctionHomeItem }) => {
@@ -1643,7 +1643,7 @@ export default function AuctionHomeScreen() {
       }
 
       case 'upcoming': {
-        // â”€â”€ Horizontal discovery rail — swipe left for more upcoming auctions â”€â”€
+        // ── Horizontal discovery rail — swipe left for more upcoming auctions ──
         const upcomingRailCardWidth = Math.round(width * 0.82);
         const upcomingRailImageHeight = Math.round(Math.min(380, width * 0.9));
         const renderUpcomingRailItem = ({ item }: { item: AuctionHomeItem }) => {
@@ -1714,7 +1714,7 @@ export default function AuctionHomeScreen() {
       }
 
       case 'watching': {
-        // â”€â”€ Horizontal discovery rail — swipe left for more watched auctions â”€â”€
+        // ── Horizontal discovery rail — swipe left for more watched auctions ──
         const watchingRailCardWidth = Math.round(width * 0.82);
         const watchingRailImageHeight = Math.round(Math.min(400, width * 0.95));
         const renderWatchingRailItem = ({ item }: { item: AuctionHomeItem }) => {
@@ -1899,7 +1899,7 @@ export default function AuctionHomeScreen() {
           </View>
         )}
 
-        {/* â”€â”€ More to explore — continuous feed â”€â”€ */}
+        {/* ── More to explore — continuous feed ── */}
         {exploreFeedItems.length > 0 && (
           <View style={styles.zoneWrap}>
             <Text style={styles.sectionTitle}>More to explore</Text>
@@ -2074,13 +2074,13 @@ const styles = StyleSheet.create({
     paddingBottom: Space.xxl + 24,
   },
 
-  // â”€â”€ Zone wrapper â”€â”€
+  // ── Zone wrapper ──
   zoneWrap: {
     paddingHorizontal: Space.md,
     marginTop: Space.lg + 4,
   },
 
-  // â”€â”€ Section title (no subtitle) â”€â”€
+  // ── Section title (no subtitle) ──
   sectionTitle: {
     fontSize: 22,
     lineHeight: 28,
@@ -2091,14 +2091,14 @@ const styles = StyleSheet.create({
     marginBottom: Space.sm + 2,
   },
 
-  // â”€â”€ Attention zone â”€â”€
+  // ── Attention zone ──
   attentionZone: {
     paddingHorizontal: Space.md,
     marginTop: Space.sm,
     marginBottom: Space.xs,
   },
 
-  // â”€â”€ Horizontal discovery rail â”€â”€
+  // ── Horizontal discovery rail ──
   railWrap: {
     marginTop: Space.md + 4,
     marginBottom: Space.xs,
@@ -2128,7 +2128,7 @@ const styles = StyleSheet.create({
     paddingRight: Space.xl + Space.md,
   },
 
-  // â”€â”€ Composition â”€â”€
+  // ── Composition ──
   compositionWrap: {
     paddingHorizontal: Space.md,
     marginTop: Space.lg + 4,
@@ -2164,7 +2164,7 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
   },
 
-  // â”€â”€ Ending soon rows â”€â”€
+  // ── Ending soon rows ──
   endingSoonContainer: {
     gap: 0,
   },
@@ -2230,12 +2230,12 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
-  // â”€â”€ Horizontal rail â”€â”€
+  // ── Horizontal rail ──
   horizontalRailContent: {
     paddingHorizontal: Space.md,
   },
 
-  // â”€â”€ Category rail â”€â”€
+  // ── Category rail ──
   categoryRailContent: {
     gap: Space.sm,
   },
@@ -2261,7 +2261,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.1,
   },
 
-  // â”€â”€ Upcoming rows â”€â”€
+  // ── Upcoming rows ──
   upcomingContainer: {
     gap: 0,
   },
@@ -2317,7 +2317,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  // â”€â”€ Results â”€â”€
+  // ── Results ──
   resultsContainer: {
     gap: 0,
   },
@@ -2370,7 +2370,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.1,
   },
 
-  // â”€â”€ Empty market â”€â”€
+  // ── Empty market ──
   emptyMarketContainer: {
     flexGrow: 1,
     paddingBottom: Space.xxl,
@@ -2380,7 +2380,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
   },
 
-  // â”€â”€ Search overlay â”€â”€
+  // ── Search overlay ──
   searchOverlayHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2415,7 +2415,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  // â”€â”€ Filter result mode â”€â”€
+  // ── Filter result mode ──
   filterResultHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2473,7 +2473,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.medium,
   },
 
-  // â”€â”€ Filter sheet â”€â”€
+  // ── Filter sheet ──
   filterSheetContent: {
     padding: Space.lg,
   },

@@ -295,7 +295,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const handleRefresh = useCallback(() => { activeQuery.refetch(); if (!isSelfProfile) publicProfileQuery.refetch(); }, [activeQuery, publicProfileQuery, isSelfProfile]);
   const onTabRailLayout = useCallback((y: number) => { stickyThreshold.value = y - (insets.top + COLLAPSED_BAR_HEIGHT); }, [insets.top]);
 
-  // â”€â”€ Per-destination scroll offset preservation â”€â”€
+  // ── Per-destination scroll offset preservation ──
   // No overlay reset on tab switch — overlay state is derived from the real scroll offset.
   const scrollOffsets = useRef<Record<string, number>>({});
   const currentDestination: string = activeTab === 'Shop' ? `${activeTab}-${shopSegment}` : activeTab;
