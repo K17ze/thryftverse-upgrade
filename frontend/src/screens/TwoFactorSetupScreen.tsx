@@ -12,8 +12,8 @@ import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
-import { Colors } from '../constants/colors';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { useAppTheme } from '../theme/ThemeContext';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
@@ -36,6 +36,7 @@ type Phase = 'setup' | 'verify' | 'recovery' | 'disable' | 'disable-confirm';
 const OTP_CELLS = 6;
 
 export default function TwoFactorSetupScreen({ navigation }: Props) {
+  const { colors } = useAppTheme();
   const { show } = useToast();
   const haptic = useHaptic();
   const twoFactorEnabled = useStore((state) => state.twoFactorEnabled);
@@ -234,36 +235,36 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
   const renderDisableOverview = () => (
     <>
       <View style={styles.phaseIntro}>
-        <View style={[styles.statusBadge, { backgroundColor: `${Colors.success}15` }]}>
-          <Ionicons name="shield-checkmark" size={18} color={Colors.success} />
-          <Text style={[styles.statusBadgeText, { color: Colors.success }]}>Protected</Text>
+        <View style={[styles.statusBadge, { backgroundColor: `${colors.success}15` }]}>
+          <Ionicons name="shield-checkmark" size={18} color={colors.success} />
+          <Text style={[styles.statusBadgeText, { color: colors.success }]}>Protected</Text>
         </View>
-        <Text style={styles.phaseTitle}>Two-factor authentication is on</Text>
-        <Text style={[styles.phaseBody, { color: Colors.textSecondary }]}>
+        <Text style={[styles.phaseTitle, { color: colors.textPrimary }]}>Two-factor authentication is on</Text>
+        <Text style={[styles.phaseBody, { color: colors.textSecondary }]}>
           Your account requires a verification code from your authenticator app in addition to your password.
         </Text>
       </View>
 
       <View style={styles.infoStack}>
-        <View style={[styles.infoRow, { borderColor: Colors.border }]}>
-          <Ionicons name="phone-portrait-outline" size={20} color={Colors.textSecondary} />
+        <View style={[styles.infoRow, { borderColor: colors.border }]}>
+          <Ionicons name="phone-portrait-outline" size={20} color={colors.textSecondary} />
           <View style={styles.infoText}>
-            <Text style={[styles.infoLabel, { color: Colors.textPrimary }]}>Authenticator app</Text>
-            <Text style={[styles.infoValue, { color: Colors.textMuted }]}>Open your app to get codes</Text>
+            <Text style={[styles.infoLabel, { color: colors.textPrimary }]}>Authenticator app</Text>
+            <Text style={[styles.infoValue, { color: colors.textMuted }]}>Open your app to get codes</Text>
           </View>
         </View>
-        <View style={[styles.infoRow, { borderColor: Colors.border }]}>
-          <Ionicons name="key-outline" size={20} color={Colors.textSecondary} />
+        <View style={[styles.infoRow, { borderColor: colors.border }]}>
+          <Ionicons name="key-outline" size={20} color={colors.textSecondary} />
           <View style={styles.infoText}>
-            <Text style={[styles.infoLabel, { color: Colors.textPrimary }]}>Recovery codes</Text>
-            <Text style={[styles.infoValue, { color: Colors.textMuted }]}>Generated when you enabled 2FA</Text>
+            <Text style={[styles.infoLabel, { color: colors.textPrimary }]}>Recovery codes</Text>
+            <Text style={[styles.infoValue, { color: colors.textMuted }]}>Generated when you enabled 2FA</Text>
           </View>
         </View>
         <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
-          <Ionicons name="lock-closed-outline" size={20} color={Colors.textSecondary} />
+          <Ionicons name="lock-closed-outline" size={20} color={colors.textSecondary} />
           <View style={styles.infoText}>
-            <Text style={[styles.infoLabel, { color: Colors.textPrimary }]}>Login protection</Text>
-            <Text style={[styles.infoValue, { color: Colors.textMuted }]}>Required at every sign-in</Text>
+            <Text style={[styles.infoLabel, { color: colors.textPrimary }]}>Login protection</Text>
+            <Text style={[styles.infoValue, { color: colors.textMuted }]}>Required at every sign-in</Text>
           </View>
         </View>
       </View>
@@ -283,36 +284,36 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
   const renderDisableConfirm = () => (
     <>
       <View style={styles.phaseIntro}>
-        <View style={[styles.statusBadge, { backgroundColor: `${Colors.danger}15` }]}>
-          <Ionicons name="shield-outline" size={18} color={Colors.danger} />
-          <Text style={[styles.statusBadgeText, { color: Colors.danger }]}>Remove protection</Text>
+        <View style={[styles.statusBadge, { backgroundColor: `${colors.danger}15` }]}>
+          <Ionicons name="shield-outline" size={18} color={colors.danger} />
+          <Text style={[styles.statusBadgeText, { color: colors.danger }]}>Remove protection</Text>
         </View>
-        <Text style={styles.phaseTitle}>Confirm with a code</Text>
-        <Text style={[styles.phaseBody, { color: Colors.textSecondary }]}>
+        <Text style={[styles.phaseTitle, { color: colors.textPrimary }]}>Confirm with a code</Text>
+        <Text style={[styles.phaseBody, { color: colors.textSecondary }]}>
           Enter your authenticator code or a recovery code to disable 2FA. Your account will be protected by password only.
         </Text>
       </View>
 
       <View style={styles.disableForm}>
-        <Text style={[styles.inputLabel, { color: Colors.textSecondary }]}>Authenticator code</Text>
+        <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Authenticator code</Text>
         <TextInput
-          style={[styles.textInput, { color: Colors.textPrimary, borderColor: Colors.border, backgroundColor: Colors.surface }]}
+          style={[styles.textInput, { color: colors.textPrimary, borderColor: colors.border, backgroundColor: colors.surface }]}
           value={disableCode}
           onChangeText={(v) => setDisableCode(v.replace(/\D/g, '').slice(0, 6))}
           keyboardType="number-pad"
           placeholder="123456"
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={colors.textMuted}
           maxLength={6}
           editable={!isDisabling}
         />
-        <Text style={[styles.inputDivider, { color: Colors.textMuted }]}>or</Text>
-        <Text style={[styles.inputLabel, { color: Colors.textSecondary }]}>Recovery code</Text>
+        <Text style={[styles.inputDivider, { color: colors.textMuted }]}>or</Text>
+        <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Recovery code</Text>
         <TextInput
-          style={[styles.textInput, { color: Colors.textPrimary, borderColor: Colors.border, backgroundColor: Colors.surface }]}
+          style={[styles.textInput, { color: colors.textPrimary, borderColor: colors.border, backgroundColor: colors.surface }]}
           value={disableRecoveryCode}
           onChangeText={setDisableRecoveryCode}
           placeholder="XXXX-XXXX"
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={colors.textMuted}
           autoCapitalize="characters"
           editable={!isDisabling}
         />
@@ -324,8 +325,8 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
   const renderSetup = () => (
     <>
       <View style={styles.phaseIntro}>
-        <Text style={styles.phaseTitle}>Add an authenticator app</Text>
-        <Text style={[styles.phaseBody, { color: Colors.textSecondary }]}>
+        <Text style={[styles.phaseTitle, { color: colors.textPrimary }]}>Add an authenticator app</Text>
+        <Text style={[styles.phaseBody, { color: colors.textSecondary }]}>
           Scan this QR code with Google Authenticator, Authy, or 1Password. Then enter the 6-digit code to verify.
         </Text>
       </View>
@@ -333,11 +334,11 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
       <View style={styles.qrContainer}>
         {isLoadingEnrollment ? (
           <View style={styles.qrLoading}>
-            <ActivityIndicator color={Colors.textPrimary} size="large" />
-            <Text style={[styles.qrLoadingText, { color: Colors.textMuted }]}>Generating secure secret…</Text>
+            <ActivityIndicator color={colors.textPrimary} size="large" />
+            <Text style={[styles.qrLoadingText, { color: colors.textMuted }]}>Generating secure secret…</Text>
           </View>
         ) : qrDataUrl ? (
-          <View style={[styles.qrFrame, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
+          <View style={[styles.qrFrame, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Image
               source={{ uri: qrDataUrl }}
               style={styles.qrImage}
@@ -345,11 +346,11 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
             />
           </View>
         ) : (
-          <View style={[styles.qrError, { borderColor: `${Colors.danger}30` }]}>
-            <Ionicons name="alert-circle-outline" size={28} color={Colors.danger} />
-            <Text style={[styles.qrErrorText, { color: Colors.danger }]}>Could not generate QR code</Text>
+          <View style={[styles.qrError, { borderColor: `${colors.danger}30` }]}>
+            <Ionicons name="alert-circle-outline" size={28} color={colors.danger} />
+            <Text style={[styles.qrErrorText, { color: colors.danger }]}>Could not generate QR code</Text>
             <AnimatedPressable onPress={() => void fetchEnrollment()} scaleValue={0.96}>
-              <Text style={[styles.qrRetry, { color: Colors.brand }]}>Try again</Text>
+              <Text style={[styles.qrRetry, { color: colors.brand }]}>Try again</Text>
             </AnimatedPressable>
           </View>
         )}
@@ -364,18 +365,18 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
             accessibilityRole="button"
             accessibilityLabel={showManualKey ? 'Hide manual key' : 'Show manual key'}
           >
-            <Ionicons name={showManualKey ? 'eye-off-outline' : 'eye-outline'} size={18} color={Colors.textSecondary} />
-            <Text style={[styles.manualKeyToggleText, { color: Colors.textSecondary }]}>
+            <Ionicons name={showManualKey ? 'eye-off-outline' : 'eye-outline'} size={18} color={colors.textSecondary} />
+            <Text style={[styles.manualKeyToggleText, { color: colors.textSecondary }]}>
               {showManualKey ? 'Hide manual key' : 'Enter key manually'}
             </Text>
           </Pressable>
           {showManualKey ? (
-            <View style={[styles.manualKeyBox, { backgroundColor: Colors.surfaceAlt, borderColor: Colors.border }]}>
-              <Text style={[styles.manualKeyValue, { color: Colors.textPrimary }]} numberOfLines={2}>
+            <View style={[styles.manualKeyBox, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+              <Text style={[styles.manualKeyValue, { color: colors.textPrimary }]} numberOfLines={2}>
                 {manualKey}
               </Text>
               <AnimatedPressable onPress={handleCopyKey} scaleValue={0.92} hapticFeedback="light">
-                <Ionicons name="copy-outline" size={20} color={Colors.brand} />
+                <Ionicons name="copy-outline" size={20} color={colors.brand} />
               </AnimatedPressable>
             </View>
           ) : null}
@@ -383,7 +384,7 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
       ) : null}
 
       {errorMsg ? (
-        <Text style={styles.errorText}>{errorMsg}</Text>
+        <Text style={[styles.errorText, { color: colors.danger }]}>{errorMsg}</Text>
       ) : null}
 
       <View style={{ marginTop: Space.md }}>
@@ -402,8 +403,8 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
   const renderVerify = () => (
     <>
       <View style={styles.phaseIntro}>
-        <Text style={styles.phaseTitle}>Enter verification code</Text>
-        <Text style={[styles.phaseBody, { color: Colors.textSecondary }]}>
+        <Text style={[styles.phaseTitle, { color: colors.textPrimary }]}>Enter verification code</Text>
+        <Text style={[styles.phaseBody, { color: colors.textSecondary }]}>
           Open your authenticator app and enter the 6-digit code shown for Thryftverse.
         </Text>
       </View>
@@ -416,9 +417,9 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
             style={[
               styles.otpCell,
               {
-                color: Colors.textPrimary,
-                borderColor: digit ? Colors.brand : Colors.border,
-                backgroundColor: Colors.surface,
+                color: colors.textPrimary,
+                borderColor: digit ? colors.brand : colors.border,
+                backgroundColor: colors.surface,
               },
             ]}
             value={digit}
@@ -439,7 +440,7 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
       </View>
 
       {errorMsg ? (
-        <Text style={styles.errorText}>{errorMsg}</Text>
+        <Text style={[styles.errorText, { color: colors.danger }]}>{errorMsg}</Text>
       ) : null}
 
       <View style={{ marginTop: Space.md }}>
@@ -459,28 +460,28 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
   const renderRecovery = () => (
     <>
       <View style={styles.phaseIntro}>
-        <View style={[styles.statusBadge, { backgroundColor: `${Colors.success}15` }]}>
-          <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
-          <Text style={[styles.statusBadgeText, { color: Colors.success }]}>Enabled</Text>
+        <View style={[styles.statusBadge, { backgroundColor: `${colors.success}15` }]}>
+          <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+          <Text style={[styles.statusBadgeText, { color: colors.success }]}>Enabled</Text>
         </View>
-        <Text style={styles.phaseTitle}>Save your recovery codes</Text>
-        <Text style={[styles.phaseBody, { color: Colors.textSecondary }]}>
+        <Text style={[styles.phaseTitle, { color: colors.textPrimary }]}>Save your recovery codes</Text>
+        <Text style={[styles.phaseBody, { color: colors.textSecondary }]}>
           These one-time codes let you access your account if you lose your authenticator device. Store them somewhere safe.
         </Text>
       </View>
 
-      <View style={[styles.recoveryCodesContainer, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
+      <View style={[styles.recoveryCodesContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         {recoveryCodes.map((code, i) => (
           <Reanimated.View
             key={i}
             entering={reducedMotionEnabled ? undefined : FadeInDown.duration(200).delay(Math.min(i, 8) * 50)}
             style={[
               styles.recoveryCodeRow,
-              i < recoveryCodes.length - 1 && { borderBottomColor: Colors.border, borderBottomWidth: StyleSheet.hairlineWidth },
+              i < recoveryCodes.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth },
             ]}
           >
-            <Text style={[styles.recoveryCodeIndex, { color: Colors.textMuted }]}>{i + 1}</Text>
-            <Text style={[styles.recoveryCodeValue, { color: Colors.textPrimary }]}>{code}</Text>
+            <Text style={[styles.recoveryCodeIndex, { color: colors.textMuted }]}>{i + 1}</Text>
+            <Text style={[styles.recoveryCodeValue, { color: colors.textPrimary }]}>{code}</Text>
           </Reanimated.View>
         ))}
       </View>
@@ -488,20 +489,20 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
       <View style={styles.recoveryActions}>
         <AnimatedPressable
           onPress={handleCopyRecoveryCodes}
-          style={[styles.recoveryActionBtn, { backgroundColor: Colors.surfaceAlt, borderColor: Colors.border }]}
+          style={[styles.recoveryActionBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
           scaleValue={0.97}
           hapticFeedback="light"
           accessibilityRole="button"
           accessibilityLabel="Copy all recovery codes"
         >
-          <Ionicons name={codesCopied ? 'checkmark' : 'copy-outline'} size={18} color={codesCopied ? Colors.success : Colors.textPrimary} />
-          <Text style={[styles.recoveryActionText, { color: Colors.textPrimary }]}>
+          <Ionicons name={codesCopied ? 'checkmark' : 'copy-outline'} size={18} color={codesCopied ? colors.success : colors.textPrimary} />
+          <Text style={[styles.recoveryActionText, { color: colors.textPrimary }]}>
             {codesCopied ? 'Copied' : 'Copy all'}
           </Text>
         </AnimatedPressable>
       </View>
 
-      <Text style={[styles.recoveryWarning, { color: Colors.textMuted }]}>
+      <Text style={[styles.recoveryWarning, { color: colors.textMuted }]}>
         Each code can only be used once. You will not see these again.
       </Text>
     </>
@@ -581,7 +582,6 @@ const styles = StyleSheet.create({
   phaseTitle: {
     fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
     letterSpacing: Type.title.letterSpacing,
     lineHeight: Type.title.lineHeight,
   },
@@ -751,7 +751,6 @@ const styles = StyleSheet.create({
     textAlignVertical: 'center',
   },
   errorText: {
-    color: Colors.danger,
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     marginTop: Space.sm,
