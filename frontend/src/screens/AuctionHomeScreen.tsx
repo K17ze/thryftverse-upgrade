@@ -102,7 +102,7 @@ interface DualPriceResult {
 type FormatDualPrice = (amountGbp: number) => DualPriceResult;
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// CATEGORY RAIL â€” compact horizontal image rail, max 3 visible
+// CATEGORY RAIL — compact horizontal image rail, max 3 visible
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 const CategoryRailTile = memo(function CategoryRailTile({
   world,
@@ -129,7 +129,7 @@ const CategoryRailTile = memo(function CategoryRailTile({
           contentFit="cover"
         />
       ) : (
-        // Deliberate editorial placeholder â€” not a skeleton
+        // Deliberate editorial placeholder — not a skeleton
         <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.surfaceAlt }]} />
       )}
       {/* Restrained gradient only behind label */}
@@ -147,7 +147,7 @@ const CategoryRailTile = memo(function CategoryRailTile({
 });
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// UPCOMING ROW â€” scheduled programme row
+// UPCOMING ROW — scheduled programme row
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 const UpcomingRow = memo(function UpcomingRow({
   item,
@@ -185,7 +185,7 @@ const UpcomingRow = memo(function UpcomingRow({
         )}
       </View>
       <View style={styles.upcomingBody}>
-        <Text style={styles.upcomingDate}>{dateStr} Â· {timeStr}</Text>
+        <Text style={styles.upcomingDate}>{dateStr} · {timeStr}</Text>
         {item.brand ? <Text style={styles.upcomingEyebrow} numberOfLines={1}>{item.brand}</Text> : null}
         <Text style={styles.upcomingTitle} numberOfLines={1}>{item.title}</Text>
         <AuctionValueLockup
@@ -209,7 +209,7 @@ const UpcomingRow = memo(function UpcomingRow({
 });
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// RESULT ROW â€” compact results ledger
+// RESULT ROW — compact results ledger
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 const ResultRow = memo(function ResultRow({
   item,
@@ -259,7 +259,7 @@ const ResultRow = memo(function ResultRow({
       </View>
       <View style={styles.resultBody}>
         <Text style={styles.resultTitle} numberOfLines={1}>{item.title}</Text>
-        <Text style={[styles.resultOutcome, { color: resultColor }]}>{resultText}{item.bidCount > 0 ? ` Â· ${item.bidCount} bids` : ''}</Text>
+        <Text style={[styles.resultOutcome, { color: resultColor }]}>{resultText}{item.bidCount > 0 ? ` · ${item.bidCount} bids` : ''}</Text>
         {item.bidCount > 0 ? (
           <AuctionValueLockup
             izeText={valueLockup.izeText}
@@ -792,7 +792,7 @@ export default function AuctionHomeScreen() {
     if (homeData.live.length > 0) parts.push(`${homeData.live.length} live`);
     if (homeData.closingSoon.length > 0) parts.push(`${homeData.closingSoon.length} ending`);
     if (homeData.upcoming.length > 0) parts.push(`${homeData.upcoming.length} upcoming`);
-    return parts.length > 0 ? parts.join(' Â· ') : undefined;
+    return parts.length > 0 ? parts.join(' · ') : undefined;
   }, [homeData.live.length, homeData.closingSoon.length, homeData.upcoming.length]);
 
   const compactHeaderContext = useMemo(() => {
@@ -836,7 +836,7 @@ export default function AuctionHomeScreen() {
         kind: 'leading' as const,
         title: homeData.attentionItem.title,
         imageUrl: homeData.attentionItem.imageUrl || null,
-        message: `Top bid Â· ${timeLabel}`,
+        message: `Top bid · ${timeLabel}`,
         actionLabel: 'View',
         countdownText: timeLabel,
         onPress: () => navigateToDetail(homeData.attentionItem!.id),
@@ -882,7 +882,7 @@ export default function AuctionHomeScreen() {
   // â”€â”€ Continuous "More to explore" feed â”€â”€
   // Combines all auction items across every segment + recently closed,
   // excluding those already shown in the active segment composition above.
-  // This is the feed layer â€” scrolling down keeps revealing more auctions.
+  // This is the feed layer — scrolling down keeps revealing more auctions.
   const exploreFeedItems = useMemo(() => {
     const seen = new Set(segmentItems.map((i) => i.id));
     const combined: AuctionHomeItem[] = [
@@ -922,7 +922,7 @@ export default function AuctionHomeScreen() {
           <TextInput
             value={searchQuery}
             onChangeText={handleSearchChange}
-            placeholder="Search auctionsâ€¦"
+            placeholder="Search auctions…"
             autoFocus
             placeholderTextColor={Colors.textMuted}
             style={styles.searchOverlayInput}
@@ -995,7 +995,7 @@ export default function AuctionHomeScreen() {
           <View style={styles.filterResultTitleWrap}>
             <Text style={styles.filterResultTitle}>Filtered results</Text>
             <Text style={styles.filterResultCount}>
-              {filterResult.status === 'ready' ? `${filterResult.items.length} auctions` : 'â€¦'}
+              {filterResult.status === 'ready' ? `${filterResult.items.length} auctions` : '…'}
             </Text>
           </View>
           <Pressable
@@ -1185,7 +1185,7 @@ export default function AuctionHomeScreen() {
 
     switch (activeSegment) {
       case 'live': {
-        // â”€â”€ Horizontal discovery rail â€” swipe left for more live auctions â”€â”€
+        // â”€â”€ Horizontal discovery rail — swipe left for more live auctions â”€â”€
         // Each card ~82% viewport with a deliberate peek of the next card.
         // Built ON TOP of the existing asymmetric editorial composition below.
         const railCardWidth = Math.round(width * 0.82);
@@ -1524,7 +1524,7 @@ export default function AuctionHomeScreen() {
       }
 
       case 'endingSoon': {
-        // â”€â”€ Horizontal discovery rail â€” swipe left for more ending-soon auctions â”€â”€
+        // â”€â”€ Horizontal discovery rail — swipe left for more ending-soon auctions â”€â”€
         const endingRailCardWidth = Math.round(width * 0.82);
         const endingRailImageHeight = Math.round(Math.min(380, width * 0.9));
         const renderEndingRailItem = ({ item }: { item: AuctionHomeItem }) => {
@@ -1582,7 +1582,7 @@ export default function AuctionHomeScreen() {
             </ScrollView>
           </View>
         ) : null;
-        // Dense editorial rows â€” countdown is the strongest signal
+        // Dense editorial rows — countdown is the strongest signal
         return (
           <View>
             {endingRail}
@@ -1643,7 +1643,7 @@ export default function AuctionHomeScreen() {
       }
 
       case 'upcoming': {
-        // â”€â”€ Horizontal discovery rail â€” swipe left for more upcoming auctions â”€â”€
+        // â”€â”€ Horizontal discovery rail — swipe left for more upcoming auctions â”€â”€
         const upcomingRailCardWidth = Math.round(width * 0.82);
         const upcomingRailImageHeight = Math.round(Math.min(380, width * 0.9));
         const renderUpcomingRailItem = ({ item }: { item: AuctionHomeItem }) => {
@@ -1714,7 +1714,7 @@ export default function AuctionHomeScreen() {
       }
 
       case 'watching': {
-        // â”€â”€ Horizontal discovery rail â€” swipe left for more watched auctions â”€â”€
+        // â”€â”€ Horizontal discovery rail — swipe left for more watched auctions â”€â”€
         const watchingRailCardWidth = Math.round(width * 0.82);
         const watchingRailImageHeight = Math.round(Math.min(400, width * 0.95));
         const renderWatchingRailItem = ({ item }: { item: AuctionHomeItem }) => {
@@ -1882,7 +1882,7 @@ export default function AuctionHomeScreen() {
           </View>
         )}
 
-        {/* Results â€” compact, near lower page */}
+        {/* Results — compact, near lower page */}
         {homeData.recentlyClosed.length > 0 && (
           <View style={styles.zoneWrap}>
             <Text style={styles.sectionTitle}>Results</Text>
@@ -1899,7 +1899,7 @@ export default function AuctionHomeScreen() {
           </View>
         )}
 
-        {/* â”€â”€ More to explore â€” continuous feed â”€â”€ */}
+        {/* â”€â”€ More to explore — continuous feed â”€â”€ */}
         {exploreFeedItems.length > 0 && (
           <View style={styles.zoneWrap}>
             <Text style={styles.sectionTitle}>More to explore</Text>
@@ -1955,7 +1955,7 @@ export default function AuctionHomeScreen() {
 }
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// FILTER SHEET â€” extracted for reuse across render paths
+// FILTER SHEET — extracted for reuse across render paths
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 const FilterSheet = memo(function FilterSheet({
   visible,

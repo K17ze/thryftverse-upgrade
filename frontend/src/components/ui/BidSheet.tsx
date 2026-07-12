@@ -86,7 +86,7 @@ export function BidSheet({
   const [currentMinimum, setCurrentMinimum] = React.useState(auction.minimumNextBidGbp);
   const idempotencyKeyRef = React.useRef<string | null>(null);
 
-  // Shared authoritative snapshot helper â€” returns refreshed state or null on failure
+  // Shared authoritative snapshot helper — returns refreshed state or null on failure
   const getAuthoritativeSnapshot = async (): Promise<{
     minimumNextBidGbp: number;
     effectiveState: 'upcoming' | 'live' | 'ended' | 'cancelled' | 'settled';
@@ -129,7 +129,7 @@ export function BidSheet({
     }
   }, [visible, auction.minimumNextBidGbp, currencyCode, goldRates, initialBidAmount]);
 
-  // Lifecycle guard â€” close sheet if auction transitions to terminal
+  // Lifecycle guard — close sheet if auction transitions to terminal
   React.useEffect(() => {
     if (visible && shouldCloseSheetDueToLifecycle(auction.effectiveState)) {
       setError({
@@ -264,18 +264,18 @@ export function BidSheet({
       setError(txError);
 
       if (txError.isAmbiguous) {
-        // Ambiguous failure â€” preserve the same idempotency key for replay
+        // Ambiguous failure — preserve the same idempotency key for replay
         // Do NOT reset the key. User retries with the same key.
         setStage('error');
       } else if (txError.kind === 'buy_now_review_required') {
-        // Recoverable conflict â€” refresh detail once to get authoritative Buy Now price
+        // Recoverable conflict — refresh detail once to get authoritative Buy Now price
         await onRefreshDetail();
         // Preserve the entered bid so user can return to it
-        // Do NOT reset idempotency key â€” this was a definitive rejection, not a transaction
+        // Do NOT reset idempotency key — this was a definitive rejection, not a transaction
         idempotencyKeyRef.current = null;
         setStage('recoverable_conflict');
       } else if (txError.transactionPossible) {
-        // Definitive rejection with retry possible â€” refresh and reset key for new attempt
+        // Definitive rejection with retry possible — refresh and reset key for new attempt
         await onRefreshDetail();
         if (txError.updatedMinimumGbp) {
           setCurrentMinimum(txError.updatedMinimumGbp);
@@ -283,7 +283,7 @@ export function BidSheet({
         idempotencyKeyRef.current = null;
         setStage('entry');
       } else {
-        // Definitive terminal rejection â€” no retry
+        // Definitive terminal rejection — no retry
         setStage('error');
       }
     } finally {
@@ -304,11 +304,11 @@ export function BidSheet({
   const handleRetry = () => {
     setError(null);
     if (error?.isAmbiguous) {
-      // Ambiguous failure â€” retry with the same idempotency key
+      // Ambiguous failure — retry with the same idempotency key
       // Key is preserved, go back to review to confirm retry
       setStage('review');
     } else {
-      // Definitive rejection â€” new key will be generated on next confirm
+      // Definitive rejection — new key will be generated on next confirm
       idempotencyKeyRef.current = null;
       setStage('entry');
     }
@@ -348,12 +348,12 @@ export function BidSheet({
 
         <View style={styles.divider} />
 
-        {/* â”€â”€ Entry stage â€” large centered amount â”€â”€ */}
+        {/* â”€â”€ Entry stage — large centered amount â”€â”€ */}
         {stage === 'entry' && (
           <View style={styles.stageContent}>
             <Text style={styles.entryHeading}>PLACE YOUR BID</Text>
 
-            {/* Large amount input â€” dominates the sheet */}
+            {/* Large amount input — dominates the sheet */}
             <View style={styles.amountContainer}>
               <Text style={styles.amountCurrency}>{currencyCode}</Text>
               <AppInput
@@ -368,12 +368,12 @@ export function BidSheet({
               />
             </View>
 
-            {/* 1ZE equivalent â€” platform value */}
+            {/* 1ZE equivalent — platform value */}
             <Text style={styles.amountIzeEquivalent}>
               {formatIzeAmount(toIze(Number(bidInput) || 0, currencyCode, goldRates), 2)}
             </Text>
 
-            {/* Minimum and current â€” stacked, not columns */}
+            {/* Minimum and current — stacked, not columns */}
             <View style={styles.bidContextStack}>
               <View style={styles.bidContextRow}>
                 <Text style={styles.bidContextLabel}>MINIMUM TO LEAD</Text>
@@ -459,7 +459,7 @@ export function BidSheet({
           </View>
         )}
 
-        {/* â”€â”€ Review stage â€” clean confirmation receipt â”€â”€ */}
+        {/* â”€â”€ Review stage — clean confirmation receipt â”€â”€ */}
         {stage === 'review' && (
           <View style={styles.stageContent}>
             <Text style={styles.reviewHeading}>CONFIRM YOUR BID</Text>
@@ -693,7 +693,7 @@ const styles = StyleSheet.create({
   stageContent: {
     gap: Space.sm,
   },
-  // â”€â”€ Entry stage â€” large centered amount â”€â”€
+  // â”€â”€ Entry stage — large centered amount â”€â”€
   entryHeading: {
     fontSize: 11,
     color: Colors.textMuted,
@@ -771,7 +771,7 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontFamily: Typography.family.regular,
   },
-  // â”€â”€ Review stage â€” receipt â”€â”€
+  // â”€â”€ Review stage — receipt â”€â”€
   reviewHeading: {
     fontSize: 11,
     fontFamily: Typography.family.semibold,
