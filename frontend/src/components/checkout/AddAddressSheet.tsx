@@ -4,7 +4,7 @@ import { BottomSheet } from '../BottomSheet';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
-import { Typography } from '../../theme/designTokens';
+import { Typography, Space, Radius } from '../../theme/designTokens';
 import { useStore } from '../../store/useStore';
 import { useToast } from '../../context/ToastContext';
 import { createUserAddress } from '../../services/commerceApi';
@@ -284,10 +284,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    paddingHorizontal: Space.md,
     paddingVertical: 14,
     backgroundColor: PANEL_SOFT_BG,
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     borderWidth: 1,
     borderColor: PANEL_BORDER,
   },
@@ -307,7 +307,7 @@ const styles = StyleSheet.create({
     marginBottom: 40,
     maxWidth: '80%',
   },
-  formGroup: { marginBottom: 24 },
+  formGroup: { marginBottom: Space.lg },
   label: {
     fontSize: 13,
     fontFamily: Typography.family.bold,
@@ -331,7 +331,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.medium,
     color: Colors.textPrimary,
   },
-  row: { flexDirection: 'row', gap: 16 },
+  row: { flexDirection: 'row', gap: Space.md },
   defaultToggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -340,7 +340,7 @@ const styles = StyleSheet.create({
     borderColor: PANEL_BORDER,
     padding: 20,
     borderRadius: 20,
-    marginTop: 16,
+    marginTop: Space.md,
     gap: 12,
   },
   defaultToggleRowActive: {

@@ -12,7 +12,7 @@ import { createUserPaymentMethod } from '../../services/commerceApi';
 import { getUserCountryCapabilities, UserCountryCapabilities } from '../../services/capabilitiesApi';
 import { parseApiError } from '../../lib/apiClient';
 import * as Haptics from 'expo-haptics';
-import { Typography } from '../../theme/designTokens';
+import { Typography, Space, Radius } from '../../theme/designTokens';
 
 const BG = Colors.background;
 const CARD = Colors.background;
@@ -283,17 +283,17 @@ const styles = StyleSheet.create({
     backgroundColor: BG,
     borderColor: BORDER,
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    marginBottom: 16,
+    marginBottom: Space.md,
   },
   blockedTitle: { fontSize: 13, fontWeight: '700', color: TEXT, marginBottom: 4 },
   blockedText: { fontSize: 12, color: MUTED, lineHeight: 18 },
   cardPreview: {
     backgroundColor: CARD_PREVIEW_BG,
     borderRadius: 20,
-    padding: 24,
+    padding: Space.lg,
     marginBottom: 28,
     borderWidth: 1,
     borderColor: CARD_PREVIEW_BORDER,
@@ -305,7 +305,7 @@ const styles = StyleSheet.create({
   cardPreviewLabel: { fontSize: 10, color: MUTED, letterSpacing: 1.5, marginBottom: 4 },
   cardPreviewValue: { fontSize: 14, fontWeight: '600', color: TEXT },
   sectionLabel: { fontSize: 11, color: MUTED, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 10, marginLeft: 4 },
-  card: { backgroundColor: CARD, borderWidth: 1, borderColor: BORDER, borderRadius: 16, overflow: 'hidden', marginBottom: 16 },
+  card: { backgroundColor: CARD, borderWidth: 1, borderColor: BORDER, borderRadius: Radius.xl, overflow: 'hidden', marginBottom: Space.md },
   fieldRow: { paddingHorizontal: 18, paddingVertical: 14 },
   fieldRowHalf: { flexDirection: 'row' },
   halfField: { flex: 1, paddingHorizontal: 18, paddingVertical: 14 },
@@ -316,6 +316,6 @@ const styles = StyleSheet.create({
   secureRow: { flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center' },
   secureText: { fontSize: 12, color: MUTED },
   footer: { paddingTop: 10, paddingBottom: Platform.OS === 'ios' ? 0 : 20 },
-  saveBtn: { backgroundColor: Colors.brand, borderRadius: 30, paddingVertical: 16, alignItems: 'center' },
+  saveBtn: { backgroundColor: Colors.brand, borderRadius: 30, paddingVertical: Space.md, alignItems: 'center' },
   saveBtnText: { fontSize: 16, fontWeight: '700', color: Colors.textInverse },
 });
