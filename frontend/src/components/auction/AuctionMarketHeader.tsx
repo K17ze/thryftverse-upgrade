@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, Pressable, useWindowDimensions } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, Pressable, useWindowDimensions, Modal, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../../theme/ThemeContext';
@@ -26,7 +26,6 @@ interface Props {
   compactContext?: string;
 }
 
-const SMALL_WIDTH_THRESHOLD = 360;
 const VERY_SMALL_THRESHOLD = 320;
 
 export function AuctionMarketHeader({
@@ -40,8 +39,8 @@ export function AuctionMarketHeader({
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { colors } = useAppTheme();
-  const isSmall = width < SMALL_WIDTH_THRESHOLD;
   const isVerySmall = width < VERY_SMALL_THRESHOLD;
+  const [overflowOpen, setOverflowOpen] = useState(false);
 
   const createAction = actions.find((a) => a.key === 'create');
   const searchAction = actions.find((a) => a.key === 'search');
@@ -49,14 +48,16 @@ export function AuctionMarketHeader({
   const sellerAction = actions.find((a) => a.key === 'seller');
   const activityAction = actions.find((a) => a.key === 'activity');
 
-  // Activity always shown when attention exists; on very small screens,
-  // it's represented by the attention strip but the header control
-  // remains when badge > 0
+  // Activity shown only when attention badge exists
   const showActivity = activityAction && (activityAction.badgeCount ?? 0) > 0;
 
-  // On small widths: Search, Create, Seller always; Filter hidden
-  // On very small: same set, context uses compact form
-  const showFilter = !isSmall && filterAction;
+  // Overflow contains secondary actions: filter + seller
+  const overflowActions = [filterAction, sellerAction].filter(Boolean) as AuctionHeaderAction[];
+
+  const handleOverflowPress = useCallback((action: AuctionHeaderAction) => {
+    setOverflowOpen(false);
+    action.onPress();
+  }, []);
 
   // Responsive context
   const displayContext = isVerySmall && compactContext ? compactContext : context;
@@ -84,7 +85,7 @@ export function AuctionMarketHeader({
         </View>
 
         <View style={styles.actions}>
-          {/* Quiet transparent actions — consistent 22px icon size */}
+          {/* Search — primary discovery action */}
           {searchAction && (
             <Pressable
               onPress={searchAction.onPress}
@@ -96,28 +97,8 @@ export function AuctionMarketHeader({
               <Ionicons name={searchAction.icon} size={22} color={colors.textPrimary} />
             </Pressable>
           )}
-          {showFilter && (
-            <Pressable
-              onPress={filterAction!.onPress}
-              hitSlop={6}
-              accessibilityRole="button"
-              accessibilityLabel={filterAction!.label}
-              style={styles.iconBtn}
-            >
-              <Ionicons name={filterAction!.icon} size={22} color={colors.textPrimary} />
-            </Pressable>
-          )}
-          {sellerAction && (
-            <Pressable
-              onPress={sellerAction.onPress}
-              hitSlop={6}
-              accessibilityRole="button"
-              accessibilityLabel={sellerAction.label}
-              style={styles.iconBtn}
-            >
-              <Ionicons name={sellerAction.icon} size={22} color={colors.textPrimary} />
-            </Pressable>
-          )}
+
+          {/* Activity — visible only when attention badge exists */}
           {showActivity && (
             <Pressable
               onPress={activityAction!.onPress}
@@ -137,6 +118,19 @@ export function AuctionMarketHeader({
             </Pressable>
           )}
 
+          {/* Overflow — secondary actions (filter, seller) */}
+          {overflowActions.length > 0 && (
+            <Pressable
+              onPress={() => setOverflowOpen(true)}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel="More actions"
+              style={styles.iconBtn}
+            >
+              <Ionicons name="ellipsis-horizontal" size={22} color={colors.textPrimary} />
+            </Pressable>
+          )}
+
           {/* Create — primary, brand-tinted circle */}
           {createAction && (
             <Pressable
@@ -151,6 +145,34 @@ export function AuctionMarketHeader({
           )}
         </View>
       </View>
+
+      {/* Overflow menu — lightweight modal sheet */}
+      <Modal
+        visible={overflowOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setOverflowOpen(false)}
+      >
+        <Pressable style={styles.overflowBackdrop} onPress={() => setOverflowOpen(false)}>
+          <View style={[styles.overflowSheet, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+            {overflowActions.map((action, i) => (
+              <Pressable
+                key={action.key}
+                onPress={() => handleOverflowPress(action)}
+                style={[
+                  styles.overflowItem,
+                  i < overflowActions.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={action.label}
+              >
+                <Ionicons name={action.icon} size={20} color={colors.textPrimary} />
+                <Text style={[styles.overflowLabel, { color: colors.textPrimary }]}>{action.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -217,5 +239,30 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.bold,
     fontSize: 9,
     color: '#FFFFFF',
+  },
+  overflowBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-end',
+    paddingTop: 100,
+    paddingRight: Space.md,
+  },
+  overflowSheet: {
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    overflow: 'hidden',
+    minWidth: 200,
+  },
+  overflowItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  overflowLabel: {
+    fontFamily: Typography.family.medium,
+    fontSize: 15,
   },
 });
