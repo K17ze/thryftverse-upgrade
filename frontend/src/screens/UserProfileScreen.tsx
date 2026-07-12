@@ -26,7 +26,7 @@ import Reanimated, {
   runOnJS,
 } from 'react-native-reanimated';
 import { useStore } from '../store/useStore';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { Space, Typography, DockConstants } from '../theme/designTokens';
 import {
@@ -68,14 +68,6 @@ const AnimatedFlashList: any = Reanimated.createAnimatedComponent(FlashList);
 
 type Props = StackScreenProps<RootStackParamList, 'UserProfile'>;
 
-const BG = Colors.background;
-const BORDER = Colors.border;
-const MUTED = Colors.textMuted;
-const TEXT = Colors.textPrimary;
-const SURFACE_ALT = Colors.surfaceAlt;
-const BRAND = Colors.brand;
-const TEXT_INVERSE = Colors.textInverse;
-
 const COVER_HEIGHT = 160;
 const GRID_GAP = 8;
 const CARD_ASPECT = 1.25;
@@ -103,6 +95,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const reducedMotion = useReducedMotion();
   const { width: screenWidth } = useWindowDimensions();
   const { show: showToast } = useToast();
+  const { colors, isDark } = useAppTheme();
 
   const currentUser = useStore(s => s.currentUser);
   const userAvatar = useStore(s => s.userAvatar);
@@ -448,13 +441,13 @@ export default function UserProfileScreen({ navigation, route }: Props) {
 
       {/* Away-mode banner — shown when seller has holiday mode enabled */}
       {sellerTrust?.holidayMode === true ? (
-        <View style={styles.awayBanner}>
-          <Ionicons name="pause-circle" size={18} color={Colors.textMuted} />
+        <View style={[styles.awayBanner, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+          <Ionicons name="pause-circle" size={18} color={colors.textMuted} />
           <View style={styles.awayBannerTextWrap}>
-            <Text style={styles.awayBannerTitle}>
+            <Text style={[styles.awayBannerTitle, { color: colors.textPrimary }]}>
               {isSelfProfile ? 'Your shop is on holiday' : 'This shop is on holiday'}
             </Text>
-            <Text style={styles.awayBannerSub}>
+            <Text style={[styles.awayBannerSub, { color: colors.textMuted }]}>
               {sellerTrust.awayMessage?.trim()
                 ? sellerTrust.awayMessage.trim()
                 : 'The seller is away right now. Listings are paused and will return when they are back.'}
@@ -495,27 +488,27 @@ export default function UserProfileScreen({ navigation, route }: Props) {
       {/* Shop policies — shown on Shop tab, derived from seller trust data */}
       {activeTab === 'Shop' && sellerTrust ? (
         <View style={styles.shopPoliciesSection}>
-          <Text style={styles.shopPoliciesTitle}>Shop policies</Text>
+          <Text style={[styles.shopPoliciesTitle, { color: colors.textMuted }]}>Shop policies</Text>
           <View style={styles.shopPoliciesGrid}>
             {sellerTrust.dispatchTimeLabel ? (
-              <View style={styles.shopPolicyItem}>
-                <Ionicons name="cube-outline" size={14} color={MUTED} />
-                <Text style={styles.shopPolicyText}>{sellerTrust.dispatchTimeLabel}</Text>
+              <View style={[styles.shopPolicyItem, { backgroundColor: colors.surfaceAlt }]}>
+                <Ionicons name="cube-outline" size={14} color={colors.textMuted} />
+                <Text style={[styles.shopPolicyText, { color: colors.textPrimary }]}>{sellerTrust.dispatchTimeLabel}</Text>
               </View>
             ) : null}
             {sellerTrust.responseTimeLabel ? (
-              <View style={styles.shopPolicyItem}>
-                <Ionicons name="time-outline" size={14} color={MUTED} />
-                <Text style={styles.shopPolicyText}>Replies {sellerTrust.responseTimeLabel}</Text>
+              <View style={[styles.shopPolicyItem, { backgroundColor: colors.surfaceAlt }]}>
+                <Ionicons name="time-outline" size={14} color={colors.textMuted} />
+                <Text style={[styles.shopPolicyText, { color: colors.textPrimary }]}>Replies {sellerTrust.responseTimeLabel}</Text>
               </View>
             ) : null}
-            <View style={styles.shopPolicyItem}>
-              <Ionicons name="shield-checkmark-outline" size={14} color={MUTED} />
-              <Text style={styles.shopPolicyText}>Buyer protection</Text>
+            <View style={[styles.shopPolicyItem, { backgroundColor: colors.surfaceAlt }]}>
+              <Ionicons name="shield-checkmark-outline" size={14} color={colors.textMuted} />
+              <Text style={[styles.shopPolicyText, { color: colors.textPrimary }]}>Buyer protection</Text>
             </View>
-            <View style={styles.shopPolicyItem}>
-              <Ionicons name="return-down-back-outline" size={14} color={MUTED} />
-              <Text style={styles.shopPolicyText}>Returns accepted</Text>
+            <View style={[styles.shopPolicyItem, { backgroundColor: colors.surfaceAlt }]}>
+              <Ionicons name="return-down-back-outline" size={14} color={colors.textMuted} />
+              <Text style={[styles.shopPolicyText, { color: colors.textPrimary }]}>Returns accepted</Text>
             </View>
           </View>
         </View>
@@ -525,8 +518,8 @@ export default function UserProfileScreen({ navigation, route }: Props) {
       {activeTab === 'Shop' && shopSegment === 'forsale' && listData.length > 0 && (
         <View style={styles.featuredSection}>
           <View style={styles.featuredHeader}>
-            <Ionicons name="star-outline" size={14} color={Colors.brand} />
-            <Text style={styles.featuredTitle}>Featured</Text>
+            <Ionicons name="star-outline" size={14} color={colors.brand} />
+            <Text style={[styles.featuredTitle, { color: colors.brand }]}>Featured</Text>
           </View>
           <ScrollView
             horizontal
@@ -544,13 +537,13 @@ export default function UserProfileScreen({ navigation, route }: Props) {
                   accessibilityLabel={`View ${listing.title}`}
                 >
                   {listing.images?.[0] ? (
-                    <CachedImage uri={listing.images[0]} style={styles.featuredImage} contentFit="cover" />
+                    <CachedImage uri={listing.images[0]} style={[styles.featuredImage, { backgroundColor: colors.surfaceAlt }]} contentFit="cover" />
                   ) : (
-                    <View style={[styles.featuredImage, styles.featuredImagePlaceholder]}>
-                      <Ionicons name="shirt-outline" size={20} color={MUTED} />
+                    <View style={[styles.featuredImage, styles.featuredImagePlaceholder, { backgroundColor: colors.surfaceAlt }]}>
+                      <Ionicons name="shirt-outline" size={20} color={colors.textMuted} />
                     </View>
                   )}
-                  <Text style={styles.featuredPrice}>{formatFromFiat(listing.priceGbp, 'GBP', { displayMode: 'fiat' })}</Text>
+                  <Text style={[styles.featuredPrice, { color: colors.textPrimary }]}>{formatFromFiat(listing.priceGbp, 'GBP', { displayMode: 'fiat' })}</Text>
                 </Pressable>
               );
             })}
@@ -565,9 +558,9 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     if (activeQuery.error) {
       return (
         <Pressable style={styles.listState} onPress={() => activeQuery.refetch()} accessibilityRole="button" accessibilityLabel="Retry loading content">
-          <Ionicons name="cloud-offline-outline" size={32} color={MUTED} />
-          <Text style={styles.listStateTitle}>Couldn't load {activeTab === 'Shop' ? 'listings' : activeTab === 'Looks' ? 'Looks' : 'reviews'}</Text>
-          <Text style={styles.listStateSub}>Tap to retry</Text>
+          <Ionicons name="cloud-offline-outline" size={32} color={colors.textMuted} />
+          <Text style={[styles.listStateTitle, { color: colors.textPrimary }]}>Couldn't load {activeTab === 'Shop' ? 'listings' : activeTab === 'Looks' ? 'Looks' : 'reviews'}</Text>
+          <Text style={[styles.listStateSub, { color: colors.textMuted }]}>Tap to retry</Text>
         </Pressable>
       );
     }
@@ -575,26 +568,26 @@ export default function UserProfileScreen({ navigation, route }: Props) {
       if (activeTab === 'Shop') {
         return (
           <View style={styles.listState}>
-            <Ionicons name="shirt-outline" size={32} color={MUTED} />
-            <Text style={styles.listStateTitle}>{shopSegment === 'forsale' ? 'No active listings' : 'No sold items yet'}</Text>
-            <Text style={styles.listStateSub}>{shopSegment === 'forsale' ? 'This seller has nothing for sale right now.' : 'Sold items will appear here.'}</Text>
+            <Ionicons name="shirt-outline" size={32} color={colors.textMuted} />
+            <Text style={[styles.listStateTitle, { color: colors.textPrimary }]}>{shopSegment === 'forsale' ? 'No active listings' : 'No sold items yet'}</Text>
+            <Text style={[styles.listStateSub, { color: colors.textMuted }]}>{shopSegment === 'forsale' ? 'This seller has nothing for sale right now.' : 'Sold items will appear here.'}</Text>
           </View>
         );
       }
       if (activeTab === 'Looks') {
         return (
           <View style={styles.listState}>
-            <Ionicons name="images-outline" size={32} color={MUTED} />
-            <Text style={styles.listStateTitle}>No published Looks</Text>
-            <Text style={styles.listStateSub}>This creator hasn't published any Looks yet.</Text>
+            <Ionicons name="images-outline" size={32} color={colors.textMuted} />
+            <Text style={[styles.listStateTitle, { color: colors.textPrimary }]}>No published Looks</Text>
+            <Text style={[styles.listStateSub, { color: colors.textMuted }]}>This creator hasn't published any Looks yet.</Text>
           </View>
         );
       }
       return (
         <View style={styles.listState}>
-          <Ionicons name="chatbubble-ellipses-outline" size={32} color={MUTED} />
-          <Text style={styles.listStateTitle}>No reviews yet</Text>
-          <Text style={styles.listStateSub}>Reviews from completed orders will appear here.</Text>
+          <Ionicons name="chatbubble-ellipses-outline" size={32} color={colors.textMuted} />
+          <Text style={[styles.listStateTitle, { color: colors.textPrimary }]}>No reviews yet</Text>
+          <Text style={[styles.listStateSub, { color: colors.textMuted }]}>Reviews from completed orders will appear here.</Text>
         </View>
       );
     }
@@ -602,12 +595,12 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   })();
 
   const listFooter = isFetchingNextPage ? (
-    <View style={styles.loadMoreIndicator}><ActivityIndicator size="small" color={MUTED} /></View>
+    <View style={styles.loadMoreIndicator}><ActivityIndicator size="small" color={colors.textMuted} /></View>
   ) : <View style={{ height: DockConstants.singleActionHeight }} />;
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={BG} />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
       {/* Top utility controls — overlay cover, fade out on scroll */}
       <View pointerEvents="box-none" style={[styles.coverActionLayer, !hasCover && { height: insets.top + 50 }]}>
@@ -616,7 +609,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           pointerEvents={collapsedVisible ? 'none' : 'auto'}
         >
           <AnimatedPressable
-            style={[styles.topUtilityIconBtn, !hasCover && styles.topUtilityIconBtnCompact]}
+            style={[styles.topUtilityIconBtn, !hasCover && styles.topUtilityIconBtnCompact, !hasCover && { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
             activeOpacity={0.9}
             onPress={() => navigation.goBack()}
             accessibilityLabel="Go back"
@@ -624,29 +617,29 @@ export default function UserProfileScreen({ navigation, route }: Props) {
             accessibilityHint="Returns to previous screen"
             hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
           >
-            <Ionicons name="arrow-back" size={18} color={hasCover ? '#fff' : TEXT} />
+            <Ionicons name="arrow-back" size={18} color={hasCover ? '#fff' : colors.textPrimary} />
           </AnimatedPressable>
           <View style={styles.topUtilityRight}>
             <AnimatedPressable
-              style={[styles.topUtilityIconBtn, !hasCover && styles.topUtilityIconBtnCompact]}
+              style={[styles.topUtilityIconBtn, !hasCover && styles.topUtilityIconBtnCompact, !hasCover && { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
               activeOpacity={0.9}
               onPress={handleShare}
               accessibilityLabel="Share profile"
               accessibilityRole="button"
               hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
             >
-              <Ionicons name="share-outline" size={18} color={hasCover ? '#fff' : TEXT} />
+              <Ionicons name="share-outline" size={18} color={hasCover ? '#fff' : colors.textPrimary} />
             </AnimatedPressable>
             {!isSelfProfile && (
               <AnimatedPressable
-                style={[styles.topUtilityIconBtn, !hasCover && styles.topUtilityIconBtnCompact]}
+                style={[styles.topUtilityIconBtn, !hasCover && styles.topUtilityIconBtnCompact, !hasCover && { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
                 activeOpacity={0.9}
                 onPress={handleMore}
                 accessibilityLabel="More options"
                 accessibilityRole="button"
                 hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
               >
-                <Ionicons name="ellipsis-horizontal" size={18} color={hasCover ? '#fff' : TEXT} />
+                <Ionicons name="ellipsis-horizontal" size={18} color={hasCover ? '#fff' : colors.textPrimary} />
               </AnimatedPressable>
             )}
           </View>
@@ -655,7 +648,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
 
       {/* Collapsed header — total height = insets.top + COLLAPSED_BAR_HEIGHT, paddingTop = insets.top, inner row = COLLAPSED_BAR_HEIGHT */}
       <Reanimated.View
-        style={[styles.collapsedHeader, { height: insets.top + COLLAPSED_BAR_HEIGHT, paddingTop: insets.top }, collapsedHeaderStyle, collapsedHeaderShadowStyle]}
+        style={[styles.collapsedHeader, { height: insets.top + COLLAPSED_BAR_HEIGHT, paddingTop: insets.top, backgroundColor: colors.background, borderBottomColor: colors.border }, collapsedHeaderStyle, collapsedHeaderShadowStyle]}
         pointerEvents={collapsedVisible ? 'auto' : 'none'}
       >
         <AnimatedPressable
@@ -665,7 +658,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           accessibilityLabel="Go back"
           accessibilityRole="button"
         >
-          <Ionicons name="arrow-back" size={18} color={TEXT} />
+          <Ionicons name="arrow-back" size={18} color={colors.textPrimary} />
         </AnimatedPressable>
         <View style={styles.collapsedCenter}>
           {displayAvatar ? (
@@ -676,27 +669,27 @@ export default function UserProfileScreen({ navigation, route }: Props) {
               contentFit="cover"
             />
           ) : (
-            <View style={[styles.collapsedAvatar, styles.collapsedAvatarMonogram]}>
-              <Text style={styles.collapsedAvatarInitials}>
+            <View style={[styles.collapsedAvatar, styles.collapsedAvatarMonogram, { backgroundColor: colors.surfaceAlt }]}>
+              <Text style={[styles.collapsedAvatarInitials, { color: colors.textMuted }]}>
                 {getCollapsedInitials(targetProfile?.displayName || displayUsername)}
               </Text>
             </View>
           )}
-          <Text style={styles.collapsedTitle} numberOfLines={1} ellipsizeMode="tail">
+          <Text style={[styles.collapsedTitle, { color: colors.textPrimary }]} numberOfLines={1} ellipsizeMode="tail">
             {targetProfile?.displayName || displayUsername}
           </Text>
         </View>
         <View style={styles.collapsedRight}>
           {!isSelfProfile && viewer ? (
             <AnimatedPressable
-              style={[styles.collapsedFollowBtn, viewer.isFollowing ? styles.collapsedFollowingBtn : styles.collapsedFollowActiveBtn, (followMutation.isPending || isBlocked) && styles.btnDisabled]}
+              style={[styles.collapsedFollowBtn, viewer.isFollowing ? [styles.collapsedFollowingBtn, { borderColor: colors.border, backgroundColor: colors.background }] : [styles.collapsedFollowActiveBtn, { backgroundColor: colors.brand }], (followMutation.isPending || isBlocked) && styles.btnDisabled]}
               onPress={handleFollowToggle}
               activeOpacity={0.85}
               disabled={followMutation.isPending || isBlocked}
               accessibilityRole="button"
               accessibilityLabel={viewer.isFollowing ? 'Unfollow' : 'Follow'}
             >
-              <Text style={[styles.collapsedFollowText, viewer.isFollowing ? {} : styles.collapsedFollowActiveText]}>
+              <Text style={[styles.collapsedFollowText, { color: colors.textPrimary }, viewer.isFollowing ? {} : { color: colors.textInverse }]}>
                 {viewer.isFollowing ? 'Following' : 'Follow'}
               </Text>
             </AnimatedPressable>
@@ -708,14 +701,14 @@ export default function UserProfileScreen({ navigation, route }: Props) {
             accessibilityRole="button"
             accessibilityLabel="Share profile"
           >
-            <Ionicons name="share-outline" size={16} color={TEXT} />
+            <Ionicons name="share-outline" size={16} color={colors.textPrimary} />
           </AnimatedPressable>
         </View>
       </Reanimated.View>
 
       {/* Sticky tab rail — external overlay, appears when original scrolls past */}
       <Reanimated.View
-        style={[styles.stickyRailWrap, { top: insets.top + COLLAPSED_BAR_HEIGHT }, stickyRailStyle]}
+        style={[styles.stickyRailWrap, { top: insets.top + COLLAPSED_BAR_HEIGHT, backgroundColor: colors.background, borderBottomColor: colors.border }, stickyRailStyle]}
         pointerEvents={stickyRailVisible ? 'auto' : 'none'}
       >
         <TabRail
@@ -757,7 +750,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         scrollEventThrottle={16}
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.5}
-        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={MUTED} colors={[MUTED]} />}
+        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={colors.textMuted} colors={[colors.textMuted]} />}
         key={`list-${numColumns}`}
         estimatedItemSize={estimatedItemSize}
         onContentSizeChange={handleContentSizeChange}
@@ -824,7 +817,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG },
+  container: { flex: 1 },
   coverActionLayer: { position: 'absolute', top: 0, left: 0, right: 0, height: COVER_HEIGHT, zIndex: 8 },
   topUtilityRow: { position: 'absolute', left: 12, right: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   topUtilityRight: { flexDirection: 'row', gap: 8 },
@@ -834,33 +827,31 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   topUtilityIconBtnCompact: {
-    backgroundColor: SURFACE_ALT,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: BORDER,
   },
   collapsedHeader: {
     position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 8, height: COLLAPSED_BAR_HEIGHT,
-    backgroundColor: BG, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: BORDER,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowRadius: 8, elevation: 4,
   },
   collapsedBackBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   collapsedCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4 },
   collapsedAvatar: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  collapsedAvatarMonogram: { backgroundColor: SURFACE_ALT },
-  collapsedAvatarInitials: { fontSize: 12, fontFamily: Typography.family.bold, color: MUTED },
-  collapsedTitle: { fontSize: 16, fontFamily: Typography.family.semibold, color: TEXT, letterSpacing: -0.3, flexShrink: 1 },
+  collapsedAvatarMonogram: {},
+  collapsedAvatarInitials: { fontSize: 12, fontFamily: Typography.family.bold },
+  collapsedTitle: { fontSize: 16, fontFamily: Typography.family.semibold, letterSpacing: -0.3, flexShrink: 1 },
   collapsedRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   collapsedFollowBtn: { height: 44, paddingHorizontal: 18, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  collapsedFollowingBtn: { borderWidth: StyleSheet.hairlineWidth, borderColor: BORDER, backgroundColor: BG },
-  collapsedFollowActiveBtn: { backgroundColor: BRAND },
-  collapsedFollowText: { fontSize: 13, fontFamily: Typography.family.semibold, color: TEXT },
-  collapsedFollowActiveText: { color: TEXT_INVERSE },
+  collapsedFollowingBtn: { borderWidth: StyleSheet.hairlineWidth },
+  collapsedFollowActiveBtn: {},
+  collapsedFollowText: { fontSize: 13, fontFamily: Typography.family.semibold },
+  collapsedFollowActiveText: {},
   collapsedIconBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   stickyRailWrap: {
     position: 'absolute', left: 0, right: 0, zIndex: 9,
-    backgroundColor: BG, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: BORDER,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   stickySegmentWrap: { paddingHorizontal: Space.md, paddingVertical: Space.sm },
   segmentWrap: { paddingHorizontal: Space.md, paddingVertical: Space.sm, flexDirection: 'row' },
@@ -873,9 +864,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
     borderRadius: 12,
-    backgroundColor: Colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
   },
   awayBannerTextWrap: {
     flex: 1,
@@ -884,12 +873,10 @@ const styles = StyleSheet.create({
   awayBannerTitle: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   awayBannerSub: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     lineHeight: 17,
   },
   shopPoliciesSection: {
@@ -900,7 +887,6 @@ const styles = StyleSheet.create({
   shopPoliciesTitle: {
     fontSize: 11,
     fontFamily: Typography.family.semibold,
-    color: MUTED,
     textTransform: 'uppercase',
     letterSpacing: 0.7,
     marginBottom: Space.xs,
@@ -916,13 +902,11 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    backgroundColor: Colors.surfaceAlt,
     borderRadius: 8,
   },
   shopPolicyText: {
     fontSize: 11,
     fontFamily: Typography.family.medium,
-    color: TEXT,
   },
   featuredSection: {
     paddingTop: Space.sm,
@@ -938,7 +922,6 @@ const styles = StyleSheet.create({
   featuredTitle: {
     fontSize: 11,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
     textTransform: 'uppercase',
     letterSpacing: 0.7,
   },
@@ -954,7 +937,6 @@ const styles = StyleSheet.create({
     width: 100,
     height: 120,
     borderRadius: 8,
-    backgroundColor: Colors.surfaceAlt,
   },
   featuredImagePlaceholder: {
     alignItems: 'center',
@@ -963,11 +945,10 @@ const styles = StyleSheet.create({
   featuredPrice: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    color: TEXT,
   },
   listState: { alignItems: 'center', justifyContent: 'center', paddingVertical: Space.xl * 2, paddingHorizontal: Space.md, gap: 8 },
-  listStateTitle: { fontSize: 15, fontFamily: Typography.family.semibold, color: TEXT },
-  listStateSub: { fontSize: 13, fontFamily: Typography.family.regular, color: MUTED, textAlign: 'center' },
+  listStateTitle: { fontSize: 15, fontFamily: Typography.family.semibold },
+  listStateSub: { fontSize: 13, fontFamily: Typography.family.regular, textAlign: 'center' },
   loadMoreIndicator: { paddingVertical: Space.md, alignItems: 'center' },
   btnDisabled: { opacity: 0.5 },
 });
