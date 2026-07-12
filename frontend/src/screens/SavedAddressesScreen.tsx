@@ -18,6 +18,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { parseApiError } from '../lib/apiClient';
 import {
   listUserAddresses,
@@ -54,6 +55,7 @@ export default function SavedAddressesScreen({ navigation }: Props) {
   const clearSavedAddress = useStore((state) => state.clearSavedAddress);
   const { show } = useToast();
   const haptic = useHaptic();
+  const reducedMotionEnabled = useReducedMotion();
 
   const [addresses, setAddresses] = useState<CommerceAddress[]>([]);
   const [loadState, setLoadState] = useState<LoadState>('loading');
@@ -199,7 +201,7 @@ export default function SavedAddressesScreen({ navigation }: Props) {
     const isDeleting = deletingId === address.id;
     const detail = formatAddressDetail(address);
     return (
-      <Reanimated.View key={address.id} entering={FadeIn.duration(250).delay(index * 40)}>
+      <Reanimated.View key={address.id} entering={reducedMotionEnabled ? undefined : FadeIn.duration(250).delay(Math.min(index, 8) * 40)}>
         <View style={[styles.addressCard, { backgroundColor: Colors.surface, borderColor: Colors.border }, isDefault && { borderColor: Colors.brand, borderWidth: 1.5 }]}>
           <View style={styles.addressCardHeader}>
             <View style={styles.addressCardHeaderLeft}>

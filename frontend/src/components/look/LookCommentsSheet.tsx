@@ -16,6 +16,7 @@ import { CachedImage } from '../CachedImage';
 import { Colors } from '../../constants/colors';
 import { Space, Radius, Typography } from '../../theme/designTokens';
 import { useHaptic } from '../../hooks/useHaptic';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useToast } from '../../context/ToastContext';
 import { KeyboardStickyView } from '../../platform/keyboard/KeyboardProvider';
 import {
@@ -59,6 +60,7 @@ export function LookCommentsSheet({
   onSignInRequired,
 }: LookCommentsSheetProps) {
   const haptic = useHaptic();
+  const reducedMotionEnabled = useReducedMotion();
   const { show } = useToast();
   const [comments, setComments] = useState<LookCommentApiItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -134,7 +136,7 @@ export function LookCommentsSheet({
     return (
       <Reanimated.View
         key={item.id}
-        entering={FadeInDown.duration(200).delay(index * 30)}
+        entering={reducedMotionEnabled ? undefined : FadeInDown.duration(200).delay(Math.min(index, 8) * 30)}
         style={styles.commentRow}
       >
         <View style={styles.avatarWrap}>
@@ -173,7 +175,7 @@ export function LookCommentsSheet({
 
   return (
     <Reanimated.View
-      entering={SlideInDown.duration(300)}
+      entering={reducedMotionEnabled ? undefined : SlideInDown.duration(300)}
       style={StyleSheet.absoluteFill}
     >
       <SafeAreaView style={styles.container} edges={['top']}>

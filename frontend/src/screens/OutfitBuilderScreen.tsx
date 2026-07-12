@@ -462,7 +462,7 @@ export default function OutfitBuilderScreen() {
             {slotItems.map((item, idx) => (
               <Reanimated.View
                 key={item.id}
-                entering={reducedMotionEnabled ? undefined : FadeInDown.delay(idx * 40).duration(250)}
+                entering={reducedMotionEnabled ? undefined : FadeInDown.delay(Math.min(idx, 6) * 40).duration(250)}
               >
                 <ItemThumb
                   item={item}

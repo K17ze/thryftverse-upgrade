@@ -11,6 +11,7 @@ import { Space, Radius, Type , Typography  } from '../theme/designTokens';
 import { AppButton } from '../components/ui/AppButton';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 type Props = StackScreenProps<RootStackParamList, 'ActiveSessions'>;
 
@@ -25,6 +26,7 @@ interface SessionItem {
 export default function ActiveSessionsScreen({ navigation }: Props) {
   const { show } = useToast();
   const currentUser = useStore((s) => s.currentUser);
+  const reducedMotionEnabled = useReducedMotion();
 
   const [sessions] = useState<SessionItem[]>([
     {
@@ -56,7 +58,7 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
   return (
     <FlagshipScreen header={<FlagshipHeader title="Active Sessions" subtitle="Device security overview" onBack={() => navigation.goBack()} />}>
       {/* Security overview */}
-      <Reanimated.View entering={FadeIn.duration(300)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
         <View style={[styles.trustSurface, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
           <View style={styles.trustHeader}>
             <Ionicons name="shield-checkmark-outline" size={20} color={Colors.success} />
@@ -69,7 +71,7 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* This device */}
-      <Reanimated.View entering={FadeIn.duration(300)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
         <SettingsSection title="This device" noCard>
           {sessions.filter((s) => s.isCurrent).map((session) => (
             <View key={session.id} style={styles.sessionRow}>
@@ -89,7 +91,7 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* Other devices */}
-      <Reanimated.View entering={FadeIn.duration(300)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
         <SettingsSection title="Other devices" noCard>
           <View style={styles.emptyGroup}>
             <Ionicons name="desktop-outline" size={32} color={Colors.textMuted} />
@@ -101,7 +103,7 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
         </SettingsSection>
       </Reanimated.View>
 
-      <Reanimated.View entering={FadeIn.duration(300)} style={{ paddingHorizontal: 16, marginTop: 16 }}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)} style={{ paddingHorizontal: 16, marginTop: 16 }}>
         <AppButton
           title="End all other sessions"
           onPress={handleEndAllOthers}

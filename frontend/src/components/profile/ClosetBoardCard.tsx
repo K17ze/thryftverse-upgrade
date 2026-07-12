@@ -9,6 +9,7 @@ import { Colors } from '../../constants/colors';
 import { Typography, Space, Radius } from '../../theme/designTokens';
 import { Listing } from '../../data/mockData';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_W = (SCREEN_W - Space.md * 2 - Space.sm) / 2;
@@ -30,9 +31,10 @@ export function ClosetBoardCard({
   index = 0,
 }: ClosetBoardCardProps) {
   const hasCovers = covers.length > 0;
+  const reducedMotionEnabled = useReducedMotion();
 
   return (
-    <Reanimated.View entering={FadeInDown.duration(350).delay(index * 60).springify()}>
+    <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(240).delay(Math.min(index, 6) * 40)}>
       <AnimatedPressable
         style={styles.card}
         onPress={onPress}

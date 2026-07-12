@@ -8,6 +8,7 @@ import { AnimatedPressable } from '../AnimatedPressable';
 import { Colors } from '../../constants/colors';
 import { Typography, Space, Radius } from '../../theme/designTokens';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -45,8 +46,9 @@ export function LookPreviewCard({
   onSave,
   index = 0,
 }: LookPreviewCardProps) {
+  const reducedMotionEnabled = useReducedMotion();
   return (
-    <Reanimated.View entering={FadeInDown.duration(350).delay(index * 60).springify()}>
+    <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(240).delay(Math.min(index, 6) * 40)}>
       <AnimatedPressable style={styles.card} onPress={onPress} {...PressPresets.card} accessibilityRole="button">
         {/* Cover */}
         <View style={styles.coverWrap}>

@@ -473,7 +473,7 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
         {recoveryCodes.map((code, i) => (
           <Reanimated.View
             key={i}
-            entering={reducedMotionEnabled ? undefined : FadeInDown.duration(200).delay(i * 50)}
+            entering={reducedMotionEnabled ? undefined : FadeInDown.duration(200).delay(Math.min(i, 8) * 50)}
             style={[
               styles.recoveryCodeRow,
               i < recoveryCodes.length - 1 && { borderBottomColor: Colors.border, borderBottomWidth: StyleSheet.hairlineWidth },

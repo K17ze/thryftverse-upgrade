@@ -15,11 +15,13 @@ import { Space, Radius, Type } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { Typography } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 type Props = StackScreenProps<RootStackParamList, 'About'>;
 
 export default function AboutScreen({ navigation }: Props) {
   const { show } = useToast();
+  const reducedMotionEnabled = useReducedMotion();
 
   const handleOpenExternal = async (url: string) => {
     try {
@@ -31,7 +33,7 @@ export default function AboutScreen({ navigation }: Props) {
 
   return (
     <FlagshipScreen header={<FlagshipHeader title="About" subtitle="Thryftverse app information" onBack={() => navigation.goBack()} />}>
-        <Reanimated.View entering={FadeIn.duration(300)} style={styles.brandWrap}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)} style={styles.brandWrap}>
           <View style={styles.brandIcon}>
             <Ionicons name="shirt-outline" size={40} color={Colors.brand} />
           </View>
@@ -39,7 +41,7 @@ export default function AboutScreen({ navigation }: Props) {
           <Text style={styles.brandVersion}>Version 1.0.0 (Build 2026.06.05)</Text>
         </Reanimated.View>
 
-        <Reanimated.View entering={FadeIn.duration(300)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
           <Text style={styles.sectionLabel}>Legal</Text>
           <View style={styles.rowGroup}>
             <AnimatedPressable
@@ -93,7 +95,7 @@ export default function AboutScreen({ navigation }: Props) {
           </View>
         </Reanimated.View>
 
-        <Reanimated.View entering={FadeIn.duration(300)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
           <Text style={styles.sectionLabel}>Support</Text>
           <View style={styles.rowGroup}>
             <AnimatedPressable

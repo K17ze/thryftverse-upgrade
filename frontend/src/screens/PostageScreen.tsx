@@ -21,6 +21,7 @@ import { RadioButton } from '../components/settings/RadioButton';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { Typography } from '../theme/designTokens';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { PremiumListSection } from '../components/ui/PremiumListSection';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 
@@ -45,6 +46,7 @@ function mapCapabilityCarriers(carriers: CapabilityCarrier[]) {
 export default function PostageScreen({ navigation }: Props) {
   const currentUser = useStore((state) => state.currentUser);
   const { show } = useToast();
+  const reducedMotionEnabled = useReducedMotion();
   const postagePreferences = useStore((state) => state.postagePreferences);
   const updatePostagePreferences = useStore((state) => state.updatePostagePreferences);
   const { formatFromFiat } = useFormattedPrice();
@@ -108,7 +110,7 @@ export default function PostageScreen({ navigation }: Props) {
         />
       }
     >
-      <Reanimated.View entering={FadeIn.duration(300)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
         <View style={[styles.deliveryTrust, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
           <Ionicons name="cube-outline" size={18} color={Colors.brand} />
           <Text style={[styles.deliveryTrustText, { color: Colors.textSecondary }]}>
@@ -140,7 +142,7 @@ export default function PostageScreen({ navigation }: Props) {
       </Pressable>
 
       {/* Default Carrier */}
-      <Reanimated.View entering={FadeIn.duration(300)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
         <PremiumListSection title="Default Carrier" subtitle={carrierScopeLabel ? `Region policy: ${carrierScopeLabel}` : undefined}>
           {isHydrating ? (
             <FlagshipState variant="loading" />
@@ -171,7 +173,7 @@ export default function PostageScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* Shipping Options */}
-      <Reanimated.View entering={FadeIn.duration(300)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
         <PremiumListSection title="Shipping Options">
           <SettingsCell
             icon="gift-outline"
@@ -197,7 +199,7 @@ export default function PostageScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* Footer note */}
-      <Reanimated.View entering={FadeIn.duration(300)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
         <Text style={styles.footerNote}>
           These are your default settings. You can override postage for individual items when
           listing.

@@ -26,10 +26,12 @@ import { useHaptic } from '../hooks/useHaptic';
 import { Typography } from '../theme/designTokens';
 import { PremiumListSection } from '../components/ui/PremiumListSection';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 type Props = StackScreenProps<RootStackParamList, 'Payments'>;
 
 export default function PaymentsScreen({ navigation }: Props) {
+  const reducedMotionEnabled = useReducedMotion();
   const paymentPreferences = useStore((state) => state.paymentPreferences);
   const updatePaymentPreferences = useStore((state) => state.updatePaymentPreferences);
   const useBalance = paymentPreferences.useBalance;
@@ -315,7 +317,7 @@ export default function PaymentsScreen({ navigation }: Props) {
         <Text style={styles.policyLabel}>Payment policy: {policyLabel}</Text>
       ) : null}
 
-      <Reanimated.View entering={FadeIn.duration(300)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
         <View style={[styles.trustBanner, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
           <Ionicons name="shield-checkmark-outline" size={18} color={Colors.success} />
           <Text style={[styles.trustBannerText, { color: Colors.textSecondary }]}>
@@ -339,7 +341,7 @@ export default function PaymentsScreen({ navigation }: Props) {
       ) : (
         <>
           {/* Primary Payment Method Summary */}
-          <Reanimated.View entering={FadeIn.duration(300)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
             {defaultMethod ? (
               <View style={[styles.primaryCard, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
                 <View style={styles.primaryCardHeader}>
@@ -393,7 +395,7 @@ export default function PaymentsScreen({ navigation }: Props) {
           </Reanimated.View>
 
           {/* Preferences */}
-          <Reanimated.View entering={FadeIn.duration(300)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
             <PremiumListSection title="Preferences">
               <SettingsCell
                 icon="wallet-outline"
@@ -410,7 +412,7 @@ export default function PaymentsScreen({ navigation }: Props) {
           </Reanimated.View>
 
           {/* Cards */}
-          <Reanimated.View entering={FadeIn.duration(300)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
             <PremiumListSection title="Cards">
               {renderPaymentMethodRows(
                 cardMethods,
@@ -442,7 +444,7 @@ export default function PaymentsScreen({ navigation }: Props) {
           </Reanimated.View>
 
           {/* Security Note */}
-          <Reanimated.View entering={FadeIn.duration(300)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
             <View style={[styles.trustNote, { backgroundColor: Colors.surfaceAlt }]}>
               <Ionicons name="shield-checkmark-outline" size={16} color={Colors.success} />
               <Text style={styles.trustNoteText}>
@@ -452,7 +454,7 @@ export default function PaymentsScreen({ navigation }: Props) {
           </Reanimated.View>
 
           {/* Bank Accounts */}
-          <Reanimated.View entering={FadeIn.duration(300)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
             <PremiumListSection title="Bank Accounts">
               {renderPaymentMethodRows(
                 bankMethods,

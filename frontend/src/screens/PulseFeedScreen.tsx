@@ -69,7 +69,7 @@ function EventCard({ event, index }: { event: FeedEvent; index: number }) {
   };
 
   return (
-    <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(index * 40).springify()}>
+    <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(240).delay(Math.min(index, 6) * 40)}>
       <AnimatedPressable style={styles.card} onPress={handlePress} activeOpacity={0.92}>
         <CachedImage uri={event.image} style={styles.cardImage} containerStyle={{ borderRadius: Radius.md }} contentFit="cover" />
         <View style={styles.cardContent}>

@@ -5,6 +5,7 @@ import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { Colors } from '../../constants/colors';
 import { Space, Radius, Type } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 interface FlagshipAssetCardProps {
   imageUri?: string | null;
@@ -32,12 +33,13 @@ export function FlagshipAssetCard({
   index = 0,
 }: FlagshipAssetCardProps) {
   const ownershipPct = totalUnits > 0 ? Math.round((yourUnits / totalUnits) * 100) : 0;
+  const reducedMotionEnabled = useReducedMotion();
 
   const statusColor =
     status === 'active' ? Colors.success : status === 'pending' ? Colors.textSecondary : status === 'sold' ? Colors.textMuted : Colors.textSecondary;
 
   return (
-    <Reanimated.View entering={FadeInDown.delay(index * 50).duration(350)}>
+    <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.delay(Math.min(index, 6) * 40).duration(240)}>
       <Pressable onPress={onPress} style={styles.root}>
         <View style={styles.imageWrap}>
           {imageUri ? (

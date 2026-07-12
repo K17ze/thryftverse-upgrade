@@ -19,6 +19,7 @@ import { RootStackParamList } from '../../navigation/types';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useToast } from '../../context/ToastContext';
 import { useBackendData } from '../../context/BackendDataContext';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { DiscoverySectionHeader } from '../discover/DiscoverySectionHeader';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -27,8 +28,9 @@ type NavT = StackNavigationProp<RootStackParamList>;
 
 /* ── Sub-components ── */
 function TrendingRailItem({ item, index, onPress }: { item: { id: string; title: string; brand: string; price: number; image: string }; index: number; onPress: () => void }) {
+  const reducedMotionEnabled = useReducedMotion();
   return (
-    <Reanimated.View entering={FadeInDown.duration(350).delay(index * 60).springify()}>
+    <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(240).delay(Math.min(index, 6) * 40)}>
       <AnimatedPressable style={styles.trendingItem} onPress={onPress} activeOpacity={0.92}>
         <CachedImage uri={item.image} style={styles.trendingImage} containerStyle={{ borderRadius: Radius.md }} contentFit="cover" />
         <Text style={styles.trendingBrand} numberOfLines={1}>{item.brand}</Text>

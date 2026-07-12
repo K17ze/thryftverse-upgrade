@@ -14,11 +14,13 @@ import { SettingsRow } from '../components/settings/SettingsRow';
 import { SettingsInfoBanner } from '../components/settings/SettingsInfoBanner';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { Typography } from '../theme/designTokens';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 type Props = StackScreenProps<RootStackParamList, 'HelpSupport'>;
 
 export default function HelpSupportScreen({ navigation }: Props) {
   const { show } = useToast();
+  const reducedMotionEnabled = useReducedMotion();
   const { formatFromFiat } = useFormattedPrice();
   const [expanded, setExpanded] = useState<string | null>(null);
   const [faqSearch, setFaqSearch] = useState('');
@@ -68,7 +70,7 @@ export default function HelpSupportScreen({ navigation }: Props) {
   return (
     <FlagshipScreen header={<FlagshipHeader title="Help & Support" subtitle="Get answers and contact us" onBack={() => navigation.goBack()} />} keyboardAvoiding>
         {/* Contact options */}
-        <Reanimated.View entering={FadeIn.duration(300)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
           <SettingsSection title="Contact us">
             <SettingsRow
               icon="mail-outline"
@@ -105,7 +107,7 @@ export default function HelpSupportScreen({ navigation }: Props) {
         </Reanimated.View>
 
         {/* FAQ Banner */}
-        <Reanimated.View entering={FadeIn.duration(300)} style={{ marginHorizontal: Space.md, marginBottom: Space.md }}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)} style={{ marginHorizontal: Space.md, marginBottom: Space.md }}>
           <SettingsInfoBanner
             text="Search our FAQs below for quick answers to common questions."
             icon="help-circle-outline"
@@ -114,7 +116,7 @@ export default function HelpSupportScreen({ navigation }: Props) {
         </Reanimated.View>
 
         {/* FAQ Search */}
-        <Reanimated.View entering={FadeIn.duration(300)} style={{ marginHorizontal: Space.md, marginBottom: Space.md }}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)} style={{ marginHorizontal: Space.md, marginBottom: Space.md }}>
           <View style={styles.searchWrap}>
             <Ionicons name="search-outline" size={18} color={Colors.textMuted} />
             <TextInput
@@ -133,7 +135,7 @@ export default function HelpSupportScreen({ navigation }: Props) {
         </Reanimated.View>
 
         {/* FAQ Accordion */}
-        <Reanimated.View entering={FadeIn.duration(300)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
           <SettingsSection title="Frequently asked">
             {filteredFaqs.length === 0 ? (
               <View style={styles.emptyFaqs}>
@@ -168,7 +170,7 @@ export default function HelpSupportScreen({ navigation }: Props) {
         </Reanimated.View>
 
         {/* External links */}
-        <Reanimated.View entering={FadeIn.duration(300)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
           <SettingsSection title="Legal">
             <SettingsRow
               icon="document-text-outline"

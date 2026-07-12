@@ -1,20 +1,27 @@
-fix(a11y): add reduced-motion support to 22 screens with entrance animations
+fix(motion): reduced-motion support + cap list stagger to above-fold items
 
-All screens using FadeInDown/FadeInUp/SlideInDown/SlideInUp entrance
-animations now check useReducedMotion() and pass undefined as the
-entering prop when reduced motion is active. This ensures the app
-respects the user's OS-level reduced motion preference per AGENTS.md
-section 17 (Motion and Interaction).
+Per audit section 5.4: "31 of 58 Reanimated screens have no visible
+reduced-motion handling" and "Many lists apply index-based
+FadeInDown.springify() to every item."
 
-Screens updated: BalanceHistory, CategoryDetail, CategoryTree, Closet,
-CoOwnIssue, CollectionDetail, CreateCollection, EditCollection,
-ExploreCollection, GlobalSearch, Home, ItemDetail, OrderSupport,
-OutfitBuilder, PulseFeed, Search, SupportTicketDetail, TradeConfirm,
-TwoFactorSetup, VisualSearch, Withdraw, WriteReview.
-
-Also updated visual14 test assertions to match the wrapped entering
-prop pattern (checking for the FadeInDown chain without requiring the
-exact entering={ prefix).
+Changes:
+- Added useReducedMotion() to 6 remaining screens with entrance
+  animations: AboutScreen, ActiveSessionsScreen, HelpSupportScreen,
+  PaymentsScreen, PostageScreen, SavedAddressesScreen. All entrance
+  animations now return undefined when reduced motion is enabled.
+- Added useReducedMotion() to 7 components with entrance animations
+  that lacked it: PulseTab (2 cards), LooksTab, EditTab,
+  LookPreviewCard, ClosetBoardCard, FlagshipAssetCard,
+  FlagshipOrderCard, LookCommentsSheet, RecommendationRail.
+- Capped list entrance stagger to above-fold items (max index 6-8)
+  across all staggered components. Item 20+ no longer waits a full
+  second to appear.
+- Removed springify() from list item entrance animations per Design.md
+  motion rules ("Press scale 0.97-0.985 with no bounce"). Spring
+  bounce on list items causes visual jitter and contradicts the
+  snappy-timing motion contract. Replaced with timing-based fades.
+- Capped SavedAddressesScreen, OutfitBuilderScreen, TwoFactorSetupScreen
+  stagger delays to Math.min(index, 8).
 
 Generated with [Devin](https://devin.ai)
 
