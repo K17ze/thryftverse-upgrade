@@ -1,22 +1,18 @@
-fix(theme): migrate CategoryDetailScreen & CategoryTreeScreen to useAppTheme
+fix(theme): migrate AccountControlScreen to useAppTheme
 
 Per audit section 5.1: "102/120 screens still import the legacy
 constants/colors module" and "StyleSheet.create() values using the
-mutable legacy Colors export are calculated at module load. Changing
-the theme variable does not reconstruct those styles, so live theme
-changes can leave large parts of the UI stale."
+mutable legacy Colors export are calculated at module load."
 
-Migrated two screens from legacy Colors to useAppTheme().colors:
-- CategoryDetailScreen: removed Colors import, all color references
-  now use reactive colors from useAppTheme(). Static StyleSheet
-  retains only structural properties; color properties are applied
-  inline for theme reactivity.
-- CategoryTreeScreen: removed Colors import and module-level PILL_BG
-  /PILL_BORDER constants (which were frozen at module load). All
-  color references now use reactive colors. Also capped the section
-  stagger animation to max index 6.
-
-Both screens now support live theme switching without remounting.
+Migrated AccountControlScreen from legacy Colors to useAppTheme().colors:
+- Removed `import { Colors } from '../constants/colors'`
+- Added `import { useAppTheme } from '../theme/ThemeContext'`
+- All 54 `Colors.xxx` references replaced with `colors.xxx` from
+  useAppTheme() hook
+- ConsequenceRow sub-component given its own useAppTheme() call
+- Static StyleSheet stripped of color properties; colors applied inline
+  for theme reactivity
+- The screen now supports live theme switching without remounting
 
 Generated with [Devin](https://devin.ai)
 

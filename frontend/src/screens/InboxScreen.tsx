@@ -16,7 +16,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 
 import NetInfo from '@react-native-community/netinfo';
 
-import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 
 import { TypeStyles } from '../theme/designTokens';
 
@@ -71,12 +71,13 @@ type ConvoItem = Conversation;
 type InboxSegment = MessagingSegment | 'unread' | 'archived';
 
 function ListingContextThumbnail({ itemId }: { itemId: string }) {
+  const { colors } = useAppTheme();
   const { listings } = useBackendData();
   const listing = useMemo(() => listings.find((l) => l.id === itemId), [listings, itemId]);
   if (!listing?.images?.[0]) {
     return (
       <View style={styles.contextThumb}>
-        <Ionicons name="pricetag-outline" size={14} color={Colors.textMuted} />
+        <Ionicons name="pricetag-outline" size={14} color={colors.textMuted} />
       </View>
     );
   }
@@ -91,6 +92,8 @@ function ListingContextThumbnail({ itemId }: { itemId: string }) {
 }
 
 export default function InboxScreen() {
+
+  const { colors } = useAppTheme();
 
   const navigation = useNavigation<NavT>();
 
@@ -516,7 +519,7 @@ export default function InboxScreen() {
 
       >
 
-        <Ionicons name="archive-outline" size={20} color={Colors.brand} />
+        <Ionicons name="archive-outline" size={20} color={colors.brand} />
 
       </AnimatedPressable>
 
@@ -538,7 +541,7 @@ export default function InboxScreen() {
 
       >
 
-        <Ionicons name="trash-outline" size={20} color={Colors.danger} />
+        <Ionicons name="trash-outline" size={20} color={colors.danger} />
 
       </AnimatedPressable>
 
@@ -570,7 +573,7 @@ export default function InboxScreen() {
 
       >
 
-        <Ionicons name={mutedIds.includes(id) ? 'volume-high-outline' : 'volume-mute-outline'} size={20} color={Colors.textPrimary} />
+        <Ionicons name={mutedIds.includes(id) ? 'volume-high-outline' : 'volume-mute-outline'} size={20} color={colors.textPrimary} />
 
       </AnimatedPressable>
 
@@ -592,7 +595,7 @@ export default function InboxScreen() {
 
       >
 
-        <Ionicons name="pin-outline" size={20} color={Colors.brand} />
+        <Ionicons name="pin-outline" size={20} color={colors.brand} />
 
       </AnimatedPressable>
 
@@ -619,7 +622,7 @@ export default function InboxScreen() {
         </Text>
         {(item.botIds?.length ?? 0) > 0 && (
           <View style={styles.botIndicator}>
-            <Ionicons name="hardware-chip-outline" size={10} color={Colors.brand} />
+            <Ionicons name="hardware-chip-outline" size={10} color={colors.brand} />
           </View>
         )}
       </View>
@@ -640,13 +643,13 @@ export default function InboxScreen() {
           <View style={styles.messageBody}>
             <View style={styles.messageTop}>
               <Text style={[styles.nameText, styles.nameUnread]}>{displayTitle}</Text>
-              <Caption color={Colors.textMuted}>{item.lastMessageTime}</Caption>
+              <Caption color={colors.textMuted}>{item.lastMessageTime}</Caption>
             </View>
-            <Caption color={Colors.textSecondary} numberOfLines={1}>{item.lastMessage}</Caption>
+            <Caption color={colors.textSecondary} numberOfLines={1}>{item.lastMessage}</Caption>
             {item.itemId && (
               <View style={styles.requestListingContext}>
                 <ListingContextThumbnail itemId={item.itemId} />
-                <Caption color={Colors.textSecondary} style={styles.requestListingText}>About a listing</Caption>
+                <Caption color={colors.textSecondary} style={styles.requestListingText}>About a listing</Caption>
               </View>
             )}
             <View style={styles.requestActions}>
@@ -757,7 +760,7 @@ export default function InboxScreen() {
 
           >
 
-            <Ionicons name="settings-outline" size={20} color={Colors.textSecondary} />
+            <Ionicons name="settings-outline" size={20} color={colors.textSecondary} />
 
           </AnimatedPressable>
 
@@ -779,7 +782,7 @@ export default function InboxScreen() {
 
           >
 
-            <Ionicons name="create-outline" size={18} color={Colors.textInverse} />
+            <Ionicons name="create-outline" size={18} color={colors.textInverse} />
 
             <Text style={styles.newMessageBtnText}>New</Text>
 
@@ -835,7 +838,7 @@ export default function InboxScreen() {
 
         <View style={styles.offlineBanner}>
 
-          <Ionicons name="cloud-offline-outline" size={16} color={Colors.textSecondary} />
+          <Ionicons name="cloud-offline-outline" size={16} color={colors.textSecondary} />
 
           <Text style={styles.offlineBannerText}>You are offline</Text>
 
@@ -849,7 +852,7 @@ export default function InboxScreen() {
 
         <View style={styles.errorBanner}>
 
-          <Ionicons name="alert-circle-outline" size={16} color={Colors.danger} />
+          <Ionicons name="alert-circle-outline" size={16} color={colors.danger} />
 
           <View style={styles.errorBannerCopy}>
             <Text style={styles.errorBannerTitle}>Couldn't sync messages</Text>
@@ -931,7 +934,7 @@ export default function InboxScreen() {
                 >
                   <View style={styles.requestsAvatarStack}>
                     <View style={styles.requestsAvatar}>
-                      <Ionicons name="mail-unread-outline" size={16} color={Colors.brand} />
+                      <Ionicons name="mail-unread-outline" size={16} color={colors.brand} />
                     </View>
                   </View>
                   <View style={{ flex: 1 }}>
@@ -941,7 +944,7 @@ export default function InboxScreen() {
                   <View style={styles.requestsBadge}>
                     <Text style={styles.requestsBadgeText}>{messageRequests.length}</Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
                 </AnimatedPressable>
               </View>
 
@@ -959,7 +962,7 @@ export default function InboxScreen() {
                     accessibilityLabel={`${buyingUnreadCount} unread buying conversations`}
                     accessibilityRole="button"
                   >
-                    <Ionicons name="cart-outline" size={14} color={Colors.brand} />
+                    <Ionicons name="cart-outline" size={14} color={colors.brand} />
                     <Text style={styles.needsActionText}>{buyingUnreadCount} buying</Text>
                   </AnimatedPressable>
                 )}
@@ -973,7 +976,7 @@ export default function InboxScreen() {
                     accessibilityLabel={`${sellingUnreadCount} unread selling conversations`}
                     accessibilityRole="button"
                   >
-                    <Ionicons name="pricetag-outline" size={14} color={Colors.brand} />
+                    <Ionicons name="pricetag-outline" size={14} color={colors.brand} />
                     <Text style={styles.needsActionText}>{sellingUnreadCount} selling</Text>
                   </AnimatedPressable>
                 )}
@@ -1209,7 +1212,6 @@ const styles = StyleSheet.create({
 
   screenRoot: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
 
   compactHeader: {
@@ -1247,8 +1249,6 @@ const styles = StyleSheet.create({
 
     fontFamily: TypeStyles.title.fontFamily,
 
-    color: Colors.textPrimary,
-
     letterSpacing: Type.title.letterSpacing,
 
     lineHeight: Type.title.lineHeight,
@@ -1260,8 +1260,6 @@ const styles = StyleSheet.create({
     fontSize: Type.caption.size,
 
     fontFamily: TypeStyles.body.fontFamily,
-
-    color: Colors.textMuted,
 
   },
 
@@ -1283,8 +1281,6 @@ const styles = StyleSheet.create({
 
     borderRadius: Radius.full,
 
-    backgroundColor: Colors.surfaceAlt,
-
     justifyContent: 'center',
 
     alignItems: 'center',
@@ -1305,8 +1301,6 @@ const styles = StyleSheet.create({
 
     borderRadius: Radius.full,
 
-    backgroundColor: Colors.textPrimary,
-
   },
 
   newMessageBtnText: {
@@ -1315,13 +1309,9 @@ const styles = StyleSheet.create({
 
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
-    color: Colors.textInverse,
-
   },
 
   searchWrap: {
-
-    backgroundColor: Colors.surfaceAlt,
 
     borderRadius: Radius.full,
 
@@ -1341,21 +1331,16 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     paddingHorizontal: 12,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
   },
   filterChipActive: {
-    backgroundColor: Colors.textPrimary,
-    borderColor: Colors.textPrimary,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   filterChipText: {
     fontSize: Type.meta.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.textSecondary,
   },
   filterChipTextActive: {
-    color: Colors.textInverse,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
   },
 
@@ -1387,8 +1372,6 @@ const styles = StyleSheet.create({
 
     height: StyleSheet.hairlineWidth,
 
-    backgroundColor: Colors.border,
-
     marginLeft: 72,
 
     marginRight: Space.md,
@@ -1405,8 +1388,6 @@ const styles = StyleSheet.create({
 
     borderRadius: Radius.full,
 
-    backgroundColor: Colors.surfaceAlt,
-
     alignItems: 'center',
 
     justifyContent: 'center',
@@ -1420,8 +1401,6 @@ const styles = StyleSheet.create({
     fontSize: Type.subtitle.size,
 
     fontFamily: TypeStyles.title.fontFamily,
-
-    color: Colors.textPrimary,
 
   },
 
@@ -1439,11 +1418,7 @@ const styles = StyleSheet.create({
 
     borderRadius: Radius.full,
 
-    backgroundColor: Colors.surface,
-
     borderWidth: 1.5,
-
-    borderColor: Colors.border,
 
     justifyContent: 'center',
 
@@ -1481,8 +1456,6 @@ const styles = StyleSheet.create({
 
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
-    color: Colors.textPrimary,
-
     letterSpacing: Type.body.letterSpacing,
 
   },
@@ -1515,13 +1488,9 @@ const styles = StyleSheet.create({
 
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
-    color: Colors.textMuted,
-
   },
 
   snippet: {
-
-    color: Colors.textSecondary,
 
     fontSize: Type.caption.size,
 
@@ -1535,8 +1504,6 @@ const styles = StyleSheet.create({
 
   snippetUnread: {
 
-    color: Colors.textPrimary,
-
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
   },
@@ -1545,10 +1512,8 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: Colors.textPrimary,
   },
   unreadPill: {
-    backgroundColor: Colors.textPrimary,
     borderRadius: Radius.sm,
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -1557,11 +1522,9 @@ const styles = StyleSheet.create({
   unreadPillText: {
     fontSize: 10,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.textInverse,
   },
   timeUnread: {
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.textPrimary,
   },
   rowMeta: {
     alignItems: 'flex-end',
@@ -1579,9 +1542,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: Radius.sm,
-    backgroundColor: Colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
