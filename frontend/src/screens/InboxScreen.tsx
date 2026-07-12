@@ -76,7 +76,7 @@ function ListingContextThumbnail({ itemId }: { itemId: string }) {
   const listing = useMemo(() => listings.find((l) => l.id === itemId), [listings, itemId]);
   if (!listing?.images?.[0]) {
     return (
-      <View style={styles.contextThumb}>
+      <View style={[styles.contextThumb, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
         <Ionicons name="pricetag-outline" size={14} color={colors.textMuted} />
       </View>
     );
@@ -85,7 +85,7 @@ function ListingContextThumbnail({ itemId }: { itemId: string }) {
     <CachedImage
       uri={listing.images[0]}
       style={styles.contextThumbImage}
-      containerStyle={styles.contextThumb}
+      containerStyle={[styles.contextThumb, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
       contentFit="cover"
     />
   );
@@ -503,7 +503,7 @@ export default function InboxScreen() {
 
       <AnimatedPressable
 
-        style={styles.swipeArchive}
+        style={[styles.swipeArchive, { backgroundColor: `${colors.brand}14` }]}
 
         onPress={() => handleArchive(id)}
 
@@ -525,7 +525,7 @@ export default function InboxScreen() {
 
       <AnimatedPressable
 
-        style={styles.swipeDelete}
+        style={[styles.swipeDelete, { backgroundColor: `${colors.danger}1F` }]}
 
         onPress={() => handleDelete(id)}
 
@@ -557,7 +557,7 @@ export default function InboxScreen() {
 
       <AnimatedPressable
 
-        style={styles.swipeMute}
+        style={[styles.swipeMute, { backgroundColor: `${colors.textMuted}1F` }]}
 
         onPress={() => handleMute(id)}
 
@@ -579,7 +579,7 @@ export default function InboxScreen() {
 
       <AnimatedPressable
 
-        style={styles.swipePin}
+        style={[styles.swipePin, { backgroundColor: `${colors.brand}14` }]}
 
         onPress={() => handlePin(id)}
 
@@ -616,12 +616,12 @@ export default function InboxScreen() {
     const isMuted = mutedIds.includes(item.id);
 
     const avatarEl = isGroup ? (
-      <View style={styles.groupAvatar}>
-        <Text style={styles.groupAvatarText}>
+      <View style={[styles.groupAvatar, { backgroundColor: colors.surfaceAlt }]}>
+        <Text style={[styles.groupAvatarText, { color: colors.textPrimary }]}>
           {item.title?.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase() ?? 'G'}
         </Text>
         {(item.botIds?.length ?? 0) > 0 && (
-          <View style={styles.botIndicator}>
+          <View style={[styles.botIndicator, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Ionicons name="hardware-chip-outline" size={10} color={colors.brand} />
           </View>
         )}
@@ -637,12 +637,12 @@ export default function InboxScreen() {
     );
 
     const requestRow = (
-      <View style={styles.requestRowAccent}>
+      <View style={[styles.requestRowAccent, { borderLeftColor: colors.brand, backgroundColor: `${colors.brand}06` }]}>
         <View style={styles.requestRowInner}>
           {avatarEl}
           <View style={styles.messageBody}>
             <View style={styles.messageTop}>
-              <Text style={[styles.nameText, styles.nameUnread]}>{displayTitle}</Text>
+              <Text style={[styles.nameText, styles.nameUnread, { color: colors.textPrimary }]}>{displayTitle}</Text>
               <Caption color={colors.textMuted}>{item.lastMessageTime}</Caption>
             </View>
             <Caption color={colors.textSecondary} numberOfLines={1}>{item.lastMessage}</Caption>
@@ -654,7 +654,7 @@ export default function InboxScreen() {
             )}
             <View style={styles.requestActions}>
               <AnimatedPressable
-                style={styles.requestBtnDecline}
+                style={[styles.requestBtnDecline, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
                 onPress={() => handleDeclineRequest(item.id)}
                 activeOpacity={0.85}
                 scaleValue={0.96}
@@ -662,10 +662,10 @@ export default function InboxScreen() {
                 accessibilityLabel="Decline message request"
                 accessibilityRole="button"
               >
-                <Text style={styles.requestBtnDeclineText}>Decline</Text>
+                <Text style={[styles.requestBtnDeclineText, { color: colors.textPrimary }]}>Decline</Text>
               </AnimatedPressable>
               <AnimatedPressable
-                style={styles.requestBtnAccept}
+                style={[styles.requestBtnAccept, { backgroundColor: colors.brand }]}
                 onPress={() => handleAcceptRequest(item.id)}
                 activeOpacity={0.85}
                 scaleValue={0.96}
@@ -673,7 +673,7 @@ export default function InboxScreen() {
                 accessibilityLabel="Accept message request"
                 accessibilityRole="button"
               >
-                <Text style={styles.requestBtnAcceptText}>Accept</Text>
+                <Text style={[styles.requestBtnAcceptText, { color: colors.textInverse }]}>Accept</Text>
               </AnimatedPressable>
             </View>
           </View>
@@ -721,7 +721,7 @@ export default function InboxScreen() {
             {conversationRow}
           </Swipeable>
         )}
-        {!isRequest && <View style={styles.rowSeparator} />}
+        {!isRequest && <View style={[styles.rowSeparator, { backgroundColor: colors.border }]} />}
       </View>
     );
   };
@@ -730,19 +730,19 @@ export default function InboxScreen() {
 
   return (
 
-    <SafeAreaView edges={['top']} style={styles.screenRoot}>
+    <SafeAreaView edges={['top']} style={[styles.screenRoot, { backgroundColor: colors.background }]}>
 
 
 
       <View style={styles.compactHeader}>
 
-        <Text style={styles.headerTitle}>Inbox</Text>
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Inbox</Text>
 
         <View style={styles.headerActions}>
 
           <AnimatedPressable
 
-            style={styles.iconBtn}
+            style={[styles.iconBtn, { backgroundColor: colors.surfaceAlt }]}
 
             onPress={() => navigation.navigate('ChatSettings')}
 
@@ -766,7 +766,7 @@ export default function InboxScreen() {
 
           <AnimatedPressable
 
-            style={styles.newMessageBtn}
+            style={[styles.newMessageBtn, { backgroundColor: colors.textPrimary }]}
 
             onPress={() => navigation.navigate('NewMessage')}
 
@@ -784,7 +784,7 @@ export default function InboxScreen() {
 
             <Ionicons name="create-outline" size={18} color={colors.textInverse} />
 
-            <Text style={styles.newMessageBtnText}>New</Text>
+            <Text style={[styles.newMessageBtnText, { color: colors.textInverse }]}>New</Text>
 
           </AnimatedPressable>
 
@@ -804,7 +804,7 @@ export default function InboxScreen() {
 
           onChangeText={setSearchQuery}
 
-          containerStyle={styles.searchWrap}
+          containerStyle={[styles.searchWrap, { backgroundColor: colors.surfaceAlt }]}
 
           inputProps={{
 
@@ -836,11 +836,11 @@ export default function InboxScreen() {
 
       {isOffline && (
 
-        <View style={styles.offlineBanner}>
+        <View style={[styles.offlineBanner, { backgroundColor: colors.surfaceAlt, borderBottomColor: colors.border }]}>
 
           <Ionicons name="cloud-offline-outline" size={16} color={colors.textSecondary} />
 
-          <Text style={styles.offlineBannerText}>You are offline</Text>
+          <Text style={[styles.offlineBannerText, { color: colors.textSecondary }]}>You are offline</Text>
 
         </View>
 
@@ -850,13 +850,13 @@ export default function InboxScreen() {
 
       {!!syncError && (
 
-        <View style={styles.errorBanner}>
+        <View style={[styles.errorBanner, { borderBottomColor: colors.border }]}>
 
           <Ionicons name="alert-circle-outline" size={16} color={colors.danger} />
 
           <View style={styles.errorBannerCopy}>
-            <Text style={styles.errorBannerTitle}>Couldn't sync messages</Text>
-            <Text style={styles.errorBannerSub}>Check your connection or retry.</Text>
+            <Text style={[styles.errorBannerTitle, { color: colors.danger }]}>Couldn't sync messages</Text>
+            <Text style={[styles.errorBannerSub, { color: colors.textMuted }]}>Check your connection or retry.</Text>
           </View>
 
           <AnimatedPressable
@@ -875,7 +875,7 @@ export default function InboxScreen() {
 
           >
 
-            <Text style={styles.errorBannerRetry}>Retry</Text>
+            <Text style={[styles.errorBannerRetry, { color: colors.brand }]}>Retry</Text>
 
           </AnimatedPressable>
 
@@ -922,7 +922,7 @@ export default function InboxScreen() {
             {segment === 'all' && messageRequests.length > 0 && (
 
               <View style={styles.requestsBanner}>
-                <View style={styles.requestsBannerRule} />
+                <View style={[styles.requestsBannerRule, { backgroundColor: colors.border }]} />
                 <AnimatedPressable
                   onPress={() => navigation.navigate('MessageRequests')}
                   activeOpacity={0.85}
@@ -933,16 +933,16 @@ export default function InboxScreen() {
                   style={styles.requestsBannerTap}
                 >
                   <View style={styles.requestsAvatarStack}>
-                    <View style={styles.requestsAvatar}>
+                    <View style={[styles.requestsAvatar, { backgroundColor: `${colors.brand}12` }]}>
                       <Ionicons name="mail-unread-outline" size={16} color={colors.brand} />
                     </View>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.requestsBannerText}>Requests</Text>
-                    <Text style={styles.requestsBannerSub}>{messageRequests.length} pending</Text>
+                    <Text style={[styles.requestsBannerText, { color: colors.textPrimary }]}>Requests</Text>
+                    <Text style={[styles.requestsBannerSub, { color: colors.textMuted }]}>{messageRequests.length} pending</Text>
                   </View>
-                  <View style={styles.requestsBadge}>
-                    <Text style={styles.requestsBadgeText}>{messageRequests.length}</Text>
+                  <View style={[styles.requestsBadge, { backgroundColor: colors.textPrimary }]}>
+                    <Text style={[styles.requestsBadgeText, { color: colors.textInverse }]}>{messageRequests.length}</Text>
                   </View>
                   <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
                 </AnimatedPressable>
@@ -954,7 +954,7 @@ export default function InboxScreen() {
               <View style={styles.needsActionRow}>
                 {buyingUnreadCount > 0 && (
                   <AnimatedPressable
-                    style={styles.needsActionChip}
+                    style={[styles.needsActionChip, { backgroundColor: `${colors.brand}0D`, borderColor: `${colors.brand}33` }]}
                     onPress={() => setSegment('buying')}
                     activeOpacity={0.85}
                     scaleValue={0.97}
@@ -963,12 +963,12 @@ export default function InboxScreen() {
                     accessibilityRole="button"
                   >
                     <Ionicons name="cart-outline" size={14} color={colors.brand} />
-                    <Text style={styles.needsActionText}>{buyingUnreadCount} buying</Text>
+                    <Text style={[styles.needsActionText, { color: colors.brand }]}>{buyingUnreadCount} buying</Text>
                   </AnimatedPressable>
                 )}
                 {sellingUnreadCount > 0 && (
                   <AnimatedPressable
-                    style={styles.needsActionChip}
+                    style={[styles.needsActionChip, { backgroundColor: `${colors.brand}0D`, borderColor: `${colors.brand}33` }]}
                     onPress={() => setSegment('selling')}
                     activeOpacity={0.85}
                     scaleValue={0.97}
@@ -977,7 +977,7 @@ export default function InboxScreen() {
                     accessibilityRole="button"
                   >
                     <Ionicons name="pricetag-outline" size={14} color={colors.brand} />
-                    <Text style={styles.needsActionText}>{sellingUnreadCount} selling</Text>
+                    <Text style={[styles.needsActionText, { color: colors.brand }]}>{sellingUnreadCount} selling</Text>
                   </AnimatedPressable>
                 )}
               </View>
@@ -1566,8 +1566,6 @@ const styles = StyleSheet.create({
 
   draftBadge: {
 
-    backgroundColor: `${Colors.brand}1A`,
-
     paddingHorizontal: Space.sm - 2,
 
     paddingVertical: 2,
@@ -1582,12 +1580,9 @@ const styles = StyleSheet.create({
 
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
-    color: Colors.brand,
-
   },
 
   rowInnerUnread: {
-    backgroundColor: `${Colors.brand}06`,
   },
   requestListingContext: {
     flexDirection: 'row',
@@ -1620,8 +1615,6 @@ const styles = StyleSheet.create({
 
   swipeDelete: {
 
-    backgroundColor: `${Colors.danger}1F`,
-
     justifyContent: 'center',
 
     alignItems: 'center',
@@ -1635,8 +1628,6 @@ const styles = StyleSheet.create({
   },
 
   swipePin: {
-
-    backgroundColor: `${Colors.brand}14`,
 
     justifyContent: 'center',
 
@@ -1652,8 +1643,6 @@ const styles = StyleSheet.create({
 
   swipeArchive: {
 
-    backgroundColor: `${Colors.brand}14`,
-
     justifyContent: 'center',
 
     alignItems: 'center',
@@ -1667,8 +1656,6 @@ const styles = StyleSheet.create({
   },
 
   swipeMute: {
-
-    backgroundColor: `${Colors.textMuted}1F`,
 
     justifyContent: 'center',
 
@@ -1684,8 +1671,6 @@ const styles = StyleSheet.create({
 
   requestRowSurface: {
 
-    backgroundColor: Colors.surface,
-
     borderRadius: Radius.lg,
 
     marginHorizontal: Space.md,
@@ -1695,8 +1680,6 @@ const styles = StyleSheet.create({
   },
   requestRowAccent: {
     borderLeftWidth: 3,
-    borderLeftColor: Colors.brand,
-    backgroundColor: `${Colors.brand}06`,
     marginHorizontal: Space.md,
     marginVertical: Space.xs,
     borderRadius: Radius.sm,
@@ -1732,11 +1715,7 @@ const styles = StyleSheet.create({
 
     borderRadius: Radius.md,
 
-    backgroundColor: Colors.surfaceAlt,
-
     borderWidth: StyleSheet.hairlineWidth,
-
-    borderColor: Colors.border,
 
   },
 
@@ -1745,8 +1724,6 @@ const styles = StyleSheet.create({
     fontSize: Type.caption.size,
 
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-
-    color: Colors.textPrimary,
 
   },
 
@@ -1762,8 +1739,6 @@ const styles = StyleSheet.create({
 
     borderRadius: Radius.md,
 
-    backgroundColor: Colors.brand,
-
   },
 
   requestsBanner: {
@@ -1775,7 +1750,6 @@ const styles = StyleSheet.create({
   },
   requestsBannerRule: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
     marginBottom: Space.sm,
     marginHorizontal: Space.md,
   },
@@ -1793,7 +1767,6 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: Radius.full,
-    backgroundColor: `${Colors.brand}12`,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1810,8 +1783,6 @@ const styles = StyleSheet.create({
 
     paddingHorizontal: Space.md,
 
-    backgroundColor: Colors.surface,
-
     borderRadius: Radius.lg,
 
   },
@@ -1823,8 +1794,6 @@ const styles = StyleSheet.create({
     height: 24,
 
     borderRadius: Radius.md,
-
-    backgroundColor: Colors.textPrimary,
 
     justifyContent: 'center',
 
@@ -1838,28 +1807,23 @@ const styles = StyleSheet.create({
 
     fontFamily: TypeStyles.title.fontFamily,
 
-    color: Colors.textInverse,
-
   },
 
   requestsIconWrap: {
     width: 40,
     height: 40,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
   },
   requestsBannerText: {
     fontSize: Type.body.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.textPrimary,
     letterSpacing: Type.body.letterSpacing,
   },
   requestsBannerSub: {
     fontSize: Type.caption.size,
     fontFamily: TypeStyles.body.fontFamily,
-    color: Colors.textMuted,
     marginTop: 2,
   },
 
@@ -1868,8 +1832,6 @@ const styles = StyleSheet.create({
     fontSize: Type.caption.size,
 
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-
-    color: Colors.textInverse,
 
   },
 
@@ -1883,11 +1845,7 @@ const styles = StyleSheet.create({
 
     gap: Space.xs,
 
-    backgroundColor: Colors.surfaceAlt,
-
     borderBottomWidth: StyleSheet.hairlineWidth,
-
-    borderBottomColor: Colors.border,
 
     paddingVertical: Space.xs + 2,
 
@@ -1896,8 +1854,6 @@ const styles = StyleSheet.create({
   },
 
   offlineBannerText: {
-
-    color: Colors.textSecondary,
 
     fontSize: Type.caption.size,
 
@@ -1921,8 +1877,6 @@ const styles = StyleSheet.create({
 
     borderBottomWidth: StyleSheet.hairlineWidth,
 
-    borderBottomColor: Colors.border,
-
   },
 
   errorBannerCopy: {
@@ -1931,13 +1885,11 @@ const styles = StyleSheet.create({
   },
 
   errorBannerTitle: {
-    color: Colors.danger,
     fontSize: Type.caption.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
   },
 
   errorBannerSub: {
-    color: Colors.textMuted,
     fontSize: 12,
     fontFamily: TypeStyles.body.fontFamily,
   },
@@ -1948,8 +1900,6 @@ const styles = StyleSheet.create({
   },
 
   errorBannerRetry: {
-
-    color: Colors.brand,
 
     fontSize: Type.caption.size,
 
@@ -1998,14 +1948,11 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: Radius.full,
-    backgroundColor: `${Colors.brand}0D`,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: `${Colors.brand}33`,
   },
   needsActionText: {
     fontSize: Type.caption.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.brand,
   },
 
 });
