@@ -5,8 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
+import { useAppTheme } from '../theme/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { EmptyState } from '../components/EmptyState';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -105,6 +105,7 @@ const STATUS_OPTIONS: { label: string; value: StatusFilter }[] = [
 ];
 
 export default function AuctionsScreen() {
+  const { colors } = useAppTheme();
   const navigation = useNavigation<NavT>();
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
@@ -379,13 +380,13 @@ export default function AuctionsScreen() {
         {SORT_OPTIONS.map((opt) => (
           <AnimatedPressable
             key={opt.value}
-            style={[styles.sortChip, sortMode === opt.value && styles.sortChipActive]}
+            style={[styles.sortChip, sortMode === opt.value && { backgroundColor: colors.brand, borderColor: colors.brand }]}
             activeOpacity={0.85}
             onPress={() => setSortMode(opt.value)}
             accessibilityRole="button"
             accessibilityLabel={`Sort by ${opt.label}`}
           >
-            <Meta style={[styles.sortChipText, sortMode === opt.value && styles.sortChipTextActive]}>
+            <Meta style={[styles.sortChipText, { color: sortMode === opt.value ? colors.textInverse : colors.textSecondary }]}>
               {opt.label}
             </Meta>
           </AnimatedPressable>
@@ -399,13 +400,13 @@ export default function AuctionsScreen() {
       {STATUS_OPTIONS.map((opt) => (
         <AnimatedPressable
           key={opt.value}
-          style={[styles.statusChip, statusFilter === opt.value && styles.statusChipActive]}
+          style={[styles.statusChip, statusFilter === opt.value && { backgroundColor: colors.brand, borderColor: colors.brand }]}
           activeOpacity={0.85}
           onPress={() => setStatusFilter(opt.value)}
           accessibilityRole="button"
           accessibilityLabel={`Filter by ${opt.label}`}
         >
-          <Meta style={[styles.statusChipText, statusFilter === opt.value && styles.statusChipTextActive]}>
+          <Meta style={[styles.statusChipText, { color: statusFilter === opt.value ? colors.textInverse : colors.textSecondary }]}>
             {opt.label}
           </Meta>
         </AnimatedPressable>
@@ -417,9 +418,9 @@ export default function AuctionsScreen() {
     if (!featuredAuction) return null;
     return (
       <View style={styles.featuredWrap}>
-        <BodyEmphasis style={styles.featuredLabel}>Featured Auction</BodyEmphasis>
+        <BodyEmphasis style={[styles.featuredLabel, { color: colors.textSecondary }]}>Featured Auction</BodyEmphasis>
         <AnimatedPressable
-          style={styles.featuredCard}
+          style={[styles.featuredCard, { borderColor: colors.border, backgroundColor: colors.surface }]}
           activeOpacity={0.92}
           onPress={() => navigateToDetail(featuredAuction)}
           accessibilityRole="button"
@@ -434,13 +435,13 @@ export default function AuctionsScreen() {
                 contentFit="cover"
               />
             ) : (
-              <View style={styles.featuredImagePlaceholder}>
-                <Ionicons name="image-outline" size={32} color={Colors.textMuted} />
+              <View style={[styles.featuredImagePlaceholder, { backgroundColor: colors.surfaceAlt }]}>
+                <Ionicons name="image-outline" size={32} color={colors.textMuted} />
               </View>
             )}
             <View style={styles.featuredOverlay}>
               <View style={styles.featuredLivePill}>
-                <View style={styles.featuredLiveDot} />
+                <View style={[styles.featuredLiveDot, { backgroundColor: colors.danger }]} />
                 <Meta style={styles.featuredLiveText}>LIVE</Meta>
               </View>
             </View>
@@ -460,21 +461,21 @@ export default function AuctionsScreen() {
               </View>
               <View>
                 <Meta style={styles.featuredStatLabel}>Ends In</Meta>
-                <BodyEmphasis style={[styles.featuredStatValue, styles.featuredTimer]}>
+                <BodyEmphasis style={[styles.featuredStatValue, styles.featuredTimer, { color: colors.danger }]}>
                   {formatCountdown(featuredAuction.msToEnd)}
                 </BodyEmphasis>
               </View>
             </View>
             {featuredAuction.viewerState === 'outbid' && (
               <View style={styles.outbidBanner}>
-                <Ionicons name="trending-down-outline" size={14} color={Colors.danger} />
-                <Meta style={styles.outbidText}>You've been outbid</Meta>
+                <Ionicons name="trending-down-outline" size={14} color={colors.danger} />
+                <Meta style={[styles.outbidText, { color: colors.danger }]}>You've been outbid</Meta>
               </View>
             )}
             {featuredAuction.viewerState === 'leading' && (
               <View style={styles.leadingBanner}>
-                <Ionicons name="trophy-outline" size={14} color={Colors.brand} />
-                <Meta style={styles.leadingText}>You're leading</Meta>
+                <Ionicons name="trophy-outline" size={14} color={colors.brand} />
+                <Meta style={[styles.leadingText, { color: colors.brand }]}>You're leading</Meta>
               </View>
             )}
           </View>
@@ -500,7 +501,7 @@ export default function AuctionsScreen() {
           value={searchQuery}
           onChangeText={setSearchQuery}
           placeholder="Search auctions..."
-          prefix={<Ionicons name="search-outline" size={16} color={Colors.textMuted} />}
+          prefix={<Ionicons name="search-outline" size={16} color={colors.textMuted} />}
           accessibilityLabel="Search auctions"
           returnKeyType="search"
           onSubmitEditing={() => void syncAuctions()}
@@ -510,26 +511,26 @@ export default function AuctionsScreen() {
       {renderStatusFilter()}
       {renderSortBar()}
 
-      <View style={styles.launchRow}>
+      <View style={[styles.launchRow, { borderColor: colors.border, backgroundColor: colors.surface }]}>
         <View>
           <BodyEmphasis style={styles.launchTitle}>{t('auctions.cta.createAuction')}</BodyEmphasis>
           <Meta style={styles.launchHint}>Schedule a drop</Meta>
         </View>
         <View style={styles.actionBtnRow}>
           <AnimatedPressable
-            style={styles.myBidsBtn}
+            style={[styles.myBidsBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
             activeOpacity={0.9}
             onPress={() => navigation.navigate('MyBids')}
             accessibilityRole="button"
             accessibilityLabel="My Bids"
             accessibilityHint="View your active bids"
           >
-            <Ionicons name="list-outline" size={15} color={Colors.brand} />
-            <Meta style={styles.myBidsBtnText}>My Bids</Meta>
+            <Ionicons name="list-outline" size={15} color={colors.brand} />
+            <Meta style={[styles.myBidsBtnText, { color: colors.brand }]}>My Bids</Meta>
           </AnimatedPressable>
           <AppButton
             title="Create"
-            icon={<Ionicons name="add" size={15} color={Colors.background} />}
+            icon={<Ionicons name="add" size={15} color={colors.background} />}
             style={styles.launchBtn}
             variant="primary"
             size="sm"
@@ -565,7 +566,7 @@ export default function AuctionsScreen() {
             contentContainerStyle={styles.horizontalListContent}
             renderItem={({ item }) => (
               <AnimatedPressable
-                style={styles.upcomingCard}
+                style={[styles.upcomingCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
                 activeOpacity={0.9}
                 onPress={() => navigateToDetail(item)}
                 accessibilityRole="button"
@@ -576,7 +577,7 @@ export default function AuctionsScreen() {
                 </SharedTransitionView>
                 <View style={styles.upcomingMeta}>
                   <BodyEmphasis style={styles.upcomingTitle} numberOfLines={1}>{item.title}</BodyEmphasis>
-                  <Body style={styles.upcomingTimer}>{t('auctions.upcoming.startsIn', { countdown: formatCountdown(item.msToStart) })}</Body>
+                  <Body style={[styles.upcomingTimer, { color: colors.brand }]}>{t('auctions.upcoming.startsIn', { countdown: formatCountdown(item.msToStart) })}</Body>
                   <Meta style={styles.upcomingBid}>{t('auctions.upcoming.startingBid', { amount: formatFromFiat(item.startingBid, 'GBP', { displayMode: 'fiat' }) })}</Meta>
                 </View>
               </AnimatedPressable>
@@ -603,7 +604,7 @@ export default function AuctionsScreen() {
   const renderLoadingState = () => (
     <View style={styles.loadingWrap}>
       {[0, 1, 2].map((i) => (
-        <View key={i} style={styles.loadingCard}>
+        <View key={i} style={[styles.loadingCard, { borderColor: colors.border, backgroundColor: colors.surface }]}>
           <SkeletonLoader width="100%" height={172} borderRadius={12} />
           <View style={{ padding: 12 }}>
             <SkeletonLoader width="70%" height={16} borderRadius={8} style={{ marginBottom: 8 }} />
@@ -701,9 +702,9 @@ export default function AuctionsScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor={Colors.brand}
-            colors={[Colors.brand]}
-            progressBackgroundColor={Colors.surfaceAlt}
+            tintColor={colors.brand}
+            colors={[colors.brand]}
+            progressBackgroundColor={colors.surfaceAlt}
           />
         }
       />
@@ -744,21 +745,11 @@ const styles = StyleSheet.create({
   sortChip: {
     borderRadius: Radius.full,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
-  sortChipActive: {
-    backgroundColor: Colors.brand,
-    borderColor: Colors.brand,
-  },
   sortChipText: {
-    color: Colors.textSecondary,
     fontSize: 12,
-  },
-  sortChipTextActive: {
-    color: Colors.textInverse,
   },
   statusFilterBar: {
     flexDirection: 'row',
@@ -770,29 +761,17 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
     paddingVertical: 7,
     alignItems: 'center',
   },
-  statusChipActive: {
-    backgroundColor: Colors.brand,
-    borderColor: Colors.brand,
-  },
   statusChipText: {
-    color: Colors.textSecondary,
     fontSize: 12,
-  },
-  statusChipTextActive: {
-    color: Colors.textInverse,
   },
   launchRow: {
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
     borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     flexDirection: 'row',
@@ -819,14 +798,10 @@ const styles = StyleSheet.create({
     gap: 4,
     borderRadius: Radius.full,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
     paddingHorizontal: 10,
     paddingVertical: 7,
   },
-  myBidsBtnText: {
-    color: Colors.brand,
-  },
+  myBidsBtnText: {},
   syncBanner: {
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
@@ -838,13 +813,10 @@ const styles = StyleSheet.create({
   featuredLabel: {
     marginBottom: Space.sm,
     fontSize: 13,
-    color: Colors.textSecondary,
   },
   featuredCard: {
     borderRadius: Radius.xl,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
     overflow: 'hidden',
   },
   featuredImageFrame: {
@@ -863,7 +835,6 @@ const styles = StyleSheet.create({
   featuredImagePlaceholder: {
     width: '100%',
     height: 200,
-    backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -885,7 +856,6 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: Colors.danger,
   },
   featuredLiveText: {
     color: '#fff',
@@ -909,9 +879,7 @@ const styles = StyleSheet.create({
   featuredStatValue: {
     fontSize: 14,
   },
-  featuredTimer: {
-    color: Colors.danger,
-  },
+  featuredTimer: {},
   outbidBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -922,9 +890,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     backgroundColor: 'rgba(255,68,68,0.1)',
   },
-  outbidText: {
-    color: Colors.danger,
-  },
+  outbidText: {},
   leadingBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -935,9 +901,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     backgroundColor: 'rgba(0,0,0,0.05)',
   },
-  leadingText: {
-    color: Colors.brand,
-  },
+  leadingText: {},
   sectionWrap: {
     marginBottom: Space.sm,
   },
@@ -955,11 +919,9 @@ const styles = StyleSheet.create({
   },
   upcomingCard: {
     width: 208,
-    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: Colors.border,
   },
   upcomingImageFrame: {
     width: '100%',
@@ -982,7 +944,6 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   upcomingTimer: {
-    color: Colors.brand,
     marginBottom: 2,
   },
   upcomingBid: {},
@@ -993,8 +954,6 @@ const styles = StyleSheet.create({
   loadingCard: {
     borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
     overflow: 'hidden',
     marginBottom: Space.sm,
   },
