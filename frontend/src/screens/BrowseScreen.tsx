@@ -14,8 +14,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CachedImage } from '../components/CachedImage';
 import Reanimated, { useSharedValue, useAnimatedStyle, withTiming, withSequence, withDelay, useAnimatedScrollHandler, runOnJS, FadeInDown } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { Colors } from '../constants/colors';
-
 import { useAppTheme } from '../theme/ThemeContext';
 
 import { Motion } from '../constants/motion';
@@ -81,7 +79,7 @@ function getSubcategoryToken(categoryId: string, subcategoryId?: string, title?:
 }
 
 export default function BrowseScreen() {
-  const { isDark } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
   const navigation = useNavigation<any>();
   const route = useRoute<BrowseRoute>();
   const { title, categoryId, subcategoryId, searchQuery } = route.params || { title: 'Browse All', categoryId: 'search' };
@@ -295,65 +293,65 @@ export default function BrowseScreen() {
   const AnimatedFlashList = Reanimated.createAnimatedComponent(FlashList);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
       {/* Heavy Typography Header */}
       <Reanimated.View entering={FadeInDown.duration(300).delay(30)} style={styles.header}>
         <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.8} accessibilityLabel="Go back">
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </AnimatedPressable>
-        <AnimatedPressable style={styles.searchBtn} activeOpacity={0.8} onPress={() => navigation.navigate('GlobalSearch')} accessibilityLabel="Search listings">
-          <Ionicons name="search" size={20} color={Colors.textPrimary} />
+        <AnimatedPressable style={[styles.searchBtn, { backgroundColor: colors.surface }]} activeOpacity={0.8} onPress={() => navigation.navigate('GlobalSearch')} accessibilityLabel="Search listings">
+          <Ionicons name="search" size={20} color={colors.textPrimary} />
         </AnimatedPressable>
       </Reanimated.View>
 
       <Reanimated.View entering={FadeInDown.duration(300).delay(60)} style={styles.titleContainer}>
-        <Text style={styles.hugeTitle}>{title}</Text>
-        <Text style={styles.itemCountText}>{backendLoading ? 'Loading…' : `${displayCount} items`}</Text>
+        <Text style={[styles.hugeTitle, { color: colors.textPrimary }]}>{title}</Text>
+        <Text style={[styles.itemCountText, { color: colors.textMuted }]}>{backendLoading ? 'Loading…' : `${displayCount} items`}</Text>
       </Reanimated.View>
 
       <Reanimated.View entering={FadeInDown.duration(300).delay(90)} style={styles.filterBar}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
           <AnimatedPressable
-            style={[styles.filterPill, hasActiveFilters && styles.filterPillActive]}
+            style={[styles.filterPill, hasActiveFilters && styles.filterPillActive, hasActiveFilters && { backgroundColor: colors.textPrimary, borderColor: colors.textPrimary }, !hasActiveFilters && { backgroundColor: colors.surface, borderColor: colors.border }]}
             onPress={() => navigation.navigate('Filter', { categoryId, subcategoryId, title })}
             activeOpacity={0.85}
             accessibilityLabel="Open filters"
           >
-            <Ionicons name="options-outline" size={14} color={hasActiveFilters ? Colors.background : Colors.textPrimary} />
-            <Text style={[styles.filterPillText, hasActiveFilters && styles.filterPillTextActive]}>{hasActiveFilters ? 'Filter on' : 'Filter'}</Text>
+            <Ionicons name="options-outline" size={14} color={hasActiveFilters ? colors.background : colors.textPrimary} />
+            <Text style={[styles.filterPillText, hasActiveFilters && styles.filterPillTextActive, hasActiveFilters && { color: colors.background }]}>{hasActiveFilters ? 'Filter on' : 'Filter'}</Text>
           </AnimatedPressable>
           <AnimatedPressable
-            style={styles.filterPillOutline}
+            style={[styles.filterPillOutline, { backgroundColor: colors.surface, borderColor: colors.border }]}
             onPress={() => navigation.navigate('Filter', { categoryId, subcategoryId, title })}
             activeOpacity={0.85}
             accessibilityLabel="Filter by brand"
           >
-            <Text style={styles.filterPillText}>{browseFilters.brands.length > 0 ? `Brand (${browseFilters.brands.length})` : 'Brand'}</Text>
-            <Ionicons name="chevron-down" size={12} color={Colors.textMuted} />
+            <Text style={[styles.filterPillText, { color: colors.textPrimary }]}>{browseFilters.brands.length > 0 ? `Brand (${browseFilters.brands.length})` : 'Brand'}</Text>
+            <Ionicons name="chevron-down" size={12} color={colors.textMuted} />
           </AnimatedPressable>
           <AnimatedPressable
-            style={styles.filterPillOutline}
+            style={[styles.filterPillOutline, { backgroundColor: colors.surface, borderColor: colors.border }]}
             onPress={() => navigation.navigate('Filter', { categoryId, subcategoryId, title })}
             activeOpacity={0.85}
             accessibilityLabel="Filter by size"
           >
-            <Text style={styles.filterPillText}>{browseFilters.sizes.length > 0 ? `Size (${browseFilters.sizes.length})` : 'Size'}</Text>
-            <Ionicons name="chevron-down" size={12} color={Colors.textMuted} />
+            <Text style={[styles.filterPillText, { color: colors.textPrimary }]}>{browseFilters.sizes.length > 0 ? `Size (${browseFilters.sizes.length})` : 'Size'}</Text>
+            <Ionicons name="chevron-down" size={12} color={colors.textMuted} />
           </AnimatedPressable>
           <AnimatedPressable
-            style={styles.filterPillOutline}
+            style={[styles.filterPillOutline, { backgroundColor: colors.surface, borderColor: colors.border }]}
             onPress={() => navigation.navigate('Filter', { categoryId, subcategoryId, title })}
             activeOpacity={0.85}
             accessibilityLabel="Filter by condition"
           >
-            <Text style={styles.filterPillText}>{browseFilters.condition !== 'Any' ? browseFilters.condition : 'Condition'}</Text>
-            <Ionicons name="chevron-down" size={12} color={Colors.textMuted} />
+            <Text style={[styles.filterPillText, { color: colors.textPrimary }]}>{browseFilters.condition !== 'Any' ? browseFilters.condition : 'Condition'}</Text>
+            <Ionicons name="chevron-down" size={12} color={colors.textMuted} />
           </AnimatedPressable>
           {saveSearchLabel && saveSearchLabel !== 'Browse All' && (
             <AnimatedPressable
-              style={[styles.filterPillOutline, isCurrentSaved && styles.saveSearchPillActive]}
+              style={[styles.filterPillOutline, { backgroundColor: colors.surface, borderColor: colors.border }, isCurrentSaved && { borderColor: colors.brand, backgroundColor: `${colors.brand}08` }]}
               activeOpacity={0.85}
               onPress={isCurrentSaved ? undefined : handleSaveSearch}
               accessibilityLabel={isCurrentSaved ? 'Search saved with alerts' : 'Save this search with alerts'}
@@ -362,9 +360,9 @@ export default function BrowseScreen() {
               <Ionicons
                 name={isCurrentSaved ? 'notifications' : 'notifications-outline'}
                 size={14}
-                color={isCurrentSaved ? Colors.brand : Colors.textSecondary}
+                color={isCurrentSaved ? colors.brand : colors.textSecondary}
               />
-              <Text style={[styles.filterPillText, isCurrentSaved && styles.saveSearchTextActive]}>
+              <Text style={[styles.filterPillText, { color: colors.textPrimary }, isCurrentSaved && { color: colors.brand }]}>
                 {isCurrentSaved ? 'Saved' : 'Save search'}
               </Text>
             </AnimatedPressable>
@@ -438,7 +436,7 @@ export default function BrowseScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1 },
 
   header: {
     flexDirection: 'row',
@@ -449,7 +447,7 @@ const styles = StyleSheet.create({
     paddingBottom: Space.xs,
   },
   backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  searchBtn: { width: 44, height: 44, borderRadius: Radius.full, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' },
+  searchBtn: { width: 44, height: 44, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
 
   titleContainer: {
     paddingHorizontal: Space.md,
@@ -459,14 +457,12 @@ const styles = StyleSheet.create({
   hugeTitle: {
     fontSize: 32,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
     letterSpacing: -0.8,
     lineHeight: 38,
   },
   itemCountText: {
     fontSize: 14,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
     marginTop: 6,
   },
 
@@ -479,15 +475,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: Colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
   },
   filterPillActive: {
-    backgroundColor: Colors.textPrimary,
-    borderColor: Colors.textPrimary,
+    borderWidth: StyleSheet.hairlineWidth,
   },
-  filterPillTextActive: { color: Colors.background, fontSize: 13, fontFamily: Typography.family.semibold },
+  filterPillTextActive: { fontSize: 13, fontFamily: Typography.family.semibold },
   filterPillOutline: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -495,17 +488,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: Colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
   },
-  filterPillText: { color: Colors.textPrimary, fontSize: 13, fontFamily: Typography.family.medium },
+  filterPillText: { fontSize: 13, fontFamily: Typography.family.medium },
   saveSearchPillActive: {
-    borderColor: Colors.brand,
-    backgroundColor: `${Colors.brand}08`,
+    borderWidth: 1,
   },
   saveSearchTextActive: {
-    color: Colors.brand,
     fontFamily: Typography.family.semibold,
   },
   syncRetryBanner: {
@@ -538,7 +527,6 @@ const styles = StyleSheet.create({
     width: ITEM_WIDTH,
     borderRadius: Radius.sm,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
     marginBottom: 12,
   },
   gridImageContainer: {
@@ -569,9 +557,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 4,
   },
-  priceText: { color: Colors.textPrimary, fontSize: 18, fontFamily: Typography.family.bold },
-  brandText: { color: Colors.textSecondary, fontSize: 12, fontFamily: Typography.family.bold, textTransform: 'uppercase' },
-  sizeText: { color: Colors.textMuted, fontSize: 13, fontFamily: Typography.family.medium },
+  priceText: { fontSize: 18, fontFamily: Typography.family.bold },
+  brandText: { fontSize: 12, fontFamily: Typography.family.bold, textTransform: 'uppercase' },
+  sizeText: { fontSize: 13, fontFamily: Typography.family.medium },
   sellerActionRow: {
     marginTop: 8,
     flexDirection: 'row',
@@ -584,8 +572,6 @@ const styles = StyleSheet.create({
     minHeight: 28,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -607,11 +593,9 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.background,
   },
   sellerActionHandle: {
     flex: 1,
-    color: Colors.textSecondary,
     fontSize: 11,
     fontFamily: Typography.family.semibold,
   },
@@ -620,8 +604,6 @@ const styles = StyleSheet.create({
     height: 28,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.background,
     alignItems: 'center',
     justifyContent: 'center',
   },
