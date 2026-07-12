@@ -11,7 +11,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
-import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Space, Typography } from '../theme/designTokens';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { useToast } from '../context/ToastContext';
@@ -140,6 +140,7 @@ function validateForm(f: FormState): FieldErrors {
 }
 
 export default function AddressFormScreen({ navigation, route }: Props) {
+  const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const savedAddress = useStore((state) => state.savedAddress);
   const saveAddress = useStore((state) => state.saveAddress);
@@ -437,18 +438,18 @@ export default function AddressFormScreen({ navigation, route }: Props) {
         scrollEnabled={false}
       >
         <View style={styles.signedOutContainer}>
-          <Ionicons name="lock-closed-outline" size={36} color={Colors.textMuted} />
-          <Text style={styles.signedOutTitle}>Sign in required</Text>
-          <Text style={styles.signedOutBody}>
+          <Ionicons name="lock-closed-outline" size={36} color={colors.textMuted} />
+          <Text style={[styles.signedOutTitle, { color: colors.textPrimary }]}>Sign in required</Text>
+          <Text style={[styles.signedOutBody, { color: colors.textSecondary }]}>
             You need to be signed in to manage your delivery address.
           </Text>
           <Pressable
-            style={styles.signedOutBtn}
+            style={[styles.signedOutBtn, { backgroundColor: colors.brand }]}
             onPress={() => navigation.navigate('Login')}
             accessibilityRole="button"
             accessibilityLabel="Go to sign in"
           >
-            <Text style={styles.signedOutBtnText}>Sign in</Text>
+            <Text style={[styles.signedOutBtnText, { color: colors.textInverse }]}>Sign in</Text>
           </Pressable>
         </View>
       </FlagshipScreen>
@@ -475,10 +476,10 @@ export default function AddressFormScreen({ navigation, route }: Props) {
       >
           {/* 2. Editorial introduction */}
           <View style={styles.intro}>
-            <Text style={styles.introTitle}>
+            <Text style={[styles.introTitle, { color: colors.textPrimary }]}>
               {isEditing ? 'Edit delivery address' : 'Add delivery address'}
             </Text>
-            <Text style={styles.introBody}>
+            <Text style={[styles.introBody, { color: colors.textSecondary }]}>
               {isEditing
                 ? 'Update your saved delivery address. Used at checkout and for delivery.'
                 : 'Add a delivery address for faster checkout. You can save multiple addresses.'}
@@ -487,10 +488,10 @@ export default function AddressFormScreen({ navigation, route }: Props) {
 
           {/* 3. Recipient section */}
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Full name</Text>
+            <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>Full name</Text>
             <TextInput
               ref={nameRef}
-              style={styles.input}
+              style={[styles.input, { color: colors.textPrimary }]}
               value={form.name}
               onChangeText={(v) => updateField('name', v)}
               onBlur={() => validateField('name')}
@@ -500,24 +501,24 @@ export default function AddressFormScreen({ navigation, route }: Props) {
               returnKeyType="next"
               onSubmitEditing={() => streetRef.current?.focus()}
               placeholder="Recipient name"
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
             />
             {errors.name && (
               <View style={styles.errorRow}>
-                <Ionicons name="alert-circle" size={13} color={Colors.danger} />
-                <Text style={styles.errorText}>{errors.name}</Text>
+                <Ionicons name="alert-circle" size={13} color={colors.danger} />
+                <Text style={[styles.errorText, { color: colors.danger }]}>{errors.name}</Text>
               </View>
             )}
           </View>
 
-          <View style={styles.separator} />
+          <View style={[styles.separator, { backgroundColor: colors.border }]} />
 
           {/* 4. Address section */}
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Address line 1</Text>
+            <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>Address line 1</Text>
             <TextInput
               ref={streetRef}
-              style={styles.input}
+              style={[styles.input, { color: colors.textPrimary }]}
               value={form.streetAddress}
               onChangeText={(v) => updateField('streetAddress', v)}
               onBlur={() => validateField('streetAddress')}
@@ -527,21 +528,21 @@ export default function AddressFormScreen({ navigation, route }: Props) {
               returnKeyType="next"
               onSubmitEditing={() => apartmentRef.current?.focus()}
               placeholder="Street address"
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
             />
             {errors.streetAddress && (
               <View style={styles.errorRow}>
-                <Ionicons name="alert-circle" size={13} color={Colors.danger} />
-                <Text style={styles.errorText}>{errors.streetAddress}</Text>
+                <Ionicons name="alert-circle" size={13} color={colors.danger} />
+                <Text style={[styles.errorText, { color: colors.danger }]}>{errors.streetAddress}</Text>
               </View>
             )}
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Address line 2 (optional)</Text>
+            <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>Address line 2 (optional)</Text>
             <TextInput
               ref={apartmentRef}
-              style={styles.input}
+              style={[styles.input, { color: colors.textPrimary }]}
               value={form.apartment}
               onChangeText={(v) => updateField('apartment', v)}
               autoCapitalize="words"
@@ -549,18 +550,18 @@ export default function AddressFormScreen({ navigation, route }: Props) {
               returnKeyType="next"
               onSubmitEditing={() => cityRef.current?.focus()}
               placeholder="Apartment, suite, unit"
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
             />
           </View>
 
-          <View style={styles.separator} />
+          <View style={[styles.separator, { backgroundColor: colors.border }]} />
 
           {/* 5. Location section */}
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>City / town</Text>
+            <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>City / town</Text>
             <TextInput
               ref={cityRef}
-              style={styles.input}
+              style={[styles.input, { color: colors.textPrimary }]}
               value={form.city}
               onChangeText={(v) => updateField('city', v)}
               onBlur={() => validateField('city')}
@@ -569,21 +570,21 @@ export default function AddressFormScreen({ navigation, route }: Props) {
               returnKeyType="next"
               onSubmitEditing={() => regionRef.current?.focus()}
               placeholder="City or town"
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
             />
             {errors.city && (
               <View style={styles.errorRow}>
-                <Ionicons name="alert-circle" size={13} color={Colors.danger} />
-                <Text style={styles.errorText}>{errors.city}</Text>
+                <Ionicons name="alert-circle" size={13} color={colors.danger} />
+                <Text style={[styles.errorText, { color: colors.danger }]}>{errors.city}</Text>
               </View>
             )}
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>State / county / region (optional)</Text>
+            <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>State / county / region (optional)</Text>
             <TextInput
               ref={regionRef}
-              style={styles.input}
+              style={[styles.input, { color: colors.textPrimary }]}
               value={form.region}
               onChangeText={(v) => updateField('region', v)}
               autoCapitalize="words"
@@ -591,15 +592,15 @@ export default function AddressFormScreen({ navigation, route }: Props) {
               returnKeyType="next"
               onSubmitEditing={() => postalRef.current?.focus()}
               placeholder="State, county or region"
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
             />
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Postal code</Text>
+            <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>Postal code</Text>
             <TextInput
               ref={postalRef}
-              style={styles.input}
+              style={[styles.input, { color: colors.textPrimary }]}
               value={form.postalCode}
               onChangeText={(v) => updateField('postalCode', v)}
               onBlur={() => validateField('postalCode')}
@@ -609,33 +610,33 @@ export default function AddressFormScreen({ navigation, route }: Props) {
               returnKeyType="done"
               onSubmitEditing={handleSave}
               placeholder="Postal code"
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
             />
             {errors.postalCode && (
               <View style={styles.errorRow}>
-                <Ionicons name="alert-circle" size={13} color={Colors.danger} />
-                <Text style={styles.errorText}>{errors.postalCode}</Text>
+                <Ionicons name="alert-circle" size={13} color={colors.danger} />
+                <Text style={[styles.errorText, { color: colors.danger }]}>{errors.postalCode}</Text>
               </View>
             )}
             {postcodeSuggestion && (
               <Pressable
-                style={styles.postcodeSuggestion}
+                style={[styles.postcodeSuggestion, { backgroundColor: `${colors.brand}08`, borderColor: `${colors.brand}30` }]}
                 onPress={applyPostcodeSuggestion}
                 accessibilityRole="button"
                 accessibilityLabel={`Use ${postcodeSuggestion.city}, ${postcodeSuggestion.region} for this postcode`}
               >
-                <Ionicons name="location-outline" size={14} color={Colors.brand} />
-                <Text style={styles.postcodeSuggestionText}>
-                  Use <Text style={styles.postcodeSuggestionBold}>{postcodeSuggestion.city}</Text>
+                <Ionicons name="location-outline" size={14} color={colors.brand} />
+                <Text style={[styles.postcodeSuggestionText, { color: colors.textSecondary }]}>
+                  Use <Text style={[styles.postcodeSuggestionBold, { color: colors.textPrimary }]}>{postcodeSuggestion.city}</Text>
                   {postcodeSuggestion.region ? `, ${postcodeSuggestion.region}` : ''}
                 </Text>
-                <Ionicons name="arrow-forward-circle" size={16} color={Colors.brand} />
+                <Ionicons name="arrow-forward-circle" size={16} color={colors.brand} />
               </Pressable>
             )}
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Country</Text>
+            <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>Country</Text>
             <Pressable
               style={styles.countryRow}
               onPress={() => {
@@ -648,25 +649,26 @@ export default function AddressFormScreen({ navigation, route }: Props) {
               <Text
                 style={[
                   styles.countryText,
-                  !form.country && styles.countryPlaceholder,
+                  { color: colors.textPrimary },
+                  !form.country && { color: colors.textMuted },
                 ]}
               >
                 {countryDisplayName}
               </Text>
-              <Ionicons name="chevron-down" size={18} color={Colors.textMuted} />
+              <Ionicons name="chevron-down" size={18} color={colors.textMuted} />
             </Pressable>
             {errors.country && (
               <View style={styles.errorRow}>
-                <Ionicons name="alert-circle" size={13} color={Colors.danger} />
-                <Text style={styles.errorText}>{errors.country}</Text>
+                <Ionicons name="alert-circle" size={13} color={colors.danger} />
+                <Text style={[styles.errorText, { color: colors.danger }]}>{errors.country}</Text>
               </View>
             )}
           </View>
 
           {/* 6. Default-address note */}
           <View style={styles.defaultNote}>
-            <Ionicons name="information-circle-outline" size={14} color={Colors.textMuted} />
-            <Text style={styles.defaultNoteText}>
+            <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
+            <Text style={[styles.defaultNoteText, { color: colors.textMuted }]}>
               This will be used as your default delivery address.
             </Text>
           </View>
@@ -680,8 +682,8 @@ export default function AddressFormScreen({ navigation, route }: Props) {
               accessibilityRole="button"
               accessibilityLabel="Remove delivery address"
             >
-              <Ionicons name="trash-outline" size={15} color={Colors.textMuted} />
-              <Text style={styles.removeBtnText}>Remove address</Text>
+              <Ionicons name="trash-outline" size={15} color={colors.textMuted} />
+              <Text style={[styles.removeBtnText, { color: colors.textMuted }]}>Remove address</Text>
             </Pressable>
           )}
       </KeyboardAwareScrollView>
@@ -689,15 +691,15 @@ export default function AddressFormScreen({ navigation, route }: Props) {
       {/* Save error display */}
       {saveError ? (
         <View style={styles.saveErrorRow}>
-          <Ionicons name="alert-circle" size={14} color={Colors.danger} />
-          <Text style={styles.saveErrorText}>{saveError}</Text>
+          <Ionicons name="alert-circle" size={14} color={colors.danger} />
+          <Text style={[styles.saveErrorText, { color: colors.danger }]}>{saveError}</Text>
         </View>
       ) : null}
 
       {/* 7. Sticky Save footer */}
-      <View style={[styles.stickyFooter, { paddingBottom: insets.bottom + Space.sm }]}>
+      <View style={[styles.stickyFooter, { paddingBottom: insets.bottom + Space.sm, backgroundColor: colors.background, borderTopColor: colors.border }]}>
         <Pressable
-          style={[styles.saveBtn, isSaving && styles.saveBtnPressed]}
+          style={[styles.saveBtn, { backgroundColor: colors.brand }, isSaving && styles.saveBtnPressed]}
           onPress={handleSave}
           disabled={isSaving}
           accessibilityRole="button"
@@ -705,9 +707,9 @@ export default function AddressFormScreen({ navigation, route }: Props) {
           accessibilityState={{ disabled: isSaving }}
         >
           {isSaving ? (
-            <Text style={styles.saveBtnText}>Saving…</Text>
+            <Text style={[styles.saveBtnText, { color: colors.textInverse }]}>Saving…</Text>
           ) : (
-            <Text style={styles.saveBtnText}>
+            <Text style={[styles.saveBtnText, { color: colors.textInverse }]}>
               {isEditing ? 'Save changes' : 'Save address'}
             </Text>
           )}
@@ -730,7 +732,6 @@ export default function AddressFormScreen({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   flex: {
     flex: 1,
@@ -751,13 +752,11 @@ const styles = StyleSheet.create({
   headerCancelText: {
     fontSize: 16,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
   },
   headerTitle: {
     flex: 1,
     fontSize: 17,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
     textAlign: 'center',
   },
   headerSpacer: {
@@ -778,13 +777,11 @@ const styles = StyleSheet.create({
   introTitle: {
     fontSize: 24,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
     letterSpacing: -0.3,
   },
   introBody: {
     fontSize: 15,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
     lineHeight: 21,
   },
 
@@ -795,20 +792,17 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 13,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
     marginBottom: 6,
   },
   input: {
     fontSize: 16,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
     paddingVertical: 10,
     paddingHorizontal: 0,
     minHeight: 44,
   },
   separator: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
   },
 
   // Error
@@ -821,7 +815,6 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.danger,
   },
   postcodeSuggestion: {
     flexDirection: 'row',
@@ -830,20 +823,16 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    backgroundColor: `${Colors.brand}08`,
     borderRadius: 8,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: `${Colors.brand}30`,
   },
   postcodeSuggestionText: {
     flex: 1,
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
   },
   postcodeSuggestionBold: {
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   saveErrorRow: {
     flexDirection: 'row',
@@ -856,7 +845,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontFamily: Typography.family.medium,
-    color: Colors.danger,
   },
 
   // Country
@@ -870,10 +858,6 @@ const styles = StyleSheet.create({
   countryText: {
     fontSize: 16,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
-  },
-  countryPlaceholder: {
-    color: Colors.textMuted,
   },
 
   // Default note
@@ -887,7 +871,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     lineHeight: 18,
   },
 
@@ -904,19 +887,15 @@ const styles = StyleSheet.create({
   removeBtnText: {
     fontSize: 14,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
   },
 
   // Sticky footer
   stickyFooter: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
-    backgroundColor: Colors.background,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
   },
   saveBtn: {
-    backgroundColor: Colors.brand,
     paddingVertical: 14,
     borderRadius: 8,
     alignItems: 'center',
@@ -929,7 +908,6 @@ const styles = StyleSheet.create({
   saveBtnText: {
     fontSize: 16,
     fontFamily: Typography.family.semibold,
-    color: Colors.textInverse,
   },
 
   // Signed out
@@ -943,13 +921,11 @@ const styles = StyleSheet.create({
   signedOutTitle: {
     fontSize: 20,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
     marginTop: Space.sm,
   },
   signedOutBody: {
     fontSize: 15,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
     textAlign: 'center',
     lineHeight: 21,
   },
@@ -957,7 +933,6 @@ const styles = StyleSheet.create({
     marginTop: Space.md,
     paddingHorizontal: Space.xl,
     paddingVertical: 14,
-    backgroundColor: Colors.brand,
     borderRadius: 8,
     minHeight: 48,
     justifyContent: 'center',
@@ -965,6 +940,5 @@ const styles = StyleSheet.create({
   signedOutBtnText: {
     fontSize: 16,
     fontFamily: Typography.family.semibold,
-    color: Colors.textInverse,
   },
 });
