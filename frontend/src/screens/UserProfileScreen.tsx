@@ -202,16 +202,22 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const reviewSummary: SellerReviewSummary | null = reviewsQuery.data?.pages?.[0]?.summary ?? null;
 
   // Scroll / header animation
+  const hasCover = Boolean(displayCover);
+  const collapseAtShared = useSharedValue(COVER_HEIGHT - 60);
   const scrollY = useSharedValue(0);
   const collapsedShared = useSharedValue(false);
   const stickyShared = useSharedValue(false);
   const stickyThreshold = useSharedValue(9999);
 
+  useEffect(() => {
+    collapseAtShared.value = hasCover ? COVER_HEIGHT - 60 : 80;
+  }, [hasCover, collapseAtShared]);
+
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (e) => {
       scrollY.value = e.contentOffset.y;
       runOnJS(saveScrollOffset)(e.contentOffset.y);
-      const collapsedAt = COVER_HEIGHT - 60;
+      const collapsedAt = collapseAtShared.value;
       if (e.contentOffset.y > collapsedAt && !collapsedShared.value) {
         collapsedShared.value = true;
         runOnJS(setCollapsedVisible)(true);
@@ -238,12 +244,14 @@ export default function UserProfileScreen({ navigation, route }: Props) {
 
   const collapsedHeaderStyle = useAnimatedStyle(() => {
     if (reducedMotion) return { opacity: collapsedShared.value ? 1 : 0 };
-    const opacity = interpolate(scrollY.value, [COVER_HEIGHT - 80, COVER_HEIGHT - 20], [0, 1], Extrapolation.CLAMP);
+    const collapseAt = collapseAtShared.value;
+    const opacity = interpolate(scrollY.value, [collapseAt - 20, collapseAt + 40], [0, 1], Extrapolation.CLAMP);
     return { opacity };
   });
 
   const collapsedHeaderShadowStyle = useAnimatedStyle(() => {
-    const shadowOpacity = interpolate(scrollY.value, [COVER_HEIGHT - 80, COVER_HEIGHT - 20], [0, 0.06], Extrapolation.CLAMP);
+    const collapseAt = collapseAtShared.value;
+    const shadowOpacity = interpolate(scrollY.value, [collapseAt - 20, collapseAt + 40], [0, 0.06], Extrapolation.CLAMP);
     return { shadowOpacity };
   });
 
@@ -326,7 +334,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
       if (saved !== undefined && saved > 0) {
         listRef.current.scrollToOffset?.({ offset: saved, animated: false });
         // Update overlay state from the restored offset
-        const collapsedAt = COVER_HEIGHT - 60;
+        const collapsedAt = hasCover ? COVER_HEIGHT - 60 : 80;
         const stickyAt = stickyThreshold.value;
         const shouldCollapse = saved > collapsedAt;
         const shouldSticky = saved > stickyAt;
@@ -602,13 +610,13 @@ export default function UserProfileScreen({ navigation, route }: Props) {
       <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={BG} />
 
       {/* Top utility controls — overlay cover, fade out on scroll */}
-      <View pointerEvents="box-none" style={styles.coverActionLayer}>
+      <View pointerEvents="box-none" style={[styles.coverActionLayer, !hasCover && { height: insets.top + 50 }]}>
         <Reanimated.View
           style={[styles.topUtilityRow, { top: Math.max(insets.top + 6, 14) }, topUtilityStyle]}
           pointerEvents={collapsedVisible ? 'none' : 'auto'}
         >
           <AnimatedPressable
-            style={styles.topUtilityIconBtn}
+            style={[styles.topUtilityIconBtn, !hasCover && styles.topUtilityIconBtnCompact]}
             activeOpacity={0.9}
             onPress={() => navigation.goBack()}
             accessibilityLabel="Go back"
@@ -616,29 +624,29 @@ export default function UserProfileScreen({ navigation, route }: Props) {
             accessibilityHint="Returns to previous screen"
             hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
           >
-            <Ionicons name="arrow-back" size={18} color="#fff" />
+            <Ionicons name="arrow-back" size={18} color={hasCover ? '#fff' : TEXT} />
           </AnimatedPressable>
           <View style={styles.topUtilityRight}>
             <AnimatedPressable
-              style={styles.topUtilityIconBtn}
+              style={[styles.topUtilityIconBtn, !hasCover && styles.topUtilityIconBtnCompact]}
               activeOpacity={0.9}
               onPress={handleShare}
               accessibilityLabel="Share profile"
               accessibilityRole="button"
               hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
             >
-              <Ionicons name="share-outline" size={18} color="#fff" />
+              <Ionicons name="share-outline" size={18} color={hasCover ? '#fff' : TEXT} />
             </AnimatedPressable>
             {!isSelfProfile && (
               <AnimatedPressable
-                style={styles.topUtilityIconBtn}
+                style={[styles.topUtilityIconBtn, !hasCover && styles.topUtilityIconBtnCompact]}
                 activeOpacity={0.9}
                 onPress={handleMore}
                 accessibilityLabel="More options"
                 accessibilityRole="button"
                 hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
               >
-                <Ionicons name="ellipsis-horizontal" size={18} color="#fff" />
+                <Ionicons name="ellipsis-horizontal" size={18} color={hasCover ? '#fff' : TEXT} />
               </AnimatedPressable>
             )}
           </View>
@@ -824,6 +832,11 @@ const styles = StyleSheet.create({
     width: 44, height: 44, borderRadius: 12,
     backgroundColor: 'rgba(0,0,0,0.22)',
     alignItems: 'center', justifyContent: 'center',
+  },
+  topUtilityIconBtnCompact: {
+    backgroundColor: SURFACE_ALT,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: BORDER,
   },
   collapsedHeader: {
     position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,

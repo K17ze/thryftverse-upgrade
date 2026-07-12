@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Linking,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Reanimated, { useAnimatedStyle, interpolate, Extrapolation } from 'react-native-reanimated';
@@ -111,8 +112,11 @@ export function ProfileHero({
   onTabSelect,
   onShopSegmentSelect,
 }: ProfileHeroProps) {
+  const insets = useSafeAreaInsets();
+  const hasCover = Boolean(displayCover);
+
   const coverParallaxStyle = useAnimatedStyle(() => {
-    if (reducedMotion) return {};
+    if (reducedMotion || !hasCover) return {};
     const overscroll = Math.min(scrollY.value, 0);
     const scale = interpolate(overscroll, [-120, 0], [1.2, 1], Extrapolation.CLAMP);
     return { transform: [{ scale }] };
@@ -138,33 +142,36 @@ export function ProfileHero({
   return (
     <View>
       {/* ── Cover stage — edge-to-edge media with gradient fades ── */}
-      <Reanimated.View style={[styles.coverContainer, coverParallaxStyle]}>
-        <FlagshipProfileMedia
-          coverUri={displayCover}
-          coverVideoUri={isVideoUri(displayCover) ? displayCover : undefined}
-          isSelf={isSelfProfile}
-          coverOnly
-          style={{ width: '100%' }}
-          coverHeight={COVER_HEIGHT}
-        />
-        {/* Top gradient fade for control contrast */}
-        <LinearGradient
-          colors={['rgba(0,0,0,0.28)', 'rgba(0,0,0,0.12)', 'transparent']}
-          style={styles.coverTopFade}
-          pointerEvents="none"
-        />
-        {/* Subtle bottom fade around the avatar seam — no hard dark strip */}
-        <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.10)']}
-          style={styles.coverBottomFade}
-          pointerEvents="none"
-        />
-      </Reanimated.View>
+      {/* When no cover media, collapse to a compact identity canvas per audit 8.3 */}
+      {hasCover ? (
+        <Reanimated.View style={[styles.coverContainer, coverParallaxStyle]}>
+          <FlagshipProfileMedia
+            coverUri={displayCover}
+            coverVideoUri={isVideoUri(displayCover) ? displayCover : undefined}
+            isSelf={isSelfProfile}
+            coverOnly
+            style={{ width: '100%' }}
+            coverHeight={COVER_HEIGHT}
+          />
+          {/* Top gradient fade for control contrast */}
+          <LinearGradient
+            colors={['rgba(0,0,0,0.28)', 'rgba(0,0,0,0.12)', 'transparent']}
+            style={styles.coverTopFade}
+            pointerEvents="none"
+          />
+          {/* Subtle bottom fade around the avatar seam — no hard dark strip */}
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.10)']}
+            style={styles.coverBottomFade}
+            pointerEvents="none"
+          />
+        </Reanimated.View>
+      ) : null}
 
       {/* ── Hero root — position relative for absolute avatar ── */}
-      <View style={styles.heroRoot}>
+      <View style={[styles.heroRoot, !hasCover && { paddingTop: insets.top + Space.sm }]}>
         {/* ── Seam row: avatar (left, overlapping) + 3 stats (right, vertically centred) ── */}
-        <View style={styles.avatarAbsolute}>
+        <View style={[styles.avatarAbsolute, !hasCover && styles.avatarCompact]}>
           {displayAvatar ? (
             <CachedImage
               uri={displayAvatar}
@@ -182,7 +189,7 @@ export function ProfileHero({
         {/* Identity canvas — paddingTop reserves avatar space */}
         <View style={styles.identityCanvas}>
           {/* Seam row — stats to the right of avatar, vertically centred */}
-          <View style={styles.seamRow}>
+          <View style={[styles.seamRow, !hasCover && styles.seamRowCompact]}>
             <View style={styles.seamSpacer} />
             <View style={styles.seamStats}>
               <Pressable
@@ -409,6 +416,10 @@ const styles = StyleSheet.create({
     left: Space.md,
     zIndex: 10,
   },
+  // Compact avatar — when no cover, sits at top of hero root (within padded area)
+  avatarCompact: {
+    top: Space.sm,
+  },
   avatar: {
     width: AVATAR_SIZE,
     height: AVATAR_SIZE,
@@ -441,6 +452,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     minHeight: AVATAR_OVERLAP + Space.sm,
     marginBottom: Space.xs,
+  },
+  // Compact seam row — when no cover, reserves full avatar height
+  seamRowCompact: {
+    minHeight: AVATAR_SIZE + Space.sm,
   },
   seamSpacer: {
     width: AVATAR_SIZE + Space.sm,
