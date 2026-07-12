@@ -20,7 +20,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Typography, Space, Radius } from '../theme/designTokens';
 import { useStore } from '../store/useStore';
 import { useNavigation, useScrollToTop } from '@react-navigation/native';
@@ -54,6 +54,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const COVER_HEIGHT = 180;
 
 export default function MyProfileScreen() {
+  const { colors, isDark } = useAppTheme();
   const navigation = useNavigation<NavT>();
   const insets = useSafeAreaInsets();
   const reducedMotionEnabled = useReducedMotion();
@@ -198,8 +199,8 @@ export default function MyProfileScreen() {
 
   if (!user) {
     return (
-      <View style={styles.container}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
         <EmptyState
           icon="person-outline"
           title="Not signed in"
@@ -270,7 +271,7 @@ export default function MyProfileScreen() {
 
   const headerOpacityStyle = useAnimatedStyle(() => {
     const opacity = interpolate(scrollY.value, [COVER_HEIGHT - 60, COVER_HEIGHT - 10], [0, 1], Extrapolation.CLAMP);
-    return { opacity, backgroundColor: Colors.background };
+    return { opacity, backgroundColor: colors.background };
   });
 
   const handleShare = async () => {
@@ -335,11 +336,11 @@ export default function MyProfileScreen() {
   const CARD_WIDTH = (SCREEN_WIDTH - Space.md * 2 - GRID_GAP) / 2;
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
       {/* ── 1. FULL-WIDTH COVER ── */}
-      <Reanimated.View style={[styles.coverWrap, coverStyle]}>
+      <Reanimated.View style={[styles.coverWrap, coverStyle, { backgroundColor: colors.surfaceAlt }]}>
         <FlagshipProfileMedia
           coverUri={displayCover}
           coverVideoUri={isVideoUri(displayCover) ? displayCover : undefined}
@@ -384,9 +385,9 @@ export default function MyProfileScreen() {
       </View>
 
       {/* ── COLLAPSED SCROLL HEADER ── */}
-      <Reanimated.View style={[styles.floatingHeader, { paddingTop: insets.top }, headerOpacityStyle]} pointerEvents="none">
+      <Reanimated.View style={[styles.floatingHeader, { paddingTop: insets.top, borderBottomColor: colors.border }, headerOpacityStyle]} pointerEvents="none">
         <View style={{ flex: 1 }} />
-        <Text style={styles.floatingHeaderTitle} numberOfLines={1} ellipsizeMode="tail">{user.username}</Text>
+        <Text style={[styles.floatingHeaderTitle, { color: colors.textPrimary }]} numberOfLines={1} ellipsizeMode="tail">{user.username}</Text>
         <View style={{ flex: 1 }} />
       </Reanimated.View>
 
@@ -416,19 +417,19 @@ export default function MyProfileScreen() {
           {/* Away-mode indicator — shown when holiday mode is enabled */}
           {holidayMode ? (
             <Pressable
-              style={myProfileStyles.awayBanner}
+              style={[myProfileStyles.awayBanner, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
               onPress={() => (navigation as any).navigate('PrivacySettings')}
               accessibilityRole="button"
               accessibilityLabel="Holiday mode is on — tap to manage"
             >
-              <Ionicons name="pause-circle" size={18} color={Colors.textMuted} />
+              <Ionicons name="pause-circle" size={18} color={colors.textMuted} />
               <View style={myProfileStyles.awayBannerTextWrap}>
-                <Text style={myProfileStyles.awayBannerTitle}>Holiday mode is on</Text>
-                <Text style={myProfileStyles.awayBannerSub}>
+                <Text style={[myProfileStyles.awayBannerTitle, { color: colors.textPrimary }]}>Holiday mode is on</Text>
+                <Text style={[myProfileStyles.awayBannerSub, { color: colors.textMuted }]}>
                   Your shop is paused. Tap to manage.
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
             </Pressable>
           ) : null}
 
@@ -465,34 +466,34 @@ export default function MyProfileScreen() {
 
         {/* LISTINGS TAB — two-column portfolio grid */}
         {activeTab === 'listings' && (
-          <View style={{ backgroundColor: Colors.background, paddingBottom: 100, paddingTop: Space.md }}>
+          <View style={{ backgroundColor: colors.background, paddingBottom: 100, paddingTop: Space.md }}>
             {allOwnedListings.length === 0 ? (
               <View style={styles.listingsEmpty}>
-                <View style={styles.listingsEmptyIcon}>
-                  <Ionicons name="add" size={28} color={Colors.brand} />
+                <View style={[styles.listingsEmptyIcon, { backgroundColor: colors.surfaceAlt }]}>
+                  <Ionicons name="add" size={28} color={colors.brand} />
                 </View>
-                <Text style={styles.listingsEmptyTitle}>List your first item</Text>
-                <Text style={styles.listingsEmptySubtitle}>Start selling</Text>
+                <Text style={[styles.listingsEmptyTitle, { color: colors.textPrimary }]}>List your first item</Text>
+                <Text style={[styles.listingsEmptySubtitle, { color: colors.textMuted }]}>Start selling</Text>
                 <AnimatedPressable
-                  style={styles.listingsEmptyCta}
+                  style={[styles.listingsEmptyCta, { backgroundColor: colors.brand }]}
                   onPress={() => navigation.navigate('MainTabs')}
                   activeOpacity={0.85}
                   accessibilityRole="button"
                   accessibilityLabel="Start selling"
                 >
-                  <Text style={styles.listingsEmptyCtaText}>Start selling</Text>
+                  <Text style={[styles.listingsEmptyCtaText, { color: colors.textInverse }]}>Start selling</Text>
                 </AnimatedPressable>
               </View>
             ) : (
               <>
                 <View style={styles.gridHeader}>
-                  <Text style={styles.gridHeaderCount}>{allOwnedListings.length} listings</Text>
+                  <Text style={[styles.gridHeaderCount, { color: colors.textMuted }]}>{allOwnedListings.length} listings</Text>
                   <Pressable
                     onPress={() => navigation.navigate('MyListings')}
                     accessibilityRole="button"
                     accessibilityLabel="View all listings"
                   >
-                    <Text style={styles.gridHeaderAction}>View All</Text>
+                    <Text style={[styles.gridHeaderAction, { color: colors.brand }]}>View All</Text>
                   </Pressable>
                 </View>
                 <View style={styles.grid}>
@@ -521,14 +522,14 @@ export default function MyProfileScreen() {
                           </View>
                         ) : null}
                       </SharedTransitionView>
-                      <Text style={styles.gridPrice} numberOfLines={1}>
+                      <Text style={[styles.gridPrice, { color: colors.textPrimary }]} numberOfLines={1}>
                         {formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}
                       </Text>
                       {item.brand ? (
-                        <Text style={styles.gridBrand} numberOfLines={1}>{item.brand}</Text>
+                        <Text style={[styles.gridBrand, { color: colors.textSecondary }]} numberOfLines={1}>{item.brand}</Text>
                       ) : null}
                       {(item.size || item.condition) ? (
-                        <Text style={styles.gridMeta} numberOfLines={1}>
+                        <Text style={[styles.gridMeta, { color: colors.textMuted }]} numberOfLines={1}>
                           {[item.size, item.condition].filter(Boolean).join(' · ')}
                         </Text>
                       ) : null}
@@ -542,10 +543,10 @@ export default function MyProfileScreen() {
 
         {/* LOOKS TAB — fetched from backend */}
         {activeTab === 'looks' && (
-          <View style={{ backgroundColor: Colors.background, paddingBottom: 100, paddingTop: Space.md }}>
+          <View style={{ backgroundColor: colors.background, paddingBottom: 100, paddingTop: Space.md }}>
             {looksLoading ? (
               <View style={{ alignItems: 'center', paddingVertical: 40 }}>
-                <Text style={{ color: Colors.textMuted, fontSize: 14 }}>Loading looks...</Text>
+                <Text style={{ color: colors.textMuted, fontSize: 14 }}>Loading looks...</Text>
               </View>
             ) : myLooks.length === 0 ? (
               <EmptyState
@@ -579,77 +580,77 @@ export default function MyProfileScreen() {
 
         {/* ABOUT TAB — flat editorial layout */}
         {activeTab === 'about' && (
-          <View style={{ backgroundColor: Colors.background, paddingBottom: 100, paddingTop: Space.md }}>
+          <View style={{ backgroundColor: colors.background, paddingBottom: 100, paddingTop: Space.md }}>
             <View style={styles.aboutContainer}>
               {user.bio ? (
-                <View style={styles.aboutRow}>
-                  <Text style={styles.aboutLabel}>Bio</Text>
-                  <Text style={styles.aboutValue}>{user.bio}</Text>
+                <View style={[styles.aboutRow, { borderBottomColor: colors.border }]}>
+                  <Text style={[styles.aboutLabel, { color: colors.textMuted }]}>Bio</Text>
+                  <Text style={[styles.aboutValue, { color: colors.textPrimary }]}>{user.bio}</Text>
                 </View>
               ) : null}
               {user.location ? (
-                <View style={styles.aboutRow}>
-                  <Text style={styles.aboutLabel}>Location</Text>
-                  <Text style={styles.aboutValue}>{user.location}</Text>
+                <View style={[styles.aboutRow, { borderBottomColor: colors.border }]}>
+                  <Text style={[styles.aboutLabel, { color: colors.textMuted }]}>Location</Text>
+                  <Text style={[styles.aboutValue, { color: colors.textPrimary }]}>{user.location}</Text>
                 </View>
               ) : null}
               {user.website ? (
-                <View style={styles.aboutRow}>
-                  <Text style={styles.aboutLabel}>Website</Text>
-                  <Text style={styles.aboutValue}>{user.website}</Text>
+                <View style={[styles.aboutRow, { borderBottomColor: colors.border }]}>
+                  <Text style={[styles.aboutLabel, { color: colors.textMuted }]}>Website</Text>
+                  <Text style={[styles.aboutValue, { color: colors.textPrimary }]}>{user.website}</Text>
                 </View>
               ) : null}
               {memberSince ? (
-                <View style={[styles.aboutRow, styles.aboutRowLast]}>
-                  <Text style={styles.aboutLabel}>Member Since</Text>
-                  <Text style={styles.aboutValue}>{memberSince}</Text>
+                <View style={[styles.aboutRow, styles.aboutRowLast, { borderBottomColor: colors.border }]}>
+                  <Text style={[styles.aboutLabel, { color: colors.textMuted }]}>Member Since</Text>
+                  <Text style={[styles.aboutValue, { color: colors.textPrimary }]}>{memberSince}</Text>
                 </View>
               ) : null}
               {!user.bio && !user.location && !user.website && !memberSince && (
-                <Text style={styles.aboutEmpty}>No profile details added yet.</Text>
+                <Text style={[styles.aboutEmpty, { color: colors.textMuted }]}>No profile details added yet.</Text>
               )}
             </View>
 
             {/* Shop stats — derived from seller trust data */}
             {sellerTrust ? (
               <View style={styles.aboutContainer}>
-                <Text style={styles.aboutSectionTitle}>Shop stats</Text>
+                <Text style={[styles.aboutSectionTitle, { color: colors.textPrimary }]}>Shop stats</Text>
                 {sellerTrust.rating !== null && sellerTrust.rating !== undefined && sellerTrust.reviewCount ? (
-                  <View style={styles.aboutRow}>
-                    <Text style={styles.aboutLabel}>Rating</Text>
-                    <Text style={styles.aboutValue}>
+                  <View style={[styles.aboutRow, { borderBottomColor: colors.border }]}>
+                    <Text style={[styles.aboutLabel, { color: colors.textMuted }]}>Rating</Text>
+                    <Text style={[styles.aboutValue, { color: colors.textPrimary }]}>
                       {sellerTrust.rating.toFixed(1)} ★ ({sellerTrust.reviewCount} review{sellerTrust.reviewCount === 1 ? '' : 's'})
                     </Text>
                   </View>
                 ) : null}
                 {sellerTrust.completedSales !== null && sellerTrust.completedSales !== undefined ? (
-                  <View style={styles.aboutRow}>
-                    <Text style={styles.aboutLabel}>Completed sales</Text>
-                    <Text style={styles.aboutValue}>{sellerTrust.completedSales}</Text>
+                  <View style={[styles.aboutRow, { borderBottomColor: colors.border }]}>
+                    <Text style={[styles.aboutLabel, { color: colors.textMuted }]}>Completed sales</Text>
+                    <Text style={[styles.aboutValue, { color: colors.textPrimary }]}>{sellerTrust.completedSales}</Text>
                   </View>
                 ) : null}
                 {sellerTrust.responseTimeLabel ? (
-                  <View style={styles.aboutRow}>
-                    <Text style={styles.aboutLabel}>Response time</Text>
-                    <Text style={styles.aboutValue}>Replies {sellerTrust.responseTimeLabel}</Text>
+                  <View style={[styles.aboutRow, { borderBottomColor: colors.border }]}>
+                    <Text style={[styles.aboutLabel, { color: colors.textMuted }]}>Response time</Text>
+                    <Text style={[styles.aboutValue, { color: colors.textPrimary }]}>Replies {sellerTrust.responseTimeLabel}</Text>
                   </View>
                 ) : null}
                 {sellerTrust.dispatchTimeLabel ? (
-                  <View style={styles.aboutRow}>
-                    <Text style={styles.aboutLabel}>Dispatch time</Text>
-                    <Text style={styles.aboutValue}>{sellerTrust.dispatchTimeLabel}</Text>
+                  <View style={[styles.aboutRow, { borderBottomColor: colors.border }]}>
+                    <Text style={[styles.aboutLabel, { color: colors.textMuted }]}>Dispatch time</Text>
+                    <Text style={[styles.aboutValue, { color: colors.textPrimary }]}>{sellerTrust.dispatchTimeLabel}</Text>
                   </View>
                 ) : null}
                 {sellerTrust.responseRate !== null && sellerTrust.responseRate !== undefined ? (
-                  <View style={styles.aboutRow}>
-                    <Text style={styles.aboutLabel}>Response rate</Text>
-                    <Text style={styles.aboutValue}>{sellerTrust.responseRate}%</Text>
+                  <View style={[styles.aboutRow, { borderBottomColor: colors.border }]}>
+                    <Text style={[styles.aboutLabel, { color: colors.textMuted }]}>Response rate</Text>
+                    <Text style={[styles.aboutValue, { color: colors.textPrimary }]}>{sellerTrust.responseRate}%</Text>
                   </View>
                 ) : null}
                 {sellerTrust.activeListingCount !== null && sellerTrust.activeListingCount !== undefined ? (
-                  <View style={[styles.aboutRow, styles.aboutRowLast]}>
-                    <Text style={styles.aboutLabel}>Active listings</Text>
-                    <Text style={styles.aboutValue}>{sellerTrust.activeListingCount}</Text>
+                  <View style={[styles.aboutRow, styles.aboutRowLast, { borderBottomColor: colors.border }]}>
+                    <Text style={[styles.aboutLabel, { color: colors.textMuted }]}>Active listings</Text>
+                    <Text style={[styles.aboutValue, { color: colors.textPrimary }]}>{sellerTrust.activeListingCount}</Text>
                   </View>
                 ) : null}
               </View>
@@ -657,26 +658,26 @@ export default function MyProfileScreen() {
 
             {/* Shop policies — derived from trust + account data */}
             <View style={styles.aboutContainer}>
-              <Text style={styles.aboutSectionTitle}>Shop policies</Text>
-              <View style={styles.aboutRow}>
-                <Text style={styles.aboutLabel}>Payments</Text>
-                <Text style={styles.aboutValue}>Secure checkout with buyer protection</Text>
+              <Text style={[styles.aboutSectionTitle, { color: colors.textPrimary }]}>Shop policies</Text>
+              <View style={[styles.aboutRow, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.aboutLabel, { color: colors.textMuted }]}>Payments</Text>
+                <Text style={[styles.aboutValue, { color: colors.textPrimary }]}>Secure checkout with buyer protection</Text>
               </View>
-              <View style={styles.aboutRow}>
-                <Text style={styles.aboutLabel}>Shipping</Text>
-                <Text style={styles.aboutValue}>
+              <View style={[styles.aboutRow, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.aboutLabel, { color: colors.textMuted }]}>Shipping</Text>
+                <Text style={[styles.aboutValue, { color: colors.textPrimary }]}>
                   {sellerTrust?.dispatchTimeLabel
                     ? `Seller ${sellerTrust.dispatchTimeLabel.toLowerCase()}. Tracking provided on dispatch.`
                     : 'Tracking provided on dispatch.'}
                 </Text>
               </View>
-              <View style={styles.aboutRow}>
-                <Text style={styles.aboutLabel}>Returns</Text>
-                <Text style={styles.aboutValue}>Returns accepted for items not as described.</Text>
+              <View style={[styles.aboutRow, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.aboutLabel, { color: colors.textMuted }]}>Returns</Text>
+                <Text style={[styles.aboutValue, { color: colors.textPrimary }]}>Returns accepted for items not as described.</Text>
               </View>
-              <View style={[styles.aboutRow, styles.aboutRowLast]}>
-                <Text style={styles.aboutLabel}>Response</Text>
-                <Text style={styles.aboutValue}>
+              <View style={[styles.aboutRow, styles.aboutRowLast, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.aboutLabel, { color: colors.textMuted }]}>Response</Text>
+                <Text style={[styles.aboutValue, { color: colors.textPrimary }]}>
                   {sellerTrust?.responseTimeLabel
                     ? `Seller typically replies ${sellerTrust.responseTimeLabel.toLowerCase()}.`
                     : 'Seller aims to respond promptly.'}
@@ -700,9 +701,7 @@ const myProfileStyles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
     borderRadius: 12,
-    backgroundColor: Colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
   },
   awayBannerTextWrap: {
     flex: 1,
@@ -711,17 +710,15 @@ const myProfileStyles = StyleSheet.create({
   awayBannerTitle: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   awayBannerSub: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
   },
 });
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background, overflow: 'hidden' },
+  container: { flex: 1, overflow: 'hidden' },
   scrollContent: { paddingBottom: 100, overflow: 'hidden' },
 
   // Cover
@@ -733,7 +730,6 @@ const styles = StyleSheet.create({
     height: COVER_HEIGHT,
     zIndex: 0,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
   },
   coverActionLayer: {
     position: 'absolute',
@@ -771,12 +767,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingBottom: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
   },
   floatingHeaderTitle: {
     fontSize: 17,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
     letterSpacing: -0.3,
   },
 
@@ -791,12 +785,10 @@ const styles = StyleSheet.create({
   gridHeaderCount: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
   },
   gridHeaderAction: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
   },
   grid: {
     flexDirection: 'row',
@@ -831,19 +823,16 @@ const styles = StyleSheet.create({
   gridPrice: {
     fontSize: 14,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
     marginTop: 6,
   },
   gridBrand: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
     marginTop: 1,
   },
   gridMeta: {
     fontSize: 11,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     marginTop: 1,
   },
 
@@ -859,7 +848,6 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 4,
@@ -867,24 +855,20 @@ const styles = StyleSheet.create({
   listingsEmptyTitle: {
     fontSize: 15,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   listingsEmptySubtitle: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
   },
   listingsEmptyCta: {
     marginTop: 8,
     paddingHorizontal: 20,
     paddingVertical: 10,
-    backgroundColor: Colors.brand,
     borderRadius: 20,
   },
   listingsEmptyCtaText: {
     fontSize: 14,
     fontFamily: Typography.family.semibold,
-    color: Colors.textInverse,
   },
 
   // About — flat editorial rows
@@ -894,14 +878,12 @@ const styles = StyleSheet.create({
   aboutSectionTitle: {
     fontSize: 13,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
     paddingTop: Space.md + 2,
     paddingBottom: Space.xs,
   },
   aboutRow: {
     paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
   },
   aboutRowLast: {
     borderBottomWidth: 0,
@@ -909,7 +891,6 @@ const styles = StyleSheet.create({
   aboutLabel: {
     fontSize: 11,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.7,
     marginBottom: 4,
@@ -917,13 +898,11 @@ const styles = StyleSheet.create({
   aboutValue: {
     fontSize: 14,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
     lineHeight: 20,
   },
   aboutEmpty: {
     fontSize: 14,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     textAlign: 'center',
     paddingVertical: Space.xl,
   },
