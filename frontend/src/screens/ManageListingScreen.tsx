@@ -24,7 +24,6 @@ import Reanimated, {
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { FlagshipActionCluster } from '../components/flagship';
 import { AppButton } from '../components/ui/AppButton';
-import { ActiveTheme, Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useToast } from '../context/ToastContext';
@@ -32,18 +31,13 @@ import { CachedImage } from '../components/CachedImage';
 import { OfferToLikersSheet } from '../components/product/OfferToLikersSheet';
 import { BoostListingSheet, type BoostTier } from '../components/product/BoostListingSheet';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { fetchListingByIdFromApi, patchListingOnApi, deleteListingOnApi } from '../services/listingsApi';
 import { useStore } from '../store/useStore';
 
 const { width: SCREEN_W } = Dimensions.get('window');
-const CARD_BG = Colors.surface;
-const CARD_BORDER = Colors.border;
-const SUCCESS_TEXT = Colors.success;
-const DANGER_TEXT = Colors.danger;
-const BRAND_TINT = Colors.surfaceAlt;
 const WARN_TINT = 'rgba(245,166,35,0.12)';
-const ICON_BG = Colors.surfaceAlt;
 
 type RouteT = RouteProp<RootStackParamList, 'ManageListing'>;
 
@@ -51,6 +45,7 @@ export default function ManageListingScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<RouteT>();
   const insets = useSafeAreaInsets();
+  const { colors, isDark } = useAppTheme();
   const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
   const { itemId } = route.params;
@@ -107,22 +102,22 @@ export default function ManageListingScreen() {
 
   if (isLoading) {
     return (
-      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor="transparent" translucent />
-        <ActivityIndicator size="large" color={Colors.brand} />
+      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background }]}>
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor="transparent" translucent />
+        <ActivityIndicator size="large" color={colors.brand} />
       </View>
     );
   }
 
   if (isNotFound || !item) {
     return (
-      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center', padding: Space.lg }]}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor="transparent" translucent />
-        <Ionicons name="pricetag-outline" size={48} color={Colors.textMuted} />
-        <Text style={{ fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginTop: Space.md }}>
+      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center', padding: Space.lg, backgroundColor: colors.background }]}>
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor="transparent" translucent />
+        <Ionicons name="pricetag-outline" size={48} color={colors.textMuted} />
+        <Text style={{ fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: colors.textPrimary, marginTop: Space.md }}>
           Listing not found
         </Text>
-        <Text style={{ fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: Colors.textMuted, marginTop: Space.xs, textAlign: 'center' }}>
+        <Text style={{ fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textMuted, marginTop: Space.xs, textAlign: 'center' }}>
           This listing may have been removed or you may not have access to it.
         </Text>
         <AppButton title="Go back" variant="secondary" size="md" style={{ marginTop: Space.lg }} onPress={() => navigation.goBack()} />
@@ -132,10 +127,10 @@ export default function ManageListingScreen() {
 
   if (hasError) {
     return (
-      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center', padding: Space.lg }]}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor="transparent" translucent />
-        <Ionicons name="warning-outline" size={48} color={Colors.textMuted} />
-        <Text style={{ fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginTop: Space.md }}>
+      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center', padding: Space.lg, backgroundColor: colors.background }]}>
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor="transparent" translucent />
+        <Ionicons name="warning-outline" size={48} color={colors.textMuted} />
+        <Text style={{ fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: colors.textPrimary, marginTop: Space.md }}>
           Could not load listing
         </Text>
         <AppButton title="Retry" variant="secondary" size="md" style={{ marginTop: Space.lg }} onPress={() => {
@@ -159,13 +154,13 @@ export default function ManageListingScreen() {
 
   if (!isOwner) {
     return (
-      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center', padding: Space.lg }]}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor="transparent" translucent />
-        <Ionicons name="lock-closed-outline" size={48} color={Colors.textMuted} />
-        <Text style={{ fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginTop: Space.md }}>
+      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center', padding: Space.lg, backgroundColor: colors.background }]}>
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor="transparent" translucent />
+        <Ionicons name="lock-closed-outline" size={48} color={colors.textMuted} />
+        <Text style={{ fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: colors.textPrimary, marginTop: Space.md }}>
           Permission denied
         </Text>
-        <Text style={{ fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: Colors.textMuted, marginTop: Space.xs, textAlign: 'center' }}>
+        <Text style={{ fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textMuted, marginTop: Space.xs, textAlign: 'center' }}>
           You do not have permission to manage this listing.
         </Text>
         <AppButton title="Go back" variant="secondary" size="md" style={{ marginTop: Space.lg }} onPress={() => navigation.goBack()} />
@@ -289,18 +284,18 @@ export default function ManageListingScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor="transparent" translucent />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor="transparent" translucent />
 
       <Reanimated.View style={[styles.floatingHeader, headerBgStyle, { paddingTop: Math.max(insets.top, 20) }]}>
         <AnimatedPressable style={styles.hdrBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </AnimatedPressable>
         <Reanimated.View style={headerTitleStyle}>
-          <Text style={styles.hdrTitle} numberOfLines={1}>Manage</Text>
+          <Text style={[styles.hdrTitle, { color: colors.textPrimary }]} numberOfLines={1}>Manage</Text>
         </Reanimated.View>
         <AnimatedPressable style={styles.hdrBtn} onPress={handleShare}>
-          <Ionicons name="share-outline" size={22} color={Colors.textPrimary} />
+          <Ionicons name="share-outline" size={22} color={colors.textPrimary} />
         </AnimatedPressable>
       </Reanimated.View>
 
@@ -311,7 +306,7 @@ export default function ManageListingScreen() {
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) + 24 }}
       >
         {/* Hero Carousel */}
-        <View style={styles.heroWrap}>
+        <View style={[styles.heroWrap, { backgroundColor: colors.surface }]}>
           <ScrollView
             horizontal
             pagingEnabled
@@ -329,7 +324,7 @@ export default function ManageListingScreen() {
           <View style={styles.heroOverlay} />
 
           <View style={styles.statusPill}>
-            <View style={[styles.statusDot, { backgroundColor: isSold ? DANGER_TEXT : isPaused ? WARN_TINT.replace('0.12', '1') : SUCCESS_TEXT }]} />
+            <View style={[styles.statusDot, { backgroundColor: isSold ? colors.danger : isPaused ? WARN_TINT.replace('0.12', '1') : colors.success }]} />
             <Text style={styles.statusPillText}>{isSold ? 'Sold' : isPaused ? 'Paused' : 'Active'}</Text>
           </View>
 
@@ -343,22 +338,22 @@ export default function ManageListingScreen() {
         </View>
 
         {/* Info Card */}
-        <View style={styles.infoCard}>
-          <Text style={styles.infoTitle} numberOfLines={2}>{item.title}</Text>
-          <Text style={styles.infoPrice}>{formatFromFiat(item.priceGbp ?? 0, 'GBP', { displayMode: 'fiat' })}</Text>
+        <View style={[styles.infoCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[styles.infoTitle, { color: colors.textPrimary }]} numberOfLines={2}>{item.title}</Text>
+          <Text style={[styles.infoPrice, { color: colors.brand }]}>{formatFromFiat(item.priceGbp ?? 0, 'GBP', { displayMode: 'fiat' })}</Text>
 
           <View style={styles.attrRow}>
-            <View style={styles.attrChip}>
-              <Text style={styles.attrLabel}>Brand</Text>
-              <Text style={styles.attrValue}>{item.brand ?? '-'}</Text>
+            <View style={[styles.attrChip, { backgroundColor: colors.surfaceAlt }]}>
+              <Text style={[styles.attrLabel, { color: colors.textMuted }]}>Brand</Text>
+              <Text style={[styles.attrValue, { color: colors.textPrimary }]}>{item.brand ?? '-'}</Text>
             </View>
-            <View style={styles.attrChip}>
-              <Text style={styles.attrLabel}>Size</Text>
-              <Text style={styles.attrValue}>{item.size ?? '-'}</Text>
+            <View style={[styles.attrChip, { backgroundColor: colors.surfaceAlt }]}>
+              <Text style={[styles.attrLabel, { color: colors.textMuted }]}>Size</Text>
+              <Text style={[styles.attrValue, { color: colors.textPrimary }]}>{item.size ?? '-'}</Text>
             </View>
-            <View style={styles.attrChip}>
-              <Text style={styles.attrLabel}>Condition</Text>
-              <Text style={styles.attrValue}>{item.condition ?? '-'}</Text>
+            <View style={[styles.attrChip, { backgroundColor: colors.surfaceAlt }]}>
+              <Text style={[styles.attrLabel, { color: colors.textMuted }]}>Condition</Text>
+              <Text style={[styles.attrValue, { color: colors.textPrimary }]}>{item.condition ?? '-'}</Text>
             </View>
           </View>
         </View>
@@ -366,10 +361,10 @@ export default function ManageListingScreen() {
         {/* Primary Edit Button */}
         <AppButton
           title="Edit Listing"
-          icon={<Ionicons name="create-outline" size={18} color={Colors.background} />}
+          icon={<Ionicons name="create-outline" size={18} color={colors.background} />}
           variant="primary"
           size="lg"
-          style={styles.editBtn}
+          style={[styles.editBtn, { backgroundColor: colors.textPrimary }]}
           onPress={() => navigation.navigate('EditListing', { itemId })}
           accessibilityLabel="Edit listing"
           accessibilityHint="Opens the listing editor"
@@ -379,37 +374,37 @@ export default function ManageListingScreen() {
         {/* Action Cluster */}
         <FlagshipActionCluster
           actions={[
-            { icon: <Ionicons name="image-outline" size={20} color={Colors.brand} />, label: 'Poster', onPress: () => navigation.navigate('CreatorStudio', { type: 'poster' }) },
-            { icon: <Ionicons name="share-outline" size={20} color={Colors.textPrimary} />, label: 'Share', onPress: handleShare },
-            { icon: <Ionicons name="eye-outline" size={20} color={Colors.textPrimary} />, label: 'Preview', onPress: () => navigation.push('ItemDetail', { itemId: item.id }) },
-            ...(status === 'active' && item.likes > 0 ? [{ icon: <Ionicons name="heart-outline" size={20} color={Colors.brand} />, label: 'Offer', onPress: () => setOfferToLikersVisible(true) }] : []),
-            ...(status === 'active' ? [{ icon: <Ionicons name="rocket-outline" size={20} color={Colors.brand} />, label: 'Boost', onPress: () => setBoostSheetVisible(true) }] : []),
-            ...(status === 'active' ? [{ icon: <Ionicons name="hammer-outline" size={20} color={Colors.brand} />, label: 'Auction', onPress: () => navigation.navigate('CreateAuction', { listingId: item.id }) }] : []),
+            { icon: <Ionicons name="image-outline" size={20} color={colors.brand} />, label: 'Poster', onPress: () => navigation.navigate('CreatorStudio', { type: 'poster' }) },
+            { icon: <Ionicons name="share-outline" size={20} color={colors.textPrimary} />, label: 'Share', onPress: handleShare },
+            { icon: <Ionicons name="eye-outline" size={20} color={colors.textPrimary} />, label: 'Preview', onPress: () => navigation.push('ItemDetail', { itemId: item.id }) },
+            ...(status === 'active' && item.likes > 0 ? [{ icon: <Ionicons name="heart-outline" size={20} color={colors.brand} />, label: 'Offer', onPress: () => setOfferToLikersVisible(true) }] : []),
+            ...(status === 'active' ? [{ icon: <Ionicons name="rocket-outline" size={20} color={colors.brand} />, label: 'Boost', onPress: () => setBoostSheetVisible(true) }] : []),
+            ...(status === 'active' ? [{ icon: <Ionicons name="hammer-outline" size={20} color={colors.brand} />, label: 'Auction', onPress: () => navigation.navigate('CreateAuction', { listingId: item.id }) }] : []),
           ]}
           style={{ marginHorizontal: Space.md, marginBottom: Space.md }}
         />
 
         {/* Listing Health */}
         {(item.views !== undefined || item.likes !== undefined || item.saves !== undefined) && (
-          <View style={styles.healthCard}>
-            <Text style={styles.healthTitle}>Listing Health</Text>
+          <View style={[styles.healthCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.healthTitle, { color: colors.textMuted }]}>Listing Health</Text>
             <View style={styles.healthRow}>
               {item.views !== undefined && (
                 <View style={styles.healthItem}>
-                  <Text style={styles.healthValue}>{item.views}</Text>
-                  <Text style={styles.healthLabel}>Views</Text>
+                  <Text style={[styles.healthValue, { color: colors.textPrimary }]}>{item.views}</Text>
+                  <Text style={[styles.healthLabel, { color: colors.textMuted }]}>Views</Text>
                 </View>
               )}
               {item.likes !== undefined && (
                 <View style={styles.healthItem}>
-                  <Text style={styles.healthValue}>{item.likes}</Text>
-                  <Text style={styles.healthLabel}>Likes</Text>
+                  <Text style={[styles.healthValue, { color: colors.textPrimary }]}>{item.likes}</Text>
+                  <Text style={[styles.healthLabel, { color: colors.textMuted }]}>Likes</Text>
                 </View>
               )}
               {item.saves !== undefined && (
                 <View style={styles.healthItem}>
-                  <Text style={styles.healthValue}>{item.saves}</Text>
-                  <Text style={styles.healthLabel}>Saves</Text>
+                  <Text style={[styles.healthValue, { color: colors.textPrimary }]}>{item.saves}</Text>
+                  <Text style={[styles.healthLabel, { color: colors.textMuted }]}>Saves</Text>
                 </View>
               )}
             </View>
@@ -418,17 +413,17 @@ export default function ManageListingScreen() {
 
         {/* Offer Floor Settings */}
         {status === 'active' && (
-          <View style={styles.card}>
-            <Text style={styles.healthTitle}>Offer preferences</Text>
-            <Text style={styles.offerFloorDescription}>
+          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.healthTitle, { color: colors.textMuted }]}>Offer preferences</Text>
+            <Text style={[styles.offerFloorDescription, { color: colors.textMuted }]}>
               Set rules to automatically accept or reject incoming offers.
             </Text>
 
             {/* Auto-accept threshold */}
             <View style={styles.offerFloorRow}>
               <View style={styles.offerFloorInfo}>
-                <Text style={styles.offerFloorLabel}>Auto-accept threshold</Text>
-                <Text style={styles.offerFloorSub}>
+                <Text style={[styles.offerFloorLabel, { color: colors.textPrimary }]}>Auto-accept threshold</Text>
+                <Text style={[styles.offerFloorSub, { color: colors.textMuted }]}>
                   Offers at or above this percentage of asking price are auto-accepted.
                 </Text>
               </View>
@@ -439,14 +434,15 @@ export default function ManageListingScreen() {
                     onPress={() => { setAutoAcceptThreshold(pct); }}
                     style={({ pressed }) => [
                       styles.thresholdChip,
-                      autoAcceptThreshold === pct && styles.thresholdChipActive,
+                      { borderColor: colors.border, backgroundColor: colors.surfaceAlt },
+                      autoAcceptThreshold === pct && { borderColor: colors.brand, backgroundColor: `${colors.brand}15` },
                       pressed && { opacity: 0.7 },
                     ]}
                     accessibilityRole="radio"
                     accessibilityState={{ selected: autoAcceptThreshold === pct }}
                     accessibilityLabel={pct === 0 ? 'No auto-accept' : `Auto-accept at ${pct}%`}
                   >
-                    <Text style={[styles.thresholdChipText, autoAcceptThreshold === pct && styles.thresholdChipTextActive]}>
+                    <Text style={[styles.thresholdChipText, { color: colors.textSecondary }, autoAcceptThreshold === pct && { color: colors.brand, fontFamily: Typography.family.semibold }]}>
                       {pct === 0 ? 'Off' : `${pct}%`}
                     </Text>
                   </Pressable>
@@ -455,10 +451,10 @@ export default function ManageListingScreen() {
             </View>
 
             {/* Minimum offer floor */}
-            <View style={[styles.offerFloorRow, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Colors.border }]}>
+            <View style={[styles.offerFloorRow, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }]}>
               <View style={styles.offerFloorInfo}>
-                <Text style={styles.offerFloorLabel}>Minimum offer</Text>
-                <Text style={styles.offerFloorSub}>
+                <Text style={[styles.offerFloorLabel, { color: colors.textPrimary }]}>Minimum offer</Text>
+                <Text style={[styles.offerFloorSub, { color: colors.textMuted }]}>
                   Offers below this amount are auto-declined.
                 </Text>
               </View>
@@ -469,14 +465,15 @@ export default function ManageListingScreen() {
                     onPress={() => { setMinimumOfferGbp(gbp); }}
                     style={({ pressed }) => [
                       styles.thresholdChip,
-                      minimumOfferGbp === gbp && styles.thresholdChipActive,
+                      { borderColor: colors.border, backgroundColor: colors.surfaceAlt },
+                      minimumOfferGbp === gbp && { borderColor: colors.brand, backgroundColor: `${colors.brand}15` },
                       pressed && { opacity: 0.7 },
                     ]}
                     accessibilityRole="radio"
                     accessibilityState={{ selected: minimumOfferGbp === gbp }}
                     accessibilityLabel={gbp === 0 ? 'No minimum' : `Minimum £${gbp}`}
                   >
-                    <Text style={[styles.thresholdChipText, minimumOfferGbp === gbp && styles.thresholdChipTextActive]}>
+                    <Text style={[styles.thresholdChipText, { color: colors.textSecondary }, minimumOfferGbp === gbp && { color: colors.brand, fontFamily: Typography.family.semibold }]}>
                       {gbp === 0 ? 'None' : `£${gbp}`}
                     </Text>
                   </Pressable>
@@ -498,15 +495,15 @@ export default function ManageListingScreen() {
         )}
 
         {/* Status Actions */}
-        <View style={styles.card}>
+        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.toggleRow}>
             <View style={styles.toggleLeft}>
               <View style={[styles.toggleIconWrap, { backgroundColor: isSold ? 'rgba(255,59,48,0.12)' : isPaused ? WARN_TINT : 'rgba(52,199,89,0.12)' }]}>
-                <Ionicons name={isSold ? 'close-circle-outline' : isPaused ? 'pause-circle-outline' : 'checkmark-circle-outline'} size={20} color={isSold ? DANGER_TEXT : isPaused ? Colors.warning : SUCCESS_TEXT} />
+                <Ionicons name={isSold ? 'close-circle-outline' : isPaused ? 'pause-circle-outline' : 'checkmark-circle-outline'} size={20} color={isSold ? colors.danger : isPaused ? colors.warning : colors.success} />
               </View>
               <View>
-                <Text style={styles.toggleTitle}>{isSold ? 'Sold' : isPaused ? 'Paused' : 'Active'}</Text>
-                <Text style={styles.toggleSub}>
+                <Text style={[styles.toggleTitle, { color: colors.textPrimary }]}>{isSold ? 'Sold' : isPaused ? 'Paused' : 'Active'}</Text>
+                <Text style={[styles.toggleSub, { color: colors.textMuted }]}>
                   {isSold ? 'Buyers cannot purchase this item' : isPaused ? 'Hidden from buyers temporarily' : 'Visible to buyers in search and browse'}
                 </Text>
               </View>
@@ -514,19 +511,19 @@ export default function ManageListingScreen() {
           </View>
 
           {status === 'active' && (
-            <View style={{ flexDirection: 'row', gap: Space.sm, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Colors.border }}>
+            <View style={{ flexDirection: 'row', gap: Space.sm, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
               <AppButton title="Pause" variant="secondary" size="sm" style={{ flex: 1 }} onPress={handlePause} />
-              <AppButton title="Mark Sold" variant="secondary" size="sm" style={{ flex: 1 }} titleStyle={{ color: Colors.danger }} onPress={handleMarkSold} />
+              <AppButton title="Mark Sold" variant="secondary" size="sm" style={{ flex: 1 }} titleStyle={{ color: colors.danger }} onPress={handleMarkSold} />
             </View>
           )}
           {status === 'paused' && (
-            <View style={{ flexDirection: 'row', gap: Space.sm, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Colors.border }}>
+            <View style={{ flexDirection: 'row', gap: Space.sm, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
               <AppButton title="Reactivate" variant="primary" size="sm" style={{ flex: 1 }} onPress={handleReactivate} />
-              <AppButton title="Mark Sold" variant="secondary" size="sm" style={{ flex: 1 }} titleStyle={{ color: Colors.danger }} onPress={handleMarkSold} />
+              <AppButton title="Mark Sold" variant="secondary" size="sm" style={{ flex: 1 }} titleStyle={{ color: colors.danger }} onPress={handleMarkSold} />
             </View>
           )}
           {status === 'sold' && (
-            <View style={{ paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Colors.border }}>
+            <View style={{ paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
               <AppButton title="Reactivate Listing" variant="secondary" size="sm" style={{ width: '100%' }} onPress={handleReactivate} />
             </View>
           )}
@@ -534,8 +531,8 @@ export default function ManageListingScreen() {
 
         {/* Delete */}
         <AnimatedPressable style={styles.deleteRow} activeOpacity={0.8} onPress={handleDeleteListing}>
-          <Ionicons name="trash-outline" size={18} color={DANGER_TEXT} />
-          <Text style={styles.deleteText}>Delete this listing</Text>
+          <Ionicons name="trash-outline" size={18} color={colors.danger} />
+          <Text style={[styles.deleteText, { color: colors.danger }]}>Delete this listing</Text>
         </AnimatedPressable>
       </Reanimated.ScrollView>
 
@@ -577,7 +574,7 @@ export default function ManageListingScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1 },
 
   floatingHeader: {
     position: 'absolute',
@@ -602,7 +599,6 @@ const styles = StyleSheet.create({
   hdrTitle: {
     fontSize: 17,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
     maxWidth: SCREEN_W * 0.5,
   },
 
@@ -610,7 +606,6 @@ const styles = StyleSheet.create({
     width: SCREEN_W,
     height: SCREEN_W,
     position: 'relative',
-    backgroundColor: Colors.surface,
   },
   heroImage: {
     width: SCREEN_W,
@@ -666,11 +661,9 @@ const styles = StyleSheet.create({
   infoCard: {
     marginTop: -24,
     marginHorizontal: 16,
-    backgroundColor: CARD_BG,
     borderRadius: 20,
     padding: 20,
     borderWidth: 1,
-    borderColor: CARD_BORDER,
     shadowColor: '#000',
     shadowOpacity: 0.06,
     shadowRadius: 16,
@@ -680,14 +673,12 @@ const styles = StyleSheet.create({
   infoTitle: {
     fontSize: 20,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
     lineHeight: 28,
     marginBottom: 6,
   },
   infoPrice: {
     fontSize: 26,
     fontFamily: Typography.family.bold,
-    color: Colors.brand,
     letterSpacing: -0.5,
     marginBottom: 14,
   },
@@ -697,7 +688,6 @@ const styles = StyleSheet.create({
   },
   attrChip: {
     flex: 1,
-    backgroundColor: Colors.surfaceAlt,
     borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 10,
@@ -706,7 +696,6 @@ const styles = StyleSheet.create({
   attrLabel: {
     fontSize: 10,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
     marginBottom: 3,
@@ -714,7 +703,6 @@ const styles = StyleSheet.create({
   attrValue: {
     fontSize: 13,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
   },
 
   editBtn: {
@@ -726,12 +714,10 @@ const styles = StyleSheet.create({
     marginTop: 16,
     paddingVertical: 16,
     borderRadius: 16,
-    backgroundColor: Colors.textPrimary,
   },
   editBtnText: {
     fontSize: 15,
     fontFamily: Typography.family.bold,
-    color: Colors.background,
   },
 
   iconActionsRow: {
@@ -755,16 +741,13 @@ const styles = StyleSheet.create({
   iconActionLabel: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
   },
 
   card: {
     marginHorizontal: 16,
     marginTop: 16,
-    backgroundColor: CARD_BG,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: CARD_BORDER,
     paddingVertical: 4,
     paddingHorizontal: 16,
     overflow: 'hidden',
@@ -790,12 +773,10 @@ const styles = StyleSheet.create({
   toggleTitle: {
     fontSize: 15,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
   },
   toggleSub: {
     fontSize: 12,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
     marginTop: 2,
   },
 
@@ -809,18 +790,15 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   healthCard: {
-    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     padding: Space.lg,
     marginHorizontal: Space.md,
     marginBottom: Space.md,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
   },
   healthTitle: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 1.2,
     marginBottom: Space.sm,
@@ -836,23 +814,19 @@ const styles = StyleSheet.create({
   healthValue: {
     fontSize: Type.priceLarge.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   healthLabel: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     marginTop: 2,
   },
   deleteText: {
     fontSize: 14,
     fontFamily: Typography.family.semibold,
-    color: DANGER_TEXT,
   },
   offerFloorDescription: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     marginBottom: Space.sm,
   },
   offerFloorRow: {
@@ -865,12 +839,10 @@ const styles = StyleSheet.create({
   offerFloorLabel: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   offerFloorSub: {
     fontSize: 11,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
   },
   thresholdChips: {
     flexDirection: 'row',
@@ -883,20 +855,9 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surfaceAlt,
-  },
-  thresholdChipActive: {
-    borderColor: Colors.brand,
-    backgroundColor: `${Colors.brand}15`,
   },
   thresholdChipText: {
     fontSize: 13,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
-  },
-  thresholdChipTextActive: {
-    color: Colors.brand,
-    fontFamily: Typography.family.semibold,
   },
 });
