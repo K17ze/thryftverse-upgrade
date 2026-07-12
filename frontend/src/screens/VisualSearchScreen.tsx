@@ -110,7 +110,7 @@ export default function VisualSearchScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
-      <ScreenHeader title="Visual Search" onBack={() => navigation.goBack()} />
+      <ScreenHeader title="Preview Visual Search" onBack={() => navigation.goBack()} />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         {/* Source selection */}

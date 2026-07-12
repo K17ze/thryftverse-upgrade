@@ -132,7 +132,7 @@ export default function SearchScreen() {
               <Ionicons name="close-circle" size={20} color={Colors.textMuted} />
             </AnimatedPressable>
           ) : (
-            <AnimatedPressable onPress={() => navigation.navigate('VisualSearch')} activeOpacity={0.85} accessibilityLabel="Visual search" accessibilityRole="button">
+            <AnimatedPressable onPress={() => navigation.navigate('VisualSearch')} activeOpacity={0.85} accessibilityLabel="Preview visual search" accessibilityRole="button">
               <Ionicons name="camera-outline" size={22} color={Colors.textMuted} style={{ marginRight: 4 }} />
             </AnimatedPressable>
           )}

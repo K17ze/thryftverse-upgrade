@@ -700,7 +700,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
             onChangeText={setQuery}
             containerStyle={{ flex: 1, borderWidth: 0, backgroundColor: 'transparent' }}
             rightNode={
-              <AnimatedPressable onPress={() => navigation.navigate('VisualSearch')} activeOpacity={0.85} accessibilityLabel="Visual search" accessibilityRole="button">
+              <AnimatedPressable onPress={() => navigation.navigate('VisualSearch')} activeOpacity={0.85} accessibilityLabel="Preview visual search" accessibilityRole="button">
                 <Ionicons name="camera" size={24} color={Colors.textMuted} />
               </AnimatedPressable>
             }
