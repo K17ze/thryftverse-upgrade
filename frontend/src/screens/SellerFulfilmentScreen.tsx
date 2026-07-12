@@ -14,8 +14,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
-import { ActiveTheme, Colors } from '../constants/colors';
 import { Space, Typography } from '../theme/designTokens';
+import { useAppTheme } from '../theme/ThemeContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
@@ -44,6 +44,7 @@ const COMMON_CARRIERS = [
 ];
 
 export default function SellerFulfilmentScreen() {
+  const { colors, isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const route = useRoute<SellerFulfilmentRoute>();
@@ -140,18 +141,18 @@ export default function SellerFulfilmentScreen() {
 
   if (isLoading) {
     return (
-      <View style={styles.container}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
-        <View style={[styles.header, { paddingTop: insets.top }]}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
+        <View style={[styles.header, { paddingTop: insets.top, borderBottomColor: colors.border }]}>
           <Pressable style={styles.headerBtn} onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityRole="button" accessibilityLabel="Go back">
-            <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
           </Pressable>
-          <Text style={styles.headerTitle}>Dispatch</Text>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Dispatch</Text>
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.textSecondary} />
-          <Text style={styles.loadingText}>Loading order…</Text>
+          <ActivityIndicator size="large" color={colors.textSecondary} />
+          <Text style={[styles.loadingText, { color: colors.textMuted }]}>Loading order…</Text>
         </View>
       </View>
     );
@@ -159,20 +160,20 @@ export default function SellerFulfilmentScreen() {
 
   if (loadError || !order) {
     return (
-      <View style={styles.container}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
-        <View style={[styles.header, { paddingTop: insets.top }]}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
+        <View style={[styles.header, { paddingTop: insets.top, borderBottomColor: colors.border }]}>
           <Pressable style={styles.headerBtn} onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityRole="button" accessibilityLabel="Go back">
-            <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
           </Pressable>
-          <Text style={styles.headerTitle}>Dispatch</Text>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Dispatch</Text>
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.errorContainer}>
-          <Ionicons name="cloud-offline-outline" size={36} color={Colors.textMuted} />
-          <Text style={styles.errorTitle}>Order could not be loaded</Text>
-          <Pressable style={styles.retryBtn} onPress={() => { setLoadError(null); setIsLoading(true); void fetchOrder(); }} accessibilityRole="button" accessibilityLabel="Retry">
-            <Text style={styles.retryBtnText}>Retry</Text>
+          <Ionicons name="cloud-offline-outline" size={36} color={colors.textMuted} />
+          <Text style={[styles.errorTitle, { color: colors.textPrimary }]}>Order could not be loaded</Text>
+          <Pressable style={[styles.retryBtn, { backgroundColor: colors.brand }]} onPress={() => { setLoadError(null); setIsLoading(true); void fetchOrder(); }} accessibilityRole="button" accessibilityLabel="Retry">
+            <Text style={[styles.retryBtnText, { color: colors.textInverse }]}>Retry</Text>
           </Pressable>
         </View>
       </View>
@@ -181,18 +182,18 @@ export default function SellerFulfilmentScreen() {
 
   if (!isSeller) {
     return (
-      <View style={styles.container}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
-        <View style={[styles.header, { paddingTop: insets.top }]}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
+        <View style={[styles.header, { paddingTop: insets.top, borderBottomColor: colors.border }]}>
           <Pressable style={styles.headerBtn} onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityRole="button" accessibilityLabel="Go back">
-            <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
           </Pressable>
-          <Text style={styles.headerTitle}>Dispatch</Text>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Dispatch</Text>
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.errorContainer}>
-          <Ionicons name="lock-closed-outline" size={36} color={Colors.textMuted} />
-          <Text style={styles.errorTitle}>Only the seller can dispatch this order</Text>
+          <Ionicons name="lock-closed-outline" size={36} color={colors.textMuted} />
+          <Text style={[styles.errorTitle, { color: colors.textPrimary }]}>Only the seller can dispatch this order</Text>
         </View>
       </View>
     );
@@ -202,14 +203,14 @@ export default function SellerFulfilmentScreen() {
   const statusLabel = humaniseStatus(order.status);
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
-      <View style={[styles.header, { paddingTop: insets.top }]}>
+      <View style={[styles.header, { paddingTop: insets.top, borderBottomColor: colors.border }]}>
         <Pressable style={styles.headerBtn} onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityRole="button" accessibilityLabel="Go back">
-          <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>Dispatch item</Text>
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Dispatch item</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -218,25 +219,25 @@ export default function SellerFulfilmentScreen() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 100 + insets.bottom }]}
       >
         <View style={styles.orderSummary}>
-          <Text style={styles.orderNumber}>ORDER #{shortOrderId}</Text>
-          <Text style={styles.statusLabel}>{statusLabel}</Text>
+          <Text style={[styles.orderNumber, { color: colors.textMuted }]}>ORDER #{shortOrderId}</Text>
+          <Text style={[styles.statusLabel, { color: colors.textPrimary }]}>{statusLabel}</Text>
         </View>
 
         <View style={styles.itemCard}>
           {order.listingImageUrl ? (
             <CachedImage uri={order.listingImageUrl} style={styles.itemImage} contentFit="cover" />
           ) : (
-            <View style={[styles.itemImage, styles.itemImagePlaceholder]}>
-              <Ionicons name="image-outline" size={24} color={Colors.textMuted} />
+            <View style={[styles.itemImage, styles.itemImagePlaceholder, { backgroundColor: colors.surface }]}>
+              <Ionicons name="image-outline" size={24} color={colors.textMuted} />
             </View>
           )}
           <View style={styles.itemInfo}>
-            <Text style={styles.itemTitle} numberOfLines={2}>{order.listingTitle || 'Ordered item'}</Text>
-            <Text style={styles.itemTotal}>{formatFromFiat(order.totalGbp, 'GBP', { displayMode: 'fiat' })}</Text>
+            <Text style={[styles.itemTitle, { color: colors.textPrimary }]} numberOfLines={2}>{order.listingTitle || 'Ordered item'}</Text>
+            <Text style={[styles.itemTotal, { color: colors.textPrimary }]}>{formatFromFiat(order.totalGbp, 'GBP', { displayMode: 'fiat' })}</Text>
           </View>
         </View>
 
-        <View style={styles.sectionDivider} />
+        <View style={[styles.sectionDivider, { backgroundColor: colors.border }]} />
 
         {/* Seller-side escrow narrative — when funds are held */}
         {(() => {
@@ -249,19 +250,19 @@ export default function SellerFulfilmentScreen() {
           const now = Date.now();
           const daysLeft = releaseTime ? Math.ceil((releaseTime - now) / (24 * 60 * 60 * 1000)) : null;
           return (
-            <View style={styles.escrowBanner}>
-              <View style={styles.escrowIconWrap}>
-                <Ionicons name="lock-closed" size={14} color={Colors.success} />
+            <View style={[styles.escrowBanner, { backgroundColor: `${colors.success}08`, borderColor: `${colors.success}25` }]}>
+              <View style={[styles.escrowIconWrap, { backgroundColor: `${colors.success}15` }]}>
+                <Ionicons name="lock-closed" size={14} color={colors.success} />
               </View>
               <View style={styles.escrowTextWrap}>
-                <Text style={styles.escrowTitle}>Funds held in escrow</Text>
-                <Text style={styles.escrowSub}>
+                <Text style={[styles.escrowTitle, { color: colors.textPrimary }]}>Funds held in escrow</Text>
+                <Text style={[styles.escrowSub, { color: colors.textSecondary }]}>
                   {normalised === 'paid'
                     ? 'Buyer\'s payment is safely held. Dispatch your item to start the release countdown.'
                     : 'Buyer\'s payment is held until they confirm receipt.'}
                 </Text>
                 {daysLeft != null && daysLeft > 0 && (
-                  <Text style={styles.escrowCountdown}>
+                  <Text style={[styles.escrowCountdown, { color: colors.textMuted }]}>
                     Auto-releases to you in {daysLeft} day{daysLeft === 1 ? '' : 's'} if the buyer doesn't act
                   </Text>
                 )}
@@ -270,25 +271,25 @@ export default function SellerFulfilmentScreen() {
           );
         })()}
 
-        <View style={styles.sectionDivider} />
+        <View style={[styles.sectionDivider, { backgroundColor: colors.border }]} />
 
-        <Text style={styles.sectionLabel}>Shipping details</Text>
+        <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>Shipping details</Text>
 
-        <Text style={styles.inputLabel}>Carrier</Text>
+        <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Carrier</Text>
         <Pressable
-          style={styles.carrierSelector}
+          style={[styles.carrierSelector, { backgroundColor: colors.surface }]}
           onPress={() => { haptics.tap(); setShowCarrierDropdown(!showCarrierDropdown); }}
           accessibilityRole="button"
           accessibilityLabel="Select carrier"
         >
-          <Text style={[styles.carrierSelectorText, !shippingProvider && styles.placeholderText]}>
+          <Text style={[styles.carrierSelectorText, { color: !shippingProvider ? colors.textMuted : colors.textPrimary }]}>
             {shippingProvider || 'Select carrier (optional)'}
           </Text>
-          <Ionicons name={showCarrierDropdown ? 'chevron-up' : 'chevron-down'} size={18} color={Colors.textMuted} />
+          <Ionicons name={showCarrierDropdown ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} />
         </Pressable>
 
         {showCarrierDropdown && (
-          <View style={styles.carrierDropdown}>
+          <View style={[styles.carrierDropdown, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             {COMMON_CARRIERS.map((carrier) => (
               <Pressable
                 key={carrier}
@@ -304,22 +305,23 @@ export default function SellerFulfilmentScreen() {
                 <Text style={[
                   styles.carrierOptionText,
                   shippingProvider === carrier && styles.carrierOptionTextActive,
+                  { color: shippingProvider === carrier ? colors.textPrimary : colors.textSecondary },
                 ]}>
                   {carrier}
                 </Text>
                 {shippingProvider === carrier && (
-                  <Ionicons name="checkmark" size={16} color={Colors.brand} />
+                  <Ionicons name="checkmark" size={16} color={colors.brand} />
                 )}
               </Pressable>
             ))}
           </View>
         )}
 
-        <Text style={styles.inputLabel}>Tracking number</Text>
+        <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Tracking number</Text>
         <TextInput
-          style={styles.textInput}
+          style={[styles.textInput, { backgroundColor: colors.surface, color: colors.textPrimary }]}
           placeholder="Enter tracking number (optional)"
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={colors.textMuted}
           value={trackingNumber}
           onChangeText={setTrackingNumber}
           autoCapitalize="none"
@@ -331,18 +333,18 @@ export default function SellerFulfilmentScreen() {
         {canShip && (
           <View style={styles.labelSection}>
             <Pressable
-              style={[styles.generateLabelBtn, isGeneratingLabel && styles.generateLabelBtnDisabled]}
+              style={[styles.generateLabelBtn, isGeneratingLabel && styles.generateLabelBtnDisabled, { borderColor: colors.brand, backgroundColor: `${colors.brand}08` }]}
               onPress={handleGenerateLabel}
               disabled={isGeneratingLabel}
               accessibilityRole="button"
               accessibilityLabel="Generate shipping label"
             >
               {isGeneratingLabel ? (
-                <ActivityIndicator size="small" color={Colors.brand} />
+                <ActivityIndicator size="small" color={colors.brand} />
               ) : (
                 <>
-                  <Ionicons name="document-text-outline" size={18} color={Colors.brand} />
-                  <Text style={styles.generateLabelBtnText}>
+                  <Ionicons name="document-text-outline" size={18} color={colors.brand} />
+                  <Text style={[styles.generateLabelBtnText, { color: colors.brand }]}>
                     {generatedLabelUrl ? 'Regenerate label' : 'Generate shipping label'}
                   </Text>
                 </>
@@ -351,7 +353,7 @@ export default function SellerFulfilmentScreen() {
 
             {generatedLabelUrl && (
               <Pressable
-                style={styles.printLabelBtn}
+                style={[styles.printLabelBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
                 onPress={() => {
                   haptics.tap();
                   navigation.navigate('ChatMediaPreview', {
@@ -363,21 +365,21 @@ export default function SellerFulfilmentScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="View and print shipping label"
               >
-                <Ionicons name="print-outline" size={18} color={Colors.textPrimary} />
-                <Text style={styles.printLabelBtnText}>View & print label</Text>
+                <Ionicons name="print-outline" size={18} color={colors.textPrimary} />
+                <Text style={[styles.printLabelBtnText, { color: colors.textPrimary }]}>View & print label</Text>
               </Pressable>
             )}
           </View>
         )}
 
-        <Text style={styles.hintText}>
+        <Text style={[styles.hintText, { color: colors.textMuted }]}>
           You can mark the order as shipped without tracking details and add them later.
         </Text>
 
         {!canShip && (
-          <View style={styles.warningBanner}>
-            <Ionicons name="alert-circle-outline" size={16} color={Colors.danger} />
-            <Text style={styles.warningText}>
+          <View style={[styles.warningBanner, { backgroundColor: colors.surface }]}>
+            <Ionicons name="alert-circle-outline" size={16} color={colors.danger} />
+            <Text style={[styles.warningText, { color: colors.danger }]}>
               This order cannot be dispatched from its current status ({statusLabel}).
             </Text>
           </View>
@@ -385,9 +387,9 @@ export default function SellerFulfilmentScreen() {
       </ScrollView>
 
       {canShip && (
-        <View style={[styles.footer, { paddingBottom: insets.bottom + Space.md }]}>
+        <View style={[styles.footer, { paddingBottom: insets.bottom + Space.md, borderTopColor: colors.border, backgroundColor: colors.background }]}>
           <Pressable
-            style={[styles.shipBtn, isShipping && styles.shipBtnDisabled]}
+            style={[styles.shipBtn, isShipping && styles.shipBtnDisabled, { backgroundColor: colors.brand }]}
             onPress={() => {
               haptics.heavyPress();
               Alert.alert(
@@ -406,9 +408,9 @@ export default function SellerFulfilmentScreen() {
             accessibilityLabel="Mark order as shipped"
           >
             {isShipping ? (
-              <ActivityIndicator size="small" color={Colors.textInverse} />
+              <ActivityIndicator size="small" color={colors.textInverse} />
             ) : (
-              <Text style={styles.shipBtnText}>Mark as shipped</Text>
+              <Text style={[styles.shipBtnText, { color: colors.textInverse }]}>Mark as shipped</Text>
             )}
           </Pressable>
         </View>
@@ -420,7 +422,6 @@ export default function SellerFulfilmentScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -429,7 +430,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingBottom: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
   },
   headerBtn: {
     width: 44,
@@ -440,7 +440,6 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 17,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   headerSpacer: {
     width: 44,
@@ -454,7 +453,6 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 14,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
   },
   errorContainer: {
     flex: 1,
@@ -466,14 +464,12 @@ const styles = StyleSheet.create({
   errorTitle: {
     fontSize: 18,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
     textAlign: 'center',
   },
   retryBtn: {
     paddingVertical: 14,
     paddingHorizontal: Space.xl,
     borderRadius: 10,
-    backgroundColor: Colors.brand,
     minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
@@ -481,7 +477,6 @@ const styles = StyleSheet.create({
   retryBtnText: {
     fontSize: 16,
     fontFamily: Typography.family.semibold,
-    color: Colors.textInverse,
   },
   scrollContent: {
     paddingHorizontal: Space.md,
@@ -494,14 +489,12 @@ const styles = StyleSheet.create({
   orderNumber: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
   },
   statusLabel: {
     fontSize: 22,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
   },
   itemCard: {
     flexDirection: 'row',
@@ -514,7 +507,6 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   itemImagePlaceholder: {
-    backgroundColor: Colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -526,17 +518,14 @@ const styles = StyleSheet.create({
   itemTitle: {
     fontSize: 15,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
     lineHeight: 20,
   },
   itemTotal: {
     fontSize: 15,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
   },
   sectionDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
     marginVertical: Space.sm,
   },
   escrowBanner: {
@@ -546,15 +535,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
     borderRadius: 12,
-    backgroundColor: `${Colors.success}08`,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: `${Colors.success}25`,
   },
   escrowIconWrap: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: `${Colors.success}15`,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -565,24 +551,20 @@ const styles = StyleSheet.create({
   escrowTitle: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   escrowSub: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
     lineHeight: 16,
   },
   escrowCountdown: {
     fontSize: 11,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
     marginTop: 2,
   },
   sectionLabel: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 1.2,
     marginBottom: Space.sm,
@@ -590,7 +572,6 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 14,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
     marginBottom: 6,
     marginTop: Space.sm,
   },
@@ -601,23 +582,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     height: 48,
     borderRadius: 10,
-    backgroundColor: Colors.surface,
     minHeight: 48,
   },
   carrierSelectorText: {
     fontSize: 15,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
-  },
-  placeholderText: {
-    color: Colors.textMuted,
   },
   carrierDropdown: {
     marginTop: 4,
     borderRadius: 10,
-    backgroundColor: Colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
     overflow: 'hidden',
   },
   carrierOption: {
@@ -631,26 +605,21 @@ const styles = StyleSheet.create({
   carrierOptionText: {
     fontSize: 15,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
   },
   carrierOptionTextActive: {
-    color: Colors.textPrimary,
     fontFamily: Typography.family.semibold,
   },
   textInput: {
     paddingHorizontal: Space.md,
     height: 48,
     borderRadius: 10,
-    backgroundColor: Colors.surface,
     fontSize: 15,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
     minHeight: 48,
   },
   hintText: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     marginTop: Space.xs,
     lineHeight: 18,
   },
@@ -666,8 +635,6 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm + 2,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: Colors.brand,
-    backgroundColor: `${Colors.brand}08`,
   },
   generateLabelBtnDisabled: {
     opacity: 0.6,
@@ -675,7 +642,6 @@ const styles = StyleSheet.create({
   generateLabelBtnText: {
     fontSize: 14,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
   },
   printLabelBtn: {
     flexDirection: 'row',
@@ -685,13 +651,10 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm + 2,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
   },
   printLabelBtnText: {
     fontSize: 14,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   warningBanner: {
     flexDirection: 'row',
@@ -700,13 +663,11 @@ const styles = StyleSheet.create({
     marginTop: Space.md,
     padding: Space.sm,
     borderRadius: 8,
-    backgroundColor: Colors.surface,
   },
   warningText: {
     flex: 1,
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.danger,
   },
   footer: {
     position: 'absolute',
@@ -716,13 +677,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
-    backgroundColor: Colors.background,
   },
   shipBtn: {
     paddingVertical: 16,
     borderRadius: 12,
-    backgroundColor: Colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 52,
@@ -733,6 +691,5 @@ const styles = StyleSheet.create({
   shipBtnText: {
     fontSize: 16,
     fontFamily: Typography.family.bold,
-    color: Colors.textInverse,
   },
 });
