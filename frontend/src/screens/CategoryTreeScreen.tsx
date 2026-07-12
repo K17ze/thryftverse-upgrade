@@ -17,6 +17,7 @@ import { useToast } from '../context/ToastContext';
 import { Typography, Space, Radius } from '../theme/designTokens';
 import { VisualCategoryTile } from '../components/discover/VisualCategoryTile';
 import { DiscoverySectionHeader } from '../components/discover/DiscoverySectionHeader';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 type RouteT = RouteProp<RootStackParamList, 'CategoryTree'>;
 const PILL_BG = Colors.surface;
@@ -46,6 +47,7 @@ export default function CategoryTreeScreen() {
   const route = useRoute<RouteT>();
   const { show } = useToast();
   const { categoryPrefix } = route.params;
+  const reducedMotionEnabled = useReducedMotion();
 
   const resolvedPrefix = TREES[categoryPrefix] ? categoryPrefix : 'Women';
   const sections = TREES[resolvedPrefix];
@@ -65,7 +67,7 @@ export default function CategoryTreeScreen() {
         </View>
 
         {/* Premium full-width View All */}
-        <Reanimated.View entering={FadeInDown.duration(350).delay(100)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(100)}>
           <AnimatedPressable
             style={styles.viewAllRow}
             onPress={() => navigation.navigate('Browse', { categoryId: resolvedPrefix.toLowerCase(), title: `All ${resolvedPrefix}` })}
@@ -77,7 +79,7 @@ export default function CategoryTreeScreen() {
         </Reanimated.View>
 
         {/* 2-column VisualCategoryTile grid */}
-        <Reanimated.View entering={FadeInDown.duration(350).delay(150)} style={styles.gridWrap}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(150)} style={styles.gridWrap}>
           <View style={styles.grid}>
             {sections.map((section, index) => (
               <VisualCategoryTile
@@ -98,7 +100,7 @@ export default function CategoryTreeScreen() {
         {sections.map((section, index) => (
           <Reanimated.View
             key={section.title}
-            entering={FadeInDown.duration(350).delay(200 + index * 80)}
+            entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(200 + index * 80)}
             style={styles.section}
           >
             <DiscoverySectionHeader

@@ -31,6 +31,7 @@ import { parseApiError } from '../lib/apiClient';
 import { CachedImage } from '../components/CachedImage';
 import { getListingCoverUri } from '../utils/media';
 import { uploadMedia } from '../services/mediaUpload';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 type RouteT = RouteProp<RootStackParamList, 'WriteReview'>;
 
@@ -41,6 +42,7 @@ export default function WriteReviewScreen() {
   const { isDark } = useAppTheme();
   const { show } = useToast();
   const haptic = useHaptic();
+  const reducedMotionEnabled = useReducedMotion();
 
   const [rating, setRating] = useState(0);
   const [review, setReview] = useState('');
@@ -161,7 +163,7 @@ export default function WriteReviewScreen() {
       >
           {/* Order context */}
           {order && (
-            <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
+            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(0)}>
               <ElevatedSurface variant="surface" style={styles.orderCard}>
                 <View style={styles.orderRow}>
                   {order.listingImageUrl && (
@@ -181,7 +183,7 @@ export default function WriteReviewScreen() {
           )}
 
           {existingReview ? (
-            <Reanimated.View entering={FadeInDown.duration(300).delay(20)} style={styles.existingCard}>
+            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(20)} style={styles.existingCard}>
               <Ionicons name="checkmark-circle" size={32} color={Colors.success} />
               <BodyEmphasis style={styles.existingTitle}>Review already submitted</BodyEmphasis>
               <Caption color={Colors.textSecondary} style={styles.existingSub}>
@@ -196,7 +198,7 @@ export default function WriteReviewScreen() {
             </Reanimated.View>
           ) : (
             <>
-              <Reanimated.View entering={FadeInDown.duration(300).delay(20)}>
+              <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(20)}>
                 <Text style={styles.promptText}>How was your experience?</Text>
 
                 <View style={styles.starsContainer}>
@@ -225,7 +227,7 @@ export default function WriteReviewScreen() {
                 )}
               </Reanimated.View>
 
-              <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
+              <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
                 <Meta color={Colors.textMuted} style={styles.sectionLabel}>DETAILED REVIEW (OPTIONAL)</Meta>
                 <View style={styles.inputCard}>
                   <TextInput
@@ -243,7 +245,7 @@ export default function WriteReviewScreen() {
               </Reanimated.View>
 
               {/* Photo upload section */}
-              <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
+              <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)}>
                 <Meta color={Colors.textMuted} style={styles.sectionLabel}>PHOTOS (OPTIONAL)</Meta>
                 <View style={styles.photoSection}>
                   {photoUris.length > 0 && (

@@ -29,6 +29,7 @@ import { CachedImage } from '../components/CachedImage';
 import { getListingCoverUri } from '../utils/media';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 type Props = StackScreenProps<RootStackParamList, 'SupportTicketDetail'>;
 
@@ -44,6 +45,7 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
   const { show } = useToast();
   const haptic = useHaptic();
   const { formatFromFiat } = useFormattedPrice();
+  const reducedMotionEnabled = useReducedMotion();
 
   const supportTickets = useStore((state) => state.supportTickets);
   const updateSupportTicketStatus = useStore((state) => state.updateSupportTicketStatus);
@@ -134,7 +136,7 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         {/* Order context card */}
         {order && (
-          <Reanimated.View entering={FadeInDown.duration(300).delay(20)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(20)}>
             <ElevatedSurface variant="surface" style={styles.orderContextCard}>
               <View style={styles.orderContextRow}>
                 {order.listingImageUrl && (
@@ -155,7 +157,7 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
         )}
 
         {/* Status header */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(40)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(40)}>
           <View style={styles.statusCard}>
             <View style={styles.statusHeader}>
               <View style={styles.statusIconWrap}>
@@ -196,7 +198,7 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
         </Reanimated.View>
 
         {/* Details */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)}>
           <Meta color={Colors.textMuted} style={styles.sectionLabel}>DETAILS</Meta>
           <View style={styles.detailsCard}>
             <Text style={styles.detailsText}>{ticket.details}</Text>
@@ -205,7 +207,7 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
 
         {/* Evidence */}
         {evidenceUrls.length > 0 && (
-          <Reanimated.View entering={FadeInDown.duration(300).delay(100)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(100)}>
             <Meta color={Colors.textMuted} style={styles.sectionLabel}>EVIDENCE</Meta>
             <View style={styles.evidenceCard}>
               <View style={styles.evidenceThumbs}>
@@ -218,7 +220,7 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
         )}
 
         {/* Timeline */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
           <Meta color={Colors.textMuted} style={styles.sectionLabel}>TIMELINE</Meta>
           <View style={styles.timelineListCard}>
             <View style={styles.timelineItem}>
@@ -244,7 +246,7 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
         </Reanimated.View>
 
         {/* Support note */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(140)} style={styles.timelineCard}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(140)} style={styles.timelineCard}>
           <Ionicons name="time-outline" size={20} color={Colors.textMuted} />
           <View style={{ flex: 1, marginLeft: 12 }}>
             <Text style={styles.timelineTitle}>Typical response time</Text>
@@ -255,7 +257,7 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
         </Reanimated.View>
 
         {/* Actions */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(160)} style={styles.actionsCard}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(160)} style={styles.actionsCard}>
           {ticket.status === 'open' && (
             <AppButton
               title="Close Request"

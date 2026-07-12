@@ -38,6 +38,7 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { BoardEmptyGraphic } from '../components/profile/BoardEmptyGraphic';
 import { ShareSheet } from '../components/ShareSheet';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 const { width: SCREEN_W } = Dimensions.get('window');
 const COVER_H = 180;
 type NavT = StackNavigationProp<RootStackParamList>;
@@ -52,6 +53,7 @@ export default function CollectionDetailScreen() {
   const [shareVisible, setShareVisible] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
   const scrollY = useSharedValue(0);
+  const reducedMotionEnabled = useReducedMotion();
 
   const collectionId = route.params?.collectionId;
 
@@ -327,7 +329,7 @@ export default function CollectionDetailScreen() {
 
         {/* Grid */}
         {count > 0 && (
-          <Reanimated.View entering={FadeInDown.duration(300)} style={{ marginTop: Space.md }}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={{ marginTop: Space.md }}>
             <MasonryGrid
               items={collectionItems}
               onPressItem={(item: any) => navigation.navigate('ItemDetail', { itemId: item.id })}

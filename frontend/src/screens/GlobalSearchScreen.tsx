@@ -38,6 +38,7 @@ import { searchListingsFromApi } from '../services/feedApi';
 import { friendlyBackendError } from '../services/listingMapper';
 import { ProductAnalytics } from '../platform/product/productAnalytics';
 import { useSavedSearchAlerts } from '../hooks/useSavedSearchAlerts';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 /* ── New Discover Components ── */
 import { HeroCarousel, HeroItem } from '../components/discover/HeroCarousel';
@@ -241,6 +242,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
   const toggleSavedSearchAlerts = useStore((state) => state.toggleSavedSearchAlerts);
   const { listings, source, isSyncing, lastError, refreshListings } = useBackendData();
   const { formatFromFiat } = useFormattedPrice();
+  const reducedMotionEnabled = useReducedMotion();
   const focusProgress = useSharedValue(0);
 
   // Evaluate saved search alerts against current listings
@@ -724,7 +726,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
       {/* Live search suggestions dropdown */}
       {searchSuggestions.length > 0 && (
         <Reanimated.View
-          entering={FadeInDown.duration(150)}
+          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(150)}
           style={styles.suggestionsWrap}
         >
           <Text style={styles.suggestionsHeader}>Suggestions</Text>
@@ -775,7 +777,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
               <>
                 {/* ── FOCUS STATE: Clean recent + trending when search is focused ── */}
                 {isSearchFocused ? (
-                  <Reanimated.View entering={FadeInDown.duration(200).springify().damping(20)}>
+                  <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(200).springify().damping(20)}>
                     {/* Recent searches */}
                     {recentSearches.length > 0 && (
                       <EditorialSection kicker="Your history" title="Recent searches">
@@ -1124,7 +1126,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                 </View>
 
                 {/* Recommendation text */}
-                <Reanimated.View entering={FadeInDown.delay(100).duration(400)} style={styles.sectionWrap}>
+                <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.delay(100).duration(400)} style={styles.sectionWrap}>
                   <Text style={styles.sectionSupertitle}>Results</Text>
                   <View style={styles.recoHeaderRow}>
                     <Text style={styles.recoHeaderTitle}>
@@ -1167,7 +1169,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                 </Reanimated.View>
 
                 {/* Masonry grid */}
-                <Reanimated.View entering={FadeInDown.delay(200).duration(400)} style={styles.sectionWrap}>
+                <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.delay(200).duration(400)} style={styles.sectionWrap}>
                   {discoverListings.length > 0 ? (
                     <View style={styles.masonryGrid}>
                       <View style={styles.masonryColumn}>

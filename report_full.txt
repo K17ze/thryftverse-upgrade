@@ -1,0 +1,459 @@
+=== PARAGRAPHS ===
+[0|Title] ThryftVerse — Deep Research Analysis Report
+[1|Subtitle] UI/UX & Business-Logic Gap Audit vs Flagship Apps (Instagram, Pinterest, TikTok) and Marketplace Leaders (eBay, Vinted, Depop, Poshmark, StockX, Grailed, Whatnot)
+[2|Author] Prepared by Devin — Cognition AI
+[3|Date] 8 July 2026
+[4|Heading 1] 1. Executive Summary
+[5|First Paragraph] ThryftVerse is a mobile-first, resale-focused social marketplace built on React Native (Expo) with a Fastify/PostgreSQL backend. This report is the outcome of a full-codebase audit of the frontend — 115 screens, ~40 shared component families, 27 API service modules, a 5-tab navigation architecture, and a 110-route stack — cross-referenced against the interaction patterns, information architecture, and business logic of the strongest players in two categories:
+[6|Compact] Flagship social/visual apps: Instagram, Pinterest, TikTok — the benchmark for feed engagement, content creation, visual discovery, and retention mechanics.
+[7|Compact] Marketplace leaders: eBay, Vinted, Depop, Poshmark, Grailed, StockX, Whatnot — the benchmark for listing flows, trust & safety, buyer/seller protection, pricing intelligence, and monetisation.
+[8|Heading 2] 1.1 Where ThryftVerse is already strong
+[9|First Paragraph] The audit found a product that is substantially more ambitious than a typical MVP marketplace. Several capabilities already exceed what Vinted or Depop shipped at comparable maturity:
+[10|Compact] Fractional co-ownership (“Co-Own”) of assets — an entire trading vertical (asset detail, order book, portfolio, leaderboard, buyout, syndicates) that no mainstream fashion marketplace offers. This is a genuine differentiator closer to StockX-meets-Public.com.
+[11|Compact] Live auctions with countdowns, sticky bid docks, seller auction centre, and reserve pricing — comparable in scope to Whatnot’s core loop (minus live video).
+[12|Compact] A rich messaging platform — group chats, bots and a bot builder, message requests, quick replies, voice messages, reactions, reply-quotes, link previews, shared media galleries, archived/muted conversation management. This is beyond what any competitor marketplace ships (Vinted/Depop chat is rudimentary).
+[13|Compact] Creator Studio — a layered canvas editor for “Looks” and “Posters” with templates, drafts, and a publish pipeline; a foundation for Instagram-style creative content.
+[14|Compact] Design-system discipline — design tokens, premium form primitives, flagship component library, skeleton loaders everywhere, haptics, Reanimated/Skia-based animation, i18n string extraction tooling, and CI-style guardrail tests for scroll/animation usage.
+[15|Compact] Poster stories (ephemeral story-like content), pulse feed, outfit builder, style quiz, visual search entry point, and personalisation surfaces.
+[16|Heading 2] 1.2 The headline gaps (what this report details)
+[17|First Paragraph] Despite the breadth, the audit identified 7 systemic gaps that separate ThryftVerse from flagship-quality experiences, and ~90 specific department-level gaps documented in Sections 4–8:
+[18|Heading 2] 1.3 How to read this report
+[19|Compact] Section 2 — Methodology and complete current-state inventory.
+[20|Compact] Section 3 — Navigation & information architecture audit.
+[21|Compact] Section 4 — Department-by-department UI/UX audit (14 departments), each with: current state → gaps vs flagships → concrete resolutions.
+[22|Compact] Section 5 — Marketplace business-logic gap analysis vs eBay/Vinted/Depop/Poshmark/StockX.
+[23|Compact] Section 6 — Missing pages, subpages, screens, buttons, and features (the concrete build list).
+[24|Compact] Section 7 — Visual & interaction-design elevation guide, department by department.
+[25|Compact] Section 8 — Prioritised roadmap (P0/P1/P2) with effort and impact ratings.
+[26|Compact] Section 9 — Competitor deep-dive teardowns (Instagram, Pinterest, TikTok/Whatnot, Vinted, Depop, Poshmark, eBay, StockX/Grailed).
+[27|Compact] Section 10 — Detailed resolution specifications for the top 12 priority builds.
+[28|Compact] Section 11 — Measurement framework (KPIs per initiative).
+[29|Compact] Section 12 — Consolidated gap register (80 numbered gaps).
+[30|Compact] Section 13 — Appendices: full screen inventory, component inventory, service-layer map.
+[31|Heading 1] 2. Methodology & Current-State Inventory
+[32|Heading 2] 2.1 Methodology
+[33|Compact] Static code audit — every screen in frontend/src/screens (115 files), the navigation graph (AppNavigator, TabNavigator, 110 typed routes), all component families (components/*, components/ui, components/flagship), all 27 API service modules, the Creator Studio module, theme/design-token system, and platform capability layer.
+[34|Compact] Git-history review — 442 commits reviewed in the prior research phase; the phase markers in navigation/types.ts (Phase 16 → Phase 28, UI-18 → UI-22R, VISUAL-15) document the evolution: commerce fundamentals first, then messaging depth, then visual elevation passes.
+[35|Compact] Keyword capability scan — targeted searches for feature signals (video, live, stories, bundles, saved searches, boosts, referrals, size guides, shipping labels, loyalty, dark mode, i18n, analytics) to establish presence/absence objectively.
+[36|Compact] Benchmark decomposition — each competitor’s canonical flows were decomposed into their constituent screens, interactions, and business rules, and diffed against ThryftVerse’s equivalents.
+[37|Heading 2] 2.2 Current-state inventory (summary)
+[38|First Paragraph] Navigation: 5-tab bottom bar — Home, Explore (search), Create (center FAB opening an action sheet), Inbox, Profile. 110 stack routes.
+[39|Body Text] Departments present today:
+[40|Body Text] Absent or vestigial (verified by capability scan): saved searches (0 references), size guides (0), referrals (0 beyond a share screen), reels/video feed (0), loyalty/rewards (1 stray reference), boosts (1), promoted listings (~4 non-feature references), shipping labels (1), dark mode (single-theme system), bundles (9 references, no buyer-facing bundle flow).
+[41|Heading 1] 3. Navigation & Information Architecture Audit
+[42|Heading 2] 3.1 Current architecture
+[43|First Paragraph] The 5-tab layout (Home / Explore / Create-FAB / Inbox / Profile) mirrors Instagram’s canonical structure and is the right skeleton. Strengths: haptic tab feedback, unread badge on Inbox, custom raised Create button, hide-on-keyboard, accessibility labels on every tab.
+[44|Heading 2] 3.2 Gaps vs flagship IA
+[45|Compact] Explore tab conflates search and browse. Instagram and Pinterest separate the feed of discovery (Explore grid / Pinterest home) from search intent (a search screen you commit to). ThryftVerse’s Explore tab is a search screen with three content tabs (Pulse/Looks/Edit); the masonry discovery grid lives in components but there is no dedicated infinite visual-browse surface as the tab’s default state. Resolution: make Explore default to an infinite, personalised masonry grid (Pinterest-style, PinterestMasonryGrid already exists); tapping the search bar transitions to search-intent mode with recent searches, trending queries, and category chips.
+[46|Compact] No dedicated “Selling” or “Activity” surface at top level. Vinted/Depop sellers live in their selling dashboard. ThryftVerse buries MyListings/SellerFulfilment/SellerAuctionCentre under Profile. Resolution: a “Seller Hub” entry (Profile top-cell or a swappable 5th tab for power sellers) aggregating listings, orders-to-ship, offers, auctions, analytics, and payouts.
+[47|Compact] Notifications have no tab or persistent affordance. NotificationsList exists as a pushed screen. Instagram places activity behind a heart icon in the top bar with a badged counter. Resolution: persistent bell/heart icon with unread badge in Home and Profile headers; group notifications by type (offers, likes, follows, orders, price drops).
+[48|Compact] Deep-link coverage is minimal (2 references). Flagships treat every entity (listing, profile, look, auction, collection) as a shareable URL. Resolution: define a universal-link scheme (thryftverse.com/l/:id, /u/:handle, /look/:id, /auction/:id), wire Linking config into the navigator, and generate OG-card web previews server-side.
+[49|Compact] Back-stack hygiene for cross-vertical flows. TradeHub, AuctionHome, and CoOwnHub are parallel universes reachable from multiple entry points; there is no persistent “mode switcher”. Resolution: a top-level segment (Shop / Auctions / Co-Own) on Home, preserving one mental model.
+[50|Compact] No global cart. Buy-now is item-at-a-time. Depop and eBay both support multi-item bags per seller (bundles). Resolution: a lightweight per-seller bag enabling bundle checkout and combined shipping (see 5.4).
+[51|Heading 1] 4. Department-by-Department UI/UX Audit
+[52|First Paragraph] Each department is presented as: (a) current state, (b) gaps vs flagship benchmark, (c) resolutions.
+[53|Heading 2] 4.1 Onboarding & Authentication
+[54|First Paragraph] Current: AuthLanding → Login/SignUp, ForgotPassword, ChangePassword, TwoFactorSetup, ActiveSessions. Style quiz exists (StyleQuiz) but is a route, not an onboarding step.
+[55|Body Text] Gaps: - No social sign-in (Apple/Google/Facebook). Vinted, Depop, and Instagram all lead with OAuth; email-first sign-up measurably increases drop-off. Apple Sign-In is an App Store requirement if any third-party login is added. - No progressive onboarding: flagships collect interests (Pinterest’s topic picker is legendary), sizes (Vinted asks sizes to power its feed), and brands during first-run, then immediately demonstrate a personalised feed. - No “guest browse” nudge strategy — the point at which an anonymous user is asked to register (on like, on message, on checkout) should be deliberate and delightful, not a hard wall. - No handle/username availability check with suggestions during sign-up. - No welcome/empty-feed education (first-session tooltips, coach marks for Create button, co-own disclosure primer).
+[56|Body Text] Resolutions: 1. Add Apple + Google OAuth (backend auth provider columns exist conceptually; add /auth/oauth/:provider endpoints). 2. Make StyleQuiz + size/brand picker a skippable 3-step first-run flow feeding Personalisation; show the feed reshaping live as the user picks (Pinterest’s trick). 3. Deferred registration: allow browse + like locally, sync on account creation. 4. Real-time username validation with suggestions.
+[57|Heading 2] 4.2 Home / Discovery Feed
+[58|First Paragraph] Current: HomeScreen (1,688 LOC) with hero carousel (currently placeholder editorial slots: “The Archive Drop”, “Summer Layers”, “Streetwear Daily”), editorial sections, visual category tiles, featured boards, Pinterest-style masonry grid, poster-story rail, skeleton loading, staggered grid entrance animations.
+[59|Body Text] Gaps vs Instagram/Pinterest: - Curation is static, not learned. The hero slots are hardcoded editorial placeholders navigating to generic Browse. Pinterest’s home is 100% behaviourally ranked; Instagram’s feed mixes followed content with ranked recommendations. ThryftVerse has the personalisation plumbing (style graph, personalisation screen, saved-affinity ExploreCollection source) but the home feed doesn’t visibly re-rank on behaviour. - No “following” feed. A social marketplace’s killer retention surface is new items from sellers you follow (Depop’s feed is exactly this). The social graph (follow/block) now works in the backend — the feed consuming it doesn’t exist. - No engagement affordances on feed cards beyond like: no long-press quick-actions (share, see similar, hide, add to collection — Pinterest’s long-press wheel), no “seller is live/new” indicators, no price-drop badges on cards. - No pull-to-refresh discovery narrative — flagships use refresh as a “new drop” moment (fresh hero, “N new items from people you follow”). - Poster stories rail exists but lacks the Instagram mechanics that make stories work: unwatched-first ordering with gradient rings (AvatarRing exists in chat components — reuse it), auto-advance between users’ stories, reply-to-story → DM, story insights for creators. - No infinite feed end-state — flagships never dead-end; when a section exhausts, inject “more like the items you liked”.
+[60|Body Text] Resolutions: 1. Ship a two-tab home: “For You” (ranked) / “Following” (chronological from followed sellers + friends’ likes, powered by the now-working social graph). 2. Convert hero carousel to a server-driven campaign system (/feed/campaigns) so merchandising is operable without releases. 3. Add long-press quick-action sheet on every ProductCardV2: See similar · Add to collection · Share · Not interested — and feed “not interested” back into ranking. 4. Card-level signals: price-drop badge, “3 others watching”, “new from @seller you follow”. 5. Story-ring elevation: unwatched-first, reply-to-story, view counts for the poster.
+[61|Heading 2] 4.3 Search & Explore
+[62|First Paragraph] Current: SearchScreen with Pulse/Looks/Edit tabs, GlobalSearchScreen, VisualSearchScreen (entry exists), Filter screen, CategoryTree, Browse.
+[63|Body Text] Gaps: - No saved searches with alerts — the single highest-retention feature in Vinted/eBay. Zero references in the codebase. - No recent-searches / trending-searches state on search focus (table stakes in every flagship). - No query understanding chips — Vinted decomposes “nike air max 90 size 9” into brand/model/size filter chips; ThryftVerse passes raw strings. - Visual search is an entry point without a highlighted loop — Pinterest Lens is a first-class camera button in the search bar; results should blend exact matches with style-similar items and shoppable looks. - Filters lack persistence and profiles — “my size” filter memory (Vinted’s killer default: only show my sizes) doesn’t exist. - No search results merchandising — zero-result states should recover with near-matches, broader category, and a one-tap “create alert for this search”.
+[64|Body Text] Resolutions: 1. Saved searches + alerts end-to-end: save current query+filters, backend cron matches new listings, push notification “3 new matches for ‘carhartt jacket M’”. This is the #1 retention build. 2. Search-focus state: recent (locally stored + server-synced), trending (from search logs), category shortcuts. 3. Size-profile default filter (“Only my sizes” toggle persisted in Personalisation). 4. Promote Lens-style camera icon inside the AppSearchBar; blend visual-similar results. 5. Zero-result recovery module with “Save this search” CTA.
+[65|Heading 2] 4.4 Product Detail Page (PDP)
+[66|First Paragraph] Current: ItemDetail composed of a strong component set: ProductMediaGallery, FullscreenMediaViewer, ProductIdentitySummary, ProductAttributeChips, ProductCommerceSummary, SellerTrustCard, ProductPolicySheet, RecommendationRail, SeenInLooksRail, DoubleTapHeart, share sheet.
+[67|Body Text] Gaps vs eBay/Vinted/Depop/StockX: - No price history / market context. StockX’s price chart and “last sold” data drive confidence; ThryftVerse has a market ledger for co-own assets but nothing on standard listings. Even Vinted shows “price dropped from £X”. - No size guide (0 references) — a conversion killer for apparel; Depop/ASOS-style size guide sheet per category + brand. - No bundle prompt — “Add more from this seller and save on shipping” (Vinted’s bundle entry lives on the PDP). - No visual-similar grid — Pinterest and Depop both show “more like this” visually below the item; the RecommendationRail exists but a tap-to-expand similarity grid from the item’s photos is the flagship pattern. - Offer affordance placement — Make-Offer exists as a screen; flagship pattern is offer + buy-now as twin sticky CTAs with the offer sheet showing seller’s floor hints (“offers above £X are usually accepted”). - No watcher/scarcity signals — eBay’s “12 watchers”, Vinted’s “5 people are interested”. Drives urgency honestly. - No authentication/verification badge programme for high-value items (StockX/Grailed authenticity is the entire brand promise). Co-own has auth photos; standard listings don’t surface any verification tier. - No buyer-protection strip — Vinted’s PDP shows the Buyer Protection line item right under price; this is trust-critical (see 5.2). - Reviews shown are seller-level only; no item Q&A — eBay’s ask-a-question drives conversion on ambiguous items; ThryftVerse has chat but no public Q&A on listing.
+[68|Body Text] Resolutions (PDP build list): price-drop history line, category size-guide sheet, bundle upsell row, “More like this” visual grid, watcher counts, verification badge tier, buyer-protection strip, sticky twin CTAs (Offer / Buy now) with haptic press states, public Q&A section (optional P2).
+[69|Heading 2] 4.5 Sell / Listing Flow
+[70|First Paragraph] Current: SellScreen (1,420 LOC) — photos via SortablePhotoStrip, media studio, title/description/price/original-price, brand, size, condition (4 tiers), category, up to 8 tags, listing mode selector (sell-now / auction / co-own), shipping method/payer, auction params, co-own share params, draft persistence, preview screen, success screen, publication pipeline with recoverable failure states.
+[71|Body Text] This is already one of the strongest sell flows in the category — the mode selector unifying standard/auction/fractional is unique.
+[72|Body Text] Gaps: - No AI listing assist. Vinted and eBay now auto-suggest title, category, brand, colour, and price from the first photo. ThryftVerse has an ml-service in its stack — wiring photo → attribute suggestions is the single biggest seller-side win. - No pricing intelligence — “similar items sold for £18–24” (eBay/Vinted show sold-comps at pricing step). The market-ledger infrastructure could power this. - No video on listings (G1) — Depop supports listing video; it measurably lifts sell-through. - No bulk/multi-listing tools, no relist/duplicate action for power sellers. - No boost/bump at publish — the natural monetisation moment (“Bump for £0.95 to reach 5× more buyers” — Vinted’s model) is absent. - No package-size selection feeding real shipping rates and label generation (see 5.5). - Condition scale is coarse — 4 options; Vinted uses 5 with photo-anchored descriptions; add per-condition helper text and photo examples. - No listing quality meter — a “completeness score” (photos ≥4, measurements, tags) that predicts sell-through and gamifies quality.
+[73|Body Text] Resolutions: photo-first AI autofill (P0), sold-comps price hint (P0), listing video (P1), publish-moment boost upsell (P1), duplicate/relist (P1), package-size + label pipeline (P0, see 5.5), quality meter (P2).
+[74|Heading 2] 4.6 Offers, Negotiation & Bundles
+[75|First Paragraph] Current: MakeOffer screen; OfferBubble in chat; offers ride the messaging rails.
+[76|Body Text] Gaps: - No structured counter-offer loop with expiries visible to both parties (eBay best-offer: offer → counter → counter, 48h expiry timers). - No offer-to-likers — Poshmark’s most famous mechanic: sellers send a private discount to everyone who liked an item, paired with a shipping discount. Requires likes list per listing (exists) + a seller-side “send offer” action. - No bundle offers — Vinted’s bundle flow (buyer multi-selects from a seller’s wardrobe, seller sets bundle discount tiers like 10% off 2 items) is a proven AOV driver. - No auto-accept / auto-decline thresholds for sellers (eBay lets sellers set floors so offers resolve instantly).
+[77|Body Text] Resolutions: structured offer state machine (pending/countered/expired/accepted) with timers rendered in chat OfferBubble; seller offer-to-likers composer; per-seller bundle bag + discount tiers; seller floor settings in ManageListing.
+[78|Heading 2] 4.7 Checkout, Orders & Post-Purchase
+[79|First Paragraph] Current: Checkout (1,388 LOC) with address + payment selectors and add-card/add-address sheets, Success, order history, OrderDetail, OrderReceipt, OrderSupport, SellerFulfilment, WriteReview. Capability layer references stripe_americas region gating.
+[80|Body Text] Gaps: - No Apple Pay / Google Pay — one-tap wallets are the single largest mobile checkout conversion lever; all competitors support them. - No buyer-protection/escrow narrative at checkout — the fee line and “your money is held until you confirm receipt” copy is what makes strangers transact (see 5.2). - No promo/discount code field (15 scattered “promo” references, no redemption flow). - Order tracking is data without a map/timeline visual — flagship post-purchase shows a stepper (Ordered → Shipped → In transit → Delivered) with carrier events; 20 tracking references exist, so data plumbing is partial — the visual timeline and push updates on state change are the gap. - No returns/refund request flow — OrderSupport exists but a structured “Request refund → reason → evidence photos → seller response window → escalate” flow (Vinted’s model) is missing. - No delivery-confirmation nudge — Vinted asks the buyer “Everything OK?” 2 days after delivery, auto-releasing escrow after N days; drives review volume too.
+[81|Body Text] Resolutions: wallet payments (P0), buyer-protection line + escrow copy (P0), visual tracking timeline with push (P1), structured refund/dispute flow (P0 — see 5.6), promo code redemption (P2), post-delivery confirmation + auto-release (P0).
+[82|Heading 2] 4.8 Auctions
+[83|First Paragraph] Current: Genuinely strong — AuctionHome with segment rails and attention strips, countdowns, sticky bid dock, value lockups, seller auction centre, MyBids, buyout, reserve pricing, state badges.
+[84|Body Text] Gaps: - No live video auctions — Whatnot’s entire category-defining format. The auction engine exists; adding a live stream layer (even phase 1: seller go-live with camera, chat overlay, current-lot bid dock) would leapfrog Depop/Vinted who have nothing here. - No outbid push with one-tap rebid deep-linking straight into the bid sheet with a pre-filled increment. - No auction ending-soon digest (“3 auctions you’re watching end within the hour”). - No proxy/max bidding — eBay’s automatic bidding is standard; check backend, expose max-bid UI in BidSheet. - No seller scheduling/promotion — schedule auction start for peak hours, share countdown card to stories/social.
+[85|Body Text] Resolutions: outbid → one-tap rebid loop (P0, retention), proxy bidding (P1), ending-soon digests (P1), live-video auctions (P2 flagship bet).
+[86|Heading 2] 4.9 Co-Own / Fractional Trading
+[87|First Paragraph] Current: The most differentiated vertical — asset detail with ledger, portfolio, leaderboard, syndicates, buyout, trade composer with market/limit orders, risk disclosures, trust panels, financial-truth guardrail tests.
+[88|Body Text] Gaps: - Onboarding comprehension — this product needs progressive education more than any other surface; CoOwnEducationCard exists, but a first-trade guided flow (“you’re buying 5 units = 5% of this jacket”) with a simulated preview would cut abandonment. - No price charts on assets — a trading product without sparklines/candles reads as unfinished next to StockX/Public; MarketLedger has the data. - No watchlist/alerts on assets (price above/below X). - No social proof in trading — “12 co-owners”, recent trades ticker, leaderboard integration on the asset page. - Liquidity states — empty order books need honest, designed states (“No sellers right now — set an alert”).
+[89|Body Text] Resolutions: asset sparkline + period selector (P1), watchlist + price alerts (P1), first-trade guided mode (P1), trades ticker + co-owner avatars (P2).
+[90|Heading 2] 4.10 Messaging & Inbox
+[91|First Paragraph] Current: Best-in-audit department (4.5/5): 1:1 + group chats, bots + bot builder + directories, message requests, quick replies, voice messages, reactions, replies, link previews, shared media, typing indicators, read receipts, archived/muted management, attachment pipeline with review sheets.
+[92|Body Text] Gaps (polish-level): - No in-chat structured transaction cards for every commerce state — OfferBubble exists; extend to order-status cards (shipped/delivered), auction-won cards, co-own fill notices, so chat becomes the transaction timeline (Vinted does this well). - No message search across conversations (Inbox-level search over content). - No translation of messages (48 i18n references exist; cross-border chat translation à la eBay would be additive later). - No safety interventions — flagged-keyword nudges (“keep payments in the app to stay protected” when someone types “PayPal me”) — a Vinted/Depop trust standard and fraud reducer. - Stories/poster replies should land as DMs (Instagram mechanic) — closes the loop between content and conversation.
+[93|Body Text] Resolutions: commerce state cards (P1), off-platform-payment keyword nudge (P0 — trust), inbox content search (P2), story-reply → DM (P1).
+[94|Heading 2] 4.11 Profile, Closet & Collections
+[95|First Paragraph] Current: MyProfile/UserProfile with identity heroes, tab rails, looks grids, shop tiles, moodboard collection grids, reviews module, connections sheet, closet boards, outfit builder.
+[96|Body Text] Gaps: - Seller storefront depth — Depop shops have pinned items, shop policies, sale banners (“20% off everything this weekend”), and seller-set categories within their closet. ThryftVerse closets are boards without merchandising controls. - No seller analytics — views, likes, conversion per listing, follower growth (Poshmark/Depop both surface closet insights). Creator analytics module exists for content (creatorAnalytics.ts) but not for selling. - No vacation/holiday mode surfacing on the public profile — backend prefs now exist (built last session); the public “away” badge and auto-reply are the missing halves. - Verification and badges — no ID-verified badge, top-seller badge, fast-shipper badge; Vinted/eBay badges materially shift buyer conversion. - Collections are private-utility; flagships make boards social — Pinterest boards are followable/shareable; collections here should be shareable with cover editing and collaborative options (P2).
+[97|Body Text] Resolutions: shop merchandising (pins, banner, policies) (P1), seller dashboard with per-listing funnel metrics (P0 for seller retention), away badge + auto-reply (P1, backend done), trust badges programme (P1), social collections (P2).
+[98|Heading 2] 4.12 Creator Studio, Looks, Posters & Content
+[99|First Paragraph] Current: Canvas editor with layers, templates, drafts, publish sheets, media pipeline; Looks and Posters as content types; PosterViewer with story mechanics; LookDetail; SeenInLooks rail on PDP tying content to commerce.
+[100|Body Text] Gaps: - No video content type (G1) — the entire industry’s engagement is video-first; Looks are static compositions. - Shoppable tagging depth — Instagram’s product tags on posts with tap-to-reveal price chips; Looks should support hotspot tags on the image linking to listings (the SeenInLooks reverse direction). - No content engagement loop — likes/comments on looks, share counts, creator notifications (“Your look reached 1.2k views”). - No hashtags/topics on content for discovery clustering. - Templates are static; trends are missing — TikTok/IG surface trending templates/sounds; a “trending look formats this week” rail keeps creators producing.
+[101|Body Text] Resolutions: hotspot product tags on looks (P0 — this is the commerce-content bridge), look engagement (like/comment/share counts + creator notifications) (P1), short video looks (P2 flagship bet), topic tags (P2).
+[102|Heading 2] 4.13 Wallet, Payments & Payouts
+[103|First Paragraph] Current: Wallet, Balance + history, Withdraw, AddBankAccount, Payments (methods), payment-method PATCH endpoints (built last session).
+[104|Body Text] Gaps: - No earnings analytics — monthly earned, fees paid, net; sellers running businesses need statements (eBay/Vinted provide exportable reports; also a tax-compliance necessity — see 5.8). - No instant-payout option (fee-based expedited withdrawal — a proven monetisation). - No spendable-balance-at-checkout toggle — using wallet balance to pay (Vinted’s balance-first checkout) increases liquidity and lock-in. - KYC states (verification pending/failed) need designed states, not just errors.
+[105|Body Text] Resolutions: balance-at-checkout (P0), earnings statements + CSV export (P1), instant payout (P2), KYC status UI (P1).
+[106|Heading 2] 4.14 Notifications, Settings, Accessibility & System
+[107|First Paragraph] Current: NotificationsScreen, PushNotifications preference screen, deep settings tree (privacy, sessions, blocked users, chat settings, about), 249 files referencing accessibility (labels/hints discipline is real), i18n extraction script, single-theme design tokens.
+[108|Body Text] Gaps: - Notification taxonomy & granularity — flagship apps offer per-category toggles (offers, price drops, followers, order updates, marketing) with quiet hours; PushNotifications screen should map to a real preference matrix honoured server-side. - No notification grouping/inbox intelligence — group “5 people liked your listing” into one row (Instagram’s aggregation). - No dark mode — single-theme tokens; the token architecture makes theming feasible; dark mode is a baseline expectation in 2026 and an App Store review favourite. - No reduced-motion audit — heavy Reanimated/Skia usage should respect prefersReducedMotion. - Localisation half-built — extraction tooling exists; complete the loop with at least 2 launch locales if cross-border is on the roadmap.
+[109|Body Text] Resolutions: notification preference matrix (P1), aggregation (P1), dark theme via tokens (P1), reduced-motion pass (P2), locale completion (P2).
+[110|Heading 1] 5. Marketplace Business-Logic Gap Analysis (vs eBay, Vinted, Depop, Poshmark, StockX)
+[111|First Paragraph] This section examines the rules of the marketplace rather than screens.
+[112|Heading 2] 5.1 Fee & monetisation model
+[113|First Paragraph] Competitors: Vinted — free to sell, buyer pays “Buyer Protection” fee (5% + £0.70) + optional item verification fee; monetises bumps/wardrobe spotlight. Depop — moved to buyer-fee model + boosted listings (8% on boosted sales). eBay — final-value fees + Promoted Listings (2–15% ad rate). Poshmark — flat 20% commission, monetises via engagement mechanics (parties, offers).
+[114|Body Text] ThryftVerse today: trade fees exist in co-own; standard-listing monetisation surfaces (bumps, boosts, spotlight) are absent.
+[115|Body Text] Gap & resolution: define and implement at least two revenue rails: (1) buyer-protection fee at checkout (trust + revenue in one move, see 5.2), and (2) seller visibility products — bump (one-off re-rank), closet spotlight (7-day category placement). Both need: purchase sheet, receipt, effect visualisation (“your listing reached 4.2× more buyers” — the retention loop that makes sellers rebuy).
+[116|Heading 2] 5.2 Buyer protection & escrow
+[117|First Paragraph] Competitors: Vinted holds payment until buyer confirms (2-day auto-release post-delivery); refund guaranteed if item doesn’t arrive / isn’t as described. eBay MBG is the industry’s strongest promise. This is the precondition for stranger-to-stranger commerce.
+[118|Body Text] ThryftVerse gap: no user-visible protection programme: no protection copy at PDP/checkout, no escrow-hold explanation, no “confirm receipt” step, no not-as-described claim flow.
+[119|Body Text] Resolution (P0): (a) escrow-hold order states (paid → shipped → delivered → buyer-confirmed/auto-released → paid-out); (b) PDP + checkout protection strip; (c) confirm-receipt prompt with review capture; (d) claims flow with evidence upload and seller response window; (e) clear seller-facing payout timeline.
+[120|Heading 2] 5.3 Trust, verification & moderation
+[121|First Paragraph] Competitors: Vinted ID verification + phone verification badges; StockX/Grailed authentication as a paid service; eBay Authenticity Guarantee for sneakers/watches/handbags above thresholds.
+[122|Body Text] ThryftVerse: report/block flows exist and now function (fixed last session); AML alerting exists on the backend (unusually sophisticated); but no user-visible verification tiers, no authentication service for high-value items, no counterfeit-detection assist at listing time.
+[123|Body Text] Resolution: verified-profile badge (email+phone+ID tiers) (P1); “ThryftVerse Verified” authentication opt-in for items above a price threshold, leveraging the co-own auth-photo pipeline that already exists (P2); listing-time brand/counterfeit heuristics via ml-service (P2).
+[124|Heading 2] 5.4 Bundles & multi-item economics
+[125|First Paragraph] Vinted bundles are a core AOV lever: buyer selects several items from one wardrobe → seller-defined bundle discounts → single combined-shipping checkout. ThryftVerse has 9 bundle references but no buyer-facing flow. Resolution: per-seller bag, seller discount tiers (e.g. 2 items −10%, 3+ −15%), combined shipping calculation, one payment intent, one shipment. This also fixes the “no cart” IA gap (3.2-6).
+[126|Heading 2] 5.5 Shipping & label logistics
+[127|First Paragraph] Competitors: Vinted’s integrated label generation (buyer picks carrier/drop-off point at checkout, seller gets a QR/label) removed the single largest friction in C2C selling. eBay/Poshmark ship labels by default.
+[128|Body Text] ThryftVerse: shipping method/payer fields exist on listings; 1 reference to shipping labels; no rate shopping, no label generation, no drop-off point picker, no tracking ingestion loop.
+[129|Body Text] Resolution (P0 for the selling loop): integrate a shipping aggregator (e.g. Shippo/EasyPost-class API): package size on listing → live rates at checkout → prepaid label to seller → tracking webhook → order timeline events → auto “delivered” → escrow clock. Until then, ship a manual-tracking-number entry UX with carrier detection (cheap interim).
+[130|Heading 2] 5.6 Disputes, returns & resolution centre
+[131|First Paragraph] eBay’s Resolution Centre pattern: structured case types (not received / not as described), evidence, deadlines, escalation to platform, outcomes logged to seller standards. ThryftVerse: OrderSupport + support tickets exist — but generic tickets, not structured cases with timers and money movement. Resolution: case objects bound to orders with state machines, buyer/seller evidence steps, countdown UI, and automated refund execution on resolution (P0-lite: not-received + not-as-described only).
+[132|Heading 2] 5.7 Seller standards & performance
+[133|First Paragraph] eBay seller levels (Top Rated), Vinted’s reliability signals, Poshmark ambassador status — performance programmes that convert good behaviour into visibility. ThryftVerse: ratings exist; no standards engine. Resolution: compute shipping-time, cancellation-rate, rating aggregates → badge tiers → feed-ranking boost + PDP badge (P1).
+[134|Heading 2] 5.8 Tax & regulatory compliance logic
+[135|First Paragraph] Marketplaces in UK/EU must report seller income (DAC7/UK equivalents) past thresholds, and US 1099-K where applicable. Vinted/eBay/Depop all built seller-info collection flows (TIN, address) triggered by sales volume. ThryftVerse: nothing user-visible. Resolution: threshold-triggered “complete your seller details” flow + annual earnings statements (ties into 4.13 statements) (P1, legally driven).
+[136|Heading 2] 5.9 Pricing intelligence & market data
+[137|First Paragraph] eBay Terapeak, StockX market data, Vinted’s price suggestions. ThryftVerse’s market-ledger + ml-service make this unusually attainable: sold-comps at listing time (5.5), price-drop suggestions for stale listings (“items like this sell 40% faster under £25”), and portfolio-style “your closet value” (P1–P2).
+[138|Heading 2] 5.10 Promotion mechanics comparison table
+[139|Heading 1] 6. Concrete Build List — Missing Pages, Screens, Subpages, Buttons & Features
+[140|First Paragraph] Grouped by surface; each item names the new screen/component and the flagship precedent.
+[141|Heading 2] 6.1 New screens
+[142|Compact] FollowingFeedScreen (or Home tab segment) — Depop feed.
+[143|Compact] SavedSearchesScreen + SaveSearch sheet on search/filter — Vinted.
+[144|Compact] SellerHubScreen (dashboard: to-ship, offers, stats, payouts) — eBay My Selling.
+[145|Compact] SellerAnalyticsScreen (per-listing views/likes/conversion, follower growth) — Depop insights.
+[146|Compact] BundleBagScreen (per-seller multi-select + discount + combined shipping) — Vinted bundles.
+[147|Compact] OfferToLikersSheet (seller composer with discount presets) — Poshmark.
+[148|Compact] ResolutionCentreScreen + CaseDetailScreen (structured disputes) — eBay.
+[149|Compact] PriceHistorySheet on PDP (sold comps, price-drop line) — StockX.
+[150|Compact] SizeGuideSheet per category/brand — ASOS/Depop.
+[151|Compact] ShippingLabelScreen (rate selection, QR/label, drop-off map) — Vinted.
+[152|Compact] TrackingTimelineScreen (stepper + carrier events + map) — flagship post-purchase.
+[153|Compact] NotificationPreferencesMatrix (rebuild of PushNotifications with categories/quiet hours) — Instagram.
+[154|Compact] ReferralScreen v2 (code, credit ledger, share cards) — Vinted referrals.
+[155|Compact] AssetWatchlistScreen + price-alert sheet (co-own) — Public/Robinhood pattern.
+[156|Compact] LiveAuctionScreen (P2: live video + chat + bid dock) — Whatnot.
+[157|Compact] EarningsStatementsScreen (monthly statements, CSV) — eBay reports.
+[158|Compact] VerificationCentreScreen (email/phone/ID badge tiers, KYC states) — Vinted.
+[159|Compact] DarkMode (not a screen — full theme) — table stakes.
+[160|Heading 2] 6.2 New buttons/affordances on existing screens
+[161|Compact] PDP: sticky twin CTA (Offer | Buy now), bundle row, watcher count, protection strip, “More like this” grid trigger, size-guide link, price-history chip.
+[162|Compact] Feed cards: long-press quick actions; price-drop and followed-seller badges.
+[163|Compact] Search bar: camera (visual search) icon; “Save search” bell on results.
+[164|Compact] Sell flow: AI-autofill banner after first photo; sold-comps hint at price field; “Boost at publish” upsell; video slot in media studio.
+[165|Compact] Profile (own): “Share closet” with OG card; analytics entry; vacation-mode toggle surface (backend done).
+[166|Compact] Profile (public): away badge; verified badges; follow-with-notification bell (Instagram’s “turn on notifications for this seller”).
+[167|Compact] Chat: order-state cards; off-platform payment warning nudge.
+[168|Compact] MyBids: one-tap rebid; ending-soon sorting.
+[169|Compact] Wallet: “Use balance at checkout” toggle.
+[170|Compact] Stories: unwatched-first rings; reply-to-story composer.
+[171|Heading 2] 6.3 Feature flags & sequencing note
+[172|First Paragraph] Every item above should ship behind the existing capability layer (capabilitiesApi.ts region/feature gating already exists) — flagship apps dark-launch and ramp; ThryftVerse has the plumbing to do the same.
+[173|Heading 1] 7. Visual & Interaction-Design Elevation Guide (per department)
+[174|First Paragraph] ThryftVerse’s visual system is already disciplined (tokens, premium primitives, skeletons, haptics). Elevation to “superior vs competitor” is mostly about motion, hierarchy, and photographic treatment — the things Instagram/Pinterest sweat.
+[175|Heading 2] 7.1 Global
+[176|Compact] Typography rhythm: enforce a stricter type scale (Display/Title/Body/Caption only); several long screens (Home 1,688 LOC, Chat 1,981 LOC) show ad-hoc sizes. Audit against designTokens.ts and remove one-off values.
+[177|Compact] Photography-first surfaces: flagship shopping apps let imagery own ≥70% of pixel real estate on discovery surfaces; chrome (cards, borders, labels) should recede — prefer edge-to-edge imagery with gradient scrims over bordered cards.
+[178|Compact] Motion language: you already have Reanimated + Skia + shared transitions. Codify: 250–350ms spring standard, shared-element image transitions on every card→PDP hop (SharedTransitionImage exists — enforce coverage), and skeleton→content crossfade (never pop).
+[179|Compact] Haptics grammar: light for navigation, medium for commit actions (bid, buy, offer), success notification for purchase/win. Partially present — make it a documented convention.
+[180|Compact] Dark theme: highest-leverage single visual upgrade; the resale aesthetic (Grailed, StockX) skews dark; tokens make it a mapping exercise.
+[181|Heading 2] 7.2 Home/Discovery
+[182|First Paragraph] Full-bleed hero with parallax scrim; masonry with mixed aspect ratios and occasional double-width “editorial break” tiles (Pinterest’s rhythm); animate like → collection-save with a fly-to-board micro-animation (Pinterest’s save delight).
+[183|Heading 2] 7.3 PDP
+[184|First Paragraph] Gallery: pinch-zoom + double-tap zoom (viewer exists — verify gesture parity), page-dots → thumbnail rail past 4 images; price block visual hierarchy (price 2× size of strikethrough original); trust elements (protection strip, seller card) visually grouped in one “confidence zone” above the fold-line of the CTA dock.
+[185|Heading 2] 7.4 Sell flow
+[186|First Paragraph] Camera-first entry (open into capture like Instagram’s composer, not a form with an add-photo slot); progressive disclosure — one decision per viewport; celebrate publish (confetti exists — pair with share-card generation: an auto-designed listing card for socials, Depop’s growth trick).
+[187|Heading 2] 7.5 Auctions/Co-Own
+[188|First Paragraph] Auction cards deserve motion urgency: countdown color-shift in the final hour, subtle pulse on the bid dock when outbid (live regions for a11y). Co-Own should borrow fintech visual credibility: monospaced numerals for prices (tabular figures), green/red deltas with arrows, sparklines everywhere a price appears.
+[189|Heading 2] 7.6 Messaging
+[190|First Paragraph] Already strong; polish targets: bubble-grouping tightness (consecutive same-sender messages), scroll-position restoration, image send with upload progress ring in-bubble (pipeline exists), and typing-indicator delight (avatar + animated dots — components exist, verify usage everywhere).
+[191|Heading 2] 7.7 Profile/Closet
+[192|First Paragraph] The closet is the seller’s brand: cover image + avatar overlap treatment (exists via heroes), pinned “shop window” row, banner strip for shop-wide sales, and a Pinterest-quality board grid with 2×2 cover mosaics for collections (MoodboardCollectionGrid exists — extend covers).
+[193|Heading 2] 7.8 Empty/edge states
+[194|First Paragraph] The custom empty-graphic components (Search/Orders/Image/Board/Flagship empties) are a strength — extend the same designed treatment to: zero search results (with recovery actions), offline mode (SyncRetryBanner exists — add designed full-screen offline state), and permission-denied states (camera/notifications) with value-forward re-ask copy.
+[195|Heading 1] 8. Prioritised Roadmap
+[196|First Paragraph] P0 — Trust & retention foundation (build first, ~1–2 release cycles)
+[197|Body Text] P1 — Growth & monetisation (next) Bundles + combined shipping; offer-to-likers + counter-offer loop with expiries; boost/bump products; seller hub + analytics; trust badges + seller standards; notification preference matrix + aggregation; dark mode; referral programme with credits; tracking timeline; KYC/verification centre; co-own watchlist + sparklines; story mechanics elevation (rings/replies); DAC7 seller-info flow; away-mode surfacing.
+[198|Body Text] P2 — Flagship bets (differentiation) Live video auctions (Whatnot-class); short-video looks; authentication service for high-value items; social/collaborative collections; public Q&A on listings; message translation; loyalty/credits programme; localisation completion; listing quality meter.
+[199|Body Text] Sequencing rationale: P0 makes strangers safe to transact and gives every user a reason to return tomorrow (alerts, following feed, rebids). P1 turns activity into revenue (boosts, bundles, offers) and sellers into residents (hub, analytics, badges). P2 spends the differentiation budget where ThryftVerse already has unfair advantages: auctions engine → live commerce; creator studio → video; co-own → fintech-grade trading UX.
+[200|Heading 1] 9. Competitor Deep-Dive Teardowns
+[201|First Paragraph] This section decomposes each benchmark app into the design decisions and business rules that make it flagship-grade, and states specifically what ThryftVerse should learn (and what it should deliberately not copy).
+[202|Heading 2] 9.1 Instagram — the engagement architecture benchmark
+[203|First Paragraph] What makes it flagship: - Content hierarchy is ruthless. One post owns the viewport; chrome is minimal (username, image, action row, caption). Everything else recedes. The feed is a sequence of full-attention moments, not a dashboard. - The action row grammar — like/comment/share/save in a fixed, muscle-memory order with instant optimistic feedback and a double-tap shortcut. Users perform these actions thousands of times; zero-latency response is non-negotiable. - Stories as a parallel, low-pressure content lane — ephemerality lowers the posting bar; the ring metaphor communicates unseen content in one glance; reply-to-story converts passive viewing into DMs (their strongest retention bridge). - Notification aggregation — “X, Y and 12 others liked your photo” turns noise into flattery. Activity is grouped by type and recency. - Creation is camera-first — the composer opens into capture, not a form.
+[204|Body Text] ThryftVerse take-aways: double-tap like exists (DoubleTapHeart) — good. Adopt: story rings with unwatched-first ordering (4.2), reply-to-story → DM (4.10), aggregated notifications (4.14), camera-first sell composer (7.4), product hotspot tags on Looks — Instagram’s shopping tags are the proven pattern for content→commerce (4.12).
+[205|Body Text] Do not copy: the algorithmic opacity that frustrates sellers; ThryftVerse should tell sellers why a listing is underperforming (analytics, quality meter) — a trust advantage Instagram never offers.
+[206|Heading 2] 9.2 Pinterest — the visual discovery benchmark
+[207|First Paragraph] What makes it flagship: - The masonry grid respects image aspect ratios — no crops to uniform tiles; the rhythm of varied heights is what makes browsing feel endless and organic. - Every image is a query. Long-press → visually similar; tap → closeup with “more like this” flowing infinitely below. The user never hits a dead end — every leaf node re-roots the browse tree. - Boards as identity — saving is organising; users curate taste publicly, and boards themselves become follow-able discovery objects. - Interest onboarding — the first-run topic picker immediately personalises the home feed and shows the feed reshaping, teaching the user that engagement improves relevance. - The save micro-animation — the pin flying into a board is a signature delight moment that reinforces the core action.
+[208|Body Text] ThryftVerse take-aways: PinterestMasonryGrid exists — make it the default Explore surface with infinite similar-item chaining (3.2, 4.3). Elevate collections toward social boards (4.11). Add the fly-to-board save animation (7.2). Ship interest/size onboarding that visibly reshapes the feed (4.1).
+[209|Heading 2] 9.3 TikTok / Whatnot — the live & video commerce benchmark
+[210|Compact] TikTok Shop proved video product discovery converts at rates static images cannot; Whatnot proved live auctions are an entertainment format — the auctioneer energy, chat, scarcity timers, and “sudden death” bidding create appointment viewing.
+[211|Compact] Whatnot’s core loop: browse scheduled shows → follow sellers → notification when live → join stream → bid in overlay dock → instant checkout with saved payment.
+[212|Compact] ThryftVerse’s advantage: it already has the auction engine, sticky bid dock, countdowns, seller auction centre, and group chat infrastructure. The delta to a v1 live show is: RTMP/WebRTC ingest, a live viewer screen with chat overlay (chat system exists), and a “current lot” binding to the existing bid dock. This is the highest-differentiation P2 bet (8).
+[213|Heading 2] 9.4 Vinted — the C2C friction-removal benchmark
+[214|First Paragraph] Business model: free selling (0% seller fee) funded by a buyer-protection fee (~5% + fixed) — a structural growth weapon that flooded supply. Monetises sellers optionally: bumps, wardrobe spotlight.
+[215|Body Text] Flagship mechanics ThryftVerse lacks (all detailed in §5): 1. Integrated shipping: buyer picks carrier/drop-off at checkout → prepaid label/QR to seller → tracking auto-ingested → escrow auto-release 2 days post-delivery. 2. Saved searches with push alerts; size-profile default filters (“only my sizes”). 3. Bundles with seller discount tiers and combined shipping. 4. Escrow + “Everything OK?” confirmation loop that doubles as review capture. 5. Off-platform payment interception in chat (fraud protection). 6. DAC7 seller-info collection flows.
+[216|Body Text] Do not copy: Vinted’s utilitarian, low-editorial visual style. ThryftVerse’s editorial/premium art direction is a real differentiator against Vinted’s classifieds aesthetic — keep it.
+[217|Heading 2] 9.5 Depop — the social-selling benchmark
+[218|Compact] The shop is a brand: sellers merchandise their closets (grid aesthetics matter, pinned items, bio links); top sellers behave like micro-brands. ThryftVerse’s closet boards are close — add shop merchandising controls (4.11).
+[219|Compact] The following feed is the home surface: new listings from followed sellers, chronological. This is the single most transplantable retention surface given ThryftVerse’s now-working social graph.
+[220|Compact] Boosted listings (8% success fee, no upfront cost) — a low-risk monetisation format sellers accept because it’s pay-on-results; consider over Vinted-style prepaid bumps.
+[221|Compact] Share-to-Instagram tooling — Depop grew on sellers advertising their own listings on IG; auto-generated share cards with deep links are cheap growth (6.2, G7).
+[222|Heading 2] 9.6 Poshmark — the engagement-mechanics benchmark
+[223|Compact] Offer-to-Likers with shipping discount: the platform’s signature conversion machine — every like becomes a lead a seller can activate. Requires: per-listing likers list (exists), offer composer with discount presets, expiring private offers with push.
+[224|Compact] Posh Parties (timed themed listing events) create appointment-based community selling — an interesting future fit for ThryftVerse’s auction/drop culture.
+[225|Compact] Ambassador programme — status tiers for community behaviour, feeding the seller-standards concept (5.7).
+[226|Heading 2] 9.7 eBay — the trust & scale benchmark
+[227|Compact] Money Back Guarantee — the strongest trust promise in commerce, backed by the structured Resolution Centre (case types, evidence, deadlines, enforced outcomes) — the model for §5.6.
+[228|Compact] Best Offer with auto-accept/decline floors — negotiation that resolves instantly at scale (4.6).
+[229|Compact] Proxy bidding — max-bid automation that keeps auctions fair and reduces snipe-anxiety (4.8).
+[230|Compact] Promoted Listings — self-serve ad rates with transparent performance reporting; the mature endpoint of the boost roadmap.
+[231|Compact] Seller levels & Terapeak pricing analytics — performance standards tied to visibility, and market data as a seller subscription value driver (5.7, 5.9).
+[232|Heading 2] 9.8 StockX / Grailed — the authentication & market-data benchmark
+[233|Compact] StockX turned verification into the brand: every item flows through authentication; the product page is a market instrument (bid/ask, last-sold, price history charts). ThryftVerse’s co-own vertical is already adjacent — extend market-data UI (sparklines, last-trade) to co-own assets first, then price-history to high-value standard listings (4.9, 4.4).
+[234|Compact] Grailed’s dark, editorial, menswear-collector aesthetic demonstrates the premium-resale visual direction; relevant precedent for the dark theme (7.1).
+[235|Heading 1] 10. Detailed Resolution Specifications (Top 12 P0 Builds)
+[236|First Paragraph] Concrete, implementation-ready specs for the twelve highest-priority builds. Each lists: user story, screens/components touched, backend requirements, and acceptance criteria.
+[237|Heading 2] 10.1 Buyer Protection & Escrow
+[238|Compact] User story: “As a buyer paying a stranger, I see exactly how my money is protected; as a seller, I know exactly when I get paid.”
+[239|Compact] Frontend: protection strip component on PDP (ProductCommerceSummary) and Checkout (above pay CTA); order timeline states in OrderDetail; “Confirm receipt — everything OK?” prompt (push + in-app card) 48h after delivered; payout timeline in SellerFulfilment.
+[240|Compact] Backend: order state machine extension (paid_held → shipped → delivered → confirmed | auto_released(+N days) → paid_out); wallet credit on release; fee line item.
+[241|Compact] Acceptance: buyer cannot miss protection copy pre-payment; seller balance shows “pending” vs “available”; auto-release fires without buyer action; all states push-notified.
+[242|Heading 2] 10.2 Structured Disputes (Resolution Centre v1)
+[243|Compact] Scope v1: two case types — item not received, not as described.
+[244|Compact] Frontend: “Report a problem” on OrderDetail → case wizard (type → description → up to 5 evidence photos) → CaseDetail screen with status stepper, response deadlines (countdown), message thread bound to the case.
+[245|Compact] Backend: order_cases table (type, status, deadline_at, resolution); seller response window (e.g. 72h); auto-escalation; refund execution on buyer-favour resolution (reverse escrow hold).
+[246|Compact] Acceptance: opening a case pauses escrow release; deadline expiry auto-resolves; both parties see identical case truth.
+[247|Heading 2] 10.3 Saved Searches & Alerts
+[248|Compact] Frontend: bell/“Save search” CTA on search results & Filter screen; SavedSearches screen (list, toggle alerts, delete, tap-to-rerun); zero-result state offers save-as-alert.
+[249|Compact] Backend: saved_searches (user, query, filters JSON, last_notified_at); matcher on listing-publish (or periodic batch) → push “N new matches for ‘’”; deep link into pre-filtered results.
+[250|Compact] Acceptance: save → new matching listing → push within minutes → tap lands on results with filters applied; per-search mute works.
+[251|Heading 2] 10.4 Price-Drop Alerts on Liked Items
+[252|Compact] Frontend: none beyond notification handling — likes exist; notification deep-links to PDP showing old→new price.
+[253|Compact] Backend: on listing price update, notify likers (rate-limited, min-drop threshold e.g. ≥10%).
+[254|Compact] Acceptance: seller drops price → likers push within minutes → PDP shows strikethrough old price.
+[255|Heading 2] 10.5 Following Feed
+[256|Compact] Frontend: Home top segment “For You | Following”; Following = chronological listings + looks from followed users, with empty state promoting user search / suggested sellers (“popular closets this week”).
+[257|Compact] Backend: /feed/following?cursor= joining user_follows × listings/looks; suggested-sellers endpoint.
+[258|Compact] Acceptance: follow a seller → their next listing appears at top of Following; infinite scroll with cursor pagination; unfollow removes immediately.
+[259|Heading 2] 10.6 Wallet Payments (Apple Pay / Google Pay)
+[260|Compact] Frontend: platform-pay button as the primary CTA when available (Stripe PaymentSheet supports both); saved-card path unchanged.
+[261|Compact] Backend: payment-intent flow already region-gated via capabilities — extend method types.
+[262|Compact] Acceptance: eligible device completes purchase without typing card details; capability gating hides the button where unsupported.
+[263|Heading 2] 10.7 Shipping v1 (interim) → v2 (labels)
+[264|Compact] v1 (fast): SellerFulfilment gains carrier picker + tracking-number field with format validation and carrier auto-detect; buyer OrderDetail renders tracking timeline (stepper) from carrier polling/webhooks; delivered → starts escrow clock.
+[265|Compact] v2: package size at listing → aggregator rate quotes at checkout → buyer pays shipping → seller receives label/QR → drop-off point picker (map) → automatic tracking binding.
+[266|Compact] Acceptance (v1): entering tracking flips order to shipped + notifies buyer; delivered detected without manual input.
+[267|Heading 2] 10.8 AI Listing Autofill + Sold-Comps Pricing
+[268|Compact] Frontend: after first photo upload in Sell, an inline suggestion banner (“Looks like: Nike hoodie, size M — apply?”) filling title/brand/category/colour chips (each individually dismissible); at price field, comps hint (“similar sold £18–24”) with tap-to-set.
+[269|Compact] Backend: ml-service endpoint photo → attributes; comps query on sold orders by category+brand(+size).
+[270|Compact] Acceptance: suggestion latency <3s; every suggestion editable; no silent overwrites of user-entered values.
+[271|Heading 2] 10.9 Off-Platform Payment Nudge (Chat Trust)
+[272|Compact] Frontend: local keyword detection (paypal, bank transfer, venmo, whatsapp, gift card…) on composer send → non-blocking inline warning card: “Keep payments on ThryftVerse to stay protected”; repeated triggers surface Report shortcut.
+[273|Compact] Acceptance: warning renders under the triggering message locally; no false-block of sending; events logged for trust ops.
+[274|Heading 2] 10.10 Outbid → One-Tap Rebid
+[275|Compact] Frontend: outbid push → deep link opens AuctionDetail with BidSheet pre-opened at next valid increment; single confirm (with haptic) places bid; MyBids gains “outbid” filter + ending-soon sort.
+[276|Compact] Acceptance: push-to-placed-bid in ≤2 taps; increment always valid; losing state visually distinct in MyBids.
+[277|Heading 2] 10.11 Balance-at-Checkout
+[278|Compact] Frontend: Checkout toggle “Use balance (£X available)” splitting payment (balance + card remainder), reflected in the summary lines.
+[279|Compact] Backend: split-tender payment intent; wallet debit atomic with payment success.
+[280|Compact] Acceptance: partial and full balance payments both work; refunds return the split correctly.
+[281|Heading 2] 10.12 Hotspot Product Tags on Looks
+[282|Compact] Frontend: CreatorStudio gains a “Tag product” tool (tap canvas → search own/others’ listings → dot anchor); LookDetail renders tappable dots → price chip → PDP; SeenInLooks rail (exists) becomes the reverse edge automatically.
+[283|Compact] Backend: look_product_tags (look_id, listing_id, x, y); include in look payloads.
+[284|Compact] Acceptance: tags survive canvas transforms; dead listings degrade gracefully (sold badge, not broken link).
+[285|Heading 1] 11. Measurement Framework — Knowing the Gaps Are Closed
+[286|First Paragraph] Flagship teams instrument before they build. Recommended KPI set per initiative:
+[287|Body Text] Baseline instrumentation gaps to close first: funnel events for search→PDP→checkout, per-listing impression counting (also powers seller analytics, §4.11), and notification open-rate tracking. The existing analytics footprint (18 files) is content-side only — commerce funnel telemetry is a P0 prerequisite for everything above.
+[288|Heading 1] 12. Consolidated Gap Register
+[289|First Paragraph] Every gap identified in this report, in one numbered register. Severity: C = critical (blocks trust/growth), H = high, M = medium. “Ref” points to the section with the full resolution.
+[290|Heading 1] 13. Appendices
+[291|Heading 2] 13.1 Appendix A — Full screen inventory (115)
+[292|First Paragraph] About, AccountControl, AccountSettings, ActiveSessions, AddBankAccount, AddressForm, ArchivedConversations, AssetDetail, AssetLeaderboard, AuctionDetail, AuctionHome, Auctions, AuthLanding, BalanceHistory, Balance, BlockedUsers, BotBuilder, BotDetail, BotDirectory, Browse, Buyout, CategoryDetail, CategoryTree, ChangePassword, ChatMediaPreview, Chat, ChatSettings, Checkout, Closet, CoOwnIssue, CollectionDetail, ConversationInfo, CreateAuction, CreateCollection, CreateGroupChat, CreateLookRedirect, CreateLook, CreatePosterRedirect, CreatePoster, CreateSyndicate, CustomBots, EditCollection, EditGroup, EditListing, EditProfile, ExploreCollection, FilterScreen, ForgotPassword, GlobalSearch, GroupBotDirectory, GroupBotManagement, GroupChatInfo, GroupMembers, HelpSupport, Home, Inbox, InviteFriends, ItemDetail, ListingPreview, ListingSuccess, Login, LookDetail, MakeOffer, ManageCollectionItems, ManageListing, ManageQuickReplies, MarketLedger, MessageRequests, MutedConversations, MyBids, MyListings, MyOrders, MyProfile, NewMessage, Notifications, OrderDetail, OrderReceipt, OrderSupport, OutfitBuilder, Payments, Personalisation, Portfolio, Postage, PosterArchive, PosterStoryActivity, PosterViewer, PrivacySettings, PulseFeed, PushNotifications, Report, RuntimeSmokeTest, SavedAddresses, Search, Sell, SellerAuctionCentre, SellerFulfilment, Settings, SharedConversationMedia, SignUp, StyleQuiz, Success, SupportTicketDetail, SyndicateHub, SyndicateOnboarding, SyndicateOrderHistory, TradeConfirm, TradeHub, Trade, TwoFactorSetup, UserProfile, VisualSearch, Wallet, Withdraw, WriteReview.
+[293|Heading 2] 13.2 Appendix B — Component families
+[294|First Paragraph] Global primitives (37: animated badges/counters/hearts, bottom sheets, cached images, confetti, double-tap handlers, image viewer, skeletons, toasts, share sheet, shared transitions, voice player…); ui/ (19 premium primitives: AppButton, AppInput, AppSearchBar, segment controls, bid/buy sheets, premium form system); flagship/ (13: screen scaffolds, hero sections, sticky footers, product/order/asset cards); plus per-department families for auction (13), chat (19), coown (20), discover (9), explore (3), product (16), profile (23), checkout (5), listing (8), settings, skeletons, trade, look, poster, closet, commerce, orders, personalisation.
+[295|Heading 2] 13.3 Appendix C — Service layer map (27 modules)
+[296|First Paragraph] account, auth, bots, capabilities (region/feature gating incl. stripe_americas), chat, coOwnPortfolio, collections, commerce, feed, feedLooks, listingMapper, listingPublication, listings, looks, market, mediaUpload(+Queue), notifications, onezeQuote, posters, profile, review, sellerReviews, styleGraph, support, wallet.
+[297|Heading 2] 13.4 Appendix D — Capability scan raw results
+[298|First Paragraph] video 60 files (players/pipelines, no listing/feed video product) · live 85 (mostly a11y live regions) · story 50 · bundle 9 (no buyer flow) · saved search 0 · wishlist 22 (likes) · shipping label 1 · tracking 20 · boost 1 · vacation/holiday 4 (new backend prefs) · size guide 0 · referral 0 · loyalty 1 · dark mode 1 · deep link 2 · i18n 48 · analytics 18 (content only) · accessibility 249.
+[300|First Paragraph] End of report. Prepared from a full static audit of the ThryftVerse frontend at commit 80f2268 (merge of PR #19), 8 July 2026.
+
+=== TABLES ===
+
+--- TABLE 0 ---
+R0: # || Systemic gap || Benchmark that exposes it
+R1: G1 || No video anywhere in the commerce loop — no listing videos, no video feed, no live selling || TikTok Shop, Whatnot, Depop video listings, Poshmark Posh Shows
+R2: G2 || Weak retention/re-engagement layer — no saved searches with alerts, no price-drop notifications on liked items, no back-in-stock/brand alerts, no streaks or daily hooks || Vinted saved searches, eBay saved sellers/searches, Pinterest home-feed re-ranking
+R3: G3 || Thin buyer-trust logic — no visible buyer-protection programme, no escrow messaging at checkout, no returns/refund flow surface, no dispute-resolution centre in-app || eBay Money Back Guarantee, Vinted Buyer Protection fee, Depop Protection
+R4: G4 || No seller-growth monetisation — no boosted/promoted listings, no seller analytics dashboard, no bulk tooling, no vacation-mode surfacing, no pro-seller tier || Vinted bumps, Depop boosted listings, eBay Promoted Listings, Poshmark closet insights
+R5: G5 || Offer/negotiation logic is one-directional and shallow — no counter-offers UX loop, no bundle offers, no “offer to likers”, no offer expiry visibility || Poshmark Offer-to-Likers, Depop offers, eBay best-offer with counters
+R6: G6 || Discovery intelligence is presentational, not behavioural — home sections are largely static/curated; no continuously learned home feed, no “more like this” long-press, no visual-similarity grid on PDP, no shop-the-look from photos || Pinterest visual similarity + board-driven feed, Instagram Explore ranking
+R7: G7 || Growth loops missing — no referral programme (InviteFriends is a static share screen), no loyalty/credits, no share-to-social listing cards with deep links, no web/SEO surface || Vinted referral credits, Depop share-to-IG flows
+
+--- TABLE 1 ---
+R0: Department || Screens || Maturity (1–5)
+R1: Auth & onboarding || AuthLanding, Login, SignUp, ForgotPassword, TwoFactorSetup || 3
+R2: Home / discovery || HomeScreen (1,688 LOC), PulseFeed, ExploreCollection, CategoryTree/Detail, Browse, Filter || 3.5
+R3: Search || SearchScreen (Pulse/Looks/Edit tabs), GlobalSearch, VisualSearch, StyleQuiz || 3
+R4: Product detail || ItemDetail + 16 product components (media gallery, seller trust card, recommendation rail, seen-in-looks rail, policy sheet) || 3.5
+R5: Sell / listing || Sell (1,420 LOC), EditListing, ManageListing, ListingPreview, ListingSuccess, MyListings || 3.5
+R6: Checkout & orders || Checkout (1,388 LOC), Success, MyOrders, OrderDetail, OrderReceipt, OrderSupport, SellerFulfilment, WriteReview || 3
+R7: Offers & trade || MakeOffer, TradeHub, Trade, TradeConfirm || 2.5
+R8: Auctions || AuctionHome, AuctionDetail, CreateAuction, SellerAuctionCentre, MyBids, Buyout + 13 auction components || 4
+R9: Co-Own / fractional || AssetDetail, Portfolio, MarketLedger, AssetLeaderboard, CoOwnIssue, Syndicates (Hub/Create/Onboarding/OrderHistory) + 20 components || 4
+R10: Messaging || Chat (1,981 LOC), Inbox (2,049 LOC), groups, bots, requests, media, quick replies — 25+ screens/components || 4.5
+R11: Profile & closet || MyProfile, UserProfile, Closet, Collections (create/edit/manage/detail), OutfitBuilder, EditProfile || 3.5
+R12: Creator / content || CreatorStudio (canvas, layers, templates, drafts, publish), CreatePoster, CreateLook, PosterViewer/Archive/Activity, LookDetail || 3.5
+R13: Wallet & payments || Wallet, Balance, BalanceHistory, Withdraw, AddBankAccount, Payments || 3
+R14: Settings & account || 20+ screens: AccountSettings/Control, Privacy, ActiveSessions, BlockedUsers, ChangePassword, Postage, PushNotifications, About, HelpSupport, SupportTicketDetail || 4
+R15: Growth || InviteFriends (static), Personalisation || 1.5
+R16: Trust & safety || Report, BlockedUsers, review system, seller trust card || 2.5
+
+--- TABLE 2 ---
+R0: Mechanic || eBay || Vinted || Depop || Poshmark || ThryftVerse
+R1: Promoted/boosted listings || Yes || Bumps || Boost 8% || — || No
+R2: Offer to likers || — || — || Yes || Signature || No
+R3: Bundles + combined ship || Carts || Yes || Yes || Yes || No
+R4: Price-drop notifications || Yes || Yes || Yes || Yes (likers) || No
+R5: Saved searches/alerts || Yes || Yes || Yes || — || No
+R6: Seller analytics || Yes || Basic || Yes || Yes || No
+R7: Buyer protection (visible) || MBG || Fee-funded || Yes || Posh Protect || No
+R8: Integrated labels || Yes || Yes || Yes (US) || Yes || No
+R9: Live selling || eBay Live || — || — || Posh Shows || No
+R10: Auctions || Yes || — || — || — || Yes
+R11: Fractional ownership || — || — || — || — || Yes (unique)
+R12: Group chat/bots || — || — || — || — || Yes (unique)
+R13: Story content || — || — || — || Stories || Yes
+
+--- TABLE 3 ---
+R0: Item || Dept || Why first || Effort
+R1: Buyer protection + escrow states + confirm receipt || 5.2 || Precondition for stranger commerce || L
+R2: Structured refund/dispute cases (2 case types) || 5.6 || Completes trust loop || M
+R3: Saved searches + alerts || 4.3 || #1 retention mechanic in category || M
+R4: Price-drop notifications on liked items || 4.2/G2 || Cheap, proven re-engagement || S
+R5: Following feed (social graph is live) || 4.2 || Converts follows into sessions || M
+R6: Apple/Google Pay || 4.7 || Checkout conversion || M
+R7: Shipping labels (or interim manual tracking UX) || 5.5 || Removes biggest C2C friction || L
+R8: AI listing autofill + sold-comps price hint || 4.5 || Seller acquisition/velocity || M
+R9: Off-platform payment nudge in chat || 4.10 || Fraud/liability reducer || S
+R10: Outbid push → one-tap rebid || 4.8 || Auction retention loop || S
+R11: Balance-at-checkout || 4.13 || Liquidity lock-in || S
+R12: Hotspot product tags on Looks || 4.12 || Content→commerce bridge || M
+
+--- TABLE 4 ---
+R0: Initiative || North-star metric || Guardrail metric
+R1: Buyer protection/escrow || First-purchase conversion rate || Dispute rate, payout-delay complaints
+R2: Saved searches + alerts || D7/D30 retention of savers vs non-savers || Push opt-out rate
+R3: Price-drop alerts || Alert→purchase conversion || Notification fatigue (open rate trend)
+R4: Following feed || Sessions/week for users following ≥5 sellers || Feed scroll depth
+R5: Wallet payments || Checkout completion rate || Payment failure rate
+R6: Shipping v1/v2 || Time-to-ship median; % orders with tracking || Not-received case rate
+R7: AI listing autofill || Listing completion rate; time-to-publish || Suggestion edit rate (quality proxy)
+R8: Offers/bundles/boosts || AOV; seller repeat-boost rate || Offer spam reports
+R9: Live auctions (P2) || Concurrent viewers; GMV/show || Refund rate on live sales
+R10: Dark mode || Adoption %; session length delta || Contrast a11y regressions
+
+--- TABLE 5 ---
+R0: # || Gap || Dept || Sev || Benchmark || Ref
+R1: 1 || No visible buyer-protection programme / escrow narrative || Trust || C || Vinted, eBay MBG || 5.2, 10.1
+R2: 2 || No structured dispute/returns cases || Trust || C || eBay Resolution Centre || 5.6, 10.2
+R3: 3 || No confirm-receipt + auto-release loop || Trust || C || Vinted || 5.2
+R4: 4 || No saved searches with alerts || Search || C || Vinted, eBay || 4.3, 10.3
+R5: 5 || No price-drop notifications on liked items || Retention || C || All competitors || 4.2, 10.4
+R6: 6 || No following feed consuming the social graph || Home || C || Depop feed || 4.2, 10.5
+R7: 7 || No Apple Pay / Google Pay || Checkout || C || All competitors || 4.7, 10.6
+R8: 8 || No shipping labels / tracking pipeline || Logistics || C || Vinted labels || 5.5, 10.7
+R9: 9 || No AI listing autofill from photos || Sell || H || Vinted, eBay || 4.5, 10.8
+R10: 10 || No sold-comps pricing intelligence at listing || Sell || H || eBay Terapeak, Vinted || 5.9, 10.8
+R11: 11 || No off-platform payment interception in chat || Trust || H || Vinted, Depop || 4.10, 10.9
+R12: 12 || No outbid push → one-tap rebid loop || Auctions || H || eBay || 4.8, 10.10
+R13: 13 || No balance-at-checkout spend || Wallet || H || Vinted || 4.13, 10.11
+R14: 14 || No product hotspot tags on Looks || Content || H || Instagram Shopping || 4.12, 10.12
+R15: 15 || No listing or feed video anywhere || Platform || H || TikTok Shop, Depop || G1, 4.5, 4.12
+R16: 16 || No live video auctions || Auctions || H || Whatnot, Posh Shows || 4.8, 9.3
+R17: 17 || No boosted/promoted listings (seller monetisation) || Monetisation || H || Vinted bumps, Depop boost || 5.1
+R18: 18 || No offer-to-likers composer || Offers || H || Poshmark || 4.6
+R19: 19 || No counter-offer loop with visible expiries || Offers || H || eBay Best Offer || 4.6
+R20: 20 || No bundle bag / combined shipping || Offers || H || Vinted bundles || 5.4
+R21: 21 || No auto-accept/decline offer floors || Offers || M || eBay || 4.6
+R22: 22 || No seller analytics dashboard || Seller || H || Depop/Poshmark insights || 4.11
+R23: 23 || No seller hub aggregating selling operations || Seller || H || eBay My Selling || 3.2, 6.1
+R24: 24 || No seller standards/performance badge programme || Seller || M || eBay Top Rated || 5.7
+R25: 25 || Vacation/away mode not surfaced on public profile || Seller || M || Vinted holiday mode || 4.11
+R26: 26 || No shop merchandising (pins, banners, policies) || Profile || M || Depop shops || 4.11
+R27: 27 || No ID/phone verification badge tiers || Trust || H || Vinted verification || 5.3
+R28: 28 || No authentication service for high-value items || Trust || M || StockX, eBay AG || 5.3
+R29: 29 || No price history / market context on standard PDP || PDP || H || StockX || 4.4
+R30: 30 || No size guide sheets || PDP || H || Depop/ASOS || 4.4
+R31: 31 || No watcher/interest counts on PDP || PDP || M || eBay watchers || 4.4
+R32: 32 || No visual-similar “more like this” grid on PDP || PDP || H || Pinterest, Depop || 4.4
+R33: 33 || No bundle upsell row on PDP || PDP || M || Vinted || 4.4
+R34: 34 || No public Q&A on listings || PDP || M || eBay || 4.4
+R35: 35 || Home hero/editorial is static, not server-driven || Home || H || All flagships || 4.2
+R36: 36 || No behavioural re-ranking of home feed || Home || H || Pinterest/Instagram || 4.2
+R37: 37 || No long-press quick-actions on feed cards || Home || M || Pinterest || 4.2
+R38: 38 || Story rail lacks unwatched-first rings / reply-to-story || Content || M || Instagram || 4.2
+R39: 39 || Explore tab defaults to search, not visual browse || IA || M || Pinterest || 3.2
+R40: 40 || No recent/trending searches on search focus || Search || M || All flagships || 4.3
+R41: 41 || No query→filter chip decomposition || Search || M || Vinted || 4.3
+R42: 42 || No “my sizes” default filter profile || Search || H || Vinted || 4.3
+R43: 43 || Visual search not promoted in search bar || Search || M || Pinterest Lens || 4.3
+R44: 44 || No zero-result recovery with save-alert CTA || Search || M || Vinted || 4.3
+R45: 45 || No social sign-in (Apple/Google) || Auth || H || All competitors || 4.1
+R46: 46 || No interest/size onboarding feeding the feed || Auth || H || Pinterest, Vinted || 4.1
+R47: 47 || No deferred (guest) browsing strategy || Auth || M || Flagships || 4.1
+R48: 48 || Coarse 4-tier condition scale, no helper anchors || Sell || M || Vinted 5-tier || 4.5
+R49: 49 || No duplicate/relist/bulk seller tooling || Sell || M || eBay || 4.5
+R50: 50 || No listing quality/completeness meter || Sell || M || — (opportunity) || 4.5
+R51: 51 || No publish-moment boost upsell || Monetisation || M || Vinted || 4.5
+R52: 52 || No promo/discount code redemption || Checkout || M || All || 4.7
+R53: 53 || No visual tracking timeline stepper || Orders || H || All || 4.7
+R54: 54 || No proxy/max bidding || Auctions || M || eBay || 4.8
+R55: 55 || No ending-soon watch digests || Auctions || M || eBay || 4.8
+R56: 56 || No auction scheduling/promotion tools || Auctions || M || Whatnot || 4.8
+R57: 57 || No price charts/sparklines on co-own assets || Co-Own || H || StockX, Public || 4.9
+R58: 58 || No asset watchlist + price alerts || Co-Own || M || Robinhood pattern || 4.9
+R59: 59 || No first-trade guided education flow || Co-Own || M || Fintech onboarding || 4.9
+R60: 60 || No commerce state cards in chat (order/auction events) || Chat || M || Vinted || 4.10
+R61: 61 || No cross-conversation message search || Chat || M || Instagram || 4.10
+R62: 62 || No message translation || Chat || M || eBay || 4.10
+R63: 63 || Notification prefs lack category matrix/quiet hours || System || M || Instagram || 4.14
+R64: 64 || No notification aggregation/grouping || System || M || Instagram || 4.14
+R65: 65 || No dark mode || Visual || H || Grailed/StockX aesthetic || 7.1
+R66: 66 || No reduced-motion audit over Reanimated/Skia usage || A11y || M || Platform standard || 4.14
+R67: 67 || Localisation loop incomplete (extraction only) || System || M || All || 4.14
+R68: 68 || No referral programme with credits || Growth || H || Vinted || G7, 6.1
+R69: 69 || No loyalty/credits programme || Growth || M || — || 8 P2
+R70: 70 || No share cards + universal deep links per entity || Growth || H || Depop share-to-IG || 3.2, 6.2
+R71: 71 || No web/SEO surface for listings || Growth || M || All || 3.2
+R72: 72 || No earnings statements / CSV export || Wallet || M || eBay reports || 4.13
+R73: 73 || No instant-payout (fee) option || Wallet || M || PayPal/Venmo pattern || 4.13
+R74: 74 || KYC/verification states lack designed UI || Wallet || M || Fintech standard || 4.13
+R75: 75 || No DAC7/tax seller-info collection flow || Compliance || H || Vinted/eBay/Depop || 5.8
+R76: 76 || No commerce funnel telemetry (impressions→checkout) || Platform || H || All (internal) || 11
+R77: 77 || No global cart / per-seller bag || IA || H || Depop, eBay || 3.2
+R78: 78 || Notifications lack persistent badged entry point || IA || M || Instagram || 3.2
+R79: 79 || No stale-listing price-drop suggestions to sellers || Sell || M || Vinted || 5.9
+R80: 80 || Collections not social/followable/shareable || Profile || M || Pinterest boards || 4.11

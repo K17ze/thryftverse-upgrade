@@ -31,6 +31,7 @@ import { getUserCountryCapabilities, UserCountryCapabilities } from '../services
 import { Typography, Space, Radius, Elevation } from '../theme/designTokens';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import {
   convertDisplayToGbpAmount,
   getDefaultWithdrawDisplayAmount,
@@ -44,6 +45,7 @@ import {
 
 export default function WithdrawScreen() {
   const navigation = useNavigation<any>();
+  const reducedMotionEnabled = useReducedMotion();
   const [amount, setAmount] = useState('');
   const [availableBalance, setAvailableBalance] = useState(0);
   const [isHydratingBalance, setIsHydratingBalance] = useState(true);
@@ -398,7 +400,7 @@ export default function WithdrawScreen() {
         showsVerticalScrollIndicator={false}
       >
 
-          <Reanimated.View entering={FadeInDown.duration(300).delay(30)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(30)}>
             <View style={styles.amountWrap}>
             <Text style={styles.currencySymbol}>{currencySymbol}</Text>
             <TextInput
@@ -418,7 +420,7 @@ export default function WithdrawScreen() {
           {exceedsBalance ? <Text style={styles.balanceError}>Entered amount exceeds available balance.</Text> : null}
           </Reanimated.View>
 
-          <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)}>
             <Text style={styles.sectionTitle}>Transfer to</Text>
             <AnimatedPressable
               style={styles.bankCard}

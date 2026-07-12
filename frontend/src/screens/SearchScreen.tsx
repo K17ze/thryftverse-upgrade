@@ -29,6 +29,7 @@ import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGri
 import PulseTab from '../components/explore/PulseTab';
 import LooksTab from '../components/explore/LooksTab';
 import EditTab from '../components/explore/EditTab';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -45,6 +46,7 @@ export default function SearchScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const navigation = useNavigation<NavT>();
+  const reducedMotionEnabled = useReducedMotion();
   const { listings, isSyncing, lastError, refreshListings } = useBackendData();
 
   const [refreshing, setRefreshing] = useState(false);
@@ -178,7 +180,7 @@ export default function SearchScreen() {
 
           {/* Empty state when no listings and not loading */}
           {listings.length === 0 && !isSyncing && !lastError ? (
-            <Reanimated.View entering={FadeInDown.duration(400)}>
+            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400)}>
               <EmptyState
                 icon="compass-outline"
                 title="Nothing to explore yet"
@@ -192,7 +194,7 @@ export default function SearchScreen() {
               />
             </Reanimated.View>
           ) : (
-            <Reanimated.View entering={FadeInDown.duration(350).delay(100)}>
+            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(100)}>
               {renderTabContent()}
             </Reanimated.View>
           )}

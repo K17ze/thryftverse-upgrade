@@ -25,6 +25,7 @@ import { useToast } from '../context/ToastContext';
 import { fetchFilteredListings } from '../services/listingsApi';
 import { Listing } from '../data/mockData';
 import { ProductAnalytics } from '../platform/product/productAnalytics';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -39,6 +40,7 @@ export default function ExploreCollectionScreen() {
   const { listings, isSyncing, lastError, refreshListings } = useBackendData();
   const savedProducts = useStore((state) => state.savedProducts);
   const toggleSavedProduct = useStore((state) => state.toggleSavedProduct);
+  const reducedMotionEnabled = useReducedMotion();
 
   const { title, subtitle, source } = route.params;
 
@@ -115,7 +117,7 @@ export default function ExploreCollectionScreen() {
   };
 
   const renderHeader = () => (
-    <Reanimated.View entering={FadeInDown.duration(300)} style={styles.headerInfo}>
+    <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.headerInfo}>
       {subtitle ? (
         <Text style={styles.headerSubtitle}>{subtitle}</Text>
       ) : null}

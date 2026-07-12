@@ -67,12 +67,12 @@ describe('VISUAL-14 Reference-Match Final Polish', () => {
 
   it('WithdrawScreen amount section has entrance animation', () => {
     const src = read(resolve(SCREENS, 'WithdrawScreen.tsx'));
-    expect(src).toContain('entering={FadeInDown.duration(300).delay(30)}');
+    expect(src).toContain('FadeInDown.duration(300).delay(30)');
   });
 
   it('WithdrawScreen bank section has entrance animation', () => {
     const src = read(resolve(SCREENS, 'WithdrawScreen.tsx'));
-    expect(src).toContain('entering={FadeInDown.duration(300).delay(80)}');
+    expect(src).toContain('FadeInDown.duration(300).delay(80)');
   });
 
   it('WithdrawScreen bank card has subtle shadow and border', () => {

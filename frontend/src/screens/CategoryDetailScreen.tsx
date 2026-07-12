@@ -19,6 +19,7 @@ import { useBackendData } from '../context/BackendDataContext';
 import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGrid';
 import { EmptyState } from '../components/EmptyState';
 import { DiscoverySectionHeader } from '../components/discover/DiscoverySectionHeader';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Typography, Space, Radius } from '../theme/designTokens';
 
 export default function CategoryDetailScreen() {
@@ -27,6 +28,7 @@ export default function CategoryDetailScreen() {
   const { formatFromFiat } = useFormattedPrice();
   const { listings } = useBackendData();
   const { categoryId } = route.params || {};
+  const reducedMotionEnabled = useReducedMotion();
 
   const category = mockFind(MOCK_CATEGORIES, (c: any) => c.id === categoryId) || MOCK_CATEGORIES[0];
   const gridData = listings.filter(
@@ -39,7 +41,7 @@ export default function CategoryDetailScreen() {
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* Editorial header with back button and category name */}
-        <Reanimated.View entering={FadeInDown.duration(350).delay(50)} style={styles.header}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(50)} style={styles.header}>
           <AnimatedPressable
             style={styles.backBtn}
             onPress={() => navigation.goBack()}
@@ -55,7 +57,7 @@ export default function CategoryDetailScreen() {
 
         {/* Refined subcategory chips */}
         {category.subItems && category.subItems.length > 0 && (
-          <Reanimated.View entering={FadeInDown.duration(350).delay(120)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(120)}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsScroll}>
               {category.subItems.map((sub: any, idx: number) => (
                 <AnimatedPressable
@@ -74,7 +76,7 @@ export default function CategoryDetailScreen() {
         )}
 
         {/* Section header for the grid */}
-        <Reanimated.View entering={FadeInDown.duration(350).delay(180)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(180)}>
           <DiscoverySectionHeader
             kicker="CURATED"
             title="Featured Listings"
@@ -84,7 +86,7 @@ export default function CategoryDetailScreen() {
 
         {/* Pinterest-style masonry grid */}
         {gridData.length > 0 ? (
-          <Reanimated.View entering={FadeInDown.duration(350).delay(220)} style={{ marginTop: Space.sm }}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(220)} style={{ marginTop: Space.sm }}>
             <PinterestMasonryGrid
               items={gridData}
               onPressItem={(item: any) => navigation.push('ItemDetail', { itemId: item.id })}
@@ -94,7 +96,7 @@ export default function CategoryDetailScreen() {
             />
           </Reanimated.View>
         ) : (
-          <Reanimated.View entering={FadeInDown.duration(350).delay(220)} style={{ marginTop: Space.xl }}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(220)} style={{ marginTop: Space.xl }}>
             <EmptyState
               icon="shirt-outline"
               title="No listings yet"

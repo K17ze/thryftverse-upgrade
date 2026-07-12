@@ -19,6 +19,7 @@ import { CachedImage } from '../components/CachedImage';
 import { Colors } from '../constants/colors';
 import { Type, Space, Radius, Typography } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { EmptyState } from '../components/EmptyState';
 import { formatCountdown } from '../data/tradeHub';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
@@ -44,6 +45,7 @@ interface FeedEvent {
 function EventCard({ event, index }: { event: FeedEvent; index: number }) {
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
+  const reducedMotionEnabled = useReducedMotion();
 
   const iconMap: Record<ActivityType, string> = {
     auction_live: 'flame-outline',
@@ -67,7 +69,7 @@ function EventCard({ event, index }: { event: FeedEvent; index: number }) {
   };
 
   return (
-    <Reanimated.View entering={FadeInDown.duration(350).delay(index * 40).springify()}>
+    <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(index * 40).springify()}>
       <AnimatedPressable style={styles.card} onPress={handlePress} activeOpacity={0.92}>
         <CachedImage uri={event.image} style={styles.cardImage} containerStyle={{ borderRadius: Radius.md }} contentFit="cover" />
         <View style={styles.cardContent}>
@@ -92,6 +94,7 @@ function EventCard({ event, index }: { event: FeedEvent; index: number }) {
 export default function PulseFeedScreen() {
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
+  const reducedMotionEnabled = useReducedMotion();
   const { listings } = useBackendData();
   const customAuctions = useStore((state) => state.customAuctions);
   const now = Date.now();

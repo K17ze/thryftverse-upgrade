@@ -12,6 +12,7 @@ import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { FlagshipEmptyGraphic } from '../components/flagship';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { Space, Radius, Type } from '../theme/designTokens';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 type Props = StackScreenProps<RootStackParamList, 'BalanceHistory'>;
 
@@ -46,6 +47,7 @@ function colorForType(type: string, lineType: string) {
 export default function BalanceHistoryScreen({ navigation }: Props) {
   const { formatFromFiat } = useFormattedPrice();
   const currentUser = useStore((state) => state.currentUser);
+  const reducedMotionEnabled = useReducedMotion();
   const [transactions, setTransactions] = React.useState<UserTransaction[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
 
@@ -98,7 +100,7 @@ export default function BalanceHistoryScreen({ navigation }: Props) {
             {transactions.map((tx, idx) => (
               <Reanimated.View
                 key={tx.id}
-                entering={FadeInDown.delay(Math.min(idx, 10) * 40).duration(300)}
+                entering={reducedMotionEnabled ? undefined : FadeInDown.delay(Math.min(idx, 10) * 40).duration(300)}
               >
                 <View style={styles.txRow}>
                   <View style={[styles.txIcon, { backgroundColor: colorForType(tx.type, tx.lineType) + '22' }]}>

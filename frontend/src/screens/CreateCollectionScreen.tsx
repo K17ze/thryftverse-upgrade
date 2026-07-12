@@ -23,6 +23,7 @@ import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { useHaptic } from '../hooks/useHaptic';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -32,6 +33,7 @@ export default function CreateCollectionScreen() {
   const { show } = useToast();
   const haptic = useHaptic();
   const createCollectionOnApi = useStore((state) => state.createCollectionOnApi);
+  const reducedMotionEnabled = useReducedMotion();
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -87,7 +89,7 @@ export default function CreateCollectionScreen() {
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
-        <Reanimated.View entering={FadeInDown.duration(300).delay(40)} style={styles.card}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(40)} style={styles.card}>
           <Text style={styles.label}>Name</Text>
           <AppInput
             value={name}
@@ -100,7 +102,7 @@ export default function CreateCollectionScreen() {
           <Text style={styles.charCount}>{name.length}/40</Text>
         </Reanimated.View>
 
-        <Reanimated.View entering={FadeInDown.duration(300).delay(80)} style={styles.card}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)} style={styles.card}>
           <Text style={styles.label}>Description</Text>
           <AppInput
             value={description}
@@ -114,7 +116,7 @@ export default function CreateCollectionScreen() {
           <Text style={styles.charCount}>{description.length}/200</Text>
         </Reanimated.View>
 
-        <Reanimated.View entering={FadeInDown.duration(300).delay(120)} style={styles.card}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)} style={styles.card}>
           <View style={styles.toggleRow}>
             <View style={styles.toggleIconWrap}>
               <Ionicons name={isPrivate ? 'lock-closed-outline' : 'lock-open-outline'} size={20} color={Colors.textSecondary} />
@@ -141,7 +143,7 @@ export default function CreateCollectionScreen() {
           </View>
         </Reanimated.View>
 
-        <Reanimated.View entering={FadeInDown.duration(300).delay(160)} style={styles.footer}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(160)} style={styles.footer}>
           <AppButton
             title={isSubmitting ? 'Creating...' : 'Create Collection'}
             onPress={handleCreate}

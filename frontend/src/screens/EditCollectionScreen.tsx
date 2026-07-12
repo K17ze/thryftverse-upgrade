@@ -21,6 +21,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { useHaptic } from '../hooks/useHaptic';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 
 type Props = StackScreenProps<RootStackParamList, 'EditCollection'>;
@@ -30,6 +31,7 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
   const { isDark } = useAppTheme();
   const { show } = useToast();
   const haptic = useHaptic();
+  const reducedMotionEnabled = useReducedMotion();
 
   const collections = useStore((state) => state.collections);
   const renameCollection = useStore((state) => state.renameCollection);
@@ -142,7 +144,7 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
-          <Reanimated.View entering={FadeInDown.duration(300).delay(40)} style={styles.card}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(40)} style={styles.card}>
             <Text style={styles.label}>Name</Text>
             <AppInput
               value={name}
@@ -155,7 +157,7 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
             <Text style={styles.charCount}>{name.length}/40</Text>
           </Reanimated.View>
 
-          <Reanimated.View entering={FadeInDown.duration(300).delay(80)} style={styles.card}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)} style={styles.card}>
             <Text style={styles.label}>Description</Text>
             <AppInput
               value={description}
@@ -169,7 +171,7 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
             <Text style={styles.charCount}>{description.length}/200</Text>
           </Reanimated.View>
 
-          <Reanimated.View entering={FadeInDown.duration(300).delay(120)} style={styles.card}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)} style={styles.card}>
             <View style={styles.toggleRow}>
               <View style={styles.toggleIconWrap}>
                 <Ionicons
@@ -200,7 +202,7 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
             </View>
           </Reanimated.View>
 
-          <Reanimated.View entering={FadeInDown.duration(300).delay(160)} style={styles.dangerCard}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(160)} style={styles.dangerCard}>
             <Text style={styles.dangerLabel}>Danger Zone</Text>
             <AppButton
               title="Delete Collection"

@@ -26,6 +26,7 @@ import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { enablePriceAlert, disablePriceAlert, getPriceAlertStatus } from '../services/priceAlertsApi';
 import { toIze, formatIzeAmount } from '../utils/currency';
 import { Motion } from '../constants/motion';
@@ -170,6 +171,7 @@ export default function ItemDetailScreen() {
   const { formatFromFiat, goldRates, displayMode } = useFormattedPrice();
   const { show } = useToast();
   const haptic = useHaptic();
+  const reducedMotionEnabled = useReducedMotion();
 
   const handleTogglePriceAlert = useCallback(async () => {
     if (!item?.id || priceAlertLoading) return;
@@ -417,7 +419,7 @@ export default function ItemDetailScreen() {
           }
         />
 
-        <Reanimated.View entering={FadeInDown.duration(350).delay(80)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(80)}>
           <ProductIdentitySummary
             brand={item.brand}
             title={item.title}
@@ -516,7 +518,7 @@ export default function ItemDetailScreen() {
             return null;
           })()}
 
-          <Reanimated.View entering={FadeInDown.duration(350).delay(120)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(120)}>
             <PriceInsightStrip
               price={item.price}
               originalPrice={item.originalPrice}
@@ -564,7 +566,7 @@ export default function ItemDetailScreen() {
             isSeller={item.seller?.id === currentUser?.id}
           />
 
-          <Reanimated.View entering={FadeInDown.duration(350).delay(160)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(160)}>
             <BundleUpsellRow
               items={bundleItems}
               currentListingId={item.id}
@@ -587,7 +589,7 @@ export default function ItemDetailScreen() {
               .slice(0, 6);
             if (visualSimilar.length < 2) return null;
             return (
-              <Reanimated.View entering={FadeInDown.duration(350).delay(180)}>
+              <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(180)}>
                 <View style={styles.sectionDivider} />
                 <Text style={styles.moreLikeThisTitle}>More like this</Text>
                 <View style={styles.moreLikeThisGrid}>

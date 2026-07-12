@@ -22,6 +22,7 @@ import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { useToast } from '../context/ToastContext';
 import { useBackendData } from '../context/BackendDataContext';
 import { MasonryGrid } from '../components/ProductCardV2';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 type Props = StackScreenProps<RootStackParamList, 'VisualSearch'>;
 
@@ -29,6 +30,7 @@ export default function VisualSearchScreen({ navigation }: Props) {
   const { isDark } = useAppTheme();
   const { show } = useToast();
   const { listings } = useBackendData();
+  const reducedMotionEnabled = useReducedMotion();
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [previewFailed, setPreviewFailed] = useState(false);
 
@@ -113,7 +115,7 @@ export default function VisualSearchScreen({ navigation }: Props) {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         {/* Source selection */}
         {!imageUri && (
-          <Reanimated.View entering={FadeInDown.duration(300)} style={styles.sourceWrap}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.sourceWrap}>
             <Text style={styles.sourceTitle}>Find similar items with a photo</Text>
             <Text style={styles.sourceSub}>
               Image matching is not connected yet. You can preview a photo, then continue with search or browse.
@@ -145,7 +147,7 @@ export default function VisualSearchScreen({ navigation }: Props) {
 
         {/* Image preview */}
         {imageUri && (
-          <Reanimated.View entering={FadeInDown.duration(300)} style={styles.previewWrap}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.previewWrap}>
             <View style={styles.previewCard}>
               {previewFailed ? (
                 <View style={styles.previewImg}>
@@ -209,7 +211,7 @@ export default function VisualSearchScreen({ navigation }: Props) {
 
         {/* Honest browse fallbacks are available as soon as a photo is selected. */}
         {imageUri && (
-          <Reanimated.View entering={FadeInDown.duration(400)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400)}>
             {/* Browse by category fallback */}
             {availableCategories.length > 0 && (
               <View style={styles.fallbackSection}>

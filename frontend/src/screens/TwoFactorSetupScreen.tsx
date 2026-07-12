@@ -25,6 +25,7 @@ import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { AppButton } from '../components/ui/AppButton';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { SettingsInfoBanner } from '../components/settings/SettingsInfoBanner';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import QRCode from 'qrcode';
 import * as Clipboard from 'expo-clipboard';
 
@@ -39,6 +40,7 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
   const haptic = useHaptic();
   const twoFactorEnabled = useStore((state) => state.twoFactorEnabled);
   const setTwoFactorEnabled = useStore((state) => state.setTwoFactorEnabled);
+  const reducedMotionEnabled = useReducedMotion();
 
   const [phase, setPhase] = useState<Phase>(twoFactorEnabled ? 'disable' : 'setup');
   const [code, setCode] = useState('');
@@ -471,7 +473,7 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
         {recoveryCodes.map((code, i) => (
           <Reanimated.View
             key={i}
-            entering={FadeInDown.duration(200).delay(i * 50)}
+            entering={reducedMotionEnabled ? undefined : FadeInDown.duration(200).delay(i * 50)}
             style={[
               styles.recoveryCodeRow,
               i < recoveryCodes.length - 1 && { borderBottomColor: Colors.border, borderBottomWidth: StyleSheet.hairlineWidth },

@@ -69,6 +69,7 @@ import { CuratedCollectionsRail, type CuratedCollection } from '../components/pr
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { useFollowingFeed } from '../hooks/useFollowingFeed';
 import { resolveListingMediaHeightRatio } from '../utils/listingMediaGeometry';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -303,6 +304,7 @@ export default function HomeScreen() {
   const customPosters = useStore((state) => state.customPosters);
   const { formatFromFiat } = useFormattedPrice();
   const haptic = useHaptic();
+  const reducedMotionEnabled = useReducedMotion();
   const { listings, source, isSyncing, lastError, refreshListings, loadMoreListings, hasMore, isLoadingMore } = useBackendData();
   const followingFeed = useFollowingFeed();
 
@@ -1010,7 +1012,7 @@ export default function HomeScreen() {
           renderExploreLoadingState()
         ) : feedGridData.length === 0 ? (
           feedMode === 'following' ? (
-            <Reanimated.View entering={FadeInDown.duration(300)} style={{ flex: 1 }}>
+            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={{ flex: 1 }}>
               <EmptyState
                 icon={followingFeed.hasFollowing ? 'pricetag-outline' : 'people-outline'}
                 title={followingFeed.hasFollowing ? 'No new drops from sellers you follow' : 'Follow sellers to see their drops here'}
@@ -1028,7 +1030,7 @@ export default function HomeScreen() {
             // Premium empty state — backend returned zero items and we are not
             // loading. Preserves the flagship layout instead of collapsing to
             // a blank masonry. Distinct from the sync-error banner above.
-            <Reanimated.View entering={FadeInDown.duration(300)} style={{ flex: 1 }}>
+            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={{ flex: 1 }}>
               <EmptyState
                 icon="sparkles-outline"
                 title="No drops live yet"

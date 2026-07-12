@@ -47,6 +47,7 @@ import {
   getSlotLabel,
   getSlotIcon,
 } from '../services/styleGraph';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -255,6 +256,7 @@ const scoreStyles = StyleSheet.create({
 export default function OutfitBuilderScreen() {
   const navigation = useNavigation<NavT>();
   const { listings } = useBackendData();
+  const reducedMotionEnabled = useReducedMotion();
   const collections = useStore((s) => s.collections);
   const createCollectionFn = useStore((s) => s.createCollection);
   const addToCollection = useStore((s) => s.addToCollection);
@@ -382,7 +384,7 @@ export default function OutfitBuilderScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {/* Outfit Preview */}
-        <Reanimated.View entering={FadeInDown.duration(300)} style={styles.previewWrap}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.previewWrap}>
           <View style={styles.slotRow}>
             {SLOTS.map((slot) => (
               <View key={slot} style={styles.slotWrap}>
@@ -420,7 +422,7 @@ export default function OutfitBuilderScreen() {
 
         {/* AI Suggestion */}
         {aiSuggestion && (
-          <Reanimated.View entering={FadeInUp.duration(250)} style={{ marginHorizontal: Space.md, marginBottom: Space.md }}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInUp.duration(250)} style={{ marginHorizontal: Space.md, marginBottom: Space.md }}>
             <View style={styles.aiCard}>
               <View style={styles.aiRow}>
                 <Ionicons name="sparkles" size={18} color={Colors.brand} />
@@ -460,7 +462,7 @@ export default function OutfitBuilderScreen() {
             {slotItems.map((item, idx) => (
               <Reanimated.View
                 key={item.id}
-                entering={FadeInDown.delay(idx * 40).duration(250)}
+                entering={reducedMotionEnabled ? undefined : FadeInDown.delay(idx * 40).duration(250)}
               >
                 <ItemThumb
                   item={item}
