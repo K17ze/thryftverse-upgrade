@@ -15,7 +15,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
-import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -97,6 +97,7 @@ export default function AuctionDetailScreen() {
   const route = useRoute<RouteT>();
   const { auctionId, openBidSheet, initialBidAmount } = route.params;
   const { show } = useToast();
+  const { colors, isDark } = useAppTheme();
   const { formatFromFiat } = useFormattedPrice();
   const { currencyCode, goldRates, displayMode } = useCurrencyContext();
   const reducedMotionEnabled = useReducedMotion();
@@ -472,9 +473,9 @@ export default function AuctionDetailScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor={Colors.brand}
-            colors={[Colors.brand]}
-            progressBackgroundColor={Colors.surfaceAlt}
+            tintColor={colors.brand}
+            colors={[colors.brand]}
+            progressBackgroundColor={colors.surfaceAlt}
           />
         }
       >
@@ -498,7 +499,7 @@ export default function AuctionDetailScreen() {
               </Pressable>
             ) : (
               <View style={styles.heroPlaceholder}>
-                <Ionicons name="image-outline" size={48} color={Colors.textMuted} />
+                <Ionicons name="image-outline" size={48} color={colors.textMuted} />
               </View>
             )}
 
@@ -551,7 +552,7 @@ export default function AuctionDetailScreen() {
                 <Ionicons
                   name={social.isSavedToCollection ? 'bookmark' : 'bookmark-outline'}
                   size={20}
-                  color={social.isSavedToCollection ? Colors.brand : '#FFFFFF'}
+                  color={social.isSavedToCollection ? colors.brand : '#FFFFFF'}
                 />
               </AnimatedPressable>
 
@@ -566,7 +567,7 @@ export default function AuctionDetailScreen() {
                 <Ionicons
                   name={social.isLiked ? 'heart' : 'heart-outline'}
                   size={20}
-                  color={social.isLiked ? Colors.danger : '#FFFFFF'}
+                  color={social.isLiked ? colors.danger : '#FFFFFF'}
                 />
               </AnimatedPressable>
 
@@ -583,7 +584,7 @@ export default function AuctionDetailScreen() {
                 <Ionicons
                   name={auction.isWatched ? 'eye' : 'eye-outline'}
                   size={20}
-                  color={auction.isWatched ? Colors.brand : '#FFFFFF'}
+                  color={auction.isWatched ? colors.brand : '#FFFFFF'}
                 />
               </AnimatedPressable>
             </View>
@@ -599,7 +600,7 @@ export default function AuctionDetailScreen() {
 
         {resyncFailed && !error && (
           <View style={styles.resyncBanner}>
-            <Ionicons name="sync-circle-outline" size={14} color={Colors.textMuted} />
+            <Ionicons name="sync-circle-outline" size={14} color={colors.textMuted} />
             <Meta style={styles.resyncText}>Clock sync failed — pull to refresh</Meta>
           </View>
         )}
@@ -620,9 +621,9 @@ export default function AuctionDetailScreen() {
             <Text
               style={[
                 styles.transactionStateLine,
-                viewerContext.treatment === 'warning' && { color: Colors.danger },
-                viewerContext.treatment === 'calm' && { color: Colors.success },
-                viewerContext.treatment === 'seller' && { color: Colors.brand },
+                viewerContext.treatment === 'warning' && { color: colors.danger },
+                viewerContext.treatment === 'calm' && { color: colors.success },
+                viewerContext.treatment === 'seller' && { color: colors.brand },
               ]}
               numberOfLines={1}
             >
@@ -714,7 +715,7 @@ export default function AuctionDetailScreen() {
         )}
         {!isTerminal && viewerState === 'leading' && isLive && (
           <View style={styles.leadingBlock}>
-            <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
+            <Ionicons name="checkmark-circle" size={18} color={colors.success} />
             <View style={styles.leadingTextWrap}>
               <Text style={styles.leadingTitle}>You're leading</Text>
               <Text style={styles.leadingSubtitle}>Current value: {formatFromFiat(auction.currentBidGbp, 'GBP')}</Text>
@@ -723,7 +724,7 @@ export default function AuctionDetailScreen() {
         )}
         {!isTerminal && viewerState === 'watching' && isLive && (
           <View style={styles.watchingBlock}>
-            <Ionicons name="eye-outline" size={16} color={Colors.textSecondary} />
+            <Ionicons name="eye-outline" size={16} color={colors.textSecondary} />
             <Text style={styles.watchingText}>You're watching this auction</Text>
           </View>
         )}
@@ -752,9 +753,9 @@ export default function AuctionDetailScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Discover similar auctions"
                 >
-                  <Ionicons name="search-outline" size={14} color={Colors.brand} />
+                  <Ionicons name="search-outline" size={14} color={colors.brand} />
                   <Text style={styles.discoverLinkInlineText}>Discover similar</Text>
-                  <Ionicons name="chevron-forward" size={12} color={Colors.brand} />
+                  <Ionicons name="chevron-forward" size={12} color={colors.brand} />
                 </Pressable>
               </>
             )}
@@ -826,7 +827,7 @@ export default function AuctionDetailScreen() {
               {auction.bidCount > 0 && (
                 <Meta style={styles.bidCountTotal}>{auction.bidCount} total</Meta>
               )}
-              <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
             </View>
           </Pressable>
           {auction.bidCount > 0 && bidActivity.length > 0 && (
@@ -868,7 +869,7 @@ export default function AuctionDetailScreen() {
                   <Text style={styles.bidPreviewMoreText}>
                     View all {auction.bidCount} bids
                   </Text>
-                  <Ionicons name="chevron-forward" size={14} color={Colors.brand} />
+                  <Ionicons name="chevron-forward" size={14} color={colors.brand} />
                 </Pressable>
               )}
             </View>
@@ -890,7 +891,7 @@ export default function AuctionDetailScreen() {
             accessibilityLabel="View bidding rules"
           >
             <BodyEmphasis style={styles.sectionTitle}>How bidding works</BodyEmphasis>
-            <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
           </Pressable>
         </View>
 
@@ -1045,9 +1046,9 @@ export default function AuctionDetailScreen() {
             : 'checkmark-done-outline'
           }
           terminalAccent={
-            viewerState === 'won' ? Colors.success
-            : isSeller && auction.bidCount > 0 ? Colors.brand
-            : Colors.textMuted
+            viewerState === 'won' ? colors.success
+            : isSeller && auction.bidCount > 0 ? colors.brand
+            : colors.textMuted
           }
         />
       )}
@@ -1306,30 +1307,9 @@ function resolveEffectiveState(
   return 'upcoming';
 }
 
-const stylesViewerTreatment: Record<string, { backgroundColor: string; borderColor: string }> = {
-  calm: { backgroundColor: 'rgba(22,163,74,0.08)', borderColor: 'rgba(22,163,74,0.2)' },
-  warning: { backgroundColor: 'rgba(220,38,38,0.08)', borderColor: 'rgba(220,38,38,0.2)' },
-  restrained: { backgroundColor: Colors.surfaceAlt, borderColor: Colors.border },
-  result: { backgroundColor: 'rgba(22,163,74,0.08)', borderColor: 'rgba(22,163,74,0.2)' },
-  subdued: { backgroundColor: Colors.surfaceAlt, borderColor: Colors.border },
-  seller: { backgroundColor: 'rgba(244,240,232,0.06)', borderColor: 'rgba(244,240,232,0.15)' },
-  none: { backgroundColor: Colors.surfaceAlt, borderColor: Colors.border },
-};
-
-const stylesViewerTitle: Record<string, { color: string }> = {
-  calm: { color: Colors.success },
-  warning: { color: Colors.danger },
-  restrained: { color: Colors.textSecondary },
-  result: { color: Colors.success },
-  subdued: { color: Colors.textMuted },
-  seller: { color: Colors.brand },
-  none: { color: Colors.textPrimary },
-};
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   loadingContainer: {
     flex: 1,
@@ -1359,7 +1339,6 @@ const styles = StyleSheet.create({
   heroPlaceholder: {
     width: '100%',
     height: '100%',
-    backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1414,7 +1393,6 @@ const styles = StyleSheet.create({
   },
   outbidMinText: {
     fontSize: 13,
-    color: Colors.danger,
     marginTop: 4,
     fontFamily: Typography.family.medium,
   },
@@ -1444,7 +1422,6 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.medium,
   },
   countdownTextUrgent: {
-    color: Colors.danger,
     fontWeight: '700',
     fontSize: 16,
     fontFamily: Typography.family.bold,
@@ -1462,7 +1439,6 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: Colors.danger,
   },
   livePillText: {
     color: '#fff',
@@ -1492,7 +1468,6 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   endedPillText: {
-    color: Colors.textMuted,
     fontSize: 10,
     fontWeight: '600',
     letterSpacing: 0.5,
@@ -1591,7 +1566,6 @@ const styles = StyleSheet.create({
     lineHeight: 34,
     fontWeight: '700',
     letterSpacing: -0.5,
-    color: Colors.textPrimary,
     fontFamily: Typography.family.bold,
   },
   priceSecondary: {
@@ -1603,12 +1577,10 @@ const styles = StyleSheet.create({
   bidCountValue: {
     fontSize: 16,
     fontWeight: '600',
-    color: Colors.textSecondary,
     fontFamily: Typography.family.semibold,
   },
   bidCountLabel: {
     fontSize: 11,
-    color: Colors.textMuted,
     marginTop: 1,
   },
   outbidHint: {
@@ -1619,7 +1591,6 @@ const styles = StyleSheet.create({
   },
   outbidHintText: {
     fontSize: 13,
-    color: Colors.danger,
     fontFamily: Typography.family.medium,
   },
   outbidHintAmount: {
@@ -1633,11 +1604,9 @@ const styles = StyleSheet.create({
   },
   timeText: {
     fontSize: 14,
-    color: Colors.textSecondary,
     fontFamily: Typography.family.medium,
   },
   timeTextUrgent: {
-    color: Colors.danger,
     fontWeight: '700',
     fontSize: 16,
     fontFamily: Typography.family.bold,
@@ -1658,7 +1627,6 @@ const styles = StyleSheet.create({
   viewerMessageTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.textPrimary,
     fontFamily: Typography.family.semibold,
   },
   viewerMessageSubtitle: {
@@ -1671,7 +1639,6 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
   },
   resyncText: {
-    color: Colors.textMuted,
   },
   // ── Removed inline action styles (PASS 4 correction pass 1) ──
   // ── Active viewer-state compositions ──
@@ -1681,23 +1648,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.xs,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
   },
   outbidHeadline: {
     fontSize: 18,
     fontFamily: Typography.family.bold,
-    color: Colors.danger,
     marginBottom: Space.xs,
   },
   outbidMinLabel: {
     fontSize: 13,
-    color: Colors.textSecondary,
     fontFamily: Typography.family.regular,
   },
   outbidMinValue: {
     fontSize: 28,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
     letterSpacing: -0.5,
     marginBottom: Space.sm,
   },
@@ -1711,7 +1674,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
   },
   leadingTextWrap: {
     flex: 1,
@@ -1719,11 +1681,9 @@ const styles = StyleSheet.create({
   leadingTitle: {
     fontSize: 16,
     fontFamily: Typography.family.semibold,
-    color: Colors.success,
   },
   leadingSubtitle: {
     fontSize: 13,
-    color: Colors.textSecondary,
     fontFamily: Typography.family.regular,
     marginTop: 2,
   },
@@ -1734,11 +1694,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
   },
   watchingText: {
     fontSize: 14,
-    color: Colors.textSecondary,
     fontFamily: Typography.family.regular,
   },
   // ── Item story ──
@@ -1749,7 +1707,6 @@ const styles = StyleSheet.create({
   },
   itemStoryBrand: {
     fontSize: 13,
-    color: Colors.textSecondary,
     fontFamily: Typography.family.medium,
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -1757,17 +1714,14 @@ const styles = StyleSheet.create({
   itemStoryTitle: {
     fontSize: 22,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
     letterSpacing: -0.3,
   },
   itemStoryCondition: {
     fontSize: 13,
-    color: Colors.textMuted,
     fontFamily: Typography.family.regular,
   },
   itemStoryDescription: {
     fontSize: 15,
-    color: Colors.textSecondary,
     lineHeight: 22,
     fontFamily: Typography.family.regular,
     marginTop: Space.xs,
@@ -1783,7 +1737,6 @@ const styles = StyleSheet.create({
   itemIdentityEyebrow: {
     fontSize: 12,
     fontWeight: '600',
-    color: Colors.textSecondary,
     fontFamily: Typography.family.semibold,
     textTransform: 'uppercase',
     letterSpacing: 1.0,
@@ -1792,12 +1745,10 @@ const styles = StyleSheet.create({
     fontSize: 26,
     lineHeight: 32,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
     letterSpacing: -0.6,
   },
   itemIdentityCondition: {
     fontSize: 13,
-    color: Colors.textMuted,
     fontFamily: Typography.family.regular,
     marginTop: 2,
   },
@@ -1808,9 +1759,7 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
     padding: Space.md + 2,
     borderRadius: Radius.lg,
-    backgroundColor: Colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
     gap: Space.sm,
   },
   transactionStateLine: {
@@ -1830,7 +1779,6 @@ const styles = StyleSheet.create({
   transactionPriceLabel: {
     fontSize: 11,
     fontWeight: '500',
-    color: Colors.textMuted,
     fontFamily: Typography.family.medium,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
@@ -1840,14 +1788,12 @@ const styles = StyleSheet.create({
     fontSize: 28,
     lineHeight: 32,
     fontWeight: '700',
-    color: Colors.textPrimary,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.5,
     fontVariant: ['tabular-nums'],
   },
   transactionPriceSecondary: {
     fontSize: 14,
-    color: Colors.textSecondary,
     fontFamily: Typography.family.regular,
     marginTop: 2,
     fontVariant: ['tabular-nums'],
@@ -1858,7 +1804,6 @@ const styles = StyleSheet.create({
   },
   transactionBidCount: {
     fontSize: 13,
-    color: Colors.textSecondary,
     fontFamily: Typography.family.medium,
   },
   transactionMinRow: {
@@ -1867,11 +1812,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: Space.xs,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
   },
   transactionMinLabel: {
     fontSize: 12,
-    color: Colors.textSecondary,
     fontFamily: Typography.family.medium,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -1879,7 +1822,6 @@ const styles = StyleSheet.create({
   transactionMinValue: {
     fontSize: 16,
     fontWeight: '700',
-    color: Colors.danger,
     fontFamily: Typography.family.bold,
     fontVariant: ['tabular-nums'],
   },
@@ -1891,7 +1833,6 @@ const styles = StyleSheet.create({
   },
   transactionReserveHint: {
     fontSize: 11,
-    color: Colors.textMuted,
     fontFamily: Typography.family.regular,
     flexShrink: 1,
   },
@@ -1903,7 +1844,6 @@ const styles = StyleSheet.create({
   transactionCountdownText: {
     fontSize: 14,
     fontWeight: '500',
-    color: Colors.textSecondary,
     fontFamily: Typography.family.medium,
     fontVariant: ['tabular-nums'],
   },
@@ -1914,40 +1854,33 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
     padding: Space.md + 2,
     borderRadius: Radius.lg,
-    backgroundColor: Colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
     gap: Space.xs + 2,
   },
   terminalResultTitleWon: {
     fontSize: 20,
     fontWeight: '700',
-    color: Colors.success,
     fontFamily: Typography.family.bold,
   },
   terminalResultTitleLost: {
     fontSize: 20,
     fontWeight: '700',
-    color: Colors.textPrimary,
     fontFamily: Typography.family.bold,
   },
   terminalResultTitleSold: {
     fontSize: 20,
     fontWeight: '700',
-    color: Colors.brand,
     fontFamily: Typography.family.bold,
   },
   terminalResultValue: {
     fontSize: 22,
     fontWeight: '700',
-    color: Colors.textPrimary,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.3,
     fontVariant: ['tabular-nums'],
   },
   terminalResultNote: {
     fontSize: 13,
-    color: Colors.textSecondary,
     fontFamily: Typography.family.regular,
     lineHeight: 18,
   },
@@ -1959,7 +1892,6 @@ const styles = StyleSheet.create({
   },
   itemDetailsDescription: {
     fontSize: 15,
-    color: Colors.textSecondary,
     lineHeight: 22,
     fontFamily: Typography.family.regular,
   },
@@ -1968,7 +1900,6 @@ const styles = StyleSheet.create({
     paddingTop: Space.lg,
   },
   brandLabel: {
-    color: Colors.textSecondary,
     marginBottom: 4,
     fontSize: 12,
     fontWeight: '500',
@@ -1977,7 +1908,6 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   conditionLabel: {
-    color: Colors.textMuted,
   },
   expandableHeader: {
     flexDirection: 'row',
@@ -2005,7 +1935,6 @@ const styles = StyleSheet.create({
     marginBottom: Space.sm,
   },
   bidCountTotal: {
-    color: Colors.textMuted,
   },
   bidSummaryRow: {
     flexDirection: 'row',
@@ -2015,25 +1944,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm,
     paddingVertical: Space.sm,
     borderRadius: Radius.sm,
-    backgroundColor: Colors.surfaceAlt,
   },
   bidSummaryLabel: {
-    color: Colors.textMuted,
     fontSize: 13,
     fontFamily: Typography.family.medium,
   },
   bidSummaryValue: {
     fontSize: 15,
     fontWeight: '600',
-    color: Colors.textPrimary,
     fontFamily: Typography.family.semibold,
   },
   bidPreviewList: {
     marginTop: Space.xs,
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
     overflow: 'hidden',
   },
   bidPreviewRow: {
@@ -2043,11 +1967,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
   },
   bidPreviewRowTop: {
-    backgroundColor: `${Colors.brand}08`,
-  },
+      },
   bidPreviewLeft: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2057,18 +1979,15 @@ const styles = StyleSheet.create({
   bidPreviewRank: {
     fontSize: 11,
     fontWeight: '700',
-    color: Colors.textMuted,
     fontFamily: Typography.family.bold,
     minWidth: 14,
   },
   bidPreviewBidder: {
-    color: Colors.textSecondary,
     fontSize: 13,
     fontFamily: Typography.family.regular,
     flexShrink: 1,
   },
   bidPreviewTopBadge: {
-    backgroundColor: Colors.success,
     borderRadius: 3,
     paddingHorizontal: 5,
     paddingVertical: 1,
@@ -2087,13 +2006,11 @@ const styles = StyleSheet.create({
   bidPreviewAmount: {
     fontSize: 13,
     fontWeight: '600',
-    color: Colors.textPrimary,
     fontFamily: Typography.family.semibold,
     fontVariant: ['tabular-nums'],
   },
   bidPreviewTime: {
     fontSize: 10,
-    color: Colors.textMuted,
     fontFamily: Typography.family.regular,
   },
   bidPreviewMore: {
@@ -2104,15 +2021,12 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm,
   },
   bidPreviewMoreText: {
-    color: Colors.brand,
     fontSize: 13,
     fontFamily: Typography.family.medium,
   },
   bidList: {
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
     overflow: 'hidden',
   },
   bidRow: {
@@ -2122,10 +2036,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
   },
   bidRowTop: {
-    backgroundColor: Colors.surfaceAlt,
   },
   bidRowLeft: {
     flexDirection: 'row',
@@ -2134,18 +2046,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   viewerBadge: {
-    backgroundColor: Colors.brand,
     borderRadius: Radius.sm,
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
   viewerBadgeText: {
-    color: Colors.textInverse,
     fontSize: 9,
     fontWeight: '700',
   },
   bidderName: {
-    color: Colors.textSecondary,
     fontSize: 13,
     fontFamily: Typography.family.regular,
   },
@@ -2160,7 +2069,6 @@ const styles = StyleSheet.create({
   },
   bidRelativeTime: {
     fontSize: 11,
-    color: Colors.textMuted,
     fontFamily: Typography.family.regular,
   },
   bidRowRight: {
@@ -2171,16 +2079,13 @@ const styles = StyleSheet.create({
   bidAmount: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.textPrimary,
     fontFamily: Typography.family.semibold,
   },
   topBidLabel: {
-    color: Colors.success,
     fontSize: 10,
     fontWeight: '600',
   },
   noBidsText: {
-    color: Colors.textMuted,
     fontSize: 14,
     fontFamily: Typography.family.regular,
   },
@@ -2191,18 +2096,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
   },
   subSectionErrorText: {
-    color: Colors.textMuted,
   },
   retryText: {
-    color: Colors.brand,
     fontSize: 13,
     fontWeight: '600',
   },
   descriptionText: {
-    color: Colors.textSecondary,
     lineHeight: 22,
   },
   itemInfoList: {
@@ -2214,11 +2115,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   itemInfoLabel: {
-    color: Colors.textMuted,
   },
   itemInfoValue: {
     fontSize: 14,
-    color: Colors.textPrimary,
   },
   infoList: {
     gap: Space.sm,
@@ -2230,7 +2129,6 @@ const styles = StyleSheet.create({
   },
   infoText: {
     flex: 1,
-    color: Colors.textSecondary,
     lineHeight: 20,
   },
   actionDock: {
@@ -2240,9 +2138,7 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
-    backgroundColor: Colors.surface,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
   },
   // ── Removed actionDockRow/Primary/Secondary (PASS 4 correction: single primary CTA) ──
   actionDockFull: {
@@ -2255,7 +2151,6 @@ const styles = StyleSheet.create({
   },
   buyNowLinkText: {
     fontSize: 13,
-    color: Colors.textSecondary,
     fontFamily: Typography.family.medium,
     textDecorationLine: 'underline',
   },
@@ -2267,7 +2162,6 @@ const styles = StyleSheet.create({
   },
   sellerDockText: {
     fontSize: 14,
-    color: Colors.textSecondary,
     fontFamily: Typography.family.medium,
   },
   terminalDock: {
@@ -2277,9 +2171,7 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
-    backgroundColor: Colors.surface,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
     alignItems: 'center',
     paddingVertical: Space.md,
   },
@@ -2290,7 +2182,6 @@ const styles = StyleSheet.create({
   },
   terminalDockText: {
     fontSize: 14,
-    color: Colors.textMuted,
     fontFamily: Typography.family.medium,
   },
   resultBodySection: {
@@ -2304,7 +2195,6 @@ const styles = StyleSheet.create({
   },
   resultEyebrow: {
     fontSize: 12,
-    color: Colors.textMuted,
     fontFamily: Typography.family.medium,
     textTransform: 'uppercase',
     letterSpacing: 1.5,
@@ -2312,43 +2202,36 @@ const styles = StyleSheet.create({
   resultTitleWon: {
     fontSize: 32,
     fontFamily: Typography.family.bold,
-    color: Colors.success,
     letterSpacing: -0.5,
   },
   resultTitleLost: {
     fontSize: 32,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
     letterSpacing: -0.5,
   },
   resultTitleSold: {
     fontSize: 32,
     fontFamily: Typography.family.bold,
-    color: Colors.brand,
     letterSpacing: -0.5,
   },
   resultPrice: {
     fontSize: 28,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
     marginTop: Space.xs,
   },
   resultPriceSecondary: {
     fontSize: 22,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
     marginTop: Space.xs,
   },
   resultItemTitle: {
     fontSize: 16,
-    color: Colors.textSecondary,
     fontFamily: Typography.family.regular,
     textAlign: 'center',
     marginTop: Space.xs,
   },
   resultBrand: {
     fontSize: 13,
-    color: Colors.textMuted,
     fontFamily: Typography.family.regular,
   },
   resultMetaRow: {
@@ -2359,11 +2242,9 @@ const styles = StyleSheet.create({
   },
   resultMetaText: {
     fontSize: 14,
-    color: Colors.textSecondary,
     fontFamily: Typography.family.medium,
   },
   resultNote: {
-    color: Colors.textMuted,
     textAlign: 'center',
     marginTop: Space.sm,
     fontSize: 13,
@@ -2379,7 +2260,6 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   discoverLinkInlineText: {
-    color: Colors.brand,
     fontFamily: Typography.family.semibold,
     fontSize: 14,
   },
@@ -2388,7 +2268,6 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm,
   },
   transactionTruthText: {
-    color: Colors.textMuted,
     fontSize: 13,
     lineHeight: 18,
   },
@@ -2401,7 +2280,6 @@ const styles = StyleSheet.create({
   discoverLinkText: {
     flex: 1,
     fontSize: 15,
-    color: Colors.brand,
     fontFamily: Typography.family.semibold,
   },
   // ── Bottom sheet styles ──
@@ -2415,7 +2293,6 @@ const styles = StyleSheet.create({
     fontSize: 22,
   },
   sheetSubtitle: {
-    color: Colors.textMuted,
   },
   sheetScroll: {
     flex: 1,
@@ -2431,13 +2308,11 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: Colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
   ruleNumberText: {
-    color: Colors.textInverse,
     fontSize: 13,
     fontWeight: '700',
     fontFamily: Typography.family.bold,
@@ -2450,7 +2325,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   ruleDescription: {
-    color: Colors.textSecondary,
     fontSize: 14,
     lineHeight: 20,
     fontFamily: Typography.family.regular,
