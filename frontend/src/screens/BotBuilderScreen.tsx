@@ -13,7 +13,6 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Colors } from '../constants/colors';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -44,7 +43,7 @@ const PERMISSION_OPTIONS = [
 
 export default function BotBuilderScreen({ navigation, route }: Props) {
   const { botId } = route.params ?? {};
-  const { isDark } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
   const { show } = useToast();
   const haptic = useHaptic();
 
@@ -117,7 +116,7 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <ScreenHeader
         title={isEditing ? 'Edit Bot' : 'Create Bot'}
@@ -126,9 +125,9 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         {/* Safety notice */}
-        <View style={styles.safetyBanner}>
-          <Ionicons name="warning-outline" size={18} color={Colors.textMuted} />
-          <Caption color={Colors.textMuted} style={styles.safetyText}>
+        <View style={[styles.safetyBanner, { backgroundColor: colors.surfaceAlt }]}>
+          <Ionicons name="warning-outline" size={18} color={colors.textMuted} />
+          <Caption color={colors.textMuted} style={styles.safetyText}>
             Custom bots are saved to your account. They become active once deployed to a group chat.
           </Caption>
         </View>
@@ -139,7 +138,7 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
             value={name}
             onChangeText={setName}
             placeholder="e.g. My Deal Assistant"
-            placeholderTextColor={Colors.textMuted}
+            placeholderTextColor={colors.textMuted}
             maxLength={40}
             accessibilityLabel="Bot name"
           />
@@ -164,15 +163,16 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
                   <View
                     style={[
                       styles.categoryItem,
-                      active && { backgroundColor: Colors.brand + '18', borderColor: Colors.brand },
+                      { backgroundColor: colors.surface, borderColor: colors.border },
+                      active && { backgroundColor: colors.brand + '18', borderColor: colors.brand },
                     ]}
                   >
                     <Ionicons
                       name={cat.icon as any}
                       size={18}
-                      color={active ? Colors.brand : Colors.textSecondary}
+                      color={active ? colors.brand : colors.textSecondary}
                     />
-                    <Caption color={active ? Colors.brand : Colors.textSecondary}>
+                    <Caption color={active ? colors.brand : colors.textSecondary}>
                       {cat.label}
                     </Caption>
                   </View>
@@ -188,7 +188,7 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
             value={description}
             onChangeText={setDescription}
             placeholder="What does this bot do?"
-            placeholderTextColor={Colors.textMuted}
+            placeholderTextColor={colors.textMuted}
             multiline
             numberOfLines={3}
             textAlignVertical="top"
@@ -196,7 +196,7 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
             accessibilityLabel="Bot description"
             inputContainerStyle={{ minHeight: 80, alignItems: 'flex-start' }}
           />
-          <Caption color={Colors.textMuted} style={styles.charCount}>
+          <Caption color={colors.textMuted} style={styles.charCount}>
             {description.length}/200
           </Caption>
         </Section>
@@ -207,7 +207,7 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
             value={commandHint}
             onChangeText={setCommandHint}
             placeholder="e.g. /deal or !help"
-            placeholderTextColor={Colors.textMuted}
+            placeholderTextColor={colors.textMuted}
             maxLength={20}
             accessibilityLabel="Command prefix"
           />
@@ -215,7 +215,7 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
 
         {/* Permissions */}
         <Section title="PERMISSIONS">
-          <View style={styles.card}>
+          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             {PERMISSION_OPTIONS.map((perm, index) => (
               <View key={perm.key}>
                 <AnimatedPressable
@@ -232,11 +232,11 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
                     <Ionicons
                       name={permissions[perm.key] ? 'checkbox' : 'square-outline'}
                       size={22}
-                      color={permissions[perm.key] ? Colors.brand : Colors.textMuted}
+                      color={permissions[perm.key] ? colors.brand : colors.textMuted}
                     />
                   </View>
                 </AnimatedPressable>
-                {index < PERMISSION_OPTIONS.length - 1 && <View style={styles.divider} />}
+                {index < PERMISSION_OPTIONS.length - 1 && <View style={[styles.divider, { backgroundColor: colors.border }]} />}
               </View>
             ))}
           </View>
@@ -255,18 +255,18 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
           accessibilityLabel="Save as draft"
           accessibilityState={{ checked: isDraft }}
         >
-          <View style={styles.draftRow}>
+          <View style={[styles.draftRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <BodyEmphasis>Save as draft</BodyEmphasis>
             <Ionicons
               name={isDraft ? 'toggle' : 'toggle-outline'}
               size={28}
-              color={isDraft ? Colors.brand : Colors.textMuted}
+              color={isDraft ? colors.brand : colors.textMuted}
             />
           </View>
         </AnimatedPressable>
 
         {isDraft && (
-          <Caption color={Colors.textMuted} style={styles.draftHint}>
+          <Caption color={colors.textMuted} style={styles.draftHint}>
             Draft bots are not visible to group chat deployments until published.
           </Caption>
         )}
@@ -287,9 +287,10 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  const { colors } = useAppTheme();
   return (
     <View style={styles.section}>
-      <Meta color={Colors.textMuted} style={styles.sectionLabel}>
+      <Meta color={colors.textMuted} style={styles.sectionLabel}>
         {title}
       </Meta>
       {children}
@@ -300,7 +301,6 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   content: {
     paddingHorizontal: Space.md,
@@ -312,7 +312,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: Space.sm,
     padding: Space.md,
-    backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.lg,
   },
   safetyText: {
@@ -343,15 +342,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: 10,
     borderRadius: Radius.lg,
-    backgroundColor: Colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
   },
   card: {
-    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
     overflow: 'hidden',
   },
   permissionRow: {
@@ -366,17 +361,14 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
     marginLeft: Space.md,
   },
   draftRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
     paddingHorizontal: Space.md,
     paddingVertical: 12,
   },
