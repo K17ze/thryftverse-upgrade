@@ -14,7 +14,6 @@ import {
 import Reanimated, { useSharedValue, useAnimatedScrollHandler, FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../constants/colors';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useNavigation, useScrollToTop } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -68,7 +67,7 @@ export default function SearchScreen() {
     setTimeout(() => setRefreshing(false), 400);
   };
 
-  const { isDark } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
 
   const renderTabContent = () => {
     switch (activeTab) {
@@ -91,22 +90,22 @@ export default function SearchScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
       {/* -- Header -- */}
       <View style={styles.headerRow}>
         <View style={styles.headerTitleBlock}>
-          <Text style={styles.headerLabel}>DISCOVER</Text>
-          <Text style={styles.hugeTitle}>Explore</Text>
+          <Text style={[styles.headerLabel, { color: colors.brand }]}>DISCOVER</Text>
+          <Text style={[styles.hugeTitle, { color: colors.textPrimary }]}>Explore</Text>
         </View>
         <View style={styles.headerRight}>
           <View style={styles.creatorActions}>
-            <AnimatedPressable style={styles.iconCircle} onPress={() => navigation.navigate('CreatorStudio', { type: 'look' })}>
-              <Ionicons name="camera-outline" size={18} color={Colors.textPrimary} />
+            <AnimatedPressable style={[styles.iconCircle, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => navigation.navigate('CreatorStudio', { type: 'look' })}>
+              <Ionicons name="camera-outline" size={18} color={colors.textPrimary} />
             </AnimatedPressable>
-            <AnimatedPressable style={styles.iconCircle} onPress={() => navigation.navigate('GlobalSearch')}>
-              <Ionicons name="compass-outline" size={18} color={Colors.textPrimary} />
+            <AnimatedPressable style={[styles.iconCircle, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => navigation.navigate('GlobalSearch')}>
+              <Ionicons name="compass-outline" size={18} color={colors.textPrimary} />
             </AnimatedPressable>
           </View>
         </View>
@@ -114,26 +113,26 @@ export default function SearchScreen() {
 
       {/* -- Search Bar -- */}
       <View style={styles.searchRow}>
-        <View style={[styles.searchBar, isSearchFocused && styles.searchBarFocused]}>
-          <Ionicons name="search" size={20} color={Colors.textMuted} style={{ marginLeft: 4 }} />
+        <View style={[styles.searchBar, isSearchFocused && styles.searchBarFocused, isSearchFocused && { backgroundColor: colors.background, borderColor: colors.brand }, !isSearchFocused && { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Ionicons name="search" size={20} color={colors.textMuted} style={{ marginLeft: 4 }} />
           <TextInput
-            style={styles.searchInput}
+            style={[styles.searchInput, { color: colors.textPrimary }]}
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder="Search Thryftverse"
-            placeholderTextColor={Colors.textMuted}
+            placeholderTextColor={colors.textMuted}
             onFocus={() => setIsSearchFocused(true)}
             onBlur={() => setIsSearchFocused(false)}
-            selectionColor={Colors.brand}
+            selectionColor={colors.brand}
             returnKeyType="search"
           />
           {searchQuery.length > 0 ? (
             <AnimatedPressable onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={20} color={Colors.textMuted} />
+              <Ionicons name="close-circle" size={20} color={colors.textMuted} />
             </AnimatedPressable>
           ) : (
             <AnimatedPressable onPress={() => navigation.navigate('VisualSearch')} activeOpacity={0.85} accessibilityLabel="Preview visual search" accessibilityRole="button">
-              <Ionicons name="camera-outline" size={22} color={Colors.textMuted} style={{ marginRight: 4 }} />
+              <Ionicons name="camera-outline" size={22} color={colors.textMuted} style={{ marginRight: 4 }} />
             </AnimatedPressable>
           )}
         </View>
@@ -207,7 +206,7 @@ export default function SearchScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1 },
 
   // Header
   headerRow: {
@@ -224,14 +223,12 @@ const styles = StyleSheet.create({
   headerLabel: {
     fontSize: 10,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
   },
   hugeTitle: {
     fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
     letterSpacing: -0.5,
   },
   headerRight: {
@@ -241,7 +238,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: Typography.family.medium,
     letterSpacing: 0.12,
-    color: Colors.textSecondary,
   },
   headerStatusWrap: {
     marginTop: 7,
@@ -251,7 +247,6 @@ const styles = StyleSheet.create({
     minHeight: 32,
     borderRadius: 16,
     borderWidth: 0,
-    backgroundColor: Colors.surfaceAlt,
     alignSelf: 'flex-end',
     paddingHorizontal: 12,
   },
@@ -278,9 +273,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: Colors.surfaceAlt,
     borderWidth: 1,
-    borderColor: Colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -291,21 +284,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: Colors.surface,
     borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
   },
   searchBarFocused: {
-    backgroundColor: Colors.background,
-    borderColor: Colors.brand,
   },
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: Colors.textPrimary,
     fontFamily: Typography.family.medium,
     letterSpacing: 0.08,
   },
@@ -318,18 +306,19 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     minHeight: 40,
     borderWidth: 0,
-    backgroundColor: Colors.surface,
     paddingHorizontal: 12,
   },
-  activeTab: { backgroundColor: Colors.textPrimary },
+  activeTab: {
+  },
   tabIconWrap: {
     width: 16,
     height: 16,
     borderRadius: 8,
     backgroundColor: 'transparent',
   },
-  tabText: { fontSize: 13, fontFamily: Typography.family.semibold, color: Colors.textMuted, letterSpacing: 0.2 },
-  activeTabText: { color: Colors.textPrimary },
+  tabText: { fontSize: 13, fontFamily: Typography.family.semibold, letterSpacing: 0.2 },
+  activeTabText: {
+  },
   tabCountWrap: {
     width: 'auto',
     height: 'auto',
@@ -346,14 +335,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
-    color: Colors.textSecondary,
     fontSize: 11,
     fontFamily: Typography.family.semibold,
   },
   tabCountActive: {
-    backgroundColor: Colors.textPrimary,
-    color: Colors.textInverse,
   },
   syncRetryBanner: {
     marginHorizontal: 16,
@@ -377,7 +362,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 0,
     borderColor: 'transparent',
-    backgroundColor: Colors.surface,
     overflow: 'hidden',
   },
   wishlistLoadingBody: {
@@ -392,7 +376,6 @@ const styles = StyleSheet.create({
   footerHint: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     textAlign: 'center',
     letterSpacing: 0.1,
   },
@@ -404,9 +387,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     padding: 14,
     borderRadius: 12,
-    backgroundColor: Colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
   },
   closetShortcutLeft: {
     flexDirection: 'row',
@@ -417,19 +398,16 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 10,
-    backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
   closetShortcutTitle: {
     fontSize: 15,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   closetShortcutSub: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     marginTop: 2,
   },
 });

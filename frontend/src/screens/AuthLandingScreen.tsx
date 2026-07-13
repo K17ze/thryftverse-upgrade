@@ -21,8 +21,8 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Linking from 'expo-linking';
-import { Colors } from '../constants/colors';
 import { Typography, Radius } from '../theme/designTokens';
+import { useAppTheme } from '../theme/ThemeContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useStore } from '../store/useStore';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -45,6 +45,7 @@ function firstQueryParam(value: string | string[] | undefined): string | undefin
 }
 
 export default function AuthLandingScreen() {
+  const { colors, isDark } = useAppTheme();
   const navigation = useNavigation<any>();
   const login = useStore((state) => state.login);
   const setTwoFactorEnabled = useStore((state) => state.setTwoFactorEnabled);
@@ -221,7 +222,7 @@ export default function AuthLandingScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} translucent backgroundColor="transparent" />
 
       {/* Premium dark gradient background */}
       <LinearGradient
@@ -287,8 +288,8 @@ export default function AuthLandingScreen() {
             entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}
             style={styles.errorBanner}
           >
-            <Ionicons name="alert-circle-outline" size={16} color={Colors.danger} />
-            <Text style={styles.errorBannerText}>{authError}</Text>
+            <Ionicons name="alert-circle-outline" size={16} color={colors.danger} />
+            <Text style={[styles.errorBannerText, { color: colors.danger }]}>{authError}</Text>
             <Pressable
               onPress={() => setAuthError(null)}
               hitSlop={8}
@@ -311,11 +312,11 @@ export default function AuthLandingScreen() {
         >
           <View>
             <AnimatedPressable
-              style={styles.primaryBtn}
+              style={[styles.primaryBtn, { backgroundColor: colors.brand, shadowColor: colors.brand }]}
               activeOpacity={0.9}
               onPress={() => navigation.navigate('SignUp')}
             >
-              <Text style={styles.primaryText}>create account</Text>
+              <Text style={[styles.primaryText, { color: colors.textInverse }]}>create account</Text>
             </AnimatedPressable>
           </View>
 
@@ -479,23 +480,19 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 12,
     fontFamily: Typography.family.medium,
-    color: Colors.danger,
     lineHeight: 16,
   },
   primaryBtn: {
-    backgroundColor: Colors.brand,
     height: 56,
     borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: Colors.brand,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.2,
     shadowRadius: 16,
     elevation: 8,
   },
   primaryText: {
-    color: Colors.textInverse,
     fontSize: 16,
     fontFamily: Typography.family.bold,
     letterSpacing: 0.2,
@@ -504,9 +501,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 0,
     padding: 0,
     overflow: 'hidden',
-    backgroundColor: Colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
     borderRadius: Radius.lg,
   },
   secondaryBtnGlass: {
@@ -578,7 +573,6 @@ const styles = StyleSheet.create({
   devBypassText: {
     fontSize: 12,
     fontFamily: Typography.family.medium,
-    color: Colors.success,
     textAlign: 'center',
   },
 });
