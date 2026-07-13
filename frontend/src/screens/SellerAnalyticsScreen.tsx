@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { RootStackParamList } from '../navigation/types';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
@@ -23,6 +23,7 @@ interface AnalyticsMetric {
 
 export default function SellerAnalyticsScreen() {
   const navigation = useNavigation<NavT>();
+  const { colors, isDark } = useAppTheme();
   const currentUser = useStore((s) => s.currentUser);
 
   const [listings, setListings] = useState<ListingApiItem[]>([]);
@@ -94,10 +95,10 @@ export default function SellerAnalyticsScreen() {
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} />
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
         <ScreenHeader title="Seller Analytics" onBack={() => navigation.goBack()} />
         <View style={styles.loadingBody}>
-          <ActivityIndicator size="large" color={Colors.brand} />
+          <ActivityIndicator size="large" color={colors.brand} />
         </View>
       </SafeAreaView>
     );
@@ -105,7 +106,7 @@ export default function SellerAnalyticsScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <ScreenHeader title="Seller Analytics" onBack={() => navigation.goBack()} />
 
       <ScrollView
@@ -119,7 +120,7 @@ export default function SellerAnalyticsScreen() {
         </View>
         <View style={styles.metricsGrid}>
           {metrics.map((metric) => {
-            const color = metric.tone === 'success' ? Colors.success : metric.tone === 'brand' ? Colors.brand : Colors.textPrimary;
+            const color = metric.tone === 'success' ? colors.success : metric.tone === 'brand' ? colors.brand : colors.textPrimary;
             return (
               <View key={metric.label} style={styles.metricCard}>
                 <View style={styles.metricHeader}>
@@ -154,7 +155,7 @@ export default function SellerAnalyticsScreen() {
           </View>
         ) : (
           <View style={styles.emptyCard}>
-            <Ionicons name="bar-chart-outline" size={32} color={Colors.textMuted} />
+            <Ionicons name="bar-chart-outline" size={32} color={colors.textMuted} />
             <Text style={styles.emptyText}>No performance data yet</Text>
             <Text style={styles.emptySubtext}>Listings with views will appear here</Text>
           </View>
@@ -167,7 +168,6 @@ export default function SellerAnalyticsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   loadingBody: {
     flex: 1,
@@ -185,7 +185,6 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   metricsGrid: {
     flexDirection: 'row',
@@ -198,9 +197,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm,
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
     gap: 4,
   },
   metricHeader: {
@@ -211,7 +208,6 @@ const styles = StyleSheet.create({
   metricLabel: {
     fontSize: 12,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
   },
   metricValue: {
     fontSize: Type.subtitle.size,
@@ -220,7 +216,6 @@ const styles = StyleSheet.create({
   metricSublabel: {
     fontSize: 11,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
   },
   topList: {
     gap: Space.xs,
@@ -232,14 +227,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
   },
   rankText: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
-    color: Colors.brand,
     minWidth: 20,
   },
   topInfo: {
@@ -249,17 +241,14 @@ const styles = StyleSheet.create({
   topTitle: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   topMeta: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
   },
   topPrice: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
   },
   emptyCard: {
     alignItems: 'center',
@@ -269,11 +258,9 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   emptySubtext: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
   },
 });
