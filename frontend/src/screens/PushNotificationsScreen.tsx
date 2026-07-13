@@ -5,8 +5,8 @@ import Constants from 'expo-constants';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
+import { Colors } from '../constants/colors';
 import { Space, Radius, Type } from '../theme/designTokens';
-import { useAppTheme } from '../theme/ThemeContext';
 import { PUSH_NOTIFICATION_DEFINITIONS, PUSH_NOTIFICATION_GROUPS } from '../preferences/settingsPreferences';
 import { useToast } from '../context/ToastContext';
 import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
@@ -34,7 +34,6 @@ function formatHour(hour: number): string {
 const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => i);
 
 export default function PushNotificationsScreen({ navigation }: Props) {
-  const { colors } = useAppTheme();
   const currentUser = useStore((state) => state.currentUser);
   const { show } = useToast();
   const {
@@ -216,15 +215,15 @@ export default function PushNotificationsScreen({ navigation }: Props) {
       disabled={isSyncingDevice}
       accessibilityLabel={allEnabled ? 'Disable all push notifications' : 'Enable all push notifications'}
       hapticFeedback="medium"
-      style={[styles.iconBtn, { borderColor: colors.border }]}
+      style={styles.iconBtn}
     >
       {isSyncingDevice ? (
-        <ActivityIndicator size="small" color={colors.textPrimary} />
+        <ActivityIndicator size="small" color={Colors.textPrimary} />
       ) : (
         <Ionicons
           name={allEnabled ? 'notifications-off-outline' : 'notifications-outline'}
           size={22}
-          color={colors.textPrimary}
+          color={Colors.textPrimary}
         />
       )}
     </AnimatedPressable>
@@ -233,9 +232,9 @@ export default function PushNotificationsScreen({ navigation }: Props) {
   return (
     <FlagshipScreen header={<FlagshipHeader title="Notifications" onBack={() => navigation.goBack()} rightAction={rightAction} />}>
       {pushPermissionStatus?.status === 'denied' && (
-        <View style={[styles.permissionBanner, { backgroundColor: colors.surfaceAlt, borderBottomColor: colors.border }]}>
-          <Ionicons name="notifications-off-outline" size={18} color={colors.danger} />
-          <Text style={[styles.permissionBannerText, { color: colors.textSecondary }]}>
+        <View style={styles.permissionBanner}>
+          <Ionicons name="notifications-off-outline" size={18} color={Colors.danger} />
+          <Text style={styles.permissionBannerText}>
             Push notifications are blocked. Enable them in Settings to receive alerts.
           </Text>
           <AnimatedPressable
@@ -245,28 +244,28 @@ export default function PushNotificationsScreen({ navigation }: Props) {
             hapticFeedback="light"
             accessibilityLabel="Open device settings"
           >
-            <Text style={[styles.permissionBannerAction, { color: colors.brand }]}>Open Settings</Text>
+            <Text style={styles.permissionBannerAction}>Open Settings</Text>
           </AnimatedPressable>
         </View>
       )}
 
-      <View style={[styles.notificationTrust, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <Ionicons name="notifications-outline" size={18} color={colors.brand} />
-        <Text style={[styles.notificationTrustText, { color: colors.textSecondary }]}>
+      <View style={[styles.notificationTrust, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
+        <Ionicons name="notifications-outline" size={18} color={Colors.brand} />
+        <Text style={[styles.notificationTrustText, { color: Colors.textSecondary }]}>
           Choose which alerts you receive. You can change these at any time.
         </Text>
       </View>
 
       <View style={styles.progressRow}>
-        <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
+        <View style={styles.progressTrack}>
           <View
             style={[
               styles.progressFill,
-              { width: `${(enabledCount / Math.max(pushTotalCount, 1)) * 100}%`, backgroundColor: colors.brand },
+              { width: `${(enabledCount / Math.max(pushTotalCount, 1)) * 100}%` },
             ]}
           />
         </View>
-        <Text style={[styles.progressLabel, { color: colors.textSecondary }]}>
+        <Text style={styles.progressLabel}>
           {enabledCount}/{pushTotalCount} enabled
         </Text>
       </View>
@@ -274,7 +273,7 @@ export default function PushNotificationsScreen({ navigation }: Props) {
       {PUSH_NOTIFICATION_GROUPS.map((group) => {
         const groupItems = NOTIFICATIONS.filter((n) => n.group === group.key);
         if (groupItems.length === 0) return null;
-        const groupIconColor = group.key === 'orders' ? colors.success : group.key === 'social' ? colors.brand : colors.textMuted;
+        const groupIconColor = group.key === 'orders' ? Colors.success : group.key === 'social' ? Colors.brand : Colors.textMuted;
         return (
           <SettingsSection key={group.key} title={group.label} noCard>
             {groupItems.map((item, idx) => (
@@ -307,16 +306,16 @@ export default function PushNotificationsScreen({ navigation }: Props) {
         {quietHours.enabled ? (
           <View style={styles.quietHoursRow}>
             <Pressable
-              style={({ pressed }) => [styles.quietTimePicker, { backgroundColor: colors.surfaceAlt }, pressed && styles.quietTimePickerPressed]}
+              style={({ pressed }) => [styles.quietTimePicker, pressed && styles.quietTimePickerPressed]}
               onPress={() => setEditingQuietTime(editingQuietTime === 'start' ? null : 'start')}
               accessibilityRole="button"
               accessibilityLabel={`Quiet hours start: ${formatHour(quietHours.startHour)}. Tap to change.`}
             >
-              <Text style={[styles.quietTimeLabel, { color: colors.textMuted }]}>From</Text>
-              <Text style={[styles.quietTimeValue, { color: colors.textPrimary }]}>{formatHour(quietHours.startHour)}</Text>
-              <Ionicons name="chevron-down" size={14} color={colors.textMuted} />
+              <Text style={styles.quietTimeLabel}>From</Text>
+              <Text style={styles.quietTimeValue}>{formatHour(quietHours.startHour)}</Text>
+              <Ionicons name="chevron-down" size={14} color={Colors.textMuted} />
             </Pressable>
-            <Ionicons name="arrow-forward" size={16} color={colors.textMuted} />
+            <Ionicons name="arrow-forward" size={16} color={Colors.textMuted} />
             <Pressable
               style={({ pressed }) => [styles.quietTimePicker, pressed && styles.quietTimePickerPressed]}
               onPress={() => setEditingQuietTime(editingQuietTime === 'end' ? null : 'end')}
@@ -325,13 +324,13 @@ export default function PushNotificationsScreen({ navigation }: Props) {
             >
               <Text style={styles.quietTimeLabel}>To</Text>
               <Text style={styles.quietTimeValue}>{formatHour(quietHours.endHour)}</Text>
-              <Ionicons name="chevron-down" size={14} color={colors.textMuted} />
+              <Ionicons name="chevron-down" size={14} color={Colors.textMuted} />
             </Pressable>
           </View>
         ) : null}
         {quietHours.enabled && editingQuietTime ? (
           <View style={styles.quietHoursPickerSheet}>
-            <Text style={[styles.quietHoursPickerTitle, { color: colors.textSecondary }]}>
+            <Text style={styles.quietHoursPickerTitle}>
               {editingQuietTime === 'start' ? 'Start time' : 'End time'}
             </Text>
             <View style={styles.quietHoursPickerGrid}>
@@ -344,7 +343,7 @@ export default function PushNotificationsScreen({ navigation }: Props) {
                     key={h}
                     style={({ pressed }) => [
                       styles.quietHourCell,
-                      selected && [styles.quietHourCellActive, { backgroundColor: colors.brand }],
+                      selected && styles.quietHourCellActive,
                       pressed && styles.quietHourCellPressed,
                     ]}
                     onPress={() => {
@@ -359,7 +358,7 @@ export default function PushNotificationsScreen({ navigation }: Props) {
                     accessibilityRole="button"
                     accessibilityLabel={`Set ${editingQuietTime === 'start' ? 'start' : 'end'} time to ${formatHour(h)}`}
                   >
-                    <Text style={[styles.quietHourCellText, { color: colors.textPrimary }, selected && { color: colors.textInverse }]}>
+                    <Text style={[styles.quietHourCellText, selected && styles.quietHourCellTextActive]}>
                       {formatHour(h)}
                     </Text>
                   </Pressable>
@@ -376,7 +375,7 @@ export default function PushNotificationsScreen({ navigation }: Props) {
         ) : null}
       </SettingsSection>
 
-      <Text style={[styles.footerNote, { color: colors.textMuted }]}>
+      <Text style={styles.footerNote}>
         You can also manage push notifications from your device Settings app.
       </Text>
     </FlagshipScreen>
@@ -392,6 +391,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
+    borderColor: Colors.border,
   },
   progressRow: {
     flexDirection: 'row',
@@ -404,15 +404,18 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 6,
     borderRadius: 3,
+    backgroundColor: Colors.border,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
     borderRadius: 3,
+    backgroundColor: Colors.brand,
   },
   progressLabel: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
+    color: Colors.textSecondary,
     letterSpacing: Type.caption.letterSpacing,
     minWidth: 60,
     textAlign: 'right',
@@ -420,6 +423,7 @@ const styles = StyleSheet.create({
   footerNote: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
     lineHeight: Type.caption.lineHeight,
     marginTop: Space.sm,
     marginHorizontal: Space.md,
@@ -429,16 +433,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
+    backgroundColor: Colors.surfaceAlt,
     paddingVertical: Space.sm,
     paddingHorizontal: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
   },
   permissionBannerText: {
     flex: 1,
+    color: Colors.textSecondary,
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
   },
   permissionBannerAction: {
+    color: Colors.brand,
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
   },
@@ -472,6 +480,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
+    backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
@@ -484,11 +493,13 @@ const styles = StyleSheet.create({
   quietTimeLabel: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
+    color: Colors.textMuted,
   },
   quietTimeValue: {
     flex: 1,
     fontSize: 15,
     fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
   },
   quietHoursPickerSheet: {
     paddingHorizontal: Space.md,
@@ -497,6 +508,7 @@ const styles = StyleSheet.create({
   quietHoursPickerTitle: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
+    color: Colors.textSecondary,
     marginBottom: Space.xs,
   },
   quietHoursPickerGrid: {
@@ -508,11 +520,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: Radius.sm,
+    backgroundColor: Colors.surfaceAlt,
     minHeight: 40,
     alignItems: 'center',
     justifyContent: 'center',
   },
   quietHourCellActive: {
+    backgroundColor: Colors.brand,
   },
   quietHourCellPressed: {
     opacity: 0.7,
@@ -521,8 +535,10 @@ const styles = StyleSheet.create({
   quietHourCellText: {
     fontSize: 12,
     fontFamily: Typography.family.medium,
+    color: Colors.textPrimary,
   },
   quietHourCellTextActive: {
+    color: Colors.textInverse,
     fontFamily: Typography.family.bold,
   },
 });

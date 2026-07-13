@@ -13,8 +13,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { ActiveTheme, Colors } from '../constants/colors';
 import { Space, Typography } from '../theme/designTokens';
-import { useAppTheme } from '../theme/ThemeContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useStore } from '../store/useStore';
 import {
@@ -75,7 +75,6 @@ function groupOrdersByDate(orders: OrderViewModel[]): DateGroup[] {
 }
 
 export default function MyOrdersScreen() {
-  const { colors, isDark } = useAppTheme();
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const { formatFromFiat } = useFormattedPrice();
@@ -289,15 +288,15 @@ export default function MyOrdersScreen() {
   const renderGroupHeader = useCallback(
     (label: string) => (
       <View style={styles.groupHeader}>
-        <Text style={[styles.groupHeaderText, { color: colors.textMuted }]}>{label}</Text>
+        <Text style={styles.groupHeaderText}>{label}</Text>
       </View>
     ),
-    [colors]
+    []
   );
 
   const keyExtractor = useCallback((item: OrderViewModel) => item.id, []);
 
-  const renderSeparator = useCallback(() => <View style={[styles.separator, { backgroundColor: colors.borderSubtle }]} />, [colors]);
+  const renderSeparator = useCallback(() => <View style={styles.separator} />, []);
 
   const renderEmpty = useCallback(() => {
     if (!viewerId) {
@@ -365,18 +364,18 @@ export default function MyOrdersScreen() {
 
   const renderLoading = useCallback(() => (
     <View style={styles.loadingContainer}>
-      <ActivityIndicator size="large" color={colors.textSecondary} />
-      <Text style={[styles.loadingText, { color: colors.textMuted }]}>Loading orders…</Text>
+      <ActivityIndicator size="large" color={Colors.textSecondary} />
+      <Text style={styles.loadingText}>Loading orders…</Text>
     </View>
-  ), [colors]);
+  ), []);
 
   const renderError = useCallback(() => (
     <View style={styles.errorContainer}>
-      <Ionicons name="cloud-offline-outline" size={40} color={colors.textMuted} />
-      <Text style={[styles.errorTitle, { color: colors.textPrimary }]}>Orders could not be loaded</Text>
-      <Text style={[styles.errorSubtitle, { color: colors.textMuted }]}>Check your connection and try again.</Text>
+      <Ionicons name="cloud-offline-outline" size={40} color={Colors.textMuted} />
+      <Text style={styles.errorTitle}>Orders could not be loaded</Text>
+      <Text style={styles.errorSubtitle}>Check your connection and try again.</Text>
       <Pressable
-        style={[styles.retryBtn, { backgroundColor: colors.brand }]}
+        style={styles.retryBtn}
         onPress={() => {
           setLoadError(null);
           setIsInitialLoading(true);
@@ -386,24 +385,24 @@ export default function MyOrdersScreen() {
         accessibilityRole="button"
         accessibilityLabel="Retry loading orders"
       >
-        <Text style={[styles.retryBtnText, { color: colors.textInverse }]}>Retry</Text>
+        <Text style={styles.retryBtnText}>Retry</Text>
       </Pressable>
     </View>
-  ), [fetchOrders, colors]);
+  ), [fetchOrders]);
 
   const renderListFooter = useCallback(() => {
     if (isLoadingMore) {
       return (
         <View style={styles.footerLoading}>
-          <ActivityIndicator size="small" color={colors.textSecondary} />
-          <Text style={[styles.footerLoadingText, { color: colors.textMuted }]}>Loading more…</Text>
+          <ActivityIndicator size="small" color={Colors.textSecondary} />
+          <Text style={styles.footerLoadingText}>Loading more…</Text>
         </View>
       );
     }
     if (paginationError) {
       return (
         <View style={styles.footerError}>
-          <Text style={[styles.footerErrorText, { color: colors.textMuted }]}>{paginationError}</Text>
+          <Text style={styles.footerErrorText}>{paginationError}</Text>
           <Pressable
             onPress={() => {
               setPaginationError(null);
@@ -413,7 +412,7 @@ export default function MyOrdersScreen() {
             accessibilityRole="button"
             accessibilityLabel="Retry loading more orders"
           >
-            <Text style={[styles.retryLink, { color: colors.brand }]}>Retry</Text>
+            <Text style={styles.retryLink}>Retry</Text>
           </Pressable>
         </View>
       );
@@ -421,12 +420,12 @@ export default function MyOrdersScreen() {
     if (!nextCursor && orders.length > 0) {
       return (
         <View style={styles.footerEnd}>
-          <Text style={[styles.footerEndText, { color: colors.textMuted }]}>No more orders</Text>
+          <Text style={styles.footerEndText}>No more orders</Text>
         </View>
       );
     }
     return null;
-  }, [isLoadingMore, paginationError, nextCursor, orders.length, fetchOrders, colors]);
+  }, [isLoadingMore, paginationError, nextCursor, orders.length, fetchOrders]);
 
   const filterSummary = useMemo(() => {
     const parts: string[] = [];
@@ -445,10 +444,10 @@ export default function MyOrdersScreen() {
   }, [filter]);
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
+    <View style={styles.container}>
+      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
 
-      <View style={[styles.header, { paddingTop: insets.top, borderBottomColor: colors.border }]}>
+      <View style={[styles.header, { paddingTop: insets.top }]}>
         <Pressable
           style={styles.headerBack}
           onPress={() => navigation.goBack()}
@@ -456,9 +455,9 @@ export default function MyOrdersScreen() {
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
         </Pressable>
-        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Orders</Text>
+        <Text style={styles.headerTitle}>Orders</Text>
         <Pressable
           style={styles.headerFilterBtn}
           onPress={() => setFilterSheetVisible(true)}
@@ -469,7 +468,7 @@ export default function MyOrdersScreen() {
           <Ionicons
             name={hasActiveFilter ? 'filter' : 'filter-outline'}
             size={22}
-            color={hasActiveFilter ? colors.brand : colors.textPrimary}
+            color={hasActiveFilter ? Colors.brand : Colors.textPrimary}
           />
         </Pressable>
       </View>
@@ -483,26 +482,26 @@ export default function MyOrdersScreen() {
 
       {needsActionCount > 0 && !debouncedQuery.trim() && filter.classification === 'all' && (
         <Pressable
-          style={[styles.needsActionBanner, { backgroundColor: colors.surface }]}
+          style={styles.needsActionBanner}
           onPress={() => setFilter({ classification: 'needs_action', year: null })}
           accessibilityRole="button"
           accessibilityLabel={`${needsActionCount} orders need your attention. Tap to view.`}
         >
-          <Ionicons name="alert-circle-outline" size={16} color={colors.brand} />
-          <Text style={[styles.needsActionText, { color: colors.brand }]}>
+          <Ionicons name="alert-circle-outline" size={16} color={Colors.brand} />
+          <Text style={styles.needsActionText}>
             {needsActionCount} {needsActionCount === 1 ? 'order' : 'orders'} need{needsActionCount === 1 ? 's' : ''} your attention
           </Text>
-          <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+          <Ionicons name="chevron-forward" size={14} color={Colors.textMuted} />
         </Pressable>
       )}
 
       <View style={styles.searchRow}>
         <ElevatedSurface variant="surface" style={styles.searchInputWrap}>
-          <Ionicons name="search-outline" size={16} color={colors.textMuted} style={styles.searchIcon} />
+          <Ionicons name="search-outline" size={16} color={Colors.textMuted} style={styles.searchIcon} />
           <TextInput
-            style={[styles.searchInput, { color: colors.textPrimary }]}
+            style={styles.searchInput}
             placeholder="Search by item, order number, member, or tracking"
-            placeholderTextColor={colors.textMuted}
+            placeholderTextColor={Colors.textMuted}
             value={searchQuery}
             onChangeText={setSearchQuery}
             autoCorrect={false}
@@ -517,7 +516,7 @@ export default function MyOrdersScreen() {
               accessibilityRole="button"
               accessibilityLabel="Clear search"
             >
-              <Ionicons name="close-circle" size={16} color={colors.textMuted} />
+              <Ionicons name="close-circle" size={16} color={Colors.textMuted} />
             </Pressable>
           )}
         </ElevatedSurface>
@@ -525,14 +524,14 @@ export default function MyOrdersScreen() {
 
       {filterSummary ? (
         <View style={styles.filterSummaryRow}>
-          <Text style={[styles.filterSummaryText, { color: colors.textMuted }]}>{filterSummary}</Text>
+          <Text style={styles.filterSummaryText}>{filterSummary}</Text>
           <Pressable
             onPress={() => setFilter({ classification: 'all', year: null })}
             hitSlop={{ top: 6, bottom: 6 }}
             accessibilityRole="button"
             accessibilityLabel="Clear filters"
           >
-            <Text style={[styles.clearFilterText, { color: colors.brand }]}>Clear</Text>
+            <Text style={styles.clearFilterText}>Clear</Text>
           </Pressable>
         </View>
       ) : null}
@@ -568,8 +567,8 @@ export default function MyOrdersScreen() {
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={handleRefresh}
-            tintColor={colors.textSecondary}
-            colors={[colors.textSecondary]}
+            tintColor={Colors.textSecondary}
+            colors={[Colors.textSecondary]}
           />
         }
       />
@@ -588,6 +587,7 @@ export default function MyOrdersScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: Colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -596,6 +596,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingBottom: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
   },
   headerBack: {
     width: 44,
@@ -606,6 +607,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 17,
     fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
   },
   headerFilterBtn: {
     width: 44,
@@ -619,11 +621,13 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: Space.md,
     paddingVertical: Space.xs,
+    backgroundColor: Colors.surface,
   },
   needsActionText: {
     flex: 1,
     fontSize: 13,
     fontFamily: Typography.family.medium,
+    color: Colors.brand,
   },
   searchRow: {
     paddingHorizontal: Space.md,
@@ -643,6 +647,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontFamily: Typography.family.regular,
+    color: Colors.textPrimary,
   },
   filterSummaryRow: {
     flexDirection: 'row',
@@ -654,10 +659,12 @@ const styles = StyleSheet.create({
   filterSummaryText: {
     fontSize: 12,
     fontFamily: Typography.family.medium,
+    color: Colors.textMuted,
   },
   clearFilterText: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
+    color: Colors.brand,
   },
   groupHeader: {
     paddingHorizontal: Space.md,
@@ -667,6 +674,7 @@ const styles = StyleSheet.create({
   groupHeaderText: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
+    color: Colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 1.2,
   },
@@ -675,6 +683,7 @@ const styles = StyleSheet.create({
   },
   separator: {
     height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.borderLight,
     marginLeft: 104,
   },
   loadingContainer: {
@@ -686,6 +695,7 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 14,
     fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
   },
   errorContainer: {
     alignItems: 'center',
@@ -696,16 +706,19 @@ const styles = StyleSheet.create({
   errorTitle: {
     fontSize: 18,
     fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
   },
   errorSubtitle: {
     fontSize: 14,
     fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
     textAlign: 'center',
   },
   retryBtn: {
     paddingVertical: 14,
     paddingHorizontal: Space.xl,
     borderRadius: 10,
+    backgroundColor: Colors.brand,
     minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
@@ -713,6 +726,7 @@ const styles = StyleSheet.create({
   retryBtnText: {
     fontSize: 16,
     fontFamily: Typography.family.semibold,
+    color: Colors.textInverse,
   },
   footerLoading: {
     flexDirection: 'row',
@@ -724,6 +738,7 @@ const styles = StyleSheet.create({
   footerLoadingText: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
   },
   footerError: {
     flexDirection: 'row',
@@ -735,10 +750,12 @@ const styles = StyleSheet.create({
   footerErrorText: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
   },
   retryLink: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
+    color: Colors.brand,
   },
   footerEnd: {
     alignItems: 'center',
@@ -747,5 +764,6 @@ const styles = StyleSheet.create({
   footerEndText: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
   },
 });

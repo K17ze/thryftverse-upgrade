@@ -6,15 +6,25 @@ import Reanimated, {
   withRepeat,
   withSequence,
   withTiming,
+  withDelay,
   Easing,
   interpolate,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useAppTheme } from '../theme/ThemeContext';
-import { useReducedMotion } from '../hooks/useReducedMotion';
+import { ActiveTheme, Colors } from '../constants/colors';
 
-// Neutral shimmer wave — no decorative gold per Design.md v1.4.
-// The wave opacity is theme-aware (computed inside the component).
+// ELEVATED: Flagship shimmer with brand tint
+const IS_LIGHT = ActiveTheme === 'light';
+const BASE_BG = Colors.surface;
+
+// Multi-layer shimmer: white sweep + subtle brand glow
+const SHIMMER_WAVE = IS_LIGHT
+  ? ['rgba(255,255,255,0)', 'rgba(255,255,255,0.45)', 'rgba(255,255,255,0)']
+  : ['rgba(255,255,255,0)', 'rgba(255,255,255,0.06)', 'rgba(255,255,255,0)'];
+
+const BRAND_TINT = IS_LIGHT
+  ? ['rgba(201,162,39,0)', 'rgba(201,162,39,0.08)', 'rgba(201,162,39,0)']
+  : ['rgba(212,168,83,0)', 'rgba(212,168,83,0.06)', 'rgba(212,168,83,0)'];
 
 interface SkeletonProps {
   width: number | `${number}%`;
@@ -24,21 +34,11 @@ interface SkeletonProps {
 }
 
 export function SkeletonLoader({ width, height, borderRadius = 8, style }: SkeletonProps) {
-  const { colors, isDark } = useAppTheme();
-  const reducedMotionEnabled = useReducedMotion();
   const translateX = useSharedValue(-400);
   const breathe = useSharedValue(1);
-
-  const shimmerWave: [string, string, string] = isDark
-    ? ['rgba(255,255,255,0)', 'rgba(255,255,255,0.06)', 'rgba(255,255,255,0)']
-    : ['rgba(255,255,255,0)', 'rgba(255,255,255,0.45)', 'rgba(255,255,255,0)'];
+  const brandTranslate = useSharedValue(-400);
 
   useEffect(() => {
-    if (reducedMotionEnabled) {
-      translateX.value = 0;
-      breathe.value = 1;
-      return;
-    }
     // Primary wave sweep
     translateX.value = withRepeat(
       withSequence(
@@ -58,10 +58,24 @@ export function SkeletonLoader({ width, height, borderRadius = 8, style }: Skele
       -1,
       true,
     );
-  }, [translateX, breathe, reducedMotionEnabled]);
+
+    // Secondary brand-tinted wave uses a slight delay for depth
+    brandTranslate.value = withRepeat(
+      withSequence(
+        withDelay(200, withTiming(500, { duration: 1600, easing: Easing.inOut(Easing.ease) })),
+        withTiming(-400, { duration: 0 })
+      ),
+      -1,
+      false,
+    );
+  }, [translateX, breathe]);
 
   const waveStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],
+  }));
+
+  const brandWaveStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: brandTranslate.value }],
   }));
 
   const breatheStyle = useAnimatedStyle(() => ({
@@ -75,24 +89,32 @@ export function SkeletonLoader({ width, height, borderRadius = 8, style }: Skele
           width: width as any,
           height,
           borderRadius,
-          backgroundColor: colors.surface,
+          backgroundColor: BASE_BG,
           overflow: 'hidden',
         },
         breatheStyle,
         style,
       ]}
     >
-      {/* Neutral shimmer wave */}
-      {!reducedMotionEnabled && (
-        <Reanimated.View style={[StyleSheet.absoluteFill, waveStyle]}>
-          <LinearGradient
-            colors={shimmerWave}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={{ width: 280, height: '100%' }}
-          />
-        </Reanimated.View>
-      )}
+      {/* Primary white shimmer wave */}
+      <Reanimated.View style={[StyleSheet.absoluteFill, waveStyle]}>
+        <LinearGradient
+          colors={SHIMMER_WAVE as [string, string, string]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={{ width: 280, height: '100%' }}
+        />
+      </Reanimated.View>
+
+      {/* Secondary brand-tinted wave (slightly delayed for depth) */}
+      <Reanimated.View style={[StyleSheet.absoluteFill, brandWaveStyle]}>
+        <LinearGradient
+          colors={BRAND_TINT as [string, string, string]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={{ width: 200, height: '100%' }}
+        />
+      </Reanimated.View>
     </Reanimated.View>
   );
 }
@@ -149,12 +171,11 @@ export function ConversationListSkeleton({ count = 6 }: { count?: number }) {
 
 /** Skeleton composite: profile hero placeholder */
 export function ProfileSkeleton() {
-  const { colors } = useAppTheme();
   return (
     <View style={profileStyles.container}>
       <SkeletonLoader width="100%" height={160} borderRadius={0} />
       <View style={profileStyles.avatarRow}>
-        <SkeletonLoader width={84} height={84} borderRadius={42} style={[profileStyles.avatar, { borderColor: colors.background }]} />
+        <SkeletonLoader width={84} height={84} borderRadius={42} style={profileStyles.avatar} />
       </View>
       <View style={profileStyles.info}>
         <SkeletonLoader width={140} height={16} borderRadius={8} />
@@ -188,7 +209,7 @@ const convoStyles = StyleSheet.create({
 const profileStyles = StyleSheet.create({
   container: {},
   avatarRow: { alignItems: 'flex-start', paddingHorizontal: 20, marginTop: -42 },
-  avatar: { borderWidth: 3 },
+  avatar: { borderWidth: 3, borderColor: Colors.background },
   info: { paddingHorizontal: 20, marginTop: 12 },
   statsRow: { flexDirection: 'row', gap: 14, marginTop: 16 },
 });

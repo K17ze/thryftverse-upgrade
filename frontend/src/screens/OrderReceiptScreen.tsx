@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
-import { useAppTheme } from '../theme/ThemeContext';
+import { ActiveTheme, Colors } from '../constants/colors';
 import { Space, Typography } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useStore } from '../store/useStore';
@@ -43,7 +43,6 @@ function formatReceiptDate(iso: string): string {
 }
 
 export default function OrderReceiptScreen() {
-  const { colors, isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const route = useRoute<OrderReceiptRoute>();
@@ -114,13 +113,13 @@ export default function OrderReceiptScreen() {
 
   if (isLoading) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
-        <View style={[styles.header, { paddingTop: insets.top, borderBottomColor: colors.border }]}>
+      <View style={styles.container}>
+        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+        <View style={[styles.header, { paddingTop: insets.top }]}>
           <Pressable style={styles.headerBtn} onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityRole="button" accessibilityLabel="Go back">
-            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
+            <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
           </Pressable>
-          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Receipt</Text>
+          <Text style={styles.headerTitle}>Receipt</Text>
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.skeletonContainer}>
@@ -150,20 +149,20 @@ export default function OrderReceiptScreen() {
 
   if (loadError || !order) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
-        <View style={[styles.header, { paddingTop: insets.top, borderBottomColor: colors.border }]}>
+      <View style={styles.container}>
+        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+        <View style={[styles.header, { paddingTop: insets.top }]}>
           <Pressable style={styles.headerBtn} onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityRole="button" accessibilityLabel="Go back">
-            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
+            <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
           </Pressable>
-          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Receipt</Text>
+          <Text style={styles.headerTitle}>Receipt</Text>
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.errorContainer}>
-          <Ionicons name="cloud-offline-outline" size={36} color={colors.textMuted} />
-          <Text style={[styles.errorTitle, { color: colors.textPrimary }]}>Receipt could not be loaded</Text>
-          <Pressable style={[styles.retryBtn, { backgroundColor: colors.brand }]} onPress={() => { setLoadError(null); setIsLoading(true); void fetchOrder(); }} accessibilityRole="button" accessibilityLabel="Retry">
-            <Text style={[styles.retryBtnText, { color: colors.textInverse }]}>Retry</Text>
+          <Ionicons name="cloud-offline-outline" size={36} color={Colors.textMuted} />
+          <Text style={styles.errorTitle}>Receipt could not be loaded</Text>
+          <Pressable style={styles.retryBtn} onPress={() => { setLoadError(null); setIsLoading(true); void fetchOrder(); }} accessibilityRole="button" accessibilityLabel="Retry">
+            <Text style={styles.retryBtnText}>Retry</Text>
           </Pressable>
         </View>
       </View>
@@ -172,18 +171,18 @@ export default function OrderReceiptScreen() {
 
   if (!isBuyer && !isSeller) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
-        <View style={[styles.header, { paddingTop: insets.top, borderBottomColor: colors.border }]}>
+      <View style={styles.container}>
+        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+        <View style={[styles.header, { paddingTop: insets.top }]}>
           <Pressable style={styles.headerBtn} onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityRole="button" accessibilityLabel="Go back">
-            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
+            <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
           </Pressable>
-          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Receipt</Text>
+          <Text style={styles.headerTitle}>Receipt</Text>
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.errorContainer}>
-          <Ionicons name="lock-closed-outline" size={36} color={colors.textMuted} />
-          <Text style={[styles.errorTitle, { color: colors.textPrimary }]}>You do not have access to this receipt</Text>
+          <Ionicons name="lock-closed-outline" size={36} color={Colors.textMuted} />
+          <Text style={styles.errorTitle}>You do not have access to this receipt</Text>
         </View>
       </View>
     );
@@ -205,17 +204,17 @@ export default function OrderReceiptScreen() {
   const counterpartyName = counterparty?.username ?? 'Unknown';
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
+    <View style={styles.container}>
+      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
 
-      <View style={[styles.header, { paddingTop: insets.top, borderBottomColor: colors.border }]}>
+      <View style={[styles.header, { paddingTop: insets.top }]}>
         <Pressable style={styles.headerBtn} onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityRole="button" accessibilityLabel="Go back">
-          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
+          <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
         </Pressable>
-        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Receipt</Text>
+        <Text style={styles.headerTitle}>Receipt</Text>
         <View style={styles.headerRight}>
           <Pressable style={styles.headerBtn} onPress={handleShare} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityRole="button" accessibilityLabel="Share receipt">
-            <Ionicons name="share-outline" size={22} color={colors.textPrimary} />
+            <Ionicons name="share-outline" size={22} color={Colors.textPrimary} />
           </Pressable>
         </View>
       </View>
@@ -227,19 +226,19 @@ export default function OrderReceiptScreen() {
         {/* Success header for completed orders */}
         {isReceiptFinal && normalisedStatus !== 'cancelled' && normalisedStatus !== 'refunded' ? (
           <View style={styles.successHeader}>
-            <View style={[styles.successIconWrap, { backgroundColor: `${colors.success}15` }]}>
-              <Ionicons name="checkmark" size={28} color={colors.success} />
+            <View style={styles.successIconWrap}>
+              <Ionicons name="checkmark" size={28} color={Colors.success} />
             </View>
-            <Text style={[styles.successTitle, { color: colors.textPrimary }]}>
+            <Text style={styles.successTitle}>
               {isBuyer ? 'Order complete' : 'Payment received'}
             </Text>
-            <Text style={[styles.successSubtitle, { color: colors.textMuted }]}>Receipt #{shortOrderId}</Text>
+            <Text style={styles.successSubtitle}>Receipt #{shortOrderId}</Text>
           </View>
         ) : null}
 
-        <View style={[styles.receiptCard, { backgroundColor: colors.surface }]}>
+        <View style={styles.receiptCard}>
           <View style={styles.receiptHeader}>
-            <Text style={[styles.receiptTitle, { color: colors.textPrimary }]}>Order Receipt</Text>
+            <Text style={styles.receiptTitle}>Order Receipt</Text>
             <Pressable
               onPress={handleCopyOrderId}
               hitSlop={{ top: 8, bottom: 8 }}
@@ -247,8 +246,8 @@ export default function OrderReceiptScreen() {
               accessibilityLabel={`Copy order ID ${shortOrderId}`}
             >
               <View style={styles.orderIdRow}>
-                <Text style={[styles.orderIdLabel, { color: colors.textSecondary }]}>#{shortOrderId}</Text>
-                <Ionicons name="copy-outline" size={14} color={colors.textMuted} />
+                <Text style={styles.orderIdLabel}>#{shortOrderId}</Text>
+                <Ionicons name="copy-outline" size={14} color={Colors.textMuted} />
               </View>
             </Pressable>
           </View>
@@ -262,13 +261,13 @@ export default function OrderReceiptScreen() {
           <View style={styles.receiptDivider} />
 
           <View style={styles.receiptSection}>
-            <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>Transaction breakdown</Text>
+            <Text style={styles.sectionLabel}>Transaction breakdown</Text>
             <ReceiptRow label="Item" value={subtotal} />
             <ReceiptRow label="Platform charge" value={platformCharge} />
             <ReceiptRow label="Delivery" value={postage} />
             <View style={styles.totalRow}>
-              <Text style={[styles.totalLabel, { color: colors.textPrimary }]}>Total</Text>
-              <Text style={[styles.totalValue, { color: colors.textPrimary }]}>{total}</Text>
+              <Text style={styles.totalLabel}>Total</Text>
+              <Text style={styles.totalValue}>{total}</Text>
             </View>
           </View>
 
@@ -276,7 +275,7 @@ export default function OrderReceiptScreen() {
             <>
               <View style={styles.receiptDivider} />
               <View style={styles.receiptSection}>
-                <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>Shipping</Text>
+                <Text style={styles.sectionLabel}>Shipping</Text>
                 {order.shippingProvider && (
                   <ReceiptRow label="Carrier" value={order.shippingProvider} />
                 )}
@@ -291,19 +290,19 @@ export default function OrderReceiptScreen() {
             </>
           )}
 
-          <View style={[styles.receiptDivider, { backgroundColor: colors.border }]} />
+          <View style={styles.receiptDivider} />
 
           <View style={styles.immutableNotice}>
-            <Ionicons name="lock-closed-outline" size={12} color={colors.textMuted} />
-            <Text style={[styles.immutableText, { color: colors.textMuted }]}>
+            <Ionicons name="lock-closed-outline" size={12} color={Colors.textMuted} />
+            <Text style={styles.immutableText}>
               This receipt is an immutable record of the transaction at the time of the order.
             </Text>
           </View>
 
           {!isReceiptFinal && (
             <View style={styles.pendingNotice}>
-              <Ionicons name="time-outline" size={12} color={colors.textMuted} />
-              <Text style={[styles.pendingText, { color: colors.textMuted }]}>
+              <Ionicons name="time-outline" size={12} color={Colors.textMuted} />
+              <Text style={styles.pendingText}>
                 This order is still in progress. The receipt will update as the order progresses.
               </Text>
             </View>
@@ -311,19 +310,19 @@ export default function OrderReceiptScreen() {
 
           {/* What happens next — contextual next-step hint for pending orders */}
           {!isReceiptFinal && isBuyer && (
-            <View style={[styles.nextStepsCard, { backgroundColor: `${colors.brand}08`, borderColor: `${colors.brand}20` }]}>
-              <Text style={[styles.nextStepsTitle, { color: colors.textPrimary }]}>What happens next</Text>
+            <View style={styles.nextStepsCard}>
+              <Text style={styles.nextStepsTitle}>What happens next</Text>
               <View style={styles.nextStepItem}>
-                <View style={[styles.nextStepDot, styles.nextStepDotActive, { backgroundColor: colors.brand }]} />
-                <Text style={[styles.nextStepText, { color: colors.textPrimary }]}>Seller prepares and dispatches your item</Text>
+                <View style={[styles.nextStepDot, styles.nextStepDotActive]} />
+                <Text style={styles.nextStepText}>Seller prepares and dispatches your item</Text>
               </View>
               <View style={styles.nextStepItem}>
-                <View style={[styles.nextStepDot, styles.nextStepDotPending, { backgroundColor: colors.border }]} />
-                <Text style={[styles.nextStepTextMuted, { color: colors.textMuted }]}>Carrier delivers to your address</Text>
+                <View style={[styles.nextStepDot, styles.nextStepDotPending]} />
+                <Text style={styles.nextStepTextMuted}>Carrier delivers to your address</Text>
               </View>
               <View style={styles.nextStepItem}>
-                <View style={[styles.nextStepDot, styles.nextStepDotPending, { backgroundColor: colors.border }]} />
-                <Text style={[styles.nextStepTextMuted, { color: colors.textMuted }]}>You confirm receipt and can leave a review</Text>
+                <View style={[styles.nextStepDot, styles.nextStepDotPending]} />
+                <Text style={styles.nextStepTextMuted}>You confirm receipt and can leave a review</Text>
               </View>
             </View>
           )}
@@ -336,8 +335,8 @@ export default function OrderReceiptScreen() {
           accessibilityRole="button"
           accessibilityLabel="View order details"
         >
-          <Text style={[styles.viewDetailBtnText, { color: colors.brand }]}>View order details</Text>
-          <Ionicons name="chevron-forward" size={16} color={colors.brand} />
+          <Text style={styles.viewDetailBtnText}>View order details</Text>
+          <Ionicons name="chevron-forward" size={16} color={Colors.brand} />
         </Pressable>
       </ScrollView>
     </View>
@@ -345,11 +344,10 @@ export default function OrderReceiptScreen() {
 }
 
 function ReceiptRow({ label, value }: { label: string; value: string }) {
-  const { colors } = useAppTheme();
   return (
     <View style={styles.receiptRow}>
-      <Text style={[styles.receiptRowLabel, { color: colors.textSecondary }]}>{label}</Text>
-      <Text style={[styles.receiptRowValue, { color: colors.textPrimary }]} numberOfLines={1}>{value}</Text>
+      <Text style={styles.receiptRowLabel}>{label}</Text>
+      <Text style={styles.receiptRowValue} numberOfLines={1}>{value}</Text>
     </View>
   );
 }
@@ -357,6 +355,7 @@ function ReceiptRow({ label, value }: { label: string; value: string }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: Colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -365,6 +364,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingBottom: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
   },
   headerBtn: {
     width: 44,
@@ -375,6 +375,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 17,
     fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
   },
   headerSpacer: {
     width: 44,
@@ -392,6 +393,7 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 14,
     fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
   },
   skeletonContainer: {
     flex: 1,
@@ -421,12 +423,14 @@ const styles = StyleSheet.create({
   errorTitle: {
     fontSize: 18,
     fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
     textAlign: 'center',
   },
   retryBtn: {
     paddingVertical: 14,
     paddingHorizontal: Space.xl,
     borderRadius: 10,
+    backgroundColor: Colors.brand,
     minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
@@ -434,6 +438,7 @@ const styles = StyleSheet.create({
   retryBtnText: {
     fontSize: 16,
     fontFamily: Typography.family.semibold,
+    color: Colors.textInverse,
   },
   scrollContent: {
     paddingHorizontal: Space.md,
@@ -448,6 +453,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
+    backgroundColor: `${Colors.success}15`,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 4,
@@ -455,13 +461,16 @@ const styles = StyleSheet.create({
   successTitle: {
     fontSize: 18,
     fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
     letterSpacing: -0.3,
   },
   successSubtitle: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
   },
   receiptCard: {
+    backgroundColor: Colors.surface,
     borderRadius: 12,
     padding: Space.md,
   },
@@ -474,6 +483,7 @@ const styles = StyleSheet.create({
   receiptTitle: {
     fontSize: 18,
     fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
   },
   orderIdRow: {
     flexDirection: 'row',
@@ -483,6 +493,7 @@ const styles = StyleSheet.create({
   orderIdLabel: {
     fontSize: 14,
     fontFamily: Typography.family.semibold,
+    color: Colors.textSecondary,
   },
   receiptSection: {
     gap: 8,
@@ -490,6 +501,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
+    color: Colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 1.2,
     marginBottom: 4,
@@ -504,15 +516,18 @@ const styles = StyleSheet.create({
   receiptRowLabel: {
     fontSize: 14,
     fontFamily: Typography.family.regular,
+    color: Colors.textSecondary,
   },
   receiptRowValue: {
     fontSize: 14,
     fontFamily: Typography.family.medium,
+    color: Colors.textPrimary,
     textAlign: 'right',
     flex: 1,
   },
   receiptDivider: {
     height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.border,
     marginVertical: Space.md,
   },
   totalRow: {
@@ -524,10 +539,12 @@ const styles = StyleSheet.create({
   totalLabel: {
     fontSize: 16,
     fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
   },
   totalValue: {
     fontSize: 18,
     fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
   },
   immutableNotice: {
     flexDirection: 'row',
@@ -538,6 +555,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 12,
     fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
     lineHeight: 16,
   },
   pendingNotice: {
@@ -550,17 +568,21 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 12,
     fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
     lineHeight: 16,
   },
   nextStepsCard: {
     marginTop: Space.md,
     padding: Space.md,
+    backgroundColor: `${Colors.brand}08`,
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: `${Colors.brand}20`,
   },
   nextStepsTitle: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
     marginBottom: Space.sm,
     letterSpacing: -0.2,
   },
@@ -576,19 +598,23 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   nextStepDotActive: {
+    backgroundColor: Colors.brand,
   },
   nextStepDotPending: {
+    backgroundColor: Colors.border,
   },
   nextStepText: {
     flex: 1,
     fontSize: 12,
     fontFamily: Typography.family.medium,
+    color: Colors.textPrimary,
     lineHeight: 16,
   },
   nextStepTextMuted: {
     flex: 1,
     fontSize: 12,
     fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
     lineHeight: 16,
   },
   viewDetailBtn: {
@@ -603,5 +629,6 @@ const styles = StyleSheet.create({
   viewDetailBtnText: {
     fontSize: 15,
     fontFamily: Typography.family.semibold,
+    color: Colors.brand,
   },
 });

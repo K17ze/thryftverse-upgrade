@@ -13,7 +13,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useAppTheme } from '../theme/ThemeContext';
+import { Colors } from '../constants/colors';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { isVideoUri } from '../utils/media';
 import { ImageEmptyGraphic } from './ImageEmptyGraphic';
@@ -53,11 +53,10 @@ export function CachedImage({
   onError,
   onLoad,
 }: CachedImageProps) {
-  const { colors } = useAppTheme();
   // Honest placeholder for missing images — no blank rectangles
   if (!uri) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.surface }, containerStyle]}>
+      <View style={[styles.container, containerStyle]}>
         <ImageEmptyGraphic
           label={emptyLabel}
           icon={emptyIcon}
@@ -155,7 +154,7 @@ export function CachedImage({
   }, [imageOpacity, previewOpacity, onError]);
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.surface }, containerStyle]}>
+    <View style={[styles.container, containerStyle]}>
       {/* Premium fallback for failed loads (404, network error, etc.) —
           never leaves a broken/blank image rectangle. */}
       {failed ? (
@@ -168,7 +167,7 @@ export function CachedImage({
       <>
       {/* Shimmer placeholder */}
       {!loaded && (
-        <View style={[StyleSheet.absoluteFill, styles.shimmerBase, { backgroundColor: colors.surface }]}>
+        <View style={[StyleSheet.absoluteFill, styles.shimmerBase]}>
           <AnimatedLinearGradient
             colors={['transparent', 'rgba(255,255,255,0.06)', 'transparent']}
             start={{ x: 0, y: 0.5 }}
@@ -239,8 +238,10 @@ export function CachedImage({
 const styles = StyleSheet.create({
   container: {
     overflow: 'hidden',
+    backgroundColor: Colors.surface,
   },
   shimmerBase: {
+    backgroundColor: Colors.surface,
   },
   image: {
     width: '100%',

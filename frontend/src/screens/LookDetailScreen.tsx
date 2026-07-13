@@ -20,7 +20,7 @@ import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
-import { useAppTheme } from '../theme/ThemeContext';
+import { Colors } from '../constants/colors';
 import { Type, Space, Radius, Typography } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
@@ -43,7 +43,6 @@ export default function LookDetailScreen() {
   const { show } = useToast();
   const { listings } = useBackendData();
   const reducedMotion = useReducedMotion();
-  const { colors } = useAppTheme();
   const currentUser = useStore((state) => state.currentUser);
 
   const { lookId } = route.params;
@@ -122,14 +121,14 @@ export default function LookDetailScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.headerRow}>
           <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.85}>
-            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
           </AnimatedPressable>
         </View>
         <View style={styles.loadingWrap}>
-          <ActivityIndicator size="large" color={colors.brand} />
+          <ActivityIndicator size="large" color={Colors.brand} />
         </View>
       </SafeAreaView>
     );
@@ -137,10 +136,10 @@ export default function LookDetailScreen() {
 
   if (!look || loadError) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.headerRow}>
           <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.85}>
-            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
           </AnimatedPressable>
         </View>
         <EmptyState
@@ -155,11 +154,11 @@ export default function LookDetailScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       {/* Floating Header */}
       <View style={styles.headerRow}>
         <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.85}>
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
         </AnimatedPressable>
         <View style={styles.headerActions}>
           <AnimatedPressable
@@ -169,7 +168,7 @@ export default function LookDetailScreen() {
             accessibilityRole="button"
             accessibilityLabel="Share look"
           >
-            <Ionicons name="share-outline" size={20} color={colors.textPrimary} />
+            <Ionicons name="share-outline" size={20} color={Colors.textPrimary} />
           </AnimatedPressable>
         </View>
       </View>
@@ -177,7 +176,7 @@ export default function LookDetailScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {/* Hero Image */}
         <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300)}>
-          <View style={[styles.heroWrap, { backgroundColor: colors.surfaceAlt }]}>
+          <View style={styles.heroWrap}>
             {isVideoMedia ? (
               <Video
                 source={{ uri: look.mediaUrl }}
@@ -218,12 +217,12 @@ export default function LookDetailScreen() {
                   {isActive && listing && (
                     <Reanimated.View entering={FadeInDown.duration(180)} style={styles.tagTooltip}>
                       {listing.images?.[0] && (
-                        <CachedImage uri={listing.images[0]} style={[styles.tagTooltipImg, { backgroundColor: colors.surfaceAlt }]} containerStyle={{ borderRadius: 4 }} contentFit="cover" />
+                        <CachedImage uri={listing.images[0]} style={styles.tagTooltipImg} containerStyle={{ borderRadius: 4 }} contentFit="cover" />
                       )}
                       <View style={{ flex: 1 }}>
                         <Text style={styles.tagTooltipTitle} numberOfLines={1}>{listing.title}</Text>
                         {listing.isSold ? (
-                          <Text style={[styles.tagTooltipSold, { color: colors.danger }]}>Sold</Text>
+                          <Text style={styles.tagTooltipSold}>Sold</Text>
                         ) : (
                           <Text style={styles.tagTooltipPrice}>£{listing.price}</Text>
                         )}
@@ -242,21 +241,21 @@ export default function LookDetailScreen() {
         {/* Info */}
         <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(350).delay(80)} style={styles.infoSection}>
           {look.caption ? (
-            <Text style={[styles.caption, { color: colors.textPrimary }]}>{look.caption}</Text>
+            <Text style={styles.caption}>{look.caption}</Text>
           ) : look.title ? (
-            <Text style={[styles.caption, { color: colors.textPrimary }]}>{look.title}</Text>
+            <Text style={styles.caption}>{look.title}</Text>
           ) : null}
           <View style={styles.creatorRow}>
-            <View style={[styles.creatorAvatar, { backgroundColor: colors.surfaceAlt }]}>
+            <View style={styles.creatorAvatar}>
               {look.creator.avatar ? (
                 <CachedImage uri={look.creator.avatar} style={styles.creatorAvatarImg} contentFit="cover" />
               ) : (
-                <Ionicons name="person-circle" size={32} color={colors.textMuted} />
+                <Ionicons name="person-circle" size={32} color={Colors.textMuted} />
               )}
             </View>
             <View style={styles.creatorInfo}>
-              <Text style={[styles.creatorName, { color: colors.textPrimary }]}>@{look.creator.username ?? 'unknown'}</Text>
-              <Text style={[styles.creatorMeta, { color: colors.textMuted }]}>{look.tags.length} pieces tagged</Text>
+              <Text style={styles.creatorName}>@{look.creator.username ?? 'unknown'}</Text>
+              <Text style={styles.creatorMeta}>{look.tags.length} pieces tagged</Text>
             </View>
           </View>
         </Reanimated.View>
@@ -283,7 +282,7 @@ export default function LookDetailScreen() {
         {/* Tagged Products Tray */}
         {look.tags.length > 0 && (
           <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(350).delay(160)} style={styles.traySection}>
-            <Text style={[styles.trayTitle, { color: colors.textPrimary }]}>Outfit Pieces</Text>
+            <Text style={styles.trayTitle}>Outfit Pieces</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.trayScroll}>
               {look.tags.map((tag) => {
                 const listing = resolveListing(tag.listingId);
@@ -296,20 +295,20 @@ export default function LookDetailScreen() {
                     accessibilityRole="button"
                     accessibilityLabel={listing ? `${listing.title}` : tag.label || 'Tagged item'}
                   >
-                    <View style={[styles.trayImgWrap, { backgroundColor: colors.surfaceAlt }]}>
+                    <View style={styles.trayImgWrap}>
                       {listing?.images?.[0] ? (
                         <CachedImage uri={listing.images[0]} style={styles.trayImg} contentFit="cover" />
                       ) : (
-                        <View style={[styles.trayImgEmpty, { backgroundColor: colors.surfaceAlt }]}>
-                          <Ionicons name="pricetag" size={20} color={colors.textMuted} />
+                        <View style={styles.trayImgEmpty}>
+                          <Ionicons name="pricetag" size={20} color={Colors.textMuted} />
                         </View>
                       )}
                     </View>
-                    <Text style={[styles.trayCardTitle, { color: colors.textPrimary }]} numberOfLines={1}>{listing?.title ?? tag.label ?? 'Untitled'}</Text>
+                    <Text style={styles.trayCardTitle} numberOfLines={1}>{listing?.title ?? tag.label ?? 'Untitled'}</Text>
                     {listing && (
                       listing.isSold
-                        ? <Text style={[styles.trayCardSold, { color: colors.danger }]}>Sold</Text>
-                        : <Text style={[styles.trayCardPrice, { color: colors.brand }]}>£{listing.price}</Text>
+                        ? <Text style={styles.trayCardSold}>Sold</Text>
+                        : <Text style={styles.trayCardPrice}>£{listing.price}</Text>
                     )}
                   </AnimatedPressable>
                 );
@@ -339,7 +338,7 @@ export default function LookDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, backgroundColor: Colors.background },
   loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   headerRow: {
     position: 'absolute',
@@ -375,6 +374,7 @@ const styles = StyleSheet.create({
     width: SCREEN_W,
     height: SCREEN_W * 1.15,
     position: 'relative',
+    backgroundColor: Colors.surfaceAlt,
     overflow: 'hidden',
   },
   heroImage: { width: '100%', height: '100%' },
@@ -404,6 +404,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(0,0,0,0.25)',
   },
   hotspotDotActive: {
+    backgroundColor: Colors.brand,
     borderColor: '#fff',
   },
   tagTooltip: {
@@ -418,10 +419,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 8,
   },
-  tagTooltipImg: { width: 36, height: 36, borderRadius: 6 },
+  tagTooltipImg: { width: 36, height: 36, borderRadius: 6, backgroundColor: Colors.surfaceAlt },
   tagTooltipTitle: { fontSize: 11, fontFamily: Typography.family.semibold, color: '#fff' },
   tagTooltipPrice: { fontSize: 10, fontFamily: Typography.family.medium, color: 'rgba(255,255,255,0.7)' },
-  tagTooltipSold: { fontSize: 10, fontFamily: Typography.family.semibold },
+  tagTooltipSold: { fontSize: 10, fontFamily: Typography.family.semibold, color: Colors.danger },
 
   infoSection: {
     paddingHorizontal: Space.md,
@@ -431,6 +432,7 @@ const styles = StyleSheet.create({
   caption: {
     fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
     letterSpacing: Type.title.letterSpacing,
     lineHeight: 24,
   },
@@ -443,6 +445,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
+    backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -452,10 +455,12 @@ const styles = StyleSheet.create({
   creatorName: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
   },
   creatorMeta: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
+    color: Colors.textMuted,
   },
 
   traySection: {
@@ -465,6 +470,7 @@ const styles = StyleSheet.create({
   trayTitle: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
     marginBottom: Space.sm,
   },
   trayScroll: {
@@ -479,6 +485,7 @@ const styles = StyleSheet.create({
     height: 170,
     borderRadius: Radius.md,
     overflow: 'hidden',
+    backgroundColor: Colors.surfaceAlt,
     position: 'relative',
   },
   trayImg: { width: '100%', height: '100%' },
@@ -487,18 +494,22 @@ const styles = StyleSheet.create({
     height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: Colors.surfaceAlt,
   },
   trayCardTitle: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
     marginTop: 4,
   },
   trayCardPrice: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.bold,
+    color: Colors.brand,
   },
   trayCardSold: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.bold,
+    color: Colors.danger,
   },
 });

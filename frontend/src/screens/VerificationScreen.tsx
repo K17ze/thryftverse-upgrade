@@ -12,6 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
+import { Colors } from '../constants/colors';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsSection } from '../components/settings/SettingsSection';
@@ -136,11 +137,11 @@ export default function VerificationScreen({ navigation }: Props) {
     >
       {/* ── STATUS CARD ── */}
       <View style={[styles.statusCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <View style={[styles.statusIconWrap, { backgroundColor: `${colors.success}15` }]}>
+        <View style={styles.statusIconWrap}>
           <Ionicons
             name={tierInfo.icon as keyof typeof Ionicons.glyphMap}
             size={28}
-            color={tierInfo.color === 'brand' ? colors.brand : colors.success}
+            color={tierInfo.color === 'brand' ? Colors.brand : Colors.success}
           />
         </View>
         <View style={styles.statusBody}>
@@ -157,7 +158,7 @@ export default function VerificationScreen({ navigation }: Props) {
       <SettingsSection title="Verification steps">
         <SettingsRow
           icon="mail-outline"
-          iconColor={colors.success}
+          iconColor={Colors.success}
           title="Email verified"
           subtitle={emailVerified ? 'Confirmed' : 'Pending — check your inbox'}
           toggleValue={emailVerified}
@@ -166,7 +167,7 @@ export default function VerificationScreen({ navigation }: Props) {
         />
         <SettingsRow
           icon="card-outline"
-          iconColor={kycVerified ? colors.success : colors.textMuted}
+          iconColor={kycVerified ? Colors.success : Colors.textMuted}
           title="Identity verification"
           subtitle={kycVerified ? 'ID verified' : 'Verify your identity with a government document'}
           onPress={handleStartKyc}
@@ -176,8 +177,8 @@ export default function VerificationScreen({ navigation }: Props) {
 
       {/* ── KYC FLOW ── */}
       {kycStep !== 'status' ? (
-        <View style={[styles.flowCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={[styles.flowHeader, { borderBottomColor: colors.border }]}>
+        <View style={styles.flowCard}>
+          <View style={styles.flowHeader}>
             <Text style={[styles.flowTitle, { color: colors.textPrimary }]}>
               {kycStep === 'identity' ? 'Your details' : kycStep === 'document' ? 'Document' : 'Review'}
             </Text>
@@ -258,8 +259,8 @@ export default function VerificationScreen({ navigation }: Props) {
                   style={[
                     styles.docOption,
                     {
-                      borderColor: kycDocumentType === doc ? colors.brand : colors.border,
-                      backgroundColor: kycDocumentType === doc ? `${colors.brand}10` : colors.surfaceAlt,
+                      borderColor: kycDocumentType === doc ? Colors.brand : colors.border,
+                      backgroundColor: kycDocumentType === doc ? `${Colors.brand}10` : colors.surfaceAlt,
                     },
                   ]}
                   onPress={() => setKycDocumentType(doc)}
@@ -270,47 +271,47 @@ export default function VerificationScreen({ navigation }: Props) {
                   <Ionicons
                     name={doc === 'passport' ? 'book-outline' : doc === 'driving_licence' ? 'car-outline' : 'id-card-outline'}
                     size={20}
-                    color={kycDocumentType === doc ? colors.brand : colors.textSecondary}
+                    color={kycDocumentType === doc ? Colors.brand : colors.textSecondary}
                   />
-                  <Text style={[styles.docOptionText, { color: kycDocumentType === doc ? colors.brand : colors.textPrimary }]}>
+                  <Text style={[styles.docOptionText, { color: kycDocumentType === doc ? Colors.brand : colors.textPrimary }]}>
                     {doc === 'passport' ? 'Passport' : doc === 'driving_licence' ? 'Driving licence' : 'National ID'}
                   </Text>
                   {kycDocumentType === doc ? (
-                    <Ionicons name="checkmark-circle" size={18} color={colors.brand} />
+                    <Ionicons name="checkmark-circle" size={18} color={Colors.brand} />
                   ) : null}
                 </Pressable>
               ))}
-              <View style={[styles.uploadPlaceholder, { borderColor: colors.border }]}>
+              <View style={styles.uploadPlaceholder}>
                 <Ionicons name="cloud-upload-outline" size={32} color={colors.textMuted} />
                 <Text style={[styles.uploadText, { color: colors.textMuted }]}>
                   Upload a clear photo of your {kycDocumentType === 'driving_licence' ? 'licence' : kycDocumentType === 'national_id' ? 'ID card' : 'passport'}
                 </Text>
                 <AnimatedPressable
-                  style={[styles.uploadBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
+                  style={styles.uploadBtn}
                   onPress={() => show('Document upload will be available in the next step', 'info')}
                   hapticFeedback="light"
                 >
-                  <Text style={[styles.uploadBtnText, { color: colors.textPrimary }]}>Choose file</Text>
+                  <Text style={styles.uploadBtnText}>Choose file</Text>
                 </AnimatedPressable>
               </View>
               <View style={styles.flowNavRow}>
                 <AnimatedPressable
-                  style={[styles.flowBackBtn, { borderColor: colors.border }]}
+                  style={styles.flowBackBtn}
                   onPress={() => setKycStep('identity')}
                   hapticFeedback="light"
                   accessibilityRole="button"
                   accessibilityLabel="Back to identity step"
                 >
-                  <Text style={[styles.flowBackBtnText, { color: colors.textSecondary }]}>Back</Text>
+                  <Text style={styles.flowBackBtnText}>Back</Text>
                 </AnimatedPressable>
                 <AnimatedPressable
-                  style={[styles.flowPrimaryBtn, { backgroundColor: colors.brand }]}
+                  style={styles.flowPrimaryBtn}
                   onPress={() => setKycStep('review')}
                   hapticFeedback="medium"
                   accessibilityRole="button"
                   accessibilityLabel="Continue to review"
                 >
-                  <Text style={[styles.flowPrimaryBtnText, { color: colors.background }]}>Continue</Text>
+                  <Text style={styles.flowPrimaryBtnText}>Continue</Text>
                 </AnimatedPressable>
               </View>
             </View>
@@ -318,21 +319,21 @@ export default function VerificationScreen({ navigation }: Props) {
 
           {kycStep === 'review' ? (
             <View style={styles.flowBody}>
-              <View style={[styles.reviewRow, { borderBottomColor: colors.border }]}>
+              <View style={styles.reviewRow}>
                 <Text style={[styles.reviewLabel, { color: colors.textMuted }]}>Name</Text>
                 <Text style={[styles.reviewValue, { color: colors.textPrimary }]}>{kycFullName}</Text>
               </View>
-              <View style={[styles.reviewRow, { borderBottomColor: colors.border }]}>
+              <View style={styles.reviewRow}>
                 <Text style={[styles.reviewLabel, { color: colors.textMuted }]}>Date of birth</Text>
                 <Text style={[styles.reviewValue, { color: colors.textPrimary }]}>{kycDob}</Text>
               </View>
-              <View style={[styles.reviewRow, { borderBottomColor: colors.border }]}>
+              <View style={styles.reviewRow}>
                 <Text style={[styles.reviewLabel, { color: colors.textMuted }]}>Address</Text>
                 <Text style={[styles.reviewValue, { color: colors.textPrimary }]} numberOfLines={2}>
                   {kycAddressLine}, {kycCity}, {kycPostcode}
                 </Text>
               </View>
-              <View style={[styles.reviewRow, { borderBottomColor: colors.border }]}>
+              <View style={styles.reviewRow}>
                 <Text style={[styles.reviewLabel, { color: colors.textMuted }]}>Document</Text>
                 <Text style={[styles.reviewValue, { color: colors.textPrimary }]}>
                   {kycDocumentType === 'passport' ? 'Passport' : kycDocumentType === 'driving_licence' ? 'Driving licence' : 'National ID'}
@@ -344,16 +345,16 @@ export default function VerificationScreen({ navigation }: Props) {
               />
               <View style={styles.flowNavRow}>
                 <AnimatedPressable
-                  style={[styles.flowBackBtn, { borderColor: colors.border }]}
+                  style={styles.flowBackBtn}
                   onPress={() => setKycStep('document')}
                   hapticFeedback="light"
                   accessibilityRole="button"
                   accessibilityLabel="Back to document upload"
                 >
-                  <Text style={[styles.flowBackBtnText, { color: colors.textSecondary }]}>Back</Text>
+                  <Text style={styles.flowBackBtnText}>Back</Text>
                 </AnimatedPressable>
                 <AnimatedPressable
-                  style={[styles.flowPrimaryBtn, { backgroundColor: colors.brand }, isSubmittingKyc && styles.flowPrimaryBtnDisabled]}
+                  style={[styles.flowPrimaryBtn, isSubmittingKyc && styles.flowPrimaryBtnDisabled]}
                   onPress={handleSubmitKyc}
                   disabled={isSubmittingKyc}
                   hapticFeedback="medium"
@@ -361,9 +362,9 @@ export default function VerificationScreen({ navigation }: Props) {
                   accessibilityLabel="Submit verification"
                 >
                   {isSubmittingKyc ? (
-                    <ActivityIndicator size="small" color={colors.background} />
+                    <ActivityIndicator size="small" color={Colors.background} />
                   ) : (
-                    <Text style={[styles.flowPrimaryBtnText, { color: colors.background }]}>Submit</Text>
+                    <Text style={styles.flowPrimaryBtnText}>Submit</Text>
                   )}
                 </AnimatedPressable>
               </View>
@@ -376,7 +377,7 @@ export default function VerificationScreen({ navigation }: Props) {
       <SettingsSection title="Tax information (DAC7)">
         <SettingsRow
           icon="document-text-outline"
-          iconColor={dac7Completed ? colors.success : colors.textMuted}
+          iconColor={dac7Completed ? Colors.success : Colors.textMuted}
           title="DAC7 tax details"
           subtitle={dac7Completed ? 'Tax information provided' : 'Required for EU sellers under DAC7 regulation'}
           onPress={() => setDac7Step(dac7Step === 'status' ? 'details' : 'status')}
@@ -386,8 +387,8 @@ export default function VerificationScreen({ navigation }: Props) {
       </SettingsSection>
 
       {dac7Step !== 'status' ? (
-        <View style={[styles.flowCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={[styles.flowHeader, { borderBottomColor: colors.border }]}>
+        <View style={styles.flowCard}>
+          <View style={styles.flowHeader}>
             <Text style={[styles.flowTitle, { color: colors.textPrimary }]}>
               {dac7Step === 'details' ? 'Tax details' : 'Review'}
             </Text>
@@ -424,8 +425,8 @@ export default function VerificationScreen({ navigation }: Props) {
                     style={[
                       styles.countryChip,
                       {
-                        borderColor: dac7Country === code ? colors.brand : colors.border,
-                        backgroundColor: dac7Country === code ? `${colors.brand}10` : colors.surfaceAlt,
+                        borderColor: dac7Country === code ? Colors.brand : colors.border,
+                        backgroundColor: dac7Country === code ? `${Colors.brand}10` : colors.surfaceAlt,
                       },
                     ]}
                     onPress={() => {
@@ -436,7 +437,7 @@ export default function VerificationScreen({ navigation }: Props) {
                     accessibilityState={{ selected: dac7Country === code }}
                     accessibilityLabel={`Select ${code}`}
                   >
-                    <Text style={[styles.countryChipText, { color: dac7Country === code ? colors.brand : colors.textPrimary }]}>
+                    <Text style={[styles.countryChipText, { color: dac7Country === code ? Colors.brand : colors.textPrimary }]}>
                       {code}
                     </Text>
                   </Pressable>
@@ -452,7 +453,7 @@ export default function VerificationScreen({ navigation }: Props) {
                 <Ionicons
                   name={dac7SelfDeclared ? 'checkbox-outline' : 'square-outline'}
                   size={20}
-                  color={dac7SelfDeclared ? colors.brand : colors.textMuted}
+                  color={dac7SelfDeclared ? Colors.brand : colors.textMuted}
                 />
                 <Text style={[styles.checkboxText, { color: colors.textSecondary }]}>
                   I confirm this tax information is accurate and complete
@@ -460,16 +461,16 @@ export default function VerificationScreen({ navigation }: Props) {
               </Pressable>
               <View style={styles.flowNavRow}>
                 <AnimatedPressable
-                  style={[styles.flowBackBtn, { borderColor: colors.border }]}
+                  style={styles.flowBackBtn}
                   onPress={() => setDac7Step('status')}
                   hapticFeedback="light"
                   accessibilityRole="button"
                   accessibilityLabel="Cancel tax information entry"
                 >
-                  <Text style={[styles.flowBackBtnText, { color: colors.textSecondary }]}>Cancel</Text>
+                  <Text style={styles.flowBackBtnText}>Cancel</Text>
                 </AnimatedPressable>
                 <AnimatedPressable
-                  style={[styles.flowPrimaryBtn, { backgroundColor: colors.brand }, isSubmittingDac7 && styles.flowPrimaryBtnDisabled]}
+                  style={[styles.flowPrimaryBtn, isSubmittingDac7 && styles.flowPrimaryBtnDisabled]}
                   onPress={handleSubmitDac7}
                   disabled={isSubmittingDac7}
                   hapticFeedback="medium"
@@ -477,9 +478,9 @@ export default function VerificationScreen({ navigation }: Props) {
                   accessibilityLabel="Save tax information"
                 >
                   {isSubmittingDac7 ? (
-                    <ActivityIndicator size="small" color={colors.background} />
+                    <ActivityIndicator size="small" color={Colors.background} />
                   ) : (
-                    <Text style={[styles.flowPrimaryBtnText, { color: colors.background }]}>Save</Text>
+                    <Text style={styles.flowPrimaryBtnText}>Save</Text>
                   )}
                 </AnimatedPressable>
               </View>
@@ -495,7 +496,7 @@ export default function VerificationScreen({ navigation }: Props) {
 
       <Text style={[styles.footerNote, { color: colors.textMuted }]}>
         Questions? Read our{' '}
-        <Text style={[styles.footerLink, { color: colors.brand }]} onPress={() => Linking.openURL('https://thryftverse.com/verification')}>
+        <Text style={styles.footerLink} onPress={() => Linking.openURL('https://thryftverse.com/verification')}>
           verification guide
         </Text>
         .
@@ -518,6 +519,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
+    backgroundColor: `${Colors.success}15`,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -533,8 +535,10 @@ const styles = StyleSheet.create({
     lineHeight: Type.body.lineHeight,
   },
   flowCard: {
+    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     borderWidth: 1,
+    borderColor: Colors.border,
     marginBottom: Space.md,
     overflow: 'hidden',
   },
@@ -544,6 +548,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
   },
   flowTitle: {
     fontSize: Type.body.size,
@@ -591,6 +596,7 @@ const styles = StyleSheet.create({
     paddingVertical: Space.lg,
     borderRadius: Radius.md,
     borderWidth: 1,
+    borderColor: Colors.border,
     borderStyle: 'dashed',
   },
   uploadText: {
@@ -603,12 +609,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.xs,
     borderRadius: Radius.sm,
+    backgroundColor: Colors.surfaceAlt,
     borderWidth: 1,
+    borderColor: Colors.border,
     marginTop: Space.xs,
   },
   uploadBtnText: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
   },
   flowNavRow: {
     flexDirection: 'row',
@@ -620,17 +629,20 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: Radius.md,
     borderWidth: 1,
+    borderColor: Colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   flowBackBtnText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
+    color: Colors.textSecondary,
   },
   flowPrimaryBtn: {
     flex: 1,
     height: 44,
     borderRadius: Radius.md,
+    backgroundColor: Colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -640,6 +652,7 @@ const styles = StyleSheet.create({
   flowPrimaryBtnText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
+    color: Colors.background,
   },
   reviewRow: {
     flexDirection: 'row',
@@ -647,6 +660,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     paddingVertical: Space.xs,
     borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
     gap: Space.md,
   },
   reviewLabel: {
@@ -697,6 +711,7 @@ const styles = StyleSheet.create({
     paddingBottom: Space.lg,
   },
   footerLink: {
+    color: Colors.brand,
     fontFamily: Typography.family.semibold,
   },
 });

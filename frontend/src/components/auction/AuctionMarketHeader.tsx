@@ -1,8 +1,8 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, useWindowDimensions, Modal, ScrollView } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, Pressable, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAppTheme } from '../../theme/ThemeContext';
+import { Colors } from '../../constants/colors';
 import { Space, Radius, Typography } from '../../theme/designTokens';
 
 export type AuctionHeaderActionKey = 'search' | 'filter' | 'create' | 'seller' | 'activity';
@@ -26,6 +26,7 @@ interface Props {
   compactContext?: string;
 }
 
+const SMALL_WIDTH_THRESHOLD = 360;
 const VERY_SMALL_THRESHOLD = 320;
 
 export function AuctionMarketHeader({
@@ -38,9 +39,8 @@ export function AuctionMarketHeader({
 }: Props) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { colors } = useAppTheme();
+  const isSmall = width < SMALL_WIDTH_THRESHOLD;
   const isVerySmall = width < VERY_SMALL_THRESHOLD;
-  const [overflowOpen, setOverflowOpen] = useState(false);
 
   const createAction = actions.find((a) => a.key === 'create');
   const searchAction = actions.find((a) => a.key === 'search');
@@ -48,16 +48,14 @@ export function AuctionMarketHeader({
   const sellerAction = actions.find((a) => a.key === 'seller');
   const activityAction = actions.find((a) => a.key === 'activity');
 
-  // Activity shown only when attention badge exists
+  // Activity always shown when attention exists; on very small screens,
+  // it's represented by the attention strip but the header control
+  // remains when badge > 0
   const showActivity = activityAction && (activityAction.badgeCount ?? 0) > 0;
 
-  // Overflow contains secondary actions: filter + seller
-  const overflowActions = [filterAction, sellerAction].filter(Boolean) as AuctionHeaderAction[];
-
-  const handleOverflowPress = useCallback((action: AuctionHeaderAction) => {
-    setOverflowOpen(false);
-    action.onPress();
-  }, []);
+  // On small widths: Search, Create, Seller always; Filter hidden
+  // On very small: same set, context uses compact form
+  const showFilter = !isSmall && filterAction;
 
   // Responsive context
   const displayContext = isVerySmall && compactContext ? compactContext : context;
@@ -73,43 +71,63 @@ export function AuctionMarketHeader({
             accessibilityLabel="Go back"
             style={styles.iconBtn}
           >
-            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
+            <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
           </Pressable>
         ) : null}
 
         <View style={styles.titleWrap}>
-          <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>{title}</Text>
+          <Text style={styles.title} numberOfLines={1}>{title}</Text>
           {displayContext ? (
-            <Text style={[styles.context, { color: colors.textSecondary }]} numberOfLines={1}>{displayContext}</Text>
+            <Text style={styles.context} numberOfLines={1}>{displayContext}</Text>
           ) : null}
         </View>
 
         <View style={styles.actions}>
-          {/* Search — primary discovery action */}
+          {/* Quiet transparent actions — consistent 22px icon size */}
           {searchAction && (
             <Pressable
               onPress={searchAction.onPress}
-              hitSlop={8}
+              hitSlop={6}
               accessibilityRole="button"
               accessibilityLabel={searchAction.label}
               style={styles.iconBtn}
             >
-              <Ionicons name={searchAction.icon} size={22} color={colors.textPrimary} />
+              <Ionicons name={searchAction.icon} size={22} color={Colors.textPrimary} />
             </Pressable>
           )}
-
-          {/* Activity — visible only when attention badge exists */}
+          {showFilter && (
+            <Pressable
+              onPress={filterAction!.onPress}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel={filterAction!.label}
+              style={styles.iconBtn}
+            >
+              <Ionicons name={filterAction!.icon} size={22} color={Colors.textPrimary} />
+            </Pressable>
+          )}
+          {sellerAction && (
+            <Pressable
+              onPress={sellerAction.onPress}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel={sellerAction.label}
+              style={styles.iconBtn}
+            >
+              <Ionicons name={sellerAction.icon} size={22} color={Colors.textPrimary} />
+            </Pressable>
+          )}
           {showActivity && (
             <Pressable
               onPress={activityAction!.onPress}
-              hitSlop={8}
+              hitSlop={6}
               accessibilityRole="button"
               accessibilityLabel={activityAction!.label}
               style={styles.iconBtn}
             >
-              <Ionicons name={activityAction!.icon} size={22} color={colors.textPrimary} />
+              <Ionicons name={activityAction!.icon} size={22} color={Colors.textPrimary} />
               {activityAction!.badgeCount != null && activityAction!.badgeCount > 0 && (
-                <View style={[styles.badge, { backgroundColor: colors.danger, borderColor: colors.background }]}>
+                <View style={styles.badge}>
                   <Text style={styles.badgeText}>
                     {activityAction!.badgeCount > 9 ? '9+' : activityAction!.badgeCount}
                   </Text>
@@ -118,61 +136,20 @@ export function AuctionMarketHeader({
             </Pressable>
           )}
 
-          {/* Overflow — secondary actions (filter, seller) */}
-          {overflowActions.length > 0 && (
-            <Pressable
-              onPress={() => setOverflowOpen(true)}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="More actions"
-              style={styles.iconBtn}
-            >
-              <Ionicons name="ellipsis-horizontal" size={22} color={colors.textPrimary} />
-            </Pressable>
-          )}
-
           {/* Create — primary, brand-tinted circle */}
           {createAction && (
             <Pressable
               onPress={createAction.onPress}
-              hitSlop={8}
+              hitSlop={6}
               accessibilityRole="button"
               accessibilityLabel={createAction.label}
               style={styles.createBtn}
             >
-              <Ionicons name={createAction.icon} size={22} color={colors.brand} />
+              <Ionicons name={createAction.icon} size={22} color={Colors.brand} />
             </Pressable>
           )}
         </View>
       </View>
-
-      {/* Overflow menu — lightweight modal sheet */}
-      <Modal
-        visible={overflowOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setOverflowOpen(false)}
-      >
-        <Pressable style={styles.overflowBackdrop} onPress={() => setOverflowOpen(false)}>
-          <View style={[styles.overflowSheet, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-            {overflowActions.map((action, i) => (
-              <Pressable
-                key={action.key}
-                onPress={() => handleOverflowPress(action)}
-                style={[
-                  styles.overflowItem,
-                  i < overflowActions.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
-                ]}
-                accessibilityRole="button"
-                accessibilityLabel={action.label}
-              >
-                <Ionicons name={action.icon} size={20} color={colors.textPrimary} />
-                <Text style={[styles.overflowLabel, { color: colors.textPrimary }]}>{action.label}</Text>
-              </Pressable>
-            ))}
-          </View>
-        </Pressable>
-      </Modal>
     </View>
   );
 }
@@ -210,11 +187,13 @@ const styles = StyleSheet.create({
   title: {
     fontFamily: Typography.family.bold,
     fontSize: 30,
+    color: Colors.textPrimary,
     letterSpacing: -0.8,
   },
   context: {
     fontFamily: Typography.family.regular,
     fontSize: 13,
+    color: Colors.textSecondary,
     marginTop: 0,
     letterSpacing: -0.1,
   },
@@ -230,39 +209,16 @@ const styles = StyleSheet.create({
     minWidth: 16,
     height: 16,
     borderRadius: Radius.full,
+    backgroundColor: Colors.danger,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
     borderWidth: 2,
+    borderColor: Colors.background,
   },
   badgeText: {
     fontFamily: Typography.family.bold,
     fontSize: 9,
     color: '#FFFFFF',
-  },
-  overflowBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    justifyContent: 'flex-start',
-    alignItems: 'flex-end',
-    paddingTop: 100,
-    paddingRight: Space.md,
-  },
-  overflowSheet: {
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    overflow: 'hidden',
-    minWidth: 200,
-  },
-  overflowItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: Space.md,
-    paddingVertical: 14,
-  },
-  overflowLabel: {
-    fontFamily: Typography.family.medium,
-    fontSize: 15,
   },
 });

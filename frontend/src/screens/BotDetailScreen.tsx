@@ -15,6 +15,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme } from '../theme/ThemeContext';
+import { Colors } from '../constants/colors';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -26,7 +27,7 @@ type Props = StackScreenProps<RootStackParamList, 'BotDetail'>;
 
 export default function BotDetailScreen({ navigation, route }: Props) {
   const { botId, conversationId } = route.params;
-  const { colors, isDark } = useAppTheme();
+  const { isDark } = useAppTheme();
   const { show } = useToast();
   const haptic = useHaptic();
 
@@ -60,7 +61,7 @@ export default function BotDetailScreen({ navigation, route }: Props) {
         <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
         <ScreenHeader title="Bot" onBack={() => navigation.goBack()} />
         <View style={styles.center}>
-          <Caption color={colors.textMuted}>Bot not found</Caption>
+          <Caption color={Colors.textMuted}>Bot not found</Caption>
         </View>
       </SafeAreaView>
     );
@@ -77,10 +78,10 @@ export default function BotDetailScreen({ navigation, route }: Props) {
 
   const statusColor =
     bot.status === 'available'
-      ? colors.brand
+      ? Colors.brand
       : bot.status === 'local-only'
-      ? colors.textSecondary
-      : colors.textMuted;
+      ? Colors.textSecondary
+      : Colors.textMuted;
 
   const [isDeploying, setIsDeploying] = useState(false);
 
@@ -179,7 +180,7 @@ export default function BotDetailScreen({ navigation, route }: Props) {
               accessibilityLabel="Edit bot"
             >
               <View style={styles.headerActionBtn}>
-                <Ionicons name="create-outline" size={20} color={colors.textPrimary} />
+                <Ionicons name="create-outline" size={20} color={Colors.textPrimary} />
               </View>
             </AnimatedPressable>
           ) : undefined
@@ -189,7 +190,7 @@ export default function BotDetailScreen({ navigation, route }: Props) {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         {/* Identity */}
         <View style={styles.identity}>
-          <View style={[styles.iconWrap, { backgroundColor: colors.surfaceAlt }]}>
+          <View style={[styles.iconWrap, { backgroundColor: Colors.surfaceAlt }]}>
             <Ionicons
               name={
                 bot.category === 'moderation'
@@ -201,14 +202,14 @@ export default function BotDetailScreen({ navigation, route }: Props) {
                   : 'flash-outline'
               }
               size={32}
-              color={colors.textPrimary}
+              color={Colors.textPrimary}
             />
           </View>
           <BodyEmphasis style={styles.botName}>{bot.name}</BodyEmphasis>
           <View style={styles.typeRow}>
-            <Caption color={colors.textMuted}>{categoryLabel}</Caption>
-            <View style={[styles.typeBadge, { backgroundColor: isCustomBot ? colors.brand + '18' : colors.surfaceAlt }]}>
-              <Text style={[styles.typeBadgeText, { color: isCustomBot ? colors.brand : colors.textSecondary }]}>
+            <Caption color={Colors.textMuted}>{categoryLabel}</Caption>
+            <View style={[styles.typeBadge, { backgroundColor: isCustomBot ? Colors.brand + '18' : Colors.surfaceAlt }]}>
+              <Text style={[styles.typeBadgeText, { color: isCustomBot ? Colors.brand : Colors.textSecondary }]}>
                 {isCustomBot ? 'Custom' : 'System'}
               </Text>
             </View>
@@ -220,7 +221,7 @@ export default function BotDetailScreen({ navigation, route }: Props) {
 
         {/* Description */}
         <Card>
-          <Caption color={colors.textPrimary} style={styles.description}>
+          <Caption color={Colors.textPrimary} style={styles.description}>
             {bot.description}
           </Caption>
         </Card>
@@ -229,7 +230,7 @@ export default function BotDetailScreen({ navigation, route }: Props) {
         <Section title="Command">
           <Card>
             <View style={styles.commandRow}>
-              <Ionicons name="terminal-outline" size={18} color={colors.textMuted} />
+              <Ionicons name="terminal-outline" size={18} color={Colors.textMuted} />
               <BodyEmphasis style={styles.commandText}>{bot.commandHint}</BodyEmphasis>
             </View>
           </Card>
@@ -239,12 +240,12 @@ export default function BotDetailScreen({ navigation, route }: Props) {
         <Section title="Permissions">
           <Card>
             {bot.permissions.length === 0 ? (
-              <Caption color={colors.textMuted}>No special permissions required.</Caption>
+              <Caption color={Colors.textMuted}>No special permissions required.</Caption>
             ) : (
               bot.permissions.map((perm) => (
                 <View key={perm} style={styles.permissionRow}>
-                  <Ionicons name="checkmark-circle-outline" size={16} color={colors.brand} />
-                  <Caption color={colors.textPrimary} style={styles.permissionText}>
+                  <Ionicons name="checkmark-circle-outline" size={16} color={Colors.brand} />
+                  <Caption color={Colors.textPrimary} style={styles.permissionText}>
                     {perm}
                   </Caption>
                 </View>
@@ -259,11 +260,11 @@ export default function BotDetailScreen({ navigation, route }: Props) {
             <View style={styles.contextRow}>
               {contextLabels.map((ctx) => (
                 <View key={ctx} style={styles.contextPill}>
-                  <Caption color={colors.textSecondary}>{ctx}</Caption>
+                  <Caption color={Colors.textSecondary}>{ctx}</Caption>
                 </View>
               ))}
               {contextLabels.length === 0 && (
-                <Caption color={colors.textMuted}>All chat contexts</Caption>
+                <Caption color={Colors.textMuted}>All chat contexts</Caption>
               )}
             </View>
           </Card>
@@ -286,10 +287,10 @@ export default function BotDetailScreen({ navigation, route }: Props) {
               <Ionicons
                 name={isBotEnabled(botId) ? 'toggle' : 'toggle-outline'}
                 size={28}
-                color={isBotEnabled(botId) ? colors.brand : colors.textMuted}
+                color={isBotEnabled(botId) ? Colors.brand : Colors.textMuted}
               />
             </AnimatedPressable>
-            <Caption color={colors.textMuted} style={styles.toggleHint}>
+            <Caption color={Colors.textMuted} style={styles.toggleHint}>
               This controls whether the bot can be deployed to your groups. It does not affect deployments already made.
             </Caption>
           </Card>
@@ -301,11 +302,11 @@ export default function BotDetailScreen({ navigation, route }: Props) {
             <Card>
               {deployedGroups.map((group) => (
                 <View key={group.id} style={styles.deployedRow}>
-                  <Ionicons name="people-outline" size={16} color={colors.textSecondary} />
-                  <Caption color={colors.textPrimary} style={styles.deployedText}>
+                  <Ionicons name="people-outline" size={16} color={Colors.textSecondary} />
+                  <Caption color={Colors.textPrimary} style={styles.deployedText}>
                     {group.title ?? 'Untitled group'}
                   </Caption>
-                  <Caption color={colors.textMuted}>
+                  <Caption color={Colors.textMuted}>
                     {group.participantIds?.length ?? 0} members
                   </Caption>
                 </View>
@@ -342,10 +343,9 @@ export default function BotDetailScreen({ navigation, route }: Props) {
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  const { colors } = useAppTheme();
   return (
     <View style={styles.section}>
-      <Meta color={colors.textMuted} style={styles.sectionLabel}>
+      <Meta color={Colors.textMuted} style={styles.sectionLabel}>
         {title.toUpperCase()}
       </Meta>
       {children}
@@ -362,6 +362,7 @@ function Card({ children }: { children: React.ReactNode }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: Colors.background,
   },
   center: {
     flex: 1,
@@ -408,8 +409,10 @@ const styles = StyleSheet.create({
     marginLeft: Space.xs,
   },
   card: {
+    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
     padding: Space.md,
     gap: Space.sm,
   },
@@ -441,6 +444,7 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   contextPill: {
+    backgroundColor: Colors.surfaceAlt,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: Radius.md,
@@ -462,6 +466,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: Radius.md,
+    backgroundColor: Colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
   },

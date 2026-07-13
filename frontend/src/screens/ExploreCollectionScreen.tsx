@@ -15,7 +15,7 @@ import { useStore } from '../store/useStore';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { ProductCardV2 } from '../components/ProductCardV2';
 import { MasonryGrid } from '../components/ProductCardV2';
-import { useAppTheme } from '../theme/ThemeContext';
+import { Colors } from '../constants/colors';
 import { Type, Space, Radius, Typography } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
 import { EmptyState } from '../components/EmptyState';
@@ -25,7 +25,6 @@ import { useToast } from '../context/ToastContext';
 import { fetchFilteredListings } from '../services/listingsApi';
 import { Listing } from '../data/mockData';
 import { ProductAnalytics } from '../platform/product/productAnalytics';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -37,11 +36,9 @@ export default function ExploreCollectionScreen() {
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
   const { show } = useToast();
-  const { colors, isDark } = useAppTheme();
   const { listings, isSyncing, lastError, refreshListings } = useBackendData();
   const savedProducts = useStore((state) => state.savedProducts);
   const toggleSavedProduct = useStore((state) => state.toggleSavedProduct);
-  const reducedMotionEnabled = useReducedMotion();
 
   const { title, subtitle, source } = route.params;
 
@@ -118,7 +115,7 @@ export default function ExploreCollectionScreen() {
   };
 
   const renderHeader = () => (
-    <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.headerInfo}>
+    <Reanimated.View entering={FadeInDown.duration(300)} style={styles.headerInfo}>
       {subtitle ? (
         <Text style={styles.headerSubtitle}>{subtitle}</Text>
       ) : null}
@@ -179,7 +176,7 @@ export default function ExploreCollectionScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, backgroundColor: Colors.background },
   headerInfo: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.sm,
@@ -188,10 +185,12 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
+    color: Colors.textMuted,
   },
   headerCount: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
+    color: Colors.textSecondary,
   },
   loadingWrap: {
     flex: 1,

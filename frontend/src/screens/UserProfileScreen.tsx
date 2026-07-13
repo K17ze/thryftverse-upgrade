@@ -26,7 +26,7 @@ import Reanimated, {
   runOnJS,
 } from 'react-native-reanimated';
 import { useStore } from '../store/useStore';
-import { useAppTheme } from '../theme/ThemeContext';
+import { ActiveTheme, Colors } from '../constants/colors';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { Space, Typography, DockConstants } from '../theme/designTokens';
 import {
@@ -68,6 +68,14 @@ const AnimatedFlashList: any = Reanimated.createAnimatedComponent(FlashList);
 
 type Props = StackScreenProps<RootStackParamList, 'UserProfile'>;
 
+const BG = Colors.background;
+const BORDER = Colors.border;
+const MUTED = Colors.textMuted;
+const TEXT = Colors.textPrimary;
+const SURFACE_ALT = Colors.surfaceAlt;
+const BRAND = Colors.brand;
+const TEXT_INVERSE = Colors.textInverse;
+
 const COVER_HEIGHT = 160;
 const GRID_GAP = 8;
 const CARD_ASPECT = 1.25;
@@ -88,14 +96,13 @@ function getCollapsedInitials(name: string): string {
 }
 
 export default function UserProfileScreen({ navigation, route }: Props) {
-  // ═══════════════════════════════════════════════════════════════════════
-  // ALL HOOKS — unconditional, no early returns before this section ends
-  // ═══════════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ALL HOOKS â€” unconditional, no early returns before this section ends
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
   const { width: screenWidth } = useWindowDimensions();
   const { show: showToast } = useToast();
-  const { colors, isDark } = useAppTheme();
 
   const currentUser = useStore(s => s.currentUser);
   const userAvatar = useStore(s => s.userAvatar);
@@ -161,7 +168,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
 
   const profileDeepLink = useMemo(() => targetUserId ? `${PROFILE_WEB_BASE}/u/${encodeURIComponent(targetUserId)}` : PROFILE_WEB_BASE, [targetUserId]);
 
-  // Tab counts — ratingAverage consumed by ProfileHero via stats
+  // Tab counts â€” ratingAverage consumed by ProfileHero via stats
   const activeCount = stats?.activeListingCount ?? 0;
   const soldCount = stats?.soldListingCount ?? 0;
   const lookCount = stats?.publishedLookCount ?? 0;
@@ -195,22 +202,16 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const reviewSummary: SellerReviewSummary | null = reviewsQuery.data?.pages?.[0]?.summary ?? null;
 
   // Scroll / header animation
-  const hasCover = Boolean(displayCover);
-  const collapseAtShared = useSharedValue(COVER_HEIGHT - 60);
   const scrollY = useSharedValue(0);
   const collapsedShared = useSharedValue(false);
   const stickyShared = useSharedValue(false);
   const stickyThreshold = useSharedValue(9999);
 
-  useEffect(() => {
-    collapseAtShared.value = hasCover ? COVER_HEIGHT - 60 : 80;
-  }, [hasCover, collapseAtShared]);
-
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (e) => {
       scrollY.value = e.contentOffset.y;
       runOnJS(saveScrollOffset)(e.contentOffset.y);
-      const collapsedAt = collapseAtShared.value;
+      const collapsedAt = COVER_HEIGHT - 60;
       if (e.contentOffset.y > collapsedAt && !collapsedShared.value) {
         collapsedShared.value = true;
         runOnJS(setCollapsedVisible)(true);
@@ -237,14 +238,12 @@ export default function UserProfileScreen({ navigation, route }: Props) {
 
   const collapsedHeaderStyle = useAnimatedStyle(() => {
     if (reducedMotion) return { opacity: collapsedShared.value ? 1 : 0 };
-    const collapseAt = collapseAtShared.value;
-    const opacity = interpolate(scrollY.value, [collapseAt - 20, collapseAt + 40], [0, 1], Extrapolation.CLAMP);
+    const opacity = interpolate(scrollY.value, [COVER_HEIGHT - 80, COVER_HEIGHT - 20], [0, 1], Extrapolation.CLAMP);
     return { opacity };
   });
 
   const collapsedHeaderShadowStyle = useAnimatedStyle(() => {
-    const collapseAt = collapseAtShared.value;
-    const shadowOpacity = interpolate(scrollY.value, [collapseAt - 20, collapseAt + 40], [0, 0.06], Extrapolation.CLAMP);
+    const shadowOpacity = interpolate(scrollY.value, [COVER_HEIGHT - 80, COVER_HEIGHT - 20], [0, 0.06], Extrapolation.CLAMP);
     return { shadowOpacity };
   });
 
@@ -258,7 +257,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   // Handlers
   const handleShare = useCallback(async () => {
     try {
-      await Share.share({ message: `${displayUsername} on Thryftverse — ${profileDeepLink}`, url: Platform.OS === 'ios' ? profileDeepLink : undefined });
+      await Share.share({ message: `${displayUsername} on Thryftverse â€” ${profileDeepLink}`, url: Platform.OS === 'ios' ? profileDeepLink : undefined });
     } catch { /* ignore */ }
   }, [displayUsername, profileDeepLink]);
 
@@ -296,8 +295,8 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const handleRefresh = useCallback(() => { activeQuery.refetch(); if (!isSelfProfile) publicProfileQuery.refetch(); }, [activeQuery, publicProfileQuery, isSelfProfile]);
   const onTabRailLayout = useCallback((y: number) => { stickyThreshold.value = y - (insets.top + COLLAPSED_BAR_HEIGHT); }, [insets.top]);
 
-  // ── Per-destination scroll offset preservation ──
-  // No overlay reset on tab switch — overlay state is derived from the real scroll offset.
+  // â”€â”€ Per-destination scroll offset preservation â”€â”€
+  // No overlay reset on tab switch â€” overlay state is derived from the real scroll offset.
   const scrollOffsets = useRef<Record<string, number>>({});
   const currentDestination: string = activeTab === 'Shop' ? `${activeTab}-${shopSegment}` : activeTab;
   const listRef = useRef<any>(null);
@@ -308,7 +307,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     scrollOffsets.current[currentDestination] = offset;
   }, [currentDestination]);
 
-  // When destination changes, queue a restore — no setTimeout during render
+  // When destination changes, queue a restore â€” no setTimeout during render
   const prevDestination = useRef<string>(currentDestination);
   useEffect(() => {
     if (prevDestination.current !== currentDestination) {
@@ -327,7 +326,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
       if (saved !== undefined && saved > 0) {
         listRef.current.scrollToOffset?.({ offset: saved, animated: false });
         // Update overlay state from the restored offset
-        const collapsedAt = hasCover ? COVER_HEIGHT - 60 : 80;
+        const collapsedAt = COVER_HEIGHT - 60;
         const stickyAt = stickyThreshold.value;
         const shouldCollapse = saved > collapsedAt;
         const shouldSticky = saved > stickyAt;
@@ -340,7 +339,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           setStickyRailVisible(shouldSticky);
         }
       } else {
-        // No previous offset — if currently collapsed, start at sticky threshold
+        // No previous offset â€” if currently collapsed, start at sticky threshold
         if (collapsedShared.value) {
           const stickyAt = stickyThreshold.value;
           if (stickyAt < 9999 && listRef.current) {
@@ -373,21 +372,21 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     );
   }, [activeTab, shopSegment, navigation, formatFromFiat, cardWidth, cardHeight, lookTileWidth, lookTileHeight, isSelfProfile]);
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // DERIVED RENDER STATE — after all hooks
-  // ═══════════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // DERIVED RENDER STATE â€” after all hooks
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   const isBlockedByTarget = viewer?.isBlockedByTarget && !viewer.isSelf;
   const isBlocked = viewer?.isBlocked ?? false;
   const canMessage = viewer?.canMessage ?? false;
 
-  // State labels — rendered by ProfileStates subcomponents:
+  // State labels â€” rendered by ProfileStates subcomponents:
   // "Profile unavailable" (ProfileUnavailableState)
   // "You've been blocked" (ProfileBlockedState)
   // canMessage gates the Message button (ProfileHero)
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // CONDITIONAL RENDERS — loading, error, unavailable, blocked
-  // ═══════════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // CONDITIONAL RENDERS â€” loading, error, unavailable, blocked
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   if (isLoadingProfile && !targetProfile) {
     return <ProfileSkeleton coverHeight={COVER_HEIGHT} screenWidth={screenWidth} destination={activeTab} />;
   }
@@ -403,9 +402,9 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     return <ProfileBlockedState onBack={() => navigation.goBack()} onShare={handleShare} coverHeight={COVER_HEIGHT} />;
   }
 
-  // ═══════════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   // MAIN RENDER
-  // ═══════════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   const numColumns = activeTab === 'Reviews' ? 1 : activeTab === 'Looks' ? LOOK_COLS : 2;
   const estimatedItemSize = activeTab === 'Shop' ? cardHeight + 64 : activeTab === 'Looks' ? lookTileHeight + LOOK_GAP : 130;
 
@@ -441,13 +440,13 @@ export default function UserProfileScreen({ navigation, route }: Props) {
 
       {/* Away-mode banner — shown when seller has holiday mode enabled */}
       {sellerTrust?.holidayMode === true ? (
-        <View style={[styles.awayBanner, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
-          <Ionicons name="pause-circle" size={18} color={colors.textMuted} />
+        <View style={styles.awayBanner}>
+          <Ionicons name="pause-circle" size={18} color={Colors.textMuted} />
           <View style={styles.awayBannerTextWrap}>
-            <Text style={[styles.awayBannerTitle, { color: colors.textPrimary }]}>
+            <Text style={styles.awayBannerTitle}>
               {isSelfProfile ? 'Your shop is on holiday' : 'This shop is on holiday'}
             </Text>
-            <Text style={[styles.awayBannerSub, { color: colors.textMuted }]}>
+            <Text style={styles.awayBannerSub}>
               {sellerTrust.awayMessage?.trim()
                 ? sellerTrust.awayMessage.trim()
                 : 'The seller is away right now. Listings are paused and will return when they are back.'}
@@ -456,7 +455,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         </View>
       ) : null}
 
-      {/* Tab rail — measures Y for sticky threshold */}
+      {/* Tab rail â€” measures Y for sticky threshold */}
       <View onLayout={(e) => onTabRailLayout(e.nativeEvent.layout.y)}>
         <TabRail
           tabs={[
@@ -488,27 +487,27 @@ export default function UserProfileScreen({ navigation, route }: Props) {
       {/* Shop policies — shown on Shop tab, derived from seller trust data */}
       {activeTab === 'Shop' && sellerTrust ? (
         <View style={styles.shopPoliciesSection}>
-          <Text style={[styles.shopPoliciesTitle, { color: colors.textMuted }]}>Shop policies</Text>
+          <Text style={styles.shopPoliciesTitle}>Shop policies</Text>
           <View style={styles.shopPoliciesGrid}>
             {sellerTrust.dispatchTimeLabel ? (
-              <View style={[styles.shopPolicyItem, { backgroundColor: colors.surfaceAlt }]}>
-                <Ionicons name="cube-outline" size={14} color={colors.textMuted} />
-                <Text style={[styles.shopPolicyText, { color: colors.textPrimary }]}>{sellerTrust.dispatchTimeLabel}</Text>
+              <View style={styles.shopPolicyItem}>
+                <Ionicons name="cube-outline" size={14} color={MUTED} />
+                <Text style={styles.shopPolicyText}>{sellerTrust.dispatchTimeLabel}</Text>
               </View>
             ) : null}
             {sellerTrust.responseTimeLabel ? (
-              <View style={[styles.shopPolicyItem, { backgroundColor: colors.surfaceAlt }]}>
-                <Ionicons name="time-outline" size={14} color={colors.textMuted} />
-                <Text style={[styles.shopPolicyText, { color: colors.textPrimary }]}>Replies {sellerTrust.responseTimeLabel}</Text>
+              <View style={styles.shopPolicyItem}>
+                <Ionicons name="time-outline" size={14} color={MUTED} />
+                <Text style={styles.shopPolicyText}>Replies {sellerTrust.responseTimeLabel}</Text>
               </View>
             ) : null}
-            <View style={[styles.shopPolicyItem, { backgroundColor: colors.surfaceAlt }]}>
-              <Ionicons name="shield-checkmark-outline" size={14} color={colors.textMuted} />
-              <Text style={[styles.shopPolicyText, { color: colors.textPrimary }]}>Buyer protection</Text>
+            <View style={styles.shopPolicyItem}>
+              <Ionicons name="shield-checkmark-outline" size={14} color={MUTED} />
+              <Text style={styles.shopPolicyText}>Buyer protection</Text>
             </View>
-            <View style={[styles.shopPolicyItem, { backgroundColor: colors.surfaceAlt }]}>
-              <Ionicons name="return-down-back-outline" size={14} color={colors.textMuted} />
-              <Text style={[styles.shopPolicyText, { color: colors.textPrimary }]}>Returns accepted</Text>
+            <View style={styles.shopPolicyItem}>
+              <Ionicons name="return-down-back-outline" size={14} color={MUTED} />
+              <Text style={styles.shopPolicyText}>Returns accepted</Text>
             </View>
           </View>
         </View>
@@ -518,8 +517,8 @@ export default function UserProfileScreen({ navigation, route }: Props) {
       {activeTab === 'Shop' && shopSegment === 'forsale' && listData.length > 0 && (
         <View style={styles.featuredSection}>
           <View style={styles.featuredHeader}>
-            <Ionicons name="star-outline" size={14} color={colors.brand} />
-            <Text style={[styles.featuredTitle, { color: colors.brand }]}>Featured</Text>
+            <Ionicons name="star-outline" size={14} color={Colors.brand} />
+            <Text style={styles.featuredTitle}>Featured</Text>
           </View>
           <ScrollView
             horizontal
@@ -537,13 +536,13 @@ export default function UserProfileScreen({ navigation, route }: Props) {
                   accessibilityLabel={`View ${listing.title}`}
                 >
                   {listing.images?.[0] ? (
-                    <CachedImage uri={listing.images[0]} style={[styles.featuredImage, { backgroundColor: colors.surfaceAlt }]} contentFit="cover" />
+                    <CachedImage uri={listing.images[0]} style={styles.featuredImage} contentFit="cover" />
                   ) : (
-                    <View style={[styles.featuredImage, styles.featuredImagePlaceholder, { backgroundColor: colors.surfaceAlt }]}>
-                      <Ionicons name="shirt-outline" size={20} color={colors.textMuted} />
+                    <View style={[styles.featuredImage, styles.featuredImagePlaceholder]}>
+                      <Ionicons name="shirt-outline" size={20} color={MUTED} />
                     </View>
                   )}
-                  <Text style={[styles.featuredPrice, { color: colors.textPrimary }]}>{formatFromFiat(listing.priceGbp, 'GBP', { displayMode: 'fiat' })}</Text>
+                  <Text style={styles.featuredPrice}>{formatFromFiat(listing.priceGbp, 'GBP', { displayMode: 'fiat' })}</Text>
                 </Pressable>
               );
             })}
@@ -558,9 +557,9 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     if (activeQuery.error) {
       return (
         <Pressable style={styles.listState} onPress={() => activeQuery.refetch()} accessibilityRole="button" accessibilityLabel="Retry loading content">
-          <Ionicons name="cloud-offline-outline" size={32} color={colors.textMuted} />
-          <Text style={[styles.listStateTitle, { color: colors.textPrimary }]}>Couldn't load {activeTab === 'Shop' ? 'listings' : activeTab === 'Looks' ? 'Looks' : 'reviews'}</Text>
-          <Text style={[styles.listStateSub, { color: colors.textMuted }]}>Tap to retry</Text>
+          <Ionicons name="cloud-offline-outline" size={32} color={MUTED} />
+          <Text style={styles.listStateTitle}>Couldn't load {activeTab === 'Shop' ? 'listings' : activeTab === 'Looks' ? 'Looks' : 'reviews'}</Text>
+          <Text style={styles.listStateSub}>Tap to retry</Text>
         </Pressable>
       );
     }
@@ -568,26 +567,26 @@ export default function UserProfileScreen({ navigation, route }: Props) {
       if (activeTab === 'Shop') {
         return (
           <View style={styles.listState}>
-            <Ionicons name="shirt-outline" size={32} color={colors.textMuted} />
-            <Text style={[styles.listStateTitle, { color: colors.textPrimary }]}>{shopSegment === 'forsale' ? 'No active listings' : 'No sold items yet'}</Text>
-            <Text style={[styles.listStateSub, { color: colors.textMuted }]}>{shopSegment === 'forsale' ? 'This seller has nothing for sale right now.' : 'Sold items will appear here.'}</Text>
+            <Ionicons name="shirt-outline" size={32} color={MUTED} />
+            <Text style={styles.listStateTitle}>{shopSegment === 'forsale' ? 'No active listings' : 'No sold items yet'}</Text>
+            <Text style={styles.listStateSub}>{shopSegment === 'forsale' ? 'This seller has nothing for sale right now.' : 'Sold items will appear here.'}</Text>
           </View>
         );
       }
       if (activeTab === 'Looks') {
         return (
           <View style={styles.listState}>
-            <Ionicons name="images-outline" size={32} color={colors.textMuted} />
-            <Text style={[styles.listStateTitle, { color: colors.textPrimary }]}>No published Looks</Text>
-            <Text style={[styles.listStateSub, { color: colors.textMuted }]}>This creator hasn't published any Looks yet.</Text>
+            <Ionicons name="images-outline" size={32} color={MUTED} />
+            <Text style={styles.listStateTitle}>No published Looks</Text>
+            <Text style={styles.listStateSub}>This creator hasn't published any Looks yet.</Text>
           </View>
         );
       }
       return (
         <View style={styles.listState}>
-          <Ionicons name="chatbubble-ellipses-outline" size={32} color={colors.textMuted} />
-          <Text style={[styles.listStateTitle, { color: colors.textPrimary }]}>No reviews yet</Text>
-          <Text style={[styles.listStateSub, { color: colors.textMuted }]}>Reviews from completed orders will appear here.</Text>
+          <Ionicons name="chatbubble-ellipses-outline" size={32} color={MUTED} />
+          <Text style={styles.listStateTitle}>No reviews yet</Text>
+          <Text style={styles.listStateSub}>Reviews from completed orders will appear here.</Text>
         </View>
       );
     }
@@ -595,21 +594,21 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   })();
 
   const listFooter = isFetchingNextPage ? (
-    <View style={styles.loadMoreIndicator}><ActivityIndicator size="small" color={colors.textMuted} /></View>
+    <View style={styles.loadMoreIndicator}><ActivityIndicator size="small" color={MUTED} /></View>
   ) : <View style={{ height: DockConstants.singleActionHeight }} />;
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
+    <View style={styles.container}>
+      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={BG} />
 
-      {/* Top utility controls — overlay cover, fade out on scroll */}
-      <View pointerEvents="box-none" style={[styles.coverActionLayer, !hasCover && { height: insets.top + 50 }]}>
+      {/* Top utility controls â€” overlay cover, fade out on scroll */}
+      <View pointerEvents="box-none" style={styles.coverActionLayer}>
         <Reanimated.View
           style={[styles.topUtilityRow, { top: Math.max(insets.top + 6, 14) }, topUtilityStyle]}
           pointerEvents={collapsedVisible ? 'none' : 'auto'}
         >
           <AnimatedPressable
-            style={[styles.topUtilityIconBtn, !hasCover && styles.topUtilityIconBtnCompact, !hasCover && { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
+            style={styles.topUtilityIconBtn}
             activeOpacity={0.9}
             onPress={() => navigation.goBack()}
             accessibilityLabel="Go back"
@@ -617,38 +616,38 @@ export default function UserProfileScreen({ navigation, route }: Props) {
             accessibilityHint="Returns to previous screen"
             hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
           >
-            <Ionicons name="arrow-back" size={18} color={hasCover ? '#fff' : colors.textPrimary} />
+            <Ionicons name="arrow-back" size={18} color="#fff" />
           </AnimatedPressable>
           <View style={styles.topUtilityRight}>
             <AnimatedPressable
-              style={[styles.topUtilityIconBtn, !hasCover && styles.topUtilityIconBtnCompact, !hasCover && { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
+              style={styles.topUtilityIconBtn}
               activeOpacity={0.9}
               onPress={handleShare}
               accessibilityLabel="Share profile"
               accessibilityRole="button"
               hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
             >
-              <Ionicons name="share-outline" size={18} color={hasCover ? '#fff' : colors.textPrimary} />
+              <Ionicons name="share-outline" size={18} color="#fff" />
             </AnimatedPressable>
             {!isSelfProfile && (
               <AnimatedPressable
-                style={[styles.topUtilityIconBtn, !hasCover && styles.topUtilityIconBtnCompact, !hasCover && { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
+                style={styles.topUtilityIconBtn}
                 activeOpacity={0.9}
                 onPress={handleMore}
                 accessibilityLabel="More options"
                 accessibilityRole="button"
                 hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
               >
-                <Ionicons name="ellipsis-horizontal" size={18} color={hasCover ? '#fff' : colors.textPrimary} />
+                <Ionicons name="ellipsis-horizontal" size={18} color="#fff" />
               </AnimatedPressable>
             )}
           </View>
         </Reanimated.View>
       </View>
 
-      {/* Collapsed header — total height = insets.top + COLLAPSED_BAR_HEIGHT, paddingTop = insets.top, inner row = COLLAPSED_BAR_HEIGHT */}
+      {/* Collapsed header â€” total height = insets.top + COLLAPSED_BAR_HEIGHT, paddingTop = insets.top, inner row = COLLAPSED_BAR_HEIGHT */}
       <Reanimated.View
-        style={[styles.collapsedHeader, { height: insets.top + COLLAPSED_BAR_HEIGHT, paddingTop: insets.top, backgroundColor: colors.background, borderBottomColor: colors.border }, collapsedHeaderStyle, collapsedHeaderShadowStyle]}
+        style={[styles.collapsedHeader, { height: insets.top + COLLAPSED_BAR_HEIGHT, paddingTop: insets.top }, collapsedHeaderStyle, collapsedHeaderShadowStyle]}
         pointerEvents={collapsedVisible ? 'auto' : 'none'}
       >
         <AnimatedPressable
@@ -658,7 +657,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           accessibilityLabel="Go back"
           accessibilityRole="button"
         >
-          <Ionicons name="arrow-back" size={18} color={colors.textPrimary} />
+          <Ionicons name="arrow-back" size={18} color={TEXT} />
         </AnimatedPressable>
         <View style={styles.collapsedCenter}>
           {displayAvatar ? (
@@ -669,27 +668,27 @@ export default function UserProfileScreen({ navigation, route }: Props) {
               contentFit="cover"
             />
           ) : (
-            <View style={[styles.collapsedAvatar, styles.collapsedAvatarMonogram, { backgroundColor: colors.surfaceAlt }]}>
-              <Text style={[styles.collapsedAvatarInitials, { color: colors.textMuted }]}>
+            <View style={[styles.collapsedAvatar, styles.collapsedAvatarMonogram]}>
+              <Text style={styles.collapsedAvatarInitials}>
                 {getCollapsedInitials(targetProfile?.displayName || displayUsername)}
               </Text>
             </View>
           )}
-          <Text style={[styles.collapsedTitle, { color: colors.textPrimary }]} numberOfLines={1} ellipsizeMode="tail">
+          <Text style={styles.collapsedTitle} numberOfLines={1} ellipsizeMode="tail">
             {targetProfile?.displayName || displayUsername}
           </Text>
         </View>
         <View style={styles.collapsedRight}>
           {!isSelfProfile && viewer ? (
             <AnimatedPressable
-              style={[styles.collapsedFollowBtn, viewer.isFollowing ? [styles.collapsedFollowingBtn, { borderColor: colors.border, backgroundColor: colors.background }] : [styles.collapsedFollowActiveBtn, { backgroundColor: colors.brand }], (followMutation.isPending || isBlocked) && styles.btnDisabled]}
+              style={[styles.collapsedFollowBtn, viewer.isFollowing ? styles.collapsedFollowingBtn : styles.collapsedFollowActiveBtn, (followMutation.isPending || isBlocked) && styles.btnDisabled]}
               onPress={handleFollowToggle}
               activeOpacity={0.85}
               disabled={followMutation.isPending || isBlocked}
               accessibilityRole="button"
               accessibilityLabel={viewer.isFollowing ? 'Unfollow' : 'Follow'}
             >
-              <Text style={[styles.collapsedFollowText, { color: colors.textPrimary }, viewer.isFollowing ? {} : { color: colors.textInverse }]}>
+              <Text style={[styles.collapsedFollowText, viewer.isFollowing ? {} : styles.collapsedFollowActiveText]}>
                 {viewer.isFollowing ? 'Following' : 'Follow'}
               </Text>
             </AnimatedPressable>
@@ -701,14 +700,14 @@ export default function UserProfileScreen({ navigation, route }: Props) {
             accessibilityRole="button"
             accessibilityLabel="Share profile"
           >
-            <Ionicons name="share-outline" size={16} color={colors.textPrimary} />
+            <Ionicons name="share-outline" size={16} color={TEXT} />
           </AnimatedPressable>
         </View>
       </Reanimated.View>
 
-      {/* Sticky tab rail — external overlay, appears when original scrolls past */}
+      {/* Sticky tab rail â€” external overlay, appears when original scrolls past */}
       <Reanimated.View
-        style={[styles.stickyRailWrap, { top: insets.top + COLLAPSED_BAR_HEIGHT, backgroundColor: colors.background, borderBottomColor: colors.border }, stickyRailStyle]}
+        style={[styles.stickyRailWrap, { top: insets.top + COLLAPSED_BAR_HEIGHT }, stickyRailStyle]}
         pointerEvents={stickyRailVisible ? 'auto' : 'none'}
       >
         <TabRail
@@ -733,7 +732,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         ) : null}
       </Reanimated.View>
 
-      {/* Content list — cover scrolls naturally as first header item */}
+      {/* Content list â€” cover scrolls naturally as first header item */}
       <AnimatedFlashList
         ref={listRef}
         data={listData as (ListingApiItem | LookApiItem | SellerReviewItem)[]}
@@ -750,7 +749,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         scrollEventThrottle={16}
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.5}
-        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={colors.textMuted} colors={[colors.textMuted]} />}
+        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={MUTED} colors={[MUTED]} />}
         key={`list-${numColumns}`}
         estimatedItemSize={estimatedItemSize}
         onContentSizeChange={handleContentSizeChange}
@@ -817,7 +816,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, backgroundColor: BG },
   coverActionLayer: { position: 'absolute', top: 0, left: 0, right: 0, height: COVER_HEIGHT, zIndex: 8 },
   topUtilityRow: { position: 'absolute', left: 12, right: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   topUtilityRight: { flexDirection: 'row', gap: 8 },
@@ -826,32 +825,29 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.22)',
     alignItems: 'center', justifyContent: 'center',
   },
-  topUtilityIconBtnCompact: {
-    borderWidth: StyleSheet.hairlineWidth,
-  },
   collapsedHeader: {
     position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 8, height: COLLAPSED_BAR_HEIGHT,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    backgroundColor: BG, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: BORDER,
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowRadius: 8, elevation: 4,
   },
   collapsedBackBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   collapsedCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4 },
   collapsedAvatar: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  collapsedAvatarMonogram: {},
-  collapsedAvatarInitials: { fontSize: 12, fontFamily: Typography.family.bold },
-  collapsedTitle: { fontSize: 16, fontFamily: Typography.family.semibold, letterSpacing: -0.3, flexShrink: 1 },
+  collapsedAvatarMonogram: { backgroundColor: SURFACE_ALT },
+  collapsedAvatarInitials: { fontSize: 12, fontFamily: Typography.family.bold, color: MUTED },
+  collapsedTitle: { fontSize: 16, fontFamily: Typography.family.semibold, color: TEXT, letterSpacing: -0.3, flexShrink: 1 },
   collapsedRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   collapsedFollowBtn: { height: 44, paddingHorizontal: 18, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  collapsedFollowingBtn: { borderWidth: StyleSheet.hairlineWidth },
-  collapsedFollowActiveBtn: {},
-  collapsedFollowText: { fontSize: 13, fontFamily: Typography.family.semibold },
-  collapsedFollowActiveText: {},
+  collapsedFollowingBtn: { borderWidth: StyleSheet.hairlineWidth, borderColor: BORDER, backgroundColor: BG },
+  collapsedFollowActiveBtn: { backgroundColor: BRAND },
+  collapsedFollowText: { fontSize: 13, fontFamily: Typography.family.semibold, color: TEXT },
+  collapsedFollowActiveText: { color: TEXT_INVERSE },
   collapsedIconBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   stickyRailWrap: {
     position: 'absolute', left: 0, right: 0, zIndex: 9,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    backgroundColor: BG, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: BORDER,
   },
   stickySegmentWrap: { paddingHorizontal: Space.md, paddingVertical: Space.sm },
   segmentWrap: { paddingHorizontal: Space.md, paddingVertical: Space.sm, flexDirection: 'row' },
@@ -864,7 +860,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
     borderRadius: 12,
+    backgroundColor: Colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
   },
   awayBannerTextWrap: {
     flex: 1,
@@ -873,10 +871,12 @@ const styles = StyleSheet.create({
   awayBannerTitle: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
   },
   awayBannerSub: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
     lineHeight: 17,
   },
   shopPoliciesSection: {
@@ -887,6 +887,7 @@ const styles = StyleSheet.create({
   shopPoliciesTitle: {
     fontSize: 11,
     fontFamily: Typography.family.semibold,
+    color: MUTED,
     textTransform: 'uppercase',
     letterSpacing: 0.7,
     marginBottom: Space.xs,
@@ -902,11 +903,13 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingHorizontal: 10,
     paddingVertical: 5,
+    backgroundColor: Colors.surfaceAlt,
     borderRadius: 8,
   },
   shopPolicyText: {
     fontSize: 11,
     fontFamily: Typography.family.medium,
+    color: TEXT,
   },
   featuredSection: {
     paddingTop: Space.sm,
@@ -922,6 +925,7 @@ const styles = StyleSheet.create({
   featuredTitle: {
     fontSize: 11,
     fontFamily: Typography.family.semibold,
+    color: Colors.brand,
     textTransform: 'uppercase',
     letterSpacing: 0.7,
   },
@@ -937,6 +941,7 @@ const styles = StyleSheet.create({
     width: 100,
     height: 120,
     borderRadius: 8,
+    backgroundColor: Colors.surfaceAlt,
   },
   featuredImagePlaceholder: {
     alignItems: 'center',
@@ -945,10 +950,11 @@ const styles = StyleSheet.create({
   featuredPrice: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
+    color: TEXT,
   },
   listState: { alignItems: 'center', justifyContent: 'center', paddingVertical: Space.xl * 2, paddingHorizontal: Space.md, gap: 8 },
-  listStateTitle: { fontSize: 15, fontFamily: Typography.family.semibold },
-  listStateSub: { fontSize: 13, fontFamily: Typography.family.regular, textAlign: 'center' },
+  listStateTitle: { fontSize: 15, fontFamily: Typography.family.semibold, color: TEXT },
+  listStateSub: { fontSize: 13, fontFamily: Typography.family.regular, color: MUTED, textAlign: 'center' },
   loadMoreIndicator: { paddingVertical: Space.md, alignItems: 'center' },
   btnDisabled: { opacity: 0.5 },
 });

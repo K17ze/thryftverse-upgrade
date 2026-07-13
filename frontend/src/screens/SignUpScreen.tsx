@@ -4,7 +4,7 @@ import Reanimated, { useSharedValue, useAnimatedStyle, withSequence, withTiming,
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useAppTheme } from '../theme/ThemeContext';
+import { ActiveTheme, Colors } from '../constants/colors';
 import { Type, Space } from '../theme/designTokens';
 import { useStore } from '../store/useStore';
 import { signupWithPassword } from '../services/authApi';
@@ -17,7 +17,6 @@ import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 
 export default function SignUpScreen() {
   const navigation = useNavigation<any>();
-  const { colors, isDark } = useAppTheme();
   const login = useStore((state) => state.login);
   const setTwoFactorEnabled = useStore((state) => state.setTwoFactorEnabled);
   const [username, setUsername] = useState('');
@@ -105,11 +104,11 @@ export default function SignUpScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
+      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
 
       <View style={styles.header}>
         <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
         </AnimatedPressable>
       </View>
 
@@ -198,9 +197,9 @@ export default function SignUpScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, backgroundColor: Colors.background },
   header: { paddingHorizontal: Space.md, paddingTop: Space.sm, paddingBottom: Space.lg },
-  backBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' },
 
   keyboardWrap: { flex: 1 },
   content: { flex: 1 },
@@ -211,15 +210,15 @@ const styles = StyleSheet.create({
     paddingTop: Space.sm,
     paddingBottom: Space.lg,
   },
-  title: { fontSize: Type.title.size + 8, fontFamily: Typography.family.bold, lineHeight: Type.title.lineHeight + 8, letterSpacing: Type.title.letterSpacing - 0.4, marginBottom: Space.xl + 8 },
+  title: { fontSize: Type.title.size + 8, fontFamily: Typography.family.bold, color: Colors.textPrimary, lineHeight: Type.title.lineHeight + 8, letterSpacing: Type.title.letterSpacing - 0.4, marginBottom: Space.xl + 8 },
 
   form: { marginBottom: Space.lg + 6 },
   inputGroup: { marginBottom: Space.lg - 2 },
 
   footer: { paddingBottom: Space.sm, position: 'relative' },
-  termsText: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, textAlign: 'center', marginBottom: Space.lg - 4, lineHeight: Type.caption.lineHeight + 2 },
-  errorText: { fontSize: 13, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: Space.md - 4 },
-  primaryBtn: { height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
+  termsText: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: Colors.textMuted, textAlign: 'center', marginBottom: Space.lg - 4, lineHeight: Type.caption.lineHeight + 2 },
+  errorText: { color: Colors.danger, fontSize: 13, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: Space.md - 4 },
+  primaryBtn: { backgroundColor: Colors.textPrimary, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
   primaryBtnDisabled: { opacity: 0.45 },
-  primaryText: { fontSize: Type.body.size + 2, fontFamily: Typography.family.bold },
+  primaryText: { color: Colors.background, fontSize: Type.body.size + 2, fontFamily: Typography.family.bold },
 });

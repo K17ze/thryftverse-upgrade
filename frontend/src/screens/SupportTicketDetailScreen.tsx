@@ -16,6 +16,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme } from '../theme/ThemeContext';
+import { Colors } from '../constants/colors';
 import { Space, Radius, Type, Typography, Elevation } from '../theme/designTokens';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -28,7 +29,6 @@ import { CachedImage } from '../components/CachedImage';
 import { getListingCoverUri } from '../utils/media';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 
 type Props = StackScreenProps<RootStackParamList, 'SupportTicketDetail'>;
 
@@ -40,11 +40,10 @@ const STATUS_CONFIG: Record<string, { label: string; tone: 'pending' | 'success'
 
 export default function SupportTicketDetailScreen({ navigation, route }: Props) {
   const { ticketId } = route.params;
-  const { colors, isDark } = useAppTheme();
+  const { isDark } = useAppTheme();
   const { show } = useToast();
   const haptic = useHaptic();
   const { formatFromFiat } = useFormattedPrice();
-  const reducedMotionEnabled = useReducedMotion();
 
   const supportTickets = useStore((state) => state.supportTickets);
   const updateSupportTicketStatus = useStore((state) => state.updateSupportTicketStatus);
@@ -105,7 +104,7 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
         <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
         <ScreenHeader title="Support Request" onBack={() => navigation.goBack()} />
         <View style={styles.center}>
-          <Ionicons name="help-circle-outline" size={48} color={colors.textMuted} />
+          <Ionicons name="help-circle-outline" size={48} color={Colors.textMuted} />
           <Text style={styles.emptyTitle}>Ticket not found</Text>
           <Text style={styles.emptySub}>This support request may have been removed.</Text>
         </View>
@@ -135,7 +134,7 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         {/* Order context card */}
         {order && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(20)}>
+          <Reanimated.View entering={FadeInDown.duration(300).delay(20)}>
             <ElevatedSurface variant="surface" style={styles.orderContextCard}>
               <View style={styles.orderContextRow}>
                 {order.listingImageUrl && (
@@ -156,15 +155,15 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
         )}
 
         {/* Status header */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(40)}>
+        <Reanimated.View entering={FadeInDown.duration(300).delay(40)}>
           <View style={styles.statusCard}>
             <View style={styles.statusHeader}>
               <View style={styles.statusIconWrap}>
-                <Ionicons name="shield-checkmark-outline" size={28} color={colors.brand} />
+                <Ionicons name="shield-checkmark-outline" size={28} color={Colors.brand} />
               </View>
               <View style={{ flex: 1 }}>
                 <BodyEmphasis style={styles.statusTitle}>{ticket.topicLabel}</BodyEmphasis>
-                <Caption color={colors.textMuted} style={styles.statusId}>
+                <Caption color={Colors.textMuted} style={styles.statusId}>
                   Ticket #{ticket.id.slice(-8).toUpperCase()}
                 </Caption>
               </View>
@@ -185,11 +184,11 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
 
             <View style={styles.metaRow}>
               <View style={styles.metaItem}>
-                <Meta color={colors.textMuted}>ORDER</Meta>
+                <Meta color={Colors.textMuted}>ORDER</Meta>
                 <Text style={styles.metaValue}>#{ticket.orderId.slice(-8).toUpperCase()}</Text>
               </View>
               <View style={styles.metaItem}>
-                <Meta color={colors.textMuted}>DATE</Meta>
+                <Meta color={Colors.textMuted}>DATE</Meta>
                 <Text style={styles.metaValue}>{createdDate}</Text>
               </View>
             </View>
@@ -197,8 +196,8 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
         </Reanimated.View>
 
         {/* Details */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)}>
-          <Meta color={colors.textMuted} style={styles.sectionLabel}>DETAILS</Meta>
+        <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
+          <Meta color={Colors.textMuted} style={styles.sectionLabel}>DETAILS</Meta>
           <View style={styles.detailsCard}>
             <Text style={styles.detailsText}>{ticket.details}</Text>
           </View>
@@ -206,8 +205,8 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
 
         {/* Evidence */}
         {evidenceUrls.length > 0 && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(100)}>
-            <Meta color={colors.textMuted} style={styles.sectionLabel}>EVIDENCE</Meta>
+          <Reanimated.View entering={FadeInDown.duration(300).delay(100)}>
+            <Meta color={Colors.textMuted} style={styles.sectionLabel}>EVIDENCE</Meta>
             <View style={styles.evidenceCard}>
               <View style={styles.evidenceThumbs}>
                 {evidenceUrls.map((uri) => (
@@ -219,8 +218,8 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
         )}
 
         {/* Timeline */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
-          <Meta color={colors.textMuted} style={styles.sectionLabel}>TIMELINE</Meta>
+        <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
+          <Meta color={Colors.textMuted} style={styles.sectionLabel}>TIMELINE</Meta>
           <View style={styles.timelineListCard}>
             <View style={styles.timelineItem}>
               <View style={[styles.timelineDot, styles.timelineDotActive]} />
@@ -245,8 +244,8 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
         </Reanimated.View>
 
         {/* Support note */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(140)} style={styles.timelineCard}>
-          <Ionicons name="time-outline" size={20} color={colors.textMuted} />
+        <Reanimated.View entering={FadeInDown.duration(300).delay(140)} style={styles.timelineCard}>
+          <Ionicons name="time-outline" size={20} color={Colors.textMuted} />
           <View style={{ flex: 1, marginLeft: 12 }}>
             <Text style={styles.timelineTitle}>Typical response time</Text>
             <Text style={styles.timelineSub}>
@@ -256,13 +255,13 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
         </Reanimated.View>
 
         {/* Actions */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(160)} style={styles.actionsCard}>
+        <Reanimated.View entering={FadeInDown.duration(300).delay(160)} style={styles.actionsCard}>
           {ticket.status === 'open' && (
             <AppButton
               title="Close Request"
               variant="secondary"
               size="lg"
-              icon={<Ionicons name="close-circle-outline" size={18} color={colors.textPrimary} />}
+              icon={<Ionicons name="close-circle-outline" size={18} color={Colors.textPrimary} />}
               style={styles.actionBtn}
               onPress={handleClose}
               hapticFeedback="medium"
@@ -274,7 +273,7 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
               title="Reopen Request"
               variant="primary"
               size="lg"
-              icon={<Ionicons name="refresh-outline" size={18} color={colors.background} />}
+              icon={<Ionicons name="refresh-outline" size={18} color={Colors.background} />}
               style={styles.actionBtn}
               onPress={handleReopen}
               hapticFeedback="medium"
@@ -288,9 +287,9 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
             scaleValue={0.98}
             hapticFeedback="light"
           >
-            <Ionicons name="cube-outline" size={18} color={colors.textSecondary} />
+            <Ionicons name="cube-outline" size={18} color={Colors.textSecondary} />
             <Text style={styles.orderLinkText}>View order</Text>
-            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+            <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
           </AnimatedPressable>
         </Reanimated.View>
       </ScrollView>
@@ -301,6 +300,7 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: Colors.background,
   },
   content: {
     paddingHorizontal: Space.md,
@@ -318,14 +318,17 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: Type.title.size,
     fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
     marginTop: Space.sm,
   },
   emptySub: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
     textAlign: 'center',
   },
   statusCard: {
+    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     padding: Space.lg,
     ...Elevation.subtle,
@@ -340,11 +343,13 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: Radius.full,
+    backgroundColor: Colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
   },
   statusTitle: {
     fontSize: Type.title.size,
+    color: Colors.textPrimary,
     marginBottom: 2,
   },
   statusId: {
@@ -354,6 +359,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Space.lg,
     borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
     paddingTop: Space.md,
   },
   metaItem: {
@@ -362,6 +368,7 @@ const styles = StyleSheet.create({
   metaValue: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
   },
   sectionLabel: {
     marginLeft: Space.sm,
@@ -369,6 +376,7 @@ const styles = StyleSheet.create({
     marginBottom: Space.sm,
   },
   detailsCard: {
+    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     padding: Space.lg,
     ...Elevation.subtle,
@@ -376,22 +384,27 @@ const styles = StyleSheet.create({
   detailsText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
+    color: Colors.textPrimary,
     lineHeight: Type.body.lineHeight + 4,
   },
   timelineCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
+    backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.lg,
     padding: Space.md,
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
   },
   timelineTitle: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
   },
   timelineSub: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
     marginTop: 4,
     lineHeight: Type.caption.lineHeight + 2,
   },
@@ -405,6 +418,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
+    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     paddingVertical: Space.md,
     paddingHorizontal: Space.lg,
@@ -414,8 +428,10 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
   },
   orderContextCard: {
+    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     padding: Space.md,
     ...Elevation.subtle,
@@ -437,17 +453,21 @@ const styles = StyleSheet.create({
   orderContextTitle: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
   },
   orderContextMeta: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
+    color: Colors.textSecondary,
   },
   orderContextStatus: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
+    color: Colors.brand,
     textTransform: 'capitalize',
   },
   evidenceCard: {
+    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     padding: Space.md,
     ...Elevation.subtle,
@@ -463,6 +483,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
   },
   timelineListCard: {
+    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     padding: Space.lg,
     ...Elevation.subtle,
@@ -478,13 +499,17 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
   },
   timelineDotActive: {
+    backgroundColor: Colors.brand,
   },
   timelineDotPending: {
+    backgroundColor: Colors.surfaceAlt,
     borderWidth: 2,
+    borderColor: Colors.border,
   },
   timelineLine: {
     width: 2,
     height: 24,
+    backgroundColor: Colors.border,
     marginLeft: 5,
   },
   timelineContent: {
@@ -493,10 +518,12 @@ const styles = StyleSheet.create({
   timelineItemTitle: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
   },
   timelineItemDate: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
     marginTop: 2,
   },
 });

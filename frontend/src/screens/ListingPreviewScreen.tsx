@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
 
 import { RootStackParamList } from '../navigation/types';
-import { useAppTheme } from '../theme/ThemeContext';
+import { Colors } from '../constants/colors';
 import { Space, Typography, DockConstants } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useStore } from '../store/useStore';
@@ -32,7 +32,6 @@ const HERO_HEIGHT = SCREEN_H * 0.65;
 export default function ListingPreviewScreen({ navigation, route }: Props) {
   const { preview, origin } = route.params;
   const insets = useSafeAreaInsets();
-  const { colors, isDark } = useAppTheme();
   const { formatFromFiat } = useFormattedPrice();
   const currentUser = useStore((s) => s.currentUser);
 
@@ -93,7 +92,7 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
             />
           ) : (
             <View style={[styles.heroWrap, styles.heroEmpty]}>
-              <Ionicons name="image-outline" size={48} color={colors.textMuted} />
+              <Ionicons name="image-outline" size={48} color={Colors.textMuted} />
               <Text style={styles.heroEmptyText}>No photos added</Text>
             </View>
           )}
@@ -162,7 +161,7 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
 
         {/* ── 3. PURCHASE CONTEXT ── */}
         <View style={styles.contextRow}>
-          <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
+          <Ionicons name="information-circle-outline" size={14} color={Colors.textMuted} />
           <Text style={styles.contextText}>
             Payment and delivery options are confirmed at checkout.
           </Text>
@@ -214,7 +213,7 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
               />
             ) : (
               <View style={[styles.sellerAvatar, styles.sellerAvatarFallback]}>
-                <Ionicons name="person" size={18} color={colors.textMuted} />
+                <Ionicons name="person" size={18} color={Colors.textMuted} />
               </View>
             )}
             <View style={styles.sellerInfo}>
@@ -269,6 +268,7 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: Colors.background,
   },
   scrollContent: {
     paddingBottom: 0,
@@ -276,6 +276,7 @@ const styles = StyleSheet.create({
   heroWrap: {
     width: SCREEN_W,
     height: HERO_HEIGHT,
+    backgroundColor: Colors.surfaceAlt,
     overflow: 'hidden',
   },
   heroEmpty: {
@@ -286,6 +287,7 @@ const styles = StyleSheet.create({
   heroEmptyText: {
     fontSize: 14,
     fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
   },
   topScrim: {
     position: 'absolute',
@@ -336,6 +338,7 @@ const styles = StyleSheet.create({
   authoringHint: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
     fontStyle: 'italic',
     paddingHorizontal: Space.md,
     paddingBottom: Space.sm,
@@ -351,6 +354,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
   },
   sectionGroup: {
     paddingHorizontal: Space.md,
@@ -359,12 +363,14 @@ const styles = StyleSheet.create({
   sectionHeading: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
+    color: Colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: Space.sm,
   },
   specGrid: {
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
     borderRadius: 8,
     overflow: 'hidden',
   },
@@ -378,25 +384,30 @@ const styles = StyleSheet.create({
   },
   specRowBorder: {
     borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
   },
   specLabel: {
     fontSize: 14,
     fontFamily: Typography.family.regular,
+    color: Colors.textSecondary,
   },
   specValue: {
     fontSize: 14,
     fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
     textAlign: 'right',
     flexShrink: 1,
   },
   descriptionText: {
     fontSize: 15,
     fontFamily: Typography.family.regular,
+    color: Colors.textPrimary,
     lineHeight: 22,
   },
   descriptionPlaceholder: {
     fontSize: 14,
     fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
     fontStyle: 'italic',
   },
   sellerRow: {
@@ -411,6 +422,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   sellerAvatarFallback: {
+    backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -420,10 +432,12 @@ const styles = StyleSheet.create({
   sellerName: {
     fontSize: 14,
     fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
   },
   sellerSubtext: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
     marginTop: 2,
   },
 });

@@ -14,15 +14,24 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
+import { ActiveTheme, Colors } from '../constants/colors';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Space, Radius, Type, Typography, LetterSpacing } from '../theme/designTokens';
-import { useAppTheme } from '../theme/ThemeContext';
 
 type Props = StackScreenProps<RootStackParamList, 'InviteFriends'>;
+
+const ACCENT = Colors.brand;
+const BG = Colors.background;
+const CARD = Colors.surface;
+const CARD_ALT = Colors.surfaceAlt;
+const BORDER = Colors.border;
+const MUTED = Colors.textMuted;
+const TEXT = Colors.textPrimary;
+const SUCCESS = Colors.success;
 
 /**
  * Generate a deterministic referral code from a user ID.
@@ -35,7 +44,6 @@ function generateReferralCode(userId: string): string {
 }
 
 export default function InviteFriendsScreen({ navigation }: Props) {
-  const { colors, isDark } = useAppTheme();
   const currentUser = useStore((s) => s.currentUser);
   const { show } = useToast();
   const reducedMotionEnabled = useReducedMotion();
@@ -102,19 +110,19 @@ export default function InviteFriendsScreen({ navigation }: Props) {
   }, [referralCode, show]);
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={BG} />
       <ScreenHeader title="Invite friends" onBack={() => navigation.goBack()} />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* Hero */}
         <Reanimated.View
-          style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          style={styles.heroCard}
           entering={reducedMotionEnabled ? undefined : FadeInDown.delay(0).duration(400)}
         >
-          <Ionicons name="gift-outline" size={48} color={colors.brand} />
-          <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>Invite & earn</Text>
-          <Text style={[styles.heroSubtitle, { color: colors.textMuted }]}>
+          <Ionicons name="gift-outline" size={48} color={ACCENT} />
+          <Text style={styles.heroTitle}>Invite & earn</Text>
+          <Text style={styles.heroSubtitle}>
             Invite friends to Thryftverse. When they make their first sale, you both get a reward.
           </Text>
         </Reanimated.View>
@@ -124,12 +132,12 @@ export default function InviteFriendsScreen({ navigation }: Props) {
           entering={reducedMotionEnabled ? undefined : FadeInDown.delay(80).duration(400)}
         >
           <View style={styles.section}>
-            <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>YOUR REFERRAL CODE</Text>
-            <View style={[styles.codeRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <Text style={[styles.codeText, { color: colors.textPrimary }]}>{referralCode}</Text>
+            <Text style={styles.sectionLabel}>YOUR REFERRAL CODE</Text>
+            <View style={styles.codeRow}>
+              <Text style={styles.codeText}>{referralCode}</Text>
               <AnimatedPressable style={styles.copyBtn} onPress={() => void handleCopyCode()} accessibilityLabel="Copy referral code" accessibilityRole="button">
-                <Ionicons name="copy-outline" size={16} color={colors.brand} />
-                <Text style={[styles.copyText, { color: colors.brand }]}>Copy</Text>
+                <Ionicons name="copy-outline" size={16} color={ACCENT} />
+                <Text style={styles.copyText}>Copy</Text>
               </AnimatedPressable>
             </View>
           </View>
@@ -140,14 +148,14 @@ export default function InviteFriendsScreen({ navigation }: Props) {
           entering={reducedMotionEnabled ? undefined : FadeInDown.delay(160).duration(400)}
         >
           <View style={styles.section}>
-            <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>YOUR INVITE LINK</Text>
-            <View style={[styles.linkRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <Text style={[styles.linkText, { color: colors.textMuted }]} numberOfLines={1}>
+            <Text style={styles.sectionLabel}>YOUR INVITE LINK</Text>
+            <View style={styles.linkRow}>
+              <Text style={styles.linkText} numberOfLines={1}>
                 {inviteLink}
               </Text>
               <AnimatedPressable style={styles.copyBtn} onPress={() => void handleCopyLink()} accessibilityLabel="Copy invite link" accessibilityRole="button">
-                <Ionicons name="copy-outline" size={16} color={colors.brand} />
-                <Text style={[styles.copyText, { color: colors.brand }]}>Copy</Text>
+                <Ionicons name="copy-outline" size={16} color={ACCENT} />
+                <Text style={styles.copyText}>Copy</Text>
               </AnimatedPressable>
             </View>
           </View>
@@ -161,14 +169,14 @@ export default function InviteFriendsScreen({ navigation }: Props) {
             {[
               { icon: 'logo-whatsapp', label: 'WhatsApp', color: '#25D366' },
               { icon: 'logo-instagram', label: 'Instagram', color: '#E1306C' },
-              { icon: 'mail-outline', label: 'Email', color: colors.brand },
-              { icon: 'share-social-outline', label: 'More', color: colors.textMuted },
+              { icon: 'mail-outline', label: 'Email', color: ACCENT },
+              { icon: 'share-social-outline', label: 'More', color: MUTED },
             ].map(s => (
               <AnimatedPressable key={s.label} style={styles.shareIconBtn} onPress={handleShare} accessibilityLabel={`Share via ${s.label}`} accessibilityRole="button">
-                <View style={[styles.shareIconCircle, { borderColor: s.color, backgroundColor: colors.surfaceAlt }]}>
+                <View style={[styles.shareIconCircle, { borderColor: s.color }]}>
                   <Ionicons name={s.icon as any} size={22} color={s.color} />
                 </View>
-                <Text style={[styles.shareIconLabel, { color: colors.textMuted }]}>{s.label}</Text>
+                <Text style={styles.shareIconLabel}>{s.label}</Text>
               </AnimatedPressable>
             ))}
           </View>
@@ -178,33 +186,33 @@ export default function InviteFriendsScreen({ navigation }: Props) {
         <Reanimated.View
           entering={reducedMotionEnabled ? undefined : FadeInDown.delay(320).duration(400)}
         >
-          <View style={[styles.rewardsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.rewardsCard}>
             <View style={styles.rewardsHeader}>
-              <Ionicons name="ribbon-outline" size={18} color={colors.brand} />
-              <Text style={[styles.rewardsTitle, { color: colors.textPrimary }]}>Your rewards</Text>
+              <Ionicons name="ribbon-outline" size={18} color={ACCENT} />
+              <Text style={styles.rewardsTitle}>Your rewards</Text>
             </View>
             <View style={styles.statsRow}>
               <View style={styles.statCell}>
-                <Text style={[styles.statValue, { color: colors.textPrimary }]}>{referralStats.invited}</Text>
-                <Text style={[styles.statLabel, { color: colors.textMuted }]}>Invited</Text>
+                <Text style={styles.statValue}>{referralStats.invited}</Text>
+                <Text style={styles.statLabel}>Invited</Text>
               </View>
-              <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+              <View style={styles.statDivider} />
               <View style={styles.statCell}>
-                <Text style={[styles.statValue, { color: colors.textPrimary }]}>{referralStats.joined}</Text>
-                <Text style={[styles.statLabel, { color: colors.textMuted }]}>Joined</Text>
+                <Text style={styles.statValue}>{referralStats.joined}</Text>
+                <Text style={styles.statLabel}>Joined</Text>
               </View>
-              <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+              <View style={styles.statDivider} />
               <View style={styles.statCell}>
-                <Text style={[styles.statValue, { color: colors.success }]}>{referralStats.rewarded}</Text>
-                <Text style={[styles.statLabel, { color: colors.textMuted }]}>Rewarded</Text>
+                <Text style={[styles.statValue, { color: SUCCESS }]}>{referralStats.rewarded}</Text>
+                <Text style={styles.statLabel}>Rewarded</Text>
               </View>
-              <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+              <View style={styles.statDivider} />
               <View style={styles.statCell}>
-                <Text style={[styles.statValue, { color: colors.brand }]}>£{referralStats.creditsBalance}</Text>
-                <Text style={[styles.statLabel, { color: colors.textMuted }]}>Credits</Text>
+                <Text style={[styles.statValue, { color: ACCENT }]}>£{referralStats.creditsBalance}</Text>
+                <Text style={styles.statLabel}>Credits</Text>
               </View>
             </View>
-            <Text style={[styles.rewardsFootnote, { color: colors.textMuted }]}>
+            <Text style={styles.rewardsFootnote}>
               Earn £5 credit for each friend who completes their first sale. Credits apply to platform fees on your next listing.
             </Text>
           </View>
@@ -214,35 +222,35 @@ export default function InviteFriendsScreen({ navigation }: Props) {
         <Reanimated.View
           entering={reducedMotionEnabled ? undefined : FadeInDown.delay(360).duration(400)}
         >
-          <View style={[styles.loyaltyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.loyaltyCard}>
             <View style={styles.loyaltyHeader}>
-              <View style={[styles.loyaltyIconWrap, { borderColor: loyaltyTier.color, backgroundColor: colors.surfaceAlt }]}>
+              <View style={[styles.loyaltyIconWrap, { borderColor: loyaltyTier.color }]}>
                 <Ionicons name={loyaltyTier.icon as any} size={24} color={loyaltyTier.color} />
               </View>
               <View style={styles.loyaltyInfo}>
-                <Text style={[styles.loyaltyTierName, { color: colors.textPrimary }]}>{loyaltyTier.name} Member</Text>
-                <Text style={[styles.loyaltySubtext, { color: colors.textMuted }]}>
+                <Text style={styles.loyaltyTierName}>{loyaltyTier.name} Member</Text>
+                <Text style={styles.loyaltySubtext}>
                   {loyaltyTier.nextThreshold
                     ? `${loyaltyTier.nextThreshold - referralStats.rewarded} more referrals to reach ${loyaltyTier.name === 'Bronze' ? 'Silver' : 'Gold'}`
                     : 'Highest tier reached'}
                 </Text>
               </View>
             </View>
-            <View style={[styles.loyaltyProgressTrack, { backgroundColor: colors.border }]}>
+            <View style={styles.loyaltyProgressTrack}>
               <View style={[styles.loyaltyProgressFill, { width: `${Math.min(loyaltyTier.progress, 100)}%`, backgroundColor: loyaltyTier.color }]} />
             </View>
             <View style={styles.loyaltyBenefitsRow}>
               <View style={styles.loyaltyBenefit}>
-                <Ionicons name="pricetag-outline" size={14} color={colors.textMuted} />
-                <Text style={[styles.loyaltyBenefitText, { color: colors.textMuted }]}>Reduced fees</Text>
+                <Ionicons name="pricetag-outline" size={14} color={MUTED} />
+                <Text style={styles.loyaltyBenefitText}>Reduced fees</Text>
               </View>
               <View style={styles.loyaltyBenefit}>
-                <Ionicons name="flash-outline" size={14} color={colors.textMuted} />
-                <Text style={[styles.loyaltyBenefitText, { color: colors.textMuted }]}>Priority support</Text>
+                <Ionicons name="flash-outline" size={14} color={MUTED} />
+                <Text style={styles.loyaltyBenefitText}>Priority support</Text>
               </View>
               <View style={styles.loyaltyBenefit}>
-                <Ionicons name="star-outline" size={14} color={colors.textMuted} />
-                <Text style={[styles.loyaltyBenefitText, { color: colors.textMuted }]}>Exclusive drops</Text>
+                <Ionicons name="star-outline" size={14} color={MUTED} />
+                <Text style={styles.loyaltyBenefitText}>Exclusive drops</Text>
               </View>
             </View>
           </View>
@@ -252,8 +260,8 @@ export default function InviteFriendsScreen({ navigation }: Props) {
         <Reanimated.View
           entering={reducedMotionEnabled ? undefined : FadeInDown.delay(400).duration(400)}
         >
-          <View style={[styles.howItWorksCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>HOW IT WORKS</Text>
+          <View style={styles.howItWorksCard}>
+            <Text style={styles.sectionLabel}>HOW IT WORKS</Text>
             {[
               { icon: 'share-outline', text: 'Share your referral link with friends' },
               { icon: 'person-add-outline', text: 'They sign up and create an account' },
@@ -261,10 +269,10 @@ export default function InviteFriendsScreen({ navigation }: Props) {
               { icon: 'gift-outline', text: 'You both get £5 credit automatically' },
             ].map((step, i) => (
               <View key={i} style={styles.stepRow}>
-                <View style={[styles.stepIconWrap, { backgroundColor: `${colors.brand}15` }]}>
-                  <Ionicons name={step.icon as any} size={16} color={colors.brand} />
+                <View style={styles.stepIconWrap}>
+                  <Ionicons name={step.icon as any} size={16} color={ACCENT} />
                 </View>
-                <Text style={[styles.stepText, { color: colors.textPrimary }]}>{step.text}</Text>
+                <Text style={styles.stepText}>{step.text}</Text>
               </View>
             ))}
           </View>

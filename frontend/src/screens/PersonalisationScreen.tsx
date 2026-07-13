@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, Pressable, Alert } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { useAppTheme } from '../theme/ThemeContext';
+import { Colors } from '../constants/colors';
 import { Space, Typography } from '../theme/designTokens';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { useToast } from '../context/ToastContext';
@@ -35,7 +35,6 @@ export default function PersonalisationScreen() {
   const membersPref = personalisationPreferences.membersPref;
   const [pickerMode, setPickerMode] = useState<PreferencePickerMode>(null);
   const { show } = useToast();
-  const { colors, isDark } = useAppTheme();
   const haptic = useHaptic();
 
   const handleSelectGender = useCallback(
@@ -140,7 +139,7 @@ export default function PersonalisationScreen() {
           onBack={() => navigation.goBack()}
           rightAction={
             <View style={styles.headerRight}>
-              <Ionicons name="checkmark-circle" size={14} color={colors.success} />
+              <Ionicons name="checkmark-circle" size={14} color={Colors.success} />
               <Text style={styles.headerSaved}>Saved</Text>
             </View>
           }
@@ -213,7 +212,7 @@ export default function PersonalisationScreen() {
           accessibilityRole="button"
           accessibilityLabel="Reset preferences to defaults"
         >
-          <Ionicons name="refresh-outline" size={16} color={colors.textMuted} />
+          <Ionicons name="refresh-outline" size={16} color={Colors.textMuted} />
           <Text style={styles.resetBtnText}>Reset preferences</Text>
         </Pressable>
       </ScrollView>
@@ -240,6 +239,7 @@ const styles = StyleSheet.create({
   headerSaved: {
     fontSize: 13,
     fontFamily: Typography.family.medium,
+    color: Colors.success,
   },
 
   // Scroll
@@ -256,11 +256,13 @@ const styles = StyleSheet.create({
   introTitle: {
     fontSize: 28,
     fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
     letterSpacing: -0.5,
   },
   introBody: {
     fontSize: 15,
     fontFamily: Typography.family.regular,
+    color: Colors.textSecondary,
     lineHeight: 21,
   },
 
@@ -271,6 +273,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
+    color: Colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     marginBottom: Space.sm,
@@ -294,5 +297,6 @@ const styles = StyleSheet.create({
   resetBtnText: {
     fontSize: 14,
     fontFamily: Typography.family.medium,
+    color: Colors.textMuted,
   },
 });

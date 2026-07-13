@@ -8,7 +8,6 @@ import { Colors } from '../../constants/colors';
 import { Space, Radius, Type } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { PremiumStatusPill } from '../ui/PremiumStatusPill';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 interface FlagshipOrderCardProps {
   imageUri?: string | null;
@@ -43,10 +42,9 @@ export function FlagshipOrderCard({
       : 'pending';
 
   const actorLabel = buyerName ? `To ${buyerName}` : sellerName ? `From ${sellerName}` : '';
-  const reducedMotionEnabled = useReducedMotion();
 
   return (
-    <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.delay(Math.min(index, 6) * 40).duration(240)}>
+    <Reanimated.View entering={FadeInDown.delay(index * 40).duration(350)}>
       <AnimatedPressable onPress={onPress} style={styles.root} {...PressPresets.listRow}>
         {/* Product Image */}
         <View style={styles.imageWrap}>

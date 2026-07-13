@@ -8,7 +8,7 @@ import {
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
-import { useAppTheme } from '../theme/ThemeContext';
+import { Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
@@ -19,6 +19,7 @@ import { AppButton } from '../components/ui/AppButton';
 import { ChatCard } from '../components/chat/ChatCard';
 import { Space, Radius, Type } from '../theme/designTokens';
 import { Meta, Caption, BodyEmphasis } from '../components/ui/Text';
+import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { Typography } from '../theme/designTokens';
 
@@ -26,7 +27,7 @@ type Props = StackScreenProps<RootStackParamList, 'GroupBotDirectory'>;
 
 export default function GroupBotDirectoryScreen({ navigation, route }: Props) {
   const { conversationId } = route.params;
-  const { colors, isDark } = useAppTheme();
+  const { isDark } = useAppTheme();
   const { show } = useToast();
   const haptic = useHaptic();
   const [pendingBotId, setPendingBotId] = useState<string | null>(null);
@@ -99,7 +100,7 @@ export default function GroupBotDirectoryScreen({ navigation, route }: Props) {
                       <Ionicons
                         name={item.category === 'moderation' ? 'shield-checkmark-outline' : item.category === 'commerce' ? 'trending-up-outline' : 'flash-outline'}
                         size={20}
-                        color={colors.textPrimary}
+                        color={Colors.textPrimary}
                       />
                     </View>
 
@@ -123,9 +124,9 @@ export default function GroupBotDirectoryScreen({ navigation, route }: Props) {
                     />
                   </View>
 
-                  <Caption color={colors.textSecondary} style={styles.botDescription}>{item.description}</Caption>
+                  <Caption color={Colors.textSecondary} style={styles.botDescription}>{item.description}</Caption>
                   <View style={styles.commandPill}>
-                    <Caption color={colors.textPrimary} style={styles.commandText}>{item.commandHint}</Caption>
+                    <Caption color={Colors.textPrimary} style={styles.commandText}>{item.commandHint}</Caption>
                   </View>
                 </ChatCard>
               </View>
@@ -138,7 +139,7 @@ export default function GroupBotDirectoryScreen({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, backgroundColor: Colors.background },
   listContent: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.xxl,
@@ -154,7 +155,9 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: Colors.surfaceAlt,
     borderWidth: 1,
+    borderColor: Colors.border,
   },
   botTextWrap: { flex: 1 },
   deployBtn: {
@@ -164,6 +167,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm + 4,
   },
   deployBtnActive: {
+    borderColor: Colors.brand,
+    backgroundColor: Colors.brand,
   },
   botDescription: {
     marginTop: Space.sm + 4,
@@ -172,6 +177,7 @@ const styles = StyleSheet.create({
   commandPill: {
     marginTop: Space.sm + 4,
     alignSelf: 'flex-start',
+    backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.sm,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs + 2,

@@ -16,16 +16,16 @@ import Reanimated, {
   FadeInDown,
 } from 'react-native-reanimated';
 import { useRoute, useNavigation } from '@react-navigation/native';
-import { useAppTheme } from '../theme/ThemeContext';
+import { Colors } from '../constants/colors';
 import { Typography, Space, DockConstants } from '../theme/designTokens';
 import { Ionicons } from '@expo/vector-icons';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Listing } from '../data/mockData';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { enablePriceAlert, disablePriceAlert, getPriceAlertStatus } from '../services/priceAlertsApi';
 import { toIze, formatIzeAmount } from '../utils/currency';
 import { Motion } from '../constants/motion';
@@ -85,7 +85,7 @@ import { trackTelemetryEvent } from '../lib/telemetry';
 import { useWindowDimensions } from 'react-native';
 
 export default function ItemDetailScreen() {
-  const { colors, isDark } = useAppTheme();
+  const { isDark } = useAppTheme();
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
@@ -170,7 +170,6 @@ export default function ItemDetailScreen() {
   const { formatFromFiat, goldRates, displayMode } = useFormattedPrice();
   const { show } = useToast();
   const haptic = useHaptic();
-  const reducedMotionEnabled = useReducedMotion();
 
   const handleTogglePriceAlert = useCallback(async () => {
     if (!item?.id || priceAlertLoading) return;
@@ -418,7 +417,7 @@ export default function ItemDetailScreen() {
           }
         />
 
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(80)}>
+        <Reanimated.View entering={FadeInDown.duration(350).delay(80)}>
           <ProductIdentitySummary
             brand={item.brand}
             title={item.title}
@@ -483,7 +482,7 @@ export default function ItemDetailScreen() {
               return (
                 <View style={styles.authCard}>
                   <View style={styles.authIconWrap}>
-                    <Ionicons name="shield-checkmark" size={20} color={colors.success} />
+                    <Ionicons name="shield-checkmark" size={20} color={Colors.success} />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.authTitle}>Authenticity verified</Text>
@@ -504,20 +503,20 @@ export default function ItemDetailScreen() {
                   accessibilityLabel="Request authenticity verification"
                 >
                   <View style={styles.authIconWrap}>
-                    <Ionicons name="shield-outline" size={20} color={colors.brand} />
+                    <Ionicons name="shield-outline" size={20} color={Colors.brand} />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.authTitle}>Request authenticity check</Text>
                     <Text style={styles.authSubtitle}>High-value item. Request professional verification before purchase.</Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                  <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
                 </Pressable>
               );
             }
             return null;
           })()}
 
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(120)}>
+          <Reanimated.View entering={FadeInDown.duration(350).delay(120)}>
             <PriceInsightStrip
               price={item.price}
               originalPrice={item.originalPrice}
@@ -565,7 +564,7 @@ export default function ItemDetailScreen() {
             isSeller={item.seller?.id === currentUser?.id}
           />
 
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(160)}>
+          <Reanimated.View entering={FadeInDown.duration(350).delay(160)}>
             <BundleUpsellRow
               items={bundleItems}
               currentListingId={item.id}
@@ -588,7 +587,7 @@ export default function ItemDetailScreen() {
               .slice(0, 6);
             if (visualSimilar.length < 2) return null;
             return (
-              <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(180)}>
+              <Reanimated.View entering={FadeInDown.duration(350).delay(180)}>
                 <View style={styles.sectionDivider} />
                 <Text style={styles.moreLikeThisTitle}>More like this</Text>
                 <View style={styles.moreLikeThisGrid}>
@@ -608,7 +607,7 @@ export default function ItemDetailScreen() {
                         />
                       ) : (
                         <View style={[styles.moreLikeThisImage, styles.moreLikeThisPlaceholder]}>
-                          <Ionicons name="shirt-outline" size={20} color={colors.textMuted} />
+                          <Ionicons name="shirt-outline" size={20} color={Colors.textMuted} />
                         </View>
                       )}
                       <Text style={styles.moreLikeThisPrice}>
@@ -633,7 +632,7 @@ export default function ItemDetailScreen() {
 
           {recsLoading && recommendationSections.length === 0 ? (
             <View style={styles.railLoading}>
-              <ActivityIndicator size="small" color={colors.textMuted} />
+              <ActivityIndicator size="small" color={Colors.textMuted} />
               <Text style={styles.railLoadingText} numberOfLines={1}>Finding recommendations...</Text>
             </View>
           ) : (
@@ -726,7 +725,7 @@ export default function ItemDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, backgroundColor: Colors.background },
   unavailableContainer: {
     flex: 1,
     alignItems: 'center',
@@ -737,22 +736,26 @@ const styles = StyleSheet.create({
   unavailableTitle: {
     fontSize: 18,
     fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
     textAlign: 'center',
   },
   unavailableBody: {
     fontSize: 14,
     fontFamily: Typography.family.regular,
+    color: Colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
   },
   sectionDivider: {
     height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.border,
     marginHorizontal: Space.md,
     marginVertical: Space.lg,
   },
   moreLikeThisTitle: {
     fontSize: 16,
     fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
     paddingHorizontal: Space.md,
     marginBottom: Space.sm,
   },
@@ -772,6 +775,7 @@ const styles = StyleSheet.create({
     width: '100%',
     aspectRatio: 1,
     borderRadius: 8,
+    backgroundColor: Colors.surfaceAlt,
   },
   moreLikeThisPlaceholder: {
     alignItems: 'center',
@@ -780,10 +784,12 @@ const styles = StyleSheet.create({
   moreLikeThisPrice: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
   },
   postedDate: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
     paddingHorizontal: Space.md,
     paddingBottom: Space.sm,
   },
@@ -796,22 +802,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
     borderRadius: 12,
+    backgroundColor: Colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
   },
   authIconWrap: {
     width: 36,
     height: 36,
     borderRadius: 18,
+    backgroundColor: `${Colors.brand}15`,
     alignItems: 'center',
     justifyContent: 'center',
   },
   authTitle: {
     fontSize: 14,
     fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
   },
   authSubtitle: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
     marginTop: 2,
   },
   syncRetry: {
@@ -828,6 +839,7 @@ const styles = StyleSheet.create({
   railLoadingText: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
   },
   recErrorRow: {
     paddingHorizontal: Space.md,
@@ -837,5 +849,6 @@ const styles = StyleSheet.create({
   recErrorText: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
   },
 });

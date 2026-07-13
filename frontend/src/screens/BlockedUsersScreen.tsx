@@ -5,7 +5,7 @@ import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
-import { useAppTheme } from '../theme/ThemeContext';
+import { Colors } from '../constants/colors';
 import { Space, Radius, Type , Typography  } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { FlagshipEmptyGraphic, FlagshipScreen, FlagshipHeader } from '../components/flagship';
@@ -14,7 +14,6 @@ type Props = StackScreenProps<RootStackParamList, 'BlockedUsers'>;
 
 export default function BlockedUsersScreen({ navigation }: Props) {
   const { show } = useToast();
-  const { colors, isDark } = useAppTheme();
   const blockedIds = useStore((s) => s.blockedUsers);
   const toggleBlocked = useStore((s) => s.toggleBlockedUser);
 
@@ -28,16 +27,16 @@ export default function BlockedUsersScreen({ navigation }: Props) {
       {blockedIds.length === 0 ? (
         <View style={{ alignItems: 'center', paddingVertical: Space.xl * 2 }}>
           <FlagshipEmptyGraphic variant="box" size={120} />
-          <Text style={{ fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: colors.textPrimary, marginTop: Space.lg }}>No blocked accounts</Text>
-          <Text style={{ fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textSecondary, textAlign: 'center', marginTop: Space.xs, paddingHorizontal: Space.lg }}>When you block someone, they will appear here. You can unblock them at any time.</Text>
+          <Text style={{ fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginTop: Space.lg }}>No blocked accounts</Text>
+          <Text style={{ fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: Colors.textSecondary, textAlign: 'center', marginTop: Space.xs, paddingHorizontal: Space.lg }}>When you block someone, they will appear here. You can unblock them at any time.</Text>
         </View>
       ) : (
         <View style={styles.list}>
           {blockedIds.map((userId, index) => (
             <View key={userId}>
               <View style={styles.userRow}>
-                <View style={[styles.avatarFallback, { backgroundColor: colors.surfaceAlt }]}>
-                  <Ionicons name="person-outline" size={16} color={colors.textMuted} />
+                <View style={[styles.avatarFallback, { backgroundColor: Colors.surfaceAlt }]}>
+                  <Ionicons name="person-outline" size={16} color={Colors.textMuted} />
                 </View>
                 <View style={styles.userText}>
                   <Text style={styles.userName}>Blocked user</Text>
@@ -48,7 +47,7 @@ export default function BlockedUsersScreen({ navigation }: Props) {
                   scaleValue={0.92}
                   hapticFeedback="light"
                 >
-                  <View style={[styles.unblockBtn, { backgroundColor: colors.danger + '15' }]}>
+                  <View style={styles.unblockBtn}>
                     <Text style={styles.unblockText}>Unblock</Text>
                   </View>
                 </AnimatedPressable>
@@ -79,11 +78,13 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
+    color: Colors.textPrimary,
     letterSpacing: Type.body.letterSpacing,
   },
   userId: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
     marginTop: 2,
     letterSpacing: Type.caption.letterSpacing,
   },
@@ -91,10 +92,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm + 4,
     paddingVertical: Space.xs + 2,
     borderRadius: Radius.md,
+    backgroundColor: Colors.danger + '15',
   },
   unblockText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
+    color: Colors.danger,
     letterSpacing: Type.caption.letterSpacing,
   },
   list: {
@@ -109,6 +112,7 @@ const styles = StyleSheet.create({
   },
   listDivider: {
     height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.border,
     marginLeft: 40 + Space.sm + 4 + Space.md,
   },
 });

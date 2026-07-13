@@ -5,7 +5,7 @@ import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
-import { useAppTheme } from '../theme/ThemeContext';
+import { Colors } from '../constants/colors';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
@@ -16,7 +16,6 @@ type Props = StackScreenProps<RootStackParamList, 'ManageQuickReplies'>;
 export default function ManageQuickRepliesScreen({ navigation, route }: Props) {
   const { role } = route.params;
   const { show } = useToast();
-  const { colors, isDark } = useAppTheme();
   const haptic = useHaptic();
 
   const replies = useStore((s) => role === 'seller' ? s.sellerQuickReplies : s.buyerQuickReplies);
@@ -86,7 +85,7 @@ export default function ManageQuickRepliesScreen({ navigation, route }: Props) {
         <Text style={styles.sectionTitle}>Your replies</Text>
         {replies.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons name="chatbubble-ellipses-outline" size={32} color={colors.textMuted} />
+            <Ionicons name="chatbubble-ellipses-outline" size={32} color={Colors.textMuted} />
             <Text style={styles.emptyText}>No quick replies yet</Text>
             <Text style={styles.emptySubtext}>Add one below to speed up your conversations</Text>
           </View>
@@ -113,7 +112,7 @@ export default function ManageQuickRepliesScreen({ navigation, route }: Props) {
                         accessibilityLabel="Save edit"
                         accessibilityRole="button"
                       >
-                        <Ionicons name="checkmark-circle" size={28} color={colors.brand} />
+                        <Ionicons name="checkmark-circle" size={28} color={Colors.brand} />
                       </AnimatedPressable>
                       <AnimatedPressable
                         onPress={() => { setEditingIndex(null); setEditingText(''); }}
@@ -122,7 +121,7 @@ export default function ManageQuickRepliesScreen({ navigation, route }: Props) {
                         accessibilityLabel="Cancel edit"
                         accessibilityRole="button"
                       >
-                        <Ionicons name="close-circle" size={28} color={colors.textMuted} />
+                        <Ionicons name="close-circle" size={28} color={Colors.textMuted} />
                       </AnimatedPressable>
                     </View>
                   ) : (
@@ -135,7 +134,7 @@ export default function ManageQuickRepliesScreen({ navigation, route }: Props) {
                         accessibilityLabel={`Edit reply ${index + 1}`}
                         accessibilityRole="button"
                       >
-                        <Ionicons name="create-outline" size={20} color={colors.textSecondary} />
+                        <Ionicons name="create-outline" size={20} color={Colors.textSecondary} />
                       </AnimatedPressable>
                       <AnimatedPressable
                         onPress={() => handleDelete(index)}
@@ -144,7 +143,7 @@ export default function ManageQuickRepliesScreen({ navigation, route }: Props) {
                         accessibilityLabel={`Delete reply ${index + 1}`}
                         accessibilityRole="button"
                       >
-                        <Ionicons name="trash-outline" size={20} color={colors.danger} />
+                        <Ionicons name="trash-outline" size={20} color={Colors.danger} />
                       </AnimatedPressable>
                     </>
                   )}
@@ -164,7 +163,7 @@ export default function ManageQuickRepliesScreen({ navigation, route }: Props) {
             value={newText}
             onChangeText={setNewText}
             placeholder="Type a quick reply..."
-            placeholderTextColor={colors.textMuted}
+            placeholderTextColor={Colors.textMuted}
             multiline
             maxLength={200}
             accessibilityLabel="New quick reply text"
@@ -177,7 +176,7 @@ export default function ManageQuickRepliesScreen({ navigation, route }: Props) {
             accessibilityLabel="Add quick reply"
             accessibilityRole="button"
           >
-            <Ionicons name="add" size={22} color={colors.textInverse} />
+            <Ionicons name="add" size={22} color={Colors.textInverse} />
           </AnimatedPressable>
         </View>
       </View>
@@ -193,11 +192,13 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
+    color: Colors.textSecondary,
     letterSpacing: Type.caption.letterSpacing,
     textTransform: 'uppercase',
     marginBottom: Space.sm,
   },
   list: {
+    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     overflow: 'hidden',
   },
@@ -213,6 +214,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
+    color: Colors.textPrimary,
     lineHeight: Type.body.lineHeight,
   },
   editRow: {
@@ -225,6 +227,8 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
+    color: Colors.textPrimary,
+    backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.sm,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs + 2,
@@ -232,6 +236,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.border,
     marginLeft: Space.md,
   },
   emptyState: {
@@ -242,10 +247,12 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
   },
   emptySubtext: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
     textAlign: 'center',
   },
   addRow: {
@@ -258,15 +265,18 @@ const styles = StyleSheet.create({
     minHeight: 44,
     maxHeight: 100,
     borderRadius: Radius.md,
+    backgroundColor: Colors.surfaceAlt,
     paddingHorizontal: Space.sm + 4,
     paddingVertical: Space.sm,
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
+    color: Colors.textPrimary,
   },
   addBtn: {
     width: 44,
     height: 44,
     borderRadius: 22,
+    backgroundColor: Colors.textPrimary,
     justifyContent: 'center',
     alignItems: 'center',
   },

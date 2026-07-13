@@ -16,6 +16,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { Colors } from '../constants/colors';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Motion } from '../constants/motion';
 import { StackScreenProps } from '@react-navigation/stack';
@@ -37,7 +38,6 @@ import { searchListingsFromApi } from '../services/feedApi';
 import { friendlyBackendError } from '../services/listingMapper';
 import { ProductAnalytics } from '../platform/product/productAnalytics';
 import { useSavedSearchAlerts } from '../hooks/useSavedSearchAlerts';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 
 /* ── New Discover Components ── */
 import { HeroCarousel, HeroItem } from '../components/discover/HeroCarousel';
@@ -241,7 +241,6 @@ export default function GlobalSearchScreen({ navigation }: Props) {
   const toggleSavedSearchAlerts = useStore((state) => state.toggleSavedSearchAlerts);
   const { listings, source, isSyncing, lastError, refreshListings } = useBackendData();
   const { formatFromFiat } = useFormattedPrice();
-  const reducedMotionEnabled = useReducedMotion();
   const focusProgress = useSharedValue(0);
 
   // Evaluate saved search alerts against current listings
@@ -455,8 +454,8 @@ export default function GlobalSearchScreen({ navigation }: Props) {
   }, [focusProgress, isSearchFocused]);
 
   const animatedSearchShellStyle = useAnimatedStyle(() => {
-    const borderColor = interpolateColor(focusProgress.value, [0, 1], [colors.border, colors.brand]);
-    const backgroundColor = interpolateColor(focusProgress.value, [0, 1], [colors.surface, colors.background]);
+    const borderColor = interpolateColor(focusProgress.value, [0, 1], [Colors.border, Colors.brand]);
+    const backgroundColor = interpolateColor(focusProgress.value, [0, 1], [Colors.surface, Colors.background]);
     return {
       borderColor,
       backgroundColor,
@@ -678,17 +677,17 @@ export default function GlobalSearchScreen({ navigation }: Props) {
     }
   };
 
-  const { colors, isDark } = useAppTheme();
+  const { isDark } = useAppTheme();
   const isDiscoverLanding = !normalizedQuery;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
 
       {/* Hero Search Header */}
       <View style={styles.header}>
         <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={26} color={colors.textPrimary} />
+          <Ionicons name="arrow-back" size={26} color={Colors.textPrimary} />
         </AnimatedPressable>
 
         <Reanimated.View style={[styles.inputContainer, animatedSearchShellStyle]}>
@@ -699,8 +698,8 @@ export default function GlobalSearchScreen({ navigation }: Props) {
             onChangeText={setQuery}
             containerStyle={{ flex: 1, borderWidth: 0, backgroundColor: 'transparent' }}
             rightNode={
-              <AnimatedPressable onPress={() => navigation.navigate('VisualSearch')} activeOpacity={0.85} accessibilityLabel="Preview visual search" accessibilityRole="button">
-                <Ionicons name="camera" size={24} color={colors.textMuted} />
+              <AnimatedPressable onPress={() => navigation.navigate('VisualSearch')} activeOpacity={0.85} accessibilityLabel="Visual search" accessibilityRole="button">
+                <Ionicons name="camera" size={24} color={Colors.textMuted} />
               </AnimatedPressable>
             }
             inputProps={{
@@ -710,7 +709,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
               onBlur: () => setIsSearchFocused(false),
               returnKeyType: 'search',
               autoCapitalize: 'none',
-              selectionColor: colors.brand,
+              selectionColor: Colors.brand,
             }}
           />
         </Reanimated.View>
@@ -725,7 +724,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
       {/* Live search suggestions dropdown */}
       {searchSuggestions.length > 0 && (
         <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(150)}
+          entering={FadeInDown.duration(150)}
           style={styles.suggestionsWrap}
         >
           <Text style={styles.suggestionsHeader}>Suggestions</Text>
@@ -751,12 +750,12 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                     : 'search-outline'
                 }
                 size={16}
-                color={colors.textMuted}
+                color={Colors.textMuted}
               />
               <Text style={styles.suggestionText} numberOfLines={1}>
                 {suggestion.text}
               </Text>
-              <Ionicons name="arrow-forward" size={14} color={colors.textMuted} />
+              <Ionicons name="arrow-forward" size={14} color={Colors.textMuted} />
             </AnimatedPressable>
           ))}
         </Reanimated.View>
@@ -776,7 +775,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
               <>
                 {/* ── FOCUS STATE: Clean recent + trending when search is focused ── */}
                 {isSearchFocused ? (
-                  <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(200).springify().damping(20)}>
+                  <Reanimated.View entering={FadeInDown.duration(200).springify().damping(20)}>
                     {/* Recent searches */}
                     {recentSearches.length > 0 && (
                       <EditorialSection kicker="Your history" title="Recent searches">
@@ -788,13 +787,13 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                               activeOpacity={0.8}
                               onPress={() => handlePillPress(term)}
                             >
-                              <Ionicons name="time-outline" size={12} color={colors.textMuted} style={{ marginRight: 4 }} />
+                              <Ionicons name="time-outline" size={12} color={Colors.textMuted} style={{ marginRight: 4 }} />
                               <Text style={styles.recentPillText}>{term}</Text>
                             </AnimatedPressable>
                           ))}
                           <AnimatedPressable style={[styles.recentPill, styles.clearRecentPill]} activeOpacity={0.8} onPress={clearRecentSearches}>
-                            <Ionicons name="close-circle" size={14} color={colors.textMuted} />
-                            <Text style={[styles.recentPillText, { color: colors.textMuted }]}>Clear</Text>
+                            <Ionicons name="close-circle" size={14} color={Colors.textMuted} />
+                            <Text style={[styles.recentPillText, { color: Colors.textMuted }]}>Clear</Text>
                           </AnimatedPressable>
                         </View>
                       </EditorialSection>
@@ -821,7 +820,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                                   <Ionicons
                                     name={search.alertsEnabled ? 'notifications' : 'bookmark-outline'}
                                     size={16}
-                                    color={search.alertsEnabled ? colors.brand : colors.textMuted}
+                                    color={search.alertsEnabled ? Colors.brand : Colors.textMuted}
                                   />
                                 </View>
                                 <View style={styles.savedSearchTextWrap}>
@@ -847,7 +846,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                             activeOpacity={0.8}
                             onPress={() => handlePillPress(term)}
                           >
-                            <Ionicons name="flame" size={12} color={colors.danger} style={{ marginRight: 4 }} />
+                            <Ionicons name="flame" size={12} color={Colors.danger} style={{ marginRight: 4 }} />
                             <Text style={styles.trendingFocusText}>{term}</Text>
                           </AnimatedPressable>
                         ))}
@@ -901,8 +900,8 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                         </AnimatedPressable>
                       ))}
                       <AnimatedPressable style={[styles.recentPill, styles.clearRecentPill]} activeOpacity={0.8} onPress={clearRecentSearches}>
-                        <Ionicons name="close-circle" size={14} color={colors.textMuted} />
-                        <Text style={[styles.recentPillText, { color: colors.textMuted }]}>Clear</Text>
+                        <Ionicons name="close-circle" size={14} color={Colors.textMuted} />
+                        <Text style={[styles.recentPillText, { color: Colors.textMuted }]}>Clear</Text>
                       </AnimatedPressable>
                     </View>
                   </EditorialSection>
@@ -929,7 +928,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                               <Ionicons
                                 name={search.alertsEnabled ? 'notifications' : 'bookmark-outline'}
                                 size={16}
-                                color={search.alertsEnabled ? colors.brand : colors.textMuted}
+                                color={search.alertsEnabled ? Colors.brand : Colors.textMuted}
                               />
                             </View>
                             <View style={styles.savedSearchTextWrap}>
@@ -952,7 +951,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                             <Ionicons
                               name={search.alertsEnabled ? 'notifications' : 'notifications-off-outline'}
                               size={18}
-                              color={search.alertsEnabled ? colors.brand : colors.textMuted}
+                              color={search.alertsEnabled ? Colors.brand : Colors.textMuted}
                             />
                           </AnimatedPressable>
                           <AnimatedPressable
@@ -962,7 +961,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                             accessibilityLabel="Remove saved search"
                             accessibilityRole="button"
                           >
-                            <Ionicons name="close" size={16} color={colors.textMuted} />
+                            <Ionicons name="close" size={16} color={Colors.textMuted} />
                           </AnimatedPressable>
                         </View>
                       ))}
@@ -1066,7 +1065,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                     </View>
                   ) : (
                     <View style={styles.recoEmptyState}>
-                      <Ionicons name="sparkles-outline" size={18} color={colors.textMuted} />
+                      <Ionicons name="sparkles-outline" size={18} color={Colors.textMuted} />
                       <Text style={styles.recoEmptyText}>
                         {hasActiveDiscoverFilters
                           ? 'No picks match your current filters. Adjust or clear them.'
@@ -1102,12 +1101,12 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                 {/* Sort + Filter bar */}
                 <View style={styles.filterBar}>
                   <AnimatedPressable style={styles.sortChip} onPress={handleCycleSort} activeOpacity={0.8}>
-                    <Ionicons name="swap-vertical" size={16} color={colors.textSecondary} />
+                    <Ionicons name="swap-vertical" size={16} color={Colors.textSecondary} />
                     <Text style={styles.sortChipText}>{browseFilters.sort}</Text>
                   </AnimatedPressable>
 
                   <AnimatedPressable style={styles.filterChip} onPress={handleOpenFilter} activeOpacity={0.8}>
-                    <Ionicons name="options-outline" size={16} color={colors.textSecondary} />
+                    <Ionicons name="options-outline" size={16} color={Colors.textSecondary} />
                     <Text style={styles.filterChipText}>Filter</Text>
                     {activeFilterCount > 0 && (
                       <View style={styles.filterBadge}>
@@ -1118,14 +1117,14 @@ export default function GlobalSearchScreen({ navigation }: Props) {
 
                   {hasActiveDiscoverFilters && (
                     <AnimatedPressable style={styles.clearChip} onPress={handleClearDiscoverFilters} activeOpacity={0.8}>
-                      <Ionicons name="close-circle" size={16} color={colors.danger} />
+                      <Ionicons name="close-circle" size={16} color={Colors.danger} />
                       <Text style={styles.clearChipText}>Clear</Text>
                     </AnimatedPressable>
                   )}
                 </View>
 
                 {/* Recommendation text */}
-                <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.delay(100).duration(400)} style={styles.sectionWrap}>
+                <Reanimated.View entering={FadeInDown.delay(100).duration(400)} style={styles.sectionWrap}>
                   <Text style={styles.sectionSupertitle}>Results</Text>
                   <View style={styles.recoHeaderRow}>
                     <Text style={styles.recoHeaderTitle}>
@@ -1146,7 +1145,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                           <Ionicons
                             name={isCurrentQuerySaved ? 'notifications' : 'notifications-outline'}
                             size={16}
-                            color={isCurrentQuerySaved ? colors.brand : colors.textSecondary}
+                            color={isCurrentQuerySaved ? Colors.brand : Colors.textSecondary}
                           />
                           <Text
                             style={[
@@ -1160,7 +1159,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                       )}
                       {!normalizedQuery && (
                         <AnimatedPressable style={styles.topicSearchBtn} activeOpacity={0.8} onPress={handleSearchSubmit}>
-                          <Ionicons name="search" size={18} color={colors.textPrimary} />
+                          <Ionicons name="search" size={18} color={Colors.textPrimary} />
                         </AnimatedPressable>
                       )}
                     </View>
@@ -1168,7 +1167,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                 </Reanimated.View>
 
                 {/* Masonry grid */}
-                <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.delay(200).duration(400)} style={styles.sectionWrap}>
+                <Reanimated.View entering={FadeInDown.delay(200).duration(400)} style={styles.sectionWrap}>
                   {discoverListings.length > 0 ? (
                     <View style={styles.masonryGrid}>
                       <View style={styles.masonryColumn}>
@@ -1218,7 +1217,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                     </View>
                   ) : (
                     <View style={styles.recoEmptyState}>
-                      <Ionicons name="sparkles-outline" size={18} color={colors.textMuted} />
+                      <Ionicons name="sparkles-outline" size={18} color={Colors.textMuted} />
                       <Text style={styles.recoEmptyText}>
                         {hasActiveDiscoverFilters
                           ? 'No picks match your current filters. Adjust or clear them.'
@@ -1239,6 +1238,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: Colors.background,
   },
 
   // Header
@@ -1276,7 +1276,9 @@ const styles = StyleSheet.create({
     marginHorizontal: 12,
     marginBottom: 8,
     borderRadius: 16,
+    backgroundColor: Colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -1287,6 +1289,7 @@ const styles = StyleSheet.create({
   suggestionsHeader: {
     fontSize: 11,
     fontFamily: Typography.family.semibold,
+    color: Colors.textMuted,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
     paddingHorizontal: 16,
@@ -1300,11 +1303,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
   },
   suggestionText: {
     flex: 1,
     fontSize: 15,
     fontFamily: Typography.family.regular,
+    color: Colors.textPrimary,
   },
 
   // Loading
@@ -1332,6 +1337,7 @@ const styles = StyleSheet.create({
     marginBottom: 28,
   },
   sectionSupertitle: {
+    color: Colors.textMuted,
     fontSize: 13,
     fontFamily: Typography.family.medium,
     marginBottom: 4,
@@ -1345,6 +1351,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   recentPill: {
+    backgroundColor: Colors.surface,
     paddingHorizontal: 18,
     paddingVertical: 10,
     borderRadius: 22,
@@ -1354,10 +1361,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     borderWidth: 1,
+    borderColor: Colors.border,
   },
   recentPillText: {
     fontSize: 14,
     fontFamily: Typography.family.medium,
+    color: Colors.textPrimary,
   },
 
   // Top searches cards
@@ -1393,14 +1402,17 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   trendingPill: {
+    backgroundColor: Colors.surface,
     paddingHorizontal: 18,
     paddingVertical: 12,
     borderRadius: 22,
     borderWidth: 1,
+    borderColor: Colors.border,
   },
   trendingPillText: {
     fontSize: 15,
     fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
   },
 
   // Focus state — trending pills (wrap layout, not horizontal scroll)
@@ -1413,14 +1425,17 @@ const styles = StyleSheet.create({
   trendingFocusPill: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: Colors.surface,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 20,
     borderWidth: 1,
+    borderColor: Colors.border,
   },
   trendingFocusText: {
     fontSize: 13,
     fontFamily: Typography.family.medium,
+    color: Colors.textPrimary,
   },
 
   // Featured boards
@@ -1442,28 +1457,34 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    backgroundColor: Colors.surface,
     borderRadius: 20,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderWidth: 1,
+    borderColor: Colors.border,
   },
   sortChipText: {
     fontFamily: Typography.family.medium,
     fontSize: 13,
+    color: Colors.textPrimary,
   },
   filterChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    backgroundColor: Colors.surface,
     borderRadius: 20,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderWidth: 1,
+    borderColor: Colors.border,
     position: 'relative',
   },
   filterChipText: {
     fontFamily: Typography.family.medium,
     fontSize: 13,
+    color: Colors.textPrimary,
   },
   filterBadge: {
     position: 'absolute',
@@ -1472,25 +1493,30 @@ const styles = StyleSheet.create({
     minWidth: 18,
     height: 18,
     borderRadius: 9,
+    backgroundColor: Colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
   },
   filterBadgeText: {
     fontFamily: Typography.family.bold,
     fontSize: 10,
+    color: Colors.textInverse,
   },
   clearChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    backgroundColor: Colors.surface,
     borderRadius: 20,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderWidth: 1,
+    borderColor: Colors.danger,
   },
   clearChipText: {
     fontFamily: Typography.family.medium,
     fontSize: 13,
+    color: Colors.danger,
   },
 
   // Masonry
@@ -1509,6 +1535,7 @@ const styles = StyleSheet.create({
   recoHeaderTitle: {
     fontSize: 22,
     fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
     letterSpacing: -0.5,
     flexShrink: 1,
   },
@@ -1516,6 +1543,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
+    backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1527,14 +1555,20 @@ const styles = StyleSheet.create({
     height: 34,
     borderRadius: 17,
     borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
   },
   saveSearchBtnActive: {
+    borderColor: Colors.brand,
+    backgroundColor: Colors.surfaceAlt,
   },
   saveSearchText: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
+    color: Colors.textSecondary,
   },
   saveSearchTextActive: {
+    color: Colors.brand,
   },
   savedSearchListWrap: {
     paddingHorizontal: 20,
@@ -1547,7 +1581,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 14,
+    backgroundColor: Colors.surface,
     borderWidth: 0.5,
+    borderColor: Colors.border,
   },
   savedSearchMain: {
     flex: 1,
@@ -1559,6 +1595,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
+    backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1569,10 +1606,12 @@ const styles = StyleSheet.create({
   savedSearchQuery: {
     fontSize: 14,
     fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
   },
   savedSearchMeta: {
     fontSize: 11,
     fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
   },
   savedSearchToggle: {
     width: 36,
@@ -1629,15 +1668,18 @@ const styles = StyleSheet.create({
   },
   recoEmptyState: {
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
     borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 12,
+    backgroundColor: Colors.surface,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     marginHorizontal: 20,
   },
   recoEmptyText: {
+    color: Colors.textSecondary,
     fontSize: 12,
     fontFamily: Typography.family.medium,
   },

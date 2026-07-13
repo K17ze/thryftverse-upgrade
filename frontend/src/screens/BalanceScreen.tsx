@@ -12,8 +12,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { RootStackParamList } from '../navigation/types';
+import { ActiveTheme, Colors } from '../constants/colors';
 import { Typography } from '../theme/designTokens';
-import { useAppTheme } from '../theme/ThemeContext';
 import { useCurrencyContext } from '../context/CurrencyContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useToast } from '../context/ToastContext';
@@ -45,8 +45,11 @@ const TX_FILTERS: TxFilter[] = ['all', 'sale', 'purchase', 'withdrawal'];
 const LOAD_IZE_FEE_RATE = 0.01;
 const CONVERT_FEE_RATE = 0.005; // 0.5% fee for converting 1ze to fiat
 
+const TINT_CARD_BG = Colors.surfaceAlt;
+const TINT_CARD_BORDER = Colors.border;
+const TINT_TEXT = Colors.brand;
+
 export default function BalanceScreen({ navigation }: Props) {
-  const { colors, isDark } = useAppTheme();
   const [activeTxFilter, setActiveTxFilter] = useState<TxFilter>('all');
   const [loadFiatInput, setLoadFiatInput] = useState('');
   const [isLoadingIze, setIsLoadingIze] = useState(false);
@@ -289,8 +292,8 @@ export default function BalanceScreen({ navigation }: Props) {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
 
       <ScreenHeader
         title="1ze wallet"
@@ -299,20 +302,20 @@ export default function BalanceScreen({ navigation }: Props) {
       />
 
       <ScrollView ref={scrollRef} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={[styles.pegInfoCard, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
+        <View style={styles.pegInfoCard}>
           <OnezeCoinIcon size={18} />
-          <Text style={[styles.pegInfoText, { color: colors.brand }]}>
+          <Text style={styles.pegInfoText}>
             1ze is a closed-loop settlement credit. Live local reference value: {formatFromIze(1, { displayMode: 'fiat' })} per 1ze.
           </Text>
         </View>
 
         <View style={styles.heroGroup}>
-          <ElevatedSurface variant="elevated" style={[styles.balanceHero, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} contentStyle={{ alignItems: 'center' }}>
-            <Text style={[styles.balanceAmount, { color: colors.brand }]}>{formatFromFiat(availableBalance, 'GBP', { displayMode: 'fiat' })}</Text>
-            <Text style={[styles.balanceIze, { color: colors.textSecondary }]}>{formatIzeAmount(availableIze)}</Text>
-            <Text style={[styles.balanceLabel, { color: colors.textMuted }]}>available balance</Text>
+          <ElevatedSurface variant="elevated" style={styles.balanceHero} contentStyle={{ alignItems: 'center' }}>
+            <Text style={styles.balanceAmount}>{formatFromFiat(availableBalance, 'GBP', { displayMode: 'fiat' })}</Text>
+            <Text style={styles.balanceIze}>{formatIzeAmount(availableIze)}</Text>
+            <Text style={styles.balanceLabel}>available balance</Text>
             {isHydratingBalance && (
-              <Text style={{ fontSize: 12, fontFamily: Typography.family.regular, color: colors.textMuted, marginTop: 4 }}>
+              <Text style={{ fontSize: 12, fontFamily: Typography.family.regular, color: Colors.textMuted, marginTop: 4 }}>
                 Syncing balance...
               </Text>
             )}
@@ -325,10 +328,10 @@ export default function BalanceScreen({ navigation }: Props) {
                 accessibilityLabel="Withdraw funds"
                 accessibilityHint="Opens withdrawal options for your wallet balance."
               >
-                <View style={[styles.actionCircle, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
-                  <Ionicons name="library-outline" size={22} color={colors.textPrimary} />
+                <View style={styles.actionCircle}>
+                  <Ionicons name="library-outline" size={22} color={Colors.textPrimary} />
                 </View>
-                <Text style={[styles.actionText, { color: colors.textSecondary }]}>withdraw</Text>
+                <Text style={styles.actionText}>withdraw</Text>
               </AnimatedPressable>
 
               <AnimatedPressable
@@ -338,10 +341,10 @@ export default function BalanceScreen({ navigation }: Props) {
                 accessibilityLabel="Convert local currency to 1ze"
                 accessibilityHint="Focuses the load input to start conversion."
               >
-                <View style={[styles.actionCircle, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
-                  <Ionicons name="swap-horizontal-outline" size={22} color={colors.textPrimary} />
+                <View style={styles.actionCircle}>
+                  <Ionicons name="swap-horizontal-outline" size={22} color={Colors.textPrimary} />
                 </View>
-                <Text style={[styles.actionText, { color: colors.textSecondary }]}>convert</Text>
+                <Text style={styles.actionText}>convert</Text>
               </AnimatedPressable>
 
               <AnimatedPressable
@@ -351,79 +354,79 @@ export default function BalanceScreen({ navigation }: Props) {
                 accessibilityLabel="Go to marketplace"
                 accessibilityHint="Navigates to main shopping tabs."
               >
-                <View style={[styles.actionCircle, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
-                  <Ionicons name="cart-outline" size={22} color={colors.textPrimary} />
+                <View style={styles.actionCircle}>
+                  <Ionicons name="cart-outline" size={22} color={Colors.textPrimary} />
                 </View>
-                <Text style={[styles.actionText, { color: colors.textSecondary }]}>shop</Text>
+                <Text style={styles.actionText}>shop</Text>
               </AnimatedPressable>
             </View>
           </ElevatedSurface>
 
-          <ElevatedSurface variant="subtle" style={[styles.pendingCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} contentStyle={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <ElevatedSurface variant="subtle" style={styles.pendingCard} contentStyle={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <View>
-              <Text style={[styles.pendingTitle, { color: colors.textSecondary }]}>pending balance</Text>
+              <Text style={styles.pendingTitle}>pending balance</Text>
             </View>
             <View style={styles.pendingAmountCol}>
-              <Text style={[styles.pendingAmount, { color: colors.textPrimary }]}>{formatFromFiat(pendingBalance, 'GBP', { displayMode: 'fiat' })}</Text>
+              <Text style={styles.pendingAmount}>{formatFromFiat(pendingBalance, 'GBP', { displayMode: 'fiat' })}</Text>
             </View>
           </ElevatedSurface>
         </View>
 
-        <ElevatedSurface variant="surface" style={[styles.loadCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+        <ElevatedSurface variant="surface" style={styles.loadCard}>
           {/* Tab Navigation */}
-          <View style={[styles.tabContainer, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+          <View style={styles.tabContainer}>
             <AnimatedPressable
-              style={[styles.tab, convertTab === 'load' && [styles.tabActive, { backgroundColor: colors.brand }]]}
+              style={[styles.tab, convertTab === 'load' && styles.tabActive]}
               onPress={() => setConvertTab('load')}
             >
-              <Text style={[styles.tabText, convertTab === 'load' && [styles.tabTextActive, { color: colors.background }]]}>Load</Text>
+              <Text style={[styles.tabText, convertTab === 'load' && styles.tabTextActive]}>Load</Text>
             </AnimatedPressable>
             <AnimatedPressable
-              style={[styles.tab, convertTab === 'buy' && [styles.tabActive, { backgroundColor: colors.brand }]]}
+              style={[styles.tab, convertTab === 'buy' && styles.tabActive]}
               onPress={() => setConvertTab('buy')}
             >
-              <Text style={[styles.tabText, convertTab === 'buy' && [styles.tabTextActive, { color: colors.background }]]}>Buy</Text>
+              <Text style={[styles.tabText, convertTab === 'buy' && styles.tabTextActive]}>Buy</Text>
             </AnimatedPressable>
             <AnimatedPressable
-              style={[styles.tab, convertTab === 'convert' && [styles.tabActive, { backgroundColor: colors.brand }]]}
+              style={[styles.tab, convertTab === 'convert' && styles.tabActive]}
               onPress={() => setConvertTab('convert')}
             >
-              <Text style={[styles.tabText, convertTab === 'convert' && [styles.tabTextActive, { color: colors.background }]]}>Convert</Text>
+              <Text style={[styles.tabText, convertTab === 'convert' && styles.tabTextActive]}>Convert</Text>
             </AnimatedPressable>
           </View>
 
           {/* Load Tab - External Payment */}
           {convertTab === 'load' && (
             <>
-              <Text style={[styles.loadHint, { color: colors.textSecondary }]}>Convert your local currency into 1ze with a low {loadFeeRateLabel} platform spread.</Text>
-              <Text style={[styles.loadInputLabel, { color: colors.textMuted }]}>Amount in {currencyCode}</Text>
+              <Text style={styles.loadHint}>Convert your local currency into 1ze with a low {loadFeeRateLabel} platform spread.</Text>
+              <Text style={styles.loadInputLabel}>Amount in {currencyCode}</Text>
               <TextInput
                 ref={loadInputRef}
-                style={[styles.loadInput, { borderColor: colors.border, backgroundColor: colors.surfaceAlt, color: colors.textPrimary }]}
+                style={styles.loadInput}
                 value={loadFiatInput}
                 onChangeText={(value) => setLoadFiatInput(value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1'))}
                 placeholder="0.00"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={Colors.textMuted}
                 keyboardType="decimal-pad"
                 accessibilityLabel={`Amount in ${currencyCode}`}
                 accessibilityHint="Enter the amount you want to convert into 1ze credits."
               />
               <View style={styles.loadSummaryRow}>
-                <Text style={[styles.loadSummaryLabel, { color: colors.textMuted }]}>Gross 1ze</Text>
-                <Text style={[styles.loadSummaryValue, { color: colors.textPrimary }]}>{formatIzeAmount(loadGrossIze)}</Text>
+                <Text style={styles.loadSummaryLabel}>Gross 1ze</Text>
+                <Text style={styles.loadSummaryValue}>{formatIzeAmount(loadGrossIze)}</Text>
               </View>
               <View style={styles.loadSummaryRow}>
-                <Text style={[styles.loadSummaryLabel, { color: colors.textMuted }]}>Platform fee ({loadFeeRateLabel})</Text>
-                <Text style={[styles.loadSummaryValue, { color: colors.textPrimary }]}>{formatIzeAmount(loadFeeIze)} | {formatFromFiat(loadFeeFiat, currencyCode, { displayMode: 'fiat' })}</Text>
+                <Text style={styles.loadSummaryLabel}>Platform fee ({loadFeeRateLabel})</Text>
+                <Text style={styles.loadSummaryValue}>{formatIzeAmount(loadFeeIze)} | {formatFromFiat(loadFeeFiat, currencyCode, { displayMode: 'fiat' })}</Text>
               </View>
-              <View style={[styles.loadSummaryRow, styles.loadSummaryRowTotal, { borderTopColor: colors.border }]}>
-                <Text style={[styles.loadSummaryTotalLabel, { color: colors.textPrimary }]}>Net 1ze credited</Text>
-                <Text style={[styles.loadSummaryTotalValue, { color: colors.textPrimary }]}>{formatIzeAmount(loadNetIze)} | {formatFromIze(loadNetIze, { displayMode: 'fiat' })}</Text>
+              <View style={[styles.loadSummaryRow, styles.loadSummaryRowTotal]}>
+                <Text style={styles.loadSummaryTotalLabel}>Net 1ze credited</Text>
+                <Text style={styles.loadSummaryTotalValue}>{formatIzeAmount(loadNetIze)} | {formatFromIze(loadNetIze, { displayMode: 'fiat' })}</Text>
               </View>
               <AppButton
                 title={isLoadingIze ? 'Loading...' : 'Load 1ze'}
-                style={[styles.loadBtn, { backgroundColor: colors.brand }, !canLoadIze && styles.loadBtnDisabled]}
-                titleStyle={[styles.loadBtnText, { color: colors.background }]}
+                style={[styles.loadBtn, !canLoadIze && styles.loadBtnDisabled]}
+                titleStyle={styles.loadBtnText}
                 variant="primary"
                 size="sm"
                 onPress={handleLoadIze}
@@ -437,31 +440,31 @@ export default function BalanceScreen({ navigation }: Props) {
           {/* Buy Tab - Use Fiat Balance */}
           {convertTab === 'buy' && (
             <>
-              <Text style={[styles.loadHint, { color: colors.textSecondary }]}>Buy 1ze using your fiat balance. Available: {formatFromFiat(availableBalance, currencyCode, { displayMode: 'fiat' })}</Text>
-              <Text style={[styles.loadInputLabel, { color: colors.textMuted }]}>Amount in {currencyCode}</Text>
+              <Text style={styles.loadHint}>Buy 1ze using your fiat balance. Available: {formatFromFiat(availableBalance, currencyCode, { displayMode: 'fiat' })}</Text>
+              <Text style={styles.loadInputLabel}>Amount in {currencyCode}</Text>
               <TextInput
                 ref={buyInputRef}
-                style={[styles.loadInput, { borderColor: colors.border, backgroundColor: colors.surfaceAlt, color: colors.textPrimary }]}
+                style={styles.loadInput}
                 value={buyFiatInput}
                 onChangeText={(value) => setBuyFiatInput(value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1'))}
                 placeholder="0.00"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={Colors.textMuted}
                 keyboardType="decimal-pad"
                 accessibilityLabel={`Amount in ${currencyCode}`}
                 accessibilityHint="Enter the fiat amount to buy 1ze."
               />
               <View style={styles.loadSummaryRow}>
-                <Text style={[styles.loadSummaryLabel, { color: colors.textMuted }]}>You will receive</Text>
-                <Text style={[styles.loadSummaryValue, { color: colors.textPrimary }]}>{formatIzeAmount(buyIzeAmount)}</Text>
+                <Text style={styles.loadSummaryLabel}>You will receive</Text>
+                <Text style={styles.loadSummaryValue}>{formatIzeAmount(buyIzeAmount)}</Text>
               </View>
-              <View style={[styles.loadSummaryRow, styles.loadSummaryRowTotal, { borderTopColor: colors.border }]}>
-                <Text style={[styles.loadSummaryTotalLabel, { color: colors.textPrimary }]}>Rate</Text>
-                <Text style={[styles.loadSummaryTotalValue, { color: colors.textPrimary }]}>1 1ze = {formatFromIze(1, { displayMode: 'fiat' })}</Text>
+              <View style={[styles.loadSummaryRow, styles.loadSummaryRowTotal]}>
+                <Text style={styles.loadSummaryTotalLabel}>Rate</Text>
+                <Text style={styles.loadSummaryTotalValue}>1 1ze = {formatFromIze(1, { displayMode: 'fiat' })}</Text>
               </View>
               <AppButton
                 title={isProcessing ? 'Processing...' : 'Buy 1ze'}
-                style={[styles.loadBtn, { backgroundColor: colors.brand }, !canBuyIze && styles.loadBtnDisabled]}
-                titleStyle={[styles.loadBtnText, { color: colors.background }]}
+                style={[styles.loadBtn, !canBuyIze && styles.loadBtnDisabled]}
+                titleStyle={styles.loadBtnText}
                 variant="primary"
                 size="sm"
                 onPress={handleBuyIze}
@@ -475,35 +478,35 @@ export default function BalanceScreen({ navigation }: Props) {
           {/* Convert Tab - 1ze to Fiat */}
           {convertTab === 'convert' && (
             <>
-              <Text style={[styles.loadHint, { color: colors.textSecondary }]}>Convert your 1ze to fiat for withdrawal. Available: {formatIzeAmount(availableIze)}</Text>
-              <Text style={[styles.loadInputLabel, { color: colors.textMuted }]}>Amount in 1ze</Text>
+              <Text style={styles.loadHint}>Convert your 1ze to fiat for withdrawal. Available: {formatIzeAmount(availableIze)}</Text>
+              <Text style={styles.loadInputLabel}>Amount in 1ze</Text>
               <TextInput
                 ref={convertInputRef}
-                style={[styles.loadInput, { borderColor: colors.border, backgroundColor: colors.surfaceAlt, color: colors.textPrimary }]}
+                style={styles.loadInput}
                 value={convertIzeInput}
                 onChangeText={(value) => setConvertIzeInput(value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1'))}
                 placeholder="0.00"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={Colors.textMuted}
                 keyboardType="decimal-pad"
                 accessibilityLabel="Amount in 1ze"
                 accessibilityHint="Enter the 1ze amount to convert to fiat."
               />
               <View style={styles.loadSummaryRow}>
-                <Text style={[styles.loadSummaryLabel, { color: colors.textMuted }]}>Gross {currencyCode}</Text>
-                <Text style={[styles.loadSummaryValue, { color: colors.textPrimary }]}>{formatFromFiat(convertFiatValue, currencyCode, { displayMode: 'fiat' })}</Text>
+                <Text style={styles.loadSummaryLabel}>Gross {currencyCode}</Text>
+                <Text style={styles.loadSummaryValue}>{formatFromFiat(convertFiatValue, currencyCode, { displayMode: 'fiat' })}</Text>
               </View>
               <View style={styles.loadSummaryRow}>
-                <Text style={[styles.loadSummaryLabel, { color: colors.textMuted }]}>Platform fee ({Math.round(CONVERT_FEE_RATE * 100)}%)</Text>
-                <Text style={[styles.loadSummaryValue, { color: colors.textPrimary }]}>{formatFromFiat(convertFee, currencyCode, { displayMode: 'fiat' })}</Text>
+                <Text style={styles.loadSummaryLabel}>Platform fee ({Math.round(CONVERT_FEE_RATE * 100)}%)</Text>
+                <Text style={styles.loadSummaryValue}>{formatFromFiat(convertFee, currencyCode, { displayMode: 'fiat' })}</Text>
               </View>
-              <View style={[styles.loadSummaryRow, styles.loadSummaryRowTotal, { borderTopColor: colors.border }]}>
-                <Text style={[styles.loadSummaryTotalLabel, { color: colors.textPrimary }]}>Net fiat credited</Text>
-                <Text style={[styles.loadSummaryTotalValue, { color: colors.textPrimary }]}>{formatFromFiat(convertNetFiat, currencyCode, { displayMode: 'fiat' })}</Text>
+              <View style={[styles.loadSummaryRow, styles.loadSummaryRowTotal]}>
+                <Text style={styles.loadSummaryTotalLabel}>Net fiat credited</Text>
+                <Text style={styles.loadSummaryTotalValue}>{formatFromFiat(convertNetFiat, currencyCode, { displayMode: 'fiat' })}</Text>
               </View>
               <AppButton
                 title={isProcessing ? 'Processing...' : 'Convert to Fiat'}
-                style={[styles.loadBtn, { backgroundColor: colors.brand }, !canConvertIze && styles.loadBtnDisabled]}
-                titleStyle={[styles.loadBtnText, { color: colors.background }]}
+                style={[styles.loadBtn, !canConvertIze && styles.loadBtnDisabled]}
+                titleStyle={styles.loadBtnText}
                 variant="primary"
                 size="sm"
                 onPress={handleConvertIzeToFiat}
@@ -515,17 +518,17 @@ export default function BalanceScreen({ navigation }: Props) {
           )}
         </ElevatedSurface>
 
-        <ElevatedSurface variant="surface" style={[styles.historyCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+        <ElevatedSurface variant="surface" style={styles.historyCard}>
           <View style={styles.historyRow}>
             <View>
-              <Text style={[styles.historyTitle, { color: colors.textPrimary }]}>Balance history</Text>
+              <Text style={styles.historyTitle}>Balance history</Text>
             </View>
           </View>
           <AppButton
             title="History"
-            trailingIcon={<Ionicons name="chevron-forward" size={20} color={colors.textMuted} />}
+            trailingIcon={<Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />}
             style={styles.historyLinkRow}
-            titleStyle={[styles.historyTitle, { color: colors.textPrimary }]}
+            titleStyle={styles.historyTitle}
             trailingIconContainerStyle={styles.historyChevronWrap}
             variant="secondary"
             size="sm"
@@ -543,16 +546,16 @@ export default function BalanceScreen({ navigation }: Props) {
           options={txFilterOptions}
           value={activeTxFilter}
           onChange={setActiveTxFilter}
-          optionStyle={[styles.filterChip, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
-          optionActiveStyle={[styles.filterChipActive, { borderColor: colors.brand, backgroundColor: colors.brand }]}
-          optionTextStyle={[styles.filterChipText, { color: colors.textSecondary }]}
-          optionTextActiveStyle={[styles.filterChipTextActive, { color: colors.background }]}
+          optionStyle={styles.filterChip}
+          optionActiveStyle={styles.filterChipActive}
+          optionTextStyle={styles.filterChipText}
+          optionTextActiveStyle={styles.filterChipTextActive}
         />
 
         {filteredTransactions.length === 0 && (
           <View style={[{ paddingVertical: 24, alignItems: 'center' }]}>
-            <Ionicons name="receipt-outline" size={32} color={colors.textMuted} style={{ marginBottom: 8 }} />
-            <Text style={{ fontSize: 14, fontFamily: Typography.family.medium, color: colors.textSecondary }}>
+            <Ionicons name="receipt-outline" size={32} color={Colors.textMuted} style={{ marginBottom: 8 }} />
+            <Text style={{ fontSize: 14, fontFamily: Typography.family.medium, color: Colors.textSecondary }}>
               No recent transactions
             </Text>
           </View>
@@ -564,13 +567,15 @@ export default function BalanceScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, backgroundColor: Colors.background },
   content: { paddingHorizontal: 20, paddingBottom: 34 },
 
   pegInfoCard: {
     marginBottom: 16,
     borderRadius: 12,
     borderWidth: 1,
+    borderColor: TINT_CARD_BORDER,
+    backgroundColor: TINT_CARD_BG,
     paddingHorizontal: 12,
     paddingVertical: 10,
     flexDirection: 'row',
@@ -579,46 +584,52 @@ const styles = StyleSheet.create({
   },
   pegInfoText: {
     flex: 1,
+    color: TINT_TEXT,
     fontSize: 13,
     lineHeight: 19,
     fontFamily: Typography.family.semibold,
   },
 
   heroGroup: { marginBottom: 22, gap: 12 },
-  balanceHero: { borderRadius: 28, borderWidth: 0.5, paddingTop: 22, paddingBottom: 18, alignItems: 'center' },
-  balanceLabel: { fontSize: 10, fontFamily: Typography.family.regular, letterSpacing: 0.92, marginBottom: 12, textTransform: 'uppercase' },
+  balanceHero: { backgroundColor: Colors.surfaceAlt, borderRadius: 28, borderWidth: 0.5, borderColor: Colors.border, paddingTop: 22, paddingBottom: 18, alignItems: 'center' },
+  balanceLabel: { fontSize: 10, fontFamily: Typography.family.regular, color: Colors.textMuted, letterSpacing: 0.92, marginBottom: 12, textTransform: 'uppercase' },
   balanceAmount: {
     fontSize: 96,
     lineHeight: 98,
     fontFamily: Typography.family.regular,
+    color: Colors.brand,
     letterSpacing: -3.4,
     fontVariant: ['tabular-nums'],
   },
   balanceIze: {
     fontSize: 12,
     fontFamily: Typography.family.medium,
+    color: Colors.textSecondary,
     marginTop: 6,
     marginBottom: 8,
     fontVariant: ['tabular-nums'],
   },
   balanceActions: { flexDirection: 'row', gap: 14, marginTop: 4 },
   actionBtn: { alignItems: 'center', gap: 8 },
-  actionCircle: { width: 48, height: 48, borderRadius: 24, borderWidth: 0.5, alignItems: 'center', justifyContent: 'center' },
-  actionText: { fontSize: 11, fontFamily: Typography.family.medium },
+  actionCircle: { width: 48, height: 48, borderRadius: 24, backgroundColor: Colors.surfaceAlt, borderWidth: 0.5, borderColor: Colors.border, alignItems: 'center', justifyContent: 'center' },
+  actionText: { fontSize: 11, fontFamily: Typography.family.medium, color: Colors.textSecondary },
 
-  pendingCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 20, borderWidth: 0.5, padding: 18 },
-  pendingTitle: { fontSize: 14, fontFamily: Typography.family.semibold },
-  pendingAmount: { fontSize: 24, fontFamily: Typography.family.bold },
+  pendingCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.surfaceAlt, borderRadius: 20, borderWidth: 0.5, borderColor: Colors.border, padding: 18 },
+  pendingTitle: { fontSize: 14, fontFamily: Typography.family.semibold, color: Colors.textSecondary },
+  pendingAmount: { fontSize: 24, fontFamily: Typography.family.bold, color: Colors.textPrimary },
   pendingAmountCol: { alignItems: 'flex-end' },
-  pendingIze: { fontSize: 12, fontFamily: Typography.family.medium, marginTop: 3 },
+  pendingIze: { fontSize: 12, fontFamily: Typography.family.medium, color: Colors.textSecondary, marginTop: 3 },
 
-  loadCard: { borderRadius: 20, borderWidth: 0.5, padding: 18, marginBottom: 22 },
-  loadTitle: { fontSize: 18, fontFamily: Typography.family.bold },
-  loadHint: { marginTop: 4, fontSize: 13, fontFamily: Typography.family.medium, marginBottom: 12, lineHeight: 18 },
-  loadInputLabel: { fontSize: 11, fontFamily: Typography.family.bold, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 },
+  loadCard: { backgroundColor: Colors.surfaceAlt, borderRadius: 20, borderWidth: 0.5, borderColor: Colors.border, padding: 18, marginBottom: 22 },
+  loadTitle: { color: Colors.textPrimary, fontSize: 18, fontFamily: Typography.family.bold },
+  loadHint: { marginTop: 4, color: Colors.textSecondary, fontSize: 13, fontFamily: Typography.family.medium, marginBottom: 12, lineHeight: 18 },
+  loadInputLabel: { color: Colors.textMuted, fontSize: 11, fontFamily: Typography.family.bold, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 },
   loadInput: {
     borderRadius: 12,
     borderWidth: 0.5,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceAlt,
+    color: Colors.textPrimary,
     fontSize: 18,
     fontFamily: Typography.family.bold,
     paddingHorizontal: 12,
@@ -626,28 +637,31 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   loadSummaryRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, gap: 10 },
-  loadSummaryLabel: { fontSize: 13, fontFamily: Typography.family.medium },
-  loadSummaryValue: { fontSize: 13, fontFamily: Typography.family.bold, textAlign: 'right', maxWidth: '70%' },
-  loadSummaryRowTotal: { marginTop: 4, borderTopWidth: 0.5, paddingTop: 9 },
-  loadSummaryTotalLabel: { fontSize: 14, fontFamily: Typography.family.bold },
-  loadSummaryTotalValue: { fontSize: 13, fontFamily: Typography.family.bold, textAlign: 'right', maxWidth: '70%' },
+  loadSummaryLabel: { color: Colors.textMuted, fontSize: 13, fontFamily: Typography.family.medium },
+  loadSummaryValue: { color: Colors.textPrimary, fontSize: 13, fontFamily: Typography.family.bold, textAlign: 'right', maxWidth: '70%' },
+  loadSummaryRowTotal: { marginTop: 4, borderTopWidth: 0.5, borderTopColor: Colors.border, paddingTop: 9 },
+  loadSummaryTotalLabel: { color: Colors.textPrimary, fontSize: 14, fontFamily: Typography.family.bold },
+  loadSummaryTotalValue: { color: Colors.textPrimary, fontSize: 13, fontFamily: Typography.family.bold, textAlign: 'right', maxWidth: '70%' },
   loadBtn: {
     marginTop: 12,
     borderRadius: 999,
+    backgroundColor: Colors.brand,
     minHeight: 44,
     borderWidth: 0,
   },
   loadBtnDisabled: { opacity: 0.55 },
-  loadBtnText: { fontSize: 13, fontFamily: Typography.family.bold },
+  loadBtnText: { color: Colors.background, fontSize: 13, fontFamily: Typography.family.bold },
 
   // Tab styles
   tabContainer: {
     flexDirection: 'row',
     marginBottom: 16,
+    backgroundColor: Colors.surfaceAlt,
     borderRadius: 12,
     padding: 4,
     gap: 4,
     borderWidth: 0.5,
+    borderColor: Colors.border,
   },
   tab: {
     flex: 1,
@@ -657,17 +671,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  tabActive: {},
+  tabActive: {
+    backgroundColor: Colors.brand,
+  },
   tabText: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
+    color: Colors.textSecondary,
   },
-  tabTextActive: {},
+  tabTextActive: {
+    color: Colors.background,
+  },
 
-  historyCard: { borderRadius: 20, borderWidth: 0.5, padding: 18, marginBottom: 22 },
+  historyCard: { backgroundColor: Colors.surfaceAlt, borderRadius: 20, borderWidth: 0.5, borderColor: Colors.border, padding: 18, marginBottom: 22 },
   historyRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 12, marginBottom: 12 },
-  historyTitle: { fontSize: 16, fontFamily: Typography.family.semibold, marginBottom: 4 },
-  historyDate: { fontSize: 13, fontFamily: Typography.family.regular },
+  historyTitle: { fontSize: 16, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginBottom: 4 },
+  historyDate: { fontSize: 13, fontFamily: Typography.family.regular, color: Colors.textSecondary },
   historyLinkRow: {
     borderRadius: 14,
     borderWidth: 0,
@@ -682,20 +701,20 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
 
-  sectionTitle: { fontSize: 13, fontFamily: Typography.family.semibold, textTransform: 'uppercase', letterSpacing: 1.2, marginLeft: 6, marginBottom: 12 },
+  sectionTitle: { fontSize: 13, fontFamily: Typography.family.semibold, color: Colors.textMuted, textTransform: 'uppercase', letterSpacing: 1.2, marginLeft: 6, marginBottom: 12 },
   filterRow: { flexDirection: 'row', gap: 8, marginBottom: 10, paddingHorizontal: 6 },
-  filterChip: { borderRadius: 999, borderWidth: 0.5, paddingHorizontal: 10, paddingVertical: 6 },
-  filterChipActive: {},
-  filterChipText: { fontSize: 11, fontFamily: Typography.family.bold, letterSpacing: 0.4 },
-  filterChipTextActive: {},
+  filterChip: { borderRadius: 999, borderWidth: 0.5, borderColor: Colors.border, backgroundColor: Colors.surfaceAlt, paddingHorizontal: 10, paddingVertical: 6 },
+  filterChipActive: { borderColor: Colors.brand, backgroundColor: Colors.brand },
+  filterChipText: { color: Colors.textSecondary, fontSize: 11, fontFamily: Typography.family.bold, letterSpacing: 0.4 },
+  filterChipTextActive: { color: Colors.background },
 
-  cardGroup: { borderRadius: 20, borderWidth: 0.5, paddingVertical: 12, paddingHorizontal: 16 },
+  cardGroup: { backgroundColor: Colors.surfaceAlt, borderRadius: 20, borderWidth: 0.5, borderColor: Colors.border, paddingVertical: 12, paddingHorizontal: 16 },
   transactionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14 },
   txLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 16 },
-  iconCircle: { width: 40, height: 40, borderRadius: 20, borderWidth: 0.5, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
-  txTitle: { fontSize: 14, fontFamily: Typography.family.semibold, marginBottom: 4, lineHeight: 18 },
-  txDate: { fontSize: 12, fontFamily: Typography.family.regular, textTransform: 'capitalize', lineHeight: 16 },
-  txStatusPending: {},
-  txStatusCompleted: {},
-  txAmount: { fontSize: 15, fontFamily: Typography.family.bold },
+  iconCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.surfaceAlt, borderWidth: 0.5, borderColor: Colors.border, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
+  txTitle: { fontSize: 14, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginBottom: 4, lineHeight: 18 },
+  txDate: { fontSize: 12, color: Colors.textSecondary, fontFamily: Typography.family.regular, textTransform: 'capitalize', lineHeight: 16 },
+  txStatusPending: { color: Colors.brand },
+  txStatusCompleted: { color: Colors.textSecondary },
+  txAmount: { fontSize: 15, fontFamily: Typography.family.bold, color: Colors.textPrimary },
 });

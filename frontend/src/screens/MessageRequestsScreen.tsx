@@ -12,8 +12,8 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
+import { Colors } from '../constants/colors';
 import { Space, Radius, Type, TypeStyles } from '../theme/designTokens';
-import { useAppTheme } from '../theme/ThemeContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
 import { AvatarRing } from '../components/chat/AvatarRing';
@@ -26,7 +26,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 type NavT = StackNavigationProp<RootStackParamList>;
 
 export default function MessageRequestsScreen() {
-  const { colors } = useAppTheme();
   const navigation = useNavigation<NavT>();
   const { show } = useToast();
   const haptic = useHaptic();
@@ -138,10 +137,10 @@ export default function MessageRequestsScreen() {
               <View style={styles.requestTop}>
                 <BodyEmphasis numberOfLines={1} style={styles.requestName}>{displayTitle}</BodyEmphasis>
                 {item.lastMessageTime && (
-                  <Caption color={colors.textMuted}>{item.lastMessageTime}</Caption>
+                  <Caption color={Colors.textMuted}>{item.lastMessageTime}</Caption>
                 )}
               </View>
-              <Caption color={colors.textMuted} numberOfLines={2} style={styles.requestPreview}>
+              <Caption color={Colors.textMuted} numberOfLines={2} style={styles.requestPreview}>
                 {item.lastMessage ?? 'Wants to message you'}
               </Caption>
             </View>
@@ -149,31 +148,31 @@ export default function MessageRequestsScreen() {
 
           {/* Listing context card */}
           {listing && (
-            <View style={[styles.listingCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+            <View style={styles.listingCard}>
               {listing.images?.[0] ? (
                 <CachedImage uri={listing.images[0]} style={styles.listingThumb} contentFit="cover" />
               ) : (
-                <View style={[styles.listingThumbPlaceholder, { backgroundColor: colors.surface }]}>
-                  <Ionicons name="pricetag-outline" size={16} color={colors.textMuted} />
+                <View style={styles.listingThumbPlaceholder}>
+                  <Ionicons name="pricetag-outline" size={16} color={Colors.textMuted} />
                 </View>
               )}
               <View style={styles.listingInfo}>
-                <Caption color={colors.textSecondary} numberOfLines={1} style={styles.listingTitle}>{listing.title}</Caption>
+                <Caption color={Colors.textSecondary} numberOfLines={1} style={styles.listingTitle}>{listing.title}</Caption>
                 {listing.price != null && (
-                  <Text style={[styles.listingPrice, { color: colors.textPrimary }]}>
+                  <Text style={styles.listingPrice}>
                     £{listing.price.toFixed(2)}
                   </Text>
                 )}
               </View>
-              <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+              <Ionicons name="chevron-forward" size={14} color={Colors.textMuted} />
             </View>
           )}
 
           {/* Safety note — only for non-marketplace requests */}
           {!listing && (
             <View style={styles.safetyNote}>
-              <Ionicons name="shield-outline" size={12} color={colors.textMuted} />
-              <Text style={[styles.safetyNoteText, { color: colors.textMuted }]}>
+              <Ionicons name="shield-outline" size={12} color={Colors.textMuted} />
+              <Text style={styles.safetyNoteText}>
                 If this seems suspicious, decline and block.
               </Text>
             </View>
@@ -182,7 +181,7 @@ export default function MessageRequestsScreen() {
           {/* Actions */}
           <View style={styles.requestActions}>
             <AnimatedPressable
-              style={[styles.requestDecline, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
+              style={styles.requestDecline}
               onPress={() => handleDecline(item.id)}
               activeOpacity={0.85}
               scaleValue={0.96}
@@ -190,10 +189,10 @@ export default function MessageRequestsScreen() {
               accessibilityRole="button"
               accessibilityLabel="Decline message request"
             >
-              <Text style={[styles.requestDeclineText, { color: colors.textPrimary }]}>Decline</Text>
+              <Text style={styles.requestDeclineText}>Decline</Text>
             </AnimatedPressable>
             <AnimatedPressable
-              style={[styles.requestAccept, { backgroundColor: colors.textPrimary }]}
+              style={styles.requestAccept}
               onPress={() => handleAccept(item.id)}
               activeOpacity={0.85}
               scaleValue={0.96}
@@ -201,7 +200,7 @@ export default function MessageRequestsScreen() {
               accessibilityRole="button"
               accessibilityLabel="Accept message request"
             >
-              <Text style={[styles.requestAcceptText, { color: colors.textInverse }]}>Accept</Text>
+              <Text style={styles.requestAcceptText}>Accept</Text>
             </AnimatedPressable>
           </View>
 
@@ -215,9 +214,9 @@ export default function MessageRequestsScreen() {
                 hapticFeedback="medium"
                 accessibilityRole="button"
                 accessibilityLabel={`Block ${displayTitle}`}
-                style={[styles.expandedBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
+                style={styles.expandedBtn}
               >
-                <Ionicons name="ban-outline" size={14} color={colors.danger} />
+                <Ionicons name="ban-outline" size={14} color={Colors.danger} />
                 <Text style={styles.expandedBtnTextDanger}>Block</Text>
               </AnimatedPressable>
               <AnimatedPressable
@@ -227,9 +226,9 @@ export default function MessageRequestsScreen() {
                 hapticFeedback="medium"
                 accessibilityRole="button"
                 accessibilityLabel={`Report ${displayTitle}`}
-                style={[styles.expandedBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
+                style={styles.expandedBtn}
               >
-                <Ionicons name="flag-outline" size={14} color={colors.danger} />
+                <Ionicons name="flag-outline" size={14} color={Colors.danger} />
                 <Text style={styles.expandedBtnTextDanger}>Report</Text>
               </AnimatedPressable>
               <AnimatedPressable
@@ -239,9 +238,9 @@ export default function MessageRequestsScreen() {
                 hapticFeedback="light"
                 accessibilityRole="button"
                 accessibilityLabel="Hide options"
-                style={[styles.expandedBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
+                style={styles.expandedBtn}
               >
-                <Ionicons name="chevron-up-outline" size={14} color={colors.textMuted} />
+                <Ionicons name="chevron-up-outline" size={14} color={Colors.textMuted} />
                 <Text style={styles.expandedBtnTextMuted}>Less</Text>
               </AnimatedPressable>
             </View>
@@ -256,18 +255,18 @@ export default function MessageRequestsScreen() {
               style={styles.moreBtn}
             >
               <Text style={styles.moreBtnText}>Block or report</Text>
-              <Ionicons name="chevron-down-outline" size={12} color={colors.textMuted} />
+              <Ionicons name="chevron-down-outline" size={12} color={Colors.textMuted} />
             </AnimatedPressable>
           )}
         </View>
-        <View style={[styles.requestSeparator, { backgroundColor: colors.border }]} />
+        <View style={styles.requestSeparator} />
       </View>
     );
   };
 
   return (
-    <SafeAreaView edges={['top']} style={[styles.screenRoot, { backgroundColor: colors.background }]}>
-      <View style={[styles.compactHeader, { borderBottomColor: colors.border }]}>
+    <SafeAreaView edges={['top']} style={styles.screenRoot}>
+      <View style={styles.compactHeader}>
         <AnimatedPressable
           onPress={() => navigation.goBack()}
           activeOpacity={0.7}
@@ -277,11 +276,11 @@ export default function MessageRequestsScreen() {
           accessibilityRole="button"
           style={styles.backBtn}
         >
-          <Ionicons name="chevron-back" size={26} color={colors.textPrimary} />
+          <Ionicons name="chevron-back" size={26} color={Colors.textPrimary} />
         </AnimatedPressable>
         <View style={styles.headerTitleWrap}>
-          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Requests</Text>
-          <Text style={[styles.headerSubtitle, { color: colors.textMuted }]}>
+          <Text style={styles.headerTitle}>Requests</Text>
+          <Text style={styles.headerSubtitle}>
             {requestConversations.length > 0
               ? `${requestConversations.length} pending · Accept to chat`
               : 'People you don\'t follow'}
@@ -313,6 +312,7 @@ export default function MessageRequestsScreen() {
 const styles = StyleSheet.create({
   screenRoot: {
     flex: 1,
+    backgroundColor: Colors.background,
   },
   compactHeader: {
     flexDirection: 'row',
@@ -321,6 +321,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
   },
   backBtn: {
     width: 40,
@@ -336,11 +337,13 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: Type.subtitle.size,
     fontFamily: TypeStyles.title.fontFamily,
+    color: Colors.textPrimary,
     letterSpacing: Type.subtitle.letterSpacing,
   },
   headerSubtitle: {
     fontSize: Type.caption.size,
     fontFamily: TypeStyles.body.fontFamily,
+    color: Colors.textMuted,
   },
   listContent: {
     paddingHorizontal: Space.md,
@@ -379,9 +382,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
+    backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.md,
     padding: Space.sm,
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
   },
   listingThumb: {
     width: 40,
@@ -392,6 +397,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: Radius.sm,
+    backgroundColor: Colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -405,6 +411,7 @@ const styles = StyleSheet.create({
   listingPrice: {
     fontSize: Type.bodyEmphasis.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    color: Colors.textPrimary,
   },
   safetyNote: {
     flexDirection: 'row',
@@ -415,6 +422,7 @@ const styles = StyleSheet.create({
   safetyNoteText: {
     fontSize: Type.meta.size,
     fontFamily: TypeStyles.body.fontFamily,
+    color: Colors.textMuted,
   },
   requestActions: {
     flexDirection: 'row',
@@ -426,11 +434,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 11,
     borderRadius: Radius.md,
+    backgroundColor: Colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
   },
   requestDeclineText: {
     fontSize: Type.caption.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    color: Colors.textPrimary,
   },
   requestAccept: {
     flex: 1,
@@ -438,13 +449,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 11,
     borderRadius: Radius.md,
+    backgroundColor: Colors.textPrimary,
   },
   requestAcceptText: {
     fontSize: Type.caption.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    color: Colors.textInverse,
   },
   requestSeparator: {
     height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.border,
     marginLeft: Space.md,
     marginRight: Space.md,
   },
@@ -461,15 +475,19 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 10,
     borderRadius: Radius.md,
+    backgroundColor: Colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
   },
   expandedBtnTextDanger: {
     fontSize: Type.caption.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    color: Colors.danger,
   },
   expandedBtnTextMuted: {
     fontSize: Type.caption.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    color: Colors.textMuted,
   },
   moreBtn: {
     flexDirection: 'row',
@@ -481,5 +499,6 @@ const styles = StyleSheet.create({
   moreBtnText: {
     fontSize: Type.meta.size,
     fontFamily: TypeStyles.body.fontFamily,
+    color: Colors.textMuted,
   },
 });

@@ -10,7 +10,6 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../../constants/colors';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const AnimatedLinearGradient = Reanimated.createAnimatedComponent(LinearGradient);
 
@@ -28,13 +27,8 @@ export function PremiumSkeletonTile({
   style,
 }: Props) {
   const shimmerX = useSharedValue(-1);
-  const reducedMotionEnabled = useReducedMotion();
 
   React.useEffect(() => {
-    if (reducedMotionEnabled) {
-      shimmerX.value = 0;
-      return;
-    }
     shimmerX.value = withRepeat(
       withSequence(
         withTiming(1, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
@@ -43,7 +37,7 @@ export function PremiumSkeletonTile({
       -1,
       false
     );
-  }, [shimmerX, reducedMotionEnabled]);
+  }, [shimmerX]);
 
   const shimmerStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: shimmerX.value * 140 }],

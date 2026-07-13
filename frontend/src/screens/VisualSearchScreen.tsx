@@ -13,6 +13,7 @@ import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import * as ImagePicker from 'expo-image-picker';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
+import { Colors } from '../constants/colors';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Space, Radius, Type , Typography  } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -21,15 +22,13 @@ import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { useToast } from '../context/ToastContext';
 import { useBackendData } from '../context/BackendDataContext';
 import { MasonryGrid } from '../components/ProductCardV2';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 
 type Props = StackScreenProps<RootStackParamList, 'VisualSearch'>;
 
 export default function VisualSearchScreen({ navigation }: Props) {
-  const { colors, isDark } = useAppTheme();
+  const { isDark } = useAppTheme();
   const { show } = useToast();
   const { listings } = useBackendData();
-  const reducedMotionEnabled = useReducedMotion();
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [previewFailed, setPreviewFailed] = useState(false);
 
@@ -47,6 +46,7 @@ export default function VisualSearchScreen({ navigation }: Props) {
         quality: 0.92,
       });
       if (!result.canceled && result.assets?.[0]?.uri) {
+        setPreviewFailed(false);
         setImageUri(result.assets[0].uri);
       }
     } catch {
@@ -68,6 +68,7 @@ export default function VisualSearchScreen({ navigation }: Props) {
         quality: 0.92,
       });
       if (!result.canceled && result.assets?.[0]?.uri) {
+        setPreviewFailed(false);
         setImageUri(result.assets[0].uri);
       }
     } catch {
@@ -76,6 +77,7 @@ export default function VisualSearchScreen({ navigation }: Props) {
   }, [show]);
 
   const handleRemoveImage = useCallback(() => {
+    setPreviewFailed(false);
     setImageUri(null);
   }, []);
 
@@ -107,38 +109,38 @@ export default function VisualSearchScreen({ navigation }: Props) {
   }, [listings]);
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
-      <ScreenHeader title="Preview Visual Search" onBack={() => navigation.goBack()} />
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
+      <ScreenHeader title="Visual Search" onBack={() => navigation.goBack()} />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         {/* Source selection */}
         {!imageUri && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.sourceWrap}>
-            <Text style={[styles.sourceTitle, { color: colors.textPrimary }]}>Find similar items with a photo</Text>
-            <Text style={[styles.sourceSub, { color: colors.textMuted }]}>
+          <Reanimated.View entering={FadeInDown.duration(300)} style={styles.sourceWrap}>
+            <Text style={styles.sourceTitle}>Find similar items with a photo</Text>
+            <Text style={styles.sourceSub}>
               Image matching is not connected yet. You can preview a photo, then continue with search or browse.
             </Text>
             <View style={styles.sourceRow}>
               <AnimatedPressable
-                style={[styles.sourceBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                style={styles.sourceBtn}
                 onPress={handleCapture}
                 activeOpacity={0.85}
                 accessibilityRole="button"
                 accessibilityLabel="Take a photo"
               >
-                <Ionicons name="camera-outline" size={32} color={colors.brand} />
-                <Text style={[styles.sourceBtnText, { color: colors.textPrimary }]}>Camera</Text>
+                <Ionicons name="camera-outline" size={32} color={Colors.brand} />
+                <Text style={styles.sourceBtnText}>Camera</Text>
               </AnimatedPressable>
               <AnimatedPressable
-                style={[styles.sourceBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                style={styles.sourceBtn}
                 onPress={handleGallery}
                 activeOpacity={0.85}
                 accessibilityRole="button"
                 accessibilityLabel="Choose a photo from gallery"
               >
-                <Ionicons name="images-outline" size={32} color={colors.brand} />
-                <Text style={[styles.sourceBtnText, { color: colors.textPrimary }]}>Gallery</Text>
+                <Ionicons name="images-outline" size={32} color={Colors.brand} />
+                <Text style={styles.sourceBtnText}>Gallery</Text>
               </AnimatedPressable>
             </View>
           </Reanimated.View>
@@ -146,11 +148,11 @@ export default function VisualSearchScreen({ navigation }: Props) {
 
         {/* Image preview */}
         {imageUri && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.previewWrap}>
-            <View style={[styles.previewCard, { backgroundColor: colors.surfaceAlt }]}>
+          <Reanimated.View entering={FadeInDown.duration(300)} style={styles.previewWrap}>
+            <View style={styles.previewCard}>
               {previewFailed ? (
                 <View style={styles.previewImg}>
-                  <Ionicons name="image-outline" size={32} color={colors.textMuted} />
+                  <Ionicons name="image-outline" size={32} color={Colors.textMuted} />
                 </View>
               ) : (
                 <Image
@@ -171,7 +173,7 @@ export default function VisualSearchScreen({ navigation }: Props) {
                 style={styles.removeBtn}
                 onPress={handleRemoveImage}
                 activeOpacity={0.85}
-                hitSlop={8}
+                hitSlop={6}
                 accessibilityRole="button"
                 accessibilityLabel="Remove selected photo"
               >
@@ -179,13 +181,13 @@ export default function VisualSearchScreen({ navigation }: Props) {
               </AnimatedPressable>
             </View>
 
-            <View style={[styles.availabilityCard, { backgroundColor: colors.surface, borderColor: colors.border }]} accessibilityRole="summary">
-              <View style={[styles.availabilityIcon, { backgroundColor: colors.surfaceAlt }]}>
-                <Ionicons name="scan-outline" size={20} color={colors.textPrimary} />
+            <View style={styles.availabilityCard} accessibilityRole="summary">
+              <View style={styles.availabilityIcon}>
+                <Ionicons name="scan-outline" size={20} color={Colors.textPrimary} />
               </View>
               <View style={styles.availabilityCopy}>
-                <Text style={[styles.availabilityTitle, { color: colors.textPrimary }]}>Visual matching is coming soon</Text>
-                <Text style={[styles.availabilityText, { color: colors.textSecondary }]}>
+                <Text style={styles.availabilityTitle}>Visual matching is coming soon</Text>
+                <Text style={styles.availabilityText}>
                   Your photo stays on this device. No scan or upload has been started.
                 </Text>
               </View>
@@ -210,23 +212,23 @@ export default function VisualSearchScreen({ navigation }: Props) {
 
         {/* Honest browse fallbacks are available as soon as a photo is selected. */}
         {imageUri && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400)}>
+          <Reanimated.View entering={FadeInDown.duration(400)}>
             {/* Browse by category fallback */}
             {availableCategories.length > 0 && (
               <View style={styles.fallbackSection}>
-                <Text style={[styles.fallbackTitle, { color: colors.textPrimary }]}>Browse by category</Text>
+                <Text style={styles.fallbackTitle}>Browse by category</Text>
                 <View style={styles.categoryChipsWrap}>
                   {availableCategories.map(({ category, count }) => (
                     <AnimatedPressable
                       key={category}
-                      style={[styles.categoryChip, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                      style={styles.categoryChip}
                       onPress={() => handleBrowseCategory(category, category)}
                       activeOpacity={0.8}
                       accessibilityLabel={`Browse ${category} category, ${count} items`}
                       accessibilityRole="button"
                     >
-                      <Text style={[styles.categoryChipText, { color: colors.textPrimary }]}>{category}</Text>
-                      <Text style={[styles.categoryChipCount, { color: colors.textMuted }]}>{count}</Text>
+                      <Text style={styles.categoryChipText}>{category}</Text>
+                      <Text style={styles.categoryChipCount}>{count}</Text>
                     </AnimatedPressable>
                   ))}
                 </View>
@@ -236,7 +238,7 @@ export default function VisualSearchScreen({ navigation }: Props) {
             {/* Nearby listings fallback grid */}
             {listings.length > 0 && (
               <View style={styles.fallbackSection}>
-                <Text style={[styles.fallbackTitle, { color: colors.textPrimary }]}>Recently listed items</Text>
+                <Text style={styles.fallbackTitle}>Recently listed items</Text>
                 <MasonryGrid
                   items={listings.slice(0, 8)}
                   onPressItem={(item) => navigation.navigate('ItemDetail', { itemId: item.id })}
@@ -253,23 +255,25 @@ export default function VisualSearchScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, backgroundColor: Colors.background },
   scroll: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
 
   sourceWrap: { marginTop: Space.lg, alignItems: 'center', gap: Space.sm },
-  sourceTitle: { fontSize: Type.subtitle.size, fontFamily: Typography.family.semibold, textAlign: 'center' },
-  sourceSub: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, textAlign: 'center' },
+  sourceTitle: { fontSize: Type.subtitle.size, fontFamily: Typography.family.semibold, color: Colors.textPrimary, textAlign: 'center' },
+  sourceSub: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: Colors.textMuted, textAlign: 'center' },
   sourceRow: { width: '100%', flexDirection: 'row', gap: Space.md, marginTop: Space.lg },
   sourceBtn: {
     flex: 1,
     aspectRatio: 1,
+    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     borderWidth: 1,
+    borderColor: Colors.border,
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.sm,
   },
-  sourceBtnText: { fontSize: Type.body.size, fontFamily: Typography.family.semibold },
+  sourceBtnText: { fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: Colors.textPrimary },
 
   previewWrap: { marginTop: Space.lg, alignItems: 'stretch' },
   previewCard: {
@@ -277,6 +281,7 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
     borderRadius: Radius.lg,
     overflow: 'hidden',
+    backgroundColor: Colors.surfaceAlt,
     position: 'relative',
   },
   previewImg: { width: '100%', height: '100%' },
@@ -296,7 +301,9 @@ const styles = StyleSheet.create({
     marginTop: Space.md,
     padding: Space.md,
     borderRadius: Radius.lg,
+    backgroundColor: Colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Space.sm,
@@ -305,17 +312,18 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: Radius.full,
+    backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
   availabilityCopy: { flex: 1, gap: 3 },
-  availabilityTitle: { fontSize: Type.body.size, fontFamily: Typography.family.semibold },
-  availabilityText: { fontSize: Type.caption.size, lineHeight: 18, fontFamily: Typography.family.regular },
+  availabilityTitle: { fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: Colors.textPrimary },
+  availabilityText: { fontSize: Type.caption.size, lineHeight: 18, fontFamily: Typography.family.regular, color: Colors.textSecondary },
   primaryAction: { marginTop: Space.md },
   secondaryAction: { marginTop: Space.sm },
 
   fallbackSection: { marginTop: Space.lg },
-  fallbackTitle: { fontSize: Type.subtitle.size, fontFamily: Typography.family.semibold, marginBottom: Space.sm },
+  fallbackTitle: { fontSize: Type.subtitle.size, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginBottom: Space.sm },
 
   // Category chips
   categoryChipsWrap: {
@@ -330,15 +338,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 9,
     borderRadius: 20,
+    backgroundColor: Colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
   },
   categoryChipText: {
     fontSize: 13,
     fontFamily: Typography.family.medium,
+    color: Colors.textPrimary,
   },
   categoryChipCount: {
     fontSize: 11,
     fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
   },
 
   cornerBracket: {

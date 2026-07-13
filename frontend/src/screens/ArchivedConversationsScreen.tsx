@@ -6,7 +6,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
-import { useAppTheme } from '../theme/ThemeContext';
+import { Colors } from '../constants/colors';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { FlagshipScreen, FlagshipHeader, FlagshipEmptyGraphic } from '../components/flagship';
@@ -17,7 +17,6 @@ type NavT = StackNavigationProp<RootStackParamList>;
 export default function ArchivedConversationsScreen() {
   const navigation = useNavigation<NavT>();
   const { show } = useToast();
-  const { colors, isDark } = useAppTheme();
   const conversations = useStore((s) => s.conversations);
   const archivedIds = useStore((s) => s.archivedConversationIds);
   const toggleArchived = useStore((s) => s.toggleArchivedConversation);
@@ -104,10 +103,10 @@ export default function ArchivedConversationsScreen() {
       {archivedConversations.length === 0 ? (
         <View style={{ alignItems: 'center', paddingVertical: Space.xl * 2 }}>
           <FlagshipEmptyGraphic variant="box" size={120} />
-          <Text style={{ fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: colors.textPrimary, marginTop: Space.lg }}>
+          <Text style={{ fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginTop: Space.lg }}>
             No archived conversations
           </Text>
-          <Text style={{ fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textSecondary, textAlign: 'center', marginTop: Space.xs, paddingHorizontal: Space.lg }}>
+          <Text style={{ fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: Colors.textSecondary, textAlign: 'center', marginTop: Space.xs, paddingHorizontal: Space.lg }}>
             Archived conversations will appear here. You can restore or delete them at any time.
           </Text>
         </View>
@@ -118,8 +117,8 @@ export default function ArchivedConversationsScreen() {
             return (
               <View key={convo.id}>
                 <View style={styles.row}>
-                  <View style={[styles.avatarFallback, { backgroundColor: colors.surfaceAlt }]}>
-                    <Ionicons name="person-outline" size={16} color={colors.textMuted} />
+                  <View style={[styles.avatarFallback, { backgroundColor: Colors.surfaceAlt }]}>
+                    <Ionicons name="person-outline" size={16} color={Colors.textMuted} />
                   </View>
                   <View style={styles.rowText}>
                     <Text style={styles.rowTitle} numberOfLines={1}>
@@ -136,8 +135,8 @@ export default function ArchivedConversationsScreen() {
                     accessibilityLabel={`Restore ${title}`}
                     accessibilityRole="button"
                   >
-                    <View style={[styles.restoreBtn, { backgroundColor: `${colors.brand}15` }]}>
-                      <Ionicons name="arrow-undo-outline" size={14} color={colors.brand} />
+                    <View style={styles.restoreBtn}>
+                      <Ionicons name="arrow-undo-outline" size={14} color={Colors.brand} />
                       <Text style={styles.restoreText}>Restore</Text>
                     </View>
                   </AnimatedPressable>
@@ -148,8 +147,8 @@ export default function ArchivedConversationsScreen() {
                     accessibilityLabel={`Delete ${title}`}
                     accessibilityRole="button"
                   >
-                    <View style={[styles.deleteBtn, { backgroundColor: `${colors.danger}10` }]}>
-                      <Ionicons name="trash-outline" size={14} color={colors.danger} />
+                    <View style={styles.deleteBtn}>
+                      <Ionicons name="trash-outline" size={14} color={Colors.danger} />
                     </View>
                   </AnimatedPressable>
                 </View>
@@ -190,11 +189,13 @@ const styles = StyleSheet.create({
   rowTitle: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
     letterSpacing: Type.body.letterSpacing,
   },
   rowPreview: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
     marginTop: 2,
     letterSpacing: Type.caption.letterSpacing,
   },
@@ -205,10 +206,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs + 2,
     borderRadius: Radius.md,
+    backgroundColor: `${Colors.brand}15`,
   },
   restoreText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
+    color: Colors.brand,
     letterSpacing: Type.caption.letterSpacing,
   },
   deleteBtn: {
@@ -217,14 +220,17 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: `${Colors.danger}10`,
   },
   clearAllBtn: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
+    color: Colors.danger,
     letterSpacing: Type.caption.letterSpacing,
   },
   listDivider: {
     height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.border,
     marginLeft: 40 + Space.sm + 4 + Space.md,
   },
 });

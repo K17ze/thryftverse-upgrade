@@ -1,11 +1,10 @@
 import React, { useEffect } from 'react';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { useAppTheme } from '../theme/ThemeContext';
+import { Colors } from '../constants/colors';
 
 export function CreatePosterRedirect() {
   const navigation = useNavigation<any>();
-  const { colors, isDark } = useAppTheme();
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -16,7 +15,7 @@ export function CreatePosterRedirect() {
 
   return (
     <View style={styles.container}>
-      <ActivityIndicator size="large" color={colors.brand} />
+      <ActivityIndicator size="large" color={Colors.brand} />
     </View>
   );
 }
@@ -26,5 +25,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: Colors.background,
   },
 });

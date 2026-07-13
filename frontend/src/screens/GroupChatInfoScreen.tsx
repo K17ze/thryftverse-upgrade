@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
-import { useAppTheme } from '../theme/ThemeContext';
+import { Colors } from '../constants/colors';
 import { Space, Radius, Type, TypeStyles } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -24,7 +24,6 @@ type Props = StackScreenProps<RootStackParamList, 'GroupChatInfo'>;
 export default function GroupChatInfoScreen({ navigation, route }: Props) {
   const { conversationId } = route.params;
   const { show } = useToast();
-  const { colors, isDark } = useAppTheme();
   const haptic = useHaptic();
   const insets = useSafeAreaInsets();
 
@@ -48,7 +47,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
     return (
       <FlagshipScreen header={<FlagshipHeader title="Group Info" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
         <View style={styles.center}>
-          <Caption color={colors.textMuted}>Group not found</Caption>
+          <Caption color={Colors.textMuted}>Group not found</Caption>
         </View>
       </FlagshipScreen>
     );
@@ -123,7 +122,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
         {/* Group Identity */}
         <View style={styles.identityCardV2}>
           <View style={styles.groupAvatarWrap}>
-            <View style={[styles.groupAvatar, { backgroundColor: colors.surfaceAlt }]}>
+            <View style={[styles.groupAvatar, { backgroundColor: Colors.surfaceAlt }]}>
               <Text style={styles.groupAvatarText}>{initials}</Text>
             </View>
           </View>
@@ -131,13 +130,13 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
             {conversation.title ?? 'Group chat'}
           </BodyEmphasis>
           {description ? (
-            <Caption color={colors.textMuted} style={styles.groupDescV2}>{description}</Caption>
+            <Caption color={Colors.textMuted} style={styles.groupDescV2}>{description}</Caption>
           ) : null}
-          <Caption color={colors.textMuted}>{memberCount} members</Caption>
+          <Caption color={Colors.textMuted}>{memberCount} members</Caption>
           {deployedBotCount > 0 && (
             <View style={styles.botBadgeV2}>
-              <Ionicons name="hardware-chip-outline" size={12} color={colors.brand} />
-              <Caption color={colors.brand} style={styles.botBadgeText}>
+              <Ionicons name="hardware-chip-outline" size={12} color={Colors.brand} />
+              <Caption color={Colors.brand} style={styles.botBadgeText}>
                 {deployedBotCount} bot{deployedBotCount > 1 ? 's' : ''} active
               </Caption>
             </View>
@@ -237,7 +236,6 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
 }
 
 function Section({ title, children, danger }: { title: string; children: React.ReactNode; danger?: boolean }) {
-  const { colors } = useAppTheme();
   const childArray = React.Children.toArray(children);
   const lastIndex = childArray.length - 1;
   const childrenWithIsLast = childArray.map((child, index) => {
@@ -248,7 +246,7 @@ function Section({ title, children, danger }: { title: string; children: React.R
   });
   return (
     <View style={styles.section}>
-      <Meta color={danger ? colors.danger : colors.textMuted} style={styles.sectionLabel}>
+      <Meta color={danger ? Colors.danger : Colors.textMuted} style={styles.sectionLabel}>
         {title.toUpperCase()}
       </Meta>
       <View style={[styles.sectionCard, danger && styles.sectionCardDanger]}>{childrenWithIsLast}</View>
@@ -273,19 +271,18 @@ function RowItem({
   danger?: boolean;
   isLast?: boolean;
 }) {
-  const { colors } = useAppTheme();
   const content = (
     <View style={[styles.row, !isLast && styles.rowBorder]}>
       <Ionicons
         name={icon as any}
         size={20}
-        color={danger ? colors.danger : colors.textSecondary}
+        color={danger ? Colors.danger : Colors.textSecondary}
       />
       <View style={styles.rowTextBody}>
         <Text
           style={[
             styles.rowLabel,
-            { color: danger ? colors.danger : colors.textPrimary },
+            { color: danger ? Colors.danger : Colors.textPrimary },
           ]}
         >
           {label}
@@ -295,7 +292,7 @@ function RowItem({
         ) : null}
       </View>
       {showChevron && (
-        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
       )}
     </View>
   );
@@ -334,6 +331,7 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xl,
     gap: Space.sm,
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
     borderRadius: Radius.xl,
     marginHorizontal: Space.xs,
   },
@@ -342,6 +340,7 @@ const styles = StyleSheet.create({
     height: 88,
     borderRadius: Radius.full,
     borderWidth: 2,
+    borderColor: Colors.border,
     padding: 2,
     justifyContent: 'center',
     alignItems: 'center',
@@ -356,10 +355,12 @@ const styles = StyleSheet.create({
   avatarText: {
     fontSize: 28,
     fontFamily: TypeStyles.title.fontFamily,
+    color: Colors.textPrimary,
   },
   groupName: {
     fontSize: Type.title.size,
     fontFamily: TypeStyles.title.fontFamily,
+    color: Colors.textPrimary,
     marginTop: Space.sm,
   },
   groupDesc: {
@@ -381,6 +382,7 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xl + 8,
     gap: Space.sm,
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
     borderRadius: Radius.xl,
     marginHorizontal: Space.xs,
   },
@@ -403,10 +405,12 @@ const styles = StyleSheet.create({
   groupAvatarText: {
     fontSize: 32,
     fontFamily: TypeStyles.title.fontFamily,
+    color: Colors.textPrimary,
   },
   groupNameV2: {
     fontSize: Type.title.size,
     fontFamily: TypeStyles.title.fontFamily,
+    color: Colors.textPrimary,
     marginTop: Space.sm,
   },
   groupDescV2: {
@@ -429,11 +433,14 @@ const styles = StyleSheet.create({
     marginLeft: Space.xs,
   },
   sectionCard: {
+    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
     overflow: 'hidden',
   },
   sectionCardDanger: {
+    borderColor: `${Colors.danger}30`,
   },
   row: {
     flexDirection: 'row',
@@ -444,6 +451,7 @@ const styles = StyleSheet.create({
   },
   rowBorder: {
     borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
   },
   rowTextBody: {
     flex: 1,
@@ -456,5 +464,6 @@ const styles = StyleSheet.create({
   rowSubtitle: {
     fontSize: Type.caption.size,
     fontFamily: TypeStyles.body.fontFamily,
+    color: Colors.textMuted,
   },
 });

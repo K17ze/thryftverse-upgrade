@@ -4,7 +4,7 @@ import Reanimated, { useSharedValue, useAnimatedStyle, withSequence, withTiming,
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useAppTheme } from '../theme/ThemeContext';
+import { ActiveTheme, Colors } from '../constants/colors';
 import { Type, Space } from '../theme/designTokens';
 import { useStore } from '../store/useStore';
 import { AppButton } from '../components/ui/AppButton';
@@ -24,7 +24,6 @@ import {
 export default function LoginScreen() {
   const navigation = useNavigation<any>();
   const canGoBack = navigation.canGoBack();
-  const { colors, isDark } = useAppTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -253,13 +252,13 @@ export default function LoginScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
 
       <View style={styles.header}>
         {canGoBack ? (
-          <AnimatedPressable style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
           </AnimatedPressable>
         ) : (
           <View style={styles.backBtnSpacer} />
@@ -274,8 +273,8 @@ export default function LoginScreen() {
         showsVerticalScrollIndicator={false}
       >
           <View>
-            <Text style={[styles.title, { color: colors.textPrimary }]}>Welcome back</Text>
-            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Log in to continue buying, selling, and trading.</Text>
+            <Text style={styles.title}>Welcome back</Text>
+            <Text style={styles.subtitle}>Log in to continue buying, selling, and trading.</Text>
 
             <View style={styles.form}>
               <AppInput
@@ -323,7 +322,7 @@ export default function LoginScreen() {
                     }}
                   />
 
-                  <Text style={[styles.twoFactorHint, { color: colors.textMuted }]}>If you lost access, use a recovery code below.</Text>
+                  <Text style={styles.twoFactorHint}>If you lost access, use a recovery code below.</Text>
 
                   <AppInput
                     label="Recovery code (optional)"
@@ -361,19 +360,19 @@ export default function LoginScreen() {
                 style={styles.forgotBtn}
                 onPress={() => navigation.navigate('ForgotPassword')}
               >
-                <Text style={[styles.forgotText, { color: colors.textSecondary }]}>Forgot password?</Text>
+                <Text style={styles.forgotText}>Forgot password?</Text>
               </AnimatedPressable>
 
               <View style={styles.dividerRow}>
-                <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
-                <Text style={[styles.dividerText, { color: colors.textMuted }]}>or</Text>
-                <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>or</Text>
+                <View style={styles.dividerLine} />
               </View>
 
               <AppButton
                 title={isOtpSending ? 'Sending OTP...' : 'Send OTP to Email'}
-                style={[styles.otpRequestBtn, { borderColor: colors.border, backgroundColor: colors.surface }, !canRequestOtp && styles.primaryBtnDisabled]}
-                titleStyle={[styles.otpRequestText, { color: colors.textPrimary }]}
+                style={[styles.otpRequestBtn, !canRequestOtp && styles.primaryBtnDisabled]}
+                titleStyle={styles.otpRequestText}
                 variant="secondary"
                 size="sm"
                 onPress={handleRequestOtp}
@@ -384,7 +383,7 @@ export default function LoginScreen() {
               <AppButton
                 title={isMagicSending ? 'Sending magic link...' : 'Send Magic Link Instead'}
                 style={[styles.magicLinkBtn, !canRequestMagicLink && styles.primaryBtnDisabled]}
-                titleStyle={[styles.magicLinkText, { color: colors.textSecondary }]}
+                titleStyle={styles.magicLinkText}
                 variant="secondary"
                 size="sm"
                 onPress={handleRequestMagicLink}
@@ -413,8 +412,8 @@ export default function LoginScreen() {
 
                   <AppButton
                     title={isOtpVerifying ? 'Verifying...' : 'Verify OTP & Log In'}
-                    style={[styles.otpVerifyBtn, { backgroundColor: colors.brand }, !canVerifyOtp && styles.primaryBtnDisabled]}
-                    titleStyle={[styles.otpVerifyText, { color: colors.textInverse }]}
+                    style={[styles.otpVerifyBtn, !canVerifyOtp && styles.primaryBtnDisabled]}
+                    titleStyle={styles.otpVerifyText}
                     variant="primary"
                     size="md"
                     onPress={handleVerifyOtp}
@@ -433,7 +432,7 @@ export default function LoginScreen() {
                 entering={statusEnterAnimation}
                 exiting={statusExitAnimation}
                 layout={layoutAnimation}
-                style={[styles.infoText, { color: colors.success }]}
+                style={styles.infoText}
               >
                 {infoMsg}
               </Reanimated.Text>
@@ -444,7 +443,7 @@ export default function LoginScreen() {
                 entering={statusEnterAnimation}
                 exiting={statusExitAnimation}
                 layout={layoutAnimation}
-                style={[styles.errorText, { color: colors.danger }]}
+                style={styles.errorText}
               >
                 {errorMsg}
               </Reanimated.Text>
@@ -453,8 +452,8 @@ export default function LoginScreen() {
             <Reanimated.View style={shakeStyle} layout={layoutAnimation}>
               <AppButton
                 title={isSubmitting ? 'Logging in...' : 'Log In'}
-                style={[styles.primaryBtn, { backgroundColor: colors.textPrimary }, !canSubmit && styles.primaryBtnDisabled]}
-                titleStyle={[styles.primaryText, { color: colors.background }]}
+                style={[styles.primaryBtn, !canSubmit && styles.primaryBtnDisabled]}
+                titleStyle={styles.primaryText}
                 variant="primary"
                 size="md"
                 onPress={handleLogin}
@@ -465,9 +464,9 @@ export default function LoginScreen() {
             </Reanimated.View>
 
             <View style={styles.switchRow}>
-              <Text style={[styles.switchText, { color: colors.textSecondary }]}>New to Thryftverse?</Text>
+              <Text style={styles.switchText}>New to Thryftverse?</Text>
               <AnimatedPressable onPress={() => navigation.navigate('SignUp')} activeOpacity={0.8}>
-                <Text style={[styles.switchLink, { color: colors.textPrimary }]}>Create account</Text>
+                <Text style={styles.switchLink}>Create account</Text>
               </AnimatedPressable>
             </View>
           </View>
@@ -477,9 +476,9 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, backgroundColor: Colors.background },
   header: { paddingHorizontal: Space.md, paddingTop: Space.sm, paddingBottom: Space.xs },
-  backBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.border },
   backBtnSpacer: { width: 44, height: 44 },
 
   keyboardWrap: { flex: 1 },
@@ -491,14 +490,14 @@ const styles = StyleSheet.create({
     paddingTop: Space.sm,
     paddingBottom: Space.lg,
   },
-  title: { fontSize: Type.title.size, fontFamily: Typography.family.bold, lineHeight: Type.title.lineHeight, letterSpacing: Type.title.letterSpacing },
-  subtitle: { marginTop: Space.sm, fontSize: Type.body.size, lineHeight: Type.body.lineHeight, fontFamily: Typography.family.regular, marginBottom: Space.lg },
+  title: { fontSize: Type.title.size, fontFamily: Typography.family.bold, color: Colors.textPrimary, lineHeight: Type.title.lineHeight, letterSpacing: Type.title.letterSpacing },
+  subtitle: { marginTop: Space.sm, fontSize: Type.body.size, lineHeight: Type.body.lineHeight, color: Colors.textSecondary, fontFamily: Typography.family.regular, marginBottom: Space.lg },
 
   form: { marginBottom: Space.lg },
   inputGroup: { marginBottom: Space.md },
 
   forgotBtn: { alignSelf: 'flex-start', marginTop: Space.sm },
-  forgotText: { fontSize: Type.body.size, fontFamily: Typography.family.medium, textDecorationLine: 'underline' },
+  forgotText: { color: Colors.textSecondary, fontSize: Type.body.size, fontFamily: Typography.family.medium, textDecorationLine: 'underline' },
   dividerRow: {
     marginTop: Space.md + 2,
     marginBottom: Space.sm + 4,
@@ -509,8 +508,10 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
+    backgroundColor: Colors.border,
   },
   dividerText: {
+    color: Colors.textMuted,
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     textTransform: 'uppercase',
@@ -520,8 +521,11 @@ const styles = StyleSheet.create({
     minHeight: 46,
     borderRadius: 23,
     borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
   },
   otpRequestText: {
+    color: Colors.textPrimary,
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
   },
@@ -534,6 +538,7 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   twoFactorHint: {
+    color: Colors.textMuted,
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     marginBottom: 2,
@@ -546,6 +551,7 @@ const styles = StyleSheet.create({
     marginTop: Space.sm + 2,
   },
   magicLinkText: {
+    color: Colors.textSecondary,
     fontSize: 13,
     fontFamily: Typography.family.medium,
     textDecorationLine: 'underline',
@@ -554,18 +560,20 @@ const styles = StyleSheet.create({
     minHeight: 48,
     borderRadius: 24,
     borderWidth: 0,
+    backgroundColor: Colors.brand,
   },
   otpVerifyText: {
+    color: Colors.textInverse,
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
   },
 
   footer: { paddingTop: Space.sm, position: 'relative' },
-  infoText: { fontSize: 13, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: Space.md - 4 },
-  errorText: { fontSize: 13, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: Space.md - 4 },
-  primaryBtn: { minHeight: 56, borderRadius: 28, borderWidth: 0 },
+  infoText: { color: Colors.success, fontSize: 13, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: Space.md - 4 },
+  errorText: { color: Colors.danger, fontSize: 13, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: Space.md - 4 },
+  primaryBtn: { backgroundColor: Colors.textPrimary, minHeight: 56, borderRadius: 28, borderWidth: 0 },
   primaryBtnDisabled: { opacity: 0.45 },
-  primaryText: { fontSize: Type.body.size, fontFamily: Typography.family.semibold },
+  primaryText: { color: Colors.background, fontSize: Type.body.size, fontFamily: Typography.family.semibold },
   switchRow: {
     marginTop: Space.sm + 6,
     flexDirection: 'row',
@@ -574,10 +582,12 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   switchText: {
+    color: Colors.textSecondary,
     fontSize: 13,
     fontFamily: Typography.family.regular,
   },
   switchLink: {
+    color: Colors.textPrimary,
     fontSize: 13,
     fontFamily: Typography.family.semibold,
     textDecorationLine: 'underline',

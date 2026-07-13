@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Colors } from '../../constants/colors';
-import { Space, Typography } from '../../theme/designTokens';
+import { Typography } from '../../theme/designTokens';
 
 interface Props {
   kicker?: string;
@@ -51,7 +51,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
+    paddingHorizontal: 16,
     marginBottom: 12,
     gap: 8,
   },

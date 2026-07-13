@@ -3,7 +3,6 @@ import { View, StyleSheet } from 'react-native';
 import { CachedImage } from '../CachedImage';
 import { Colors } from '../../constants/colors';
 import { Radius } from '../../theme/designTokens';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -31,10 +30,9 @@ export function AvatarRing({
   fallbackInitials,
 }: AvatarRingProps) {
   const pulse = useSharedValue(0);
-  const reducedMotionEnabled = useReducedMotion();
 
   React.useEffect(() => {
-    if (isUnread && !reducedMotionEnabled) {
+    if (isUnread) {
       pulse.value = withRepeat(
         withTiming(1, {
           duration: 2000,
@@ -44,7 +42,7 @@ export function AvatarRing({
         true
       );
     }
-  }, [isUnread, pulse, reducedMotionEnabled]);
+  }, [isUnread, pulse]);
 
   const glowStyle = useAnimatedStyle(() => {
     const scale = interpolate(pulse.value, [0, 1], [1, 1.25]);

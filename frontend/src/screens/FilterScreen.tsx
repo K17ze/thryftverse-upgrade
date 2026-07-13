@@ -23,7 +23,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
-import { useAppTheme } from '../theme/ThemeContext';
+import { Colors } from '../constants/colors';
 import { Typography } from '../theme/designTokens';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
@@ -43,6 +43,15 @@ const { height, width } = Dimensions.get('window');
 const SNAP_HALF = height * 0.5;
 const SNAP_FULL = height * 0.1;
 const OVERLAY_BG = 'rgba(0,0,0,0.45)';
+const SHEET_BG = Colors.surface;
+const HANDLE_BG = Colors.borderLight;
+const CHIP_BG = Colors.surface;
+const CHIP_BORDER = Colors.border;
+const DIVIDER_COLOR = Colors.border;
+const RETRY_BANNER_BG = Colors.surface;
+const RETRY_BUTTON_BG = Colors.surface;
+const FOOTER_BG = Colors.background;
+const APPLY_DISABLED_BG = Colors.border;
 
 type SortOption = 'Recommended' | 'Newest' | 'Price: Low to High' | 'Price: High to Low';
 type ConditionOption = 'Any' | 'New with tags' | 'Very good' | 'Good' | 'Satisfactory';
@@ -92,7 +101,6 @@ function getSubcategoryToken(categoryId: string, subcategoryId?: string, title?:
 }
 
 export default function FilterScreen() {
-  const { colors, isDark } = useAppTheme();
   const navigation = useNavigation<any>();
   const route = useRoute<FilterRoute>();
   const browseFilters = useStore((state) => state.browseFilters);
@@ -339,41 +347,41 @@ export default function FilterScreen() {
       </Reanimated.View>
 
       <GestureDetector gesture={gesture}>
-        <Reanimated.View style={[styles.sheet, { backgroundColor: colors.surface }, sheetStyle]}>
+        <Reanimated.View style={[styles.sheet, sheetStyle]}>
           {/* Drag Handle */}
           <View style={styles.handleContainer}>
-            <View style={[styles.handle, { backgroundColor: colors.borderSubtle }]} />
+            <View style={styles.handle} />
           </View>
 
           <View style={styles.header}>
-            <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Filter & Sort</Text>
+            <Text style={styles.headerTitle}>Filter & Sort</Text>
             <AppButton
               title="Clear"
               onPress={handleClear}
               variant="secondary"
               size="sm"
               style={styles.clearBtn}
-              titleStyle={[styles.clearText, { color: colors.brand }]}
+              titleStyle={styles.clearText}
               accessibilityLabel="Clear selected filters"
             />
           </View>
 
           <View style={styles.statusRow}>
-            <Text style={[styles.statusMeta, { color: colors.textMuted }]}>{resultCount} matches currently</Text>
+            <Text style={styles.statusMeta}>{resultCount} matches currently</Text>
             <SyncStatusPill tone={filterStatus.tone} label={filterStatus.label} compact />
           </View>
 
           <View style={styles.contextActionRow}>
             <AnimatedPressable
-              style={[styles.contextIdentity, { borderColor: colors.border, backgroundColor: colors.surface }]}
+              style={styles.contextIdentity}
               onPress={() => navigation.navigate('CategoryTree', { categoryPrefix: categoryId === 'search' ? '' : categoryId })}
               activeOpacity={0.85}
               accessibilityRole="button"
               accessibilityLabel="Open category tree"
               accessibilityHint="Shows the full category tree for this filter context"
             >
-              <Ionicons name="funnel-outline" size={14} color={colors.textPrimary} />
-              <Text style={[styles.contextText, { color: colors.textPrimary }]} numberOfLines={1}>
+              <Ionicons name="funnel-outline" size={14} color={Colors.textPrimary} />
+              <Text style={styles.contextText} numberOfLines={1}>
                 {title ?? categoryId}
               </Text>
             </AnimatedPressable>
@@ -382,16 +390,16 @@ export default function FilterScreen() {
 
           {/* Filter presets — quick apply chips + save current */}
           {(filterPresets.length > 0 || isSavingPreset) && (
-            <View style={[styles.presetsWrap, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+            <View style={styles.presetsWrap}>
               <View style={styles.presetsHeaderRow}>
-                <Text style={[styles.presetsLabel, { color: colors.textMuted }]}>Presets</Text>
+                <Text style={styles.presetsLabel}>Presets</Text>
                 {!isSavingPreset && hasActiveSelection && (
                   <AnimatedPressable
                     onPress={() => setIsSavingPreset(true)}
                     accessibilityLabel="Save current filters as a preset"
                     accessibilityRole="button"
                   >
-                    <Text style={[styles.presetsSaveLink, { color: colors.brand }]}>+ Save current</Text>
+                    <Text style={styles.presetsSaveLink}>+ Save current</Text>
                   </AnimatedPressable>
                 )}
               </View>
@@ -399,9 +407,9 @@ export default function FilterScreen() {
               {isSavingPreset ? (
                 <View style={styles.presetInputWrap}>
                   <TextInput
-                    style={[styles.presetInput, { borderColor: colors.border, backgroundColor: colors.surface, color: colors.textPrimary }]}
+                    style={styles.presetInput}
                     placeholder="Preset name (e.g. Streetwear M)"
-                    placeholderTextColor={colors.textMuted}
+                    placeholderTextColor={Colors.textMuted}
                     value={presetName}
                     onChangeText={setPresetName}
                     autoFocus
@@ -410,12 +418,12 @@ export default function FilterScreen() {
                     onSubmitEditing={handleSavePreset}
                   />
                   <AnimatedPressable
-                    style={[styles.presetSaveBtn, { backgroundColor: colors.brand }, !presetName.trim() && styles.presetSaveBtnDisabled]}
+                    style={[styles.presetSaveBtn, !presetName.trim() && styles.presetSaveBtnDisabled]}
                     onPress={handleSavePreset}
                     accessibilityLabel="Save preset"
                     accessibilityRole="button"
                   >
-                    <Ionicons name="checkmark" size={18} color={colors.surface} />
+                    <Ionicons name="checkmark" size={18} color={Colors.surface} />
                   </AnimatedPressable>
                   <AnimatedPressable
                     style={styles.presetCancelBtn}
@@ -423,21 +431,21 @@ export default function FilterScreen() {
                     accessibilityLabel="Cancel saving preset"
                     accessibilityRole="button"
                   >
-                    <Ionicons name="close" size={18} color={colors.textMuted} />
+                    <Ionicons name="close" size={18} color={Colors.textMuted} />
                   </AnimatedPressable>
                 </View>
               ) : (
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.presetsScroll}>
                   {filterPresets.map((preset) => (
-                    <View key={preset.id} style={[styles.presetChipWrap, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                    <View key={preset.id} style={styles.presetChipWrap}>
                       <AnimatedPressable
                         style={styles.presetChip}
                         onPress={() => handleApplyPreset(preset)}
                         accessibilityLabel={`Apply filter preset ${preset.name}`}
                         accessibilityRole="button"
                       >
-                        <Ionicons name="bookmark" size={12} color={colors.brand} />
-                        <Text style={[styles.presetChipText, { color: colors.textPrimary }]} numberOfLines={1}>{preset.name}</Text>
+                        <Ionicons name="bookmark" size={12} color={Colors.brand} />
+                        <Text style={styles.presetChipText} numberOfLines={1}>{preset.name}</Text>
                       </AnimatedPressable>
                       <AnimatedPressable
                         style={styles.presetRemoveBtn}
@@ -445,7 +453,7 @@ export default function FilterScreen() {
                         accessibilityLabel={`Remove filter preset ${preset.name}`}
                         accessibilityRole="button"
                       >
-                        <Ionicons name="close-circle" size={14} color={colors.textMuted} />
+                        <Ionicons name="close-circle" size={14} color={Colors.textMuted} />
                       </AnimatedPressable>
                     </View>
                   ))}
@@ -457,13 +465,13 @@ export default function FilterScreen() {
           {/* Inline "Save current" entry when no presets exist yet */}
           {filterPresets.length === 0 && !isSavingPreset && hasActiveSelection && (
             <AnimatedPressable
-              style={[styles.presetsEmptyCta, { backgroundColor: `${colors.brand}0A`, borderColor: `${colors.brand}30` }]}
+              style={styles.presetsEmptyCta}
               onPress={() => setIsSavingPreset(true)}
               accessibilityLabel="Save current filters as a preset"
               accessibilityRole="button"
             >
-              <Ionicons name="bookmark-outline" size={14} color={colors.brand} />
-              <Text style={[styles.presetsEmptyCtaText, { color: colors.brand }]}>Save current filters as a preset</Text>
+              <Ionicons name="bookmark-outline" size={14} color={Colors.brand} />
+              <Text style={styles.presetsEmptyCtaText}>Save current filters as a preset</Text>
             </AnimatedPressable>
           )}
 
@@ -473,8 +481,8 @@ export default function FilterScreen() {
               onRetry={() => void refreshListings()}
               isRetrying={isSyncing}
               telemetryContext="filter_sync"
-              containerStyle={[styles.syncRetryBanner, { backgroundColor: colors.surface }]}
-              actionStyle={[styles.syncRetryBtn, { backgroundColor: colors.surface }]}
+              containerStyle={styles.syncRetryBanner}
+              actionStyle={styles.syncRetryBtn}
             />
           ) : null}
 
@@ -484,24 +492,24 @@ export default function FilterScreen() {
             ) : (
               <>
                 {/* Sort Section */}
-                <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>Sort By</Text>
+                <Text style={styles.sectionHeading}>Sort By</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
                   <AppSegmentControl
                     options={SORT_OPTIONS}
                     value={activeSort}
                     onChange={setActiveSort}
-                    optionStyle={[styles.chip, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                    optionActiveStyle={[styles.chipActive, { backgroundColor: colors.textPrimary, borderColor: colors.textPrimary }]}
-                    optionTextStyle={[styles.chipText, { color: colors.textPrimary }]}
-                    optionTextActiveStyle={[styles.chipTextActive, { color: colors.background }]}
+                    optionStyle={styles.chip}
+                    optionActiveStyle={styles.chipActive}
+                    optionTextStyle={styles.chipText}
+                    optionTextActiveStyle={styles.chipTextActive}
                   />
                 </ScrollView>
 
-                <View style={[styles.sectionDivider, { backgroundColor: colors.border }]} />
+                <View style={styles.sectionDivider} />
 
                 {/* Brand Section */}
                 <View style={styles.sectionHeaderRow}>
-                  <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>Brand</Text>
+                  <Text style={styles.sectionHeading}>Brand</Text>
                   {brandOptions.length > 8 ? (
                     <AppButton
                       title={showAllBrands ? 'Show less' : 'See all'}
@@ -509,7 +517,7 @@ export default function FilterScreen() {
                       variant="secondary"
                       size="sm"
                       style={styles.seeAllBtn}
-                      titleStyle={[styles.seeAllText, { color: colors.brand }]}
+                      titleStyle={styles.seeAllText}
                       accessibilityLabel={showAllBrands ? 'Show fewer brand options' : 'Show all brand options'}
                     />
                   ) : null}
@@ -523,8 +531,8 @@ export default function FilterScreen() {
                         title={b}
                         variant="secondary"
                         size="sm"
-                        style={[styles.chip, { backgroundColor: colors.surface, borderColor: colors.border }, isActive && [styles.chipActive, { backgroundColor: colors.textPrimary, borderColor: colors.textPrimary }]]}
-                        titleStyle={[styles.chipText, { color: colors.textPrimary }, isActive && [styles.chipTextActive, { color: colors.background }]]}
+                        style={[styles.chip, isActive && styles.chipActive]}
+                        titleStyle={[styles.chipText, isActive && styles.chipTextActive]}
                         onPress={() => toggleBrand(b)}
                         accessibilityLabel={`Toggle brand filter ${b}`}
                       />
@@ -532,15 +540,15 @@ export default function FilterScreen() {
                   })}
                 </View>
 
-                <View style={[styles.sectionDivider, { backgroundColor: colors.border }]} />
+                <View style={styles.sectionDivider} />
 
                 {/* Size Section */}
-                <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>Size</Text>
+                <Text style={styles.sectionHeading}>Size</Text>
 
                 {/* My Sizes — saved size profile for quick application */}
                 {mySizes.length > 0 ? (
                   <View style={styles.mySizesRow}>
-                    <Text style={[styles.mySizesLabel, { color: colors.textSecondary }]}>My sizes:</Text>
+                    <Text style={styles.mySizesLabel}>My sizes:</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.mySizesScroll}>
                       {mySizes.map(s => {
                         const isActive = selectedSizes.includes(s);
@@ -550,8 +558,8 @@ export default function FilterScreen() {
                             title={s}
                             variant="secondary"
                             size="sm"
-                            style={[styles.chip, styles.sizeChip, styles.mySizeChip, { backgroundColor: colors.surface, borderColor: colors.border }, isActive && [styles.chipActive, { backgroundColor: colors.textPrimary, borderColor: colors.textPrimary }]]}
-                            titleStyle={[styles.chipText, { color: colors.textPrimary }, isActive && [styles.chipTextActive, { color: colors.background }]]}
+                            style={[styles.chip, styles.sizeChip, styles.mySizeChip, isActive && styles.chipActive]}
+                            titleStyle={[styles.chipText, isActive && styles.chipTextActive]}
                             onPress={() => toggleSize(s)}
                             accessibilityLabel={`Toggle your saved size ${s}`}
                           />
@@ -580,12 +588,12 @@ export default function FilterScreen() {
                       >
                         <AppButton
                           title={s}
-                          icon={isMySize ? <Ionicons name="star" size={11} color={colors.brand} /> : undefined}
+                          icon={isMySize ? <Ionicons name="star" size={11} color={Colors.brand} /> : undefined}
                           iconContainerStyle={styles.chipIconWrap}
                           variant="secondary"
                           size="sm"
-                          style={[styles.chip, styles.sizeChip, { backgroundColor: colors.surface, borderColor: colors.border }, isActive && [styles.chipActive, { backgroundColor: colors.textPrimary, borderColor: colors.textPrimary }], isMySize && [styles.mySizeMarkedChip, { borderColor: colors.brand }]]}
-                          titleStyle={[styles.chipText, { color: colors.textPrimary }, isActive && [styles.chipTextActive, { color: colors.background }]]}
+                          style={[styles.chip, styles.sizeChip, isActive && styles.chipActive, isMySize && styles.mySizeMarkedChip]}
+                          titleStyle={[styles.chipText, isActive && styles.chipTextActive]}
                           onPress={() => toggleSize(s)}
                           accessibilityLabel={`Toggle size filter ${s}. Long press to ${mySizes.includes(s) ? 'remove from' : 'save to'} your sizes.`}
                         />
@@ -599,12 +607,12 @@ export default function FilterScreen() {
                   <View style={styles.saveSizesRow}>
                     <AppButton
                       title={selectedSizes.every(s => mySizes.includes(s)) ? 'All saved' : 'Save as my sizes'}
-                      icon={selectedSizes.every(s => mySizes.includes(s)) ? <Ionicons name="checkmark-circle" size={14} color={colors.brand} /> : undefined}
+                      icon={selectedSizes.every(s => mySizes.includes(s)) ? <Ionicons name="checkmark-circle" size={14} color={Colors.brand} /> : undefined}
                       iconContainerStyle={styles.chipIconWrap}
                       variant="secondary"
                       size="sm"
-                      style={[styles.saveSizesBtn, { borderColor: colors.brand }]}
-                      titleStyle={[styles.saveSizesBtnText, { color: colors.brand }]}
+                      style={styles.saveSizesBtn}
+                      titleStyle={styles.saveSizesBtnText}
                       onPress={() => {
                         // Merge current selection into my sizes
                         const merged = [...new Set([...mySizes, ...selectedSizes])];
@@ -616,30 +624,30 @@ export default function FilterScreen() {
                   </View>
                 ) : null}
 
-                <View style={[styles.sectionDivider, { backgroundColor: colors.border }]} />
+                <View style={styles.sectionDivider} />
 
                 {/* Condition Section */}
-                <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>Condition</Text>
+                <Text style={styles.sectionHeading}>Condition</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
                   <AppSegmentControl
                     options={CONDITION_OPTIONS}
                     value={selectedCondition}
                     onChange={setSelectedCondition}
-                    optionStyle={[styles.chip, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                    optionActiveStyle={[styles.chipActive, { backgroundColor: colors.textPrimary, borderColor: colors.textPrimary }]}
-                    optionTextStyle={[styles.chipText, { color: colors.textPrimary }]}
-                    optionTextActiveStyle={[styles.chipTextActive, { color: colors.background }]}
+                    optionStyle={styles.chip}
+                    optionActiveStyle={styles.chipActive}
+                    optionTextStyle={styles.chipText}
+                    optionTextActiveStyle={styles.chipTextActive}
                   />
                 </ScrollView>
               </>
             )}
 
             {/* Sticky Bottom Action */}
-            <View style={[styles.footer, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
+            <View style={styles.footer}>
               <AppButton
                 style={[styles.applyBtn, showFilterLoadingState && styles.applyBtnDisabled]}
                 title={applyLabel}
-                titleStyle={[styles.applyBtnText, { color: colors.textPrimary }, showFilterLoadingState && [styles.applyBtnTextDisabled, { color: colors.textMuted }]]}
+                titleStyle={[styles.applyBtnText, showFilterLoadingState && styles.applyBtnTextDisabled]}
                 onPress={handleApply}
                 disabled={showFilterLoadingState}
                 variant="primary"
@@ -662,6 +670,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: width,
     height: height,
+    backgroundColor: SHEET_BG,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     shadowColor: '#000',
@@ -678,6 +687,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 4,
     borderRadius: 2,
+    backgroundColor: HANDLE_BG,
   },
 
   header: {
@@ -687,7 +697,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingBottom: 16,
   },
-  headerTitle: { fontSize: 20, fontFamily: Typography.family.bold, letterSpacing: -0.3 },
+  headerTitle: { fontSize: 20, fontFamily: Typography.family.bold, color: Colors.textPrimary, letterSpacing: -0.3 },
   clearBtn: {
     minHeight: 32,
     borderRadius: 16,
@@ -695,7 +705,7 @@ const styles = StyleSheet.create({
     borderWidth: 0,
     backgroundColor: 'transparent',
   },
-  clearText: { fontSize: 15, fontFamily: Typography.family.semibold },
+  clearText: { color: Colors.brand, fontSize: 15, fontFamily: Typography.family.semibold },
   statusRow: {
     paddingHorizontal: 24,
     paddingBottom: 8,
@@ -705,6 +715,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   statusMeta: {
+    color: Colors.textMuted,
     fontSize: 13,
     fontFamily: Typography.family.medium,
   },
@@ -721,6 +732,8 @@ const styles = StyleSheet.create({
     minHeight: 32,
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: CHIP_BORDER,
+    backgroundColor: CHIP_BG,
     paddingHorizontal: 10,
     flexDirection: 'row',
     alignItems: 'center',
@@ -728,6 +741,7 @@ const styles = StyleSheet.create({
   },
   contextText: {
     flex: 1,
+    color: Colors.textPrimary,
     fontSize: 12,
     fontFamily: Typography.family.semibold,
   },
@@ -739,7 +753,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 12,
+    backgroundColor: Colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
   },
   presetsHeaderRow: {
     flexDirection: 'row',
@@ -750,12 +766,14 @@ const styles = StyleSheet.create({
   presetsLabel: {
     fontSize: 11,
     fontFamily: Typography.family.semibold,
+    color: Colors.textMuted,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
   presetsSaveLink: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
+    color: Colors.brand,
   },
   presetsScroll: {
     gap: 8,
@@ -763,8 +781,10 @@ const styles = StyleSheet.create({
   presetChipWrap: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: Colors.surface,
     borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
     paddingLeft: 10,
     paddingRight: 4,
     paddingVertical: 3,
@@ -778,6 +798,7 @@ const styles = StyleSheet.create({
   presetChipText: {
     fontSize: 13,
     fontFamily: Typography.family.medium,
+    color: Colors.textPrimary,
     maxWidth: 120,
   },
   presetRemoveBtn: {
@@ -797,14 +818,18 @@ const styles = StyleSheet.create({
     height: 38,
     borderRadius: 10,
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
     paddingHorizontal: 12,
     fontSize: 14,
     fontFamily: Typography.family.regular,
+    color: Colors.textPrimary,
   },
   presetSaveBtn: {
     width: 38,
     height: 38,
     borderRadius: 10,
+    backgroundColor: Colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -827,18 +852,23 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 14,
     borderRadius: 12,
+    backgroundColor: `${Colors.brand}0A`,
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: `${Colors.brand}30`,
   },
   presetsEmptyCtaText: {
     fontSize: 13,
     fontFamily: Typography.family.medium,
+    color: Colors.brand,
   },
 
   syncRetryBanner: {
     marginHorizontal: 24,
     marginBottom: 8,
+    backgroundColor: RETRY_BANNER_BG,
   },
   syncRetryBtn: {
+    backgroundColor: RETRY_BUTTON_BG,
   },
 
   scrollContent: { paddingTop: 8, paddingBottom: 40 },
@@ -862,6 +892,7 @@ const styles = StyleSheet.create({
   sectionHeading: {
     fontSize: 16,
     fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
     paddingHorizontal: 20,
     marginBottom: 12,
     letterSpacing: -0.2,
@@ -880,7 +911,7 @@ const styles = StyleSheet.create({
     borderWidth: 0,
     backgroundColor: 'transparent',
   },
-  seeAllText: { fontSize: 14, fontFamily: Typography.family.semibold },
+  seeAllText: { color: Colors.brand, fontSize: 14, fontFamily: Typography.family.semibold },
 
   hScroll: { paddingHorizontal: 20, gap: 8 },
 
@@ -895,14 +926,18 @@ const styles = StyleSheet.create({
     minHeight: 36,
     paddingHorizontal: 14,
     borderRadius: 18,
+    backgroundColor: CHIP_BG,
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: CHIP_BORDER,
   },
   sizeChip: { minWidth: 56, alignItems: 'center' },
   mySizeChip: {
+    borderColor: Colors.brand,
     borderWidth: 1.5,
   },
   mySizeMarkedChip: {
     borderWidth: 1.5,
+    borderColor: Colors.brand,
   },
   mySizesRow: {
     flexDirection: 'row',
@@ -914,6 +949,7 @@ const styles = StyleSheet.create({
   mySizesLabel: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
+    color: Colors.textSecondary,
   },
   mySizesScroll: {
     gap: 6,
@@ -928,13 +964,15 @@ const styles = StyleSheet.create({
     minHeight: 32,
     borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.brand,
     backgroundColor: 'transparent',
   },
   saveSizesBtnText: {
+    color: Colors.brand,
     fontSize: 13,
     fontFamily: Typography.family.semibold,
   },
-  chipActive: {},
+  chipActive: { backgroundColor: Colors.textPrimary, borderColor: Colors.textPrimary },
 
   chipIconWrap: {
     width: 18,
@@ -942,11 +980,12 @@ const styles = StyleSheet.create({
     borderRadius: 9,
   },
 
-  chipText: { fontSize: 14, fontFamily: Typography.family.semibold },
-  chipTextActive: { fontFamily: Typography.family.bold },
+  chipText: { fontSize: 14, fontFamily: Typography.family.semibold, color: Colors.textPrimary },
+  chipTextActive: { color: Colors.background, fontFamily: Typography.family.bold },
 
   sectionDivider: {
     height: StyleSheet.hairlineWidth,
+    backgroundColor: DIVIDER_COLOR,
     marginVertical: 20,
     marginHorizontal: 20,
   },
@@ -957,7 +996,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 14,
     paddingBottom: Platform.OS === 'ios' ? 32 : 22,
+    backgroundColor: FOOTER_BG,
     borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: DIVIDER_COLOR,
   },
   applyBtn: {
     width: '100%',
@@ -968,10 +1009,12 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   applyBtnText: {
+    color: Colors.textPrimary,
     fontSize: 16,
     fontFamily: Typography.family.bold,
     letterSpacing: 0.2,
   },
   applyBtnTextDisabled: {
+    color: Colors.textMuted,
   },
 });

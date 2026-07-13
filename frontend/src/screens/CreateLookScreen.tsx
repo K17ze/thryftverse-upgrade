@@ -15,7 +15,7 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { useAppTheme } from '../theme/ThemeContext';
+import { Colors } from '../constants/colors';
 import { Type, Space, Radius, Typography } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
@@ -41,7 +41,6 @@ export default function CreateLookScreen() {
   const haptic = useHaptic();
   const { show } = useToast();
   const reducedMotion = useReducedMotion();
-  const { colors, isDark } = useAppTheme();
   const currentUser = useStore((state) => state.currentUser);
 
   const [imageUri, setImageUri] = useState<string | null>(null);
@@ -161,12 +160,12 @@ export default function CreateLookScreen() {
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
         </AnimatedPressable>
         <Text style={styles.headerTitle}>Create Look</Text>
         <View style={styles.headerRight}>
           {isPublishing ? (
-            <ActivityIndicator size="small" color={colors.brand} />
+            <ActivityIndicator size="small" color={Colors.brand} />
           ) : null}
         </View>
       </View>
@@ -200,7 +199,7 @@ export default function CreateLookScreen() {
               value={caption}
               onChangeText={setCaption}
               placeholder="Share the story behind this outfit..."
-              placeholderTextColor={colors.textMuted}
+              placeholderTextColor={Colors.textMuted}
               maxLength={500}
               multiline
               textAlignVertical="top"
@@ -244,7 +243,7 @@ export default function CreateLookScreen() {
                     <Ionicons
                       name={opt.icon}
                       size={18}
-                      color={isActive ? colors.brand : colors.textSecondary}
+                      color={isActive ? Colors.brand : Colors.textSecondary}
                     />
                     <Text
                       style={[
@@ -290,6 +289,7 @@ export default function CreateLookScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: Colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -298,6 +298,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
   },
   backBtn: {
     width: 40,
@@ -309,6 +310,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
   },
   headerRight: {
     minWidth: 60,
@@ -325,18 +327,23 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
   },
   captionInput: {
+    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     padding: Space.md,
     fontSize: 16,
     fontFamily: Typography.family.medium,
+    color: Colors.textPrimary,
     minHeight: 80,
     borderWidth: 1,
+    borderColor: Colors.border,
   },
   charCount: {
     fontSize: 12,
     fontFamily: Typography.family.medium,
+    color: Colors.textMuted,
     textAlign: 'right',
   },
   audienceRow: {
@@ -351,16 +358,21 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 10,
     borderRadius: Radius.md,
+    backgroundColor: Colors.surface,
     borderWidth: 1,
+    borderColor: Colors.border,
   },
   audienceBtnActive: {
+    borderColor: Colors.brand,
     backgroundColor: 'rgba(99,102,241,0.06)',
   },
   audienceBtnText: {
     fontSize: 14,
     fontFamily: Typography.family.medium,
+    color: Colors.textSecondary,
   },
   audienceBtnTextActive: {
+    color: Colors.brand,
     fontFamily: Typography.family.semibold,
   },
   publishSection: {
@@ -368,6 +380,7 @@ const styles = StyleSheet.create({
     paddingTop: Space.xl,
   },
   publishBtn: {
+    backgroundColor: Colors.brand,
     borderRadius: Radius.lg,
     paddingVertical: 14,
     alignItems: 'center',

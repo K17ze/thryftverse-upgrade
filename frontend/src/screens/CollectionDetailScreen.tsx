@@ -21,7 +21,7 @@ import Reanimated, {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { useAppTheme } from '../theme/ThemeContext';
+import { ActiveTheme, Colors } from '../constants/colors';
 import { Type, Space, Radius, DockConstants } from '../theme/designTokens';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -38,13 +38,11 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { BoardEmptyGraphic } from '../components/profile/BoardEmptyGraphic';
 import { ShareSheet } from '../components/ShareSheet';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 const { width: SCREEN_W } = Dimensions.get('window');
 const COVER_H = 180;
 type NavT = StackNavigationProp<RootStackParamList>;
 
 export default function CollectionDetailScreen() {
-  const { colors, isDark } = useAppTheme();
   const navigation = useNavigation<NavT>();
   const route = useRoute<any>();
   const haptic = useHaptic();
@@ -54,7 +52,6 @@ export default function CollectionDetailScreen() {
   const [shareVisible, setShareVisible] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
   const scrollY = useSharedValue(0);
-  const reducedMotionEnabled = useReducedMotion();
 
   const collectionId = route.params?.collectionId;
 
@@ -149,7 +146,7 @@ export default function CollectionDetailScreen() {
 
   if (!collection) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <SafeAreaView style={styles.container} edges={['top']}>
         <EmptyState
           icon="alert-circle-outline"
           title="Collection not found"
@@ -164,16 +161,16 @@ export default function CollectionDetailScreen() {
   const count = collectionItems.length;
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
 
       {/* Floating Header with scroll fade */}
-      <Reanimated.View style={[styles.floatingHeader, { backgroundColor: colors.background, borderBottomColor: colors.border }, headerBgStyle]}>
+      <Reanimated.View style={[styles.floatingHeader, headerBgStyle]}>
         <View style={styles.headerInner}>
-          <AnimatedPressable style={[styles.backBtn, { borderColor: colors.border, backgroundColor: colors.surface }]} onPress={handleGoBack} activeOpacity={0.85}>
-            <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+          <AnimatedPressable style={styles.backBtn} onPress={handleGoBack} activeOpacity={0.85}>
+            <Ionicons name="arrow-back" size={22} color={Colors.textPrimary} />
           </AnimatedPressable>
-          <Text style={[styles.floatingTitle, { color: colors.textPrimary }]} numberOfLines={1}>{collection.name}</Text>
+          <Text style={styles.floatingTitle} numberOfLines={1}>{collection.name}</Text>
           <View style={{ width: 40 }} />
         </View>
       </Reanimated.View>
@@ -212,8 +209,8 @@ export default function CollectionDetailScreen() {
                 <Text style={styles.coverTitle} numberOfLines={1}>{collection.name}</Text>
                 {collection.isPrivate && (
                   <View style={styles.privacyBadge}>
-                    <Ionicons name="lock-closed" size={10} color={colors.textInverse} />
-                    <Text style={[styles.privacyText, { color: colors.textInverse }]}>Private</Text>
+                    <Ionicons name="lock-closed" size={10} color={Colors.textInverse} />
+                    <Text style={styles.privacyText}>Private</Text>
                   </View>
                 )}
               </View>
@@ -234,7 +231,7 @@ export default function CollectionDetailScreen() {
                     accessibilityLabel={isFollowing ? 'Unfollow collection' : 'Follow collection'}
                     accessibilityRole="button"
                   >
-                    <Ionicons name={isFollowing ? 'heart' : 'heart-outline'} size={18} color={isFollowing ? colors.brand : '#fff'} />
+                    <Ionicons name={isFollowing ? 'heart' : 'heart-outline'} size={18} color={isFollowing ? Colors.brand : '#fff'} />
                   </AnimatedPressable>
                 )}
                 <AnimatedPressable
@@ -265,48 +262,48 @@ export default function CollectionDetailScreen() {
           <View style={styles.noCoverHeader}>
             <View style={{ flex: 1 }}>
               <View style={styles.coverTitleRow}>
-                <Text style={[styles.noCoverTitle, { color: colors.textPrimary }]}>{collection.name}</Text>
+                <Text style={styles.noCoverTitle}>{collection.name}</Text>
                 {collection.isPrivate && (
-                  <View style={[styles.privacyBadgeOutline, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
-                    <Ionicons name="lock-closed" size={10} color={colors.textMuted} />
-                    <Text style={[styles.privacyTextOutline, { color: colors.textMuted }]}>Private</Text>
+                  <View style={styles.privacyBadgeOutline}>
+                    <Ionicons name="lock-closed" size={10} color={Colors.textMuted} />
+                    <Text style={styles.privacyTextOutline}>Private</Text>
                   </View>
                 )}
               </View>
               {collection.description ? (
-                <Text style={[styles.noCoverDesc, { color: colors.textSecondary }]} numberOfLines={2}>{collection.description}</Text>
+                <Text style={styles.noCoverDesc} numberOfLines={2}>{collection.description}</Text>
               ) : null}
-              <Text style={[styles.noCoverMeta, { color: colors.textMuted }]}>{count} {count === 1 ? 'item' : 'items'}</Text>
+              <Text style={styles.noCoverMeta}>{count} {count === 1 ? 'item' : 'items'}</Text>
             </View>
             <View style={styles.actionRow}>
               {!collection.isPrivate && (
                 <AnimatedPressable
-                  style={[styles.actionBtn, { borderColor: colors.border, backgroundColor: colors.surface }, isFollowing && { borderColor: colors.brand, backgroundColor: `${colors.brand}15` }]}
+                  style={[styles.actionBtn, isFollowing && styles.actionBtnActive]}
                   onPress={handleToggleFollow}
                   activeOpacity={0.85}
                   accessibilityLabel={isFollowing ? 'Unfollow collection' : 'Follow collection'}
                   accessibilityRole="button"
                 >
-                  <Ionicons name={isFollowing ? 'heart' : 'heart-outline'} size={20} color={isFollowing ? colors.brand : colors.textPrimary} />
+                  <Ionicons name={isFollowing ? 'heart' : 'heart-outline'} size={20} color={isFollowing ? Colors.brand : Colors.textPrimary} />
                 </AnimatedPressable>
               )}
               <AnimatedPressable
-                style={[styles.actionBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
+                style={styles.actionBtn}
                 onPress={handleShare}
                 activeOpacity={0.85}
                 accessibilityLabel="Share collection"
                 accessibilityRole="button"
               >
-                <Ionicons name="share-outline" size={20} color={colors.textPrimary} />
+                <Ionicons name="share-outline" size={20} color={Colors.textPrimary} />
               </AnimatedPressable>
               <AnimatedPressable
-                style={[styles.actionBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
+                style={styles.actionBtn}
                 onPress={() => { haptic.light(); navigation.navigate('EditCollection', { collectionId }); }}
                 activeOpacity={0.85}
                 accessibilityLabel="Edit collection"
                 accessibilityRole="button"
               >
-                <Ionicons name="settings-outline" size={20} color={colors.textPrimary} />
+                <Ionicons name="settings-outline" size={20} color={Colors.textPrimary} />
               </AnimatedPressable>
             </View>
           </View>
@@ -315,22 +312,22 @@ export default function CollectionDetailScreen() {
         {/* Manage items row */}
         {count > 0 && (
           <AnimatedPressable
-            style={[styles.manageRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            style={styles.manageRow}
             onPress={() => navigation.navigate('ManageCollectionItems', { collectionId })}
             activeOpacity={0.85}
             hapticFeedback="light"
             accessibilityLabel="Manage collection items"
             accessibilityRole="button"
           >
-            <Ionicons name="list-outline" size={18} color={colors.textSecondary} />
-            <Text style={[styles.manageRowText, { color: colors.textPrimary }]}>Manage items</Text>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            <Ionicons name="list-outline" size={18} color={Colors.textSecondary} />
+            <Text style={styles.manageRowText}>Manage items</Text>
+            <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
           </AnimatedPressable>
         )}
 
         {/* Grid */}
         {count > 0 && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={{ marginTop: Space.md }}>
+          <Reanimated.View entering={FadeInDown.duration(300)} style={{ marginTop: Space.md }}>
             <MasonryGrid
               items={collectionItems}
               onPressItem={(item: any) => navigation.navigate('ItemDetail', { itemId: item.id })}
@@ -382,7 +379,6 @@ function MoreLikeThisRow({
   navigation: any;
   formatFromFiat: any;
 }) {
-  const { colors } = useAppTheme();
   const similarItems = React.useMemo(() => {
     if (collectionItems.length === 0) return [];
     const brands = new Set(collectionItems.map((i) => i.brand?.toLowerCase()));
@@ -397,7 +393,7 @@ function MoreLikeThisRow({
 
   return (
     <View style={{ marginTop: 32, paddingBottom: 8 }}>
-      <Text style={[styles.moreTitle, { color: colors.textPrimary }]}>More like this</Text>
+      <Text style={styles.moreTitle}>More like this</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingRight: 20 }}>
         {similarItems.map((item) => (
           <AnimatedPressable
@@ -417,7 +413,7 @@ function MoreLikeThisRow({
                 contentFit="cover"
               />
             </SharedTransitionView>
-            <Text style={[styles.morePrice, { color: colors.textPrimary }]}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
+            <Text style={styles.morePrice}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
           </AnimatedPressable>
         ))}
       </ScrollView>
@@ -428,6 +424,7 @@ function MoreLikeThisRow({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: Colors.background,
   },
   floatingHeader: {
     position: 'absolute',
@@ -435,7 +432,9 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 50,
+    backgroundColor: Colors.background,
     borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
   },
   headerInner: {
     flexDirection: 'row',
@@ -449,6 +448,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
     textAlign: 'center',
   },
   absoluteBack: {
@@ -462,6 +462,8 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: Radius.md,
     borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -532,10 +534,12 @@ const styles = StyleSheet.create({
   noCoverTitle: {
     fontSize: 22,
     fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
   },
   noCoverMeta: {
     fontSize: 13,
     fontFamily: Typography.family.medium,
+    color: Colors.textMuted,
     marginTop: 2,
   },
   coverTitleRow: {
@@ -552,6 +556,7 @@ const styles = StyleSheet.create({
   noCoverDesc: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
+    color: Colors.textSecondary,
     marginTop: 2,
   },
   privacyBadge: {
@@ -566,6 +571,7 @@ const styles = StyleSheet.create({
   privacyText: {
     fontSize: 10,
     fontFamily: Typography.family.bold,
+    color: Colors.textInverse,
   },
   privacyBadgeOutline: {
     flexDirection: 'row',
@@ -574,22 +580,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: Radius.full,
+    backgroundColor: Colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
   },
   privacyTextOutline: {
     fontSize: 10,
     fontFamily: Typography.family.bold,
+    color: Colors.textMuted,
   },
   actionBtn: {
     width: 40,
     height: 40,
     borderRadius: Radius.md,
     borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   actionBtnActive: {
-    borderWidth: 1,
+    borderColor: Colors.brand,
+    backgroundColor: `${Colors.brand}15`,
   },
   manageRow: {
     flexDirection: 'row',
@@ -600,12 +612,15 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm,
     paddingHorizontal: Space.md,
     borderRadius: Radius.lg,
+    backgroundColor: Colors.surface,
     borderWidth: 1,
+    borderColor: Colors.border,
   },
   manageRowText: {
     flex: 1,
     fontSize: 14,
     fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
   },
   listContent: {
     paddingBottom: 120,
@@ -613,6 +628,7 @@ const styles = StyleSheet.create({
   moreTitle: {
     fontSize: 16,
     fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
     marginBottom: 14,
     paddingHorizontal: Space.md,
   },
@@ -634,5 +650,6 @@ const styles = StyleSheet.create({
   morePrice: {
     fontSize: 14,
     fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
   },
 });

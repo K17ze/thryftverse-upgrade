@@ -14,8 +14,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
-import { useAppTheme } from '../theme/ThemeContext';
+import { Colors } from '../constants/colors';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { useAppTheme } from '../theme/ThemeContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useToast } from '../context/ToastContext';
 import { uploadMedia } from '../services/mediaUpload';
@@ -95,7 +96,7 @@ function validateFrames(frames: ComposerFrame[]): string | null {
 }
 
 export default function CreatePosterScreen({ navigation, route }: Props) {
-  const { colors, isDark } = useAppTheme();
+  const { isDark } = useAppTheme();
   const { show } = useToast();
   const currentUser = useStore((state) => state.currentUser);
 
@@ -524,7 +525,7 @@ export default function CreatePosterScreen({ navigation, route }: Props) {
           scaleValue={0.9}
           hapticFeedback="light"
         >
-          <Ionicons name="close" size={26} color={colors.textPrimary} />
+          <Ionicons name="close" size={26} color={Colors.textPrimary} />
         </AnimatedPressable>
 
         <Text style={styles.topTitle}>
@@ -553,7 +554,7 @@ export default function CreatePosterScreen({ navigation, route }: Props) {
             scaleValue={0.9}
             hapticFeedback="light"
           >
-            <Ionicons name="settings-outline" size={24} color={colors.textPrimary} />
+            <Ionicons name="settings-outline" size={24} color={Colors.textPrimary} />
           </AnimatedPressable>
         )}
       </View>
@@ -579,7 +580,7 @@ export default function CreatePosterScreen({ navigation, route }: Props) {
             <TextInput
               style={styles.captionInput}
               placeholder="Type caption or text..."
-              placeholderTextColor={colors.textMuted}
+              placeholderTextColor={Colors.textMuted}
               value={activeFrame.caption}
               onChangeText={(text) => updateFrame({ caption: text })}
               multiline
@@ -592,7 +593,7 @@ export default function CreatePosterScreen({ navigation, route }: Props) {
             <TextInput
               style={styles.captionInput}
               placeholder="Add a caption (optional)..."
-              placeholderTextColor={colors.textMuted}
+              placeholderTextColor={Colors.textMuted}
               value={activeFrame.caption}
               onChangeText={(text) => updateFrame({ caption: text })}
               multiline
@@ -748,6 +749,7 @@ export default function CreatePosterScreen({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: Colors.background,
   },
   topBar: {
     flexDirection: 'row',
@@ -759,6 +761,7 @@ const styles = StyleSheet.create({
   topTitle: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
     letterSpacing: Type.subtitle.letterSpacing,
   },
   iconBtn: {
@@ -778,8 +781,10 @@ const styles = StyleSheet.create({
   topBarActionText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
+    color: Colors.brand,
   },
   topBarActionTextDisabled: {
+    color: Colors.textMuted,
   },
   editorBody: {
     flex: 1,
@@ -794,11 +799,14 @@ const styles = StyleSheet.create({
     maxWidth: 360,
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
+    color: Colors.textPrimary,
     minHeight: 48,
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
     borderRadius: Radius.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
+    backgroundColor: Colors.surfaceAlt,
     textAlignVertical: 'top',
   },
   previewBody: {
@@ -819,8 +827,10 @@ const styles = StyleSheet.create({
     width: 24,
     height: 3,
     borderRadius: 1.5,
+    backgroundColor: Colors.border,
   },
   segmentActive: {
+    backgroundColor: Colors.brand,
   },
   previewNav: {
     flexDirection: 'row',
@@ -843,23 +853,28 @@ const styles = StyleSheet.create({
   framePosition: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
+    color: Colors.textSecondary,
   },
   settingsSheet: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
     paddingBottom: Space.lg,
     borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
+    backgroundColor: Colors.surface,
     gap: Space.md,
   },
   sheetHandle: {
     width: 36,
     height: 4,
     borderRadius: 2,
+    backgroundColor: Colors.border,
     alignSelf: 'center',
   },
   sheetTitle: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
   },
   settingRow: {
     flexDirection: 'row',
@@ -869,6 +884,7 @@ const styles = StyleSheet.create({
   settingLabel: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
+    color: Colors.textPrimary,
   },
   toggleRow: {
     flexDirection: 'row',
@@ -878,13 +894,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: 6,
     borderRadius: Radius.md,
+    backgroundColor: Colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
   },
   toggleBtnActive: {
+    backgroundColor: Colors.brand,
+    borderColor: Colors.brand,
   },
   toggleText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
+    color: Colors.textSecondary,
   },
   toggleTextActive: {
     color: '#fff',
@@ -893,10 +914,12 @@ const styles = StyleSheet.create({
     width: 44,
     height: 26,
     borderRadius: 13,
+    backgroundColor: Colors.border,
     justifyContent: 'center',
     paddingHorizontal: 2,
   },
   switchOn: {
+    backgroundColor: Colors.brand,
   },
   switchThumb: {
     width: 22,
@@ -911,14 +934,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
   },
   publishProgress: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
+    color: Colors.textSecondary,
     textAlign: 'center',
     marginBottom: Space.xs,
   },
   publishBtn: {
+    backgroundColor: Colors.brand,
     borderRadius: Radius.lg,
     paddingVertical: 14,
     alignItems: 'center',
@@ -931,5 +957,6 @@ const styles = StyleSheet.create({
   publishBtnText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
+    color: Colors.textInverse,
   },
 });

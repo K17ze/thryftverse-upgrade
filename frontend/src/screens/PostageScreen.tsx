@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
-import { useAppTheme } from '../theme/ThemeContext';
+import { Colors } from '../constants/colors';
 import { Space, Radius, Type } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useStore } from '../store/useStore';
@@ -21,7 +21,6 @@ import { RadioButton } from '../components/settings/RadioButton';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { Typography } from '../theme/designTokens';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { PremiumListSection } from '../components/ui/PremiumListSection';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 
@@ -46,8 +45,6 @@ function mapCapabilityCarriers(carriers: CapabilityCarrier[]) {
 export default function PostageScreen({ navigation }: Props) {
   const currentUser = useStore((state) => state.currentUser);
   const { show } = useToast();
-  const { colors, isDark } = useAppTheme();
-  const reducedMotionEnabled = useReducedMotion();
   const postagePreferences = useStore((state) => state.postagePreferences);
   const updatePostagePreferences = useStore((state) => state.updatePostagePreferences);
   const { formatFromFiat } = useFormattedPrice();
@@ -111,10 +108,10 @@ export default function PostageScreen({ navigation }: Props) {
         />
       }
     >
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
-        <View style={[styles.deliveryTrust, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Ionicons name="cube-outline" size={18} color={colors.brand} />
-          <Text style={[styles.deliveryTrustText, { color: colors.textSecondary }]}>
+      <Reanimated.View entering={FadeIn.duration(300)}>
+        <View style={[styles.deliveryTrust, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
+          <Ionicons name="cube-outline" size={18} color={Colors.brand} />
+          <Text style={[styles.deliveryTrustText, { color: Colors.textSecondary }]}>
             Set your preferred carrier and postage defaults for faster listing. Manage saved delivery addresses in Settings.
           </Text>
         </View>
@@ -125,25 +122,25 @@ export default function PostageScreen({ navigation }: Props) {
         onPress={() => navigation.navigate('SavedAddresses')}
         style={({ pressed }) => [
           styles.addressLinkRow,
-          { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
+          { backgroundColor: Colors.surface, borderColor: Colors.border, opacity: pressed ? 0.7 : 1 },
         ]}
         accessibilityRole="button"
         accessibilityLabel="Manage saved addresses"
       >
         <View style={styles.addressLinkLeft}>
-          <Ionicons name="location-outline" size={20} color={colors.textPrimary} />
+          <Ionicons name="location-outline" size={20} color={Colors.textPrimary} />
           <View>
-            <Text style={[styles.addressLinkTitle, { color: colors.textPrimary }]}>Saved addresses</Text>
-            <Text style={[styles.addressLinkSubtitle, { color: colors.textMuted }]}>
+            <Text style={[styles.addressLinkTitle, { color: Colors.textPrimary }]}>Saved addresses</Text>
+            <Text style={[styles.addressLinkSubtitle, { color: Colors.textMuted }]}>
               {savedAddress ? '1 saved' : 'None saved'}
             </Text>
           </View>
         </View>
-        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
       </Pressable>
 
       {/* Default Carrier */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
+      <Reanimated.View entering={FadeIn.duration(300)}>
         <PremiumListSection title="Default Carrier" subtitle={carrierScopeLabel ? `Region policy: ${carrierScopeLabel}` : undefined}>
           {isHydrating ? (
             <FlagshipState variant="loading" />
@@ -152,7 +149,7 @@ export default function PostageScreen({ navigation }: Props) {
               {carriers.map((c, idx) => (
                 <AnimatedPressable
                   key={c.key}
-                  style={[styles.carrierRow, c.selected && { backgroundColor: `${colors.brand}08` }, idx < carriers.length - 1 && styles.carrierRowBorder]}
+                  style={[styles.carrierRow, c.selected && { backgroundColor: `${Colors.brand}08` }, idx < carriers.length - 1 && styles.carrierRowBorder]}
                   onPress={() => selectCarrier(c.key)}
                   hapticFeedback="light"
                   accessibilityRole="radio"
@@ -174,11 +171,11 @@ export default function PostageScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* Shipping Options */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
+      <Reanimated.View entering={FadeIn.duration(300)}>
         <PremiumListSection title="Shipping Options">
           <SettingsCell
             icon="gift-outline"
-            iconColor={colors.brand}
+            iconColor={Colors.brand}
             title="Offer free shipping"
             subtitle="You'll cover the postage cost for buyers"
             variant="toggle"
@@ -188,7 +185,7 @@ export default function PostageScreen({ navigation }: Props) {
           />
           <SettingsCell
             icon="cube-outline"
-            iconColor={colors.brand}
+            iconColor={Colors.brand}
             title="Bundle discount on postage"
             subtitle="Buyers save when buying multiple items"
             variant="toggle"
@@ -200,7 +197,7 @@ export default function PostageScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* Footer note */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
+      <Reanimated.View entering={FadeIn.duration(300)}>
         <Text style={styles.footerNote}>
           These are your default settings. You can override postage for individual items when
           listing.
@@ -251,6 +248,7 @@ const styles = StyleSheet.create({
   },
   carrierRowBorder: {
     borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
   },
   carrierText: {
     flex: 1,
@@ -259,17 +257,20 @@ const styles = StyleSheet.create({
   carrierLabel: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
+    color: Colors.textPrimary,
     marginBottom: 2,
     letterSpacing: Type.body.letterSpacing,
   },
   carrierPrice: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
     letterSpacing: Type.caption.letterSpacing,
   },
   footerNote: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
     lineHeight: Type.caption.lineHeight,
     paddingHorizontal: Space.xs,
     marginTop: Space.sm,

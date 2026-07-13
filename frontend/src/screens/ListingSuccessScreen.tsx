@@ -11,12 +11,13 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useAppTheme } from '../theme/ThemeContext';
+import { Colors } from '../constants/colors';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { Confetti } from '../components/Confetti';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { CachedImage } from '../components/CachedImage';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Typography, Space, Type, Radius, FontSize } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
@@ -26,7 +27,7 @@ import { fetchListingByIdFromApi } from '../services/listingsApi';
 type Props = StackScreenProps<RootStackParamList, 'ListingSuccess'>;
 
 export default function ListingSuccessScreen({ navigation, route }: Props) {
-  const { colors, isDark } = useAppTheme();
+  const { isDark } = useAppTheme();
   const { formatFromFiat } = useFormattedPrice();
 
   const listingId = route.params?.listingId;
@@ -109,7 +110,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <StatusBar
         barStyle={isDark ? 'light-content' : 'dark-content'}
-        backgroundColor={colors.background}
+        backgroundColor={Colors.background}
       />
       <Confetti />
 
@@ -120,7 +121,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
         {/* Celebration Header */}
         <View style={styles.heroSection}>
           <View style={styles.iconCircle}>
-            <Ionicons name="checkmark" size={64} color={colors.brand} />
+            <Ionicons name="checkmark" size={64} color={Colors.brand} />
           </View>
           <Text style={styles.heroBigText}>Published</Text>
           <Text style={styles.heroSubText}>
@@ -157,7 +158,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
               <Ionicons
                 name="bag-handle-outline"
                 size={20}
-                color={colors.textMuted}
+                color={Colors.textMuted}
               />
             </View>
           )}
@@ -186,7 +187,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
                 <Ionicons
                   name="eye-outline"
                   size={20}
-                  color={colors.textPrimary}
+                  color={Colors.textPrimary}
                 />
               </View>
               <Text style={styles.actionText}>view listing</Text>
@@ -194,7 +195,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
             <Ionicons
               name="chevron-forward"
               size={16}
-              color={colors.textMuted}
+              color={Colors.textMuted}
             />
           </AnimatedPressable>
         ) : null}
@@ -210,7 +211,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
                 <Ionicons
                   name="settings-outline"
                   size={20}
-                  color={colors.textPrimary}
+                  color={Colors.textPrimary}
                 />
               </View>
               <Text style={styles.actionText}>manage listing</Text>
@@ -218,7 +219,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
             <Ionicons
               name="chevron-forward"
               size={16}
-              color={colors.textMuted}
+              color={Colors.textMuted}
             />
           </AnimatedPressable>
         ) : null}
@@ -234,7 +235,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
                 <Ionicons
                   name="share-outline"
                   size={20}
-                  color={colors.textPrimary}
+                  color={Colors.textPrimary}
                 />
               </View>
               <Text style={styles.actionText}>share listing</Text>
@@ -242,7 +243,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
             <Ionicons
               name="chevron-forward"
               size={16}
-              color={colors.textMuted}
+              color={Colors.textMuted}
             />
           </AnimatedPressable>
         ) : null}
@@ -257,7 +258,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
               <Ionicons
                 name="add-circle-outline"
                 size={20}
-                color={colors.textPrimary}
+                color={Colors.textPrimary}
               />
             </View>
             <Text style={styles.actionText}>create another listing</Text>
@@ -265,7 +266,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
           <Ionicons
             name="chevron-forward"
             size={16}
-            color={colors.textMuted}
+            color={Colors.textMuted}
           />
         </AnimatedPressable>
 
@@ -279,12 +280,12 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
               <Ionicons
                 name="home-outline"
                 size={20}
-                color={colors.textPrimary}
+                color={Colors.textPrimary}
               />
             </View>
             <Text style={styles.actionText}>back to feed</Text>
           </View>
-          <Ionicons name="arrow-forward" size={16} color={colors.textMuted} />
+          <Ionicons name="arrow-forward" size={16} color={Colors.textMuted} />
         </AnimatedPressable>
 
         </ElevatedSurface>
@@ -292,23 +293,23 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
         {/* Tips for selling — first-listing guidance */}
         <View style={styles.tipsCard}>
           <View style={styles.tipsHeader}>
-            <Ionicons name="bulb-outline" size={14} color={colors.brand} />
+            <Ionicons name="bulb-outline" size={14} color={Colors.brand} />
             <Text style={styles.tipsTitle}>Tips for selling faster</Text>
           </View>
           <View style={styles.tipRow}>
-            <Ionicons name="camera-outline" size={13} color={colors.textMuted} />
+            <Ionicons name="camera-outline" size={13} color={Colors.textMuted} />
             <Text style={styles.tipText}>Add clear, well-lit photos from multiple angles</Text>
           </View>
           <View style={styles.tipRow}>
-            <Ionicons name="pricetag-outline" size={13} color={colors.textMuted} />
+            <Ionicons name="pricetag-outline" size={13} color={Colors.textMuted} />
             <Text style={styles.tipText}>Price competitively — check similar sold items</Text>
           </View>
           <View style={styles.tipRow}>
-            <Ionicons name="chatbubble-outline" size={13} color={colors.textMuted} />
+            <Ionicons name="chatbubble-outline" size={13} color={Colors.textMuted} />
             <Text style={styles.tipText}>Respond quickly to buyer questions and offers</Text>
           </View>
           <View style={styles.tipRow}>
-            <Ionicons name="share-outline" size={13} color={colors.textMuted} />
+            <Ionicons name="share-outline" size={13} color={Colors.textMuted} />
             <Text style={styles.tipText}>Share your listing on social media for more reach</Text>
           </View>
         </View>
@@ -322,7 +323,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
           <Ionicons
             name="help-circle-outline"
             size={14}
-            color={colors.textMuted}
+            color={Colors.textMuted}
           />
           <Text style={styles.supportLinkText}>
             Need help? Visit the Help Centre
@@ -334,7 +335,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, backgroundColor: Colors.background },
 
   content: { paddingHorizontal: Space.lg, paddingTop: Space.xxl, paddingBottom: Space.xxl },
 
@@ -346,7 +347,9 @@ const styles = StyleSheet.create({
     width: 104,
     height: 104,
     borderRadius: Radius.full,
+    backgroundColor: Colors.surfaceAlt,
     borderWidth: 1,
+    borderColor: Colors.border,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Space.md,
@@ -355,18 +358,21 @@ const styles = StyleSheet.create({
     fontSize: FontSize.hero,
     lineHeight: FontSize.hero + 4,
     fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
     letterSpacing: -2.2,
     marginBottom: Space.xs,
   },
   heroSubText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
     letterSpacing: Type.body.letterSpacing,
     lineHeight: Type.body.lineHeight,
   },
   heroMicroCopy: {
     marginTop: Space.sm,
     fontSize: Type.body.size,
+    color: Colors.textSecondary,
     fontFamily: Typography.family.medium,
     lineHeight: Type.body.lineHeight,
   },
@@ -382,7 +388,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
+    backgroundColor: Colors.success + '14',
     borderWidth: 1,
+    borderColor: Colors.success + '33',
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
     borderRadius: Radius.md,
@@ -390,6 +398,7 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.bold,
+    color: Colors.success,
     textTransform: 'uppercase',
     letterSpacing: Type.caption.letterSpacing,
     lineHeight: Type.caption.lineHeight,
@@ -397,6 +406,7 @@ const styles = StyleSheet.create({
   idText: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
+    color: Colors.textMuted,
     flexShrink: 1,
     lineHeight: Type.meta.lineHeight,
     letterSpacing: Type.meta.letterSpacing,
@@ -414,7 +424,9 @@ const styles = StyleSheet.create({
     width: 72,
     height: 90,
     borderRadius: Radius.lg,
+    backgroundColor: Colors.surfaceAlt,
     borderWidth: 1,
+    borderColor: Colors.border,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -424,12 +436,14 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   summaryImageFallback: {
+    backgroundColor: Colors.surfaceAlt,
   },
   summaryBody: {
     flex: 1,
     justifyContent: 'center',
   },
   summaryLabel: {
+    color: Colors.textMuted,
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     textTransform: 'uppercase',
@@ -438,12 +452,14 @@ const styles = StyleSheet.create({
   },
   summaryTitle: {
     marginTop: Space.xs,
+    color: Colors.textPrimary,
     fontSize: Type.subtitle.size,
     lineHeight: Type.subtitle.lineHeight,
     fontFamily: Typography.family.bold,
   },
   summaryMeta: {
     marginTop: Space.xs,
+    color: Colors.textSecondary,
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     lineHeight: Type.caption.lineHeight,
@@ -456,6 +472,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: Space.md,
     borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
   },
   actionLeft: {
     flexDirection: 'row',
@@ -466,13 +483,16 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: Radius.full,
+    backgroundColor: Colors.surfaceAlt,
     borderWidth: 1,
+    borderColor: Colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   actionText: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
     lineHeight: Type.subtitle.lineHeight,
     letterSpacing: Type.subtitle.letterSpacing,
   },
@@ -481,8 +501,10 @@ const styles = StyleSheet.create({
     marginBottom: Space.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
+    backgroundColor: `${Colors.brand}08`,
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: `${Colors.brand}20`,
     gap: 8,
   },
   tipsHeader: {
@@ -494,6 +516,7 @@ const styles = StyleSheet.create({
   tipsTitle: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
   },
   tipRow: {
     flexDirection: 'row',
@@ -504,6 +527,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 12,
     fontFamily: Typography.family.regular,
+    color: Colors.textSecondary,
     lineHeight: 17,
   },
 
@@ -518,6 +542,7 @@ const styles = StyleSheet.create({
   supportLinkText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
+    color: Colors.textMuted,
     lineHeight: Type.caption.lineHeight,
     letterSpacing: Type.caption.letterSpacing,
   },

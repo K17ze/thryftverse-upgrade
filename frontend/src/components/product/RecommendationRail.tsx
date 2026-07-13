@@ -20,7 +20,6 @@ import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 interface RailCardProps {
   item: Listing;
@@ -109,7 +108,6 @@ export function RecommendationRail({
   onSeeAll,
 }: RecommendationRailProps) {
   const { width: screenWidth } = useWindowDimensions();
-  const reducedMotionEnabled = useReducedMotion();
 
   if (section.items.length === 0) return null;
 
@@ -126,7 +124,7 @@ export function RecommendationRail({
 
   return (
     <Reanimated.View
-      entering={reducedMotionEnabled ? undefined : FadeInDown.duration(240)}
+      entering={FadeInDown.duration(300).springify().damping(18)}
       style={styles.container}
     >
       <View style={styles.header}>

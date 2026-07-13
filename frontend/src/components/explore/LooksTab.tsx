@@ -23,7 +23,6 @@ import { RootStackParamList } from '../../navigation/types';
 import { EmptyState } from '../EmptyState';
 import { DiscoverySectionHeader } from '../discover/DiscoverySectionHeader';
 import { fetchLooksFromApi, type LookApiItem } from '../../services/looksApi';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -39,10 +38,9 @@ function LookCard({
   index: number;
 }) {
   const [activeTag, setActiveTag] = useState<string | null>(null);
-  const reducedMotionEnabled = useReducedMotion();
 
   return (
-    <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(240).delay(Math.min(index, 6) * 40)}>
+    <Reanimated.View entering={FadeInDown.duration(350).delay(index * 80).springify()}>
       <AnimatedPressable style={styles.card} onPress={onPress} activeOpacity={0.92} accessibilityRole="button" accessibilityLabel={`Look by ${look.creator.username ?? 'unknown'}`}>
         <View style={styles.imageWrap}>
           <SharedTransitionView style={styles.imageShared} sharedTransitionTag={`look-${look.id}`}>
@@ -274,7 +272,7 @@ const styles = StyleSheet.create({
   },
   retryBtn: {
     marginTop: Space.sm,
-    paddingHorizontal: Space.lg,
+    paddingHorizontal: 24,
     paddingVertical: 10,
     backgroundColor: Colors.brand,
     borderRadius: 20,
@@ -394,7 +392,7 @@ const styles = StyleSheet.create({
     left: 20,
     top: -6,
     backgroundColor: 'rgba(0,0,0,0.8)',
-    borderRadius: Radius.lg,
+    borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 5,
     flexDirection: 'row',

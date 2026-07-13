@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
-import { useAppTheme } from '../theme/ThemeContext';
+import { ActiveTheme, Colors } from '../constants/colors';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { formatCountryPolicyScope, isPaymentMethodAllowed } from '../utils/capabilityPolicy';
@@ -25,8 +25,16 @@ import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 
 type Props = StackScreenProps<RootStackParamList, 'AddBankAccount'>;
 
+const BG = Colors.background;
+const CARD = Colors.surface;
+const CARD_SOFT = Colors.surfaceAlt;
+const BORDER = Colors.border;
+const DIVIDER = Colors.border;
+const MUTED = Colors.textMuted;
+const TEXT = Colors.textPrimary;
+const BRAND = Colors.brand;
+
 export default function AddBankAccountScreen({ navigation }: Props) {
-  const { colors, isDark } = useAppTheme();
   const [accountName, setAccountName] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
   const [sortCode, setSortCode] = useState('');
@@ -132,22 +140,22 @@ export default function AddBankAccountScreen({ navigation }: Props) {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={BG} />
+      <View style={styles.header}>
         <AnimatedPressable
           onPress={() => navigation.goBack()}
           accessibilityRole="button"
           accessibilityLabel="Go back"
           accessibilityHint="Returns to the previous screen"
         >
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={TEXT} />
         </AnimatedPressable>
-        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Add bank account</Text>
+        <Text style={styles.headerTitle}>Add bank account</Text>
         <View style={{ width: 24 }} />
       </View>
 
-      {policyLabel ? <Text style={[styles.policyLabel, { color: colors.textMuted }]}>Policy scope: {policyLabel}</Text> : null}
+      {policyLabel ? <Text style={styles.policyLabel}>Policy scope: {policyLabel}</Text> : null}
 
       <KeyboardAwareScrollView
         style={{ flex: 1 }}
@@ -157,59 +165,59 @@ export default function AddBankAccountScreen({ navigation }: Props) {
         showsVerticalScrollIndicator={false}
       >
           {!bankAllowed ? (
-            <View style={[styles.blockedCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
-              <Text style={[styles.blockedTitle, { color: colors.textPrimary }]}>Bank payouts unavailable in your region</Text>
-              <Text style={[styles.blockedText, { color: colors.textMuted }]}>Switch your country policy to enable bank withdrawal rails.</Text>
+            <View style={styles.blockedCard}>
+              <Text style={styles.blockedTitle}>Bank payouts unavailable in your region</Text>
+              <Text style={styles.blockedText}>Switch your country policy to enable bank withdrawal rails.</Text>
             </View>
           ) : null}
 
-          <Text style={[styles.intro, { color: colors.textMuted }]}>
+          <Text style={styles.intro}>
             Your bank account is used for withdrawals. We use bank-grade encryption to keep your details safe.
           </Text>
 
-          <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>ACCOUNT DETAILS</Text>
-          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={styles.sectionLabel}>ACCOUNT DETAILS</Text>
+          <View style={styles.card}>
             <View style={styles.fieldRow}>
-              <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Account holder name</Text>
+              <Text style={styles.fieldLabel}>Account holder name</Text>
               <TextInput
-                style={[styles.fieldInput, { color: colors.textPrimary }]}
+                style={styles.fieldInput}
                 value={accountName}
                 onChangeText={setAccountName}
                 placeholder="Full name on account"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={MUTED}
                 autoCapitalize="words"
-                selectionColor={colors.brand}
+                selectionColor={BRAND}
                 accessibilityLabel="Account holder name"
                 accessibilityHint="Enter the full legal name on the bank account"
               />
             </View>
-            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+            <View style={styles.divider} />
             <View style={styles.fieldRow}>
-              <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Account number</Text>
+              <Text style={styles.fieldLabel}>Account number</Text>
               <TextInput
-                style={[styles.fieldInput, { color: colors.textPrimary }]}
+                style={styles.fieldInput}
                 value={accountNumber}
                 onChangeText={v => setAccountNumber(v.replace(/\D/g, '').slice(0, 8))}
                 placeholder="8 digits"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={MUTED}
                 keyboardType="number-pad"
-                selectionColor={colors.brand}
+                selectionColor={BRAND}
                 maxLength={8}
                 accessibilityLabel="Account number"
                 accessibilityHint="Enter your 8-digit account number"
               />
             </View>
-            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+            <View style={styles.divider} />
             <View style={styles.fieldRow}>
-              <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Sort code</Text>
+              <Text style={styles.fieldLabel}>Sort code</Text>
               <TextInput
-                style={[styles.fieldInput, { color: colors.textPrimary }]}
+                style={styles.fieldInput}
                 value={sortCode}
                 onChangeText={v => setSortCode(formatSortCode(v))}
                 placeholder="00-00-00"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={MUTED}
                 keyboardType="number-pad"
-                selectionColor={colors.brand}
+                selectionColor={BRAND}
                 maxLength={8}
                 accessibilityLabel="Sort code"
                 accessibilityHint="Enter the 6-digit sort code"
@@ -218,18 +226,18 @@ export default function AddBankAccountScreen({ navigation }: Props) {
           </View>
 
           <View style={styles.secureRow}>
-            <Ionicons name="shield-checkmark-outline" size={14} color={colors.brand} />
-            <Text style={[styles.secureText, { color: colors.brand }]}>Protected by bank-level encryption</Text>
+            <Ionicons name="shield-checkmark-outline" size={14} color={BRAND} />
+            <Text style={styles.secureText}>Protected by bank-level encryption</Text>
           </View>
 
-          <View style={[styles.infoCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
-            <Ionicons name="information-circle-outline" size={16} color={colors.textMuted} />
-            <Text style={[styles.infoText, { color: colors.textMuted }]}>
+          <View style={styles.infoCard}>
+            <Ionicons name="information-circle-outline" size={16} color={MUTED} />
+            <Text style={styles.infoText}>
               Withdrawals typically take 1-3 business days. You'll receive a confirmation email once initiated.
             </Text>
           </View>
 
-        <View style={[styles.footer, { borderTopColor: colors.border }]}>
+        <View style={styles.footer}>
           <AppButton
             title={isSaving ? 'Saving...' : 'Save bank account'}
             onPress={handleSaveBank}
@@ -245,41 +253,45 @@ export default function AddBankAccountScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, backgroundColor: BG },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1,
+    paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: BORDER,
   },
-  headerTitle: { fontSize: 17, fontWeight: '700' },
-  policyLabel: { fontSize: 12, textAlign: 'center', marginTop: 8 },
+  headerTitle: { fontSize: 17, fontWeight: '700', color: TEXT },
+  policyLabel: { fontSize: 12, color: MUTED, textAlign: 'center', marginTop: 8 },
   content: { padding: 20, paddingBottom: 40 },
   blockedCard: {
+    backgroundColor: CARD_SOFT,
+    borderColor: BORDER,
     borderWidth: 1,
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 14,
     marginBottom: 16,
   },
-  blockedTitle: { fontSize: 13, fontWeight: '700', marginBottom: 4 },
-  blockedText: { fontSize: 12, lineHeight: 18 },
-  intro: { fontSize: 13, lineHeight: 20, marginBottom: 20, textAlign: 'center' },
-  sectionLabel: { fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 10, marginLeft: 4 },
-  card: { borderWidth: 1, borderRadius: 16, overflow: 'hidden', marginBottom: 20 },
+  blockedTitle: { fontSize: 13, fontWeight: '700', color: TEXT, marginBottom: 4 },
+  blockedText: { fontSize: 12, color: MUTED, lineHeight: 18 },
+  intro: { fontSize: 13, color: MUTED, lineHeight: 20, marginBottom: 20, textAlign: 'center' },
+  sectionLabel: { fontSize: 11, color: MUTED, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 10, marginLeft: 4 },
+  card: { backgroundColor: CARD, borderWidth: 1, borderColor: BORDER, borderRadius: 16, overflow: 'hidden', marginBottom: 20 },
   fieldRow: { paddingHorizontal: 18, paddingVertical: 14 },
-  fieldLabel: { fontSize: 12, marginBottom: 6, fontWeight: '600' },
-  fieldInput: { fontSize: 16, fontWeight: '500', paddingVertical: 4 },
-  divider: { height: 1 },
+  fieldLabel: { fontSize: 12, color: MUTED, marginBottom: 6, fontWeight: '600' },
+  fieldInput: { fontSize: 16, color: TEXT, fontWeight: '500', paddingVertical: 4 },
+  divider: { height: 1, backgroundColor: DIVIDER },
   secureRow: { flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'center', marginBottom: 16 },
-  secureText: { fontSize: 12 },
+  secureText: { fontSize: 12, color: BRAND },
   infoCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
+    backgroundColor: CARD_SOFT,
     borderWidth: 1,
+    borderColor: BORDER,
     borderRadius: 12,
     padding: 14,
   },
-  infoText: { flex: 1, fontSize: 12, lineHeight: 18 },
-  footer: { padding: 20, borderTopWidth: 1 },
+  infoText: { flex: 1, fontSize: 12, color: MUTED, lineHeight: 18 },
+  footer: { padding: 20, borderTopWidth: 1, borderTopColor: BORDER },
   saveBtn: { borderRadius: 30 },
 });

@@ -43,7 +43,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.12)',
   },
   dot: {
-    borderRadius: Radius.full,
+    borderRadius: 999,
     backgroundColor: Colors.danger,
   },
   label: {

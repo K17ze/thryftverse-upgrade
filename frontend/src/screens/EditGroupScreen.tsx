@@ -14,6 +14,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme } from '../theme/ThemeContext';
+import { Colors } from '../constants/colors';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -25,7 +26,7 @@ type Props = StackScreenProps<RootStackParamList, 'EditGroup'>;
 
 export default function EditGroupScreen({ navigation, route }: Props) {
   const { conversationId } = route.params;
-  const { colors, isDark } = useAppTheme();
+  const { isDark } = useAppTheme();
   const { show } = useToast();
   const haptic = useHaptic();
 
@@ -48,7 +49,7 @@ export default function EditGroupScreen({ navigation, route }: Props) {
     return (
       <FlagshipScreen header={<FlagshipHeader title="Edit Group" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
         <View style={styles.center}>
-          <Caption color={colors.textMuted}>Group not found</Caption>
+          <Caption color={Colors.textMuted}>Group not found</Caption>
         </View>
       </FlagshipScreen>
     );
@@ -124,12 +125,12 @@ export default function EditGroupScreen({ navigation, route }: Props) {
     <FlagshipScreen header={<FlagshipHeader title="Edit Group" onBack={handleBack} />} scrollEnabled={false}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         {/* Group preview */}
-        <View style={[styles.identity, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={[styles.avatar, { backgroundColor: colors.surfaceAlt }]}>
-            <Text style={[styles.avatarText, { color: colors.textPrimary }]}>{initials || 'G'}</Text>
+        <View style={styles.identity}>
+          <View style={[styles.avatar, { backgroundColor: Colors.surfaceAlt }]}>
+            <Text style={styles.avatarText}>{initials || 'G'}</Text>
           </View>
           <BodyEmphasis numberOfLines={1}>{name.trim() || 'Untitled group'}</BodyEmphasis>
-          <Caption color={colors.textMuted}>
+          <Caption color={Colors.textMuted}>
             {conversation.participantIds?.length ?? 0} member{(conversation.participantIds?.length ?? 0) === 1 ? '' : 's'}
           </Caption>
         </View>
@@ -137,11 +138,11 @@ export default function EditGroupScreen({ navigation, route }: Props) {
         {/* Group name */}
         <Section title="GROUP NAME">
           <TextInput
-            style={[styles.input, { color: colors.textPrimary, backgroundColor: colors.surface, borderColor: colors.border }]}
+            style={styles.input}
             value={name}
             onChangeText={setName}
             placeholder="Group name"
-            placeholderTextColor={colors.textMuted}
+            placeholderTextColor={Colors.textMuted}
             maxLength={50}
             accessibilityLabel="Group name"
           />
@@ -150,17 +151,17 @@ export default function EditGroupScreen({ navigation, route }: Props) {
         {/* Group description */}
         <Section title="DESCRIPTION">
           <TextInput
-            style={[styles.input, styles.textarea, { color: colors.textPrimary, backgroundColor: colors.surface, borderColor: colors.border }]}
+            style={[styles.input, styles.textarea]}
             value={description}
             onChangeText={setDescription}
             placeholder="What is this group about?"
-            placeholderTextColor={colors.textMuted}
+            placeholderTextColor={Colors.textMuted}
             maxLength={120}
             multiline
             numberOfLines={3}
             accessibilityLabel="Group description"
           />
-          <Caption color={colors.textMuted} style={styles.charCount}>{description.length}/120</Caption>
+          <Caption color={Colors.textMuted} style={styles.charCount}>{description.length}/120</Caption>
         </Section>
 
         <AppButton
@@ -174,16 +175,16 @@ export default function EditGroupScreen({ navigation, route }: Props) {
 
         {/* Danger zone */}
         <View style={styles.dangerZone}>
-          <Meta color={colors.danger} style={styles.dangerLabel}>DANGER ZONE</Meta>
+          <Meta color={Colors.danger} style={styles.dangerLabel}>DANGER ZONE</Meta>
           <AnimatedPressable
-            style={[styles.dangerRow, { backgroundColor: colors.surface, borderColor: `${colors.danger}30` }]}
+            style={styles.dangerRow}
             onPress={handleLeaveGroup}
             activeOpacity={0.7}
             scaleValue={0.98}
             hapticFeedback="medium"
           >
-            <Ionicons name="log-out-outline" size={20} color={colors.danger} />
-            <Text style={[styles.dangerText, { color: colors.danger }]}>Leave group</Text>
+            <Ionicons name="log-out-outline" size={20} color={Colors.danger} />
+            <Text style={styles.dangerText}>Leave group</Text>
           </AnimatedPressable>
         </View>
       </ScrollView>
@@ -192,10 +193,9 @@ export default function EditGroupScreen({ navigation, route }: Props) {
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  const { colors } = useAppTheme();
   return (
     <View style={styles.section}>
-      <Meta color={colors.textMuted} style={styles.sectionLabel}>
+      <Meta color={Colors.textMuted} style={styles.sectionLabel}>
         {title}
       </Meta>
       {children}
@@ -206,6 +206,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: Colors.background,
   },
   center: {
     flex: 1,
@@ -222,8 +223,10 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xl,
     gap: Space.sm,
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
     borderRadius: Radius.xl,
     marginHorizontal: Space.xs,
+    backgroundColor: Colors.surface,
   },
   avatar: {
     width: 80,
@@ -235,6 +238,7 @@ const styles = StyleSheet.create({
   avatarText: {
     fontSize: 28,
     fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
   },
   section: {
     gap: Space.sm,
@@ -245,12 +249,15 @@ const styles = StyleSheet.create({
     marginLeft: Space.xs,
   },
   input: {
+    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
     paddingHorizontal: Space.md,
     paddingVertical: 14,
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
+    color: Colors.textPrimary,
   },
   textarea: {
     minHeight: 80,
@@ -274,19 +281,23 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     paddingHorizontal: Space.md,
     paddingVertical: 14,
+    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: `${Colors.danger}30`,
   },
   dangerText: {
     flex: 1,
     fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
+    color: Colors.danger,
   },
   limitationBanner: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Space.sm,
     padding: Space.md,
+    backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.lg,
   },
   limitationText: {

@@ -189,7 +189,7 @@ const styles = StyleSheet.create({
     bottom: 52,
     right: Space.md,
     backgroundColor: Colors.textPrimary,
-    paddingHorizontal: Space.md,
+    paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: Radius.full,
     flexDirection: 'row',

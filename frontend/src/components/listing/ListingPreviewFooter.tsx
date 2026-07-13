@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { Space, Typography } from '../../theme/designTokens';
 import { haptics } from '../../utils/haptics';
 
 interface ListingPreviewFooterProps {
@@ -70,8 +70,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     paddingVertical: 12,
-    paddingHorizontal: Space.md,
-    borderRadius: Radius.lg,
+    paddingHorizontal: 16,
+    borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
     backgroundColor: Colors.surface,
@@ -87,7 +87,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 14,
-    borderRadius: Radius.lg,
+    borderRadius: 12,
     backgroundColor: Colors.brand,
     minHeight: 48,
   },

@@ -25,7 +25,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { useAppTheme } from '../theme/ThemeContext';
+import { Colors, ActiveTheme } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
@@ -47,7 +47,6 @@ import {
   getSlotLabel,
   getSlotIcon,
 } from '../services/styleGraph';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -68,7 +67,6 @@ function SlotCircle({
   isActive: boolean;
   onPress: () => void;
 }) {
-  const { colors } = useAppTheme();
   return (
     <AnimatedPressable
       style={[slotStyles.circle, isActive && slotStyles.circleActive]}
@@ -89,7 +87,7 @@ function SlotCircle({
         />
       ) : (
         <View style={slotStyles.empty}>
-          <Ionicons name={getSlotIcon(slot) as any} size={20} color={isActive ? colors.brand : colors.textMuted} />
+          <Ionicons name={getSlotIcon(slot) as any} size={20} color={isActive ? Colors.brand : Colors.textMuted} />
         </View>
       )}
       {isActive && <View style={slotStyles.activeRing} />}
@@ -102,12 +100,15 @@ const slotStyles = StyleSheet.create({
     width: SLOT_SIZE,
     height: SLOT_SIZE,
     borderRadius: Radius.lg,
+    backgroundColor: Colors.surface,
     borderWidth: 1,
+    borderColor: Colors.border,
     overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
   },
   circleActive: {
+    borderColor: Colors.brand,
     borderWidth: 2,
   },
   image: {
@@ -125,6 +126,7 @@ const slotStyles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
+    backgroundColor: Colors.brand,
   },
 });
 
@@ -137,7 +139,6 @@ function ItemThumb({
   onPress: () => void;
   isSelected: boolean;
 }) {
-  const { colors } = useAppTheme();
   return (
     <AnimatedPressable
       style={[thumbStyles.card, isSelected && thumbStyles.cardSelected]}
@@ -153,24 +154,24 @@ function ItemThumb({
         <CachedImage uri={item.imageUri} style={thumbStyles.image} priority="low" />
       ) : (
         <View style={[thumbStyles.image, thumbStyles.placeholder]}>
-          <Ionicons name="image-outline" size={24} color={colors.textMuted} />
+          <Ionicons name="image-outline" size={24} color={Colors.textMuted} />
         </View>
       )}
       <View style={thumbStyles.meta}>
         <T.Caption
-          color={colors.textPrimary}
+          color={Colors.textPrimary}
           numberOfLines={1}
           style={{ fontFamily: Typography.family.semibold }}
         >
           {item.title}
         </T.Caption>
-        <T.Meta color={colors.textMuted} numberOfLines={1}>
+        <T.Meta color={Colors.textMuted} numberOfLines={1}>
           {item.brand ?? item.category}
         </T.Meta>
       </View>
       {isSelected && (
         <View style={thumbStyles.check}>
-          <Ionicons name="checkmark-circle" size={20} color={colors.brand} />
+          <Ionicons name="checkmark-circle" size={20} color={Colors.brand} />
         </View>
       )}
     </AnimatedPressable>
@@ -181,16 +182,20 @@ const thumbStyles = StyleSheet.create({
   card: {
     width: (SCREEN_W - Space.md * 2 - Space.sm) / 2,
     borderRadius: Radius.lg,
+    backgroundColor: Colors.surface,
     borderWidth: 1,
+    borderColor: Colors.border,
     overflow: 'hidden',
     marginBottom: Space.sm,
   },
   cardSelected: {
+    borderColor: Colors.brand,
     borderWidth: 2,
   },
   image: {
     width: '100%',
     height: 140,
+    backgroundColor: Colors.surfaceAlt,
   },
   placeholder: {
     justifyContent: 'center',
@@ -203,12 +208,12 @@ const thumbStyles = StyleSheet.create({
     position: 'absolute',
     top: Space.xs,
     right: Space.xs,
+    backgroundColor: Colors.background,
     borderRadius: Radius.full,
   },
 });
 
 function ScoreBadge({ score }: { score: number }) {
-  const { colors } = useAppTheme();
   const scale = useSharedValue(1);
   React.useEffect(() => {
     scale.value = withSpring(1.15, { damping: 12 });
@@ -222,7 +227,7 @@ function ScoreBadge({ score }: { score: number }) {
     transform: [{ scale: scale.value }],
   }));
 
-  const color = score >= 80 ? colors.success : score >= 50 ? colors.brand : colors.danger;
+  const color = score >= 80 ? Colors.success : score >= 50 ? Colors.brand : Colors.danger;
 
   return (
     <Reanimated.View style={[scoreStyles.badge, { borderColor: color }, animStyle]}>
@@ -241,16 +246,15 @@ const scoreStyles = StyleSheet.create({
     borderWidth: 2,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: Colors.surface,
   },
 });
 
 // ── Main Screen ──
 
 export default function OutfitBuilderScreen() {
-  const { colors, isDark } = useAppTheme();
   const navigation = useNavigation<NavT>();
   const { listings } = useBackendData();
-  const reducedMotionEnabled = useReducedMotion();
   const collections = useStore((s) => s.collections);
   const createCollectionFn = useStore((s) => s.createCollection);
   const addToCollection = useStore((s) => s.addToCollection);
@@ -349,7 +353,7 @@ export default function OutfitBuilderScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
+      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
 
       {/* Header */}
       <View style={styles.header}>
@@ -361,7 +365,7 @@ export default function OutfitBuilderScreen() {
           accessibilityLabel="Close outfit builder"
           hapticFeedback="light"
         >
-          <Ionicons name="close" size={28} color={colors.textPrimary} />
+          <Ionicons name="close" size={28} color={Colors.textPrimary} />
         </AnimatedPressable>
         <T.Headline style={styles.headerTitle}>Outfit Builder</T.Headline>
         <AnimatedPressable
@@ -372,13 +376,13 @@ export default function OutfitBuilderScreen() {
           accessibilityLabel="Clear outfit"
           hapticFeedback="light"
         >
-          <Ionicons name="trash-outline" size={22} color={colors.danger} />
+          <Ionicons name="trash-outline" size={22} color={Colors.danger} />
         </AnimatedPressable>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {/* Outfit Preview */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.previewWrap}>
+        <Reanimated.View entering={FadeInDown.duration(300)} style={styles.previewWrap}>
           <View style={styles.slotRow}>
             {SLOTS.map((slot) => (
               <View key={slot} style={styles.slotWrap}>
@@ -388,7 +392,7 @@ export default function OutfitBuilderScreen() {
                   isActive={activeSlot === slot}
                   onPress={() => setActiveSlot(slot)}
                 />
-                <T.Meta color={activeSlot === slot ? colors.brand : colors.textMuted} style={styles.slotLabel}>
+                <T.Meta color={activeSlot === slot ? Colors.brand : Colors.textMuted} style={styles.slotLabel}>
                   {getSlotLabel(slot)}
                 </T.Meta>
               </View>
@@ -400,39 +404,39 @@ export default function OutfitBuilderScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.sm }}>
               <ScoreBadge score={compatibility.score} />
               <View>
-                <T.Caption color={colors.textPrimary} style={{ fontFamily: Typography.family.bold }}>
+                <T.Caption color={Colors.textPrimary} style={{ fontFamily: Typography.family.bold }}>
                   Compatibility
                 </T.Caption>
-                <T.Meta color={colors.textMuted}>
+                <T.Meta color={Colors.textMuted}>
                   {compatibility.reasons.join(' · ') || 'Select items to score'}
                 </T.Meta>
               </View>
             </View>
             <View style={{ flexDirection: 'row', gap: Space.xs }}>
-              <T.Meta color={colors.textMuted}>{filledCount}/{SLOTS.length}</T.Meta>
+              <T.Meta color={Colors.textMuted}>{filledCount}/{SLOTS.length}</T.Meta>
             </View>
           </View>
         </Reanimated.View>
 
         {/* AI Suggestion */}
         {aiSuggestion && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInUp.duration(250)} style={{ marginHorizontal: Space.md, marginBottom: Space.md }}>
+          <Reanimated.View entering={FadeInUp.duration(250)} style={{ marginHorizontal: Space.md, marginBottom: Space.md }}>
             <View style={styles.aiCard}>
               <View style={styles.aiRow}>
-                <Ionicons name="sparkles" size={18} color={colors.brand} />
-                <T.Caption color={colors.brand} style={{ fontFamily: Typography.family.bold }}>
+                <Ionicons name="sparkles" size={18} color={Colors.brand} />
+                <T.Caption color={Colors.brand} style={{ fontFamily: Typography.family.bold }}>
                   AI Suggestion
                 </T.Caption>
               </View>
-              <T.Body color={colors.textSecondary} style={{ marginBottom: Space.sm }}>
-                Add a <Text style={{ fontFamily: Typography.family.bold, color: colors.textPrimary }}>{getSlotLabel(aiSuggestion.slot)}</Text> to improve your outfit score by +{aiSuggestion.scoreImprovement}.
+              <T.Body color={Colors.textSecondary} style={{ marginBottom: Space.sm }}>
+                Add a <Text style={{ fontFamily: Typography.family.bold, color: Colors.textPrimary }}>{getSlotLabel(aiSuggestion.slot)}</Text> to improve your outfit score by +{aiSuggestion.scoreImprovement}.
               </T.Body>
               <AppButton
                 title={`Add ${aiSuggestion.item.brand ?? ''} ${aiSuggestion.item.title}`.trim()}
                 variant="secondary"
                 size="sm"
                 onPress={handleAiSuggest}
-                icon={<Ionicons name="add-circle-outline" size={16} color={colors.brand} />}
+                icon={<Ionicons name="add-circle-outline" size={16} color={Colors.brand} />}
               />
             </View>
           </Reanimated.View>
@@ -440,8 +444,8 @@ export default function OutfitBuilderScreen() {
 
         {/* Section Header */}
         <View style={styles.sectionHeader}>
-          <T.Title2 color={colors.textPrimary}>{getSlotLabel(activeSlot)}s</T.Title2>
-          <T.Meta color={colors.textMuted}>{slotItems.length} items</T.Meta>
+          <T.Title2 color={Colors.textPrimary}>{getSlotLabel(activeSlot)}s</T.Title2>
+          <T.Meta color={Colors.textMuted}>{slotItems.length} items</T.Meta>
         </View>
 
         {/* Item Grid */}
@@ -456,7 +460,7 @@ export default function OutfitBuilderScreen() {
             {slotItems.map((item, idx) => (
               <Reanimated.View
                 key={item.id}
-                entering={reducedMotionEnabled ? undefined : FadeInDown.delay(Math.min(idx, 6) * 40).duration(250)}
+                entering={FadeInDown.delay(idx * 40).duration(250)}
               >
                 <ItemThumb
                   item={item}
@@ -479,8 +483,8 @@ export default function OutfitBuilderScreen() {
           size="lg"
           onPress={handleSave}
           disabled={filledCount < 2}
-          icon={<Ionicons name="bookmark-outline" size={18} color={filledCount >= 2 ? colors.background : colors.textPrimary} />}
-          trailingIcon={<Ionicons name="arrow-forward" size={18} color={filledCount >= 2 ? colors.background : colors.textMuted} />}
+          icon={<Ionicons name="bookmark-outline" size={18} color={filledCount >= 2 ? Colors.background : Colors.textPrimary} />}
+          trailingIcon={<Ionicons name="arrow-forward" size={18} color={filledCount >= 2 ? Colors.background : Colors.textMuted} />}
         />
       </View>
     </SafeAreaView>
@@ -490,6 +494,7 @@ export default function OutfitBuilderScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: Colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -503,6 +508,8 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: Radius.md,
     borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -519,7 +526,9 @@ const styles = StyleSheet.create({
     marginBottom: Space.md,
     padding: Space.md,
     borderRadius: Radius.lg,
+    backgroundColor: Colors.surface,
     borderWidth: 1,
+    borderColor: Colors.border,
   },
   slotRow: {
     flexDirection: 'row',
@@ -539,12 +548,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderTopWidth: 1,
+    borderTopColor: Colors.border,
     paddingTop: Space.md,
   },
   aiCard: {
     padding: Space.md,
     borderRadius: Radius.lg,
+    backgroundColor: Colors.surface,
     borderWidth: 1,
+    borderColor: Colors.border,
   },
   aiRow: {
     flexDirection: 'row',
@@ -573,6 +585,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
     paddingBottom: Platform.OS === 'ios' ? Space.md : Space.sm,
+    backgroundColor: Colors.background,
     borderTopWidth: 1,
+    borderTopColor: Colors.border,
   },
 });

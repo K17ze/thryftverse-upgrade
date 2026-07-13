@@ -16,7 +16,6 @@ import { CachedImage } from '../CachedImage';
 import { Colors } from '../../constants/colors';
 import { Space, Radius, Typography } from '../../theme/designTokens';
 import { useHaptic } from '../../hooks/useHaptic';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useToast } from '../../context/ToastContext';
 import { KeyboardStickyView } from '../../platform/keyboard/KeyboardProvider';
 import {
@@ -60,7 +59,6 @@ export function LookCommentsSheet({
   onSignInRequired,
 }: LookCommentsSheetProps) {
   const haptic = useHaptic();
-  const reducedMotionEnabled = useReducedMotion();
   const { show } = useToast();
   const [comments, setComments] = useState<LookCommentApiItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -136,7 +134,7 @@ export function LookCommentsSheet({
     return (
       <Reanimated.View
         key={item.id}
-        entering={reducedMotionEnabled ? undefined : FadeInDown.duration(200).delay(Math.min(index, 8) * 30)}
+        entering={FadeInDown.duration(200).delay(index * 30)}
         style={styles.commentRow}
       >
         <View style={styles.avatarWrap}>
@@ -175,7 +173,7 @@ export function LookCommentsSheet({
 
   return (
     <Reanimated.View
-      entering={reducedMotionEnabled ? undefined : SlideInDown.duration(300)}
+      entering={SlideInDown.duration(300)}
       style={StyleSheet.absoluteFill}
     >
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -302,7 +300,7 @@ const styles = StyleSheet.create({
   avatarWrap: {
     width: 32,
     height: 32,
-    borderRadius: Radius.xl,
+    borderRadius: 16,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
@@ -311,7 +309,7 @@ const styles = StyleSheet.create({
   avatar: {
     width: 32,
     height: 32,
-    borderRadius: Radius.xl,
+    borderRadius: 16,
   },
   commentBody: {
     flex: 1,
@@ -396,7 +394,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     height: 44,
-    paddingHorizontal: Space.lg,
+    paddingHorizontal: 24,
     borderRadius: 22,
     borderWidth: 1,
     borderColor: Colors.brand,

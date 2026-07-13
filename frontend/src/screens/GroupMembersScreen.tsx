@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useAppTheme } from '../theme/ThemeContext';
+import { Colors } from '../constants/colors';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -23,7 +24,7 @@ type MemberRole = 'owner' | 'admin' | 'member';
 
 export default function GroupMembersScreen({ navigation, route }: Props) {
   const { conversationId } = route.params;
-  const { colors, isDark } = useAppTheme();
+  const { isDark } = useAppTheme();
   const haptic = useHaptic();
 
   const conversations = useStore((state) => state.conversations);
@@ -65,22 +66,22 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
     return (
       <FlagshipScreen header={<FlagshipHeader title="Members" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
         <View style={styles.center}>
-          <Caption color={colors.textMuted}>Group not found</Caption>
+          <Caption color={Colors.textMuted}>Group not found</Caption>
         </View>
       </FlagshipScreen>
     );
   }
 
   const roleBadge = (role: MemberRole) => {
-    const badgeColors = {
-      owner: { bg: `${colors.brand}15`, text: colors.brand },
-      admin: { bg: `${colors.textPrimary}15`, text: colors.textPrimary },
-      member: { bg: colors.surfaceAlt, text: colors.textMuted },
+    const colors = {
+      owner: { bg: `${Colors.brand}15`, text: Colors.brand },
+      admin: { bg: `${Colors.textPrimary}15`, text: Colors.textPrimary },
+      member: { bg: Colors.surfaceAlt, text: Colors.textMuted },
     };
     const labels = { owner: 'Owner', admin: 'Admin', member: 'Member' };
     return (
-      <View style={[styles.roleBadge, { backgroundColor: badgeColors[role].bg }]}>
-        <Caption style={[styles.roleBadgeText, { color: badgeColors[role].text }]}>{labels[role]}</Caption>
+      <View style={[styles.roleBadge, { backgroundColor: colors[role].bg }]}>
+        <Caption style={[styles.roleBadgeText, { color: colors[role].text }]}>{labels[role]}</Caption>
       </View>
     );
   };
@@ -90,14 +91,14 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         {/* Search */}
-        <View style={[styles.searchRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Ionicons name="search-outline" size={18} color={colors.textMuted} />
+        <View style={styles.searchRow}>
+          <Ionicons name="search-outline" size={18} color={Colors.textMuted} />
           <TextInput
-            style={[styles.searchInput, { color: colors.textPrimary }]}
+            style={styles.searchInput}
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder="Search members..."
-            placeholderTextColor={colors.textMuted}
+            placeholderTextColor={Colors.textMuted}
             autoCapitalize="none"
             autoCorrect={false}
             returnKeyType="search"
@@ -110,7 +111,7 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
               scaleValue={0.9}
               hapticFeedback="light"
             >
-              <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+              <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
             </AnimatedPressable>
           )}
         </View>
@@ -118,8 +119,8 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
         {/* Member list */}
         {filteredMembers.length === 0 ? (
           <View style={styles.emptyWrapV2}>
-            <Ionicons name="people-outline" size={32} color={colors.textMuted} />
-            <Caption color={colors.textMuted} style={styles.emptyTextV2}>No members match your search.</Caption>
+            <Ionicons name="people-outline" size={32} color={Colors.textMuted} />
+            <Caption color={Colors.textMuted} style={styles.emptyTextV2}>No members match your search.</Caption>
           </View>
         ) : (
           <View style={styles.memberList}>
@@ -134,8 +135,8 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
                   accessibilityLabel={`View ${member.name} profile`}
                   style={styles.memberRowV2}
                 >
-                  <View style={[styles.memberAvatarV2, { backgroundColor: colors.surfaceAlt }]}>
-                    <Text style={[styles.memberAvatarTextV2, { color: colors.textPrimary }]}>
+                  <View style={[styles.memberAvatarV2, { backgroundColor: Colors.surfaceAlt }]}>
+                    <Text style={styles.memberAvatarTextV2}>
                       {member.name.slice(0, 2).toUpperCase()}
                     </Text>
                   </View>
@@ -145,13 +146,13 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
                       {roleBadge(member.role)}
                     </View>
                     {member.role === 'owner' && (
-                      <Caption color={colors.textMuted}>{member.isMe ? 'You · Group creator' : 'Group creator'}</Caption>
+                      <Caption color={Colors.textMuted}>{member.isMe ? 'You · Group creator' : 'Group creator'}</Caption>
                     )}
                   </View>
-                  <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+                  <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
                 </AnimatedPressable>
                 {index < filteredMembers.length - 1 && (
-                  <View style={[styles.memberDivider, { backgroundColor: colors.border }]} />
+                  <View style={styles.memberDivider} />
                 )}
               </View>
             ))}
@@ -165,6 +166,7 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: Colors.background,
   },
   center: {
     flex: 1,
@@ -177,8 +179,10 @@ const styles = StyleSheet.create({
     gap: Space.md,
   },
   listCard: {
+    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
     overflow: 'hidden',
   },
   memberRow: {
@@ -198,6 +202,7 @@ const styles = StyleSheet.create({
   memberAvatarText: {
     fontSize: 13,
     fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
   },
   memberText: {
     flex: 1,
@@ -205,6 +210,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.border,
     marginLeft: Space.md + 40 + Space.sm,
   },
   searchRow: {
@@ -213,14 +219,17 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     paddingHorizontal: Space.sm + 4,
     paddingVertical: Space.sm,
+    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
     marginBottom: Space.sm,
   },
   searchInput: {
     flex: 1,
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
+    color: Colors.textPrimary,
   },
   nameRow: {
     flexDirection: 'row',
@@ -241,8 +250,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: Space.xl,
     gap: Space.sm,
+    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
   },
   emptyText: {
     textAlign: 'center',
@@ -267,6 +278,7 @@ const styles = StyleSheet.create({
   memberAvatarTextV2: {
     fontSize: 14,
     fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
   },
   memberTextV2: {
     flex: 1,
@@ -279,6 +291,7 @@ const styles = StyleSheet.create({
   },
   memberDivider: {
     height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.border,
     marginLeft: Space.md + 44 + Space.sm + 4,
     marginRight: Space.md,
   },

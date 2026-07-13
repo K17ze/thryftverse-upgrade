@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, Pressable, Text, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Typography, Space } from '../../theme/designTokens';
+import { Typography } from '../../theme/designTokens';
 
 interface BackgroundPickerProps {
   visible: boolean;
@@ -104,7 +104,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(20,20,25,0.95)',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    paddingHorizontal: Space.md,
+    paddingHorizontal: 16,
     paddingBottom: 32,
     paddingTop: 8,
     gap: 12,

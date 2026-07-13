@@ -18,7 +18,6 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../navigation/types';
 import { useHaptic } from '../../hooks/useHaptic';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useToast } from '../../context/ToastContext';
 import { EmptyState } from '../EmptyState';
 import { formatCountdown } from '../../data/tradeHub';
@@ -54,9 +53,8 @@ interface LiveAuctionItem {
 /* ── Sub-components ── */
 function LiveNowCard({ auction, index, onPress }: { auction: LiveAuctionItem; index: number; onPress: () => void }) {
   const countdown = formatCountdown(Math.max(0, auction.endsAtMs - Date.now()));
-  const reducedMotionEnabled = useReducedMotion();
   return (
-    <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(240).delay(Math.min(index, 6) * 40)}>
+    <Reanimated.View entering={FadeInDown.duration(350).delay(index * 60).springify()}>
       <AnimatedPressable style={styles.liveCard} onPress={onPress} activeOpacity={0.92}>
         <CachedImage uri={auction.image} style={styles.liveImage} containerStyle={{ borderRadius: Radius.md }} contentFit="cover" />
         <View style={styles.liveContent}>
@@ -83,10 +81,9 @@ function ActivityCard({ item, onPress, index }: { item: ActivityItem; onPress: (
     fresh_drop: Colors.brand,
     price_drop: '#dd6a33',
   };
-  const reducedMotionEnabled = useReducedMotion();
 
   return (
-    <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(240).delay(Math.min(index, 6) * 40)}>
+    <Reanimated.View entering={FadeInDown.duration(350).delay(index * 60).springify()}>
       <AnimatedPressable style={styles.activityCard} onPress={onPress} activeOpacity={0.92}>
         <CachedImage uri={item.image} style={styles.activityImage} containerStyle={{ borderRadius: Radius.md }} contentFit="cover" />
         <View style={styles.activityContent}>
@@ -349,7 +346,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 24,
     height: 24,
-    borderRadius: Radius.lg,
+    borderRadius: 12,
     backgroundColor: Colors.danger,
     opacity: 0.25,
   },

@@ -28,8 +28,9 @@ import { Video, ResizeMode } from '../components/compat/Video';
 import { ImageContentFit } from 'expo-image';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useAppTheme } from '../theme/ThemeContext';
+import { Colors } from '../constants/colors';
 
+import { useAppTheme } from '../theme/ThemeContext';
 
 // Typography simplified - using direct font names
 import { fetchPosterStories } from '../services/postersApi';
@@ -68,7 +69,6 @@ import { CuratedCollectionsRail, type CuratedCollection } from '../components/pr
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { useFollowingFeed } from '../hooks/useFollowingFeed';
 import { resolveListingMediaHeightRatio } from '../utils/listingMediaGeometry';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -76,6 +76,8 @@ const HEADER_EXPANDED = 80;
 const HEADER_COLLAPSED = 56;
 const GRID_GAP = 12;
 const SCREEN_WIDTH = Dimensions.get('window').width;
+
+const PANEL_BG = Colors.surfaceAlt;
 
 // Skeleton variation communicates loading without inventing media geometry.
 const SKELETON_HEIGHT_RATIOS = [1.25, 1.08, 1.32, 1.16] as const;
@@ -138,6 +140,13 @@ const STORY_STATUS_LABEL: Record<StoryStatus, string> = {
   'sold-recently': 'sold recently',
 };
 
+const STORY_STATUS_GRADIENT: Record<StoryStatus, [string, string]> = {
+  'new-listing': [Colors.brand, Colors.brandPressed],
+  'live-auction': [Colors.textSecondary, Colors.textMuted],
+  'co-own-launching': [Colors.success, Colors.success + '99'],
+  'sold-recently': [Colors.danger, Colors.danger + '99'],
+};
+
 // Trend clips removed — demo-only content, not real data
 
 type ExploreTile = {
@@ -190,7 +199,6 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
   sellerUsername,
   sellerAvatar,
 }: ExploreGridItemProps) {
-  const { colors } = useAppTheme();
   const sharedTag = item.mediaType === 'image' && item.routeId
     ? `image-${item.routeId}-0`
     : undefined;
@@ -263,7 +271,7 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
               />
             ) : (
               <View style={styles.exploreSellerAvatarFallback}>
-                <Ionicons name="person" size={10} color={colors.textMuted} />
+                <Ionicons name="person" size={10} color={Colors.textMuted} />
               </View>
             )}
             <Text style={styles.exploreSellerText} numberOfLines={1}>
@@ -277,7 +285,7 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
             accessibilityRole="button"
             accessibilityLabel="Message seller"
           >
-            <Ionicons name="chatbubble-outline" size={13} color={colors.textSecondary} />
+            <Ionicons name="chatbubble-outline" size={13} color={Colors.textSecondary} />
           </AnimatedPressable>
         </View>
       )}
@@ -286,7 +294,7 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
 });
 
 export default function HomeScreen() {
-  const { colors, isDark } = useAppTheme();
+  const { isDark } = useAppTheme();
   const navigation = useNavigation<NavT>();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
@@ -295,7 +303,6 @@ export default function HomeScreen() {
   const customPosters = useStore((state) => state.customPosters);
   const { formatFromFiat } = useFormattedPrice();
   const haptic = useHaptic();
-  const reducedMotionEnabled = useReducedMotion();
   const { listings, source, isSyncing, lastError, refreshListings, loadMoreListings, hasMore, isLoadingMore } = useBackendData();
   const followingFeed = useFollowingFeed();
 
@@ -577,7 +584,7 @@ export default function HomeScreen() {
         coverImage: luxuryItems[0].images?.[0] ?? '',
         itemCount: luxuryItems.length,
         curatorName: 'ThryftVerse',
-        accentColor: colors.brand,
+        accentColor: Colors.brand,
       });
     }
 
@@ -694,7 +701,7 @@ export default function HomeScreen() {
           >
             <View style={styles.posterCreateTile}>
               <View style={styles.posterCreateIcon}>
-                <Ionicons name="add" size={24} color={colors.background} />
+                <Ionicons name="add" size={24} color={Colors.background} />
               </View>
               <Text style={styles.posterCreateLabel}>Create Poster</Text>
             </View>
@@ -702,9 +709,9 @@ export default function HomeScreen() {
 
           {realPosters.length === 0 && !postersLoading && (
             <View style={styles.posterCard}>
-              <View style={[styles.posterTile, { justifyContent: 'center', alignItems: 'center', backgroundColor: colors.surfaceAlt }]}>
-                <Ionicons name="images-outline" size={28} color={colors.textMuted} />
-                <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 6, textAlign: 'center' }}>No posters yet</Text>
+              <View style={[styles.posterTile, { justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.surfaceAlt }]}>
+                <Ionicons name="images-outline" size={28} color={Colors.textMuted} />
+                <Text style={{ fontSize: 12, color: Colors.textMuted, marginTop: 6, textAlign: 'center' }}>No posters yet</Text>
               </View>
             </View>
           )}
@@ -750,7 +757,7 @@ export default function HomeScreen() {
                     contentFit="cover"
                   />
                 ) : (
-                  <View style={[StyleSheet.absoluteFill, { backgroundColor: firstFrame?.backgroundColor ?? colors.surfaceAlt, justifyContent: 'center', alignItems: 'center' }]}>
+                  <View style={[StyleSheet.absoluteFill, { backgroundColor: firstFrame?.backgroundColor ?? Colors.surfaceAlt, justifyContent: 'center', alignItems: 'center' }]}>
                     <Text style={{ color: '#fff', fontSize: 11, fontFamily: Typography.family.medium, textAlign: 'center', paddingHorizontal: 8 }} numberOfLines={2}>{caption || 'Text story'}</Text>
                   </View>
                 )}
@@ -813,8 +820,8 @@ export default function HomeScreen() {
           style={styles.newListingsBanner}
           contentStyle={styles.newListingsBannerContent}
           titleStyle={styles.newListingsBannerText}
-          icon={<Ionicons name="sparkles-outline" size={13} color={colors.background} />}
-          trailingIcon={<Ionicons name="arrow-up" size={13} color={colors.background} />}
+          icon={<Ionicons name="sparkles-outline" size={13} color={Colors.background} />}
+          trailingIcon={<Ionicons name="arrow-up" size={13} color={Colors.background} />}
           iconContainerStyle={styles.newListingsBannerIconWrap}
           trailingIconContainerStyle={styles.newListingsBannerIconWrap}
           hapticFeedback="selection"
@@ -879,10 +886,10 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
 
       <Reanimated.View style={[styles.floatingHeaderShell, headerHeightStyle, headerShadowStyle]}>
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surfaceAlt }]} />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.surfaceAlt }]} />
 
         <View style={[styles.headerForeground, { paddingTop: insets.top + 2, paddingBottom: 8 }]}>
           <Reanimated.View style={[headerTitleStyle, styles.headerTitleWrap]}>
@@ -897,7 +904,7 @@ export default function HomeScreen() {
               accessibilityRole="button"
               accessibilityHint="Opens global search"
             >
-              <Ionicons name="search" size={22} color={colors.textPrimary} />
+              <Ionicons name="search" size={22} color={Colors.textPrimary} />
             </AnimatedPressable>
             <AnimatedPressable
               style={styles.headerBtn}
@@ -906,7 +913,7 @@ export default function HomeScreen() {
               accessibilityRole="button"
               accessibilityHint="Opens notifications center"
             >
-              <Ionicons name="notifications-outline" size={22} color={colors.textPrimary} />
+              <Ionicons name="notifications-outline" size={22} color={Colors.textPrimary} />
               {notificationCount > 0 && (
                 <View style={styles.notificationBadge} pointerEvents="none">
                   <Text style={styles.notificationBadgeText}>
@@ -1003,7 +1010,7 @@ export default function HomeScreen() {
           renderExploreLoadingState()
         ) : feedGridData.length === 0 ? (
           feedMode === 'following' ? (
-            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={{ flex: 1 }}>
+            <Reanimated.View entering={FadeInDown.duration(300)} style={{ flex: 1 }}>
               <EmptyState
                 icon={followingFeed.hasFollowing ? 'pricetag-outline' : 'people-outline'}
                 title={followingFeed.hasFollowing ? 'No new drops from sellers you follow' : 'Follow sellers to see their drops here'}
@@ -1021,7 +1028,7 @@ export default function HomeScreen() {
             // Premium empty state — backend returned zero items and we are not
             // loading. Preserves the flagship layout instead of collapsing to
             // a blank masonry. Distinct from the sync-error banner above.
-            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={{ flex: 1 }}>
+            <Reanimated.View entering={FadeInDown.duration(300)} style={{ flex: 1 }}>
               <EmptyState
                 icon="sparkles-outline"
                 title="No drops live yet"
@@ -1080,7 +1087,7 @@ export default function HomeScreen() {
 
         {isLoadingMore && (
           <View style={{ paddingVertical: Space.md, alignItems: 'center' }}>
-            <Text style={{ color: colors.textMuted, fontSize: 13 }}>Loading more...</Text>
+            <Text style={{ color: Colors.textMuted, fontSize: 13 }}>Loading more...</Text>
           </View>
         )}
       </Reanimated.ScrollView>
@@ -1131,7 +1138,7 @@ export default function HomeScreen() {
                     align="center"
                     style={styles.peekPrimaryBtn}
                     titleStyle={styles.peekPrimaryText}
-                    icon={<Ionicons name="arrow-forward" size={14} color={colors.background} />}
+                    icon={<Ionicons name="arrow-forward" size={14} color={Colors.background} />}
                     iconContainerStyle={styles.peekPrimaryIconWrap}
                     onPress={() => {
                       if (peekItem.routeId) {
@@ -1155,6 +1162,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: Colors.background,
   },
   floatingHeaderShell: {
     position: 'absolute',
@@ -1164,6 +1172,7 @@ const styles = StyleSheet.create({
     zIndex: 20,
     overflow: 'hidden',
     borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.borderLight,
     ...Elevation.subtle, // ELEVATED: Subtle shadow for depth
   },
   headerForeground: {
@@ -1181,6 +1190,7 @@ const styles = StyleSheet.create({
     fontSize: 26, // Slightly reduced
     fontFamily: Typography.family.bold, // Changed from ExtraBold for elegance
     letterSpacing: 2, // Luxury spacing (ELEVATED)
+    color: Colors.textPrimary,
     lineHeight: 30,
     textTransform: 'uppercase', // ELEVATED: Uppercase like luxury brands
   },
@@ -1189,6 +1199,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: Typography.family.regular,
     letterSpacing: 0.25,
+    color: Colors.textSecondary,
   },
   headerRight: {
     flexDirection: 'row',
@@ -1200,7 +1211,9 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: Colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
     ...Elevation.subtle, // ELEVATED: Subtle shadow
   },
   notificationBadge: {
@@ -1210,10 +1223,12 @@ const styles = StyleSheet.create({
     minWidth: 18,
     height: 18,
     borderRadius: 9,
+    backgroundColor: Colors.danger,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
     borderWidth: 1.5,
+    borderColor: Colors.background,
   },
   notificationBadgeText: {
     color: '#fff',
@@ -1243,6 +1258,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 20,
+    backgroundColor: Colors.brand,
     borderWidth: 0,
   },
   newListingsBannerContent: {
@@ -1257,6 +1273,7 @@ const styles = StyleSheet.create({
   newListingsBannerText: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
+    color: Colors.background,
     letterSpacing: 0.2,
   },
 
@@ -1270,11 +1287,13 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 17,
     fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
     letterSpacing: -0.1,
   },
   sectionHint: {
     fontSize: 11,
     fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
     letterSpacing: 0.22,
   },
 
@@ -1321,6 +1340,7 @@ const styles = StyleSheet.create({
     borderRadius: 29,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: Colors.background,
   },
   storyAvatarWrap: {
     width: 54,
@@ -1336,14 +1356,17 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
+    backgroundColor: Colors.brand,
     position: 'absolute',
     right: 1,
     top: 1,
     borderWidth: 1,
+    borderColor: Colors.background,
   },
   storyName: {
     fontSize: 10,
     fontFamily: Typography.family.medium,
+    color: Colors.textSecondary,
     width: 66,
     textAlign: 'center',
   },
@@ -1351,6 +1374,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontSize: 9,
     fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
     width: 66,
     textAlign: 'center',
     textTransform: 'uppercase',
@@ -1370,6 +1394,8 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     overflow: 'hidden',
     borderWidth: 0.5,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceAlt,
   },
   lookImageWrap: {
     width: '100%',
@@ -1384,6 +1410,8 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     overflow: 'hidden',
     borderWidth: 0.5,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceAlt,
   },
   lookFeedImageWrap: {
     width: '100%',
@@ -1489,11 +1517,14 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: 5,
     position: 'relative',
+    backgroundColor: Colors.surfaceAlt,
   },
   posterTileUnseen: {
     borderWidth: 2,
+    borderColor: Colors.brand,
   },
   posterTileRing: {
+    shadowColor: Colors.brand,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.35,
     shadowRadius: 6,
@@ -1501,6 +1532,7 @@ const styles = StyleSheet.create({
   },
   posterTileSeen: {
     borderWidth: 0.5,
+    borderColor: Colors.border,
   },
   posterImage: {
     width: '100%',
@@ -1543,6 +1575,7 @@ const styles = StyleSheet.create({
     height: 152,
     borderRadius: 12,
     marginBottom: 5,
+    backgroundColor: Colors.textPrimary,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
@@ -1556,6 +1589,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   posterCreateLabel: {
+    color: Colors.background,
     fontSize: 10,
     fontFamily: Typography.family.semibold,
     textAlign: 'center',
@@ -1646,6 +1680,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 6,
     left: 6,
+    backgroundColor: Colors.brand,
     borderRadius: 8,
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -1663,16 +1698,19 @@ const styles = StyleSheet.create({
   posterUserName: {
     fontSize: 9,
     fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
   },
   posterFreshMeta: {
     fontSize: 10,
     fontFamily: Typography.family.bold,
+    color: Colors.brand,
     letterSpacing: 0.3,
     textTransform: 'uppercase',
   },
   posterSeenMeta: {
     fontSize: 10,
     fontFamily: Typography.family.medium,
+    color: Colors.textMuted,
     letterSpacing: 0.3,
     textTransform: 'uppercase',
   },
@@ -1690,6 +1728,7 @@ const styles = StyleSheet.create({
   exploreItemBox: {
     borderRadius: Radius.md,
     overflow: 'hidden',
+    backgroundColor: Colors.surfaceAlt,
     // Pinterest feel: no border, no shadow — image is the card
   },
   exploreMediaWrap: {
@@ -1736,6 +1775,8 @@ const styles = StyleSheet.create({
     minHeight: 28,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceAlt,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -1758,9 +1799,11 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: Colors.surfaceAlt,
   },
   exploreSellerText: {
     flex: 1,
+    color: Colors.textSecondary,
     fontSize: 11,
     fontFamily: Typography.family.semibold,
     letterSpacing: 0.1,
@@ -1770,6 +1813,8 @@ const styles = StyleSheet.create({
     height: 28,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
     ...Elevation.subtle, // ELEVATED: Use design system
@@ -1813,10 +1858,13 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     overflow: 'hidden',
     borderWidth: 0.5,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceAlt,
   },
   peekMediaWrap: {
     width: '100%',
     height: 340,
+    backgroundColor: Colors.surfaceAlt,
   },
   peekMedia: {
     width: '100%',
@@ -1829,12 +1877,14 @@ const styles = StyleSheet.create({
   peekTitle: {
     fontSize: 19,
     fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
     letterSpacing: -0.2,
   },
   peekSubtitle: {
     marginTop: 4,
     fontSize: 13,
     fontFamily: Typography.family.regular,
+    color: Colors.textSecondary,
   },
   peekActionsRow: {
     marginTop: 14,
@@ -1850,6 +1900,7 @@ const styles = StyleSheet.create({
   peekGhostText: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
   },
   peekPrimaryBtn: {
     flex: 1,
@@ -1866,5 +1917,6 @@ const styles = StyleSheet.create({
   peekPrimaryText: {
     fontSize: 13,
     fontFamily: Typography.family.bold,
+    color: Colors.background,
   },
 });

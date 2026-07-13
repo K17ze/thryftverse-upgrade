@@ -1,6 +1,7 @@
 import React from 'react';
 import { Linking, View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Colors } from '../constants/colors';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { StackScreenProps } from '@react-navigation/stack';
@@ -191,8 +192,8 @@ export default function SettingsScreen({ navigation }: Props) {
 
   // Security badges for identity card
   const securityBadges: { icon: string; label: string; color: string }[] = [];
-  if (twoFactorEnabled) securityBadges.push({ icon: 'shield-checkmark', label: '2FA', color: colors.success });
-  if (currentUser?.emailVerified) securityBadges.push({ icon: 'checkmark-circle', label: 'Verified', color: colors.success });
+  if (twoFactorEnabled) securityBadges.push({ icon: 'shield-checkmark', label: '2FA', color: Colors.success });
+  if (currentUser?.emailVerified) securityBadges.push({ icon: 'checkmark-circle', label: 'Verified', color: Colors.success });
 
   const notificationSummary = `${pushEnabledCount}/${pushTotalCount} categories`;
 
@@ -281,7 +282,7 @@ export default function SettingsScreen({ navigation }: Props) {
               {avatarUri ? (
                 <CachedImage uri={avatarUri} style={styles.identityAvatarImage} contentFit="cover" />
               ) : (
-                <Text style={[styles.identityAvatarText, { color: colors.textPrimary }]}>{displayName.charAt(0).toUpperCase()}</Text>
+                <Text style={styles.identityAvatarText}>{displayName.charAt(0).toUpperCase()}</Text>
               )}
             </View>
             <View style={styles.identityHeroText}>
@@ -315,7 +316,7 @@ export default function SettingsScreen({ navigation }: Props) {
       <SettingsSection title="Account">
         <SettingsRow
           icon="shield-checkmark-outline"
-          iconColor={currentUser?.emailVerified ? colors.success : colors.textMuted}
+          iconColor={currentUser?.emailVerified ? Colors.success : Colors.textMuted}
           title="Verification"
           subtitle={currentUser?.emailVerified ? 'Verified' : 'Get the verified badge'}
           onPress={() => navigation.navigate('Verification')}
@@ -570,6 +571,7 @@ const styles = StyleSheet.create({
   identityAvatarText: {
     fontSize: 22,
     fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
   },
   identityHeroText: {
     flex: 1,

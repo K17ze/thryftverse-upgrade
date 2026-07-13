@@ -11,7 +11,7 @@ import Reanimated, {
   Easing,
 } from 'react-native-reanimated';
 import { Colors } from '../constants/colors';
-import { Typography, Space } from '../theme/designTokens';
+import { Typography } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
 interface BrandedSplashProps {
@@ -87,7 +87,7 @@ const styles = StyleSheet.create({
   centerWrap: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: Space.lg,
+    paddingHorizontal: 24,
   },
   brandRow: {
     flexDirection: 'row',

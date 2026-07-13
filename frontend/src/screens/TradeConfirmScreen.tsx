@@ -20,7 +20,6 @@ import {
   CoOwnStickyActionDock,
   CoOwnRiskDisclosure,
 } from '../components/coown';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 
 type Props = StackScreenProps<RootStackParamList, 'TradeConfirm'>;
 
@@ -34,7 +33,6 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
   const currentUser = useStore((state) => state.currentUser);
-  const reducedMotionEnabled = useReducedMotion();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -111,7 +109,7 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
         ]}
       >
         {/* Trade receipt — product identity, order details, totals */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(40)}>
+        <Reanimated.View entering={FadeInDown.duration(300).delay(40)}>
           <CoOwnTradeReceipt
             imageUri={assetImageUrl}
             title={assetTitle ?? 'Co-Own asset'}
@@ -130,7 +128,7 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
         </Reanimated.View>
 
         {/* Risk disclosure */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)} style={styles.riskWrap}>
+        <Reanimated.View entering={FadeInDown.duration(300).delay(120)} style={styles.riskWrap}>
           <CoOwnRiskDisclosure />
         </Reanimated.View>
       </ScrollView>

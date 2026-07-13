@@ -5,7 +5,7 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
-import { useAppTheme } from '../theme/ThemeContext';
+import { Colors } from '../constants/colors';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { FlagshipScreen, FlagshipHeader, FlagshipEmptyGraphic } from '../components/flagship';
@@ -15,7 +15,6 @@ type NavT = StackNavigationProp<RootStackParamList>;
 
 export default function MutedConversationsScreen() {
   const navigation = useNavigation<NavT>();
-  const { colors, isDark } = useAppTheme();
   const conversations = useStore((s) => s.conversations);
   const mutedIds = useStore((s) => s.mutedConversationIds);
   const toggleMuted = useStore((s) => s.toggleMutedConversation);
@@ -50,10 +49,10 @@ export default function MutedConversationsScreen() {
       {mutedConversations.length === 0 ? (
         <View style={{ alignItems: 'center', paddingVertical: Space.xl * 2 }}>
           <FlagshipEmptyGraphic variant="box" size={120} />
-          <Text style={{ fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: colors.textPrimary, marginTop: Space.lg }}>
+          <Text style={{ fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginTop: Space.lg }}>
             No muted conversations
           </Text>
-          <Text style={{ fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textSecondary, textAlign: 'center', marginTop: Space.xs, paddingHorizontal: Space.lg }}>
+          <Text style={{ fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: Colors.textSecondary, textAlign: 'center', marginTop: Space.xs, paddingHorizontal: Space.lg }}>
             Muted conversations will appear here. You can unmute them at any time.
           </Text>
         </View>
@@ -62,8 +61,8 @@ export default function MutedConversationsScreen() {
           {mutedConversations.map((convo, index) => (
             <View key={convo.id}>
               <View style={styles.row}>
-                <View style={[styles.avatarFallback, { backgroundColor: colors.surfaceAlt }]}>
-                  <Ionicons name="person-outline" size={16} color={colors.textMuted} />
+                <View style={[styles.avatarFallback, { backgroundColor: Colors.surfaceAlt }]}>
+                  <Ionicons name="person-outline" size={16} color={Colors.textMuted} />
                 </View>
                 <View style={styles.rowText}>
                   <Text style={styles.rowTitle} numberOfLines={1}>
@@ -80,8 +79,8 @@ export default function MutedConversationsScreen() {
                   accessibilityLabel={`Unmute ${getDisplayTitle(convo)}`}
                   accessibilityRole="button"
                 >
-                  <View style={[styles.unmuteBtn, { backgroundColor: `${colors.brand}15` }]}>
-                    <Ionicons name="volume-high-outline" size={14} color={colors.brand} />
+                  <View style={styles.unmuteBtn}>
+                    <Ionicons name="volume-high-outline" size={14} color={Colors.brand} />
                     <Text style={styles.unmuteText}>Unmute</Text>
                   </View>
                 </AnimatedPressable>
@@ -122,11 +121,13 @@ const styles = StyleSheet.create({
   rowTitle: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
     letterSpacing: Type.body.letterSpacing,
   },
   rowPreview: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
     marginTop: 2,
     letterSpacing: Type.caption.letterSpacing,
   },
@@ -137,14 +138,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm + 4,
     paddingVertical: Space.xs + 2,
     borderRadius: Radius.md,
+    backgroundColor: `${Colors.brand}15`,
   },
   unmuteText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
+    color: Colors.brand,
     letterSpacing: Type.caption.letterSpacing,
   },
   listDivider: {
     height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.border,
     marginLeft: 40 + Space.sm + 4 + Space.md,
   },
 });

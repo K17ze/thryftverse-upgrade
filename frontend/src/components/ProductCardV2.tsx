@@ -6,7 +6,7 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAppTheme } from '../theme/ThemeContext';
+import { Colors } from '../constants/colors';
 import { Space, Radius } from '../theme/designTokens';
 import { T, Price } from './ui/Text';
 import { AnimatedPressable } from './AnimatedPressable';
@@ -61,7 +61,6 @@ export function ProductCardV2({
   const haptic = useHaptic();
   const { formatFromFiat } = useFormattedPrice();
   const reducedMotionEnabled = useReducedMotion();
-  const { colors } = useAppTheme();
 
   const [imageFailed, setImageFailed] = useState(false);
   const aspectRatio = mediaAspectRatio ?? resolveListingMediaAspectRatio(item);
@@ -73,6 +72,8 @@ export function ProductCardV2({
   const hasVideo = usableImages.some((uri) => isVideoUri(uri));
   const hasMultiple = usableImages.length > 1;
   const showPlaceholder = !hasUsableImage || imageFailed;
+  const sellerUsername = item.seller?.username ?? null;
+  const sellerAvatar = item.seller?.avatar ?? null;
 
   const handleToggleFav = () => {
     toggleFav(item.id);
@@ -97,7 +98,7 @@ export function ProductCardV2({
       {/* Image - Full bleed, subtle radius for modern feel */}
       <AnimatedPressable
         onPress={onPress}
-        style={[styles.imageWrap, { backgroundColor: colors.surfaceAlt }]}
+        style={styles.imageWrap}
         {...PressPresets.card}
         accessibilityRole="button"
         accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}`}
@@ -124,7 +125,7 @@ export function ProductCardV2({
         {/* Sold overlay */}
         {item.isSold && (
           <View style={styles.soldOverlay}>
-            <Text style={[styles.soldText, { color: colors.textPrimary }]}>SOLD</Text>
+            <Text style={styles.soldText}>SOLD</Text>
           </View>
         )}
 
@@ -160,12 +161,12 @@ export function ProductCardV2({
               style={styles.saveBtn}
               onPress={handleToggleSave}
               {...PressPresets.iconButton}
-              hitSlop={8}
+              hitSlop={6}
               accessibilityRole="button"
               accessibilityLabel={isSaved ? 'Remove from saved' : 'Save product'}
               accessibilityHint="Toggles this product in your saved page"
             >
-              <Ionicons name={isSaved ? 'bookmark' : 'bookmark-outline'} size={18} color={isSaved ? colors.brand : '#FFFFFF'} />
+              <Ionicons name={isSaved ? 'bookmark' : 'bookmark-outline'} size={18} color={isSaved ? Colors.brand : '#FFFFFF'} />
             </AnimatedPressable>
           ) : null}
           <View style={styles.favBtn}>
@@ -173,31 +174,50 @@ export function ProductCardV2({
               isActive={isFav}
               onToggle={handleToggleFav}
               size={20}
-              activeColor={colors.danger}
+              activeColor={Colors.danger}
               inactiveColor="#FFFFFF"
             />
           </View>
         </View>
       </AnimatedPressable>
 
-      {/* Info — one-line identity + price per Design.md 8.2 discovery card */}
+      {/* Info - Clean hierarchy */}
       {!visualOnly && (
         <View style={styles.info}>
-          <T.Caption
-            color={colors.textSecondary}
-            numberOfLines={1}
-            style={styles.title}
-          >
-            {item.title}
-          </T.Caption>
           <View style={styles.priceRow}>
             <View style={styles.priceWrap}>
-              <Price amount={item.price} color={colors.textPrimary} />
+              <Price amount={item.price} />
               {hasPriceDrop && (
-                <Text style={[styles.originalPrice, { color: colors.textMuted }]}>{formatFromFiat(item.originalPrice!, 'GBP', { displayMode: 'fiat' })}</Text>
+                <Text style={styles.originalPrice}>{formatFromFiat(item.originalPrice!, 'GBP', { displayMode: 'fiat' })}</Text>
               )}
             </View>
+            {item.likes > 0 ? (
+              <View style={styles.likes}>
+                <Ionicons name="heart" size={9} color={Colors.textMuted} />
+                <T.Caption style={styles.likesText}>{item.likes}</T.Caption>
+              </View>
+            ) : null}
           </View>
+
+          {item.size ? <T.Caption numberOfLines={1} style={{ marginTop: 1 }}>{item.size}</T.Caption> : null}
+          {sellerUsername ? (
+            <View style={styles.sellerRow}>
+              {sellerAvatar ? (
+                <CachedImage
+                  uri={sellerAvatar}
+                  style={styles.sellerAvatar}
+                  contentFit="cover"
+                />
+              ) : (
+                // Premium compact seller placeholder — keeps alignment and
+                // avoids awkward whitespace when avatar is missing.
+                <View style={styles.sellerAvatarPlaceholder}>
+                  <Ionicons name="person" size={9} color={Colors.textMuted} />
+                </View>
+              )}
+              <Text style={styles.sellerName} numberOfLines={1}>@{sellerUsername}</Text>
+            </View>
+          ) : null}
         </View>
       )}
     </View>
@@ -286,6 +306,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'hidden',
     borderRadius: Radius.lg,
+    backgroundColor: Colors.surfaceAlt,
   },
   image: {
     width: '100%',
@@ -301,6 +322,7 @@ const styles = StyleSheet.create({
   soldText: {
     fontSize: 13,
     fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
     letterSpacing: 1.5,
     textTransform: 'uppercase',
   },
@@ -316,16 +338,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   favBtn: {
-    width: 44,
-    height: 44,
+    width: 36,
+    height: 36,
     borderRadius: Radius.full,
     backgroundColor: 'rgba(0,0,0,0.32)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   saveBtn: {
-    width: 44,
-    height: 44,
+    width: 36,
+    height: 36,
     borderRadius: Radius.full,
     backgroundColor: 'rgba(0,0,0,0.32)',
     alignItems: 'center',
@@ -340,14 +362,11 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
 
-  // Info — discovery card: title + price only
+  // Info - Clean hierarchy
   info: {
     paddingTop: Space.sm,
     paddingHorizontal: Space.xs,
-    gap: 2,
-  },
-  title: {
-    lineHeight: 16,
+    gap: 3,
   },
   priceRow: {
     flexDirection: 'row',
@@ -362,7 +381,44 @@ const styles = StyleSheet.create({
   originalPrice: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
     textDecorationLine: 'line-through',
+  },
+  likes: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  likesText: {
+    fontSize: 11,
+    lineHeight: 14,
+  },
+  sellerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  sellerAvatar: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+  },
+  sellerAvatarPlaceholder: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sellerName: {
+    fontSize: 11,
+    fontFamily: Typography.family.medium,
+    color: Colors.textSecondary,
+    flex: 1,
   },
   // Condition & price-drop badges
   conditionBadge: {

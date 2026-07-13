@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useAppTheme } from '../theme/ThemeContext';
+import { Colors, ActiveTheme } from '../constants/colors';
 import { Typography } from '../theme/designTokens';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -15,19 +15,19 @@ interface Props {
   style?: object;
 }
 
-const LIGHT_GRADIENT_PAIRS: [string, string][] = [
-  ['#F5F0EB', '#EDE8E1'],
-  ['#EAE5DE', '#E2DDD6'],
-  ['#F0EBE6', '#E8E3DC'],
-  ['#EDE8E1', '#E5E0D9'],
-];
-
-const DARK_GRADIENT_PAIRS: [string, string][] = [
-  ['#1A1A1A', '#141414'],
-  ['#1F1F1F', '#181818'],
-  ['#1C1C1C', '#161616'],
-  ['#222222', '#1B1B1B'],
-];
+const GRADIENT_PAIRS: [string, string][] = ActiveTheme === 'light'
+  ? [
+    ['#F5F0EB', '#EDE8E1'],
+    ['#EAE5DE', '#E2DDD6'],
+    ['#F0EBE6', '#E8E3DC'],
+    ['#EDE8E1', '#E5E0D9'],
+  ]
+  : [
+    ['#1A1A1A', '#141414'],
+    ['#1F1F1F', '#181818'],
+    ['#1C1C1C', '#161616'],
+    ['#222222', '#1B1B1B'],
+  ];
 
 export function ImageEmptyGraphic({
   label,
@@ -36,17 +36,8 @@ export function ImageEmptyGraphic({
   height: h,
   style,
 }: Props) {
-  const { isDark } = useAppTheme();
-  const gradientPairs = isDark ? DARK_GRADIENT_PAIRS : LIGHT_GRADIENT_PAIRS;
-  const pairIndex = (label?.length ?? 0) % gradientPairs.length;
-  const [gradStart, gradEnd] = gradientPairs[pairIndex];
-
-  const stripeColor = isDark ? 'rgba(255,255,255,0.025)' : 'rgba(0,0,0,0.03)';
-  const iconColor = isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.18)';
-  const iconRingBg = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)';
-  const iconRingBorder = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
-  const labelBg = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)';
-  const labelColor = isDark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.35)';
+  const pairIndex = (label?.length ?? 0) % GRADIENT_PAIRS.length;
+  const [gradStart, gradEnd] = GRADIENT_PAIRS[pairIndex];
 
   return (
     <View
@@ -73,7 +64,10 @@ export function ImageEmptyGraphic({
               styles.stripe,
               {
                 left: `${i * 22}%`,
-                backgroundColor: stripeColor,
+                backgroundColor:
+                  ActiveTheme === 'light'
+                    ? 'rgba(0,0,0,0.03)'
+                    : 'rgba(255,255,255,0.025)',
               },
             ]}
           />
@@ -82,16 +76,16 @@ export function ImageEmptyGraphic({
 
       {/* Center content */}
       <View style={styles.center}>
-        <View style={[styles.iconRing, { backgroundColor: iconRingBg, borderColor: iconRingBorder }]}>
+        <View style={styles.iconRing}>
           <Ionicons
             name={icon}
             size={22}
-            color={iconColor}
+            color={ActiveTheme === 'light' ? 'rgba(0,0,0,0.18)' : 'rgba(255,255,255,0.2)'}
           />
         </View>
         {label ? (
-          <View style={[styles.labelWrap, { backgroundColor: labelBg }]}>
-            <Text style={[styles.label, { color: labelColor }]}>{label}</Text>
+          <View style={styles.labelWrap}>
+            <Text style={styles.label}>{label}</Text>
           </View>
         ) : null}
       </View>
@@ -128,16 +122,23 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor:
+      ActiveTheme === 'light' ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.05)',
     borderWidth: 1,
+    borderColor:
+      ActiveTheme === 'light' ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)',
   },
   labelWrap: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 4,
+    backgroundColor:
+      ActiveTheme === 'light' ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.04)',
   },
   label: {
     fontFamily: Typography.family.medium,
     fontSize: 11,
+    color: ActiveTheme === 'light' ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.35)',
     letterSpacing: 0.3,
     textTransform: 'uppercase',
   },

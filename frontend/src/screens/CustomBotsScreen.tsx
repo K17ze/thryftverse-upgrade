@@ -14,6 +14,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme } from '../theme/ThemeContext';
+import { Colors } from '../constants/colors';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -23,7 +24,7 @@ import { Caption, BodyEmphasis, Meta } from '../components/ui/Text';
 type Props = StackScreenProps<RootStackParamList, 'CustomBots'>;
 
 export default function CustomBotsScreen({ navigation }: Props) {
-  const { colors, isDark } = useAppTheme();
+  const { isDark } = useAppTheme();
   const { show } = useToast();
   const haptic = useHaptic();
 
@@ -90,7 +91,7 @@ export default function CustomBotsScreen({ navigation }: Props) {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <ScreenHeader
         title="My Bots"
@@ -104,8 +105,8 @@ export default function CustomBotsScreen({ navigation }: Props) {
             accessibilityRole="button"
             accessibilityLabel="Create bot"
           >
-            <View style={[styles.createBtn, { backgroundColor: colors.surfaceAlt }]}>
-              <Ionicons name="add" size={22} color={colors.textPrimary} />
+            <View style={styles.createBtn}>
+              <Ionicons name="add" size={22} color={Colors.textPrimary} />
             </View>
           </AnimatedPressable>
         }
@@ -113,9 +114,9 @@ export default function CustomBotsScreen({ navigation }: Props) {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         {/* Info banner */}
-        <View style={[styles.infoBanner, { backgroundColor: colors.surfaceAlt }]}>
-          <Ionicons name="information-circle-outline" size={18} color={colors.textMuted} />
-          <Caption color={colors.textMuted} style={styles.infoText}>
+        <View style={styles.infoBanner}>
+          <Ionicons name="information-circle-outline" size={18} color={Colors.textMuted} />
+          <Caption color={Colors.textMuted} style={styles.infoText}>
             Custom bots are saved locally. They cannot execute AI logic until a backend bot runtime is connected.
           </Caption>
         </View>
@@ -176,8 +177,8 @@ export default function CustomBotsScreen({ navigation }: Props) {
 
         {customBots.length === 0 && (
           <View style={styles.empty}>
-            <Ionicons name="hardware-chip-outline" size={40} color={colors.textMuted} />
-            <Caption color={colors.textMuted} style={styles.emptyText}>
+            <Ionicons name="hardware-chip-outline" size={40} color={Colors.textMuted} />
+            <Caption color={Colors.textMuted} style={styles.emptyText}>
               You have not created any custom bots yet.
             </Caption>
             <AnimatedPressable
@@ -185,9 +186,9 @@ export default function CustomBotsScreen({ navigation }: Props) {
               activeOpacity={0.7}
               scaleValue={0.98}
               hapticFeedback="light"
-              style={[styles.createEmptyBtn, { backgroundColor: colors.brand }]}
+              style={styles.createEmptyBtn}
             >
-              <Text style={[styles.createEmptyBtnText, { color: colors.textInverse }]}>Create your first bot</Text>
+              <Text style={styles.createEmptyBtnText}>Create your first bot</Text>
             </AnimatedPressable>
           </View>
         )}
@@ -197,13 +198,12 @@ export default function CustomBotsScreen({ navigation }: Props) {
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  const { colors } = useAppTheme();
   return (
     <View style={styles.section}>
-      <Meta color={colors.textMuted} style={styles.sectionLabel}>
+      <Meta color={Colors.textMuted} style={styles.sectionLabel}>
         {title}
       </Meta>
-      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>{children}</View>
+      <View style={styles.card}>{children}</View>
     </View>
   );
 }
@@ -225,7 +225,6 @@ function BotRow({
   onDelete: () => void;
   onView: () => void;
 }) {
-  const { colors } = useAppTheme();
   return (
     <AnimatedPressable
       onPress={onView}
@@ -236,7 +235,7 @@ function BotRow({
       accessibilityLabel={`View ${bot.name}`}
     >
       <View style={styles.row}>
-        <View style={[styles.iconWrap, { backgroundColor: colors.surfaceAlt }]}>
+        <View style={[styles.iconWrap, { backgroundColor: Colors.surfaceAlt }]}>
           <Ionicons
             name={
               bot.category === 'moderation'
@@ -248,13 +247,13 @@ function BotRow({
                 : 'flash-outline'
             }
             size={20}
-            color={colors.textPrimary}
+            color={Colors.textPrimary}
           />
         </View>
 
         <View style={styles.botText}>
           <BodyEmphasis numberOfLines={1}>{bot.name}</BodyEmphasis>
-          <Caption color={colors.textMuted} numberOfLines={1}>
+          <Caption color={Colors.textMuted} numberOfLines={1}>
             {bot.isDraft ? 'Draft' : `${deploymentCount} group${deploymentCount !== 1 ? 's' : ''}`}
           </Caption>
         </View>
@@ -271,7 +270,7 @@ function BotRow({
             <Ionicons
               name={enabled ? 'toggle' : 'toggle-outline'}
               size={26}
-              color={enabled ? colors.brand : colors.textMuted}
+              color={enabled ? Colors.brand : Colors.textMuted}
             />
           </AnimatedPressable>
 
@@ -283,7 +282,7 @@ function BotRow({
             accessibilityRole="button"
             accessibilityLabel="Edit bot"
           >
-            <Ionicons name="create-outline" size={20} color={colors.textSecondary} />
+            <Ionicons name="create-outline" size={20} color={Colors.textSecondary} />
           </AnimatedPressable>
 
           <AnimatedPressable
@@ -294,7 +293,7 @@ function BotRow({
             accessibilityRole="button"
             accessibilityLabel="Delete bot"
           >
-            <Ionicons name="trash-outline" size={20} color={colors.danger} />
+            <Ionicons name="trash-outline" size={20} color={Colors.danger} />
           </AnimatedPressable>
         </View>
       </View>
@@ -305,6 +304,7 @@ function BotRow({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: Colors.background,
   },
   content: {
     paddingHorizontal: Space.md,
@@ -315,6 +315,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: Radius.md,
+    backgroundColor: Colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -323,6 +324,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: Space.sm,
     padding: Space.md,
+    backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.lg,
   },
   infoText: {
@@ -338,8 +340,10 @@ const styles = StyleSheet.create({
     marginLeft: Space.xs,
   },
   card: {
+    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
     overflow: 'hidden',
     gap: 1,
   },
@@ -376,11 +380,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   createEmptyBtn: {
+    backgroundColor: Colors.brand,
     paddingHorizontal: Space.md,
     paddingVertical: 12,
     borderRadius: Radius.lg,
   },
   createEmptyBtnText: {
+    color: Colors.textInverse,
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
   },

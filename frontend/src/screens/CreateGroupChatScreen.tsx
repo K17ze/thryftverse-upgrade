@@ -12,7 +12,7 @@ import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAppTheme } from '../theme/ThemeContext';
+import { Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
@@ -54,7 +54,6 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
   const upsertConversation = useStore((state) => state.upsertConversation);
   const isBlockedUser = useStore((state) => state.isBlockedUser);
   const { show } = useToast();
-  const { colors, isDark } = useAppTheme();
   const haptic = useHaptic();
   const insets = useSafeAreaInsets();
 
@@ -239,9 +238,9 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
 
         <View style={[styles.checkCircle, selected && styles.checkCircleActive]}>
           {selected ? (
-            <Ionicons name="checkmark" size={18} color={colors.textInverse} />
+            <Ionicons name="checkmark" size={18} color={Colors.textInverse} />
           ) : (
-            <Ionicons name="ellipse-outline" size={22} color={colors.textMuted} />
+            <Ionicons name="ellipse-outline" size={22} color={Colors.textMuted} />
           )}
         </View>
       </Pressable>
@@ -259,7 +258,7 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
             <>
               {createError ? (
                 <View style={styles.createErrorBanner}>
-                  <Ionicons name="alert-circle" size={16} color={colors.danger} />
+                  <Ionicons name="alert-circle" size={16} color={Colors.danger} />
                   <Text style={styles.createErrorText}>{createError}</Text>
                   <Pressable onPress={handleRetryCreate} hitSlop={8}>
                     <Text style={styles.retryText}>Retry</Text>
@@ -284,9 +283,9 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
         >
           <View style={styles.avatarSelectorWrap}>
             <View style={styles.avatarSelector}>
-              <Ionicons name="camera-outline" size={28} color={colors.textMuted} />
+              <Ionicons name="camera-outline" size={28} color={Colors.textMuted} />
             </View>
-            <Caption color={colors.textMuted} style={styles.avatarHint}>Group photo</Caption>
+            <Caption color={Colors.textMuted} style={styles.avatarHint}>Group photo</Caption>
           </View>
 
           <View style={styles.fieldGroup}>
@@ -295,7 +294,7 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
               value={title}
               onChangeText={(t) => { setTitle(t); setCreateError(''); }}
               placeholder="Group name"
-              placeholderTextColor={colors.textMuted}
+              placeholderTextColor={Colors.textMuted}
               maxLength={80}
               inputContainerStyle={styles.fieldInputWrap}
               inputStyle={styles.fieldInput}
@@ -310,7 +309,7 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
               value={description}
               onChangeText={(t) => { setDescription(t); setCreateError(''); }}
               placeholder="What's this group about?"
-              placeholderTextColor={colors.textMuted}
+              placeholderTextColor={Colors.textMuted}
               maxLength={280}
               multiline
               inputContainerStyle={styles.fieldInputWrapMultiline}
@@ -354,12 +353,12 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
     <FlagshipScreen header={<FlagshipHeader title="New group" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
       <View style={styles.selectRoot}>
         <View style={styles.searchRow}>
-          <Ionicons name="search-outline" size={18} color={colors.textMuted} />
+          <Ionicons name="search-outline" size={18} color={Colors.textMuted} />
           <AppInput
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder="Search by username..."
-            placeholderTextColor={colors.textMuted}
+            placeholderTextColor={Colors.textMuted}
             autoCapitalize="none"
             autoCorrect={false}
             inputContainerStyle={styles.searchInputWrap}
@@ -376,7 +375,7 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
               accessibilityLabel="Clear search"
               accessibilityRole="button"
             >
-              <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+              <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
             </AnimatedPressable>
           )}
         </View>
@@ -403,7 +402,7 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
                     </View>
                   )}
                   <Text style={styles.selectedChipText} numberOfLines={1}>{displayName}</Text>
-                  <Ionicons name="close-circle" size={14} color={colors.textMuted} />
+                  <Ionicons name="close-circle" size={14} color={Colors.textMuted} />
                 </Pressable>
               );
             })}
@@ -413,7 +412,7 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
 
       {searchError ? (
         <View style={styles.searchErrorBanner}>
-          <Ionicons name="alert-circle-outline" size={16} color={colors.danger} />
+          <Ionicons name="alert-circle-outline" size={16} color={Colors.danger} />
           <Text style={styles.searchErrorText}>{searchError}</Text>
           <Pressable
             onPress={() => void performSearch(searchQuery)}
@@ -428,8 +427,8 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
 
       {!searchQuery.trim() ? (
         <View style={styles.emptyWrap}>
-          <Ionicons name="search-outline" size={32} color={colors.textMuted} />
-          <Caption color={colors.textMuted} style={styles.emptyText}>
+          <Ionicons name="search-outline" size={32} color={Colors.textMuted} />
+          <Caption color={Colors.textMuted} style={styles.emptyText}>
             Search by username to add members to your group.
           </Caption>
         </View>
@@ -447,8 +446,8 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
         </View>
       ) : filteredResults.length === 0 ? (
         <View style={styles.emptyWrap}>
-          <Ionicons name="people-outline" size={32} color={colors.textMuted} />
-          <Caption color={colors.textMuted} style={styles.emptyText}>
+          <Ionicons name="people-outline" size={32} color={Colors.textMuted} />
+          <Caption color={Colors.textMuted} style={styles.emptyText}>
             {hasSearched && !searchError ? 'No users match your search.' : 'Type at least 2 characters to search.'}
           </Caption>
         </View>
@@ -501,6 +500,7 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     fontSize: Type.body.size,
+    color: Colors.textPrimary,
     paddingVertical: 0,
   },
   selectedRail: {
@@ -514,10 +514,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.full,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
   },
   selectedChipAvatar: {
     width: 20,
@@ -528,15 +530,18 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: Radius.full,
+    backgroundColor: Colors.border,
     justifyContent: 'center',
     alignItems: 'center',
   },
   selectedChipAvatarText: {
     fontSize: 10,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    color: Colors.textPrimary,
   },
   selectedChipText: {
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    color: Colors.textPrimary,
   },
   searchErrorBanner: {
     flexDirection: 'row',
@@ -544,12 +549,14 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
+    backgroundColor: `${Colors.danger}10`,
     borderRadius: Radius.md,
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
   },
   searchErrorText: {
     flex: 1,
+    color: Colors.danger,
     fontSize: Type.caption.size,
   },
   memberList: {
@@ -564,6 +571,7 @@ const styles = StyleSheet.create({
     minHeight: 56,
   },
   memberRowPressed: {
+    backgroundColor: Colors.surfaceAlt,
   },
   memberAvatar: {
     width: 44,
@@ -574,21 +582,25 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: Radius.full,
+    backgroundColor: Colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
   },
   memberAvatarText: {
     fontSize: Type.bodyEmphasis.size,
     fontFamily: TypeStyles.title.fontFamily,
+    color: Colors.textPrimary,
   },
   memberTextWrap: {
     flex: 1,
   },
   memberDisplayName: {
     fontSize: Type.body.size,
+    color: Colors.textPrimary,
   },
   memberUsername: {
     fontSize: Type.caption.size,
+    color: Colors.textMuted,
   },
   checkCircle: {
     width: 28,
@@ -597,6 +609,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   checkCircleActive: {
+    backgroundColor: Colors.brand,
     borderRadius: Radius.full,
   },
   listWrap: {
@@ -613,6 +626,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: Radius.full,
+    backgroundColor: Colors.surfaceAlt,
   },
   skeletonTextWrap: {
     flex: 1,
@@ -621,6 +635,7 @@ const styles = StyleSheet.create({
   skeletonLine: {
     height: 12,
     borderRadius: Radius.sm,
+    backgroundColor: Colors.surfaceAlt,
   },
   skeletonLineShort: {
     width: '40%',
@@ -657,9 +672,11 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: Radius.full,
+    backgroundColor: Colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
   },
   avatarHint: {
     fontSize: Type.caption.size,
@@ -669,30 +686,38 @@ const styles = StyleSheet.create({
   },
   fieldLabel: {
     fontSize: Type.bodyEmphasis.size,
+    color: Colors.textPrimary,
     marginBottom: Space.xs + 2,
   },
   fieldInputWrap: {
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
     borderRadius: Radius.md,
     minHeight: 48,
     paddingHorizontal: Space.sm + 2,
   },
   fieldInput: {
     fontSize: Type.body.size,
+    color: Colors.textPrimary,
   },
   fieldInputWrapMultiline: {
     borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
     borderRadius: Radius.md,
     minHeight: 80,
     paddingHorizontal: Space.sm + 2,
   },
   fieldInputMultiline: {
     fontSize: Type.body.size,
+    color: Colors.textPrimary,
   },
   charCount: {
     textAlign: 'right',
     marginTop: 2,
     fontSize: Type.caption.size,
+    color: Colors.textMuted,
   },
   participantSection: {
     marginTop: Space.sm,
@@ -715,21 +740,25 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: Radius.full,
+    backgroundColor: Colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
   },
   participantAvatarText: {
     fontSize: Type.bodyEmphasis.size,
     fontFamily: TypeStyles.title.fontFamily,
+    color: Colors.textPrimary,
   },
   participantTextWrap: {
     flex: 1,
   },
   participantName: {
     fontSize: Type.body.size,
+    color: Colors.textPrimary,
   },
   participantHandle: {
     fontSize: Type.caption.size,
+    color: Colors.textMuted,
   },
 
   /* ── Shared ── */
@@ -739,15 +768,18 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
+    backgroundColor: `${Colors.danger}10`,
     borderRadius: Radius.md,
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
   },
   createErrorText: {
     flex: 1,
+    color: Colors.danger,
     fontSize: Type.caption.size,
   },
   retryText: {
+    color: Colors.brand,
     fontSize: Type.caption.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
   },

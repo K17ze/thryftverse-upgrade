@@ -11,14 +11,13 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { StackScreenProps } from '@react-navigation/stack';
-import { useAppTheme } from '../theme/ThemeContext';
+import { Colors } from '../constants/colors';
 import { Space, Radius, Type } from '../theme/designTokens';
 import { Typography } from '../theme/designTokens';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { parseApiError } from '../lib/apiClient';
 import {
   listUserAddresses,
@@ -49,14 +48,12 @@ function formatAddressDetail(address: CommerceAddress): string {
 }
 
 export default function SavedAddressesScreen({ navigation }: Props) {
-  const { colors } = useAppTheme();
   const currentUser = useStore((state) => state.currentUser);
   const savedAddress = useStore((state) => state.savedAddress);
   const saveAddress = useStore((state) => state.saveAddress);
   const clearSavedAddress = useStore((state) => state.clearSavedAddress);
   const { show } = useToast();
   const haptic = useHaptic();
-  const reducedMotionEnabled = useReducedMotion();
 
   const [addresses, setAddresses] = useState<CommerceAddress[]>([]);
   const [loadState, setLoadState] = useState<LoadState>('loading');
@@ -202,14 +199,14 @@ export default function SavedAddressesScreen({ navigation }: Props) {
     const isDeleting = deletingId === address.id;
     const detail = formatAddressDetail(address);
     return (
-      <Reanimated.View key={address.id} entering={reducedMotionEnabled ? undefined : FadeIn.duration(250).delay(Math.min(index, 8) * 40)}>
-        <View style={[styles.addressCard, { backgroundColor: colors.surface, borderColor: colors.border }, isDefault && { borderColor: colors.brand, borderWidth: 1.5 }]}>
+      <Reanimated.View key={address.id} entering={FadeIn.duration(250).delay(index * 40)}>
+        <View style={[styles.addressCard, { backgroundColor: Colors.surface, borderColor: Colors.border }, isDefault && { borderColor: Colors.brand, borderWidth: 1.5 }]}>
           <View style={styles.addressCardHeader}>
             <View style={styles.addressCardHeaderLeft}>
               {isDefault ? (
-                <View style={[styles.defaultBadge, { backgroundColor: `${colors.brand}15` }]}>
-                  <Ionicons name="star" size={11} color={colors.brand} />
-                  <Text style={[styles.defaultBadgeText, { color: colors.brand }]}>DEFAULT</Text>
+                <View style={[styles.defaultBadge, { backgroundColor: `${Colors.brand}15` }]}>
+                  <Ionicons name="star" size={11} color={Colors.brand} />
+                  <Text style={[styles.defaultBadgeText, { color: Colors.brand }]}>DEFAULT</Text>
                 </View>
               ) : null}
             </View>
@@ -222,7 +219,7 @@ export default function SavedAddressesScreen({ navigation }: Props) {
                 accessibilityRole="button"
                 accessibilityLabel={`Edit address for ${address.name}`}
               >
-                <Text style={[styles.editAction, { color: colors.brand }]}>Edit</Text>
+                <Text style={[styles.editAction, { color: Colors.brand }]}>Edit</Text>
               </AnimatedPressable>
               <AnimatedPressable
                 onPress={() => handleDelete(address)}
@@ -234,22 +231,22 @@ export default function SavedAddressesScreen({ navigation }: Props) {
                 accessibilityLabel={`Remove address for ${address.name}`}
               >
                 {isDeleting ? (
-                  <ActivityIndicator size="small" color={colors.danger} />
+                  <ActivityIndicator size="small" color={Colors.danger} />
                 ) : (
-                  <Ionicons name="trash-outline" size={18} color={colors.danger} />
+                  <Ionicons name="trash-outline" size={18} color={Colors.danger} />
                 )}
               </AnimatedPressable>
             </View>
           </View>
           <View style={styles.addressCardBody}>
-            <Text style={[styles.addressName, { color: colors.textPrimary }]} numberOfLines={1}>
+            <Text style={[styles.addressName, { color: Colors.textPrimary }]} numberOfLines={1}>
               {address.name}
             </Text>
-            <Text style={[styles.addressLine, { color: colors.textSecondary }]} numberOfLines={2}>
+            <Text style={[styles.addressLine, { color: Colors.textSecondary }]} numberOfLines={2}>
               {formatAddressLine(address)}
             </Text>
             {detail ? (
-              <Text style={[styles.addressDetail, { color: colors.textMuted }]} numberOfLines={1}>
+              <Text style={[styles.addressDetail, { color: Colors.textMuted }]} numberOfLines={1}>
                 {detail}
               </Text>
             ) : null}
@@ -275,11 +272,11 @@ export default function SavedAddressesScreen({ navigation }: Props) {
               onPress={handleAdd}
               scaleValue={0.92}
               hapticFeedback="light"
-              style={[styles.addBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
+              style={[styles.addBtn, { backgroundColor: Colors.surfaceAlt, borderColor: Colors.border }]}
               accessibilityRole="button"
               accessibilityLabel="Add new address"
             >
-              <Ionicons name="add" size={22} color={colors.textPrimary} />
+              <Ionicons name="add" size={22} color={Colors.textPrimary} />
             </AnimatedPressable>
           }
         />
@@ -295,19 +292,19 @@ export default function SavedAddressesScreen({ navigation }: Props) {
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={() => void fetchAddresses(true)}
-            tintColor={colors.textMuted}
+            tintColor={Colors.textMuted}
           />
         }
       >
         {loadState === 'loading' ? (
           <View style={styles.skeletonWrap}>
             {[0, 1].map((i) => (
-              <View key={i} style={[styles.skeletonCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <View style={[styles.skeletonLine, { width: '30%', backgroundColor: colors.surfaceAlt }]} />
+              <View key={i} style={[styles.skeletonCard, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
+                <View style={[styles.skeletonLine, { width: '30%', backgroundColor: Colors.surfaceAlt }]} />
                 <View style={{ height: 8 }} />
-                <View style={[styles.skeletonLine, { width: '90%', backgroundColor: colors.surfaceAlt }]} />
+                <View style={[styles.skeletonLine, { width: '90%', backgroundColor: Colors.surfaceAlt }]} />
                 <View style={{ height: 6 }} />
-                <View style={[styles.skeletonLine, { width: '60%', backgroundColor: colors.surfaceAlt }]} />
+                <View style={[styles.skeletonLine, { width: '60%', backgroundColor: Colors.surfaceAlt }]} />
               </View>
             ))}
           </View>
@@ -331,7 +328,7 @@ export default function SavedAddressesScreen({ navigation }: Props) {
         ) : (
           <View style={styles.listWrap}>
             {addresses.map((address, index) => renderAddressCard(address, index))}
-            <Text style={[styles.listFootnote, { color: colors.textMuted }]}>
+            <Text style={[styles.listFootnote, { color: Colors.textMuted }]}>
               Addresses are used at checkout and for delivery. The default address is selected automatically.
             </Text>
           </View>
