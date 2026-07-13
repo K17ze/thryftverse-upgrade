@@ -10,8 +10,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { ActiveTheme, Colors } from '../constants/colors';
 import { Confetti } from '../components/Confetti';
+import { useAppTheme } from '../theme/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { Typography } from '../theme/designTokens';
 import { FlagshipActionCluster } from '../components/flagship';
@@ -29,6 +29,7 @@ import { Elevation } from '../theme/designTokens';
 type RouteT = RouteProp<RootStackParamList, 'Success'>;
 
 export default function SuccessScreen() {
+  const { colors, isDark } = useAppTheme();
   const navigation = useNavigation<any>();
   const route = useRoute<RouteT>();
   const { orderId } = route.params;
@@ -78,19 +79,19 @@ export default function SuccessScreen() {
   const sellerName = order?.seller?.username ?? `Seller ${order?.sellerId?.slice(0, 8) ?? ''}`;
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       {!reducedMotionEnabled && <Confetti />}
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.centerContent}>
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400)} style={styles.iconCircle}>
-            <Ionicons name="checkmark" size={48} color={Colors.background} />
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400)} style={[styles.iconCircle, { backgroundColor: colors.success }]}>
+            <Ionicons name="checkmark" size={48} color={colors.background} />
           </Reanimated.View>
 
           <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(80)}>
-            <Text style={styles.title}>Payment Successful</Text>
-            <Text style={styles.subtitle}>
+            <Text style={[styles.title, { color: colors.textPrimary }]}>Payment Successful</Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
               Your order has been placed.{ '\n' }
               {isLoading
                 ? 'Fetching order details...'
@@ -103,7 +104,7 @@ export default function SuccessScreen() {
           {/* Order Context Card */}
           {!isLoading && !hasError && order && (
             <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(120)} style={styles.orderCardWrap}>
-              <ElevatedSurface variant="surface" style={styles.orderCard}>
+              <ElevatedSurface variant="surface" style={[styles.orderCard, { backgroundColor: colors.surfaceAlt }]}>
                 {order.listingImageUrl && (
                   <CachedImage
                     uri={getListingCoverUri([order.listingImageUrl], '')}
@@ -112,9 +113,9 @@ export default function SuccessScreen() {
                   />
                 )}
                 <View style={styles.orderInfo}>
-                  <Text style={styles.orderTitle} numberOfLines={2}>{order.listingTitle}</Text>
-                  <Text style={styles.orderSeller}>from @{sellerName}</Text>
-                  <Text style={styles.orderAmount}>{formatFromFiat(order.totalGbp, 'GBP')}</Text>
+                  <Text style={[styles.orderTitle, { color: colors.textPrimary }]} numberOfLines={2}>{order.listingTitle}</Text>
+                  <Text style={[styles.orderSeller, { color: colors.textSecondary }]}>from @{sellerName}</Text>
+                  <Text style={[styles.orderAmount, { color: colors.textPrimary }]}>{formatFromFiat(order.totalGbp, 'GBP')}</Text>
                 </View>
               </ElevatedSurface>
             </Reanimated.View>
@@ -123,7 +124,7 @@ export default function SuccessScreen() {
           {/* What happens next — timeline */}
           {!isLoading && !hasError && order && (
             <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(160)} style={styles.timelineWrap}>
-              <Text style={styles.timelineTitle}>What happens next?</Text>
+              <Text style={[styles.timelineTitle, { color: colors.textPrimary }]}>What happens next?</Text>
               <View style={styles.timeline}>
                 <TimelineStep
                   icon="checkmark-circle"
@@ -168,12 +169,12 @@ export default function SuccessScreen() {
               accessibilityRole="button"
               accessibilityLabel="Open order support"
             >
-              <View style={styles.supportIdentity}>
-                <View style={[styles.supportAvatarWrap, { backgroundColor: Colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }]}>
-                  <Ionicons name="help-circle-outline" size={20} color={Colors.textSecondary} />
+              <View style={[styles.supportIdentity, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+                <View style={[styles.supportAvatarWrap, { backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }]}>
+                  <Ionicons name="help-circle-outline" size={20} color={colors.textSecondary} />
                 </View>
-                <Text style={styles.supportText}>Need help with this order?</Text>
-                <Ionicons name="chevron-forward" size={14} color={Colors.textMuted} />
+                <Text style={[styles.supportText, { color: colors.textPrimary }]}>Need help with this order?</Text>
+                <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
               </View>
             </AnimatedPressable>
           </Reanimated.View>
@@ -210,27 +211,30 @@ function TimelineStep({
   isActive?: boolean;
   isLast?: boolean;
 }) {
-  const color = isComplete ? Colors.success : isActive ? Colors.brand : Colors.textMuted;
+  const { colors } = useAppTheme();
+  const color = isComplete ? colors.success : isActive ? colors.brand : colors.textMuted;
   return (
     <View style={timelineStyles.step}>
       <View style={timelineStyles.iconCol}>
         <View style={[
           timelineStyles.iconWrap,
-          isComplete && timelineStyles.iconWrapComplete,
-          isActive && timelineStyles.iconWrapActive,
+          { backgroundColor: colors.surfaceAlt },
+          isComplete && { backgroundColor: colors.success },
+          isActive && { backgroundColor: colors.brand },
         ]}>
-          <Ionicons name={icon as any} size={14} color={isComplete || isActive ? Colors.background : Colors.textMuted} />
+          <Ionicons name={icon as any} size={14} color={isComplete || isActive ? colors.background : colors.textMuted} />
         </View>
         {!isLast && <View style={[
           timelineStyles.connector,
-          isComplete && timelineStyles.connectorComplete,
+          { backgroundColor: colors.border },
+          isComplete && { backgroundColor: colors.success },
         ]} />}
       </View>
       <View style={timelineStyles.textCol}>
-        <Text style={[timelineStyles.label, { color: isComplete || isActive ? Colors.textPrimary : Colors.textMuted }]}>
+        <Text style={[timelineStyles.label, { color: isComplete || isActive ? colors.textPrimary : colors.textMuted }]}>
           {label}
         </Text>
-        <Text style={timelineStyles.detail}>{detail}</Text>
+        <Text style={[timelineStyles.detail, { color: colors.textMuted }]}>{detail}</Text>
       </View>
     </View>
   );
@@ -249,25 +253,14 @@ const timelineStyles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  iconWrapComplete: {
-    backgroundColor: Colors.success,
-  },
-  iconWrapActive: {
-    backgroundColor: Colors.brand,
   },
   connector: {
     width: 2,
     flex: 1,
-    backgroundColor: Colors.border,
     marginTop: 4,
     minHeight: 20,
-  },
-  connectorComplete: {
-    backgroundColor: Colors.success,
   },
   textCol: {
     flex: 1,
@@ -281,24 +274,22 @@ const timelineStyles = StyleSheet.create({
   detail: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     lineHeight: 16,
   },
 });
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1 },
   scrollContent: { flexGrow: 1, paddingHorizontal: 24 },
   centerContent: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 40, paddingBottom: 20 },
   iconCircle: {
     width: 96, height: 96, borderRadius: 48,
-    backgroundColor: Colors.success,
     alignItems: 'center', justifyContent: 'center',
     marginBottom: 32,
   },
 
-  title: { fontSize: 28, fontFamily: Typography.family.bold, color: Colors.textPrimary, marginBottom: 12, textAlign: 'center' },
-  subtitle: { fontSize: 15, fontFamily: Typography.family.regular, color: Colors.textSecondary, textAlign: 'center', lineHeight: 22 },
+  title: { fontSize: 28, fontFamily: Typography.family.bold, marginBottom: 12, textAlign: 'center' },
+  subtitle: { fontSize: 15, fontFamily: Typography.family.regular, textAlign: 'center', lineHeight: 22 },
 
   orderCardWrap: { width: '100%', marginTop: 24 },
   orderCard: {
@@ -307,13 +298,12 @@ const styles = StyleSheet.create({
     gap: 12,
     padding: 12,
     borderRadius: Radius.lg,
-    backgroundColor: Colors.surfaceAlt,
   },
   orderImage: { width: 64, height: 64, borderRadius: Radius.md },
   orderInfo: { flex: 1, gap: 2 },
-  orderTitle: { fontSize: 15, fontFamily: Typography.family.semibold, color: Colors.textPrimary },
-  orderSeller: { fontSize: 13, fontFamily: Typography.family.regular, color: Colors.textSecondary },
-  orderAmount: { fontSize: 15, fontFamily: Typography.family.bold, color: Colors.textPrimary, marginTop: 2 },
+  orderTitle: { fontSize: 15, fontFamily: Typography.family.semibold },
+  orderSeller: { fontSize: 13, fontFamily: Typography.family.regular },
+  orderAmount: { fontSize: 15, fontFamily: Typography.family.bold, marginTop: 2 },
 
   timelineWrap: {
     width: '100%',
@@ -323,7 +313,6 @@ const styles = StyleSheet.create({
   timelineTitle: {
     fontSize: 16,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
     marginBottom: 14,
     textAlign: 'left',
   },
@@ -338,8 +327,6 @@ const styles = StyleSheet.create({
     gap: 10,
     borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
@@ -352,7 +339,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
 
   footer: { paddingHorizontal: 24, paddingBottom: 40, gap: 12 },
