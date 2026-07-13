@@ -76,6 +76,7 @@ export function MyProfileIdentityHero({
           <Pressable
             style={styles.editAvatarBtn}
             onPress={onEditAvatar}
+            hitSlop={8}
             accessibilityLabel="Edit avatar"
             accessibilityRole="button"
           >
@@ -227,8 +228,8 @@ const styles = StyleSheet.create({
   },
   editBtn: {
     flex: 1,
-    height: 42,
-    borderRadius: 21,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: Colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
@@ -243,9 +244,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    height: 42,
+    height: 44,
     paddingHorizontal: 18,
-    borderRadius: 21,
+    borderRadius: 22,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
     backgroundColor: Colors.background,
