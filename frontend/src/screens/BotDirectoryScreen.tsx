@@ -10,7 +10,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
-import { Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
@@ -44,17 +43,17 @@ const STATUS_LABEL: Record<string, string> = {
   'backend-required': 'Backend required',
 };
 
-const STATUS_COLOR: Record<string, string> = {
-  available: Colors.brand,
-  'local-only': Colors.textSecondary,
-  'backend-required': Colors.textMuted,
-};
-
 export default function BotDirectoryScreen({ navigation }: Props) {
-  const { isDark } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
   const { show } = useToast();
   const haptic = useHaptic();
   const [selectedCategory, setSelectedCategory] = useState<BotCategory>('all');
+
+  const STATUS_COLOR: Record<string, string> = {
+    available: colors.brand,
+    'local-only': colors.textSecondary,
+    'backend-required': colors.textMuted,
+  };
 
   const bots = useStore((state) => state.availableChatBots);
   const enabledBotIds = useStore((state) => state.enabledBotIds);
@@ -82,10 +81,10 @@ export default function BotDirectoryScreen({ navigation }: Props) {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <StatusBar
         barStyle={isDark ? 'light-content' : 'dark-content'}
-        backgroundColor={Colors.background}
+        backgroundColor={colors.background}
       />
 
       <ScreenHeader
@@ -101,17 +100,17 @@ export default function BotDirectoryScreen({ navigation }: Props) {
             accessibilityRole="button"
             accessibilityLabel="My bots"
           >
-            <View style={styles.headerActionBtn}>
-              <Ionicons name="person-outline" size={20} color={Colors.textPrimary} />
+            <View style={[styles.headerActionBtn, { backgroundColor: colors.surfaceAlt }]}>
+              <Ionicons name="person-outline" size={20} color={colors.textPrimary} />
             </View>
           </AnimatedPressable>
         }
       />
 
       {/* What are bots explanation */}
-      <View style={styles.infoBanner}>
-        <Ionicons name="information-circle-outline" size={18} color={Colors.textMuted} />
-        <Caption color={Colors.textMuted} style={styles.infoText}>
+      <View style={[styles.infoBanner, { backgroundColor: colors.surfaceAlt }]}>
+        <Ionicons name="information-circle-outline" size={18} color={colors.textMuted} />
+        <Caption color={colors.textMuted} style={styles.infoText}>
           Bots are automated assistants that can help moderate, sell, or style in your group chats.
           {' '}{STATUS_LABEL['local-only']} bots work on this device.
           {' '}{STATUS_LABEL['backend-required']} bots need a server connection.
@@ -138,13 +137,13 @@ export default function BotDirectoryScreen({ navigation }: Props) {
               <View
                 style={[
                   styles.categoryPill,
-                  active && styles.categoryPillActive,
+                  active && { backgroundColor: colors.brand },
                 ]}
               >
                 <Text
                   style={[
                     styles.categoryText,
-                    active && styles.categoryTextActive,
+                    active && { color: colors.textInverse, fontFamily: Typography.family.semibold },
                   ]}
                 >
                   {cat.label}
@@ -173,7 +172,7 @@ export default function BotDirectoryScreen({ navigation }: Props) {
               <View key={bot.id}>
                 <ChatCard variant="surface" style={styles.botCard}>
                   <View style={styles.botHeadRow}>
-                    <View style={styles.botIconWrap}>
+                    <View style={[styles.botIconWrap, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
                       <Ionicons
                         name={
                           bot.category === 'moderation'
@@ -187,30 +186,30 @@ export default function BotDirectoryScreen({ navigation }: Props) {
                                   : 'flash-outline'
                         }
                         size={20}
-                        color={Colors.textPrimary}
+                        color={colors.textPrimary}
                       />
                     </View>
 
                     <View style={styles.botTextWrap}>
                       <BodyEmphasis>{bot.name}</BodyEmphasis>
                       <View style={styles.metaRow}>
-                        <View style={[styles.typeBadge, { backgroundColor: Colors.surfaceAlt }]}>
-                          <Text style={[styles.typeBadgeText, { color: Colors.textSecondary }]}>System</Text>
+                        <View style={[styles.typeBadge, { backgroundColor: colors.surfaceAlt }]}>
+                          <Text style={[styles.typeBadgeText, { color: colors.textSecondary }]}>System</Text>
                         </View>
                         <Caption
-                          color={STATUS_COLOR[bot.status] ?? Colors.textMuted}
+                          color={STATUS_COLOR[bot.status] ?? colors.textMuted}
                           style={styles.statusLabel}
                         >
                           {STATUS_LABEL[bot.status] ?? bot.status}
                         </Caption>
-                        <Caption color={Colors.textMuted}>
+                        <Caption color={colors.textMuted}>
                           {bot.category.toUpperCase()}
                         </Caption>
                       </View>
                     </View>
 
                     <AppButton
-                      style={[styles.enableBtn, enabled && styles.enableBtnActive]}
+                      style={[styles.enableBtn, enabled && { borderColor: colors.brand, backgroundColor: colors.brand }]}
                       variant={enabled ? 'primary' : 'secondary'}
                       size="sm"
                       title={enabled ? 'On' : 'Off'}
@@ -219,28 +218,28 @@ export default function BotDirectoryScreen({ navigation }: Props) {
                     />
                   </View>
 
-                  <Caption color={Colors.textSecondary} style={styles.botDescription}>
+                  <Caption color={colors.textSecondary} style={styles.botDescription}>
                     {bot.description}
                   </Caption>
 
                   {bot.permissions.length > 0 && (
                     <View style={styles.permissionsRow}>
                       {bot.permissions.slice(0, 2).map((perm) => (
-                        <View key={perm} style={styles.permissionPill}>
-                          <Caption color={Colors.textSecondary} style={styles.permissionPillText}>
+                        <View key={perm} style={[styles.permissionPill, { backgroundColor: colors.surfaceAlt }]}>
+                          <Caption color={colors.textSecondary} style={styles.permissionPillText}>
                             {perm}
                           </Caption>
                         </View>
                       ))}
                       {bot.permissions.length > 2 && (
-                        <Caption color={Colors.textMuted} style={styles.permissionPillText}>
+                        <Caption color={colors.textMuted} style={styles.permissionPillText}>
                           +{bot.permissions.length - 2}
                         </Caption>
                       )}
                     </View>
                   )}
 
-                  <View style={styles.cardActions}>
+                  <View style={[styles.cardActions, { borderTopColor: colors.border }]}>
                     <AnimatedPressable
                       onPress={() => navigation.navigate('BotDetail', { botId: bot.id })}
                       activeOpacity={0.8}
@@ -250,12 +249,12 @@ export default function BotDirectoryScreen({ navigation }: Props) {
                       accessibilityLabel={`View ${bot.name} details`}
                     >
                       <View style={styles.viewDetailBtn}>
-                        <Caption color={Colors.brand} style={styles.viewDetailText}>View details</Caption>
-                        <Ionicons name="chevron-forward" size={14} color={Colors.brand} />
+                        <Caption color={colors.brand} style={styles.viewDetailText}>View details</Caption>
+                        <Ionicons name="chevron-forward" size={14} color={colors.brand} />
                       </View>
                     </AnimatedPressable>
 
-                    <Caption color={Colors.textMuted} style={styles.toggleHint}>
+                    <Caption color={colors.textMuted} style={styles.toggleHint}>
                       {enabled ? 'Enabled in account' : 'Disabled in account'}
                     </Caption>
                   </View>
@@ -271,14 +270,13 @@ export default function BotDirectoryScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1 },
   infoBanner: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Space.sm,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    backgroundColor: Colors.surfaceAlt,
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
     borderRadius: Radius.lg,
@@ -296,19 +294,10 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm - 2,
     paddingHorizontal: Space.md,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
-  },
-  categoryPillActive: {
-    backgroundColor: Colors.brand,
   },
   categoryText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
-  },
-  categoryTextActive: {
-    color: Colors.textInverse,
-    fontFamily: Typography.family.semibold,
   },
   listContent: {
     paddingHorizontal: Space.md,
@@ -329,9 +318,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.surfaceAlt,
     borderWidth: 1,
-    borderColor: Colors.border,
   },
   botTextWrap: { flex: 1 },
   metaRow: {
@@ -349,10 +336,6 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     paddingHorizontal: Space.sm + 4,
   },
-  enableBtnActive: {
-    borderColor: Colors.brand,
-    backgroundColor: Colors.brand,
-  },
   botDescription: {
     marginTop: Space.sm + 4,
     lineHeight: 19,
@@ -364,7 +347,6 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
   },
   permissionPill: {
-    backgroundColor: Colors.surfaceAlt,
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: Radius.sm,
@@ -379,7 +361,6 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
     paddingTop: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
   },
   viewDetailBtn: {
     flexDirection: 'row',
@@ -396,7 +377,6 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
   },
