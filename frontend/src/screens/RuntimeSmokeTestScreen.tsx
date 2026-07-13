@@ -10,8 +10,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
-import { ActiveTheme, Colors } from '../constants/colors';
 import { Typography } from '../theme/designTokens';
+import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
@@ -65,6 +65,7 @@ interface TestButton {
 }
 
 export default function RuntimeSmokeTestScreen({ navigation }: Props) {
+  const { colors, isDark } = useAppTheme();
   const conversations = useStore((s) => s.conversations);
   const currentUser = useStore((s) => s.currentUser);
   const { listings } = useBackendData();
@@ -170,9 +171,9 @@ export default function RuntimeSmokeTestScreen({ navigation }: Props) {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <StatusBar
-        barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'}
+        barStyle={isDark ? 'light-content' : 'dark-content'}
       />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
@@ -182,15 +183,15 @@ export default function RuntimeSmokeTestScreen({ navigation }: Props) {
           <BodyEmphasis style={styles.headerTitle}>
             Runtime Smoke Test
           </BodyEmphasis>
-          <Caption color={Colors.textMuted}>Dev-only</Caption>
+          <Caption color={colors.textMuted}>Dev-only</Caption>
         </View>
 
-        <Meta color={Colors.textMuted} style={styles.subtitle}>
+        <Meta color={colors.textMuted} style={styles.subtitle}>
           Tap a route to open it. Red screens are NOT swallowed — copy the
           terminal logs starting with [DIAGNOSTIC CRASH].
         </Meta>
 
-        <View style={styles.statsCard}>
+        <View style={[styles.statsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <StatRow label="Conversations" value={String(conversations.length)} />
           <StatRow label="Listings" value={String(listings.length)} />
           <StatRow label="Current User" value={currentUser?.username ?? 'null'} />
@@ -213,7 +214,7 @@ export default function RuntimeSmokeTestScreen({ navigation }: Props) {
         </View>
 
         <AnimatedPressable
-          style={styles.resetTile}
+          style={[styles.resetTile, { backgroundColor: colors.danger + '18', borderColor: colors.danger + '40' }]}
           onPress={handleResetLocalState}
           activeOpacity={0.8}
           scaleValue={0.96}
@@ -221,8 +222,8 @@ export default function RuntimeSmokeTestScreen({ navigation }: Props) {
           accessibilityRole="button"
           accessibilityLabel="Reset local app state"
         >
-          <Text style={styles.resetTileLabel}>Reset local app state</Text>
-          <Caption style={styles.resetTileCaption}>Clears persisted stores + AsyncStorage</Caption>
+          <Text style={[styles.resetTileLabel, { color: colors.danger }]}>Reset local app state</Text>
+          <Caption style={[styles.resetTileCaption, { color: colors.textMuted }]}>Clears persisted stores + AsyncStorage</Caption>
         </AnimatedPressable>
 
         <View style={styles.grid}>
@@ -234,7 +235,8 @@ export default function RuntimeSmokeTestScreen({ navigation }: Props) {
                 key={btn.label}
                 style={[
                   styles.tile,
-                  !hasData && styles.tileDisabled,
+                  { backgroundColor: colors.surface, borderColor: colors.border },
+                  !hasData && { backgroundColor: colors.surfaceAlt, borderColor: `${colors.border}60` },
                 ]}
                 onPress={() => handlePress(btn)}
                 activeOpacity={0.8}
@@ -246,14 +248,15 @@ export default function RuntimeSmokeTestScreen({ navigation }: Props) {
                 <Text
                   style={[
                     styles.tileLabel,
-                    !hasData && styles.tileLabelDisabled,
+                    { color: colors.textPrimary },
+                    !hasData && { color: colors.textMuted },
                   ]}
                   numberOfLines={1}
                 >
                   {btn.label}
                 </Text>
                 {!hasData && (
-                  <Caption style={styles.tileMissing}>
+                  <Caption style={[styles.tileMissing, { color: colors.danger }]}>
                     No data
                   </Caption>
                 )}
@@ -267,10 +270,11 @@ export default function RuntimeSmokeTestScreen({ navigation }: Props) {
 }
 
 function StatRow({ label, value }: { label: string; value: string }) {
+  const { colors } = useAppTheme();
   return (
     <View style={styles.statRow}>
-      <Caption color={Colors.textSecondary}>{label}</Caption>
-      <Caption color={Colors.textPrimary} style={styles.statValue}>
+      <Caption color={colors.textSecondary}>{label}</Caption>
+      <Caption color={colors.textPrimary} style={styles.statValue}>
         {value}
       </Caption>
     </View>
@@ -280,7 +284,6 @@ function StatRow({ label, value }: { label: string; value: string }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   scrollContent: {
     padding: Space.md,
@@ -302,12 +305,10 @@ const styles = StyleSheet.create({
     lineHeight: Type.body.lineHeight,
   },
   statsCard: {
-    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     padding: Space.md,
     marginBottom: Space.md,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
     gap: Space.xs + 2,
   },
   statRow: {
@@ -327,56 +328,41 @@ const styles = StyleSheet.create({
     width: '30%',
     flexGrow: 1,
     minWidth: 100,
-    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     paddingVertical: Space.md,
     paddingHorizontal: Space.sm,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
     minHeight: 72,
     gap: Space.xs,
-  },
-  tileDisabled: {
-    backgroundColor: Colors.surfaceAlt,
-    borderColor: `${Colors.border}60`,
   },
   tileLabel: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
     textAlign: 'center',
-  },
-  tileLabelDisabled: {
-    color: Colors.textMuted,
   },
   tileMissing: {
     fontSize: 10,
-    color: Colors.danger,
   },
   resetTile: {
     width: '100%',
-    backgroundColor: Colors.danger + '18',
     borderRadius: Radius.lg,
     paddingVertical: Space.md,
     paddingHorizontal: Space.sm,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.danger + '40',
     marginBottom: Space.md,
     gap: Space.xs,
   },
   resetTileLabel: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.danger,
     textAlign: 'center',
   },
   resetTileCaption: {
     fontSize: 10,
-    color: Colors.textMuted,
     textAlign: 'center',
   },
 });
