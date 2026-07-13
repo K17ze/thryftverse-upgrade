@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, StatusBar, useWindowDimensions, RefreshControl, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, useWindowDimensions, RefreshControl } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,6 +18,7 @@ import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { haptics } from '../utils/haptics';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { HorizontalRail } from '../components/HorizontalRail';
 import {
   CoOwnMarketHeader,
   CoOwnFeaturedAsset,
@@ -369,9 +370,7 @@ export default function CoOwnHubScreen() {
             </View>
 
             {/* Tab rail: Discover / Portfolio / Activity */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
+            <HorizontalRail
               contentContainerStyle={[styles.tabRail, { flexGrow: 1 }]}
             >
               <TabButton
@@ -393,7 +392,7 @@ export default function CoOwnHubScreen() {
                 onPress={() => { haptics.tap(); navigation.navigate('CoOwnOrderHistory'); }}
                 colors={colors}
               />
-            </ScrollView>
+            </HorizontalRail>
 
             {/* Market context — quiet, real data only */}
             {!isSearching && marketContext.openItems > 0 && (
@@ -463,9 +462,7 @@ export default function CoOwnHubScreen() {
                     <Text style={[styles.sectionLink, { color: colors.textSecondary }]} numberOfLines={1}>All {yourPositions.length}</Text>
                   </AnimatedPressable>
                 </View>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
+                <HorizontalRail
                   contentContainerStyle={styles.positionsRow}
                   accessibilityLabel="Your positions"
                 >
@@ -482,7 +479,7 @@ export default function CoOwnHubScreen() {
                       />
                     </View>
                   ))}
-                </ScrollView>
+                </HorizontalRail>
               </View>
             )}
 
@@ -492,9 +489,7 @@ export default function CoOwnHubScreen() {
                 <View style={styles.sectionHeader}>
                   <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} numberOfLines={1}>Newest</Text>
                 </View>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
+                <HorizontalRail
                   contentContainerStyle={styles.railContent}
                   accessibilityLabel="Newest Co-Own items"
                 >
@@ -511,7 +506,7 @@ export default function CoOwnHubScreen() {
                       />
                     </View>
                   ))}
-                </ScrollView>
+                </HorizontalRail>
               </View>
             )}
 
@@ -520,9 +515,7 @@ export default function CoOwnHubScreen() {
                 <View style={styles.sectionHeader}>
                   <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} numberOfLines={1}>Most available</Text>
                 </View>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
+                <HorizontalRail
                   contentContainerStyle={styles.railContent}
                   accessibilityLabel="Most available Co-Own items"
                 >
@@ -539,7 +532,7 @@ export default function CoOwnHubScreen() {
                       />
                     </View>
                   ))}
-                </ScrollView>
+                </HorizontalRail>
               </View>
             )}
 
@@ -548,9 +541,7 @@ export default function CoOwnHubScreen() {
                 <View style={styles.sectionHeader}>
                   <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} numberOfLines={1}>Nearly allocated</Text>
                 </View>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
+                <HorizontalRail
                   contentContainerStyle={styles.railContent}
                   accessibilityLabel="Nearly allocated Co-Own items"
                 >
@@ -567,7 +558,7 @@ export default function CoOwnHubScreen() {
                       />
                     </View>
                   ))}
-                </ScrollView>
+                </HorizontalRail>
               </View>
             )}
 
