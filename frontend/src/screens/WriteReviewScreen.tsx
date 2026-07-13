@@ -13,14 +13,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { Typography, Space, Radius, Type, Elevation } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
-import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { Meta, BodyEmphasis, Caption } from '../components/ui/Text';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
@@ -39,7 +38,7 @@ export default function WriteReviewScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<RouteT>();
   const { orderId } = route.params;
-  const { isDark } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
   const { show } = useToast();
   const haptic = useHaptic();
   const reducedMotionEnabled = useReducedMotion();
@@ -141,7 +140,7 @@ export default function WriteReviewScreen() {
         <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
         <ScreenHeader title="Write a Review" onBack={() => navigation.goBack()} />
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.brand} />
+          <ActivityIndicator size="large" color={colors.brand} />
           <Text style={styles.loadingText}>Loading…</Text>
         </View>
       </SafeAreaView>
@@ -184,9 +183,9 @@ export default function WriteReviewScreen() {
 
           {existingReview ? (
             <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(20)} style={styles.existingCard}>
-              <Ionicons name="checkmark-circle" size={32} color={Colors.success} />
+              <Ionicons name="checkmark-circle" size={32} color={colors.success} />
               <BodyEmphasis style={styles.existingTitle}>Review already submitted</BodyEmphasis>
-              <Caption color={Colors.textSecondary} style={styles.existingSub}>
+              <Caption color={colors.textSecondary} style={styles.existingSub}>
                 You rated this order {existingReview.rating} star{existingReview.rating > 1 ? 's' : ''} on{' '}
                 {new Date(existingReview.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}.
               </Caption>
@@ -214,7 +213,7 @@ export default function WriteReviewScreen() {
                       <Ionicons
                         name={rating >= star ? 'star' : 'star-outline'}
                         size={44}
-                        color={rating >= star ? Colors.brand : Colors.textMuted}
+                        color={rating >= star ? colors.brand : colors.textMuted}
                       />
                     </AnimatedPressable>
                   ))}
@@ -228,12 +227,12 @@ export default function WriteReviewScreen() {
               </Reanimated.View>
 
               <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
-                <Meta color={Colors.textMuted} style={styles.sectionLabel}>DETAILED REVIEW (OPTIONAL)</Meta>
+                <Meta color={colors.textMuted} style={styles.sectionLabel}>DETAILED REVIEW (OPTIONAL)</Meta>
                 <View style={styles.inputCard}>
                   <TextInput
                     style={styles.input}
                     placeholder="Tell others what you thought about the item and seller..."
-                    placeholderTextColor={Colors.textMuted}
+                    placeholderTextColor={colors.textMuted}
                     multiline
                     textAlignVertical="top"
                     value={review}
@@ -246,7 +245,7 @@ export default function WriteReviewScreen() {
 
               {/* Photo upload section */}
               <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)}>
-                <Meta color={Colors.textMuted} style={styles.sectionLabel}>PHOTOS (OPTIONAL)</Meta>
+                <Meta color={colors.textMuted} style={styles.sectionLabel}>PHOTOS (OPTIONAL)</Meta>
                 <View style={styles.photoSection}>
                   {photoUris.length > 0 && (
                     <View style={styles.photoGrid}>
@@ -265,7 +264,7 @@ export default function WriteReviewScreen() {
                             accessibilityRole="button"
                             accessibilityLabel={`Remove photo ${index + 1}`}
                           >
-                            <Ionicons name="close-circle" size={20} color={Colors.danger} />
+                            <Ionicons name="close-circle" size={20} color={colors.danger} />
                           </Pressable>
                         </View>
                       ))}
@@ -283,10 +282,10 @@ export default function WriteReviewScreen() {
                       accessibilityLabel="Add photos to your review"
                     >
                       {isUploadingPhotos ? (
-                        <ActivityIndicator size="small" color={Colors.brand} />
+                        <ActivityIndicator size="small" color={colors.brand} />
                       ) : (
                         <>
-                          <Ionicons name="camera-outline" size={22} color={Colors.brand} />
+                          <Ionicons name="camera-outline" size={22} color={colors.brand} />
                           <Text style={styles.photoAddText}>
                             {photoUris.length > 0 ? 'Add more photos' : 'Add photos'}
                           </Text>
@@ -319,7 +318,7 @@ export default function WriteReviewScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1 },
   content: { flex: 1 },
   scrollContent: {
     paddingHorizontal: Space.md,
@@ -336,10 +335,8 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
   },
   orderCard: {
-    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     padding: Space.md,
     ...Elevation.subtle,
@@ -361,17 +358,14 @@ const styles = StyleSheet.create({
   orderTitle: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   orderMeta: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
   },
   promptText: {
     fontSize: Type.title.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
     textAlign: 'center',
     marginBottom: Space.md,
   },
@@ -384,7 +378,6 @@ const styles = StyleSheet.create({
   ratingLabel: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    color: Colors.brand,
     textAlign: 'center',
   },
   sectionLabel: {
@@ -393,7 +386,6 @@ const styles = StyleSheet.create({
     marginBottom: Space.sm,
   },
   inputCard: {
-    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     padding: Space.md,
     ...Elevation.subtle,
@@ -401,7 +393,6 @@ const styles = StyleSheet.create({
   input: {
     minHeight: 120,
     maxHeight: 240,
-    color: Colors.textPrimary,
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     textAlignVertical: 'top',
@@ -426,7 +417,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -6,
     right: -6,
-    backgroundColor: Colors.background,
     borderRadius: 10,
   },
   photoAddBtn: {
@@ -434,33 +424,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.sm,
-    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
     paddingVertical: Space.md,
     ...Elevation.subtle,
   },
   photoAddText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
     flex: 1,
   },
   photoAddHint: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
   },
   charCount: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     textAlign: 'right',
     marginTop: Space.xs,
   },
   existingCard: {
-    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     padding: Space.lg,
     alignItems: 'center',
@@ -470,7 +454,6 @@ const styles = StyleSheet.create({
   existingTitle: {
     fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
     marginTop: Space.sm,
   },
   existingSub: {
@@ -478,7 +461,6 @@ const styles = StyleSheet.create({
     lineHeight: Type.caption.lineHeight + 2,
   },
   existingCommentBox: {
-    backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.md,
     padding: Space.md,
     width: '100%',
@@ -487,13 +469,11 @@ const styles = StyleSheet.create({
   existingCommentText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
     lineHeight: Type.body.lineHeight + 4,
   },
   footer: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
   },
 });
