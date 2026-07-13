@@ -16,10 +16,9 @@ import Reanimated, {
   FadeInDown,
 } from 'react-native-reanimated';
 import { useRoute, useNavigation } from '@react-navigation/native';
-import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Typography, Space, DockConstants } from '../theme/designTokens';
 import { Ionicons } from '@expo/vector-icons';
-import { useAppTheme } from '../theme/ThemeContext';
 import { Listing } from '../data/mockData';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '../store/useStore';
@@ -86,7 +85,7 @@ import { trackTelemetryEvent } from '../lib/telemetry';
 import { useWindowDimensions } from 'react-native';
 
 export default function ItemDetailScreen() {
-  const { isDark } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
@@ -484,7 +483,7 @@ export default function ItemDetailScreen() {
               return (
                 <View style={styles.authCard}>
                   <View style={styles.authIconWrap}>
-                    <Ionicons name="shield-checkmark" size={20} color={Colors.success} />
+                    <Ionicons name="shield-checkmark" size={20} color={colors.success} />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.authTitle}>Authenticity verified</Text>
@@ -505,13 +504,13 @@ export default function ItemDetailScreen() {
                   accessibilityLabel="Request authenticity verification"
                 >
                   <View style={styles.authIconWrap}>
-                    <Ionicons name="shield-outline" size={20} color={Colors.brand} />
+                    <Ionicons name="shield-outline" size={20} color={colors.brand} />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.authTitle}>Request authenticity check</Text>
                     <Text style={styles.authSubtitle}>High-value item. Request professional verification before purchase.</Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
                 </Pressable>
               );
             }
@@ -609,7 +608,7 @@ export default function ItemDetailScreen() {
                         />
                       ) : (
                         <View style={[styles.moreLikeThisImage, styles.moreLikeThisPlaceholder]}>
-                          <Ionicons name="shirt-outline" size={20} color={Colors.textMuted} />
+                          <Ionicons name="shirt-outline" size={20} color={colors.textMuted} />
                         </View>
                       )}
                       <Text style={styles.moreLikeThisPrice}>
@@ -634,7 +633,7 @@ export default function ItemDetailScreen() {
 
           {recsLoading && recommendationSections.length === 0 ? (
             <View style={styles.railLoading}>
-              <ActivityIndicator size="small" color={Colors.textMuted} />
+              <ActivityIndicator size="small" color={colors.textMuted} />
               <Text style={styles.railLoadingText} numberOfLines={1}>Finding recommendations...</Text>
             </View>
           ) : (
@@ -727,7 +726,7 @@ export default function ItemDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1 },
   unavailableContainer: {
     flex: 1,
     alignItems: 'center',
@@ -738,26 +737,22 @@ const styles = StyleSheet.create({
   unavailableTitle: {
     fontSize: 18,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
     textAlign: 'center',
   },
   unavailableBody: {
     fontSize: 14,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
   },
   sectionDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
     marginHorizontal: Space.md,
     marginVertical: Space.lg,
   },
   moreLikeThisTitle: {
     fontSize: 16,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
     paddingHorizontal: Space.md,
     marginBottom: Space.sm,
   },
@@ -777,7 +772,6 @@ const styles = StyleSheet.create({
     width: '100%',
     aspectRatio: 1,
     borderRadius: 8,
-    backgroundColor: Colors.surfaceAlt,
   },
   moreLikeThisPlaceholder: {
     alignItems: 'center',
@@ -786,12 +780,10 @@ const styles = StyleSheet.create({
   moreLikeThisPrice: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   postedDate: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     paddingHorizontal: Space.md,
     paddingBottom: Space.sm,
   },
@@ -804,27 +796,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
     borderRadius: 12,
-    backgroundColor: Colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
   },
   authIconWrap: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: `${Colors.brand}15`,
     alignItems: 'center',
     justifyContent: 'center',
   },
   authTitle: {
     fontSize: 14,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   authSubtitle: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     marginTop: 2,
   },
   syncRetry: {
@@ -841,7 +828,6 @@ const styles = StyleSheet.create({
   railLoadingText: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
   },
   recErrorRow: {
     paddingHorizontal: Space.md,
@@ -851,6 +837,5 @@ const styles = StyleSheet.create({
   recErrorText: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
   },
 });
