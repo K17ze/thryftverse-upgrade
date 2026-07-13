@@ -1,6 +1,5 @@
 import React from 'react';
-import { StyleProp, ViewStyle } from 'react-native';
-import { ScrollView } from 'react-native-gesture-handler';
+import { StyleProp, ViewStyle, ScrollView as RNScrollView } from 'react-native';
 
 interface HorizontalRailProps {
   children: React.ReactNode;
@@ -17,12 +16,11 @@ interface HorizontalRailProps {
 /**
  * Horizontal scroll rail that works correctly inside GestureHandlerRootView.
  *
- * Uses the gesture-handler ScrollView so that Pressable/Touchable children
- * don't steal horizontal drag gestures on Android. Drop-in replacement for
- * <ScrollView horizontal> when the rail is inside a vertical ScrollView and
- * the app is wrapped in GestureHandlerRootView.
+ * Uses nestedScrollEnabled so the horizontal ScrollView can scroll independently
+ * of the parent vertical ScrollView on Android. The app is wrapped in
+ * GestureHandlerRootView at the root, which provides the gesture context.
  */
-export const HorizontalRail = React.forwardRef<ScrollView, HorizontalRailProps>(
+export const HorizontalRail = React.forwardRef<RNScrollView, HorizontalRailProps>(
   function HorizontalRail(
     {
       children,
@@ -38,9 +36,10 @@ export const HorizontalRail = React.forwardRef<ScrollView, HorizontalRailProps>(
     ref,
   ) {
     return (
-      <ScrollView
+      <RNScrollView
         ref={ref}
         horizontal
+        nestedScrollEnabled
         showsHorizontalScrollIndicator={showsHorizontalScrollIndicator}
         contentContainerStyle={contentContainerStyle}
         style={style}
@@ -51,7 +50,7 @@ export const HorizontalRail = React.forwardRef<ScrollView, HorizontalRailProps>(
         accessibilityLabel={accessibilityLabel}
       >
         {children}
-      </ScrollView>
+      </RNScrollView>
     );
   },
 );

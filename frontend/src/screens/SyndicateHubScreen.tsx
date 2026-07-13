@@ -1,6 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, StatusBar, useWindowDimensions, RefreshControl } from 'react-native';
-import { FlashList } from '@shopify/flash-list';
+import { View, Text, StyleSheet, StatusBar, RefreshControl, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -68,7 +67,6 @@ export default function CoOwnHubScreen() {
   const { show } = useToast();
   const reducedMotion = useReducedMotion();
   const { colors, isDark } = useAppTheme();
-  const { width: screenWidth } = useWindowDimensions();
   const { listings } = useBackendData();
   const actingUserId = currentUser?.id;
 
@@ -245,8 +243,6 @@ export default function CoOwnHubScreen() {
 
   const isSearching = query.trim().length > 0;
 
-  const gridColumns = screenWidth < 360 ? 1 : 2;
-
   // Real market context — no fabricated volume/growth figures
   const marketContext = React.useMemo(() => {
     const openItems = marketAssets.filter((a) => a.isOpen && a.availableUnits > 0).length;
@@ -342,12 +338,9 @@ export default function CoOwnHubScreen() {
         ]}
       />
 
-      <FlashList
-        key={`hub-grid-${gridColumns}`}
-        data={isSearching ? filteredAssets : []}
-        keyExtractor={(item) => item.id}
-        numColumns={gridColumns}
-        contentContainerStyle={styles.listContent}
+      <ScrollView
+        style={styles.listContent}
+        contentContainerStyle={styles.listContentInner}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -356,10 +349,9 @@ export default function CoOwnHubScreen() {
             tintColor={colors.textSecondary}
           />
         }
-        ListHeaderComponent={
-          <View>
+      >
             {/* Search */}
-            <View style={styles.searchWrap}>
+            <View style={[styles.searchWrap, styles.sectionPad]}>
               <AppInput
                 value={query}
                 onChangeText={setQuery}
@@ -370,6 +362,7 @@ export default function CoOwnHubScreen() {
             </View>
 
             {/* Tab rail: Discover / Portfolio / Activity */}
+            <View style={styles.sectionPad}>
             <HorizontalRail
               contentContainerStyle={[styles.tabRail, { flexGrow: 1 }]}
             >
@@ -393,10 +386,11 @@ export default function CoOwnHubScreen() {
                 colors={colors}
               />
             </HorizontalRail>
+            </View>
 
             {/* Market context — quiet, real data only */}
             {!isSearching && marketContext.openItems > 0 && (
-              <Text style={[styles.marketContext, { color: colors.textMuted }]} numberOfLines={1}>
+              <Text style={[styles.marketContext, styles.sectionPad, { color: colors.textMuted }]} numberOfLines={1}>
                 {marketContext.openItems} {marketContext.openItems === 1 ? 'item' : 'items'} open · {marketContext.totalAvailableUnits} units available
                 {yourPositions.length > 0 ? ` · ${yourPositions.length} ${yourPositions.length === 1 ? 'position' : 'positions'} held` : ''}
               </Text>
@@ -404,7 +398,7 @@ export default function CoOwnHubScreen() {
 
             {/* Sort control — only in search mode */}
             {isSearching && (
-              <View style={styles.sortRow}>
+              <View style={[styles.sortRow, styles.sectionPad]}>
                 {(['newest', 'available', 'allocation'] as SortOption[]).map((opt) => (
                   <AnimatedPressable
                     key={opt}
@@ -433,7 +427,7 @@ export default function CoOwnHubScreen() {
 
             {/* Featured asset — media-first, product desire */}
             {!isSearching && featuredAsset && (
-              <View style={styles.featuredWrap}>
+              <View style={[styles.featuredWrap, styles.sectionPad]}>
                 <CoOwnFeaturedAsset
                   imageUri={featuredAsset.image}
                   title={featuredAsset.title}
@@ -571,77 +565,82 @@ export default function CoOwnHubScreen() {
                 </View>
               </View>
             )}
-          </View>
-        }
-        renderItem={({ item, index }) => (
-          <View style={styles.tileWrap}>
-            <CoOwnAssetTile
-              imageUri={item.image}
-              title={item.title}
-              unitPriceLabel={formatFromFiat(item.unitPriceGBP, 'GBP')}
-              availableUnits={item.availableUnits}
-              totalUnits={item.totalUnits}
-              status={formatStatus(item)}
-              onPress={() => navigation.navigate('AssetDetail', { assetId: item.id })}
-              index={index}
-            />
-          </View>
-        )}
-        ListEmptyComponent={
-          <CoOwnStateCanvas
-            variant="empty"
-            title={isSearching ? 'No results' : 'No items available'}
-            subtitle={isSearching ? 'Try a different search term.' : 'Check back soon for new Co-Own items.'}
-            emptyGraphicVariant="search"
-          />
-        }
-        ListFooterComponent={
-          !isSearching ? (
-            <View style={styles.footerWrap}>
-              {/* Creator action — intentional, not a random admin button */}
-              <AnimatedPressable
-                onPress={() => { haptics.tap(); navigation.navigate('CreateCoOwn'); }}
-                style={[styles.creatorCard, { borderColor: colors.brand + '40' }]}
-                accessibilityRole="button"
-                accessibilityLabel="Issue a new Co-Own item"
-                scaleValue={0.98}
-              >
-                <View style={[styles.creatorIcon, { backgroundColor: colors.brand + '18' }]}>
-                  <Ionicons name="add-circle-outline" size={22} color={colors.brand} />
-                </View>
-                <View style={styles.creatorBody}>
-                  <Text style={[styles.creatorTitle, { color: colors.textPrimary }]} numberOfLines={1}>Issue a new Co-Own</Text>
-                  <Text style={[styles.creatorSub, { color: colors.textSecondary }]} numberOfLines={2}>
-                    List an item for shared ownership and invite co-owners
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-              </AnimatedPressable>
 
-              {/* How Co-Own works */}
-              <CoOwnEducationCard
-                onLearnMore={() => navigation.navigate('CoOwnOnboarding')}
-                learnMoreLabel="Read full guide"
+            {/* Grid items — search results */}
+            {isSearching && filteredAssets.length > 0 && (
+              <View style={styles.gridWrap}>
+                {filteredAssets.map((item, index) => (
+                  <View key={item.id} style={styles.tileWrap}>
+                    <CoOwnAssetTile
+                      imageUri={item.image}
+                      title={item.title}
+                      unitPriceLabel={formatFromFiat(item.unitPriceGBP, 'GBP')}
+                      availableUnits={item.availableUnits}
+                      totalUnits={item.totalUnits}
+                      status={formatStatus(item)}
+                      onPress={() => navigation.navigate('AssetDetail', { assetId: item.id })}
+                      index={index}
+                    />
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* Empty state */}
+            {isSearching && filteredAssets.length === 0 && (
+              <CoOwnStateCanvas
+                variant="empty"
+                title={isSearching ? 'No results' : 'No items available'}
+                subtitle={isSearching ? 'Try a different search term.' : 'Check back soon for new Co-Own items.'}
+                emptyGraphicVariant="search"
               />
+            )}
 
-              {/* Ledger link */}
-              <AnimatedPressable
-                onPress={() => { haptics.tap(); navigation.navigate('MarketLedger'); }}
-                style={[styles.ledgerLink, { borderColor: colors.border }]}
-                accessibilityRole="button"
-                accessibilityLabel="View market ledger"
-              >
-                <Ionicons name="receipt-outline" size={18} color={colors.textSecondary} />
-                <Text style={[styles.ledgerLinkText, { color: colors.textSecondary }]} numberOfLines={1}>View market ledger</Text>
-                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-              </AnimatedPressable>
+            {/* Footer */}
+            {!isSearching ? (
+              <View style={styles.footerWrap}>
+                {/* Creator action — intentional, not a random admin button */}
+                <AnimatedPressable
+                  onPress={() => { haptics.tap(); navigation.navigate('CreateCoOwn'); }}
+                  style={[styles.creatorCard, { borderColor: colors.brand + '40' }]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Issue a new Co-Own item"
+                  scaleValue={0.98}
+                >
+                  <View style={[styles.creatorIcon, { backgroundColor: colors.brand + '18' }]}>
+                    <Ionicons name="add-circle-outline" size={22} color={colors.brand} />
+                  </View>
+                  <View style={styles.creatorBody}>
+                    <Text style={[styles.creatorTitle, { color: colors.textPrimary }]} numberOfLines={1}>Issue a new Co-Own</Text>
+                    <Text style={[styles.creatorSub, { color: colors.textSecondary }]} numberOfLines={2}>
+                      List an item for shared ownership and invite co-owners
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+                </AnimatedPressable>
 
-              <View style={{ height: Space.xxl }} />
-            </View>
-          ) : null
-        }
-        estimatedItemSize={gridColumns === 1 ? 480 : 300}
-      />
+                {/* How Co-Own works */}
+                <CoOwnEducationCard
+                  onLearnMore={() => navigation.navigate('CoOwnOnboarding')}
+                  learnMoreLabel="Read full guide"
+                />
+
+                {/* Ledger link */}
+                <AnimatedPressable
+                  onPress={() => { haptics.tap(); navigation.navigate('MarketLedger'); }}
+                  style={[styles.ledgerLink, { borderColor: colors.border }]}
+                  accessibilityRole="button"
+                  accessibilityLabel="View market ledger"
+                >
+                  <Ionicons name="receipt-outline" size={18} color={colors.textSecondary} />
+                  <Text style={[styles.ledgerLinkText, { color: colors.textSecondary }]} numberOfLines={1}>View market ledger</Text>
+                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                </AnimatedPressable>
+
+                <View style={{ height: Space.xxl }} />
+              </View>
+            ) : null}
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -696,6 +695,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   listContent: {
+    flex: 1,
+  },
+  listContentInner: {
+    paddingBottom: Space.xxl,
+  },
+  sectionPad: {
+    paddingHorizontal: Space.md,
+  },
+  gridWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Space.sm,
     paddingHorizontal: Space.md,
   },
   searchWrap: {
@@ -763,6 +774,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: Space.md,
+    paddingHorizontal: Space.md,
   },
   sectionTitle: {
     fontSize: Type.subtitle.size,
@@ -800,6 +812,7 @@ const styles = StyleSheet.create({
   },
   footerWrap: {
     paddingTop: Space.lg,
+    paddingHorizontal: Space.md,
   },
   creatorCard: {
     flexDirection: 'row',

@@ -1,10 +1,11 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
+import { AnimatedPressable } from '../AnimatedPressable';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import type { CoOwnAssetStatus } from './CoOwnFeaturedAsset';
 
@@ -38,8 +39,9 @@ export function CoOwnAssetTile({
 
   return (
     <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.delay(Math.min(index, 8) * 40).duration(300)}>
-      <Pressable
+      <AnimatedPressable
         onPress={onPress}
+        activeOpacity={0.92}
         accessibilityRole="button"
         accessibilityLabel={`${title}, ${unitPriceLabel} per unit, ${availableUnits} of ${totalUnits} units available, ${statusLabel}`}
       >
@@ -71,7 +73,7 @@ export function CoOwnAssetTile({
             {availableUnits} left
           </Text>
         </View>
-      </Pressable>
+      </AnimatedPressable>
     </Reanimated.View>
   );
 }
