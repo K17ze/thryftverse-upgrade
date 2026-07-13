@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { EmptyState } from '../components/EmptyState';
@@ -92,15 +92,6 @@ function bidToActivity(b: MyAuctionBid): ActivityItem {
   };
 }
 
-function getStateInfo(state: ActivityItem['bidState']): { label: string; color: string; icon: keyof typeof Ionicons.glyphMap; nextAction: string } {
-  if (state === 'won') return { label: 'Won', color: Colors.success, icon: 'trophy-outline', nextAction: 'View result' };
-  if (state === 'lost') return { label: 'Lost', color: Colors.textMuted, icon: 'close-circle-outline', nextAction: 'Browse more' };
-  if (state === 'outbid') return { label: 'Outbid', color: Colors.danger, icon: 'trending-down', nextAction: 'Bid again' };
-  if (state === 'leading') return { label: 'Leading', color: Colors.success, icon: 'trending-up', nextAction: 'View auction' };
-  if (state === 'watching') return { label: 'Watching', color: Colors.textSecondary, icon: 'eye-outline', nextAction: 'View auction' };
-  return { label: 'Active', color: Colors.brand, icon: 'hammer-outline', nextAction: 'View auction' };
-}
-
 function formatActivityTime(endsAt: string, lifecycle: string): string {
   const end = new Date(endsAt);
   const now = new Date();
@@ -123,6 +114,16 @@ export default function MyBidsScreen() {
   const { formatFromFiat } = useFormattedPrice();
   const { goldRates, displayMode } = useCurrencyContext();
   const reducedMotionEnabled = useReducedMotion();
+  const { colors, isDark } = useAppTheme();
+
+  const getStateInfo = (state: ActivityItem['bidState']): { label: string; color: string; icon: keyof typeof Ionicons.glyphMap; nextAction: string } => {
+    if (state === 'won') return { label: 'Won', color: colors.success, icon: 'trophy-outline', nextAction: 'View result' };
+    if (state === 'lost') return { label: 'Lost', color: colors.textMuted, icon: 'close-circle-outline', nextAction: 'Browse more' };
+    if (state === 'outbid') return { label: 'Outbid', color: colors.danger, icon: 'trending-down', nextAction: 'Bid again' };
+    if (state === 'leading') return { label: 'Leading', color: colors.success, icon: 'trending-up', nextAction: 'View auction' };
+    if (state === 'watching') return { label: 'Watching', color: colors.textSecondary, icon: 'eye-outline', nextAction: 'View auction' };
+    return { label: 'Active', color: colors.brand, icon: 'hammer-outline', nextAction: 'View auction' };
+  };
 
   const [filter, setFilter] = React.useState<BidFilter>('all');
   const [endingSoonest, setEndingSoonest] = React.useState(false);
@@ -192,8 +193,8 @@ export default function MyBidsScreen() {
   }, [nextCursor, isLoadingMore, fetchItems, filter]);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} />
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       <TradeHeader title="Auction Activity" onBack={() => navigation.goBack()} />
 
@@ -209,41 +210,41 @@ export default function MyBidsScreen() {
           {BID_FILTERS.map((opt) => (
             <Pressable
               key={opt.value}
-              style={[styles.stateRailChip, filter === opt.value && styles.stateRailChipActive]}
+              style={[styles.stateRailChip, { borderColor: colors.border, backgroundColor: colors.surface }, filter === opt.value && { backgroundColor: colors.brand, borderColor: colors.brand }]}
               onPress={() => setFilter(opt.value)}
               accessibilityRole="button"
               accessibilityLabel={opt.accessibilityLabel}
             >
-              <Text style={[styles.stateRailText, filter === opt.value && styles.stateRailTextActive]}>
+              <Text style={[styles.stateRailText, { color: colors.textSecondary }, filter === opt.value && { color: colors.textInverse }]}>
                 {opt.label}
               </Text>
             </Pressable>
           ))}
-          <View style={styles.filterDivider} />
+          <View style={[styles.filterDivider, { backgroundColor: colors.border }]} />
           <Pressable
             key={WATCHING_FILTER.value}
-            style={[styles.stateRailChip, filter === WATCHING_FILTER.value && styles.stateRailChipActive]}
+            style={[styles.stateRailChip, { borderColor: colors.border, backgroundColor: colors.surface }, filter === WATCHING_FILTER.value && { backgroundColor: colors.brand, borderColor: colors.brand }]}
             onPress={() => setFilter(WATCHING_FILTER.value)}
             accessibilityRole="button"
             accessibilityLabel={WATCHING_FILTER.accessibilityLabel}
           >
-            <Text style={[styles.stateRailText, filter === WATCHING_FILTER.value && styles.stateRailTextActive]}>
+            <Text style={[styles.stateRailText, { color: colors.textSecondary }, filter === WATCHING_FILTER.value && { color: colors.textInverse }]}>
               {WATCHING_FILTER.label}
             </Text>
           </Pressable>
           {/* Ending-soonest sort toggle — integrated into filter rail */}
           {(filter === 'all' || filter === 'outbid' || filter === 'leading') && items.length > 1 && (
             <>
-              <View style={styles.filterDivider} />
+              <View style={[styles.filterDivider, { backgroundColor: colors.border }]} />
               <Pressable
-                style={[styles.stateRailChip, styles.sortChip, endingSoonest && styles.sortToggleActive]}
+                style={[styles.stateRailChip, styles.sortChip, { borderColor: colors.border, backgroundColor: colors.surface }, endingSoonest && { backgroundColor: colors.brand, borderColor: colors.brand }]}
                 onPress={() => setEndingSoonest((v) => !v)}
                 accessibilityRole="button"
                 accessibilityLabel={endingSoonest ? 'Stop sorting by ending soonest' : 'Sort by ending soonest'}
                 accessibilityState={{ checked: endingSoonest }}
               >
-                <Ionicons name="time-outline" size={13} color={endingSoonest ? Colors.textInverse : Colors.textMuted} />
-                <Text style={[styles.stateRailText, endingSoonest && styles.stateRailTextActive]}>
+                <Ionicons name="time-outline" size={13} color={endingSoonest ? colors.textInverse : colors.textMuted} />
+                <Text style={[styles.stateRailText, { color: colors.textSecondary }, endingSoonest && { color: colors.textInverse }]}>
                   Ending soonest
                 </Text>
               </Pressable>
@@ -272,7 +273,7 @@ export default function MyBidsScreen() {
               }
             >
               <AnimatedPressable
-                style={styles.activityRow}
+                style={[styles.activityRow, { borderBottomColor: colors.border }]}
                 onPress={() => navigation.navigate('AuctionDetail', {
                   auctionId: item.auctionId,
                   // One-tap rebid: auto-open BidSheet when the user is outbid
@@ -294,8 +295,8 @@ export default function MyBidsScreen() {
                       contentFit="cover"
                     />
                   ) : (
-                    <View style={styles.activityImagePlaceholder}>
-                      <Ionicons name="image-outline" size={18} color={Colors.textMuted} />
+                    <View style={[styles.activityImagePlaceholder, { backgroundColor: colors.surfaceAlt }]}>
+                      <Ionicons name="image-outline" size={18} color={colors.textMuted} />
                     </View>
                   )}
                 </View>
@@ -312,21 +313,21 @@ export default function MyBidsScreen() {
                   <View style={styles.activityPriceRow}>
                     {item.amountGbp > 0 && (
                       <View>
-                        <Meta style={styles.activityPriceLabel}>Your bid</Meta>
-                        <Body style={styles.activityPriceValue}>{formatFromFiat(item.amountGbp, 'GBP')}</Body>
+                        <Meta style={[styles.activityPriceLabel, { color: colors.textMuted }]}>Your bid</Meta>
+                        <Body style={[styles.activityPriceValue, { color: colors.textPrimary }]}>{formatFromFiat(item.amountGbp, 'GBP')}</Body>
                         {displayMode !== 'ize' && (
-                          <Text style={styles.activityIzeText}>
+                          <Text style={[styles.activityIzeText, { color: colors.textMuted }]}>
                             {formatIzeAmount(toIze(item.amountGbp, 'GBP', goldRates))}
                           </Text>
                         )}
                       </View>
                     )}
                     {item.currentBidGbp > 0 && (
-                      <View style={[item.amountGbp > 0 && styles.activityPriceCol]}>
-                        <Meta style={styles.activityPriceLabel}>Current</Meta>
-                        <Body style={styles.activityPriceValue}>{formatFromFiat(item.currentBidGbp, 'GBP')}</Body>
+                      <View style={[item.amountGbp > 0 && [styles.activityPriceCol, { borderLeftColor: colors.border }]]}>
+                        <Meta style={[styles.activityPriceLabel, { color: colors.textMuted }]}>Current</Meta>
+                        <Body style={[styles.activityPriceValue, { color: colors.textPrimary }]}>{formatFromFiat(item.currentBidGbp, 'GBP')}</Body>
                         {displayMode !== 'ize' && (
-                          <Text style={styles.activityIzeText}>
+                          <Text style={[styles.activityIzeText, { color: colors.textMuted }]}>
                             {formatIzeAmount(toIze(item.currentBidGbp, 'GBP', goldRates))}
                           </Text>
                         )}
@@ -335,20 +336,20 @@ export default function MyBidsScreen() {
                   </View>
                   <View style={styles.activityMetaRow}>
                     <View style={styles.activityMetaCol}>
-                      <Meta style={styles.activityMetaLabel}>Time</Meta>
-                      <Text style={styles.activityMetaValue}>{formatActivityTime(item.endsAt, item.lifecycle)}</Text>
+                      <Meta style={[styles.activityMetaLabel, { color: colors.textMuted }]}>Time</Meta>
+                      <Text style={[styles.activityMetaValue, { color: colors.textSecondary }]}>{formatActivityTime(item.endsAt, item.lifecycle)}</Text>
                     </View>
                     {(item.bidState === 'won' || item.bidState === 'lost') && (
                       <View style={styles.activityMetaCol}>
-                        <Meta style={styles.activityMetaLabel}>Result</Meta>
+                        <Meta style={[styles.activityMetaLabel, { color: colors.textMuted }]}>Result</Meta>
                         <Text style={[styles.activityMetaValue, { color: stateInfo.color }]}>
                           {item.bidState === 'won' ? 'Won' : 'Lost'}
                         </Text>
                       </View>
                     )}
                     <View style={styles.activityNextRow}>
-                      <Text style={styles.activityNextText}>{stateInfo.nextAction}</Text>
-                      <Ionicons name="chevron-forward" size={11} color={Colors.brand} />
+                      <Text style={[styles.activityNextText, { color: colors.brand }]}>{stateInfo.nextAction}</Text>
+                      <Ionicons name="chevron-forward" size={11} color={colors.brand} />
                     </View>
                   </View>
                 </View>
@@ -382,9 +383,9 @@ export default function MyBidsScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor={Colors.brand}
-            colors={[Colors.brand]}
-            progressBackgroundColor={Colors.surfaceAlt}
+            tintColor={colors.brand}
+            colors={[colors.brand]}
+            progressBackgroundColor={colors.surfaceAlt}
           />
         }
       />
@@ -395,7 +396,6 @@ export default function MyBidsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   stateRailContent: {
     paddingHorizontal: Space.md,
@@ -408,36 +408,23 @@ const styles = StyleSheet.create({
     minHeight: 36,
     borderRadius: Radius.full,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-  },
-  stateRailChipActive: {
-    backgroundColor: Colors.brand,
-    borderColor: Colors.brand,
   },
   stateRailText: {
     fontSize: 13,
-    color: Colors.textSecondary,
     fontFamily: 'Inter_500Medium',
   },
   stateRailTextActive: {
-    color: Colors.textInverse,
     fontFamily: 'Inter_600SemiBold',
   },
   filterDivider: {
     width: 1,
     height: 20,
-    backgroundColor: Colors.border,
     alignSelf: 'center',
   },
   sortChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-  },
-  sortToggleActive: {
-    backgroundColor: Colors.brand,
-    borderColor: Colors.brand,
   },
   listContent: {
     paddingHorizontal: Space.md,
@@ -455,7 +442,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingVertical: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
     gap: Space.sm,
   },
   activityImageWrap: {
@@ -475,7 +461,6 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -505,12 +490,10 @@ const styles = StyleSheet.create({
   },
   activityPriceCol: {
     borderLeftWidth: StyleSheet.hairlineWidth,
-    borderLeftColor: Colors.border,
     paddingLeft: Space.md,
   },
   activityPriceLabel: {
     fontSize: 10,
-    color: Colors.textMuted,
     fontFamily: 'Inter_600SemiBold',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
@@ -519,12 +502,10 @@ const styles = StyleSheet.create({
   activityPriceValue: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.textPrimary,
     fontFamily: 'Inter_600SemiBold',
   },
   activityIzeText: {
     fontSize: 11,
-    color: Colors.textMuted,
     fontFamily: 'Inter_400Regular',
     marginTop: 1,
   },
@@ -539,13 +520,11 @@ const styles = StyleSheet.create({
   },
   activityMetaLabel: {
     fontSize: 10,
-    color: Colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   activityMetaValue: {
     fontSize: 12,
-    color: Colors.textSecondary,
     fontFamily: 'Inter_500Medium',
     marginTop: 1,
   },
@@ -557,7 +536,6 @@ const styles = StyleSheet.create({
   },
   activityNextText: {
     fontSize: 12,
-    color: Colors.brand,
     fontFamily: 'Inter_600SemiBold',
   },
 });

@@ -12,8 +12,8 @@ import { View,
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { ActiveTheme, Colors } from '../constants/colors';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { useAppTheme } from '../theme/ThemeContext';
 import { useCurrencyContext } from '../context/CurrencyContext';
 import { CURRENCIES } from '../constants/currencies';
 import { useToast } from '../context/ToastContext';
@@ -46,6 +46,7 @@ import {
 export default function WithdrawScreen() {
   const navigation = useNavigation<any>();
   const reducedMotionEnabled = useReducedMotion();
+  const { colors, isDark } = useAppTheme();
   const [amount, setAmount] = useState('');
   const [availableBalance, setAvailableBalance] = useState(0);
   const [isHydratingBalance, setIsHydratingBalance] = useState(true);
@@ -375,10 +376,10 @@ export default function WithdrawScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
-      <View style={styles.header}>
+      <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <AnimatedPressable
           style={styles.backBtn}
           onPress={() => navigation.goBack()}
@@ -386,9 +387,9 @@ export default function WithdrawScreen() {
           accessibilityLabel="Go back"
           accessibilityHint="Returns to the previous screen"
         >
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </AnimatedPressable>
-        <Text style={styles.headerTitle}>Withdraw Balance</Text>
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Withdraw Balance</Text>
         <View style={{ width: 44 }} />
       </View>
 
@@ -402,28 +403,28 @@ export default function WithdrawScreen() {
 
           <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(30)}>
             <View style={styles.amountWrap}>
-            <Text style={styles.currencySymbol}>{currencySymbol}</Text>
+            <Text style={[styles.currencySymbol, { color: colors.textPrimary }]}>{currencySymbol}</Text>
             <TextInput
-              style={styles.amountInput}
+              style={[styles.amountInput, { color: colors.textPrimary }]}
               value={amount}
               onChangeText={(value) => setAmount(sanitizeDecimalInput(value))}
               keyboardType="decimal-pad"
               autoFocus
-              selectionColor={Colors.brand}
+              selectionColor={colors.brand}
               accessibilityLabel="Withdrawal amount"
               accessibilityHint="Enter the amount to withdraw from your available balance"
             />
           </View>
-          <Text style={styles.availableText}>Available: {formatFromFiat(availableBalance, 'GBP', { displayMode: 'fiat' })}</Text>
-          {policyScopeLabel ? <Text style={styles.policyLabel}>Policy scope: {policyScopeLabel}</Text> : null}
-          {payoutPolicyHint ? <Text style={styles.policyHint}>{payoutPolicyHint}</Text> : null}
-          {exceedsBalance ? <Text style={styles.balanceError}>Entered amount exceeds available balance.</Text> : null}
+          <Text style={[styles.availableText, { color: colors.textSecondary }]}>Available: {formatFromFiat(availableBalance, 'GBP', { displayMode: 'fiat' })}</Text>
+          {policyScopeLabel ? <Text style={[styles.policyLabel, { color: colors.textMuted }]}>Policy scope: {policyScopeLabel}</Text> : null}
+          {payoutPolicyHint ? <Text style={[styles.policyHint, { color: colors.textMuted }]}>{payoutPolicyHint}</Text> : null}
+          {exceedsBalance ? <Text style={[styles.balanceError, { color: colors.danger }]}>Entered amount exceeds available balance.</Text> : null}
           </Reanimated.View>
 
           <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)}>
-            <Text style={styles.sectionTitle}>Transfer to</Text>
+            <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>Transfer to</Text>
             <AnimatedPressable
-              style={styles.bankCard}
+              style={[styles.bankCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
               activeOpacity={0.8}
               onPress={() => {
               if (!allowBankAccounts) {
@@ -439,15 +440,15 @@ export default function WithdrawScreen() {
             accessibilityHint="Opens bank account options for withdrawals"
           >
             <View style={styles.bankLeft}>
-              <View style={styles.bankIcon}>
-                <Ionicons name="business" size={24} color={Colors.textPrimary} />
+              <View style={[styles.bankIcon, { backgroundColor: colors.surface }]}>
+                <Ionicons name="business" size={24} color={colors.textPrimary} />
               </View>
               <View>
-                <Text style={styles.bankName}>{bankCopy.name}</Text>
-                <Text style={styles.bankDetails}>{bankCopy.details}</Text>
+                <Text style={[styles.bankName, { color: colors.textPrimary }]}>{bankCopy.name}</Text>
+                <Text style={[styles.bankDetails, { color: colors.textSecondary }]}>{bankCopy.details}</Text>
               </View>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </AnimatedPressable>
 
           {allowBankAccounts ? (
@@ -458,16 +459,16 @@ export default function WithdrawScreen() {
               accessibilityLabel="Add a new bank account"
               accessibilityHint="Opens the bank account setup form"
             >
-              <Ionicons name="add" size={18} color={Colors.brand} />
-              <Text style={styles.addBankText}>Add a new bank account</Text>
+              <Ionicons name="add" size={18} color={colors.brand} />
+              <Text style={[styles.addBankText, { color: colors.brand }]}>Add a new bank account</Text>
             </AnimatedPressable>
           ) : (
-            <Text style={styles.railHintText}>Bank account setup is currently disabled for this region policy.</Text>
+            <Text style={[styles.railHintText, { color: colors.textMuted }]}>Bank account setup is currently disabled for this region policy.</Text>
           )}
           </Reanimated.View>
 
-        <View style={styles.footer}>
-          <Text style={styles.feeText}>Withdrawals are processed from completed sale proceeds in 3-5 working days.</Text>
+        <View style={[styles.footer, { borderTopColor: colors.border, backgroundColor: colors.background }]}>
+          <Text style={[styles.feeText, { color: colors.textMuted }]}>Withdrawals are processed from completed sale proceeds in 3-5 working days.</Text>
           <AppButton
             title={
               isWithdrawing
@@ -477,8 +478,8 @@ export default function WithdrawScreen() {
             onPress={handleWithdraw}
             disabled={!canWithdraw}
             variant="primary"
-            style={[styles.primaryBtn, !canWithdraw && styles.primaryBtnDisabled]}
-            titleStyle={styles.primaryText}
+            style={[styles.primaryBtn, { backgroundColor: colors.textPrimary }, !canWithdraw && styles.primaryBtnDisabled]}
+            titleStyle={[styles.primaryText, { color: colors.background }]}
             accessibilityLabel={
               isWithdrawing
                 ? 'Processing withdrawal'
@@ -493,35 +494,35 @@ export default function WithdrawScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, height: 56, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  container: { flex: 1 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, height: 56, borderBottomWidth: 1 },
   backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'flex-start' },
-  headerTitle: { fontSize: 17, fontFamily: Typography.family.semibold, color: Colors.textPrimary },
+  headerTitle: { fontSize: 17, fontFamily: Typography.family.semibold },
 
   content: { flex: 1, paddingHorizontal: 20 },
 
   amountWrap: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 40, marginBottom: 12 },
-  currencySymbol: { fontSize: 44, fontFamily: Typography.family.bold, color: Colors.textPrimary, marginRight: 8 },
-  amountInput: { fontSize: 56, fontFamily: Typography.family.bold, color: Colors.textPrimary, minWidth: 150 },
-  availableText: { textAlign: 'center', fontSize: 14, fontFamily: Typography.family.medium, color: Colors.textSecondary, marginBottom: 8 },
-  policyLabel: { textAlign: 'center', fontSize: 12, fontFamily: Typography.family.semibold, color: Colors.textMuted, marginBottom: 4 },
-  policyHint: { textAlign: 'center', fontSize: 12, fontFamily: Typography.family.medium, color: Colors.textMuted, marginBottom: 28 },
-  balanceError: { textAlign: 'center', marginTop: 4, marginBottom: 20, fontSize: 12, fontFamily: Typography.family.semibold, color: Colors.danger },
-  sectionTitle: { fontSize: 13, fontFamily: Typography.family.semibold, color: Colors.textMuted, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 12 },
+  currencySymbol: { fontSize: 44, fontFamily: Typography.family.bold, marginRight: 8 },
+  amountInput: { fontSize: 56, fontFamily: Typography.family.bold, minWidth: 150 },
+  availableText: { textAlign: 'center', fontSize: 14, fontFamily: Typography.family.medium, marginBottom: 8 },
+  policyLabel: { textAlign: 'center', fontSize: 12, fontFamily: Typography.family.semibold, marginBottom: 4 },
+  policyHint: { textAlign: 'center', fontSize: 12, fontFamily: Typography.family.medium, marginBottom: 28 },
+  balanceError: { textAlign: 'center', marginTop: 4, marginBottom: 20, fontSize: 12, fontFamily: Typography.family.semibold },
+  sectionTitle: { fontSize: 13, fontFamily: Typography.family.semibold, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 12 },
 
-  bankCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.surface, padding: 16, borderRadius: Radius.lg, marginBottom: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.border, ...Elevation.subtle },
+  bankCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderRadius: Radius.lg, marginBottom: 12, borderWidth: StyleSheet.hairlineWidth, ...Elevation.subtle },
   bankLeft: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  bankIcon: { width: 48, height: 48, borderRadius: 24, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' },
-  bankName: { fontSize: 16, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginBottom: 4 },
-  bankDetails: { fontSize: 13, fontFamily: Typography.family.regular, color: Colors.textSecondary },
+  bankIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  bankName: { fontSize: 16, fontFamily: Typography.family.semibold, marginBottom: 4 },
+  bankDetails: { fontSize: 13, fontFamily: Typography.family.regular },
 
   addBankBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12 },
-  addBankText: { fontSize: 15, fontFamily: Typography.family.semibold, color: Colors.brand },
-  railHintText: { fontSize: 12, fontFamily: Typography.family.medium, color: Colors.textMuted, paddingVertical: 12 },
+  addBankText: { fontSize: 15, fontFamily: Typography.family.semibold },
+  railHintText: { fontSize: 12, fontFamily: Typography.family.medium, paddingVertical: 12 },
 
-  footer: { paddingVertical: 20, borderTopWidth: 1, borderTopColor: Colors.border, backgroundColor: Colors.background },
-  feeText: { fontSize: 12, fontFamily: Typography.family.regular, color: Colors.textMuted, textAlign: 'center', marginBottom: 16 },
-  primaryBtn: { backgroundColor: Colors.textPrimary, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
+  footer: { paddingVertical: 20, borderTopWidth: 1 },
+  feeText: { fontSize: 12, fontFamily: Typography.family.regular, textAlign: 'center', marginBottom: 16 },
+  primaryBtn: { height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
   primaryBtnDisabled: { opacity: 0.45 },
-  primaryText: { color: Colors.background, fontSize: 16, fontFamily: Typography.family.bold },
+  primaryText: { fontSize: 16, fontFamily: Typography.family.bold },
 });
