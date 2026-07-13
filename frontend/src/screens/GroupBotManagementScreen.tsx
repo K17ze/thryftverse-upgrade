@@ -13,7 +13,6 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Colors } from '../constants/colors';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -24,7 +23,7 @@ type Props = StackScreenProps<RootStackParamList, 'GroupBotManagement'>;
 
 export default function GroupBotManagementScreen({ navigation, route }: Props) {
   const { conversationId } = route.params;
-  const { isDark } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
   const { show } = useToast();
   const haptic = useHaptic();
 
@@ -110,8 +109,8 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
               accessibilityRole="button"
               accessibilityLabel="My bots"
             >
-              <View style={styles.headerActionBtn}>
-                <Ionicons name="hardware-chip-outline" size={20} color={Colors.textPrimary} />
+              <View style={[styles.headerActionBtn, { backgroundColor: colors.surfaceAlt }]}>
+                <Ionicons name="hardware-chip-outline" size={20} color={colors.textPrimary} />
               </View>
             </AnimatedPressable>
           }
@@ -124,10 +123,10 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
         {/* Deployed bots */}
         {deployedBots.length > 0 && (
           <View style={styles.section}>
-            <Meta color={Colors.textMuted} style={styles.sectionLabel}>
+            <Meta color={colors.textMuted} style={styles.sectionLabel}>
               ACTIVE IN THIS GROUP
             </Meta>
-            <View style={styles.card}>
+            <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               {deployedBots.map((bot, index) => (
                 <View key={bot.id}>
                   <BotRow
@@ -136,7 +135,7 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
                     onRemove={() => handleRemove(bot.id, bot.name)}
                     onView={() => navigation.navigate('BotDetail', { botId: bot.id, conversationId })}
                   />
-                  {index < deployedBots.length - 1 && <View style={styles.divider} />}
+                  {index < deployedBots.length - 1 && <View style={[styles.divider, { backgroundColor: colors.border }]} />}
                 </View>
               ))}
             </View>
@@ -146,10 +145,10 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
         {/* Available bots */}
         {availableToDeploy.length > 0 && (
           <View style={styles.section}>
-            <Meta color={Colors.textMuted} style={styles.sectionLabel}>
+            <Meta color={colors.textMuted} style={styles.sectionLabel}>
               AVAILABLE TO DEPLOY
             </Meta>
-            <View style={styles.card}>
+            <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               {availableToDeploy.map((bot, index) => (
                 <View key={bot.id}>
                   <BotRow
@@ -157,7 +156,7 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
                     onDeploy={() => handleDeploy(bot.id)}
                     onView={() => navigation.navigate('BotDetail', { botId: bot.id, conversationId })}
                   />
-                  {index < availableToDeploy.length - 1 && <View style={styles.divider} />}
+                  {index < availableToDeploy.length - 1 && <View style={[styles.divider, { backgroundColor: colors.border }]} />}
                 </View>
               ))}
             </View>
@@ -166,8 +165,8 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
 
         {deployedBots.length === 0 && availableToDeploy.length === 0 && (
           <View style={styles.empty}>
-            <Ionicons name="hardware-chip-outline" size={40} color={Colors.textMuted} />
-            <Caption color={Colors.textMuted} style={styles.emptyText}>
+            <Ionicons name="hardware-chip-outline" size={40} color={colors.textMuted} />
+            <Caption color={colors.textMuted} style={styles.emptyText}>
               No bots available for this group.
             </Caption>
           </View>
@@ -190,6 +189,7 @@ function BotRow({
   onDeploy?: () => void;
   onView?: () => void;
 }) {
+  const { colors } = useAppTheme();
   const statusLabel =
     bot.status === 'available'
       ? 'Available'
@@ -199,10 +199,10 @@ function BotRow({
 
   const statusColor =
     bot.status === 'available'
-      ? Colors.brand
+      ? colors.brand
       : bot.status === 'local-only'
-      ? Colors.textSecondary
-      : Colors.textMuted;
+      ? colors.textSecondary
+      : colors.textMuted;
 
   return (
     <AnimatedPressable
@@ -214,7 +214,7 @@ function BotRow({
       accessibilityLabel={`View ${bot.name}`}
     >
       <View style={styles.botRow}>
-        <View style={styles.botIconWrap}>
+        <View style={[styles.botIconWrap, { backgroundColor: colors.surfaceAlt }]}>
           <Ionicons
             name={
               bot.category === 'moderation'
@@ -226,7 +226,7 @@ function BotRow({
                 : 'flash-outline'
             }
             size={20}
-            color={Colors.textPrimary}
+            color={colors.textPrimary}
           />
         </View>
 
@@ -234,8 +234,8 @@ function BotRow({
           <View style={styles.botNameRow}>
             <BodyEmphasis numberOfLines={1}>{bot.name}</BodyEmphasis>
             <View style={styles.badgeRow}>
-              <View style={[styles.typeBadge, { backgroundColor: bot.type === 'custom' ? Colors.brand + '18' : Colors.surfaceAlt }]}>
-                <Text style={[styles.typeBadgeText, { color: bot.type === 'custom' ? Colors.brand : Colors.textSecondary }]}>
+              <View style={[styles.typeBadge, { backgroundColor: bot.type === 'custom' ? colors.brand + '18' : colors.surfaceAlt }]}>
+                <Text style={[styles.typeBadgeText, { color: bot.type === 'custom' ? colors.brand : colors.textSecondary }]}>
                   {bot.type === 'custom' ? 'Custom' : 'System'}
                 </Text>
               </View>
@@ -244,11 +244,11 @@ function BotRow({
               </View>
             </View>
           </View>
-          <Caption color={Colors.textMuted} numberOfLines={1}>
+          <Caption color={colors.textMuted} numberOfLines={1}>
             {bot.description}
           </Caption>
           {deployed && (
-            <Caption color={Colors.brand} style={styles.commandHint}>
+            <Caption color={colors.brand} style={styles.commandHint}>
               {bot.commandHint}
             </Caption>
           )}
@@ -263,7 +263,7 @@ function BotRow({
             accessibilityRole="button"
             accessibilityLabel={`Remove ${bot.name}`}
           >
-            <Ionicons name="remove-circle" size={24} color={Colors.danger} />
+            <Ionicons name="remove-circle" size={24} color={colors.danger} />
           </AnimatedPressable>
         ) : (
           <AnimatedPressable
@@ -274,7 +274,7 @@ function BotRow({
             accessibilityRole="button"
             accessibilityLabel={`Deploy ${bot.name}`}
           >
-            <Ionicons name="add-circle" size={24} color={Colors.brand} />
+            <Ionicons name="add-circle" size={24} color={colors.brand} />
           </AnimatedPressable>
         )}
       </View>
@@ -285,7 +285,6 @@ function BotRow({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   content: {
     paddingHorizontal: Space.md,
@@ -301,10 +300,8 @@ const styles = StyleSheet.create({
     marginLeft: Space.xs,
   },
   card: {
-    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
     overflow: 'hidden',
   },
   botRow: {
@@ -318,7 +315,6 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -347,7 +343,6 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
     marginLeft: Space.md + 40 + Space.sm,
   },
   empty: {
@@ -362,7 +357,6 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
   },
