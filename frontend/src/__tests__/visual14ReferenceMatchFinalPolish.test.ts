@@ -11,12 +11,15 @@ function read(p: string): string {
 }
 
 describe('VISUAL-14 Reference-Match Final Polish', () => {
-  // ── 1. InboxScreen has card-like conversation rows ──
-  it('InboxScreen rows use surface background with border radius and shadow', () => {
-    const src = read(resolve(SCREENS, 'InboxScreen.tsx'));
-    expect(src).toContain('backgroundColor: Colors.surface');
-    expect(src).toContain('borderRadius: Radius.lg');
-    expect(src).toContain('...Elevation.subtle');
+  // ── 1. InboxScreen uses the current flat, shared conversation row ──
+  it('InboxScreen rows use the shared native row with explicit typography and press feedback', () => {
+    const screen = read(resolve(SCREENS, 'InboxScreen.tsx'));
+    const row = read(resolve(COMPONENTS, 'chat/InboxConversationRow.tsx'));
+    expect(screen).toContain('InboxConversationRow');
+    expect(row).toContain('scaleValue={0.98}');
+    expect(row).toContain('paddingHorizontal: Space.md');
+    expect(row).toContain('color: Colors.textPrimary');
+    expect(row).not.toContain('...Elevation.subtle');
   });
 
   it('InboxScreen list has top padding for card spacing', () => {
@@ -98,20 +101,21 @@ describe('VISUAL-14 Reference-Match Final Polish', () => {
   });
 
   // ── 6. SettingsScreen maintains upgraded structure ──
-  it('SettingsScreen uses IdentityCard and SettingsSection/SettingsRow', () => {
+  it('SettingsScreen uses the flagship shell, identity hero and shared setting rows', () => {
     const src = read(resolve(SCREENS, 'SettingsScreen.tsx'));
-    expect(src).toContain('IdentityCard');
+    expect(src).toContain('FlagshipScreen');
+    expect(src).toContain('identityHero');
     expect(src).toContain('SettingsSection');
     expect(src).toContain('SettingsRow');
-    expect(src).toContain('FadeInDown');
+    expect(src).toContain('...Elevation.subtle');
   });
 
   // ── 7. Combined visual branch components still present ──
-  it('ProfileVisualHeader component exists and is imported', () => {
-    const src = read(resolve(COMPONENTS, 'profile/ProfileVisualHeader.tsx'));
+  it('MyProfileIdentityHero component exists and is imported', () => {
+    const src = read(resolve(COMPONENTS, 'profile/MyProfileIdentityHero.tsx'));
     expect(src).toBeTruthy();
     const screen = read(resolve(SCREENS, 'MyProfileScreen.tsx'));
-    expect(screen).toContain('ProfileVisualHeader');
+    expect(screen).toContain('MyProfileIdentityHero');
   });
 
   it('ProfileTabRail component exists and is imported', () => {

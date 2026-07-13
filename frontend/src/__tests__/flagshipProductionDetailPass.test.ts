@@ -56,5 +56,7 @@ describe("neutral flagship production detail pass", () => {
     expect(visualSearch).not.toContain("setInterval");
     expect(visualSearch).not.toContain("Analysing image");
     expect(visualSearch).not.toContain("fetchJson('/visual-search'");
+    expect(visualSearch).toContain('onError={() => setPreviewFailed(true)}');
+    expect(visualSearch.match(/setPreviewFailed\(false\)/g)?.length).toBeGreaterThanOrEqual(3);
   });
 });

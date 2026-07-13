@@ -46,6 +46,7 @@ export default function VisualSearchScreen({ navigation }: Props) {
         quality: 0.92,
       });
       if (!result.canceled && result.assets?.[0]?.uri) {
+        setPreviewFailed(false);
         setImageUri(result.assets[0].uri);
       }
     } catch {
@@ -67,6 +68,7 @@ export default function VisualSearchScreen({ navigation }: Props) {
         quality: 0.92,
       });
       if (!result.canceled && result.assets?.[0]?.uri) {
+        setPreviewFailed(false);
         setImageUri(result.assets[0].uri);
       }
     } catch {
@@ -75,6 +77,7 @@ export default function VisualSearchScreen({ navigation }: Props) {
   }, [show]);
 
   const handleRemoveImage = useCallback(() => {
+    setPreviewFailed(false);
     setImageUri(null);
   }, []);
 

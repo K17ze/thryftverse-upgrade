@@ -530,9 +530,9 @@ export default function SettingsScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   searchBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.md,
+    width: 44,
+    height: 44,
+    borderRadius: Radius.full,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',

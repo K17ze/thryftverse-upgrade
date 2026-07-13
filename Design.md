@@ -247,6 +247,8 @@ The palette must support three distinct surface modes. The previous global rule 
 
 The legacy `frontend/src/constants/colors.ts` is compatibility-only. New React components should use `useAppTheme().colors`; non-component utilities may use static tokens where hooks are impossible.
 
+Theme migration is a visual-preservation change, not a deletion pass. A component may remove a static `Colors.*` declaration only when the same render path receives an equivalent `colors.*` value through a dynamic style, a theme-aware style factory, or a shared themed primitive. Never leave text, canvas, input, border, badge, pressed, focus, destructive, loading, or selected-state colour to the React Native platform default. Migrations must be reviewed in both light and dark modes and must retain the previous hierarchy before any aesthetic refinement is accepted.
+
 ### Surface canvas modes
 
 Choose a mode before designing a screen.
