@@ -15,7 +15,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
-import { Colors } from '../constants/colors';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -31,7 +30,7 @@ const CARD_W = (SCREEN_W - Space.md * 3) / 2;
 const CARD_H = CARD_W * (16 / 9);
 
 export default function PosterArchiveScreen({ navigation }: Props) {
-  const { isDark } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
   const { show } = useToast();
 
   const [stories, setStories] = useState<PosterStory[]>([]);
@@ -101,7 +100,7 @@ export default function PosterArchiveScreen({ navigation }: Props) {
               containerStyle={{ borderRadius: Radius.lg, overflow: 'hidden' }}
             />
           ) : (
-            <View style={[styles.cardPlaceholder, { backgroundColor: firstFrame?.backgroundColor ?? Colors.surfaceAlt }]}>
+            <View style={[styles.cardPlaceholder, { backgroundColor: firstFrame?.backgroundColor ?? colors.surfaceAlt }]}>
               <Text style={styles.cardPlaceholderText} numberOfLines={2}>
                 {firstFrame?.caption || 'Text story'}
               </Text>
@@ -126,11 +125,11 @@ export default function PosterArchiveScreen({ navigation }: Props) {
           </View>
         </View>
         <View style={styles.cardFooter}>
-          <Text style={styles.cardDate}>
+          <Text style={[styles.cardDate, { color: colors.textSecondary }]}>
             {new Date(item.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
           </Text>
           <Pressable onPress={() => handleDelete(item.id)} accessibilityLabel="Delete story">
-            <Ionicons name="trash-outline" size={18} color={Colors.textMuted} />
+            <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
           </Pressable>
         </View>
       </Pressable>
@@ -139,24 +138,24 @@ export default function PosterArchiveScreen({ navigation }: Props) {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
         <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
         <View style={styles.topBar}>
           <AnimatedPressable onPress={() => navigation.goBack()} style={styles.iconBtn} activeOpacity={0.7} scaleValue={0.9} hapticFeedback="light">
-            <Ionicons name="chevron-back" size={26} color={Colors.textPrimary} />
+            <Ionicons name="chevron-back" size={26} color={colors.textPrimary} />
           </AnimatedPressable>
-          <Text style={styles.topTitle}>Archive</Text>
+          <Text style={[styles.topTitle, { color: colors.textPrimary }]}>Archive</Text>
           <View style={styles.iconBtn} />
         </View>
         <View style={styles.loadingBody}>
-          <ActivityIndicator size="large" color={Colors.brand} />
+          <ActivityIndicator size="large" color={colors.brand} />
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       <View style={styles.topBar}>
@@ -167,9 +166,9 @@ export default function PosterArchiveScreen({ navigation }: Props) {
           scaleValue={0.9}
           hapticFeedback="light"
         >
-          <Ionicons name="chevron-back" size={26} color={Colors.textPrimary} />
+          <Ionicons name="chevron-back" size={26} color={colors.textPrimary} />
         </AnimatedPressable>
-        <Text style={styles.topTitle}>My Poster Archive</Text>
+        <Text style={[styles.topTitle, { color: colors.textPrimary }]}>My Poster Archive</Text>
         <View style={styles.iconBtn} />
       </View>
 
@@ -184,14 +183,14 @@ export default function PosterArchiveScreen({ navigation }: Props) {
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={() => loadArchive(true)}
-            tintColor={Colors.brand}
+            tintColor={colors.brand}
           />
         }
         ListEmptyComponent={
           <View style={styles.emptyBody}>
-            <Ionicons name="archive-outline" size={48} color={Colors.textMuted} />
-            <Text style={styles.emptyTitle}>No archived stories</Text>
-            <Text style={styles.emptySubtitle}>Your past poster stories will appear here</Text>
+            <Ionicons name="archive-outline" size={48} color={colors.textMuted} />
+            <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No archived stories</Text>
+            <Text style={[styles.emptySubtitle, { color: colors.textMuted }]}>Your past poster stories will appear here</Text>
           </View>
         }
       />
@@ -202,7 +201,6 @@ export default function PosterArchiveScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   topBar: {
     flexDirection: 'row',
@@ -214,7 +212,6 @@ const styles = StyleSheet.create({
   topTitle: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
     letterSpacing: Type.subtitle.letterSpacing,
   },
   iconBtn: {
@@ -304,7 +301,6 @@ const styles = StyleSheet.create({
   cardDate: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
   },
   emptyBody: {
     flex: 1,
@@ -316,11 +312,9 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
   },
   emptySubtitle: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
   },
 });
