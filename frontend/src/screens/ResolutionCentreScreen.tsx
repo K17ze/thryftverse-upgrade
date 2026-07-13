@@ -12,7 +12,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Space, Typography, Radius } from '../theme/designTokens';
 import { useStore } from '../store/useStore';
 import { TradeHeader } from '../components/trade/TradeHeader';
@@ -25,12 +25,6 @@ const FILTERS: Array<{ value: TicketFilter; label: string; accessibilityLabel: s
   { value: 'resolved', label: 'Resolved', accessibilityLabel: 'Show resolved requests' },
   { value: 'closed', label: 'Closed', accessibilityLabel: 'Show closed requests' },
 ];
-
-const STATUS_CONFIG: Record<string, { label: string; color: string; icon: keyof typeof Ionicons.glyphMap }> = {
-  open: { label: 'Open', color: Colors.brand, icon: 'folder-open-outline' },
-  resolved: { label: 'Resolved', color: Colors.success, icon: 'checkmark-circle-outline' },
-  closed: { label: 'Closed', color: Colors.textMuted, icon: 'close-circle-outline' },
-};
 
 function formatRelativeDate(timestamp: number): string {
   const now = Date.now();
@@ -46,18 +40,19 @@ function formatRelativeDate(timestamp: number): string {
 const SKELETON_COUNT = 4;
 
 function TicketSkeleton() {
+  const { colors } = useAppTheme();
   return (
-    <View style={styles.ticketCard}>
-      <View style={[styles.statusIconWrap, { backgroundColor: Colors.surfaceAlt }]} />
+    <View style={[styles.ticketCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <View style={[styles.statusIconWrap, { backgroundColor: colors.surfaceAlt }]} />
       <View style={styles.ticketInfo}>
-        <View style={styles.skeletonTopic} />
-        <View style={styles.skeletonDetails} />
+        <View style={[styles.skeletonTopic, { backgroundColor: colors.surfaceAlt }]} />
+        <View style={[styles.skeletonDetails, { backgroundColor: colors.surfaceAlt }]} />
         <View style={styles.skeletonMetaRow}>
-          <View style={styles.skeletonMetaShort} />
-          <View style={styles.skeletonMetaLong} />
+          <View style={[styles.skeletonMetaShort, { backgroundColor: colors.surfaceAlt }]} />
+          <View style={[styles.skeletonMetaLong, { backgroundColor: colors.surfaceAlt }]} />
         </View>
       </View>
-      <View style={styles.skeletonChevron} />
+      <View style={[styles.skeletonChevron, { backgroundColor: colors.surfaceAlt }]} />
     </View>
   );
 }
@@ -65,12 +60,19 @@ function TicketSkeleton() {
 export default function ResolutionCentreScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
+  const { colors, isDark } = useAppTheme();
   const [filter, setFilter] = useState<TicketFilter>('all');
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const supportTickets = useStore((state) => state.supportTickets);
   const loadSupportTicketsFromApi = useStore((state) => state.loadSupportTicketsFromApi);
+
+  const STATUS_CONFIG: Record<string, { label: string; color: string; icon: keyof typeof Ionicons.glyphMap }> = {
+    open: { label: 'Open', color: colors.brand, icon: 'folder-open-outline' },
+    resolved: { label: 'Resolved', color: colors.success, icon: 'checkmark-circle-outline' },
+    closed: { label: 'Closed', color: colors.textMuted, icon: 'close-circle-outline' },
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -100,13 +102,13 @@ export default function ResolutionCentreScreen() {
   const openCount = supportTickets.filter((t) => t.status === 'open').length;
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       <TradeHeader title="Resolution Centre" onBack={() => navigation.goBack()} />
 
       {/* Filter rail */}
-      <View style={styles.filterRail}>
+      <View style={[styles.filterRail, { borderBottomColor: colors.border }]}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -120,12 +122,22 @@ export default function ResolutionCentreScreen() {
             return (
               <Pressable
                 key={opt.value}
-                style={[styles.filterChip, isActive && styles.filterChipActive]}
+                style={[
+                  styles.filterChip,
+                  { borderColor: colors.border, backgroundColor: colors.surface },
+                  isActive && { borderColor: colors.brand, backgroundColor: colors.brand },
+                ]}
                 onPress={() => setFilter(opt.value)}
                 accessibilityRole="button"
                 accessibilityLabel={opt.accessibilityLabel}
               >
-                <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    { color: colors.textMuted },
+                    isActive && { color: colors.textInverse, fontFamily: Typography.family.semibold },
+                  ]}
+                >
                   {opt.label}
                   {count > 0 && (
                     <Text style={styles.filterChipCount}> {count}</Text>
@@ -145,13 +157,13 @@ export default function ResolutionCentreScreen() {
         </View>
       ) : filteredTickets.length === 0 ? (
         <View style={styles.centerState}>
-          <View style={styles.emptyIconWrap}>
-            <Ionicons name="folder-open-outline" size={36} color={Colors.textMuted} />
+          <View style={[styles.emptyIconWrap, { backgroundColor: colors.surface }]}>
+            <Ionicons name="folder-open-outline" size={36} color={colors.textMuted} />
           </View>
-          <Text style={styles.emptyTitle}>
+          <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
             {filter === 'open' ? 'No open requests' : 'No support requests'}
           </Text>
-          <Text style={styles.emptySub}>
+          <Text style={[styles.emptySub, { color: colors.textMuted }]}>
             {filter === 'open'
               ? 'You have no open support requests right now.'
               : 'If you have an issue with an order, open the order and tap "Report an issue".'}
@@ -164,13 +176,16 @@ export default function ResolutionCentreScreen() {
           contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 20 }]}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.brand} />
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.brand} />
           }
           renderItem={({ item }) => {
             const statusCfg = STATUS_CONFIG[item.status] ?? STATUS_CONFIG.open;
             return (
               <Pressable
-                style={styles.ticketCard}
+                style={[
+                  styles.ticketCard,
+                  { backgroundColor: colors.surface, borderColor: colors.border },
+                ]}
                 onPress={() => navigation.navigate('SupportTicketDetail', { ticketId: item.id })}
                 accessibilityRole="button"
                 accessibilityLabel={`Support request: ${item.topicLabel}, ${statusCfg.label}`}
@@ -179,16 +194,16 @@ export default function ResolutionCentreScreen() {
                   <Ionicons name={statusCfg.icon} size={18} color={statusCfg.color} />
                 </View>
                 <View style={styles.ticketInfo}>
-                  <Text style={styles.ticketTopic} numberOfLines={1}>{item.topicLabel}</Text>
-                  <Text style={styles.ticketDetails} numberOfLines={2}>{item.details}</Text>
+                  <Text style={[styles.ticketTopic, { color: colors.textPrimary }]} numberOfLines={1}>{item.topicLabel}</Text>
+                  <Text style={[styles.ticketDetails, { color: colors.textSecondary }]} numberOfLines={2}>{item.details}</Text>
                   <View style={styles.ticketMetaRow}>
                     <View style={[styles.statusPill, { backgroundColor: `${statusCfg.color}12` }]}>
                       <Text style={[styles.ticketStatus, { color: statusCfg.color }]}>{statusCfg.label}</Text>
                     </View>
-                    <Text style={styles.ticketDate}>Updated {formatRelativeDate(item.updatedAt)}</Text>
+                    <Text style={[styles.ticketDate, { color: colors.textMuted }]}>Updated {formatRelativeDate(item.updatedAt)}</Text>
                   </View>
                 </View>
-                <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
               </Pressable>
             );
           }}
@@ -201,11 +216,9 @@ export default function ResolutionCentreScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   filterRail: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
     paddingVertical: Space.sm,
   },
   filterRailContent: {
@@ -218,21 +231,10 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     borderRadius: Radius.full,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-  },
-  filterChipActive: {
-    borderColor: Colors.brand,
-    backgroundColor: Colors.brand,
   },
   filterChipText: {
     fontSize: 13,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
-  },
-  filterChipTextActive: {
-    color: Colors.textInverse,
-    fontFamily: Typography.family.semibold,
   },
   filterChipCount: {
     fontSize: 11,
@@ -251,9 +253,7 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm + 2,
     marginBottom: Space.sm,
     borderRadius: Radius.lg,
-    backgroundColor: Colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
   },
   statusIconWrap: {
     width: 40,
@@ -270,12 +270,10 @@ const styles = StyleSheet.create({
   ticketTopic: {
     fontSize: 14,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   ticketDetails: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
     lineHeight: 16,
   },
   ticketMetaRow: {
@@ -296,7 +294,6 @@ const styles = StyleSheet.create({
   ticketDate: {
     fontSize: 11,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
   },
   centerState: {
     flex: 1,
@@ -309,7 +306,6 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 4,
@@ -317,12 +313,10 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 16,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   emptySub: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     textAlign: 'center',
     lineHeight: 18,
   },
@@ -331,13 +325,11 @@ const styles = StyleSheet.create({
     width: '60%',
     height: 14,
     borderRadius: 4,
-    backgroundColor: Colors.surfaceAlt,
   },
   skeletonDetails: {
     width: '90%',
     height: 12,
     borderRadius: 4,
-    backgroundColor: Colors.surfaceAlt,
     marginTop: 2,
   },
   skeletonMetaRow: {
@@ -350,18 +342,15 @@ const styles = StyleSheet.create({
     width: 50,
     height: 10,
     borderRadius: 5,
-    backgroundColor: Colors.surfaceAlt,
   },
   skeletonMetaLong: {
     width: 80,
     height: 10,
     borderRadius: 4,
-    backgroundColor: Colors.surfaceAlt,
   },
   skeletonChevron: {
     width: 18,
     height: 18,
     borderRadius: 4,
-    backgroundColor: Colors.surfaceAlt,
   },
 });
