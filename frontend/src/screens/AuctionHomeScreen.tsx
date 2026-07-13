@@ -1231,9 +1231,6 @@ export default function AuctionHomeScreen() {
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              decelerationRate="fast"
-              snapToInterval={railCardWidth + Space.sm}
-              snapToAlignment="start"
               contentContainerStyle={styles.railContent}
             >
               {segmentItems.map((item, idx) => (
@@ -1568,9 +1565,6 @@ export default function AuctionHomeScreen() {
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              decelerationRate="fast"
-              snapToInterval={endingRailCardWidth + Space.sm}
-              snapToAlignment="start"
               contentContainerStyle={styles.railContent}
             >
               {segmentItems.map((item, idx) => (
@@ -1679,9 +1673,6 @@ export default function AuctionHomeScreen() {
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              decelerationRate="fast"
-              snapToInterval={upcomingRailCardWidth + Space.sm}
-              snapToAlignment="start"
               contentContainerStyle={styles.railContent}
             >
               {segmentItems.map((item, idx) => (
@@ -1760,9 +1751,6 @@ export default function AuctionHomeScreen() {
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              decelerationRate="fast"
-              snapToInterval={watchingRailCardWidth + Space.sm}
-              snapToAlignment="start"
               contentContainerStyle={styles.railContent}
             >
               {segmentItems.map((item, idx) => (

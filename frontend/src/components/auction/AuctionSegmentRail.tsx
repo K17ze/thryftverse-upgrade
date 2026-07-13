@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable, LayoutChangeEvent } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, LayoutChangeEvent } from 'react-native';
 import Reanimated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { Colors } from '../../constants/colors';
 import { Space, Typography } from '../../theme/designTokens';
@@ -57,32 +57,38 @@ export function AuctionSegmentRail({
 
   return (
     <View style={styles.container}>
-      {segments.map((seg) => {
-        const active = seg.key === activeKey;
-        return (
-          <Pressable
-            key={seg.key}
-            style={styles.segment}
-            onPress={() => {
-              haptics.tap();
-              onSelect(seg.key);
-            }}
-            onLayout={handleLayout(seg.key)}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: active }}
-            accessibilityLabel={`${accessibilityLabelPrefix} ${seg.label}${seg.count != null ? `, ${seg.count} auctions` : ''}`}
-          >
-            <Text style={[styles.label, active && styles.labelActive]}>
-              {seg.label}
-            </Text>
-            {seg.count != null && (
-              <Text style={[styles.count, active && styles.countActive]}>
-                {seg.count}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.segmentsRow}
+      >
+        {segments.map((seg) => {
+          const active = seg.key === activeKey;
+          return (
+            <Pressable
+              key={seg.key}
+              style={styles.segment}
+              onPress={() => {
+                haptics.tap();
+                onSelect(seg.key);
+              }}
+              onLayout={handleLayout(seg.key)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: active }}
+              accessibilityLabel={`${accessibilityLabelPrefix} ${seg.label}${seg.count != null ? `, ${seg.count} auctions` : ''}`}
+            >
+              <Text style={[styles.label, active && styles.labelActive]}>
+                {seg.label}
               </Text>
-            )}
-          </Pressable>
-        );
-      })}
+              {seg.count != null && (
+                <Text style={[styles.count, active && styles.countActive]}>
+                  {seg.count}
+                </Text>
+              )}
+            </Pressable>
+          );
+        })}
+      </ScrollView>
       <Reanimated.View style={[styles.underline, animatedUnderlineStyle]} />
     </View>
   );
@@ -90,10 +96,12 @@ export function AuctionSegmentRail({
 
 const styles = StyleSheet.create({
   container: {
+    position: 'relative',
+  },
+  segmentsRow: {
     flexDirection: 'row',
     paddingHorizontal: Space.md,
     paddingVertical: Space.xs,
-    position: 'relative',
   },
   segment: {
     flexDirection: 'row',

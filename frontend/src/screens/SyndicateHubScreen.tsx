@@ -369,7 +369,11 @@ export default function CoOwnHubScreen() {
             </View>
 
             {/* Tab rail: Discover / Portfolio / Activity */}
-            <View style={styles.tabRail}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={[styles.tabRail, { flexGrow: 1 }]}
+            >
               <TabButton
                 label="Discover"
                 active={activeTab === 'discover' && !isSearching}
@@ -389,7 +393,7 @@ export default function CoOwnHubScreen() {
                 onPress={() => { haptics.tap(); navigation.navigate('CoOwnOrderHistory'); }}
                 colors={colors}
               />
-            </View>
+            </ScrollView>
 
             {/* Market context — quiet, real data only */}
             {!isSearching && marketContext.openItems > 0 && (
