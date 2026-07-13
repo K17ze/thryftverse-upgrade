@@ -14,7 +14,6 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Colors } from '../constants/colors';
 import { Space, Radius, Type, Typography, Elevation } from '../theme/designTokens';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -28,7 +27,7 @@ type Props = StackScreenProps<RootStackParamList, 'EditCollection'>;
 
 export default function EditCollectionScreen({ navigation, route }: Props) {
   const { collectionId } = route.params;
-  const { isDark } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
   const { show } = useToast();
   const haptic = useHaptic();
   const reducedMotionEnabled = useReducedMotion();
@@ -104,18 +103,18 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
 
   if (!collection) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
         <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
         <ScreenHeader title="Edit Collection" onBack={() => navigation.goBack()} />
         <View style={styles.center}>
-          <Text style={styles.emptyText}>Collection not found</Text>
+          <Text style={[styles.emptyText, { color: colors.textMuted }]}>Collection not found</Text>
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <ScreenHeader
         title="Edit Collection"
@@ -130,7 +129,7 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
             accessibilityLabel="Save changes"
             accessibilityRole="button"
           >
-            <Text style={[styles.headerAction, !canSave && styles.headerActionDisabled]}>
+            <Text style={[styles.headerAction, { color: colors.textPrimary }, !canSave && { color: colors.textMuted }]}>
               Save
             </Text>
           </AnimatedPressable>
@@ -144,8 +143,8 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(40)} style={styles.card}>
-            <Text style={styles.label}>Name</Text>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(40)} style={[styles.card, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.label, { color: colors.textMuted }]}>Name</Text>
             <AppInput
               value={name}
               onChangeText={setName}
@@ -154,11 +153,11 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
               maxLength={40}
               accessibilityLabel="Collection name input"
             />
-            <Text style={styles.charCount}>{name.length}/40</Text>
+            <Text style={[styles.charCount, { color: colors.textMuted }]}>{name.length}/40</Text>
           </Reanimated.View>
 
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)} style={styles.card}>
-            <Text style={styles.label}>Description</Text>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)} style={[styles.card, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.label, { color: colors.textMuted }]}>Description</Text>
             <AppInput
               value={description}
               onChangeText={setDescription}
@@ -168,21 +167,21 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
               inputContainerStyle={styles.textArea}
               accessibilityLabel="Collection description input"
             />
-            <Text style={styles.charCount}>{description.length}/200</Text>
+            <Text style={[styles.charCount, { color: colors.textMuted }]}>{description.length}/200</Text>
           </Reanimated.View>
 
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)} style={styles.card}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)} style={[styles.card, { backgroundColor: colors.surface }]}>
             <View style={styles.toggleRow}>
-              <View style={styles.toggleIconWrap}>
+              <View style={[styles.toggleIconWrap, { backgroundColor: colors.surfaceAlt }]}>
                 <Ionicons
                   name={isPrivate ? 'lock-closed-outline' : 'lock-open-outline'}
                   size={20}
-                  color={Colors.textSecondary}
+                  color={colors.textSecondary}
                 />
               </View>
               <View style={styles.toggleText}>
-                <Text style={styles.toggleLabel}>Private collection</Text>
-                <Text style={styles.toggleSub}>Only you can see this collection</Text>
+                <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>Private collection</Text>
+                <Text style={[styles.toggleSub, { color: colors.textMuted }]}>Only you can see this collection</Text>
               </View>
               <AnimatedPressable
                 onPress={() => {
@@ -195,27 +194,27 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
                 accessibilityRole="switch"
                 accessibilityState={{ checked: isPrivate }}
               >
-                <View style={[styles.togglePill, isPrivate && styles.togglePillActive]}>
-                  <View style={[styles.toggleKnob, isPrivate && styles.toggleKnobActive]} />
+                <View style={[styles.togglePill, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, isPrivate && { backgroundColor: colors.textPrimary, borderColor: colors.textPrimary }]}>
+                  <View style={[styles.toggleKnob, { backgroundColor: colors.background }, isPrivate && styles.toggleKnobActive]} />
                 </View>
               </AnimatedPressable>
             </View>
           </Reanimated.View>
 
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(160)} style={styles.dangerCard}>
-            <Text style={styles.dangerLabel}>Danger Zone</Text>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(160)} style={[styles.dangerCard, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.dangerLabel, { color: colors.danger }]}>Danger Zone</Text>
             <AppButton
               title="Delete Collection"
               variant="secondary"
               size="lg"
-              icon={<Ionicons name="trash-outline" size={18} color={Colors.danger} />}
-              titleStyle={{ color: Colors.danger }}
-              style={styles.deleteBtn}
+              icon={<Ionicons name="trash-outline" size={18} color={colors.danger} />}
+              titleStyle={{ color: colors.danger }}
+              style={{ borderColor: colors.danger }}
               onPress={handleDelete}
               hapticFeedback="heavy"
               accessibilityLabel="Delete collection"
             />
-            <Text style={styles.dangerSub}>
+            <Text style={[styles.dangerSub, { color: colors.textMuted }]}>
               This action cannot be undone. Your saved items will remain in Saved.
             </Text>
           </Reanimated.View>
@@ -227,7 +226,6 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   content: {
     flex: 1,
@@ -246,19 +244,13 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
   },
   headerAction: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
     letterSpacing: Type.body.letterSpacing,
   },
-  headerActionDisabled: {
-    color: Colors.textMuted,
-  },
   card: {
-    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     padding: Space.md,
     ...Elevation.subtle,
@@ -266,7 +258,6 @@ const styles = StyleSheet.create({
   label: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 1.2,
     marginBottom: Space.sm,
@@ -278,7 +269,6 @@ const styles = StyleSheet.create({
   charCount: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     textAlign: 'right',
     marginTop: Space.xs,
   },
@@ -291,7 +281,6 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -301,13 +290,11 @@ const styles = StyleSheet.create({
   toggleLabel: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
     letterSpacing: Type.body.letterSpacing,
   },
   toggleSub: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     marginTop: 2,
     letterSpacing: Type.caption.letterSpacing,
   },
@@ -315,28 +302,20 @@ const styles = StyleSheet.create({
     width: 48,
     height: 28,
     borderRadius: 14,
-    backgroundColor: Colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
     justifyContent: 'center',
     paddingHorizontal: 3,
-  },
-  togglePillActive: {
-    backgroundColor: Colors.textPrimary,
-    borderColor: Colors.textPrimary,
   },
   toggleKnob: {
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: Colors.background,
     ...Elevation.card,
   },
   toggleKnobActive: {
     transform: [{ translateX: 20 }],
   },
   dangerCard: {
-    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     padding: Space.md,
     ...Elevation.subtle,
@@ -345,18 +324,13 @@ const styles = StyleSheet.create({
   dangerLabel: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.danger,
     textTransform: 'uppercase',
     letterSpacing: 1.2,
     marginBottom: Space.sm,
   },
-  deleteBtn: {
-    borderColor: Colors.danger,
-  },
   dangerSub: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     marginTop: Space.sm,
     textAlign: 'center',
   },
