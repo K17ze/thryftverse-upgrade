@@ -9,7 +9,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../constants/colors';
 import { useAppTheme } from '../theme/ThemeContext';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
@@ -35,7 +34,7 @@ function relativeTime(isoTs?: string): string | null {
 }
 
 export default function SavedSearchesScreen({ navigation }: Props) {
-  const { isDark } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
   const savedSearches = useStore((s) => s.savedSearches);
   const removeSavedSearch = useStore((s) => s.removeSavedSearch);
   const toggleSavedSearchAlerts = useStore((s) => s.toggleSavedSearchAlerts);
@@ -86,18 +85,18 @@ export default function SavedSearchesScreen({ navigation }: Props) {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <StatusBar
         barStyle={isDark ? 'light-content' : 'dark-content'}
-        backgroundColor={Colors.background}
+        backgroundColor={colors.background}
       />
 
       {/* Header */}
       <View style={styles.header}>
         <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={26} color={Colors.textPrimary} />
+          <Ionicons name="arrow-back" size={26} color={colors.textPrimary} />
         </AnimatedPressable>
-        <Text style={styles.headerTitle}>Saved Searches</Text>
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Saved Searches</Text>
         {totalNewMatches > 0 ? (
           <AnimatedPressable
             style={styles.markSeenBtn}
@@ -105,7 +104,7 @@ export default function SavedSearchesScreen({ navigation }: Props) {
             accessibilityLabel="Mark all saved searches as seen"
             accessibilityRole="button"
           >
-            <Ionicons name="checkmark-done" size={20} color={Colors.brand} />
+            <Ionicons name="checkmark-done" size={20} color={colors.brand} />
           </AnimatedPressable>
         ) : (
           <View style={styles.backBtn} />
@@ -129,37 +128,37 @@ export default function SavedSearchesScreen({ navigation }: Props) {
             {/* Filter tabs */}
             <View style={styles.tabRow}>
               <AnimatedPressable
-                style={[styles.tab, activeTab === 'all' && styles.tabActive]}
+                style={[styles.tab, activeTab === 'all' && styles.tabActive, { backgroundColor: activeTab === 'all' ? `${colors.brand}12` : colors.surface, borderColor: activeTab === 'all' ? colors.brand : colors.border }]}
                 onPress={() => setActiveTab('all')}
                 accessibilityLabel="Show all saved searches"
                 accessibilityRole="button"
               >
-                <Text style={[styles.tabText, activeTab === 'all' && styles.tabTextActive]}>
+                <Text style={[styles.tabText, activeTab === 'all' && styles.tabTextActive, { color: activeTab === 'all' ? colors.brand : colors.textMuted }]}>
                   All ({savedSearches.length})
                 </Text>
               </AnimatedPressable>
               <AnimatedPressable
-                style={[styles.tab, activeTab === 'new' && styles.tabActive]}
+                style={[styles.tab, activeTab === 'new' && styles.tabActive, { backgroundColor: activeTab === 'new' ? `${colors.brand}12` : colors.surface, borderColor: activeTab === 'new' ? colors.brand : colors.border }]}
                 onPress={() => setActiveTab('new')}
                 accessibilityLabel="Show only saved searches with new matches"
                 accessibilityRole="button"
               >
-                <Text style={[styles.tabText, activeTab === 'new' && styles.tabTextActive]}>
+                <Text style={[styles.tabText, activeTab === 'new' && styles.tabTextActive, { color: activeTab === 'new' ? colors.brand : colors.textMuted }]}>
                   New ({totalNewMatches})
                 </Text>
               </AnimatedPressable>
             </View>
 
-            <Text style={styles.sectionHint}>
+            <Text style={[styles.sectionHint, { color: colors.textMuted }]}>
               {filteredSearches.length} {filteredSearches.length === 1 ? 'search' : 'searches'}
               {' · '}
               {savedSearches.filter((s) => s.alertsEnabled).length} with alerts
             </Text>
 
             {totalNewMatches > 0 && (
-              <View style={styles.newMatchesBanner}>
-                <Ionicons name="sparkles" size={16} color={Colors.brand} />
-                <Text style={styles.newMatchesText}>
+              <View style={[styles.newMatchesBanner, { backgroundColor: `${colors.brand}10` }]}>
+                <Ionicons name="sparkles" size={16} color={colors.brand} />
+                <Text style={[styles.newMatchesText, { color: colors.brand }]}>
                   {totalNewMatches} new {totalNewMatches === 1 ? 'match' : 'matches'} across your saved searches
                 </Text>
               </View>
@@ -167,14 +166,14 @@ export default function SavedSearchesScreen({ navigation }: Props) {
 
             {filteredSearches.length === 0 ? (
               <View style={styles.noNewWrap}>
-                <Ionicons name="checkmark-circle-outline" size={28} color={Colors.textMuted} />
-                <Text style={styles.noNewText}>All caught up — no new matches right now</Text>
+                <Ionicons name="checkmark-circle-outline" size={28} color={colors.textMuted} />
+                <Text style={[styles.noNewText, { color: colors.textMuted }]}>All caught up — no new matches right now</Text>
               </View>
             ) : filteredSearches.map((search) => {
               const newCount = newMatchesMap.get(search.id) ?? 0;
               const checkedLabel = relativeTime(search.lastCheckedAt);
               return (
-                <View key={search.id} style={styles.searchCard}>
+                <View key={search.id} style={[styles.searchCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                   <Pressable
                     style={styles.searchMain}
                     onPress={() => handleSearchPress(search.query)}
@@ -183,24 +182,25 @@ export default function SavedSearchesScreen({ navigation }: Props) {
                   >
                     <View style={[
                       styles.searchIconWrap,
+                      { backgroundColor: colors.surfaceAlt },
                       !search.alertsEnabled && styles.searchIconWrapInactive,
                     ]}>
                       <Ionicons
                         name={search.alertsEnabled ? 'notifications' : 'bookmark-outline'}
                         size={18}
-                        color={search.alertsEnabled ? Colors.brand : Colors.textMuted}
+                        color={search.alertsEnabled ? colors.brand : colors.textMuted}
                       />
                     </View>
                     <View style={styles.searchTextWrap}>
                       <View style={styles.searchQueryRow}>
-                        <Text style={styles.searchQuery} numberOfLines={1}>{search.query}</Text>
+                        <Text style={[styles.searchQuery, { color: colors.textPrimary }]} numberOfLines={1}>{search.query}</Text>
                         {newCount > 0 && (
-                          <View style={styles.newBadge}>
-                            <Text style={styles.newBadgeText}>{newCount} new</Text>
+                          <View style={[styles.newBadge, { backgroundColor: `${colors.brand}15` }]}>
+                            <Text style={[styles.newBadgeText, { color: colors.brand }]}>{newCount} new</Text>
                           </View>
                         )}
                       </View>
-                      <Text style={styles.searchMeta}>
+                      <Text style={[styles.searchMeta, { color: colors.textMuted }]}>
                         {search.alertsEnabled ? 'Alerts on' : 'Alerts off'}
                         {search.filters.brands.length > 0 && ` · ${search.filters.brands.join(', ')}`}
                         {search.filters.sizes.length > 0 && ` · ${search.filters.sizes.join(', ')}`}
@@ -220,7 +220,7 @@ export default function SavedSearchesScreen({ navigation }: Props) {
                       <Ionicons
                         name={search.alertsEnabled ? 'notifications' : 'notifications-off-outline'}
                         size={20}
-                        color={search.alertsEnabled ? Colors.brand : Colors.textMuted}
+                        color={search.alertsEnabled ? colors.brand : colors.textMuted}
                       />
                     </AnimatedPressable>
                     <AnimatedPressable
@@ -229,7 +229,7 @@ export default function SavedSearchesScreen({ navigation }: Props) {
                       accessibilityLabel="Remove saved search"
                       accessibilityRole="button"
                     >
-                      <Ionicons name="trash-outline" size={18} color={Colors.danger} />
+                      <Ionicons name="trash-outline" size={18} color={colors.danger} />
                     </AnimatedPressable>
                   </View>
                 </View>
@@ -245,7 +245,6 @@ export default function SavedSearchesScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -271,7 +270,6 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 17,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
   },
   tabRow: {
     flexDirection: 'row',
@@ -283,22 +281,17 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     paddingHorizontal: 12,
     borderRadius: 12,
-    backgroundColor: Colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
     alignItems: 'center',
   },
   tabActive: {
-    backgroundColor: `${Colors.brand}12`,
-    borderColor: Colors.brand,
+    borderWidth: 1,
   },
   tabText: {
     fontSize: 13,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
   },
   tabTextActive: {
-    color: Colors.brand,
     fontFamily: Typography.family.semibold,
   },
   noNewWrap: {
@@ -309,7 +302,6 @@ const styles = StyleSheet.create({
   noNewText: {
     fontSize: 14,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     textAlign: 'center',
   },
   listWrap: {
@@ -319,7 +311,6 @@ const styles = StyleSheet.create({
   sectionHint: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     marginBottom: Space.md,
     letterSpacing: 0.2,
   },
@@ -330,9 +321,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderRadius: 16,
-    backgroundColor: Colors.surface,
     borderWidth: 0.5,
-    borderColor: Colors.border,
     marginBottom: 8,
   },
   searchMain: {
@@ -345,7 +334,6 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -359,7 +347,6 @@ const styles = StyleSheet.create({
   searchQuery: {
     fontSize: 15,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
     flexShrink: 1,
   },
   searchQueryRow: {
@@ -368,7 +355,6 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   newBadge: {
-    backgroundColor: `${Colors.brand}15`,
     borderRadius: 10,
     paddingHorizontal: 7,
     paddingVertical: 2,
@@ -377,14 +363,12 @@ const styles = StyleSheet.create({
   newBadgeText: {
     fontSize: 10,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
     letterSpacing: 0.2,
   },
   newMatchesBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: `${Colors.brand}10`,
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -394,12 +378,10 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
   },
   searchMeta: {
     fontSize: 11,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
   },
   searchActions: {
     flexDirection: 'row',
