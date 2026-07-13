@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
-import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Space, Radius, Type } from '../theme/designTokens';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -20,6 +20,7 @@ type Props = StackScreenProps<RootStackParamList, 'HelpSupport'>;
 
 export default function HelpSupportScreen({ navigation }: Props) {
   const { show } = useToast();
+  const { colors, isDark } = useAppTheme();
   const reducedMotionEnabled = useReducedMotion();
   const { formatFromFiat } = useFormattedPrice();
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -118,17 +119,17 @@ export default function HelpSupportScreen({ navigation }: Props) {
         {/* FAQ Search */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)} style={{ marginHorizontal: Space.md, marginBottom: Space.md }}>
           <View style={styles.searchWrap}>
-            <Ionicons name="search-outline" size={18} color={Colors.textMuted} />
+            <Ionicons name="search-outline" size={18} color={colors.textMuted} />
             <TextInput
               style={styles.searchInput}
               value={faqSearch}
               onChangeText={setFaqSearch}
               placeholder="Search FAQs..."
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
             />
             {faqSearch ? (
               <AnimatedPressable onPress={() => setFaqSearch('')} hitSlop={8}>
-                <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
+                <Ionicons name="close-circle" size={18} color={colors.textMuted} />
               </AnimatedPressable>
             ) : null}
           </View>
@@ -156,7 +157,7 @@ export default function HelpSupportScreen({ navigation }: Props) {
                       <Ionicons
                         name={expanded === faq.q ? 'chevron-up' : 'chevron-down'}
                         size={18}
-                        color={Colors.textMuted}
+                        color={colors.textMuted}
                       />
                     </View>
                     {expanded === faq.q && (
@@ -203,18 +204,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    backgroundColor: Colors.surface,
     borderRadius: Radius.xl,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 4,
     borderWidth: 1,
-    borderColor: Colors.border,
   },
   searchInput: {
     flex: 1,
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
     letterSpacing: Type.body.letterSpacing,
     paddingVertical: 0,
   },
@@ -225,7 +223,6 @@ const styles = StyleSheet.create({
   emptyFaqsText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
     letterSpacing: Type.body.letterSpacing,
   },
   faqRow: {
@@ -237,13 +234,11 @@ const styles = StyleSheet.create({
   },
   border: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
   },
   faqQ: {
     flex: 1,
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
     lineHeight: Type.body.lineHeight,
     letterSpacing: Type.body.letterSpacing,
     paddingRight: Space.sm,
@@ -251,7 +246,6 @@ const styles = StyleSheet.create({
   faqA: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     lineHeight: Type.caption.lineHeight,
     letterSpacing: Type.caption.letterSpacing,
     paddingHorizontal: Space.md,
@@ -260,7 +254,6 @@ const styles = StyleSheet.create({
   version: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     textAlign: 'center',
     marginTop: Space.lg,
     marginBottom: Space.md,

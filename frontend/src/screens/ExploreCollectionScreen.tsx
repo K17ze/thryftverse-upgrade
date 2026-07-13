@@ -15,7 +15,7 @@ import { useStore } from '../store/useStore';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { ProductCardV2 } from '../components/ProductCardV2';
 import { MasonryGrid } from '../components/ProductCardV2';
-import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Type, Space, Radius, Typography } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
 import { EmptyState } from '../components/EmptyState';
@@ -37,6 +37,7 @@ export default function ExploreCollectionScreen() {
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
   const { show } = useToast();
+  const { colors, isDark } = useAppTheme();
   const { listings, isSyncing, lastError, refreshListings } = useBackendData();
   const savedProducts = useStore((state) => state.savedProducts);
   const toggleSavedProduct = useStore((state) => state.toggleSavedProduct);
@@ -178,7 +179,7 @@ export default function ExploreCollectionScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1 },
   headerInfo: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.sm,
@@ -187,12 +188,10 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
   },
   headerCount: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
   },
   loadingWrap: {
     flex: 1,

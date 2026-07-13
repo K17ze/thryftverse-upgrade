@@ -13,7 +13,7 @@ import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
-import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -27,6 +27,7 @@ export default function ManageCollectionItemsScreen({ navigation, route }: Props
   const { collectionId } = route.params;
   const haptic = useHaptic();
   const { show } = useToast();
+  const { colors, isDark } = useAppTheme();
 
   const collections = useStore((state) => state.collections);
   const removeFromCollectionOnApi = useStore((state) => state.removeFromCollectionOnApi);
@@ -113,12 +114,12 @@ export default function ManageCollectionItemsScreen({ navigation, route }: Props
           <CachedImage uri={item.images[0]} style={styles.thumb} contentFit="cover" />
         ) : (
           <View style={styles.thumbEmpty}>
-            <Ionicons name="image-outline" size={18} color={Colors.textMuted} />
+            <Ionicons name="image-outline" size={18} color={colors.textMuted} />
           </View>
         )}
         <View style={styles.rowBody}>
           <BodyEmphasis numberOfLines={1}>{item.title}</BodyEmphasis>
-          <Caption color={Colors.textMuted}>{item.brand}</Caption>
+          <Caption color={colors.textMuted}>{item.brand}</Caption>
         </View>
         <AnimatedPressable
           style={styles.removeBtn}
@@ -129,7 +130,7 @@ export default function ManageCollectionItemsScreen({ navigation, route }: Props
           accessibilityLabel="Remove from collection"
           accessibilityRole="button"
         >
-          <Ionicons name="trash-outline" size={18} color={Colors.danger} />
+          <Ionicons name="trash-outline" size={18} color={colors.danger} />
         </AnimatedPressable>
       </AnimatedPressable>
     );
@@ -180,18 +181,15 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: Radius.sm,
-    backgroundColor: Colors.surfaceAlt,
     overflow: 'hidden',
   },
   thumbEmpty: {
     width: 56,
     height: 56,
     borderRadius: Radius.sm,
-    backgroundColor: Colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
   },
   rowBody: {
     flex: 1,
@@ -201,15 +199,12 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
   },
   separator: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
     marginLeft: 72,
   },
 });

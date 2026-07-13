@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
-import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Space, Type } from '../theme/designTokens';
 import { useToast } from '../context/ToastContext';
 import { changePassword } from '../services/authApi';
@@ -22,6 +22,7 @@ import { FlagshipScreen, FlagshipHeader, FlagshipStickyFooter, FlagshipFormSecti
 export default function ChangePasswordScreen() {
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
   const { show } = useToast();
+  const { colors, isDark } = useAppTheme();
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -63,7 +64,7 @@ export default function ChangePasswordScreen() {
       <Ionicons
         name={isSecure ? 'eye-off-outline' : 'eye-outline'}
         size={20}
-        color={Colors.textSecondary}
+        color={colors.textSecondary}
       />
     </AnimatedPressable>
   );
@@ -128,7 +129,6 @@ const styles = StyleSheet.create({
   infoText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     marginBottom: Space.sm,
     lineHeight: Type.caption.lineHeight,
     letterSpacing: Type.caption.letterSpacing,
@@ -141,7 +141,6 @@ const styles = StyleSheet.create({
   forgotPasswordText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    color: Colors.brand,
     letterSpacing: Type.body.letterSpacing,
   },
 });

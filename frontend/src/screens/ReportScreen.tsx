@@ -9,7 +9,7 @@ import { View,
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Typography, Space } from '../theme/designTokens';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 
@@ -23,6 +23,7 @@ const REASONS = [
 
 export default function ReportScreen() {
   const navigation = useNavigation<any>();
+  const { colors, isDark } = useAppTheme();
   const route = useRoute<any>();
 
   // Could be 'item' or 'user'
@@ -39,11 +40,11 @@ export default function ReportScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
       <View style={styles.header}>
         <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="close" size={24} color={Colors.textPrimary} />
+          <Ionicons name="close" size={24} color={colors.textPrimary} />
         </AnimatedPressable>
         <Text style={styles.headerTitle}>Report {reportType === 'user' ? 'User' : 'Item'}</Text>
         <View style={{ width: 44 }} />
@@ -58,7 +59,7 @@ export default function ReportScreen() {
       >
         {isSubmitted ? (
           <View style={styles.successState}>
-            <Ionicons name="checkmark-circle-outline" size={64} color={Colors.success} />
+            <Ionicons name="checkmark-circle-outline" size={64} color={colors.success} />
             <Text style={styles.successTitle}>Report Submitted</Text>
             <Text style={styles.successText}>Thank you for helping keep the Thryftverse safe. Our moderation team will review this shortly.</Text>
             <AnimatedPressable style={styles.primaryBtn} onPress={() => navigation.goBack()} activeOpacity={0.9}>
@@ -78,7 +79,7 @@ export default function ReportScreen() {
                 >
                   <Text style={[styles.reasonText, selectedReason === reason && styles.selectedText]}>{reason}</Text>
                   {selectedReason === reason && (
-                    <Ionicons name="checkmark" size={20} color={Colors.textInverse} />
+                    <Ionicons name="checkmark" size={20} color={colors.textInverse} />
                   )}
                 </AnimatedPressable>
               ))}
@@ -102,7 +103,7 @@ export default function ReportScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -111,16 +112,15 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     paddingBottom: 20,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
   },
-  backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { fontSize: 18, fontFamily: Typography.family.bold, color: Colors.textPrimary, textTransform: 'capitalize' },
+  backBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { fontSize: 18, fontFamily: Typography.family.bold, textTransform: 'capitalize' },
 
   content: { flex: 1, paddingHorizontal: 24 },
   contentContainer: { paddingTop: 32, paddingBottom: 40 },
   form: { flex: 1 },
 
-  promptText: { fontSize: 18, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginBottom: 24 },
+  promptText: { fontSize: 18, fontFamily: Typography.family.semibold, marginBottom: 24 },
 
   reasonsList: { gap: 12 },
   reasonRow: {
@@ -130,21 +130,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderRadius: 16,
-    backgroundColor: Colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
   },
   selectedRow: {
-    backgroundColor: Colors.brand,
-    borderColor: Colors.brand,
   },
-  reasonText: { fontSize: 15, fontFamily: Typography.family.medium, color: Colors.textPrimary },
-  selectedText: { color: Colors.textInverse, fontFamily: Typography.family.bold },
+  reasonText: { fontSize: 15, fontFamily: Typography.family.medium },
+  selectedText: { fontFamily: Typography.family.bold },
 
   footer: { marginTop: Space.md },
-  primaryBtn: { backgroundColor: Colors.textPrimary, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
+  primaryBtn: { height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
   disabledBtn: { opacity: 0.5 },
-  primaryText: { color: Colors.background, fontSize: 16, fontFamily: Typography.family.bold },
+  primaryText: { fontSize: 16, fontFamily: Typography.family.bold },
 
   successState: {
     flex: 1,
@@ -155,12 +151,10 @@ const styles = StyleSheet.create({
   successTitle: {
     fontSize: 24,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
     marginTop: 24,
   },
   successText: {
     fontSize: 16,
-    color: Colors.textSecondary,
     fontFamily: Typography.family.regular,
     textAlign: 'center',
     marginVertical: 16,

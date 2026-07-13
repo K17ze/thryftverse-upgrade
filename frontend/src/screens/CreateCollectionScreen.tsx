@@ -15,7 +15,6 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Colors } from '../constants/colors';
 import { Space, Radius, Type, Typography, Elevation } from '../theme/designTokens';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -29,7 +28,7 @@ type NavT = StackNavigationProp<RootStackParamList>;
 
 export default function CreateCollectionScreen() {
   const navigation = useNavigation<NavT>();
-  const { isDark } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
   const { show } = useToast();
   const haptic = useHaptic();
   const createCollectionOnApi = useStore((state) => state.createCollectionOnApi);
@@ -119,7 +118,7 @@ export default function CreateCollectionScreen() {
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)} style={styles.card}>
           <View style={styles.toggleRow}>
             <View style={styles.toggleIconWrap}>
-              <Ionicons name={isPrivate ? 'lock-closed-outline' : 'lock-open-outline'} size={20} color={Colors.textSecondary} />
+              <Ionicons name={isPrivate ? 'lock-closed-outline' : 'lock-open-outline'} size={20} color={colors.textSecondary} />
             </View>
             <View style={styles.toggleText}>
               <Text style={styles.toggleLabel}>Private collection</Text>
@@ -163,7 +162,6 @@ export default function CreateCollectionScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   content: {
     flex: 1,
@@ -177,14 +175,11 @@ const styles = StyleSheet.create({
   headerAction: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
     letterSpacing: Type.body.letterSpacing,
   },
   headerActionDisabled: {
-    color: Colors.textMuted,
   },
   card: {
-    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     padding: Space.md,
     ...Elevation.subtle,
@@ -192,7 +187,6 @@ const styles = StyleSheet.create({
   label: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 1.2,
     marginBottom: Space.sm,
@@ -204,7 +198,6 @@ const styles = StyleSheet.create({
   charCount: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     textAlign: 'right',
     marginTop: Space.xs,
   },
@@ -217,7 +210,6 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -227,13 +219,11 @@ const styles = StyleSheet.create({
   toggleLabel: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
     letterSpacing: Type.body.letterSpacing,
   },
   toggleSub: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     marginTop: 2,
     letterSpacing: Type.caption.letterSpacing,
   },
@@ -241,21 +231,16 @@ const styles = StyleSheet.create({
     width: 48,
     height: 28,
     borderRadius: 14,
-    backgroundColor: Colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
     justifyContent: 'center',
     paddingHorizontal: 3,
   },
   togglePillActive: {
-    backgroundColor: Colors.textPrimary,
-    borderColor: Colors.textPrimary,
   },
   toggleKnob: {
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: Colors.background,
     ...Elevation.card,
   },
   toggleKnobActive: {

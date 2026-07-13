@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
-import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Space, Radius } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -34,6 +34,7 @@ type MediaItem = {
 export default function SharedConversationMediaScreen({ navigation, route }: Props) {
   const { conversationId } = route.params as { conversationId: string };
   const haptic = useHaptic();
+  const { colors, isDark } = useAppTheme();
   const { width } = useWindowDimensions();
   const thumbSize = (width - Space.md * 2 - GAP * (COLS - 1)) / COLS;
 
@@ -78,7 +79,7 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
     >
       {item.isVideo ? (
         <View style={[styles.thumb, styles.videoTile, { width: thumbSize, height: thumbSize }]}>
-          <Ionicons name="videocam" size={24} color={Colors.textSecondary} />
+          <Ionicons name="videocam" size={24} color={colors.textSecondary} />
         </View>
       ) : (
         <CachedImage
@@ -89,7 +90,7 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
       )}
       {item.isVideo && (
         <View style={styles.videoBadge}>
-          <Ionicons name="play" size={12} color={Colors.textInverse} />
+          <Ionicons name="play" size={12} color={colors.textInverse} />
         </View>
       )}
     </AnimatedPressable>
@@ -138,16 +139,13 @@ const styles = StyleSheet.create({
   thumbWrap: {
     borderRadius: Radius.sm,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
     marginRight: GAP,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
   },
   thumb: {
     borderRadius: Radius.sm,
   },
   videoTile: {
-    backgroundColor: Colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },

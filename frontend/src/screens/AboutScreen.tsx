@@ -7,7 +7,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
-import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useToast } from '../context/ToastContext';
@@ -21,6 +21,7 @@ type Props = StackScreenProps<RootStackParamList, 'About'>;
 
 export default function AboutScreen({ navigation }: Props) {
   const { show } = useToast();
+  const { colors, isDark } = useAppTheme();
   const reducedMotionEnabled = useReducedMotion();
 
   const handleOpenExternal = async (url: string) => {
@@ -35,7 +36,7 @@ export default function AboutScreen({ navigation }: Props) {
     <FlagshipScreen header={<FlagshipHeader title="About" subtitle="Thryftverse app information" onBack={() => navigation.goBack()} />}>
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)} style={styles.brandWrap}>
           <View style={styles.brandIcon}>
-            <Ionicons name="shirt-outline" size={40} color={Colors.brand} />
+            <Ionicons name="shirt-outline" size={40} color={colors.brand} />
           </View>
           <Text style={styles.brandName}>Thryftverse</Text>
           <Text style={styles.brandVersion}>Version 1.0.0 (Build 2026.06.05)</Text>
@@ -52,12 +53,12 @@ export default function AboutScreen({ navigation }: Props) {
             >
               <View style={[styles.rowRoot, styles.rowBorder]}>
                 <View style={styles.rowIconWrap}>
-                  <Ionicons name="document-text-outline" size={22} color={Colors.textPrimary} />
+                  <Ionicons name="document-text-outline" size={22} color={colors.textPrimary} />
                 </View>
                 <View style={styles.rowTextWrap}>
                   <Text style={styles.rowTitle}>Terms of Service</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
               </View>
             </AnimatedPressable>
             <AnimatedPressable
@@ -68,12 +69,12 @@ export default function AboutScreen({ navigation }: Props) {
             >
               <View style={[styles.rowRoot, styles.rowBorder]}>
                 <View style={styles.rowIconWrap}>
-                  <Ionicons name="shield-checkmark-outline" size={22} color={Colors.textPrimary} />
+                  <Ionicons name="shield-checkmark-outline" size={22} color={colors.textPrimary} />
                 </View>
                 <View style={styles.rowTextWrap}>
                   <Text style={styles.rowTitle}>Privacy Policy</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
               </View>
             </AnimatedPressable>
             <AnimatedPressable
@@ -84,12 +85,12 @@ export default function AboutScreen({ navigation }: Props) {
             >
               <View style={styles.rowRoot}>
                 <View style={styles.rowIconWrap}>
-                  <Ionicons name="cube-outline" size={22} color={Colors.textPrimary} />
+                  <Ionicons name="cube-outline" size={22} color={colors.textPrimary} />
                 </View>
                 <View style={styles.rowTextWrap}>
                   <Text style={styles.rowTitle}>Cookie Policy</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
               </View>
             </AnimatedPressable>
           </View>
@@ -106,12 +107,12 @@ export default function AboutScreen({ navigation }: Props) {
             >
               <View style={styles.rowRoot}>
                 <View style={styles.rowIconWrap}>
-                  <Ionicons name="help-circle-outline" size={22} color={Colors.textPrimary} />
+                  <Ionicons name="help-circle-outline" size={22} color={colors.textPrimary} />
                 </View>
                 <View style={styles.rowTextWrap}>
                   <Text style={styles.rowTitle}>Help Centre</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
               </View>
             </AnimatedPressable>
           </View>
@@ -125,7 +126,6 @@ export default function AboutScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -143,7 +143,6 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
     letterSpacing: Type.subtitle.letterSpacing,
     lineHeight: Type.subtitle.lineHeight,
   },
@@ -161,32 +160,27 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 24,
-    backgroundColor: Colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },
   brandName: {
     fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
     letterSpacing: -0.3,
   },
   brandVersion: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     letterSpacing: Type.caption.letterSpacing,
   },
   sectionLabel: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
     marginBottom: Space.sm + 4,
     marginTop: Space.lg,
     letterSpacing: Type.body.letterSpacing,
   },
   rowGroup: {
-    backgroundColor: Colors.surface,
     borderRadius: Radius.xl,
     overflow: 'hidden',
     marginBottom: Space.sm,
@@ -201,7 +195,6 @@ const styles = StyleSheet.create({
   },
   rowBorder: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
   },
   rowIconWrap: {
     width: 28,
@@ -215,7 +208,6 @@ const styles = StyleSheet.create({
   rowTitle: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
     letterSpacing: Type.body.letterSpacing,
     lineHeight: Type.body.lineHeight,
   },

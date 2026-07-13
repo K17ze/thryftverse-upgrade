@@ -16,7 +16,7 @@ import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
-import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Type, Space, Radius, Typography } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -45,6 +45,7 @@ interface FeedEvent {
 function EventCard({ event, index }: { event: FeedEvent; index: number }) {
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
+  const { colors, isDark } = useAppTheme();
   const reducedMotionEnabled = useReducedMotion();
 
   const iconMap: Record<ActivityType, string> = {
@@ -54,11 +55,11 @@ function EventCard({ event, index }: { event: FeedEvent; index: number }) {
     sold: 'checkmark-circle-outline',
   };
   const accentMap: Record<ActivityType, string> = {
-    auction_live: Colors.danger,
-    fresh_drop: Colors.brand,
+    auction_live: colors.danger,
+    fresh_drop: colors.brand,
     // Price-drop orange — semantic accent not yet in token system
     price_drop: '#dd6a33',
-    sold: Colors.success,
+    sold: colors.success,
   };
 
   const handlePress = () => {
@@ -94,6 +95,7 @@ function EventCard({ event, index }: { event: FeedEvent; index: number }) {
 export default function PulseFeedScreen() {
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
+  const { colors, isDark } = useAppTheme();
   const reducedMotionEnabled = useReducedMotion();
   const { listings } = useBackendData();
   const customAuctions = useStore((state) => state.customAuctions);
@@ -195,7 +197,7 @@ export default function PulseFeedScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1 },
   scrollContent: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
@@ -204,10 +206,8 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
     padding: Space.md,
     marginBottom: Space.sm,
     gap: Space.md,
@@ -216,7 +216,6 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
   },
   cardContent: {
     flex: 1,
@@ -235,25 +234,21 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
     letterSpacing: Type.body.letterSpacing,
     lineHeight: Type.body.lineHeight,
   },
   cardSubtitle: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
     letterSpacing: Type.caption.letterSpacing,
   },
   cardMeta: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
     letterSpacing: Type.meta.letterSpacing,
     marginTop: 2,
   },
   cardMetaAccent: {
-    color: Colors.danger,
     fontFamily: Typography.family.semibold,
   },
 });
