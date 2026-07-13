@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
-import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Space, Radius, Type, TypeStyles } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
@@ -23,6 +23,7 @@ import { useBackendData } from '../context/BackendDataContext';
 type Props = StackScreenProps<RootStackParamList, 'ConversationInfo'>;
 
 export default function ConversationInfoScreen({ navigation, route }: Props) {
+  const { colors } = useAppTheme();
   const { conversationId } = route.params;
   const { show } = useToast();
   const haptic = useHaptic();
@@ -53,7 +54,7 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
     return (
       <FlagshipScreen header={<FlagshipHeader title="Conversation" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
         <View style={styles.center}>
-          <Caption color={Colors.textMuted}>Conversation not found</Caption>
+          <Caption color={colors.textMuted}>Conversation not found</Caption>
         </View>
       </FlagshipScreen>
     );
@@ -120,7 +121,7 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
         {/* Partner Identity */}
         <View>
           <AnimatedPressable
-            style={styles.identityCardV2}
+            style={[styles.identityCardV2, { borderColor: colors.border }]}
             onPress={handleViewProfile}
             disabled={!counterpartyId}
             activeOpacity={0.85}
@@ -133,13 +134,13 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
               {avatarUrl ? (
                 <CachedImage uri={avatarUrl} style={styles.identityAvatarImage} contentFit="cover" />
               ) : (
-                <View style={[styles.identityAvatarFallback, { backgroundColor: Colors.surfaceAlt }]}>
+                <View style={[styles.identityAvatarFallback, { backgroundColor: colors.surfaceAlt }]}>
                   <Text style={styles.identityAvatarText}>{displayName.charAt(0).toUpperCase()}</Text>
                 </View>
               )}
             </View>
             <BodyEmphasis style={styles.identityName} numberOfLines={1}>{displayName}</BodyEmphasis>
-            <Caption color={Colors.textMuted}>{handle}</Caption>
+            <Caption color={colors.textMuted}>{handle}</Caption>
           </AnimatedPressable>
         </View>
 
@@ -248,6 +249,7 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
 }
 
 function Section({ title, children, danger }: { title: string; children: React.ReactNode; danger?: boolean }) {
+  const { colors } = useAppTheme();
   const childArray = React.Children.toArray(children);
   const lastIndex = childArray.length - 1;
   const childrenWithIsLast = childArray.map((child, index) => {
@@ -258,10 +260,10 @@ function Section({ title, children, danger }: { title: string; children: React.R
   });
   return (
     <View style={styles.section}>
-      <Meta color={danger ? Colors.danger : Colors.textMuted} style={styles.sectionLabel}>
+      <Meta color={danger ? colors.danger : colors.textMuted} style={styles.sectionLabel}>
         {title.toUpperCase()}
       </Meta>
-      <View style={[styles.sectionCard, danger && styles.sectionCardDanger]}>{childrenWithIsLast}</View>
+      <View style={[styles.sectionCard, { backgroundColor: colors.surface }, danger && { borderColor: `${colors.danger}30`, borderWidth: StyleSheet.hairlineWidth }]}>{childrenWithIsLast}</View>
     </View>
   );
 }
@@ -283,26 +285,27 @@ function RowItem({
   isLast?: boolean;
   detail?: string;
 }) {
+  const { colors } = useAppTheme();
   const content = (
-    <View style={[styles.row, !isLast && styles.rowBorder]}>
+    <View style={[styles.row, !isLast && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }]}>
       <Ionicons
         name={icon as any}
         size={20}
-        color={danger ? Colors.danger : Colors.textSecondary}
+        color={danger ? colors.danger : colors.textSecondary}
       />
       <Text
         style={[
           styles.rowLabel,
-          { color: danger ? Colors.danger : Colors.textPrimary },
+          { color: danger ? colors.danger : colors.textPrimary },
         ]}
       >
         {label}
       </Text>
       {detail && (
-        <Caption color={Colors.textMuted}>{detail}</Caption>
+        <Caption color={colors.textMuted}>{detail}</Caption>
       )}
       {showChevron && (
-        <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
       )}
     </View>
   );
@@ -341,7 +344,6 @@ const styles = StyleSheet.create({
     paddingVertical: Space.lg,
     gap: Space.sm,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
     borderRadius: Radius.xl,
     marginHorizontal: Space.xs,
   },
@@ -350,7 +352,6 @@ const styles = StyleSheet.create({
     height: 88,
     borderRadius: Radius.full,
     borderWidth: 2,
-    borderColor: Colors.border,
     padding: 2,
     justifyContent: 'center',
     alignItems: 'center',
@@ -366,12 +367,10 @@ const styles = StyleSheet.create({
     width: 76,
     height: 76,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
   },
   avatarText: {
     fontSize: 28,
     fontFamily: TypeStyles.title.fontFamily,
-    color: Colors.textPrimary,
     textTransform: 'uppercase',
   },
   name: {
@@ -384,7 +383,6 @@ const styles = StyleSheet.create({
     paddingVertical: Space.lg + 8,
     gap: Space.sm,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
     borderRadius: Radius.xl,
     marginHorizontal: Space.xs,
   },
@@ -399,7 +397,6 @@ const styles = StyleSheet.create({
     width: 96,
     height: 96,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
   },
   identityAvatarFallback: {
     width: 96,
@@ -411,7 +408,6 @@ const styles = StyleSheet.create({
   identityAvatarText: {
     fontSize: 32,
     fontFamily: TypeStyles.title.fontFamily,
-    color: Colors.textPrimary,
     textTransform: 'uppercase',
   },
   identityName: {
@@ -427,13 +423,8 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
   },
   sectionCard: {
-    backgroundColor: Colors.surface,
     borderRadius: Radius.xl,
     overflow: 'hidden',
-  },
-  sectionCardDanger: {
-    borderColor: `${Colors.danger}30`,
-    borderWidth: StyleSheet.hairlineWidth,
   },
   row: {
     flexDirection: 'row',
@@ -441,10 +432,6 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: Space.md,
     gap: Space.sm + 4,
-  },
-  rowBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
   },
   rowLabel: {
     flex: 1,
