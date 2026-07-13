@@ -13,7 +13,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
-import { Colors } from '../constants/colors';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -34,7 +33,7 @@ const REACTION_LABELS: Record<string, string> = {
 };
 
 export default function PosterStoryActivityScreen({ navigation, route }: Props) {
-  const { isDark } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
   const { show } = useToast();
   const storyId = route.params.storyId;
 
@@ -68,7 +67,7 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
   ];
 
   const renderViewer = ({ item }: { item: ActivityData['viewers'][0] }) => (
-    <View style={styles.row}>
+    <View style={[styles.row, { borderBottomColor: colors.border }]}>
       {item.avatar ? (
         <CachedImage
           uri={item.avatar}
@@ -77,24 +76,24 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
           contentFit="cover"
         />
       ) : (
-        <View style={[styles.avatar, styles.avatarPlaceholder]}>
-          <Text style={styles.avatarText}>{item.username?.[0]?.toUpperCase() ?? '?'}</Text>
+        <View style={[styles.avatar, styles.avatarPlaceholder, { backgroundColor: colors.surfaceAlt }]}>
+          <Text style={[styles.avatarText, { color: colors.textSecondary }]}>{item.username?.[0]?.toUpperCase() ?? '?'}</Text>
         </View>
       )}
       <View style={styles.rowContent}>
-        <Text style={styles.rowTitle}>@{item.username ?? item.userId}</Text>
-        <Text style={styles.rowSubtitle}>
+        <Text style={[styles.rowTitle, { color: colors.textPrimary }]}>@{item.username ?? item.userId}</Text>
+        <Text style={[styles.rowSubtitle, { color: colors.textSecondary }]}>
           Viewed {item.viewedFrameCount} frame{item.viewedFrameCount !== 1 ? 's' : ''}
         </Text>
       </View>
-      <Text style={styles.rowTime}>
+      <Text style={[styles.rowTime, { color: colors.textMuted }]}>
         {new Date(item.latestViewedAt).toLocaleDateString(undefined, { hour: 'numeric', minute: '2-digit' })}
       </Text>
     </View>
   );
 
   const renderReaction = ({ item }: { item: ActivityData['reactions'][0] }) => (
-    <View style={styles.row}>
+    <View style={[styles.row, { borderBottomColor: colors.border }]}>
       {item.avatar ? (
         <CachedImage
           uri={item.avatar}
@@ -103,22 +102,22 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
           contentFit="cover"
         />
       ) : (
-        <View style={[styles.avatar, styles.avatarPlaceholder]}>
-          <Text style={styles.avatarText}>{item.username?.[0]?.toUpperCase() ?? '?'}</Text>
+        <View style={[styles.avatar, styles.avatarPlaceholder, { backgroundColor: colors.surfaceAlt }]}>
+          <Text style={[styles.avatarText, { color: colors.textSecondary }]}>{item.username?.[0]?.toUpperCase() ?? '?'}</Text>
         </View>
       )}
       <View style={styles.rowContent}>
-        <Text style={styles.rowTitle}>@{item.username ?? item.userId}</Text>
-        <Text style={styles.rowSubtitle}>reacted {REACTION_LABELS[item.reaction] ?? item.reaction}</Text>
+        <Text style={[styles.rowTitle, { color: colors.textPrimary }]}>@{item.username ?? item.userId}</Text>
+        <Text style={[styles.rowSubtitle, { color: colors.textSecondary }]}>reacted {REACTION_LABELS[item.reaction] ?? item.reaction}</Text>
       </View>
-      <Text style={styles.rowTime}>
+      <Text style={[styles.rowTime, { color: colors.textMuted }]}>
         {new Date(item.createdAt).toLocaleDateString(undefined, { hour: 'numeric', minute: '2-digit' })}
       </Text>
     </View>
   );
 
   const renderReply = ({ item }: { item: ActivityData['replies'][0] }) => (
-    <View style={styles.row}>
+    <View style={[styles.row, { borderBottomColor: colors.border }]}>
       {item.authorAvatar ? (
         <CachedImage
           uri={item.authorAvatar}
@@ -127,15 +126,15 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
           contentFit="cover"
         />
       ) : (
-        <View style={[styles.avatar, styles.avatarPlaceholder]}>
-          <Text style={styles.avatarText}>{item.authorUsername?.[0]?.toUpperCase() ?? '?'}</Text>
+        <View style={[styles.avatar, styles.avatarPlaceholder, { backgroundColor: colors.surfaceAlt }]}>
+          <Text style={[styles.avatarText, { color: colors.textSecondary }]}>{item.authorUsername?.[0]?.toUpperCase() ?? '?'}</Text>
         </View>
       )}
       <View style={styles.rowContent}>
-        <Text style={styles.rowTitle}>@{item.authorUsername ?? item.authorId}</Text>
-        <Text style={styles.rowSubtitle} numberOfLines={2}>{item.body}</Text>
+        <Text style={[styles.rowTitle, { color: colors.textPrimary }]}>@{item.authorUsername ?? item.authorId}</Text>
+        <Text style={[styles.rowSubtitle, { color: colors.textSecondary }]} numberOfLines={2}>{item.body}</Text>
       </View>
-      <Text style={styles.rowTime}>
+      <Text style={[styles.rowTime, { color: colors.textMuted }]}>
         {new Date(item.createdAt).toLocaleDateString(undefined, { hour: 'numeric', minute: '2-digit' })}
       </Text>
     </View>
@@ -143,17 +142,17 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
         <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
         <View style={styles.topBar}>
           <AnimatedPressable onPress={() => navigation.goBack()} style={styles.iconBtn} activeOpacity={0.7} scaleValue={0.9} hapticFeedback="light">
-            <Ionicons name="chevron-back" size={26} color={Colors.textPrimary} />
+            <Ionicons name="chevron-back" size={26} color={colors.textPrimary} />
           </AnimatedPressable>
-          <Text style={styles.topTitle}>Story Activity</Text>
+          <Text style={[styles.topTitle, { color: colors.textPrimary }]}>Story Activity</Text>
           <View style={styles.iconBtn} />
         </View>
         <View style={styles.loadingBody}>
-          <ActivityIndicator size="large" color={Colors.brand} />
+          <ActivityIndicator size="large" color={colors.brand} />
         </View>
       </SafeAreaView>
     );
@@ -164,7 +163,7 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
     : activity?.replies ?? [];
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       <View style={styles.topBar}>
@@ -175,9 +174,9 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
           scaleValue={0.9}
           hapticFeedback="light"
         >
-          <Ionicons name="chevron-back" size={26} color={Colors.textPrimary} />
+          <Ionicons name="chevron-back" size={26} color={colors.textPrimary} />
         </AnimatedPressable>
-        <Text style={styles.topTitle}>Story Activity</Text>
+        <Text style={[styles.topTitle, { color: colors.textPrimary }]}>Story Activity</Text>
         <View style={styles.iconBtn} />
       </View>
 
@@ -186,11 +185,11 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
           <Pressable
             key={tab.key}
             onPress={() => setActiveTab(tab.key)}
-            style={[styles.tab, activeTab === tab.key && styles.tabActive]}
+            style={[styles.tab, { backgroundColor: colors.surfaceAlt }, activeTab === tab.key && { backgroundColor: colors.brand }]}
             accessibilityLabel={`${tab.label} (${tab.count})`}
             accessibilityRole="button"
           >
-            <Text style={[styles.tabText, activeTab === tab.key && styles.tabTextActive]}>
+            <Text style={[styles.tabText, { color: colors.textSecondary }, activeTab === tab.key && styles.tabTextActive]}>
               {tab.label}
             </Text>
             {tab.count > 0 && (
@@ -211,13 +210,13 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={() => loadActivity(true)}
-            tintColor={Colors.brand}
+            tintColor={colors.brand}
           />
         }
         ListEmptyComponent={
           <View style={styles.emptyBody}>
-            <Ionicons name="people-outline" size={40} color={Colors.textMuted} />
-            <Text style={styles.emptyText}>No {activeTab} yet</Text>
+            <Ionicons name="people-outline" size={40} color={colors.textMuted} />
+            <Text style={[styles.emptyText, { color: colors.textMuted }]}>No {activeTab} yet</Text>
           </View>
         }
       />
@@ -228,7 +227,6 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   topBar: {
     flexDirection: 'row',
@@ -240,7 +238,6 @@ const styles = StyleSheet.create({
   topTitle: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
     letterSpacing: Type.subtitle.letterSpacing,
   },
   iconBtn: {
@@ -269,15 +266,10 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingVertical: 8,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
-  },
-  tabActive: {
-    backgroundColor: Colors.brand,
   },
   tabText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
   },
   tabTextActive: {
     color: '#fff',
@@ -305,7 +297,6 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     paddingVertical: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
   },
   avatar: {
     width: 40,
@@ -315,10 +306,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   avatarPlaceholder: {
-    backgroundColor: Colors.surfaceAlt,
   },
   avatarText: {
-    color: Colors.textSecondary,
     fontFamily: Typography.family.bold,
     fontSize: 16,
   },
@@ -329,17 +318,14 @@ const styles = StyleSheet.create({
   rowTitle: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   rowSubtitle: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
   },
   rowTime: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
   },
   emptyBody: {
     flex: 1,
@@ -351,6 +337,5 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
   },
 });
