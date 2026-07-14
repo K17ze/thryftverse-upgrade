@@ -127,6 +127,75 @@ export async function fetchFilteredListings(options?: {
   }
 }
 
+export interface VisualSearchResult {
+  listings: Listing[];
+  source: 'api' | 'fallback';
+  visualMatching: boolean;
+  note?: string;
+  error?: string;
+}
+
+/**
+ * Visual Search — calls POST /visual-search.
+ * The backend returns real listings filtered by category/brand/price/description
+ * (visualMatching=false until an ML image-similarity model is deployed).
+ * On any network/server failure the caller is expected to fall back to
+ * client-side filtering of cached listings.
+ */
+export async function visualSearch(params: {
+  imageUrl?: string;
+  query?: string;
+  category?: string;
+  brand?: string;
+  size?: string;
+  condition?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  sort?: 'newest' | 'price_asc' | 'price_desc';
+  limit?: number;
+}): Promise<VisualSearchResult> {
+  try {
+    const payload = await fetchJson<{
+      ok: boolean;
+      runtimeAvailable?: boolean;
+      visualMatching?: boolean;
+      note?: string;
+      items?: ApiListingRow[];
+    }>('/visual-search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        imageUrl: params.imageUrl,
+        query: params.query,
+        category: params.category,
+        brand: params.brand,
+        size: params.size,
+        condition: params.condition,
+        minPrice: params.minPrice,
+        maxPrice: params.maxPrice,
+        sort: params.sort ?? 'newest',
+        limit: params.limit ?? 48,
+      }),
+    });
+
+    const rows = Array.isArray(payload.items) ? payload.items : [];
+    return {
+      listings: rows.map((row) => mapBackendListingToListing(row)),
+      source: 'api',
+      visualMatching: payload.visualMatching === true,
+      note: payload.note,
+      error: rows.length === 0 ? 'No listings match your photo filters yet.' : undefined,
+    };
+  } catch (error) {
+    return {
+      listings: [],
+      source: 'fallback',
+      visualMatching: false,
+      error: friendlyBackendError(error),
+    };
+  }
+}
+
 /* ── Real backend CRUD ─────────────────────────────────────────────── */
 
 export interface ListingCreateBody {

@@ -482,7 +482,7 @@ export default function ItemDetailScreen() {
               return (
                 <View style={styles.authCard}>
                   <View style={styles.authIconWrap}>
-                    <Ionicons name="shield-checkmark" size={20} color={Colors.success} />
+                    <Ionicons name="shield-checkmark" size={20} color={Colors.brand} />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.authTitle}>Authenticity verified</Text>

@@ -32,9 +32,9 @@ colors:
     text-inverse: "#FFFFFF"        # dark: #000000
     border: "#E5E5E5"             # dark: #262626
     border-subtle: "#F0F0F0"      # dark: #333333
-    danger: "#DC2626"
-    success: "#16A34A"
-    warning: "#F59E0B"
+    danger: "#9b0202"
+    success: "#215634"
+    warning: "#ffc765"
     overlay: "rgba(0,0,0,0.4)"     # dark: rgba(0,0,0,0.6)
     input: "#FFFFFF"               # dark: #1A1A1A
     input-text: "#000000"          # dark: #FFFFFF

@@ -226,8 +226,7 @@ export type RootStackParamList = {
   TradeHub: { destination?: 'auction' | 'co_own' } | undefined;
   // Trust & Verification
   Verification: undefined;
-  // Seller Hub
-  SellerHub: undefined;
+  // Seller analytics (entry via MyListings)
   SellerAnalytics: undefined;
   BundleBag: { sellerId: string; sellerName?: string } | undefined;
 };

@@ -23,16 +23,27 @@ function computeStrength(password: string): PasswordStrength {
   return 'strong';
 }
 
-function strengthColor(strength: PasswordStrength): string {
+function strengthLabelColor(strength: PasswordStrength): string {
   switch (strength) {
     case 'weak':
-      return Colors.danger;
     case 'fair':
-      return Colors.warning;
+      return Colors.textSecondary;
     case 'good':
-      return '#3B82F6';
     case 'strong':
-      return Colors.success;
+      return Colors.brand;
+  }
+}
+
+function strengthFillOpacity(strength: PasswordStrength): number {
+  switch (strength) {
+    case 'weak':
+      return 0.3;
+    case 'fair':
+      return 0.5;
+    case 'good':
+      return 0.75;
+    case 'strong':
+      return 1;
   }
 }
 
@@ -51,7 +62,7 @@ function strengthLabel(strength: PasswordStrength): string {
 
 export function PasswordStrengthBar({ password }: PasswordStrengthBarProps) {
   const strength = computeStrength(password);
-  const color = strengthColor(strength);
+  const labelColor = strengthLabelColor(strength);
   const segments = ['weak', 'fair', 'good', 'strong'] as PasswordStrength[];
   const activeIndex = segments.indexOf(strength);
 
@@ -63,12 +74,12 @@ export function PasswordStrengthBar({ password }: PasswordStrengthBarProps) {
             key={seg}
             style={[
               styles.segment,
-              idx <= activeIndex && { backgroundColor: color },
+              idx <= activeIndex && { backgroundColor: Colors.brand, opacity: strengthFillOpacity(strength) },
             ]}
           />
         ))}
       </View>
-      <Caption color={color} style={styles.label}>
+      <Caption color={labelColor} style={styles.label}>
         {strengthLabel(strength)}
       </Caption>
     </View>

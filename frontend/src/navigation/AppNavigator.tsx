@@ -32,7 +32,6 @@ import TradeScreen from '../screens/TradeScreen';
 import PortfolioScreen from '../screens/PortfolioScreen';
 import MyBidsScreen from '../screens/MyBidsScreen';
 import MyListingsScreen from '../screens/MyListingsScreen';
-import SellerHubScreen from '../screens/SellerHubScreen';
 import SellerAnalyticsScreen from '../screens/SellerAnalyticsScreen';
 import BundleBagScreen from '../screens/BundleBagScreen';
 import CoOwnOrderHistoryScreen from '../screens/SyndicateOrderHistoryScreen';
@@ -246,7 +245,6 @@ export default function AppNavigator() {
       <Stack.Screen name="Portfolio" component={PortfolioScreen} />
       <Stack.Screen name="MyBids" component={MyBidsScreen} />
       <Stack.Screen name="MyListings" component={MyListingsScreen} />
-      <Stack.Screen name="SellerHub" component={SellerHubScreen} />
       <Stack.Screen name="SellerAnalytics" component={SellerAnalyticsScreen} />
       <Stack.Screen name="BundleBag" component={BundleBagScreen} />
       <Stack.Screen name="CoOwnOrderHistory" component={CoOwnOrderHistoryScreen} />
@@ -318,8 +316,8 @@ export default function AppNavigator() {
       <Stack.Screen name="Report" component={ReportScreen} options={modalScreenOptions} />
       <Stack.Screen name="SavedSearches" component={SavedSearchesScreen} />
 
-      {/* Visual Search */}
-      <Stack.Screen name="VisualSearch" component={VisualSearchScreen} />
+      {/* Visual Search — full-screen camera viewfinder with its own header on results */}
+      <Stack.Screen name="VisualSearch" component={VisualSearchScreen} options={{ headerShown: false }} />
 
       {/* Explore / Creator screens */}
       <Stack.Screen name="CreateLook" component={CreateLookRedirect} options={modalScreenOptions} />
