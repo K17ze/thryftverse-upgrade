@@ -66,17 +66,17 @@ export function CreatorTemplateBrowser({
   const renderItem = useCallback(
     ({ item }: { item: CreatorTemplate }) => {
       const previewDoc = item.build();
-      const previewWidth = 120;
+      const previewWidth = 160;
       const previewHeight = Math.floor(previewWidth / previewDoc.canvas.aspectRatio);
 
       return (
         <Pressable
           onPress={() => handleApply(item)}
-          style={styles.templateCard}
+          style={[styles.templateCard, { borderColor: colors.border }]}
           accessibilityLabel={`Apply template ${item.name}`}
           accessibilityRole="button"
         >
-          <View style={styles.previewContainer}>
+          <View style={[styles.previewContainer, { backgroundColor: colors.surfaceAlt }]}>
             <CreatorCanvas
               document={previewDoc}
               page={previewDoc.pages[0]}
@@ -85,12 +85,12 @@ export function CreatorTemplateBrowser({
               mode="preview"
             />
           </View>
-          <Text style={styles.templateName}>{item.name}</Text>
-          <Text style={styles.templateDesc} numberOfLines={2}>{item.description}</Text>
+          <Text style={[styles.templateName, { color: colors.textPrimary }]}>{item.name}</Text>
+          <Text style={[styles.templateDesc, { color: colors.textMuted }]} numberOfLines={2}>{item.description}</Text>
         </Pressable>
       );
     },
-    [handleApply],
+    [handleApply, colors],
   );
 
   return (
@@ -112,7 +112,7 @@ export function CreatorTemplateBrowser({
             renderItem={renderItem}
             numColumns={2}
             contentContainerStyle={styles.listContent}
-            ItemSeparatorComponent={() => <View style={{ height: Space.md }} />}
+            columnWrapperStyle={styles.columnWrapper}
             ListEmptyComponent={
               <View style={styles.emptyState}>
                 <Ionicons name="grid-outline" size={40} color={colors.textMuted} />
@@ -145,33 +145,33 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: Space.md,
-    gap: Space.sm,
+    paddingBottom: Space.lg,
+  },
+  columnWrapper: {
+    gap: Space.md,
+    marginBottom: Space.md,
   },
   templateCard: {
     flex: 1,
-    marginHorizontal: Space.xs,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.lg,
     padding: Space.sm,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderWidth: 1,
   },
   previewContainer: {
     alignItems: 'center',
     marginBottom: Space.sm,
-    borderRadius: Radius.sm,
+    borderRadius: Radius.md,
     overflow: 'hidden',
   },
   templateName: {
     fontFamily: Typography.family.semibold,
     fontSize: Type.body.size,
-    color: Colors.textPrimary,
     marginBottom: 2,
   },
   templateDesc: {
     fontFamily: Typography.family.regular,
     fontSize: Type.caption.size,
-    color: Colors.textMuted,
+    lineHeight: 16,
   },
   emptyState: {
     alignItems: 'center',

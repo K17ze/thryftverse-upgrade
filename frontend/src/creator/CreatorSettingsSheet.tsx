@@ -64,7 +64,12 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
           />
 
           {/* Shared: Caption */}
-          <Text style={styles.sectionLabel}>Caption</Text>
+          <View style={styles.labelRow}>
+            <Text style={styles.sectionLabel}>Caption</Text>
+            <Text style={[styles.charCount, { color: caption.length > 2000 ? colors.danger : colors.textMuted }]}>
+              {caption.length}/2200
+            </Text>
+          </View>
           <TextInput
             style={[styles.input, styles.textArea]}
             value={caption}
@@ -73,6 +78,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
             placeholder="Add a caption..."
             placeholderTextColor={Colors.textMuted}
             multiline
+            maxLength={2200}
             accessibilityLabel="Caption"
           />
 
@@ -240,15 +246,27 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
 }
 
 function RatioButton({ label, ratio, current, onSelect }: { label: string; ratio: number; current: number; onSelect: (r: number) => void }) {
+  const { colors } = useAppTheme();
   const isActive = Math.abs(current - ratio) < 0.01;
+  // Visual preview: a rectangle showing the aspect ratio shape
+  // Max dimensions: 32x40 box
+  const previewW = ratio <= 1 ? Math.floor(28 * ratio) : 28;
+  const previewH = ratio <= 1 ? 28 : Math.floor(28 / ratio);
   return (
     <Pressable
       onPress={() => onSelect(ratio)}
-      style={[styles.ratioBtn, isActive && styles.ratioBtnActive]}
-      accessibilityLabel={`Canvas ratio ${label}`}
+      style={[
+        styles.ratioBtn,
+        { borderColor: isActive ? colors.brand : colors.border, backgroundColor: isActive ? `${colors.brand}10` : 'transparent' },
+      ]}
+      accessibilityLabel={`Canvas ratio ${label}${isActive ? ', current' : ''}`}
       accessibilityRole="button"
     >
-      <Text style={[styles.ratioBtnText, isActive && styles.ratioBtnTextActive]}>{label}</Text>
+      <View style={[
+        styles.ratioPreview,
+        { width: previewW, height: previewH, backgroundColor: isActive ? colors.brand : colors.textMuted },
+      ]} />
+      <Text style={[styles.ratioBtnText, { color: isActive ? colors.brand : colors.textSecondary }]}>{label}</Text>
     </Pressable>
   );
 }
@@ -319,24 +337,31 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   ratioBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surfaceAlt,
+    gap: 6,
+    minWidth: 72,
+    minHeight: 72,
   },
-  ratioBtnActive: {
-    borderColor: Colors.brand,
-    backgroundColor: `${Colors.brand}15`,
+  ratioPreview: {
+    borderRadius: 4,
   },
   ratioBtnText: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
-    color: Colors.textPrimary,
+    fontSize: Type.caption.size,
   },
-  ratioBtnTextActive: {
-    color: Colors.brand,
+  labelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  charCount: {
+    fontSize: 12,
+    fontFamily: Typography.family.regular,
   },
   draftSection: {
     marginTop: Space.md,

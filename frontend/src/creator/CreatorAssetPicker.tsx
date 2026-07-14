@@ -120,6 +120,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
   const [isLoading, setIsLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const cursorRef = useRef<string | undefined>(undefined);
   const mountedRef = useRef(true);
 
@@ -140,7 +141,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
 
     try {
       const opts: any = {
-        first: 30,
+        first: 60,
         mediaType: ['photo', 'video'],
         sortBy: [['creationTime', false]],
       };
@@ -164,7 +165,6 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
       cursorRef.current = page.endCursor;
       setHasMore(page.hasNextPage);
     } catch {
-      // Permission or access error — keep the empty state
       if (reset) setAssets([]);
       setHasMore(false);
     } finally {
@@ -175,33 +175,45 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
     }
   }, [hasMore, loadingMore]);
 
-  // Request permission on mount if not determined
   useEffect(() => {
-    if (status && !status.granted && !status.canAskAgain) {
-      // Permission permanently denied — show settings prompt
-      return;
-    }
     if (status && status.granted) {
       loadRecentMedia(true);
     }
   }, [status, loadRecentMedia]);
 
-  const handleSelectAsset = useCallback((asset: MediaAsset) => {
-    onAddLayer({
-      ...baseLayer(createStableId('media'), 0),
-      type: 'media',
-      width: 1,
-      height: 1,
-      payload: {
-        mediaUri: asset.uri,
-        mediaType: asset.mediaType,
-        contentFit: 'cover',
-        videoDurationMs: asset.duration,
-        opacity: 1,
-      },
+  const toggleSelect = useCallback((asset: MediaAsset) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(asset.id)) {
+        next.delete(asset.id);
+      } else {
+        if (next.size >= 10) return prev;
+        next.add(asset.id);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleAddSelected = useCallback(() => {
+    if (selectedIds.size === 0) return;
+    const selected = assets.filter((a) => selectedIds.has(a.id));
+    selected.forEach((asset, i) => {
+      onAddLayer({
+        ...baseLayer(createStableId('media'), i),
+        type: 'media',
+        width: 1,
+        height: 1,
+        payload: {
+          mediaUri: asset.uri,
+          mediaType: asset.mediaType,
+          contentFit: 'cover',
+          videoDurationMs: asset.duration,
+          opacity: 1,
+        },
+      });
     });
     onClose();
-  }, [onAddLayer, onClose]);
+  }, [selectedIds, assets, onAddLayer, onClose]);
 
   const handleTakePhoto = useCallback(async () => {
     const { status: camStatus } = await ImagePicker.requestCameraPermissionsAsync();
@@ -254,6 +266,8 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
     const { Linking } = await import('react-native');
     Linking.openSettings();
   }, []);
+
+  const selectedCount = selectedIds.size;
 
   // ── Permission states ──
   if (!status) {
@@ -314,7 +328,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
     );
   }
 
-  // ── Media grid ──
+  // ── Media grid with multi-select ──
   const renderItem = useCallback(({ item, index }: { item: MediaAsset | 'camera' | 'video'; index: number }) => {
     if (item === 'camera') {
       return (
@@ -341,11 +355,13 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
       );
     }
     const asset = item as MediaAsset;
+    const isSelected = selectedIds.has(asset.id);
+    const selectionOrder = isSelected ? Array.from(selectedIds).indexOf(asset.id) + 1 : 0;
     return (
       <Pressable
-        onPress={() => handleSelectAsset(asset)}
+        onPress={() => toggleSelect(asset)}
         style={styles.mediaGridCell}
-        accessibilityLabel={`Select ${asset.mediaType} from ${new Date(asset.id).toLocaleDateString()}`}
+        accessibilityLabel={`Select ${asset.mediaType}${isSelected ? `, selected ${selectionOrder}` : ''}`}
         accessibilityRole="button"
       >
         <Image
@@ -363,17 +379,43 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
             )}
           </View>
         )}
+        {isSelected && (
+          <View style={styles.mediaGridSelectedOverlay}>
+            <View style={styles.mediaGridSelectionBadge}>
+              <Text style={styles.mediaGridSelectionText}>{selectionOrder}</Text>
+            </View>
+          </View>
+        )}
       </Pressable>
     );
-  }, [colors, handleTakePhoto, handlePickVideo, handleSelectAsset]);
+  }, [colors, handleTakePhoto, handlePickVideo, toggleSelect, selectedIds]);
 
-  // Prepend camera and video buttons to the grid
   const gridData: (MediaAsset | 'camera' | 'video')[] = useMemo(() => {
     return ['camera', 'video', ...assets];
   }, [assets]);
 
   return (
-    <PickerShell title="Add Media" onClose={onClose}>
+    <SheetContainer visible={true} onClose={selectedCount > 0 ? () => { setSelectedIds(new Set()); } : onClose} maxHeight={0.9}>
+      <View style={styles.header}>
+        <Text style={[styles.title, { color: colors.textPrimary }]}>
+          {selectedCount > 0 ? `${selectedCount} selected` : 'Add Media'}
+        </Text>
+        <View style={styles.headerRight}>
+          {selectedCount > 0 && (
+            <PressScale
+              onPress={handleAddSelected}
+              style={[styles.addBtn, { backgroundColor: colors.brand }]}
+              accessibilityLabel="Add selected media"
+            >
+              <Text style={[styles.addBtnText, { color: colors.textInverse }]}>Add</Text>
+            </PressScale>
+          )}
+          <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close picker">
+            <Ionicons name="close" size={22} color={colors.textSecondary} />
+          </PressScale>
+        </View>
+      </View>
+
       {isLoading ? (
         <View style={styles.mediaLoadingState}>
           <ActivityIndicator size="large" color={colors.brand} />
@@ -410,7 +452,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
           ) : null}
         />
       )}
-    </PickerShell>
+    </SheetContainer>
   );
 }
 
@@ -1014,6 +1056,40 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 10,
     fontFamily: Typography.family.medium,
+  },
+  mediaGridSelectedOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  mediaGridSelectionBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mediaGridSelectionText: {
+    color: '#000',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  addBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: Radius.full,
+  },
+  addBtnText: {
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.bodyEmphasis.size,
   },
   mediaGridFooter: {
     paddingVertical: Space.md,

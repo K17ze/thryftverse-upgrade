@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -23,6 +23,9 @@ const LAYER_ICONS: Record<CreatorLayer['type'], string> = {
   decorative: 'happy-outline',
 };
 
+const TOUCH = 44;
+const THUMB = 40;
+
 export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps) {
   const { document, activePageIndex, selectedLayerId, selectLayer, removeLayer, duplicateLayer, reorderLayer, toggleLayerLock, toggleLayerVisibility } = useCreator();
   const { colors } = useAppTheme();
@@ -34,11 +37,42 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
     onClose();
   }, [onClose]);
 
+  const openOverflow = useCallback(
+    (layer: CreatorLayer) => {
+      const name = getLayerDisplayName(layer);
+      Alert.alert(
+        name,
+        layer.type,
+        [
+          {
+            text: 'Bring to front',
+            onPress: () => reorderLayer(layer.id, 'front'),
+          },
+          {
+            text: 'Send to back',
+            onPress: () => reorderLayer(layer.id, 'back'),
+          },
+          {
+            text: 'Duplicate',
+            onPress: () => duplicateLayer(layer.id),
+          },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: () => removeLayer(layer.id),
+          },
+          { text: 'Cancel', style: 'cancel' },
+        ],
+      );
+    },
+    [reorderLayer, duplicateLayer, removeLayer],
+  );
+
   return (
     <SheetContainer visible={visible} onClose={handleClose} maxHeight={0.7}>
       <View style={styles.header}>
         <Text style={[styles.title, { color: colors.textPrimary }]}>Layers</Text>
-        <PressScale onPress={handleClose} style={styles.closeBtn} accessibilityLabel="Close layers">
+        <PressScale onPress={handleClose} style={styles.closeBtn} accessibilityLabel="Close layers" accessibilityRole="button">
           <Ionicons name="close" size={22} color={colors.textSecondary} />
         </PressScale>
       </View>
@@ -53,52 +87,96 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
         ) : (
           layers.map((layer) => {
             const isSelected = layer.id === selectedLayerId;
+            const thumbSource = getLayerThumbnailSource(layer);
             return (
-              <PressScale
+              <View
                 key={layer.id}
-                onPress={() => selectLayer(layer.id)}
                 style={[
                   styles.layerRow,
                   { backgroundColor: colors.surfaceAlt },
                   isSelected ? { backgroundColor: `${colors.brand}15`, borderWidth: 1, borderColor: `${colors.brand}40` } : {},
                 ]}
-                accessibilityLabel={`Layer ${getLayerDisplayName(layer)}${layer.locked ? ', locked' : ''}${layer.hidden ? ', hidden' : ''}${isSelected ? ', selected' : ''}`}
-                accessibilityHint="Double tap to select layer"
               >
-                <View style={[styles.layerIcon, { backgroundColor: `${getLayerColor(layer.type)}20` }, layer.hidden && styles.layerIconHidden]}>
-                  <Ionicons name={LAYER_ICONS[layer.type] as any} size={18} color={layer.hidden ? colors.textMuted : getLayerColor(layer.type)} />
+                <PressScale
+                  onPress={() => selectLayer(layer.id)}
+                  style={styles.rowMain}
+                  accessibilityLabel={`Layer ${getLayerDisplayName(layer)}${layer.locked ? ', locked' : ''}${layer.hidden ? ', hidden' : ''}${isSelected ? ', selected' : ''}`}
+                  accessibilityHint="Double tap to select layer"
+                  accessibilityRole="button"
+                >
+                  <View style={[styles.thumbnail, { backgroundColor: `${getLayerColor(layer.type)}20` }, layer.hidden && styles.thumbnailHidden]}>
+                    {thumbSource ? (
+                      <Image source={thumbSource} style={styles.thumbnailImage} resizeMode="cover" />
+                    ) : (
+                      <Ionicons name={LAYER_ICONS[layer.type] as any} size={20} color={layer.hidden ? colors.textMuted : getLayerColor(layer.type)} />
+                    )}
+                    {layer.type === 'media' && layer.payload.mediaType === 'video' && (
+                      <View style={styles.videoBadge}>
+                        <Ionicons name="play" size={10} color="#ffffff" />
+                      </View>
+                    )}
+                  </View>
+                  <View style={styles.layerInfo}>
+                    <Text
+                      style={[styles.layerName, { color: colors.textPrimary }, layer.hidden && { textDecorationLine: 'line-through', color: colors.textMuted }]}
+                      numberOfLines={1}
+                    >
+                      {getLayerDisplayName(layer)}
+                    </Text>
+                    <Text style={[styles.layerType, { color: colors.textMuted }]} numberOfLines={1}>
+                      {layer.type}
+                    </Text>
+                  </View>
+                </PressScale>
+
+                <View style={styles.rowActions}>
+                  <PressScale
+                    onPress={() => reorderLayer(layer.id, 'forward')}
+                    style={styles.actionBtn}
+                    accessibilityLabel="Move layer up"
+                    accessibilityRole="button"
+                  >
+                    <Ionicons name="chevron-up" size={22} color={colors.textSecondary} />
+                  </PressScale>
+                  <PressScale
+                    onPress={() => reorderLayer(layer.id, 'backward')}
+                    style={styles.actionBtn}
+                    accessibilityLabel="Move layer down"
+                    accessibilityRole="button"
+                  >
+                    <Ionicons name="chevron-down" size={22} color={colors.textSecondary} />
+                  </PressScale>
+                  <PressScale
+                    onPress={() => toggleLayerVisibility(layer.id)}
+                    style={styles.actionBtn}
+                    accessibilityLabel={layer.hidden ? 'Show layer' : 'Hide layer'}
+                    accessibilityRole="button"
+                  >
+                    <Ionicons name={layer.hidden ? 'eye-off-outline' : 'eye-outline'} size={22} color={colors.textSecondary} />
+                  </PressScale>
+                  <PressScale
+                    onPress={() => toggleLayerLock(layer.id)}
+                    style={styles.actionBtn}
+                    accessibilityLabel={layer.locked ? 'Unlock layer' : 'Lock layer'}
+                    accessibilityRole="button"
+                  >
+                    <Ionicons
+                      name={layer.locked ? 'lock-closed' : 'lock-open-outline'}
+                      size={22}
+                      color={layer.locked ? colors.warning : colors.textSecondary}
+                    />
+                  </PressScale>
+                  <PressScale
+                    onPress={() => openOverflow(layer)}
+                    style={styles.actionBtn}
+                    accessibilityLabel="More layer actions"
+                    accessibilityHint="Opens duplicate, delete and reorder options"
+                    accessibilityRole="button"
+                  >
+                    <Ionicons name="ellipsis-horizontal" size={22} color={colors.textSecondary} />
+                  </PressScale>
                 </View>
-                <View style={styles.layerInfo}>
-                  <Text style={[styles.layerName, { color: colors.textPrimary }, layer.hidden && { textDecorationLine: 'line-through', color: colors.textMuted }]} numberOfLines={1}>{getLayerDisplayName(layer)}</Text>
-                  <Text style={[styles.layerType, { color: colors.textMuted }]}>{layer.type}{layer.locked ? ' · locked' : ''}{layer.hidden ? ' · hidden' : ''}</Text>
-                </View>
-                <View style={styles.layerActions}>
-                  <PressScale onPress={() => reorderLayer(layer.id, 'front')} style={styles.layerActionBtn} accessibilityLabel="Bring to front">
-                    <Ionicons name="arrow-up-circle-outline" size={18} color={colors.textSecondary} />
-                  </PressScale>
-                  <PressScale onPress={() => reorderLayer(layer.id, 'forward')} style={styles.layerActionBtn} accessibilityLabel="Move forward">
-                    <Ionicons name="chevron-up" size={18} color={colors.textSecondary} />
-                  </PressScale>
-                  <PressScale onPress={() => reorderLayer(layer.id, 'backward')} style={styles.layerActionBtn} accessibilityLabel="Move backward">
-                    <Ionicons name="chevron-down" size={18} color={colors.textSecondary} />
-                  </PressScale>
-                  <PressScale onPress={() => reorderLayer(layer.id, 'back')} style={styles.layerActionBtn} accessibilityLabel="Send to back">
-                    <Ionicons name="arrow-down-circle-outline" size={18} color={colors.textSecondary} />
-                  </PressScale>
-                  <PressScale onPress={() => toggleLayerLock(layer.id)} style={styles.layerActionBtn} accessibilityLabel={layer.locked ? 'Unlock layer' : 'Lock layer'}>
-                    <Ionicons name={layer.locked ? 'lock-closed' : 'lock-open-outline'} size={18} color={layer.locked ? colors.warning : colors.textSecondary} />
-                  </PressScale>
-                  <PressScale onPress={() => toggleLayerVisibility(layer.id)} style={styles.layerActionBtn} accessibilityLabel={layer.hidden ? 'Show layer' : 'Hide layer'}>
-                    <Ionicons name={layer.hidden ? 'eye-off-outline' : 'eye-outline'} size={18} color={colors.textSecondary} />
-                  </PressScale>
-                  <PressScale onPress={() => duplicateLayer(layer.id)} style={styles.layerActionBtn} accessibilityLabel="Duplicate layer">
-                    <Ionicons name="copy-outline" size={18} color={colors.textSecondary} />
-                  </PressScale>
-                  <PressScale onPress={() => removeLayer(layer.id)} style={styles.layerActionBtn} accessibilityLabel="Delete layer">
-                    <Ionicons name="trash-outline" size={18} color={colors.danger} />
-                  </PressScale>
-                </View>
-              </PressScale>
+              </View>
             );
           })
         )}
@@ -128,6 +206,25 @@ function getLayerDisplayName(layer: CreatorLayer): string {
   }
 }
 
+function getLayerThumbnailSource(layer: CreatorLayer): { uri: string } | null {
+  switch (layer.type) {
+    case 'media': {
+      const uri = layer.payload.thumbnailUri || layer.payload.mediaUri;
+      return uri ? { uri } : null;
+    }
+    case 'product': {
+      const uri = layer.payload.snapshotImageUrl;
+      return uri ? { uri } : null;
+    }
+    case 'look': {
+      const uri = layer.payload.snapshotImageUrl;
+      return uri ? { uri } : null;
+    }
+    default:
+      return null;
+  }
+}
+
 function getLayerColor(type: CreatorLayer['type']): string {
   switch (type) {
     case 'media': return '#5ac8fa';
@@ -154,8 +251,8 @@ const styles = StyleSheet.create({
     fontSize: Type.subtitle.size,
   },
   closeBtn: {
-    width: 44,
-    height: 44,
+    width: TOUCH,
+    height: TOUCH,
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: Radius.sm,
@@ -183,45 +280,69 @@ const styles = StyleSheet.create({
   layerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-    paddingVertical: Space.sm,
-    paddingHorizontal: Space.md,
+    gap: Space.xs,
+    paddingVertical: Space.xs,
+    paddingHorizontal: Space.sm,
     borderRadius: Radius.md,
+    minHeight: 56,
   },
-  layerIcon: {
-    width: 36,
-    height: 36,
+  rowMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    minHeight: TOUCH,
+  },
+  thumbnail: {
+    width: THUMB,
+    height: THUMB,
     borderRadius: Radius.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  thumbnailHidden: {
+    opacity: 0.5,
+  },
+  thumbnailImage: {
+    width: '100%',
+    height: '100%',
+  },
+  videoBadge: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   layerInfo: {
     flex: 1,
+    justifyContent: 'center',
     gap: 2,
   },
   layerName: {
-    fontFamily: Typography.family.medium,
-    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.body.size,
   },
   layerType: {
     fontFamily: Typography.family.regular,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     textTransform: 'capitalize',
   },
-  layerActions: {
+  rowActions: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 2,
-    flexWrap: 'wrap',
-    maxWidth: 200,
   },
-  layerActionBtn: {
-    width: 40,
-    height: 40,
+  actionBtn: {
+    width: TOUCH,
+    height: TOUCH,
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: Radius.sm,
-  },
-  layerIconHidden: {
-    opacity: 0.4,
   },
 });

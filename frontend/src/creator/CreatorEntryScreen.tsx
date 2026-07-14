@@ -213,14 +213,6 @@ export function CreatorEntryScreen({
 
   const selectedCount = selectedIds.size;
 
-  // Grid data: camera tile first, then media assets
-  const gridData = useMemo(() => {
-    return [
-      { key: 'camera', type: 'camera' as const },
-      ...assets.map((a) => ({ key: a.id, type: 'media' as const, asset: a })),
-    ];
-  }, [assets]);
-
   // ── Permission states ──
   if (!status) {
     return (
@@ -306,6 +298,31 @@ export function CreatorEntryScreen({
         insets={insets}
       />
 
+      {/* Camera section — large button at top */}
+      <View style={[styles.cameraSection, { marginTop: insets.top + 50 }]}>
+        <Pressable
+          style={styles.cameraBigBtn}
+          onPress={handleTakePhoto}
+          accessibilityLabel="Take photo with camera"
+        >
+          <LinearGradient
+            colors={['rgba(255,255,255,0.12)', 'rgba(255,255,255,0.04)']}
+            style={styles.cameraBigGradient}
+          >
+            <Ionicons name="camera" size={36} color="#fff" />
+            <Text style={styles.cameraBigText}>Camera</Text>
+          </LinearGradient>
+        </Pressable>
+      </View>
+
+      {/* Section label */}
+      <View style={styles.sectionLabelRow}>
+        <Text style={styles.sectionLabelText}>RECENT</Text>
+        {selectedCount > 0 && (
+          <Text style={styles.sectionLabelCount}>{selectedCount} selected</Text>
+        )}
+      </View>
+
       {/* Media grid — 3 columns, edge-to-edge */}
       {isLoading ? (
         <View style={styles.centerState}>
@@ -313,81 +330,72 @@ export function CreatorEntryScreen({
         </View>
       ) : assets.length === 0 ? (
         <View style={styles.centerState}>
-          <Ionicons name="images-outline" size={56} color="rgba(255,255,255,0.4)" />
-          <Text style={styles.permissionTitle}>No photos found</Text>
-          <Pressable style={styles.permissionBtn} onPress={handleTakePhoto}>
-            <Text style={styles.permissionBtnText}>Take photo</Text>
-          </Pressable>
+          <Ionicons name="images-outline" size={48} color="rgba(255,255,255,0.3)" />
+          <Text style={styles.permissionText}>No photos found in your library</Text>
           <Pressable style={styles.blankBtn} onPress={onBlankStart}>
             <Text style={styles.blankBtnText}>Start with blank canvas</Text>
           </Pressable>
         </View>
       ) : (
         <FlatList
-          data={gridData}
-          keyExtractor={(item) => item.key}
+          data={assets}
+          keyExtractor={(item) => item.id}
           numColumns={GRID_COLUMNS}
           onEndReached={() => loadRecentMedia(false)}
           onEndReachedThreshold={0.5}
           ListFooterComponent={loadingMore ? <ActivityIndicator color="rgba(255,255,255,0.4)" /> : null}
           contentContainerStyle={styles.grid}
           renderItem={({ item }) => {
-            if (item.type === 'camera') {
-              return (
-                <Pressable
-                  style={[styles.cameraTile, { width: thumbSize, height: thumbSize }]}
-                  onPress={handleTakePhoto}
-                  accessibilityLabel="Take photo"
-                >
-                  <Ionicons name="camera" size={32} color="#fff" />
-                </Pressable>
-              );
-            }
-            const asset = item.asset;
-            const isSelected = selectedIds.has(asset.id);
+            const isSelected = selectedIds.has(item.id);
             const selectionOrder = isSelected
-              ? Array.from(selectedIds).indexOf(asset.id) + 1
+              ? Array.from(selectedIds).indexOf(item.id) + 1
               : 0;
             return (
               <MediaThumb
-                asset={asset}
+                asset={item}
                 size={thumbSize}
                 isSelected={isSelected}
                 selectionOrder={selectionOrder}
-                onPress={() => toggleSelect(asset)}
+                onPress={() => toggleSelect(item)}
               />
             );
           }}
         />
       )}
 
-      {/* Bottom bar with selection count + Next */}
+      {/* Bottom bar with Next / blank canvas */}
       <LinearGradient
-        colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.6)']}
+        colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.7)']}
         style={[styles.bottomBar, { paddingBottom: insets.bottom + 8 }]}
       >
         {selectedCount > 0 ? (
-          <>
-            <Text style={styles.selectionCount}>
-              {selectedCount} selected
-            </Text>
-            <Pressable
-              style={styles.nextBtn}
-              onPress={handleNext}
-              accessibilityLabel="Next"
-            >
-              <Text style={styles.nextBtnText}>Next</Text>
-              <Ionicons name="arrow-forward" size={20} color="#000" />
-            </Pressable>
-          </>
-        ) : (
           <Pressable
-            style={styles.blankBtn}
-            onPress={onBlankStart}
-            accessibilityLabel="Start with blank canvas"
+            style={styles.nextBtn}
+            onPress={handleNext}
+            accessibilityLabel="Next — enter editor with selected media"
           >
-            <Text style={styles.blankBtnText}>Start with blank canvas</Text>
+            <Text style={styles.nextBtnText}>Next</Text>
+            <Ionicons name="arrow-forward" size={20} color="#000" />
           </Pressable>
+        ) : (
+          <View style={styles.bottomBarRow}>
+            <Pressable
+              style={styles.blankBtn}
+              onPress={onBlankStart}
+              accessibilityLabel="Start with blank canvas"
+            >
+              <Ionicons name="create-outline" size={18} color="rgba(255,255,255,0.6)" />
+              <Text style={styles.blankBtnText}>Blank canvas</Text>
+            </Pressable>
+            <Pressable
+              style={styles.templateBtn}
+              onPress={onBlankStart}
+              accessibilityLabel="Browse templates"
+            >
+              <Ionicons name="grid-outline" size={18} color="rgba(255,255,255,0.6)" />
+              <Text style={styles.blankBtnText}>Templates</Text>
+            </Pressable>
+          </View>
         )}
       </LinearGradient>
     </View>
@@ -499,12 +507,48 @@ const styles = StyleSheet.create({
   grid: {
     paddingHorizontal: 0,
   },
-  cameraTile: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    justifyContent: 'center',
+  // Camera section
+  cameraSection: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
+  cameraBigBtn: {
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  cameraBigGradient: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 16,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  cameraBigText: {
+    color: '#fff',
+    fontSize: 17,
+    fontWeight: '600',
+  },
+  // Section label
+  sectionLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  sectionLabelText: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.8,
+  },
+  sectionLabelCount: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '500',
   },
   thumb: {
     position: 'relative',
@@ -595,11 +639,15 @@ const styles = StyleSheet.create({
   },
   // Bottom bar
   bottomBar: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingTop: 16,
+  },
+  bottomBarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 24,
   },
   selectionCount: {
     color: '#fff',
@@ -611,9 +659,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     backgroundColor: '#fff',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 24,
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    borderRadius: 28,
+    minWidth: 120,
+    justifyContent: 'center',
+  },
+  templateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
   nextBtnText: {
     color: '#000',
