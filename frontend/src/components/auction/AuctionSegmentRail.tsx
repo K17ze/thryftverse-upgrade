@@ -60,7 +60,6 @@ export function AuctionSegmentRail({
     <View style={styles.container}>
       <ScrollView
         horizontal
-        nestedScrollEnabled
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.segmentsRow}
       >
