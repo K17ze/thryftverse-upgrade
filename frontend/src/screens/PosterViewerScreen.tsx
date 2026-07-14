@@ -42,6 +42,8 @@ import { PosterStickerLayer } from '../components/poster/PosterStickerLayer';
 import { PosterReactionReplyBar } from '../components/poster/PosterReactionReplyBar';
 import { CachedImage } from '../components/CachedImage';
 import { Video } from '../components/compat/Video';
+import { safeValidateDocument, type CreatorDocument } from '../creator/composition';
+import { CreatorCanvas } from '../creator/CreatorCanvas';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const TICK_MS = 50;
@@ -104,6 +106,21 @@ export default function PosterViewerScreen() {
   const activeStory = stories[storyIndex];
   const activeFrame: PosterFrame | undefined = activeStory?.frames[frameIndex];
   const isOwner = !!activeStory && !!currentUser && activeStory.creatorId === currentUser.id;
+
+  // Parse the canonical composition document for WYSIWYG rendering. When
+  // present, each page maps to a story frame and is rendered through the
+  // same CreatorCanvas used in the editor, preserving all layers, geometry,
+  // styles, and background.
+  const compositionDoc = React.useMemo<CreatorDocument | null>(() => {
+    if (!activeStory?.compositionDocument) return null;
+    const result = safeValidateDocument(activeStory.compositionDocument);
+    if (result.success && result.data && result.data.type === 'poster') {
+      return result.data;
+    }
+    return null;
+  }, [activeStory?.compositionDocument]);
+
+  const compositionPage = compositionDoc?.pages[frameIndex] ?? null;
 
   const goNextFrame = React.useCallback(() => {
     setProgress(0);
@@ -259,8 +276,16 @@ export default function PosterViewerScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      {/* Background media */}
-      {isVideo && activeFrame.mediaUrl ? (
+      {/* Background — canonical composition or legacy media */}
+      {compositionDoc && compositionPage ? (
+        <CreatorCanvas
+          document={compositionDoc}
+          page={compositionPage}
+          canvasWidth={SCREEN_WIDTH}
+          canvasHeight={SCREEN_HEIGHT}
+          mode="view"
+        />
+      ) : isVideo && activeFrame.mediaUrl ? (
         <Video
           source={{ uri: activeFrame.mediaUrl }}
           style={styles.mediaFull}
@@ -399,8 +424,9 @@ export default function PosterViewerScreen() {
           </View>
         </View>
 
-        {/* Stickers overlay */}
-        {activeFrame.stickers.length > 0 && (
+        {/* Stickers overlay — skipped when rendering canonical composition,
+            since the composition canvas already includes all layers */}
+        {!compositionDoc && activeFrame.stickers.length > 0 && (
           <PosterStickerLayer
             stickers={activeFrame.stickers}
             containerWidth={SCREEN_WIDTH}
@@ -408,8 +434,8 @@ export default function PosterViewerScreen() {
           />
         )}
 
-        {/* Caption */}
-        {activeFrame.caption && activeFrame.mediaType !== 'text' && (
+        {/* Caption — skipped when rendering canonical composition */}
+        {!compositionDoc && activeFrame.caption && activeFrame.mediaType !== 'text' && (
           <View style={styles.captionWrap}>
             <LinearGradient
               colors={['transparent', 'rgba(0,0,0,0.5)']}

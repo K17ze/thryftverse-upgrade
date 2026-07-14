@@ -33,6 +33,9 @@ export interface LookApiItem {
   saveCount: number;
   likedByViewer: boolean;
   savedByViewer: boolean;
+  /** Versioned composition document for collage looks. When present, the
+   * viewer should render this canonical composition instead of only mediaUrl. */
+  compositionDocument?: unknown;
 }
 
 export interface LookApiResponse {

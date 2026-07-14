@@ -217,7 +217,7 @@ function CreatorStudioInner() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pageStrip} contentContainerStyle={styles.pageStripContent}>
           {document.pages.map((p, i) => {
             const thumbW = 36;
-            const thumbH = Math.floor(thumbW * document.canvas.aspectRatio);
+            const thumbH = Math.floor(thumbW / document.canvas.aspectRatio);
             return (
               <Pressable
                 key={p.id}

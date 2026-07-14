@@ -172,8 +172,14 @@ export function serialiseToLookPayload(doc: CreatorDocument): {
       y: l.y,
     }));
 
-  // Include full composition document for collage looks so backend can persist editable layers
-  const hasMultipleMedia = mediaLayers.length > 1;
+  // Include the full composition document whenever the look has any visible
+  // non-primary layer (text, shape, decorative, additional media, product,
+  // mention, etc.). This ensures the viewer can render the authored collage
+  // instead of only the primary media. A single bare media layer with no
+  // other authored content does not need the document.
+  const hasComposableLayers = page.layers.some(
+    (l) => !l.hidden && l.id !== mediaLayer.id,
+  );
 
   return {
     payload: {
@@ -184,7 +190,7 @@ export function serialiseToLookPayload(doc: CreatorDocument): {
       visibility: doc.metadata.visibility,
       tags,
       status: 'published',
-      ...(hasMultipleMedia ? { compositionDocument: doc } : {}),
+      ...(hasComposableLayers ? { compositionDocument: doc } : {}),
     },
     remixAttribution: {
       sourceDocumentId: doc.metadata.sourceDocumentId,
@@ -245,6 +251,10 @@ export function serialiseToPosterPayload(doc: CreatorDocument): {
       expiresInHours: doc.metadata.expiresInHours ?? 24,
       posterMode: doc.type,
       frames,
+      // Persist the full versioned composition document so the viewer can
+      // render the exact authored result (WYSIWYG) instead of reconstructing
+      // from the narrowed frame/sticker contract.
+      compositionDocument: doc,
     },
     remixAttribution: {
       sourceDocumentId: doc.metadata.sourceDocumentId,

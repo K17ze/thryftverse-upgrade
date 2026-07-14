@@ -32,7 +32,8 @@ describe('CreatorDocument schema', () => {
   it('creates a valid empty poster document', () => {
     const doc = createEmptyDocument('poster');
     expect(doc.type).toBe('poster');
-    expect(doc.canvas.aspectRatio).toBeCloseTo(16 / 9);
+    // P0.1: Poster defaults to 9:16 portrait (0.5625), not legacy 16:9 landscape
+    expect(doc.canvas.aspectRatio).toBeCloseTo(9 / 16);
     expect(doc.metadata.expiresInHours).toBe(24);
   });
 

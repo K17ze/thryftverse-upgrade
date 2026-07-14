@@ -9,7 +9,7 @@ function makePosterDoc(): CreatorDocument {
     id: 'doc_poster_1',
     type: 'poster',
     version: 1,
-    canvas: { aspectRatio: 16 / 9, background: { type: 'color', value: '#1a1a1a' } },
+    canvas: { aspectRatio: 9 / 16, background: { type: 'color', value: '#1a1a1a' } },
     metadata: {
       title: 'Test Poster',
       caption: 'Test caption',
@@ -150,24 +150,24 @@ describe('PASS 14 — Poster/look visual separation', () => {
 });
 
 describe('PASS 15 — Frame thumbnail geometry', () => {
-  it('poster mode uses 16:9 aspect ratio for thumbnails', () => {
+  it('poster mode uses 9:16 aspect ratio for thumbnails (height = width / ratio)', () => {
     const thumbWidth = 52;
-    const aspect = 16 / 9;
-    const thumbHeight = Math.round(thumbWidth * aspect);
-    expect(thumbHeight).toBe(92);
+    const aspect = 9 / 16; // width / height
+    const thumbHeight = Math.round(thumbWidth / aspect);
+    expect(thumbHeight).toBe(92); // 52 / 0.5625 ≈ 92.4 → 92
   });
 
-  it('look mode uses 4:3 aspect ratio for thumbnails', () => {
+  it('look mode uses 4:5 aspect ratio for thumbnails (height = width / ratio)', () => {
     const thumbWidth = 52;
-    const aspect = 4 / 3;
-    const thumbHeight = Math.round(thumbWidth * aspect);
-    expect(thumbHeight).toBe(69);
+    const aspect = 4 / 5; // width / height = 0.8
+    const thumbHeight = Math.round(thumbWidth / aspect);
+    expect(thumbHeight).toBe(65); // 52 / 0.8 = 65
   });
 
   it('poster and look thumbnail heights differ', () => {
     const thumbWidth = 52;
-    const posterHeight = Math.round(thumbWidth * (16 / 9));
-    const lookHeight = Math.round(thumbWidth * (4 / 3));
+    const posterHeight = Math.round(thumbWidth / (9 / 16));
+    const lookHeight = Math.round(thumbWidth / (4 / 5));
     expect(posterHeight).not.toBe(lookHeight);
   });
 });
@@ -221,11 +221,12 @@ describe('PASS 19 — Canvas measurement', () => {
     expect(canvasW).toBe(320);
   });
 
-  it('canvas height is derived from width and aspect ratio', () => {
+  it('canvas height is derived from width and aspect ratio (height = width / ratio)', () => {
     const canvasW = 360;
-    const posterH = Math.round(canvasW * (16 / 9));
-    const lookH = Math.round(canvasW * (4 / 3));
+    // aspectRatio = width / height, so height = width / aspectRatio
+    const posterH = Math.round(canvasW / (9 / 16)); // 360 / 0.5625 = 640
+    const lookH = Math.round(canvasW / (4 / 5)); // 360 / 0.8 = 450
     expect(posterH).toBe(640);
-    expect(lookH).toBe(480);
+    expect(lookH).toBe(450);
   });
 });

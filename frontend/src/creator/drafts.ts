@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { CreatorDocument } from './composition';
+import { migrateDocument } from './composition';
 
 const DRAFT_PREFIX = 'creator_draft_';
 const DRAFT_INDEX_KEY = 'creator_draft_index';
@@ -24,7 +25,14 @@ export class CreatorDraftService {
     const raw = await AsyncStorage.getItem(key);
     if (!raw) return null;
     try {
-      return JSON.parse(raw) as CreatorDocument;
+      const parsed = JSON.parse(raw) as CreatorDocument;
+      // Apply migrations (e.g. legacy 16:9 Poster ratio → 9:16)
+      const migrated = migrateDocument(parsed);
+      // If migration changed the document, persist the corrected version
+      if (JSON.stringify(migrated) !== JSON.stringify(parsed)) {
+        await AsyncStorage.setItem(key, JSON.stringify(migrated));
+      }
+      return migrated;
     } catch {
       return null;
     }

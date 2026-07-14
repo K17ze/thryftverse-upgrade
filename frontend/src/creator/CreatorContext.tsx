@@ -31,7 +31,7 @@ export interface CreatorContextValue {
   selectLayer: (id: string | null) => void;
 
   addLayer: (layer: CreatorLayer) => void;
-  updateLayer: (id: string, updates: Partial<CreatorLayer>) => void;
+  updateLayer: (id: string, updates: Partial<CreatorLayer>, label?: string) => void;
   commitLayerTransform: (id: string, updates: Partial<CreatorLayer>, label: string) => void;
   removeLayer: (id: string) => void;
   duplicateLayer: (id: string) => void;
@@ -186,12 +186,17 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
     CreatorAnalytics.layerAdd(document.type, layer.type);
   }, [activePageIndex, syncHistoryButtons, document.type]);
 
-  const updateLayer = useCallback((id: string, updates: Partial<CreatorLayer>) => {
+  const updateLayer = useCallback((id: string, updates: Partial<CreatorLayer>, label?: string) => {
     setDocumentState((prev) => {
       const doc = updateLayerInPage(prev, activePageIndex, id, updates);
+      doc.updatedAt = new Date().toISOString();
+      historyRef.current.push(doc, label ?? 'Update layer');
+      setIsDirty(true);
+      syncHistoryButtons();
       return doc;
     });
-  }, [activePageIndex]);
+    CreatorAnalytics.layerTransform(document.type, updates.type ?? 'update');
+  }, [activePageIndex, syncHistoryButtons, document.type]);
 
   const commitLayerTransform = useCallback((id: string, updates: Partial<CreatorLayer>, label: string) => {
     setDocumentState((prev) => {
