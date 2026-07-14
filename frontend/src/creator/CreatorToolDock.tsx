@@ -71,18 +71,23 @@ export function CreatorToolDock({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {tools.map((tool) => (
+        {tools.map((tool, i) => (
           <PressScale
             key={tool.label}
             onPress={tool.action}
             style={styles.toolBtn}
             accessibilityLabel={tool.label}
           >
-            <Ionicons
-              name={tool.icon as any}
-              size={24}
-              color={tool.danger ? dangerIconColor : iconColor}
-            />
+            <View style={[
+              styles.toolIconWrap,
+              tool.danger && styles.toolIconWrapDanger,
+            ]}>
+              <Ionicons
+                name={tool.icon as any}
+                size={24}
+                color={tool.danger ? dangerIconColor : iconColor}
+              />
+            </View>
             <Text
               style={[styles.toolLabel, { color: tool.danger ? dangerLabelColor : labelColor }]}
               numberOfLines={1}
@@ -219,14 +224,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     minWidth: 64,
-    minHeight: 52,
+    minHeight: 56,
     paddingHorizontal: Space.sm,
-    borderRadius: Radius.sm,
-    gap: 4,
+    borderRadius: Radius.md,
+    gap: 5,
+  },
+  toolIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  toolIconWrapDanger: {
+    backgroundColor: 'rgba(255,107,107,0.12)',
   },
   toolLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: Typography.family.medium,
+    letterSpacing: 0.2,
   },
   actions: {
     flexDirection: 'row',

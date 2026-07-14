@@ -133,13 +133,14 @@ export function CreatorCanvas({
 }
 
 // ── Empty canvas state ─────────────────────────────────────────────
-// Subtle pulsing icon + guidance text. Respects reduced motion.
+// Premium empty state with layered icon, title, and guidance.
+// Not just a pulsing icon — a proper designed empty surface.
 function EmptyCanvasState({ colors }: { colors: ReturnType<typeof useAppTheme>['colors'] }) {
   const scaleSV = useSharedValue(1);
 
   useEffect(() => {
     scaleSV.value = withRepeat(
-      withTiming(1.05, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
+      withTiming(1.08, { duration: 2200, easing: Easing.inOut(Easing.ease) }),
       -1,
       true,
     );
@@ -152,11 +153,16 @@ function EmptyCanvasState({ colors }: { colors: ReturnType<typeof useAppTheme>['
 
   return (
     <View style={styles.emptyState} pointerEvents="none">
-      <Reanimated.View style={animatedIconStyle}>
-        <Ionicons name="images-outline" size={48} color={colors.textMuted} />
-      </Reanimated.View>
-      <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>
-        Tap Media to start
+      <View style={styles.emptyStateIconWrap}>
+        <Reanimated.View style={animatedIconStyle}>
+          <Ionicons name="add-circle-outline" size={56} color="rgba(255,255,255,0.25)" />
+        </Reanimated.View>
+      </View>
+      <Text style={styles.emptyStateTitle}>
+        Start creating
+      </Text>
+      <Text style={styles.emptyStateSubtitle}>
+        Use the tools below to add media, text, and more
       </Text>
     </View>
   );
@@ -602,6 +608,48 @@ function MediaLayerContent({ layer, width, height }: { layer: Extract<CreatorLay
 
 function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'text' }> }) {
   const { payload } = layer;
+
+  // Per-style typography — real visual distinction, not just font size
+  const styleMap: Record<string, any> = {
+    headline: {
+      fontFamily: Typography.family.bold,
+      fontSize: Type.title.size + 4,
+      lineHeight: (Type.title.size + 4) * 1.15,
+      textShadowColor: 'rgba(0,0,0,0.4)',
+      textShadowOffset: { width: 0, height: 1 },
+      textShadowRadius: 4,
+    },
+    editorial: {
+      fontFamily: Typography.family.bold,
+      fontSize: Type.title.size + 1,
+      lineHeight: (Type.title.size + 1) * 1.2,
+      textShadowColor: 'rgba(0,0,0,0.35)',
+      textShadowOffset: { width: 0, height: 1 },
+      textShadowRadius: 3,
+    },
+    clean: {
+      fontFamily: Typography.family.medium,
+      fontSize: Type.body.size + 1,
+      lineHeight: (Type.body.size + 1) * 1.35,
+      textShadowColor: 'rgba(0,0,0,0.3)',
+      textShadowOffset: { width: 0, height: 1 },
+      textShadowRadius: 2,
+    },
+    compact: {
+      fontFamily: Typography.family.semibold,
+      fontSize: Type.caption.size,
+      lineHeight: Type.caption.size * 1.3,
+      letterSpacing: 0.8,
+      textTransform: 'uppercase',
+    },
+    handwritten: {
+      fontFamily: Typography.family.medium,
+      fontSize: Type.body.size + 2,
+      lineHeight: (Type.body.size + 2) * 1.3,
+      fontStyle: 'italic',
+    },
+  };
+
   return (
     <View
       style={[
@@ -615,12 +663,9 @@ function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tex
         style={[
           textStyles.text,
           { color: payload.textColor },
-          payload.textStyle === 'headline' && { fontFamily: Typography.family.bold, fontSize: Type.title.size + 2 },
-          payload.textStyle === 'editorial' && { fontFamily: Typography.family.bold, fontSize: Type.title.size },
-          payload.textStyle === 'clean' && { fontFamily: Typography.family.light, fontSize: Type.body.size },
-          payload.textStyle === 'compact' && { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, letterSpacing: 0.5 },
-          payload.textStyle === 'handwritten' && { fontFamily: Typography.family.medium, fontSize: Type.body.size, fontStyle: 'italic' },
+          styleMap[payload.textStyle] ?? styleMap.clean,
         ]}
+        numberOfLines={undefined}
       >
         {payload.text}
       </Text>
@@ -677,6 +722,8 @@ function ProductLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
       </View>
     );
   }
+
+  // Fallback: compact tag with icon — premium shoppable pin style
 
   return (
     <View style={productStyles.container}>
@@ -961,16 +1008,26 @@ const styles = StyleSheet.create({
     height: '100%',
     overflow: 'hidden',
   },
-  // Empty state
+  // Empty state — premium designed surface
   emptyState: {
     ...StyleSheet.absoluteFill,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: Space.md,
+    gap: Space.sm,
   },
-  emptyStateText: {
-    fontFamily: Typography.family.medium,
+  emptyStateIconWrap: {
+    marginBottom: Space.xs,
+  },
+  emptyStateTitle: {
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.title.size,
+    color: 'rgba(255,255,255,0.85)',
+  },
+  emptyStateSubtitle: {
+    fontFamily: Typography.family.regular,
     fontSize: Type.body.size,
+    color: 'rgba(255,255,255,0.4)',
+    textAlign: 'center',
   },
   // Gesture feedback badge
   gestureBadge: {
@@ -1023,14 +1080,15 @@ const textStyles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.xs,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.xs + 2,
     borderRadius: Radius.sm,
   },
   text: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
+    fontFamily: Typography.family.medium,
+    fontSize: Type.body.size + 1,
     textAlign: 'center',
+    flexWrap: 'wrap',
   },
 });
 
@@ -1114,27 +1172,34 @@ const productStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(0,0,0,0.65)',
+    backgroundColor: 'rgba(0,0,0,0.7)',
     borderRadius: Radius.full,
-    paddingHorizontal: Space.sm + 2,
-    paddingVertical: 5,
+    paddingHorizontal: Space.sm + 4,
+    paddingVertical: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
   },
   hotspotDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.brand,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#fff',
+    borderWidth: 1.5,
+    borderColor: Colors.brand,
   },
   hotspotLabel: {
     color: '#fff',
-    fontFamily: Typography.family.medium,
-    fontSize: 10,
+    fontFamily: Typography.family.semibold,
+    fontSize: 11,
     flex: 1,
   },
   hotspotPrice: {
     color: Colors.brand,
     fontFamily: Typography.family.bold,
-    fontSize: 10,
+    fontSize: 11,
   },
 });
 

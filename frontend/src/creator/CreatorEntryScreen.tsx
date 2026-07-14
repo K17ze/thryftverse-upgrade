@@ -515,7 +515,7 @@ export function CreatorEntryScreen({
         />
       )}
 
-      {/* Framing brackets — mode-specific aspect ratio */}
+      {/* Framing brackets — mode-specific aspect ratio guide */}
       <View
         style={{
           position: 'absolute',
@@ -526,14 +526,20 @@ export function CreatorEntryScreen({
         }}
         pointerEvents="none"
       >
-        {/* Corner brackets */}
+        {/* Corner brackets — same as VisualSearchCamera */}
         <View style={[styles.bracket, { borderTopWidth: CORNER_STROKE, borderLeftWidth: CORNER_STROKE, width: cornerSize, height: cornerSize, top: 0, left: 0, borderTopLeftRadius: 12 }]} />
         <View style={[styles.bracket, { borderTopWidth: CORNER_STROKE, borderRightWidth: CORNER_STROKE, width: cornerSize, height: cornerSize, top: 0, right: 0, borderTopRightRadius: 12 }]} />
         <View style={[styles.bracket, { borderBottomWidth: CORNER_STROKE, borderLeftWidth: CORNER_STROKE, width: cornerSize, height: cornerSize, bottom: 0, left: 0, borderBottomLeftRadius: 12 }]} />
         <View style={[styles.bracket, { borderBottomWidth: CORNER_STROKE, borderRightWidth: CORNER_STROKE, width: cornerSize, height: cornerSize, bottom: 0, right: 0, borderBottomRightRadius: 12 }]} />
       </View>
 
-      {/* Top controls */}
+      {/* Center crosshair — same as VisualSearchCamera */}
+      <View style={styles.crosshair} pointerEvents="none">
+        <View style={styles.crosshairH} />
+        <View style={styles.crosshairV} />
+      </View>
+
+      {/* Top controls — close, mode pill, flash */}
       <View style={[styles.topBar, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
         <Pressable style={styles.topIconBtn} onPress={onClose} accessibilityLabel="Close">
           <Ionicons name="close" size={26} color="#fff" />
@@ -554,9 +560,16 @@ export function CreatorEntryScreen({
         </View>
       </View>
 
-      {/* Bottom controls */}
+      {/* Capture hint — guides the user on first view */}
+      <View style={styles.captureHint} pointerEvents="none">
+        <Text style={styles.captureHintText}>
+          {isPoster ? 'Tap to capture your story' : 'Tap to capture for your collage'}
+        </Text>
+      </View>
+
+      {/* Bottom controls — gallery, shutter, flip */}
       <LinearGradient
-        colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.5)']}
+        colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.7)']}
         style={[styles.bottomBar, { paddingBottom: insets.bottom + 16 }]}
         pointerEvents="box-none"
       >
@@ -739,7 +752,46 @@ const styles = StyleSheet.create({
   // Framing brackets
   bracket: {
     position: 'absolute',
-    borderColor: 'rgba(255,255,255,0.7)',
+    borderColor: 'rgba(255,255,255,0.85)',
+  },
+  // Center crosshair — same as VisualSearchCamera
+  crosshair: {
+    position: 'absolute',
+    left: '50%',
+    top: '40%',
+    width: 24,
+    height: 24,
+    marginLeft: -12,
+    marginTop: -12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  crosshairH: {
+    position: 'absolute',
+    width: 24,
+    height: 2,
+    backgroundColor: 'rgba(255,255,255,0.6)',
+  },
+  crosshairV: {
+    position: 'absolute',
+    width: 2,
+    height: 24,
+    backgroundColor: 'rgba(255,255,255,0.6)',
+  },
+  // Capture hint
+  captureHint: {
+    position: 'absolute',
+    bottom: 130,
+    alignSelf: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  captureHintText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.85)',
   },
   // Bottom bar
   bottomBar: {
