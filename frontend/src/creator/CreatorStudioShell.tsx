@@ -9,9 +9,12 @@ import {
   Alert,
   Keyboard,
   useWindowDimensions,
+  Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -30,9 +33,23 @@ import type { CreatorTemplate } from './templates';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
+function layerTypeLabel(type: CreatorLayer['type']): string {
+  switch (type) {
+    case 'media': return 'Media';
+    case 'text': return 'Text';
+    case 'product': return 'Product';
+    case 'mention': return 'Mention';
+    case 'look': return 'Look';
+    case 'vote': return 'Vote';
+    case 'decorative': return 'Shape';
+    default: return 'Layer';
+  }
+}
+
 function CreatorStudioInner() {
   const navigation = useNavigation<any>();
   const { colors } = useAppTheme();
+  const insets = useSafeAreaInsets();
   const { document, activePageIndex, setActivePageIndex, selectedLayerId, selectLayer, canUndo, canRedo, undo, redo, isDirty, removeLayer, duplicateLayer, reorderLayer, updateLayer, addLayer, addPage, removePage, duplicatePage, commitLayerTransform, autosaveStatus, isLoadingDraft, setDocument, saveDraft } = useCreator();
 
   const [showLayers, setShowLayers] = useState(false);
@@ -46,27 +63,31 @@ function CreatorStudioInner() {
 
   const page = document.pages[activePageIndex];
   const isLook = document.type === 'look';
+  const isPoster = document.type === 'poster';
 
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
-  // Canvas dimensions — computed once, stable layout. The canvas area
-  // is fixed (non-scrolling) so the editing surface never shifts under
-  // the user's finger when the keyboard opens or sheets appear.
-  const canvasWidth = useMemo(() => {
-    const maxW = screenWidth - 32;
-    // Reserve space for top bar (~56), page strip (~80 for poster), bottom dock (~64)
-    const reservedH = isLook ? 56 + 64 + 16 : 56 + 80 + 64 + 16;
-    const maxH = screenHeight - reservedH;
-    const ratio = document.canvas.aspectRatio;
-    if (maxW / ratio <= maxH) {
-      return Math.floor(maxW);
-    }
-    return Math.floor(maxH * ratio);
-  }, [screenWidth, screenHeight, document.canvas.aspectRatio, isLook]);
-
+  // ── Full-screen immersive canvas (Instagram Stories pattern) ──────
+  // The canvas fills the ENTIRE screen. Chrome floats over it with
+  // gradient/blur overlays. No padding, no card, no reserved space.
+  //
+  // For Poster (9:16): canvas = full screen width, height = width / ratio.
+  //   On most phones this fills the full height. The canvas IS the stage.
+  // For Look (4:5): canvas = full screen width, height = width / ratio.
+  //   4:5 is squarer, so there will be space above/below — the canvas
+  //   centers vertically and the background fills the rest.
+  const canvasWidth = screenWidth;
   const canvasHeight = useMemo(() => {
-    return Math.floor(canvasWidth / document.canvas.aspectRatio);
-  }, [canvasWidth, document.canvas.aspectRatio]);
+    const h = Math.floor(screenWidth / document.canvas.aspectRatio);
+    // For 9:16 poster, cap at screen height so it doesn't overflow
+    return Math.min(h, screenHeight);
+  }, [screenWidth, document.canvas.aspectRatio, screenHeight]);
+
+  // Canvas is vertically centered if shorter than screen
+  const canvasVerticalOffset = useMemo(() => {
+    if (canvasHeight >= screenHeight) return 0;
+    return Math.floor((screenHeight - canvasHeight) / 2);
+  }, [canvasHeight, screenHeight]);
 
   // Truthful back — offers Save Draft / Discard / Keep Editing when dirty.
   // This is honest: the draft is actually persisted to the draft service.
@@ -166,167 +187,203 @@ function CreatorStudioInner() {
   }, [isLoadingDraft, autosaveStatus]);
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* ── Simplified top bar: Back · Status · Next ─────────────────── */}
-      <View style={[styles.topBar, { borderBottomColor: colors.border }]}>
-        <PressScale
-          onPress={handleBack}
-          style={styles.topBtn}
-          accessibilityLabel="Back"
-        >
-          <Ionicons name="chevron-back" size={28} color={colors.textPrimary} />
-        </PressScale>
-
-        {/* Compact centre: type label + dirty indicator / status */}
-        <View style={styles.topCenter}>
-          <Text style={[styles.titleText, { color: colors.textPrimary }]} numberOfLines={1}>
-            {isLook ? 'Look' : 'Poster'}
-          </Text>
-          {draftStatusLabel ? (
-            <Text style={[styles.statusText, { color: autosaveStatus === 'failed' ? colors.danger : colors.textMuted }]} numberOfLines={1}>
-              {draftStatusLabel}
-            </Text>
-          ) : isDirty ? (
-            <View style={[styles.dirtyDot, { backgroundColor: colors.brand }]} />
-          ) : null}
-        </View>
-
-        {/* Right: Preview + Next */}
-        <View style={styles.topRight}>
-          <PressScale
-            onPress={() => setShowPreview(true)}
-            style={styles.topBtn}
-            accessibilityLabel="Preview"
-          >
-            <Ionicons name="eye-outline" size={24} color={colors.textPrimary} />
-          </PressScale>
-          <PressScale
-            onPress={() => setShowPublish(true)}
-            style={[styles.nextBtn, { backgroundColor: colors.brand }]}
-            accessibilityLabel="Next"
-            scale={0.97}
-          >
-            <Text style={[styles.nextBtnText, { color: colors.textInverse }]}>Next</Text>
-          </PressScale>
+    <View style={styles.container}>
+      {/* ── Full-screen canvas ────────────────────────────────────────── */}
+      {/* The canvas fills the entire screen. All chrome floats over it
+          with gradient/blur overlays. This is the Instagram Stories
+          pattern: media dominates, chrome recedes. */}
+      <View style={styles.canvasStage}>
+        <View style={{ position: 'absolute', top: canvasVerticalOffset, left: 0, right: 0 }}>
+          <CreatorCanvas
+            document={document}
+            page={page}
+            canvasWidth={canvasWidth}
+            canvasHeight={canvasHeight}
+            mode="edit"
+            selectedLayerId={selectedLayerId}
+            onLayerPress={handleLayerPress}
+            onCanvasPress={handleCanvasPress}
+            onLayerTransformChange={(layerId, updates) => commitLayerTransform(layerId, updates, 'Transform layer')}
+            onLayerDoubleTap={(layerId) => {
+              const l = page?.layers.find((x) => x.id === layerId);
+              if (l?.type === 'text') {
+                setEditingLayer(l);
+                setPickerMode('text');
+              }
+            }}
+            onLayerLongPress={(layerId) => {
+              selectLayer(layerId);
+              setShowLayers(true);
+            }}
+          />
         </View>
       </View>
 
-      {/* Page strip (poster only) — compact, below top bar */}
-      {document.type === 'poster' && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={[styles.pageStrip, { backgroundColor: colors.background }]}
-          contentContainerStyle={styles.pageStripContent}
+      {/* ── Floating top bar with gradient fade ──────────────────────── */}
+      {/* Semi-transparent gradient from black to transparent, like
+          Instagram Stories. Chrome floats over the canvas. */}
+      <View style={[styles.topBarContainer, { paddingTop: insets.top }]}>
+        <LinearGradient
+          colors={['rgba(0,0,0,0.6)', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0)']}
+          style={styles.topBarGradient}
         >
-          {document.pages.map((p, i) => {
-            const thumbW = 44;
-            const thumbH = Math.floor(thumbW / document.canvas.aspectRatio);
-            return (
-              <PressScale
-                key={p.id}
-                onPress={() => {
-                  selectLayer(null);
-                  setActivePageIndex(i);
-                }}
-                onLongPress={() => {
-                  if (document.pages.length > 1) {
-                    Alert.alert(
-                      `Page ${i + 1}`,
-                      undefined,
-                      [
-                        { text: 'Duplicate', onPress: () => duplicatePage(i) },
-                        { text: 'Delete', style: 'destructive', onPress: () => removePage(i) },
-                        { text: 'Cancel', style: 'cancel' },
-                      ],
-                    );
-                  }
-                }}
-                style={[
-                  styles.pageThumb,
-                  { height: thumbH, backgroundColor: colors.surfaceAlt },
-                  i === activePageIndex
-                    ? { borderColor: colors.brand, borderWidth: 2 }
-                    : { borderColor: colors.borderSubtle, borderWidth: 1 },
-                ]}
-                accessibilityLabel={`Page ${i + 1}`}
-              >
-                <CreatorCanvas
-                  document={document}
-                  page={p}
-                  canvasWidth={thumbW}
-                  canvasHeight={thumbH}
-                  mode="view"
-                />
-              </PressScale>
-            );
-          })}
-          {document.pages.length < 10 && (
-            <PressScale
-              onPress={() => {
-                selectLayer(null);
-                addPage();
-              }}
-              style={[styles.addPageBtn, { borderColor: colors.borderSubtle, backgroundColor: colors.surfaceAlt }]}
-              accessibilityLabel="Add page"
-            >
-              <Ionicons name="add" size={20} color={colors.textMuted} />
-            </PressScale>
+          {/* Page progress dots (poster) — Instagram-style segments at top */}
+          {isPoster && document.pages.length > 1 && (
+            <View style={styles.pageDotsRow}>
+              {document.pages.map((p, i) => (
+                <PressScale
+                  key={p.id}
+                  onPress={() => { selectLayer(null); setActivePageIndex(i); }}
+                  onLongPress={() => {
+                    if (document.pages.length > 1) {
+                      Alert.alert(
+                        `Page ${i + 1}`,
+                        undefined,
+                        [
+                          { text: 'Duplicate', onPress: () => duplicatePage(i) },
+                          { text: 'Delete', style: 'destructive', onPress: () => removePage(i) },
+                          { text: 'Cancel', style: 'cancel' },
+                        ],
+                      );
+                    }
+                  }}
+                  style={styles.pageDotSegment}
+                  accessibilityLabel={`Page ${i + 1}`}
+                >
+                  <View style={[
+                    styles.pageDotFill,
+                    i === activePageIndex
+                      ? { backgroundColor: '#fff' }
+                      : { backgroundColor: 'rgba(255,255,255,0.3)' },
+                  ]} />
+                </PressScale>
+              ))}
+            </View>
           )}
-        </ScrollView>
+
+          <View style={styles.topBarRow}>
+            {selectedLayer ? (
+              /* During selection: Done · object name · More (audit 9.3) */
+              <>
+                <PressScale
+                  onPress={() => selectLayer(null)}
+                  style={styles.topBtn}
+                  accessibilityLabel="Done"
+                >
+                  <Text style={styles.doneText}>Done</Text>
+                </PressScale>
+
+                <View style={styles.topCenter}>
+                  <Text style={styles.titleText} numberOfLines={1}>
+                    {layerTypeLabel(selectedLayer.type)}
+                  </Text>
+                </View>
+
+                <View style={styles.topRight}>
+                  <PressScale
+                    onPress={() => setShowOverflow(true)}
+                    style={styles.topBtn}
+                    accessibilityLabel="More options"
+                  >
+                    <Ionicons name="ellipsis-horizontal" size={24} color="#fff" />
+                  </PressScale>
+                </View>
+              </>
+            ) : (
+              /* Default: Back · center draft status · Preview/Next (audit 9.3) */
+              <>
+                <PressScale
+                  onPress={handleBack}
+                  style={styles.topBtn}
+                  accessibilityLabel="Back"
+                >
+                  <Ionicons name="close" size={28} color="#fff" />
+                </PressScale>
+
+                {/* Centre: type label + status */}
+                <View style={styles.topCenter}>
+                  {draftStatusLabel ? (
+                    <Text style={styles.statusText} numberOfLines={1}>
+                      {draftStatusLabel}
+                    </Text>
+                  ) : (
+                    <Text style={styles.titleText} numberOfLines={1}>
+                      {isLook ? 'Look' : 'Poster'}
+                      {isDirty ? ' ·' : ''}
+                    </Text>
+                  )}
+                </View>
+
+                {/* Right: Preview + Next */}
+                <View style={styles.topRight}>
+                  <PressScale
+                    onPress={() => setShowPreview(true)}
+                    style={styles.topBtn}
+                    accessibilityLabel="Preview"
+                  >
+                    <Ionicons name="eye-outline" size={24} color="#fff" />
+                  </PressScale>
+                  <PressScale
+                    onPress={() => setShowPublish(true)}
+                    style={styles.nextBtn}
+                    accessibilityLabel="Next"
+                    scale={0.97}
+                  >
+                    <Text style={styles.nextBtnText}>Next</Text>
+                  </PressScale>
+                </View>
+              </>
+            )}
+          </View>
+        </LinearGradient>
+      </View>
+
+      {/* ── Add page button (poster) — floating, right side ──────────── */}
+      {isPoster && document.pages.length < 10 && (
+        <PressScale
+          onPress={() => { selectLayer(null); addPage(); }}
+          style={[styles.addPageFloat, { top: insets.top + 60 }]}
+          accessibilityLabel="Add page"
+        >
+          <LinearGradient
+            colors={['rgba(0,0,0,0.5)', 'rgba(0,0,0,0.3)']}
+            style={styles.addPageFloatGradient}
+          >
+            <Ionicons name="add" size={20} color="#fff" />
+          </LinearGradient>
+        </PressScale>
       )}
 
-      {/* ── Fixed canvas stage (non-scrolling) ────────────────────────── */}
-      <View style={[styles.canvasArea, { backgroundColor: colors.background }]}>
-        <CreatorCanvas
-          document={document}
-          page={page}
-          canvasWidth={canvasWidth}
-          canvasHeight={canvasHeight}
-          mode="edit"
-          selectedLayerId={selectedLayerId}
-          onLayerPress={handleLayerPress}
-          onCanvasPress={handleCanvasPress}
-          onLayerTransformChange={(layerId, updates) => commitLayerTransform(layerId, updates, 'Transform layer')}
-          onLayerDoubleTap={(layerId) => {
-            const l = page?.layers.find((x) => x.id === layerId);
-            if (l?.type === 'text') {
-              setEditingLayer(l);
-              setPickerMode('text');
-            }
-          }}
-          onLayerLongPress={(layerId) => {
-            selectLayer(layerId);
-            setShowLayers(true);
-          }}
-        />
+      {/* ── Floating bottom rail with gradient fade ──────────────────── */}
+      {/* Semi-transparent gradient from transparent to black, with
+          blur. The tool dock sits on top of this gradient. */}
+      <View style={[styles.bottomRailContainer, { paddingBottom: insets.bottom }]}>
+        <LinearGradient
+          colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.7)']}
+          style={styles.bottomRailGradient}
+        >
+          <CreatorToolDock
+            selectedLayer={selectedLayer}
+            onPublish={() => setShowPublish(true)}
+            onSettings={() => setShowSettings(true)}
+            onToolPress={(tool) => setPickerMode(tool)}
+            onEditLayer={(layer) => {
+              setEditingLayer(layer);
+              if (layer.type === 'text') setPickerMode('text');
+              else if (layer.type === 'media') setPickerMode('media');
+              else if (layer.type === 'product') setPickerMode('product');
+              else if (layer.type === 'mention') setPickerMode('mention');
+            }}
+            onDeleteLayer={(id) => removeLayer(id)}
+            onDuplicateLayer={(id) => duplicateLayer(id)}
+            onReorderLayer={(id, dir) => reorderLayer(id, dir)}
+            onMore={() => setShowOverflow(true)}
+            floating={true}
+          />
+        </LinearGradient>
       </View>
 
-      {/* ── Contextual bottom rail ────────────────────────────────────── */}
-      {/* Replaces both the rainbow tool dock and the separate selection
-          toolbar. The rail adapts to selection state: when nothing is
-          selected it shows add-tools; when a layer is selected it shows
-          edit/reorder/copy/delete. Overflow menu holds undo/redo/layers/
-          templates/drafts/settings. */}
-      <CreatorToolDock
-        selectedLayer={selectedLayer}
-        onPublish={() => setShowPublish(true)}
-        onSettings={() => setShowSettings(true)}
-        onToolPress={(tool) => setPickerMode(tool)}
-        onEditLayer={(layer) => {
-          setEditingLayer(layer);
-          if (layer.type === 'text') setPickerMode('text');
-          else if (layer.type === 'media') setPickerMode('media');
-          else if (layer.type === 'product') setPickerMode('product');
-          else if (layer.type === 'mention') setPickerMode('mention');
-        }}
-        onDeleteLayer={(id) => removeLayer(id)}
-        onDuplicateLayer={(id) => duplicateLayer(id)}
-        onReorderLayer={(id, dir) => reorderLayer(id, dir)}
-        onMore={() => setShowOverflow(true)}
-      />
-
-      {/* ── Overflow menu (undo/redo/layers/templates/drafts/settings) ── */}
+      {/* ── Overflow menu ────────────────────────────────────────────── */}
       {showOverflow && (
         <Pressable
           style={styles.overflowBackdrop}
@@ -338,6 +395,7 @@ function CreatorStudioInner() {
               {
                 backgroundColor: colors.surfaceElevated,
                 borderColor: colors.border,
+                bottom: insets.bottom + 72,
               },
             ]}
           >
@@ -355,6 +413,28 @@ function CreatorStudioInner() {
               colors={colors}
               onPress={() => { redo(); setShowOverflow(false); }}
             />
+            <View style={[styles.overflowDivider, { backgroundColor: colors.border }]} />
+            <OverflowItem
+              icon="at-outline"
+              label="Mention"
+              colors={colors}
+              onPress={() => { setPickerMode('mention'); setShowOverflow(false); }}
+            />
+            {isLook ? (
+              <OverflowItem
+                icon="shirt-outline"
+                label="Look"
+                colors={colors}
+                onPress={() => { setPickerMode('look'); setShowOverflow(false); }}
+              />
+            ) : (
+              <OverflowItem
+                icon="stats-chart-outline"
+                label="Vote"
+                colors={colors}
+                onPress={() => { setPickerMode('vote'); setShowOverflow(false); }}
+              />
+            )}
             <View style={[styles.overflowDivider, { backgroundColor: colors.border }]} />
             <OverflowItem
               icon="layers-outline"
@@ -420,7 +500,7 @@ function CreatorStudioInner() {
           }
         }}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -476,22 +556,53 @@ export function CreatorStudioScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#000',
   },
-  // ── Top bar ──
-  topBar: {
+  // ── Full-screen canvas stage ──
+  canvasStage: {
+    ...StyleSheet.absoluteFill,
+  },
+  // ── Floating top bar ──
+  topBarContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 100,
+  },
+  topBarGradient: {
+    paddingHorizontal: Space.sm,
+    paddingBottom: Space.md,
+  },
+  // ── Page progress dots (Instagram-style segments) ──
+  pageDotsRow: {
+    flexDirection: 'row',
+    gap: 4,
+    paddingHorizontal: Space.xs,
+    paddingBottom: Space.sm,
+  },
+  pageDotSegment: {
+    flex: 1,
+    height: 3,
+    borderRadius: 2,
+  },
+  pageDotFill: {
+    flex: 1,
+    height: 3,
+    borderRadius: 2,
+  },
+  // ── Top bar row ──
+  topBarRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Space.sm,
-    height: 56,
-    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   topBtn: {
     width: 44,
     height: 44,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: Radius.sm,
+    borderRadius: Radius.full,
   },
   topCenter: {
     flexDirection: 'row',
@@ -503,21 +614,23 @@ const styles = StyleSheet.create({
   titleText: {
     fontFamily: Typography.family.semibold,
     fontSize: Type.bodyEmphasis.size,
+    color: '#fff',
+  },
+  doneText: {
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.bodyEmphasis.size,
+    color: '#fff',
   },
   statusText: {
     fontSize: 12,
     fontFamily: Typography.family.medium,
-  },
-  dirtyDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginTop: 2,
+    color: 'rgba(255,255,255,0.8)',
   },
   nextBtn: {
     paddingHorizontal: 20,
     height: 40,
-    borderRadius: Radius.sm,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(255,255,255,0.95)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -529,54 +642,44 @@ const styles = StyleSheet.create({
   nextBtnText: {
     fontFamily: Typography.family.semibold,
     fontSize: Type.bodyEmphasis.size,
+    color: '#000',
   },
-  // ── Page strip ──
-  pageStrip: {
-    maxHeight: 80,
+  // ── Add page floating button ──
+  addPageFloat: {
+    position: 'absolute',
+    right: Space.sm,
+    zIndex: 90,
   },
-  pageStripContent: {
-    paddingHorizontal: Space.md,
-    gap: Space.sm,
-    alignItems: 'center',
-    paddingVertical: Space.sm,
-  },
-  pageThumb: {
-    width: 44,
-    borderRadius: Radius.sm,
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  addPageBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.sm,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderStyle: 'dashed',
+  addPageFloatGradient: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  // ── Canvas ──
-  canvasArea: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: Space.sm,
+  // ── Floating bottom rail ──
+  bottomRailContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    zIndex: 100,
+  },
+  bottomRailGradient: {
+    paddingTop: Space.md,
   },
   // ── Overflow menu ──
   overflowBackdrop: {
     ...StyleSheet.absoluteFill,
+    zIndex: 200,
   },
   overflowMenu: {
     position: 'absolute',
-    bottom: 72,
     right: Space.sm,
     minWidth: 220,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     paddingVertical: Space.xs,
-    // Shadow — deeper elevation for floating menu
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.4,

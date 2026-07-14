@@ -29,6 +29,7 @@ export interface CreatorToolDockProps {
   onDuplicateLayer: (id: string) => void;
   onReorderLayer: (id: string, direction: 'forward' | 'backward') => void;
   onMore: () => void;
+  floating?: boolean;
 }
 
 export function CreatorToolDock({
@@ -40,6 +41,7 @@ export function CreatorToolDock({
   onDuplicateLayer,
   onReorderLayer,
   onMore,
+  floating = false,
 }: CreatorToolDockProps) {
   const { document } = useCreator();
   const { colors } = useAppTheme();
@@ -50,8 +52,15 @@ export function CreatorToolDock({
     ? buildSelectionTools(selectedLayer, onEditLayer, onDeleteLayer, onDuplicateLayer, onReorderLayer)
     : buildDefaultTools(isLook, onToolPress);
 
+  // When floating over canvas: transparent background, white icons
+  // When solid (in a sheet): surface background, theme icons
+  const iconColor = floating ? '#fff' : (selectedLayer ? colors.textSecondary : colors.textSecondary);
+  const labelColor = floating ? 'rgba(255,255,255,0.7)' : colors.textMuted;
+  const dangerIconColor = floating ? '#ff6b6b' : colors.danger;
+  const dangerLabelColor = floating ? 'rgba(255,107,107,0.8)' : colors.danger;
+
   return (
-    <View style={[styles.container, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+    <View style={[styles.container, floating ? styles.containerFloating : { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -67,10 +76,10 @@ export function CreatorToolDock({
             <Ionicons
               name={tool.icon as any}
               size={24}
-              color={tool.danger ? colors.danger : colors.textSecondary}
+              color={tool.danger ? dangerIconColor : iconColor}
             />
             <Text
-              style={[styles.toolLabel, { color: tool.danger ? colors.danger : colors.textMuted }]}
+              style={[styles.toolLabel, { color: tool.danger ? dangerLabelColor : labelColor }]}
               numberOfLines={1}
             >
               {tool.label}
@@ -80,45 +89,47 @@ export function CreatorToolDock({
       </ScrollView>
 
       {/* Primary action — separated from editing tools */}
-      <View style={[styles.actions, { borderLeftColor: colors.border }]}>
+      <View style={[styles.actions, { borderLeftColor: floating ? 'rgba(255,255,255,0.15)' : colors.border }]}>
         <PressScale
           onPress={onMore}
           style={styles.actionBtn}
           accessibilityLabel="More options"
         >
-          <Ionicons name="ellipsis-horizontal" size={24} color={colors.textSecondary} />
+          <Ionicons name="ellipsis-horizontal" size={24} color={iconColor} />
         </PressScale>
-        <PressScale
-          onPress={onPublish}
-          style={[styles.publishBtn, { backgroundColor: colors.brand }]}
-          accessibilityLabel="Next"
-          scale={0.97}
-        >
-          <Text style={[styles.publishBtnText, { color: colors.textInverse }]}>Next</Text>
-        </PressScale>
+        {!floating && (
+          <PressScale
+            onPress={onPublish}
+            style={[styles.publishBtn, { backgroundColor: colors.brand }]}
+            accessibilityLabel="Next"
+            scale={0.97}
+          >
+            <Text style={[styles.publishBtnText, { color: colors.textInverse }]}>Next</Text>
+          </PressScale>
+        )}
       </View>
     </View>
   );
 }
 
 // ── Tool builders ──────────────────────────────────────────────────
+// Per audit 9.4: 4-5 context-relevant tools, neutral icons, one accent.
+// Nothing selected: Media, Text, Product, Elements, More
+// Media selected: Replace, Forward, Back, Delete, More
+// Text selected: Edit, Forward, Back, Delete, More
+// Product selected: Edit, Forward, Back, Delete, More
 
 function buildDefaultTools(
   isLook: boolean,
   onToolPress: (mode: AssetPickerMode) => void,
 ): RailTool[] {
+  // 4 primary tools + secondary tools moved to More/overflow
   const tools: RailTool[] = [
     { icon: 'images-outline', label: 'Media', action: () => onToolPress('media') },
     { icon: 'text-outline', label: 'Text', action: () => onToolPress('text') },
     { icon: 'pricetag-outline', label: 'Product', action: () => onToolPress('product') },
+    { icon: 'shapes-outline', label: 'Stickers', action: () => onToolPress('shape') },
   ];
-  if (isLook) {
-    tools.push({ icon: 'shirt-outline', label: 'Look', action: () => onToolPress('look') });
-  } else {
-    tools.push({ icon: 'stats-chart-outline', label: 'Vote', action: () => onToolPress('vote') });
-  }
-  tools.push({ icon: 'happy-outline', label: 'Shape', action: () => onToolPress('shape') });
-  tools.push({ icon: 'at-outline', label: 'Mention', action: () => onToolPress('mention') });
   return tools;
 }
 
@@ -131,7 +142,7 @@ function buildSelectionTools(
 ): RailTool[] {
   const tools: RailTool[] = [];
 
-  // Type-specific edit action
+  // Type-specific primary action
   if (layer.type === 'text') {
     tools.push({ icon: 'create-outline', label: 'Edit', action: () => onEditLayer(layer) });
   } else if (layer.type === 'media') {
@@ -140,16 +151,18 @@ function buildSelectionTools(
     tools.push({ icon: 'pricetag-outline', label: 'Edit', action: () => onEditLayer(layer) });
   } else if (layer.type === 'mention') {
     tools.push({ icon: 'person-outline', label: 'Edit', action: () => onEditLayer(layer) });
+  } else {
+    tools.push({ icon: 'create-outline', label: 'Edit', action: () => onEditLayer(layer) });
   }
 
-  // Layer ordering
+  // Layer ordering (audit: "Layer" in product context)
   tools.push({ icon: 'arrow-up', label: 'Forward', action: () => onReorderLayer(layer.id, 'forward') });
   tools.push({ icon: 'arrow-down', label: 'Back', action: () => onReorderLayer(layer.id, 'backward') });
 
   // Duplicate
   tools.push({ icon: 'copy-outline', label: 'Copy', action: () => onDuplicateLayer(layer.id) });
 
-  // Delete (danger)
+  // Delete (danger, separated)
   tools.push({ icon: 'trash-outline', label: 'Delete', action: () => onDeleteLayer(layer.id), danger: true });
 
   return tools;
@@ -162,6 +175,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
     borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  containerFloating: {
+    borderTopWidth: 0,
+    backgroundColor: 'transparent',
   },
   scrollContent: {
     gap: Space.sm,
@@ -198,7 +215,7 @@ const styles = StyleSheet.create({
   publishBtn: {
     paddingHorizontal: 20,
     height: 40,
-    borderRadius: Radius.sm,
+    borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
   },
