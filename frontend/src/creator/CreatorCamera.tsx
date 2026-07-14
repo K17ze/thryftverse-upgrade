@@ -232,16 +232,11 @@ export default function CreatorCamera({
         <View style={styles.crosshairV} />
       </View>
 
-      {/* Top controls */}
+      {/* Top controls — close (left), flash (right) — same as VisualSearchCamera */}
       <View style={[styles.topBar, { paddingTop: Math.max(insets.top, 16) + 8 }]} pointerEvents="box-none">
         <Pressable style={styles.topIconBtn} onPress={onClose} hitSlop={12} accessibilityLabel="Close">
           <Ionicons name="close" size={26} color="#fff" />
         </Pressable>
-
-        {/* Mode pill — Story / Collage */}
-        <View style={styles.modePill}>
-          <Text style={styles.modeText}>{isPoster ? 'Story' : 'Collage'}</Text>
-        </View>
 
         <View style={styles.topRightControls}>
           <Pressable
@@ -255,16 +250,8 @@ export default function CreatorCamera({
         </View>
       </View>
 
-      {/* Capture hint */}
-      <View style={styles.captureHint} pointerEvents="none">
-        <Text style={styles.captureHintText}>
-          {isPoster ? 'Tap to capture your story' : 'Tap to capture for your collage'}
-        </Text>
-      </View>
-
       {/* Bottom controls — gallery, shutter, flip (same layout as VisualSearchCamera) */}
       <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) + 16 }]} pointerEvents="box-none">
-        {/* Gallery thumbnail */}
         <Pressable
           style={styles.galleryBtn}
           onPress={onGallery}
@@ -274,21 +261,17 @@ export default function CreatorCamera({
           {lastImageUri ? (
             <Image source={{ uri: lastImageUri }} style={styles.galleryThumb} />
           ) : (
-            <View style={styles.galleryThumbPlaceholder}>
-              <Ionicons name="images-outline" size={24} color="#fff" />
-            </View>
+            <Ionicons name="images-outline" size={24} color="#fff" />
           )}
           <Text style={styles.bottomLabel}>Gallery</Text>
         </Pressable>
 
-        {/* Shutter button */}
         <Pressable onPress={handleShutterPress} hitSlop={24} accessibilityLabel="Take photo">
           <Animated.View style={[styles.shutterOuter, { transform: [{ scale: scaleAnim }] }]}>
             <View style={styles.shutterInner} />
           </Animated.View>
         </Pressable>
 
-        {/* Flip camera */}
         <Pressable
           style={styles.facingBtn}
           onPress={toggleFacing}
@@ -298,6 +281,11 @@ export default function CreatorCamera({
           <Ionicons name="camera-reverse-outline" size={24} color="#fff" />
           <Text style={styles.bottomLabel}>Flip</Text>
         </Pressable>
+      </View>
+
+      {/* Mode indicator — same position as VisualSearchCamera (bottom: 120, centered) */}
+      <View style={styles.modePill} pointerEvents="none">
+        <Text style={styles.modeText}>{isPoster ? 'Story' : 'Collage'}</Text>
       </View>
     </View>
   );
@@ -460,8 +448,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // Mode pill
+  // Mode pill — same position as VisualSearchCamera (bottom: 120, centered)
   modePill: {
+    position: 'absolute',
+    bottom: 120,
+    alignSelf: 'center',
     paddingHorizontal: 16,
     paddingVertical: 6,
     borderRadius: 16,
@@ -471,21 +462,6 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.medium,
     fontSize: 13,
     color: '#fff',
-  },
-  // Capture hint
-  captureHint: {
-    position: 'absolute',
-    bottom: 130,
-    alignSelf: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  captureHintText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: 'rgba(255,255,255,0.85)',
   },
   // Bottom bar — same layout as VisualSearchCamera
   bottomBar: {
@@ -511,16 +487,6 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#fff',
     backgroundColor: 'rgba(255,255,255,0.15)',
-  },
-  galleryThumbPlaceholder: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.5)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.3)',
   },
   facingBtn: {
     alignItems: 'center',
