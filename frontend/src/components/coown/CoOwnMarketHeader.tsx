@@ -12,6 +12,7 @@ export interface CoOwnMarketHeaderAction {
   label: string;
   onPress: () => void;
   badge?: number;
+  variant?: 'default' | 'primary';
 }
 
 export interface CoOwnMarketHeaderProps {
@@ -64,33 +65,41 @@ export function CoOwnMarketHeader({
         </View>
 
         <View style={styles.actionsRow}>
-          {actions.map((action, i) => (
-            <AnimatedPressable
-              key={`${action.label}-${i}`}
-              style={[styles.iconBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
-              onPress={() => { haptics.tap(); action.onPress(); }}
-              accessibilityRole="button"
-              accessibilityLabel={action.label}
-              scaleValue={0.92}
-              hapticFeedback="light"
-            >
-              <Ionicons name={action.icon} size={20} color={colors.textPrimary} />
-              {action.badge != null && action.badge > 0 && (
-                <View style={[styles.badge, { backgroundColor: colors.brand }]}>
-                  <Text style={[styles.badgeText, { color: colors.background }]}>
-                    {action.badge > 9 ? '9+' : action.badge}
-                  </Text>
-                </View>
-              )}
-            </AnimatedPressable>
-          ))}
+          {actions.map((action, i) => {
+            const isPrimary = action.variant === 'primary';
+            return (
+              <AnimatedPressable
+                key={`${action.label}-${i}`}
+                style={[
+                  styles.iconBtn,
+                  isPrimary
+                    ? { backgroundColor: colors.brand, borderColor: colors.brand }
+                    : { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
+                ]}
+                onPress={() => { haptics.tap(); action.onPress(); }}
+                accessibilityRole="button"
+                accessibilityLabel={action.label}
+                scaleValue={0.92}
+                hapticFeedback="light"
+              >
+                <Ionicons name={action.icon} size={18} color={isPrimary ? colors.background : colors.textPrimary} />
+                {action.badge != null && action.badge > 0 && (
+                  <View style={[styles.badge, { backgroundColor: isPrimary ? colors.background : colors.brand, borderColor: colors.background }]}>
+                    <Text style={[styles.badgeText, { color: isPrimary ? colors.brand : colors.background }]}>
+                      {action.badge > 9 ? '9+' : action.badge}
+                    </Text>
+                  </View>
+                )}
+              </AnimatedPressable>
+            );
+          })}
         </View>
       </View>
     </View>
   );
 }
 
-const ICON_SIZE = 40;
+const ICON_SIZE = 38;
 
 const styles = StyleSheet.create({
   root: {
@@ -135,17 +144,18 @@ const styles = StyleSheet.create({
   },
   actionsRow: {
     flexDirection: 'row',
-    gap: Space.xs,
+    gap: 6,
     alignItems: 'center',
   },
   badge: {
     position: 'absolute',
-    top: -4,
-    right: -4,
-    minWidth: 18,
-    height: 18,
+    top: -5,
+    right: -5,
+    minWidth: 17,
+    height: 17,
     borderRadius: 9,
-    paddingHorizontal: 5,
+    paddingHorizontal: 4,
+    borderWidth: 1.5,
     justifyContent: 'center',
     alignItems: 'center',
   },

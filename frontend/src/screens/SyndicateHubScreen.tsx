@@ -20,6 +20,7 @@ import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import {
   CoOwnMarketHeader,
+  type CoOwnMarketHeaderAction,
   CoOwnFeaturedAsset,
   CoOwnAssetTile,
   CoOwnEducationCard,
@@ -29,8 +30,6 @@ import {
 } from '../components/coown';
 
 type NavT = StackNavigationProp<RootStackParamList>;
-
-type HubTab = 'discover' | 'portfolio' | 'activity';
 
 type SortOption = 'newest' | 'available' | 'allocation';
 
@@ -73,7 +72,6 @@ export default function CoOwnHubScreen() {
 
   const [query, setQuery] = React.useState('');
   const [sortBy, setSortBy] = React.useState<SortOption>('newest');
-  const [activeTab, setActiveTab] = React.useState<HubTab>('discover');
   const [remoteAssets, setRemoteAssets] = React.useState<HubAsset[]>([]);
   const [holdings, setHoldings] = React.useState<Map<string, { units: number; avgEntry: number; realized: number }>>(new Map());
   const [isSyncing, setIsSyncing] = React.useState(true);
@@ -216,6 +214,31 @@ export default function CoOwnHubScreen() {
     [marketAssets]
   );
 
+  const headerActions = React.useMemo<CoOwnMarketHeaderAction[]>(() => [
+    {
+      icon: 'pie-chart-outline',
+      label: yourPositions.length > 0 ? `Portfolio, ${yourPositions.length} positions held` : 'Portfolio',
+      badge: yourPositions.length,
+      onPress: () => navigation.navigate('Portfolio'),
+    },
+    {
+      icon: 'pulse-outline',
+      label: 'Activity',
+      onPress: () => navigation.navigate('CoOwnOrderHistory'),
+    },
+    {
+      icon: 'receipt-outline',
+      label: 'Market ledger',
+      onPress: () => navigation.navigate('MarketLedger'),
+    },
+    {
+      icon: 'add',
+      label: 'Issue a Co-Own',
+      variant: 'primary',
+      onPress: () => navigation.navigate('CreateCoOwn'),
+    },
+  ], [navigation, yourPositions.length]);
+
   // ── Horizontal rail data: newest, most available, most allocated ──
   const newestRail = React.useMemo(() => {
     const open = marketAssets.filter((a) => a.isOpen && a.availableUnits > 0);
@@ -265,12 +288,8 @@ export default function CoOwnHubScreen() {
         <StatusBar style={isDark ? 'light' : 'dark'} />
         <CoOwnMarketHeader
           title="Co-Own"
-          subtitle="Shared ownership of desirable items"
           onBack={handleBack}
-          actions={[
-            { icon: 'receipt-outline', label: 'Ledger', onPress: () => navigation.navigate('MarketLedger') },
-            { icon: 'add-circle-outline', label: 'Create', onPress: () => { haptics.tap(); navigation.navigate('CreateCoOwn'); } },
-          ]}
+          actions={headerActions}
         />
         <CoOwnHubSkeleton />
       </SafeAreaView>
@@ -284,12 +303,8 @@ export default function CoOwnHubScreen() {
         <StatusBar style={isDark ? 'light' : 'dark'} />
         <CoOwnMarketHeader
           title="Co-Own"
-          subtitle="Shared ownership of desirable items"
           onBack={handleBack}
-          actions={[
-            { icon: 'receipt-outline', label: 'Ledger', onPress: () => navigation.navigate('MarketLedger') },
-            { icon: 'add-circle-outline', label: 'Create', onPress: () => { haptics.tap(); navigation.navigate('CreateCoOwn'); } },
-          ]}
+          actions={headerActions}
         />
         <CoOwnStateCanvas
           variant="error"
@@ -307,12 +322,8 @@ export default function CoOwnHubScreen() {
         <StatusBar style={isDark ? 'light' : 'dark'} />
         <CoOwnMarketHeader
           title="Co-Own"
-          subtitle="Shared ownership of desirable items"
           onBack={handleBack}
-          actions={[
-            { icon: 'receipt-outline', label: 'Ledger', onPress: () => navigation.navigate('MarketLedger') },
-            { icon: 'add-circle-outline', label: 'Create', onPress: () => { haptics.tap(); navigation.navigate('CreateCoOwn'); } },
-          ]}
+          actions={headerActions}
         />
         <CoOwnStateCanvas
           variant="empty"
@@ -333,12 +344,8 @@ export default function CoOwnHubScreen() {
 
       <CoOwnMarketHeader
         title="Co-Own"
-        subtitle="Shared ownership of desirable items"
         onBack={handleBack}
-        actions={[
-          { icon: 'receipt-outline', label: 'Ledger', onPress: () => navigation.navigate('MarketLedger') },
-          { icon: 'add-circle-outline', label: 'Create', onPress: () => { haptics.tap(); navigation.navigate('CreateCoOwn'); } },
-        ]}
+        actions={headerActions}
       />
 
       <FlashList
@@ -365,29 +372,6 @@ export default function CoOwnHubScreen() {
                 placeholder="Search items, brands, categories..."
                 prefix={<Ionicons name="search-outline" size={16} color={colors.textMuted} />}
                 accessibilityLabel="Search Co-Own marketplace"
-              />
-            </View>
-
-            {/* Tab rail: Discover / Portfolio / Activity */}
-            <View style={styles.tabRail}>
-              <TabButton
-                label="Discover"
-                active={activeTab === 'discover' && !isSearching}
-                onPress={() => { setActiveTab('discover'); setQuery(''); haptics.selection(); }}
-                colors={colors}
-              />
-              <TabButton
-                label="Portfolio"
-                badge={yourPositions.length}
-                active={activeTab === 'portfolio'}
-                onPress={() => { haptics.tap(); navigation.navigate('Portfolio'); }}
-                colors={colors}
-              />
-              <TabButton
-                label="Activity"
-                active={activeTab === 'activity'}
-                onPress={() => { haptics.tap(); navigation.navigate('CoOwnOrderHistory'); }}
-                colors={colors}
               />
             </View>
 
@@ -651,51 +635,6 @@ export default function CoOwnHubScreen() {
   );
 }
 
-// ── Tab button ──
-function TabButton({
-  label,
-  active,
-  onPress,
-  badge,
-  colors,
-}: {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-  badge?: number;
-  colors: { brand: string; background: string; textPrimary: string; textSecondary: string; surfaceAlt: string; border: string };
-}) {
-  return (
-    <AnimatedPressable
-      onPress={onPress}
-      style={[
-        styles.tabBtn,
-        {
-          backgroundColor: active ? colors.brand : 'transparent',
-          borderColor: active ? colors.brand : colors.border,
-        },
-      ]}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ selected: active }}
-    >
-      <Text style={[
-        styles.tabBtnText,
-        { color: active ? colors.background : colors.textSecondary },
-      ]}>
-        {label}
-      </Text>
-      {badge != null && badge > 0 ? (
-        <View style={[styles.tabBadge, { backgroundColor: active ? colors.background : colors.brand }]}>
-          <Text style={[styles.tabBadgeText, { color: active ? colors.brand : colors.background }]}>
-            {badge}
-          </Text>
-        </View>
-      ) : null}
-    </AnimatedPressable>
-  );
-}
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -705,37 +644,6 @@ const styles = StyleSheet.create({
   },
   searchWrap: {
     marginBottom: Space.md,
-  },
-  tabRail: {
-    flexDirection: 'row',
-    gap: Space.sm,
-    marginBottom: Space.md,
-  },
-  tabBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: Space.sm + 2,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-  },
-  tabBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
-  tabBadge: {
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    paddingHorizontal: 5,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  tabBadgeText: {
-    fontSize: 10,
-    fontFamily: Typography.family.bold,
   },
   sortRow: {
     flexDirection: 'row',
