@@ -580,9 +580,10 @@ export function CreatorStudioScreen() {
   const draftId = route.params?.draftId as string | undefined;
   const templateId = route.params?.templateId as string | undefined;
   const sourceDocumentId = route.params?.sourceDocumentId as string | undefined;
+  const initialMediaUri = route.params?.initialMediaUri as string | undefined;
 
   return (
-    <CreatorProvider initialType={initialType} draftId={draftId} templateId={templateId} sourceDocumentId={sourceDocumentId}>
+    <CreatorProvider initialType={initialType} draftId={draftId} templateId={templateId} sourceDocumentId={sourceDocumentId} initialMediaUri={initialMediaUri}>
       <CreatorStudioInner />
     </CreatorProvider>
   );

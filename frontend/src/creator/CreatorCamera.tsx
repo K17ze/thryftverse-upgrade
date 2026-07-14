@@ -40,14 +40,16 @@ const CORNER_SIZE = 40;
 const CORNER_STROKE = 3;
 
 export interface CreatorCameraProps {
-  /** Creator mode — determines framing guide + labels */
-  mode: 'poster' | 'look';
+  /** Camera mode — determines framing guide + labels */
+  mode: 'poster' | 'look' | 'visual-search';
   /** Called when the user captures a photo */
   onCapture: (uri: string) => void;
   /** Called when the user taps the gallery thumbnail */
   onGallery: () => void;
   /** Called when the user taps close */
   onClose: () => void;
+  /** Optional render prop for the bottom overlay (e.g. mode switcher) */
+  renderBottomOverlay?: () => React.ReactNode;
 }
 
 export default function CreatorCamera({
@@ -55,6 +57,7 @@ export default function CreatorCamera({
   onCapture,
   onGallery,
   onClose,
+  renderBottomOverlay,
 }: CreatorCameraProps) {
   const { show } = useToast();
   const insets = useSafeAreaInsets();
@@ -68,6 +71,8 @@ export default function CreatorCamera({
   const [lastImageUri, setLastImageUri] = useState<string | null>(null);
 
   const isPoster = mode === 'poster';
+  const isVisualSearch = mode === 'visual-search';
+  const modeLabel = isVisualSearch ? 'Search' : isPoster ? 'Story' : 'Collage';
 
   // ── Permission ──
   useEffect(() => {
@@ -285,8 +290,11 @@ export default function CreatorCamera({
 
       {/* Mode indicator — same position as VisualSearchCamera (bottom: 120, centered) */}
       <View style={styles.modePill} pointerEvents="none">
-        <Text style={styles.modeText}>{isPoster ? 'Story' : 'Collage'}</Text>
+        <Text style={styles.modeText}>{modeLabel}</Text>
       </View>
+
+      {/* Optional bottom overlay (e.g. mode switcher) rendered above bottom controls */}
+      {renderBottomOverlay?.()}
     </View>
   );
 }

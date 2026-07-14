@@ -35,14 +35,15 @@ type Props = StackScreenProps<RootStackParamList, 'VisualSearch'>;
 
 type ResultStatus = 'idle' | 'loading' | 'populated' | 'empty' | 'error';
 
-export default function VisualSearchScreen({ navigation }: Props) {
+export default function VisualSearchScreen({ navigation, route }: Props) {
   const { isDark } = useAppTheme();
+  const initialImageUri = route.params?.initialImageUri;
   const { show } = useToast();
   const { listings } = useBackendData();
   const addSavedSearch = useStore((state) => state.addSavedSearch);
   const savedSearches = useStore((state) => state.savedSearches);
 
-  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [imageUri, setImageUri] = useState<string | null>(initialImageUri ?? null);
   const [previewFailed, setPreviewFailed] = useState(false);
   const [description, setDescription] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);

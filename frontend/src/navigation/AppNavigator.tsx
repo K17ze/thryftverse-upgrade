@@ -100,6 +100,7 @@ import SavedSearchesScreen from '../screens/SavedSearchesScreen';
 // Phase 28
 import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
 import VisualSearchScreen from '../screens/VisualSearchScreen';
+import CreateCameraScreen from '../screens/CreateCameraScreen';
 import ChangePasswordScreen from '../screens/ChangePasswordScreen';
 import TwoFactorSetupScreen from '../screens/TwoFactorSetupScreen';
 import WriteReviewScreen from '../screens/WriteReviewScreen';
@@ -318,6 +319,9 @@ export default function AppNavigator() {
 
       {/* Visual Search — full-screen camera viewfinder with its own header on results */}
       <Stack.Screen name="VisualSearch" component={VisualSearchScreen} options={{ headerShown: false }} />
+
+      {/* Unified camera-first create screen — replaces the Create tab action sheet */}
+      <Stack.Screen name="CreateCamera" component={CreateCameraScreen} options={modalScreenOptions} />
 
       {/* Explore / Creator screens */}
       <Stack.Screen name="CreateLook" component={CreateLookRedirect} options={modalScreenOptions} />
