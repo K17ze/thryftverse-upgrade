@@ -46,6 +46,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useBackendData } from '../context/BackendDataContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
+import { HorizontalRail } from '../components/HorizontalRail';
 // Phase 3: Removed SyncStatusPill (status indicator clutter reduced)
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { EmptyState } from '../components/EmptyState';
@@ -669,13 +670,13 @@ export default function HomeScreen() {
           <View style={styles.sectionRow}>
             <Text style={styles.sectionTitle}>Posters</Text>
           </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.postersScroll}>
+          <HorizontalRail contentContainerStyle={styles.postersScroll}>
             {Array.from({ length: 4 }).map((_, i) => (
               <View key={`poster_skeleton_${i}`} style={styles.posterCard}>
                 <SkeletonLoader width={120} height={152} borderRadius={Radius.md} />
               </View>
             ))}
-          </ScrollView>
+          </HorizontalRail>
         </View>
       );
     }
@@ -686,9 +687,7 @@ export default function HomeScreen() {
           <Text style={styles.sectionTitle}>Posters</Text>
         </View>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
+        <HorizontalRail
           contentContainerStyle={styles.postersScroll}
         >
           <AnimatedPressable
@@ -790,7 +789,7 @@ export default function HomeScreen() {
             );
             });
           })()}
-        </ScrollView>
+        </HorizontalRail>
 
         {lastError ? (
           <SyncRetryBanner

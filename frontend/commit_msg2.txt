@@ -1,0 +1,29 @@
+fix(scroll): use nestedScrollEnabled on RN ScrollView for horizontal rails
+
+Root cause: The previous fix used ScrollView from react-native-gesture-handler
+for horizontal rails. However, this did NOT enable nested scrolling on Android
+— the outer vertical ScrollView still intercepted horizontal drag gestures
+before the inner horizontal ScrollView could handle them.
+
+Fix: Switch HorizontalRail back to plain RN ScrollView with nestedScrollEnabled.
+This prop tells Android's native view system to allow the inner horizontal
+ScrollView to scroll independently of the parent vertical ScrollView, which
+is the correct Android mechanism for nested scroll containers.
+
+Also restructured SyndicateHubScreen:
+- Replaced FlashList with plain ScrollView (FlashList's internal gesture
+  handling conflicted with nested horizontal ScrollViews)
+- Moved horizontal rails out of ListHeaderComponent into the ScrollView body
+- Moved paddingHorizontal from outer container to individual children so
+  HorizontalRail gets full screen width for proper scrolling
+- Removed unused FlashList, useWindowDimensions, gridColumns imports
+
+Updated CoOwnAssetTile to use AnimatedPressable for consistent press
+feedback across all tiles.
+
+Verified on emulator: both EditTab Trending Now rail and Co-Own Hub
+Newest rail now scroll horizontally with swipe gestures.
+
+Generated with [Devin](https://devin.ai)
+
+Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>

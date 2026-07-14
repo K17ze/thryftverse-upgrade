@@ -22,6 +22,7 @@ import { useToast } from '../../context/ToastContext';
 import { EmptyState } from '../EmptyState';
 import { formatCountdown } from '../../data/tradeHub';
 import { DiscoverySectionHeader } from '../discover/DiscoverySectionHeader';
+import { HorizontalRail } from '../HorizontalRail';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -202,7 +203,7 @@ export default function PulseTab() {
             actionLabel="View all"
             onAction={handleViewAll}
           />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.liveScroll}>
+          <HorizontalRail contentContainerStyle={styles.liveScroll}>
             {liveAuctions.map((auction, i) => (
               <LiveNowCard
                 key={auction.id}
@@ -211,7 +212,7 @@ export default function PulseTab() {
                 onPress={() => { haptic.light(); navigation.push('ItemDetail', { itemId: auction.listingId }); }}
               />
             ))}
-          </ScrollView>
+          </HorizontalRail>
         </Reanimated.View>
       )}
 

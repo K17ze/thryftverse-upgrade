@@ -20,6 +20,7 @@ import { useHaptic } from '../../hooks/useHaptic';
 import { useToast } from '../../context/ToastContext';
 import { useBackendData } from '../../context/BackendDataContext';
 import { DiscoverySectionHeader } from '../discover/DiscoverySectionHeader';
+import { HorizontalRail } from '../HorizontalRail';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -98,7 +99,7 @@ export default function EditTab() {
             actionLabel="See all"
             onAction={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Trending' })}
           />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.trendingScroll}>
+          <HorizontalRail contentContainerStyle={styles.trendingScroll}>
             {trendingListings.map((item, i) => (
               <TrendingRailItem
                 key={item.id}
@@ -107,7 +108,7 @@ export default function EditTab() {
                 onPress={() => { haptic.light(); navigation.push('ItemDetail', { itemId: item.id }); }}
               />
             ))}
-          </ScrollView>
+          </HorizontalRail>
         </Reanimated.View>
       )}
 
@@ -120,7 +121,7 @@ export default function EditTab() {
             actionLabel="See all"
             onAction={() => handleExploreCollection({ title: 'New Arrivals', source: { type: 'newest' } })}
           />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.trendingScroll}>
+          <HorizontalRail contentContainerStyle={styles.trendingScroll}>
             {newestListings.map((item, i) => (
               <TrendingRailItem
                 key={item.id}
@@ -129,7 +130,7 @@ export default function EditTab() {
                 onPress={() => { haptic.light(); navigation.push('ItemDetail', { itemId: item.id }); }}
               />
             ))}
-          </ScrollView>
+          </HorizontalRail>
         </Reanimated.View>
       )}
 
@@ -142,7 +143,7 @@ export default function EditTab() {
             actionLabel="See all"
             onAction={() => handleExploreCollection({ title: 'Price Drops', source: { type: 'price_drop' } })}
           />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.trendingScroll}>
+          <HorizontalRail contentContainerStyle={styles.trendingScroll}>
             {priceDropListings.map((item, i) => (
               <TrendingRailItem
                 key={item.id}
@@ -151,7 +152,7 @@ export default function EditTab() {
                 onPress={() => { haptic.light(); navigation.push('ItemDetail', { itemId: item.id }); }}
               />
             ))}
-          </ScrollView>
+          </HorizontalRail>
         </Reanimated.View>
       )}
 

@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, StatusBar, useWindowDimensions, RefreshControl, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, useWindowDimensions, RefreshControl } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,6 +19,7 @@ import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { haptics } from '../utils/haptics';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { HorizontalRail } from '../components/HorizontalRail';
 import {
   CoOwnMarketHeader,
   type CoOwnMarketHeaderAction,
@@ -375,6 +377,7 @@ export default function CoOwnHubScreen() {
               />
             </View>
 
+
             {/* Market context — quiet, real data only */}
             {!isSearching && marketContext.openItems > 0 && (
               <Text style={[styles.marketContext, { color: colors.textMuted }]} numberOfLines={1}>
@@ -443,9 +446,7 @@ export default function CoOwnHubScreen() {
                     <Text style={[styles.sectionLink, { color: colors.textSecondary }]} numberOfLines={1}>All {yourPositions.length}</Text>
                   </AnimatedPressable>
                 </View>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
+                <HorizontalRail
                   contentContainerStyle={styles.positionsRow}
                   accessibilityLabel="Your positions"
                 >
@@ -462,7 +463,7 @@ export default function CoOwnHubScreen() {
                       />
                     </View>
                   ))}
-                </ScrollView>
+                </HorizontalRail>
               </View>
             )}
 
@@ -472,9 +473,7 @@ export default function CoOwnHubScreen() {
                 <View style={styles.sectionHeader}>
                   <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} numberOfLines={1}>Newest</Text>
                 </View>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
+                <HorizontalRail
                   contentContainerStyle={styles.railContent}
                   accessibilityLabel="Newest Co-Own items"
                 >
@@ -491,7 +490,7 @@ export default function CoOwnHubScreen() {
                       />
                     </View>
                   ))}
-                </ScrollView>
+                </HorizontalRail>
               </View>
             )}
 
@@ -500,9 +499,7 @@ export default function CoOwnHubScreen() {
                 <View style={styles.sectionHeader}>
                   <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} numberOfLines={1}>Most available</Text>
                 </View>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
+                <HorizontalRail
                   contentContainerStyle={styles.railContent}
                   accessibilityLabel="Most available Co-Own items"
                 >
@@ -519,7 +516,7 @@ export default function CoOwnHubScreen() {
                       />
                     </View>
                   ))}
-                </ScrollView>
+                </HorizontalRail>
               </View>
             )}
 
@@ -528,9 +525,7 @@ export default function CoOwnHubScreen() {
                 <View style={styles.sectionHeader}>
                   <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} numberOfLines={1}>Nearly allocated</Text>
                 </View>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
+                <HorizontalRail
                   contentContainerStyle={styles.railContent}
                   accessibilityLabel="Nearly allocated Co-Own items"
                 >
@@ -547,7 +542,7 @@ export default function CoOwnHubScreen() {
                       />
                     </View>
                   ))}
-                </ScrollView>
+                </HorizontalRail>
               </View>
             )}
 
@@ -558,6 +553,36 @@ export default function CoOwnHubScreen() {
                   <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} numberOfLines={1}>Results</Text>
                   <Text style={[styles.sectionCount, { color: colors.textMuted }]} numberOfLines={1}>{filteredAssets.length} items</Text>
                 </View>
+              </View>
+            )}
+
+            {/* All items header — Discover mode */}
+            {!isSearching && discoveryAssets.length > 0 && (
+              <View style={styles.sectionWrap}>
+                <View style={styles.sectionHeader}>
+                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} numberOfLines={1}>All items</Text>
+                  <Text style={[styles.sectionCount, { color: colors.textMuted }]} numberOfLines={1}>{discoveryAssets.length}</Text>
+                </View>
+              </View>
+            )}
+
+            {/* All items grid — Discover mode */}
+            {!isSearching && discoveryAssets.length > 0 && (
+              <View style={styles.discoveryGrid}>
+                {discoveryAssets.map((item, index) => (
+                  <View key={item.id} style={styles.discoveryTileWrap}>
+                    <CoOwnAssetTile
+                      imageUri={item.image}
+                      title={item.title}
+                      unitPriceLabel={formatFromFiat(item.unitPriceGBP, 'GBP')}
+                      availableUnits={item.availableUnits}
+                      totalUnits={item.totalUnits}
+                      status={formatStatus(item)}
+                      onPress={() => navigation.navigate('AssetDetail', { assetId: item.id })}
+                      index={index}
+                    />
+                  </View>
+                ))}
               </View>
             )}
           </View>
@@ -629,7 +654,7 @@ export default function CoOwnHubScreen() {
             </View>
           ) : null
         }
-        estimatedItemSize={gridColumns === 1 ? 480 : 300}
+        estimatedItemSize={(gridColumns === 1 ? 480 : 300) as any}
       />
     </SafeAreaView>
   );
@@ -710,6 +735,17 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: Space.xs,
     marginBottom: Space.lg,
+  },
+  discoveryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: Space.md,
+    gap: Space.sm,
+  },
+  discoveryTileWrap: {
+    width: '48%',
+    flex: 0,
+    marginBottom: Space.md,
   },
   footerWrap: {
     paddingTop: Space.lg,
