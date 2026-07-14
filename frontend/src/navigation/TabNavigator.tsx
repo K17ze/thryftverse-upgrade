@@ -112,8 +112,8 @@ const CreateActionSheet = ({
 
   const actions = [
     { key: 'sell', label: 'List an item', description: 'Sell something on the marketplace', icon: 'pricetag-outline' as const, route: 'Sell' as const },
-    { key: 'look', label: 'Create a Look', description: 'Style and share an outfit', icon: 'shirt-outline' as const, route: 'CreateLook' as const },
-    { key: 'poster', label: 'Create a Poster', description: 'Design a visual poster', icon: 'images-outline' as const, route: 'CreatePoster' as const, params: { mode: 'poster' } },
+    { key: 'look', label: 'Create a Look', description: 'Style and share an outfit', icon: 'shirt-outline' as const, route: 'CreatorStudio' as const, params: { type: 'look' } },
+    { key: 'poster', label: 'Create a Poster', description: 'Design a visual poster', icon: 'images-outline' as const, route: 'CreatorStudio' as const, params: { type: 'poster' } },
     { key: 'auction', label: 'Create auction', description: 'Time-based bidding for an item', icon: 'hammer-outline' as const, route: 'CreateAuction' as const },
     { key: 'coown', label: 'Create Co-Own', description: 'Shared ownership opportunity', icon: 'people-outline' as const, route: 'CreateCoOwn' as const },
   ];
