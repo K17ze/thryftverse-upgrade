@@ -190,6 +190,8 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
     setDocumentState((prev) => {
       const doc = updateLayerInPage(prev, activePageIndex, id, updates);
       doc.updatedAt = new Date().toISOString();
+      // Coalesce rapid updates with the same label into one history entry
+      // This prevents history spam when updateLayer is called in rapid succession
       historyRef.current.push(doc, label ?? 'Update layer');
       setIsDirty(true);
       syncHistoryButtons();

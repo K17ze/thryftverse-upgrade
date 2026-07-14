@@ -444,12 +444,20 @@ function LayerRenderer({
           {isSelected && (
             <Reanimated.View style={[StyleSheet.absoluteFill, selectionBorderStyle]} pointerEvents="none" />
           )}
-          {/* Selection handles — scale in with spring */}
+          {/* Selection handles — draggable corner + rotation handles */}
           {isSelected && (
             <SelectionHandles
               handleScaleSV={handleScale}
               colors={colors}
               layerLocked={layer.locked}
+              scaleSV={scaleSV}
+              rotationSV={rotationSV}
+              onScaleChange={(s) => setGestureBadge(`${Math.round(s * 100)}%`)}
+              onRotationChange={(r) => setGestureBadge(`${r}°`)}
+              onCommit={() => {
+                setGestureBadge(null);
+                handleTransformCommit(scaleSV.value, rotationSV.value);
+              }}
             />
           )}
           {/* Locked badge */}
@@ -751,16 +759,78 @@ function SelectionHandles({
   handleScaleSV,
   colors,
   layerLocked,
+  scaleSV,
+  rotationSV,
+  onScaleChange,
+  onRotationChange,
+  onCommit,
 }: {
   handleScaleSV: ReturnType<typeof useSharedValue<number>>;
   colors: ReturnType<typeof useAppTheme>['colors'];
   layerLocked: boolean;
+  scaleSV: ReturnType<typeof useSharedValue<number>>;
+  rotationSV: ReturnType<typeof useSharedValue<number>>;
+  onScaleChange: (scale: number) => void;
+  onRotationChange: (rotation: number) => void;
+  onCommit: () => void;
 }) {
   const handleColor = layerLocked ? colors.warning : colors.brand;
+  const startScale = useSharedValue(1);
+  const startRotation = useSharedValue(0);
 
   const animatedHandleStyle = useAnimatedStyle(() => ({
     transform: [{ scale: handleScaleSV.value }],
   }));
+
+  // ── Corner handle: drag to resize (scale) ──
+  // The handle is at a corner. Dragging away from center = scale up,
+  // dragging toward center = scale down. We use the Y component of
+  // the drag (in the layer's rotated space) as the primary axis.
+  const cornerPan = useMemo(
+    () =>
+      Gesture.Pan()
+        .enabled(!layerLocked)
+        .minDistance(3)
+        .onStart(() => {
+          startScale.value = scaleSV.value;
+        })
+        .onUpdate((e) => {
+          // Use absolute translation distance for scale change
+          // Positive Y (drag down/away) = scale up
+          const scaleDelta = 1 + (e.translationY * 0.005);
+          const newScale = Math.max(0.2, Math.min(5, startScale.value * scaleDelta));
+          scaleSV.value = newScale;
+          runOnJS(onScaleChange)(Math.round(newScale * 100) / 100);
+        })
+        .onEnd(() => {
+          runOnJS(onCommit)();
+        }),
+    [layerLocked, scaleSV, startScale, onScaleChange, onCommit]
+  );
+
+  // ── Rotation handle: drag to rotate ──
+  // The handle is above the top-center. Dragging left/right rotates.
+  const rotationPan = useMemo(
+    () =>
+      Gesture.Pan()
+        .enabled(!layerLocked)
+        .minDistance(3)
+        .onStart(() => {
+          startRotation.value = rotationSV.value;
+        })
+        .onUpdate((e) => {
+          // Convert drag translation to rotation degrees
+          // 1px of horizontal drag = ~0.5 degrees
+          const rotationDelta = e.translationX * 0.5;
+          const newRotation = normaliseDegrees(startRotation.value + rotationDelta);
+          rotationSV.value = newRotation;
+          runOnJS(onRotationChange)(Math.round(newRotation));
+        })
+        .onEnd(() => {
+          runOnJS(onCommit)();
+        }),
+    [layerLocked, rotationSV, startRotation, onRotationChange, onCommit]
+  );
 
   const handleBase: any = {
     position: 'absolute',
@@ -777,13 +847,41 @@ function SelectionHandles({
     elevation: 4,
   };
 
+  // Invisible hit zone — 44pt for touch compliance
+  const hitZone: any = {
+    position: 'absolute',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+  };
+
   return (
-    <Reanimated.View style={[StyleSheet.absoluteFill, animatedHandleStyle]} pointerEvents="none">
-      {/* Corner handles — 20px visible, centered on corners */}
-      <View style={[handleBase, { top: -10, left: -10 }]} />
-      <View style={[handleBase, { top: -10, right: -10 }]} />
-      <View style={[handleBase, { bottom: -10, left: -10 }]} />
-      <View style={[handleBase, { bottom: -10, right: -10 }]} />
+    <Reanimated.View style={[StyleSheet.absoluteFill, animatedHandleStyle]}>
+      {/* Corner handles — 20px visible, 44pt hit zone, draggable */}
+      {/* Top-left */}
+      <GestureDetector gesture={cornerPan}>
+        <Reanimated.View style={[hitZone, { top: -22, left: -22 }]}>
+          <View style={[handleBase, { top: 12, left: 12 }]} pointerEvents="none" />
+        </Reanimated.View>
+      </GestureDetector>
+      {/* Top-right */}
+      <GestureDetector gesture={cornerPan}>
+        <Reanimated.View style={[hitZone, { top: -22, right: -22 }]}>
+          <View style={[handleBase, { top: 12, right: 12 }]} pointerEvents="none" />
+        </Reanimated.View>
+      </GestureDetector>
+      {/* Bottom-left */}
+      <GestureDetector gesture={cornerPan}>
+        <Reanimated.View style={[hitZone, { bottom: -22, left: -22 }]}>
+          <View style={[handleBase, { bottom: 12, left: 12 }]} pointerEvents="none" />
+        </Reanimated.View>
+      </GestureDetector>
+      {/* Bottom-right */}
+      <GestureDetector gesture={cornerPan}>
+        <Reanimated.View style={[hitZone, { bottom: -22, right: -22 }]}>
+          <View style={[handleBase, { bottom: 12, right: 12 }]} pointerEvents="none" />
+        </Reanimated.View>
+      </GestureDetector>
 
       {/* Rotation handle — above top-center, connected by a line */}
       <View
@@ -796,19 +894,15 @@ function SelectionHandles({
           height: 18,
           backgroundColor: handleColor,
         }}
+        pointerEvents="none"
       />
-      <View
-        style={[
-          handleBase,
-          {
-            top: -38,
-            left: '50%',
-            marginLeft: -10,
-          },
-        ]}
-      >
-        <Ionicons name="refresh" size={10} color={handleColor} style={{ textAlign: 'center', lineHeight: 16 }} />
-      </View>
+      <GestureDetector gesture={rotationPan}>
+        <Reanimated.View style={[hitZone, { top: -50, left: '50%', marginLeft: -22 }]}>
+          <View style={[handleBase, { top: 12, left: 12 }]} pointerEvents="none">
+            <Ionicons name="refresh" size={10} color={handleColor} style={{ textAlign: 'center', lineHeight: 16 }} />
+          </View>
+        </Reanimated.View>
+      </GestureDetector>
     </Reanimated.View>
   );
 }

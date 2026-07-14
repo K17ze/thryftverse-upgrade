@@ -28,6 +28,7 @@ import { CreatorSettingsSheet } from './CreatorSettingsSheet';
 import { CreatorAssetPicker, type AssetPickerMode } from './CreatorAssetPicker';
 import { CreatorTemplateBrowser } from './CreatorTemplateBrowser';
 import { CreatorPreviewOverlay } from './CreatorPreviewOverlay';
+import { CreatorEntryScreen } from './CreatorEntryScreen';
 import { PressScale } from './CreatorAnimations';
 import type { CreatorTemplate } from './templates';
 
@@ -60,6 +61,11 @@ function CreatorStudioInner() {
   const [showTemplates, setShowTemplates] = useState(false);
   const [showOverflow, setShowOverflow] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [entryComplete, setEntryComplete] = useState(false);
+
+  // Show entry screen when document is empty and not loading a draft/template
+  const hasContent = document.pages.some((p) => p.layers.length > 0);
+  const showEntryScreen = !entryComplete && !hasContent && !isLoadingDraft;
 
   const page = document.pages[activePageIndex];
   const isLook = document.type === 'look';
@@ -185,6 +191,32 @@ function CreatorStudioInner() {
     if (autosaveStatus === 'failed') return 'Save failed';
     return null;
   }, [isLoadingDraft, autosaveStatus]);
+
+  // Handle media selection from entry screen — add all layers to the
+  // first page, then enter the editor.
+  const handleEntryMediaSelected = useCallback((layers: CreatorLayer[]) => {
+    layers.forEach((layer) => addLayer(layer));
+    setEntryComplete(true);
+  }, [addLayer]);
+
+  const handleEntryBlankStart = useCallback(() => {
+    setEntryComplete(true);
+  }, []);
+
+  const handleEntryClose = useCallback(() => {
+    navigation.goBack();
+  }, [navigation]);
+
+  if (showEntryScreen) {
+    return (
+      <CreatorEntryScreen
+        documentType={document.type}
+        onClose={handleEntryClose}
+        onMediaSelected={handleEntryMediaSelected}
+        onBlankStart={handleEntryBlankStart}
+      />
+    );
+  }
 
   return (
     <View style={styles.container}>
