@@ -24,6 +24,7 @@ import { CreatorPublishSheet } from './CreatorPublishSheet';
 import { CreatorSettingsSheet } from './CreatorSettingsSheet';
 import { CreatorAssetPicker, type AssetPickerMode } from './CreatorAssetPicker';
 import { CreatorTemplateBrowser } from './CreatorTemplateBrowser';
+import { CreatorPreviewOverlay } from './CreatorPreviewOverlay';
 import type { CreatorTemplate } from './templates';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -40,6 +41,7 @@ function CreatorStudioInner() {
   const [editingLayer, setEditingLayer] = useState<CreatorLayer | null>(null);
   const [showTemplates, setShowTemplates] = useState(false);
   const [showOverflow, setShowOverflow] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
 
   const page = document.pages[activePageIndex];
   const isLook = document.type === 'look';
@@ -107,7 +109,8 @@ function CreatorStudioInner() {
         e.preventDefault();
         if (canRedo) redo();
       } else if (e.key === 'Escape') {
-        if (showOverflow) setShowOverflow(false);
+        if (showPreview) setShowPreview(false);
+        else if (showOverflow) setShowOverflow(false);
         else if (showPublish) setShowPublish(false);
         else if (showTemplates) setShowTemplates(false);
         else if (showLayers) setShowLayers(false);
@@ -122,12 +125,13 @@ function CreatorStudioInner() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [canUndo, canRedo, undo, redo, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, selectedLayerId, selectLayer, removeLayer, handleBack]);
+  }, [canUndo, canRedo, undo, redo, showPreview, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, selectedLayerId, selectLayer, removeLayer, handleBack]);
 
   // Hardware back button — intercept to close sheets first
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {
+        if (showPreview) { setShowPreview(false); return true; }
         if (showOverflow) { setShowOverflow(false); return true; }
         if (showPublish) { setShowPublish(false); return true; }
         if (showTemplates) { setShowTemplates(false); return true; }
@@ -138,7 +142,7 @@ function CreatorStudioInner() {
         return false;
       };
       return onBackPress;
-    }, [showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, selectedLayerId, selectLayer])
+    }, [showPreview, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, selectedLayerId, selectLayer])
   );
 
   const handleCanvasPress = useCallback(() => {
@@ -188,18 +192,29 @@ function CreatorStudioInner() {
           ) : null}
         </View>
 
-        {/* Right: Next (publish) */}
-        <Pressable
-          onPress={() => setShowPublish(true)}
-          style={({ pressed }) => [
-            styles.nextBtn,
-            { backgroundColor: pressed ? colors.brandPressed : colors.brand },
-          ]}
-          accessibilityLabel="Next"
-          accessibilityRole="button"
-        >
-          <Text style={[styles.nextBtnText, { color: colors.textInverse }]}>Next</Text>
-        </Pressable>
+        {/* Right: Preview + Next */}
+        <View style={styles.topRight}>
+          <Pressable
+            onPress={() => setShowPreview(true)}
+            style={styles.topBtn}
+            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+            accessibilityLabel="Preview"
+            accessibilityRole="button"
+          >
+            <Ionicons name="eye-outline" size={22} color={colors.textPrimary} />
+          </Pressable>
+          <Pressable
+            onPress={() => setShowPublish(true)}
+            style={({ pressed }) => [
+              styles.nextBtn,
+              { backgroundColor: pressed ? colors.brandPressed : colors.brand },
+            ]}
+            accessibilityLabel="Next"
+            accessibilityRole="button"
+          >
+            <Text style={[styles.nextBtnText, { color: colors.textInverse }]}>Next</Text>
+          </Pressable>
+        </View>
       </View>
 
       {/* Page strip (poster only) — compact, below top bar */}
@@ -377,6 +392,14 @@ function CreatorStudioInner() {
       )}
 
       {/* ── Sheets ────────────────────────────────────────────────────── */}
+      <CreatorPreviewOverlay
+        visible={showPreview}
+        onClose={() => setShowPreview(false)}
+        onPublish={() => {
+          setShowPreview(false);
+          setShowPublish(true);
+        }}
+      />
       <CreatorLayersSheet visible={showLayers} onClose={() => setShowLayers(false)} />
       <CreatorPublishSheet visible={showPublish} onClose={() => setShowPublish(false)} />
       <CreatorSettingsSheet visible={showSettings} onClose={() => setShowSettings(false)} />
@@ -507,6 +530,11 @@ const styles = StyleSheet.create({
     borderRadius: Radius.sm,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  topRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
   },
   nextBtnText: {
     fontFamily: Typography.family.semibold,
