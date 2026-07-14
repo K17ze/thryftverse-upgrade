@@ -31,7 +31,6 @@ const MODES: { key: CreateMode; label: string; icon: keyof typeof Ionicons.glyph
 ];
 
 const OVERFLOW_ACTIONS = [
-  { key: 'sell', label: 'List an item', route: 'Sell' as const },
   { key: 'auction', label: 'Create auction', route: 'CreateAuction' as const },
   { key: 'coown', label: 'Create Co-Own', route: 'CreateCoOwn' as const },
 ];

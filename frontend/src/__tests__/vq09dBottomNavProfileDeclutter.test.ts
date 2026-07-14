@@ -112,9 +112,14 @@ describe('VQ-09D: Central Create control', () => {
   });
 
   it('CreateCamera preserves other create actions in overflow menu', () => {
-    expect(createCameraSrc).toContain('Sell');
     expect(createCameraSrc).toContain('CreateAuction');
     expect(createCameraSrc).toContain('CreateCoOwn');
+  });
+
+  it('HomeScreen has a separate + button for the listing flow', () => {
+    const homeSrc = readSrc('screens/HomeScreen.tsx');
+    expect(homeSrc).toContain("navigation.navigate('Sell')");
+    expect(homeSrc).toContain('name="add"');
   });
 
   it('Create control has accessibility label and hint', () => {

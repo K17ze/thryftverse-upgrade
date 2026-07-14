@@ -898,6 +898,15 @@ export default function HomeScreen() {
           <View style={styles.headerRight}>
             <AnimatedPressable
               style={styles.headerBtn}
+              onPress={() => navigation.navigate('Sell')}
+              accessibilityLabel="List an item"
+              accessibilityRole="button"
+              accessibilityHint="Opens sell listing flow"
+            >
+              <Ionicons name="add" size={26} color={Colors.textPrimary} />
+            </AnimatedPressable>
+            <AnimatedPressable
+              style={styles.headerBtn}
               onPress={() => navigation.navigate('GlobalSearch')}
               accessibilityLabel="Search listings"
               accessibilityRole="button"
