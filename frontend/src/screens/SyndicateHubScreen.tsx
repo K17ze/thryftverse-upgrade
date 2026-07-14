@@ -567,11 +567,21 @@ export default function CoOwnHubScreen() {
               </View>
             )}
 
-            {/* Grid items — search results */}
-            {isSearching && filteredAssets.length > 0 && (
+            {/* All items header — Discover mode */}
+            {!isSearching && discoveryAssets.length > 0 && (
+              <View style={styles.sectionWrap}>
+                <View style={styles.sectionHeader}>
+                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} numberOfLines={1}>All items</Text>
+                  <Text style={[styles.sectionCount, { color: colors.textMuted }]} numberOfLines={1}>{discoveryAssets.length}</Text>
+                </View>
+              </View>
+            )}
+
+            {/* Grid items — search results or discover all */}
+            {((isSearching && filteredAssets.length > 0) || (!isSearching && discoveryAssets.length > 0)) && (
               <View style={styles.gridWrap}>
-                {filteredAssets.map((item, index) => (
-                  <View key={item.id} style={styles.tileWrap}>
+                {(isSearching ? filteredAssets : discoveryAssets).map((item, index) => (
+                  <View key={item.id} style={styles.gridTileWrap}>
                     <CoOwnAssetTile
                       imageUri={item.image}
                       title={item.title}
@@ -710,6 +720,11 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     paddingHorizontal: Space.md,
   },
+  gridTileWrap: {
+    width: '48%',
+    flex: 0,
+    marginBottom: Space.md,
+  },
   searchWrap: {
     marginBottom: Space.md,
   },
@@ -805,11 +820,6 @@ const styles = StyleSheet.create({
   railTileWrap: {
     width: 160,
     flex: 0,
-  },
-  tileWrap: {
-    flex: 1,
-    paddingHorizontal: Space.xs,
-    marginBottom: Space.lg,
   },
   footerWrap: {
     paddingTop: Space.lg,
