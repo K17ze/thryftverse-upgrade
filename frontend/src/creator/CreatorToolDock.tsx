@@ -2,48 +2,55 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
-import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { useCreator } from './CreatorContext';
+import type { CreatorLayer } from './composition';
 import type { AssetPickerMode } from './CreatorAssetPicker';
 
+// ── Contextual tool definitions ────────────────────────────────────
+// Neutral icons — no rainbow colors. A single accent (brand) marks
+// the active/primary state. Every tool has a 44pt minimum hit area.
+
+interface RailTool {
+  icon: string;
+  label: string;
+  action: () => void;
+  danger?: boolean;
+}
+
 export interface CreatorToolDockProps {
+  selectedLayer: CreatorLayer | null;
   onPublish: () => void;
   onSettings: () => void;
   onToolPress: (mode: AssetPickerMode) => void;
+  onEditLayer: (layer: CreatorLayer) => void;
+  onDeleteLayer: (id: string) => void;
+  onDuplicateLayer: (id: string) => void;
+  onReorderLayer: (id: string, direction: 'forward' | 'backward') => void;
+  onMore: () => void;
 }
 
-interface ToolDef {
-  icon: string;
-  label: string;
-  color: string;
-  mode: AssetPickerMode;
-}
-
-const LOOK_TOOLS: ToolDef[] = [
-  { icon: 'images-outline', label: 'Photo', color: '#5ac8fa', mode: 'media' },
-  { icon: 'pricetag-outline', label: 'Tag', color: '#ff9500', mode: 'product' },
-  { icon: 'text-outline', label: 'Text', color: '#ffcc00', mode: 'text' },
-  { icon: 'shirt-outline', label: 'Look', color: '#5856d6', mode: 'look' },
-  { icon: 'at-outline', label: 'Mention', color: '#ff2d55', mode: 'mention' },
-  { icon: 'happy-outline', label: 'Shape', color: '#4cd964', mode: 'shape' },
-];
-
-const POSTER_TOOLS: ToolDef[] = [
-  { icon: 'images-outline', label: 'Media', color: '#5ac8fa', mode: 'media' },
-  { icon: 'text-outline', label: 'Text', color: '#ffcc00', mode: 'text' },
-  { icon: 'pricetag-outline', label: 'Product', color: '#ff9500', mode: 'product' },
-  { icon: 'at-outline', label: 'Mention', color: '#ff2d55', mode: 'mention' },
-  { icon: 'shirt-outline', label: 'Look', color: '#5856d6', mode: 'look' },
-  { icon: 'stats-chart-outline', label: 'Vote', color: '#34c759', mode: 'vote' },
-  { icon: 'happy-outline', label: 'Shape', color: '#4cd964', mode: 'shape' },
-];
-
-export function CreatorToolDock({ onPublish, onSettings, onToolPress }: CreatorToolDockProps) {
+export function CreatorToolDock({
+  selectedLayer,
+  onPublish,
+  onToolPress,
+  onEditLayer,
+  onDeleteLayer,
+  onDuplicateLayer,
+  onReorderLayer,
+  onMore,
+}: CreatorToolDockProps) {
   const { document } = useCreator();
-  const tools = document.type === 'poster' ? POSTER_TOOLS : LOOK_TOOLS;
+  const { colors } = useAppTheme();
+  const isLook = document.type === 'look';
+
+  // Build contextual tools based on selection state
+  const tools: RailTool[] = selectedLayer
+    ? buildSelectionTools(selectedLayer, onEditLayer, onDeleteLayer, onDuplicateLayer, onReorderLayer)
+    : buildDefaultTools(isLook, onToolPress);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -52,41 +59,107 @@ export function CreatorToolDock({ onPublish, onSettings, onToolPress }: CreatorT
         {tools.map((tool) => (
           <Pressable
             key={tool.label}
-            onPress={() => onToolPress(tool.mode)}
-            style={styles.toolBtn}
-            hitSlop={{ top: 4, bottom: 4, left: 2, right: 2 }}
-            accessibilityLabel={`Add ${tool.label}`}
+            onPress={tool.action}
+            style={({ pressed }) => [
+              styles.toolBtn,
+              { backgroundColor: pressed ? colors.surfaceAlt : 'transparent' },
+            ]}
+            accessibilityLabel={tool.label}
             accessibilityRole="button"
           >
-            <View style={[styles.toolIcon, { backgroundColor: `${tool.color}20` }]}>
-              <Ionicons name={tool.icon as any} size={20} color={tool.color} />
-            </View>
-            <Text style={styles.toolLabel}>{tool.label}</Text>
+            <Ionicons
+              name={tool.icon as any}
+              size={22}
+              color={tool.danger ? colors.danger : colors.textSecondary}
+            />
+            <Text
+              style={[styles.toolLabel, { color: tool.danger ? colors.danger : colors.textMuted }]}
+              numberOfLines={1}
+            >
+              {tool.label}
+            </Text>
           </Pressable>
         ))}
       </ScrollView>
 
-      <View style={styles.actions}>
+      {/* Primary action — separated from editing tools */}
+      <View style={[styles.actions, { borderLeftColor: colors.border }]}>
         <Pressable
-          onPress={onSettings}
-          style={styles.actionBtn}
-          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-          accessibilityLabel="Settings"
+          onPress={onMore}
+          style={({ pressed }) => [styles.actionBtn, { backgroundColor: pressed ? colors.surfaceAlt : 'transparent' }]}
+          accessibilityLabel="More options"
           accessibilityRole="button"
         >
-          <Ionicons name="settings-outline" size={20} color={Colors.textSecondary} />
+          <Ionicons name="ellipsis-horizontal" size={22} color={colors.textSecondary} />
         </Pressable>
         <Pressable
           onPress={onPublish}
-          style={styles.publishBtn}
-          accessibilityLabel="Publish"
+          style={({ pressed }) => [
+            styles.publishBtn,
+            { backgroundColor: pressed ? colors.brandPressed : colors.brand },
+          ]}
+          accessibilityLabel="Next"
           accessibilityRole="button"
         >
-          <Text style={styles.publishBtnText}>Publish</Text>
+          <Text style={[styles.publishBtnText, { color: colors.textInverse }]}>Next</Text>
         </Pressable>
       </View>
     </View>
   );
+}
+
+// ── Tool builders ──────────────────────────────────────────────────
+
+function buildDefaultTools(
+  isLook: boolean,
+  onToolPress: (mode: AssetPickerMode) => void,
+): RailTool[] {
+  const tools: RailTool[] = [
+    { icon: 'images-outline', label: 'Media', action: () => onToolPress('media') },
+    { icon: 'text-outline', label: 'Text', action: () => onToolPress('text') },
+    { icon: 'pricetag-outline', label: 'Product', action: () => onToolPress('product') },
+  ];
+  if (isLook) {
+    tools.push({ icon: 'shirt-outline', label: 'Look', action: () => onToolPress('look') });
+  } else {
+    tools.push({ icon: 'stats-chart-outline', label: 'Vote', action: () => onToolPress('vote') });
+  }
+  tools.push({ icon: 'happy-outline', label: 'Shape', action: () => onToolPress('shape') });
+  tools.push({ icon: 'at-outline', label: 'Mention', action: () => onToolPress('mention') });
+  return tools;
+}
+
+function buildSelectionTools(
+  layer: CreatorLayer,
+  onEditLayer: (layer: CreatorLayer) => void,
+  onDeleteLayer: (id: string) => void,
+  onDuplicateLayer: (id: string) => void,
+  onReorderLayer: (id: string, direction: 'forward' | 'backward') => void,
+): RailTool[] {
+  const tools: RailTool[] = [];
+
+  // Type-specific edit action
+  if (layer.type === 'text') {
+    tools.push({ icon: 'create-outline', label: 'Edit', action: () => onEditLayer(layer) });
+  } else if (layer.type === 'media') {
+    tools.push({ icon: 'swap-horizontal-outline', label: 'Replace', action: () => onEditLayer(layer) });
+  } else if (layer.type === 'product') {
+    tools.push({ icon: 'pricetag-outline', label: 'Edit', action: () => onEditLayer(layer) });
+  } else if (layer.type === 'mention') {
+    tools.push({ icon: 'person-outline', label: 'Edit', action: () => onEditLayer(layer) });
+  }
+
+  // Layer ordering
+  tools.push({ icon: 'arrow-up', label: 'Forward', action: () => onReorderLayer(layer.id, 'forward') });
+  tools.push({ icon: 'arrow-down', label: 'Back', action: () => onReorderLayer(layer.id, 'backward') });
+
+  // Duplicate
+  tools.push({ icon: 'copy-outline', label: 'Copy', action: () => onDuplicateLayer(layer.id) });
+
+  // Delete (danger)
+  tools.push({ icon: 'trash-outline', label: 'Delete', action: () => onDeleteLayer(layer.id), danger: true });
+
+  return tools;
 }
 
 const styles = StyleSheet.create({
@@ -94,57 +167,49 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Space.sm,
-    paddingVertical: Space.sm,
-    backgroundColor: '#141414',
+    paddingVertical: Space.xs,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#1a1a1a',
-    gap: Space.sm,
   },
   scrollContent: {
-    gap: Space.sm,
+    gap: Space.xs,
     alignItems: 'center',
   },
   toolBtn: {
     alignItems: 'center',
-    gap: 4,
-    minWidth: 52,
-  },
-  toolIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.md,
     justifyContent: 'center',
-    alignItems: 'center',
+    minWidth: 60,
+    minHeight: 48,
+    paddingHorizontal: Space.sm,
+    borderRadius: Radius.sm,
+    gap: 3,
   },
   toolLabel: {
-    fontSize: 10,
+    fontSize: 11,
     fontFamily: Typography.family.medium,
-    color: '#999',
   },
   actions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     marginLeft: 'auto',
+    paddingLeft: Space.sm,
+    borderLeftWidth: StyleSheet.hairlineWidth,
   },
   actionBtn: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: Radius.md,
-    backgroundColor: '#1a1a1a',
+    borderRadius: Radius.sm,
   },
   publishBtn: {
     paddingHorizontal: Space.md + 4,
-    height: 40,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.brand,
+    height: 44,
+    borderRadius: Radius.sm,
     justifyContent: 'center',
     alignItems: 'center',
   },
   publishBtnText: {
-    color: '#fff',
     fontFamily: Typography.family.semibold,
     fontSize: Type.body.size,
   },
