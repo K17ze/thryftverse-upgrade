@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Pressable,
   Dimensions,
   StatusBar,
 } from 'react-native';
@@ -13,6 +12,7 @@ import { useAppTheme } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useCreator } from './CreatorContext';
 import { CreatorCanvas } from './CreatorCanvas';
+import { PressScale } from './CreatorAnimations';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -76,15 +76,13 @@ export function CreatorPreviewOverlay({ visible, onClose, onPublish }: CreatorPr
 
       {/* Top bar — minimal, transparent over media */}
       <SafeAreaView style={styles.topBar} edges={['top']}>
-        <Pressable
+        <PressScale
           onPress={onClose}
           style={styles.topBtn}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           accessibilityLabel="Close preview"
-          accessibilityRole="button"
         >
           <Ionicons name="close" size={28} color="#fff" />
-        </Pressable>
+        </PressScale>
 
         <View style={styles.topCenter}>
           <Text style={styles.topLabel}>Preview</Text>
@@ -95,27 +93,26 @@ export function CreatorPreviewOverlay({ visible, onClose, onPublish }: CreatorPr
           )}
         </View>
 
-        <Pressable
+        <PressScale
           onPress={onPublish}
           style={styles.publishBtn}
           accessibilityLabel="Publish"
-          accessibilityRole="button"
+          scale={0.97}
         >
           <Text style={styles.publishBtnText}>Publish</Text>
-        </Pressable>
+        </PressScale>
       </SafeAreaView>
 
       {/* Page navigation for multi-page posters */}
       {isPoster && pageCount > 1 && (
         <View style={styles.pageNavRow}>
-          <Pressable
+          <PressScale
             onPress={goPrevPage}
             style={styles.pageNavBtn}
             accessibilityLabel="Previous page"
-            accessibilityRole="button"
           >
             <Ionicons name="chevron-back" size={24} color="#fff" />
-          </Pressable>
+          </PressScale>
           <View style={styles.pageDots}>
             {document.pages.map((p, i) => (
               <View
@@ -124,14 +121,13 @@ export function CreatorPreviewOverlay({ visible, onClose, onPublish }: CreatorPr
               />
             ))}
           </View>
-          <Pressable
+          <PressScale
             onPress={goNextPage}
             style={styles.pageNavBtn}
             accessibilityLabel="Next page"
-            accessibilityRole="button"
           >
             <Ionicons name="chevron-forward" size={24} color="#fff" />
-          </Pressable>
+          </PressScale>
         </View>
       )}
     </View>

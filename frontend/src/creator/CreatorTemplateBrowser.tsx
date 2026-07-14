@@ -5,18 +5,19 @@ import {
   StyleSheet,
   Pressable,
   ScrollView,
-  Modal,
   FlatList,
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Colors } from '../constants/colors';
 import {
   getTemplatesByType,
   type CreatorTemplate,
 } from './templates';
 import { CreatorCanvas } from './CreatorCanvas';
+import { SheetContainer, PressScale } from './CreatorAnimations';
 
 export interface CreatorTemplateBrowserProps {
   visible: boolean;
@@ -33,6 +34,7 @@ export function CreatorTemplateBrowser({
   onApply,
   hasExistingWork,
 }: CreatorTemplateBrowserProps) {
+  const { colors } = useAppTheme();
   const templates = getTemplatesByType(documentType);
 
   const handleApply = useCallback(
@@ -92,22 +94,16 @@ export function CreatorTemplateBrowser({
   );
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <Pressable style={styles.backdrop} onPress={onClose} />
-        <View style={styles.sheet}>
-          <View style={styles.handle} />
+    <SheetContainer visible={visible} onClose={onClose} maxHeight={0.85}>
           <View style={styles.header}>
-            <Text style={styles.title}>Templates</Text>
-            <Pressable
+            <Text style={[styles.title, { color: colors.textPrimary }]}>Templates</Text>
+            <PressScale
               onPress={onClose}
               style={styles.closeBtn}
-              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
               accessibilityLabel="Close templates"
-              accessibilityRole="button"
             >
-              <Ionicons name="close" size={20} color={Colors.textSecondary} />
-            </Pressable>
+              <Ionicons name="close" size={22} color={colors.textSecondary} />
+            </PressScale>
           </View>
 
           <FlatList
@@ -119,41 +115,16 @@ export function CreatorTemplateBrowser({
             ItemSeparatorComponent={() => <View style={{ height: Space.md }} />}
             ListEmptyComponent={
               <View style={styles.emptyState}>
-                <Ionicons name="grid-outline" size={40} color={Colors.textMuted} />
-                <Text style={styles.emptyText}>No templates available</Text>
+                <Ionicons name="grid-outline" size={40} color={colors.textMuted} />
+                <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No templates available</Text>
               </View>
             }
           />
-        </View>
-      </View>
-    </Modal>
+    </SheetContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  sheet: {
-    backgroundColor: Colors.surface,
-    borderTopLeftRadius: Radius.lg,
-    borderTopRightRadius: Radius.lg,
-    maxHeight: '85%',
-    paddingBottom: Space.xl,
-  },
-  handle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.border,
-    alignSelf: 'center',
-    marginTop: Space.sm,
-  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -163,8 +134,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.title.size,
-    color: Colors.textPrimary,
+    fontSize: Type.subtitle.size,
   },
   closeBtn: {
     width: 36,

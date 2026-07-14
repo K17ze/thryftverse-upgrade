@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useEffect, useState } from 'react';
-import { View, Text, Image, StyleSheet, Pressable } from 'react-native';
+import { View, Text, Image, StyleSheet, Pressable, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Reanimated, {
@@ -7,9 +7,15 @@ import Reanimated, {
   useAnimatedStyle,
   runOnJS,
   withTiming,
+  withSpring,
+  withRepeat,
+  cancelAnimation,
+  Easing,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Colors } from '../constants/colors';
 import { Video, ResizeMode } from '../components/compat/Video';
 import type { CreatorLayer, CreatorDocument, CreatorPage } from './composition';
@@ -53,6 +59,8 @@ export function CreatorCanvas({
 }: CreatorCanvasProps) {
   const { canvas } = document;
   const visibleLayers = getVisibleLayersSorted(page);
+  const { colors } = useAppTheme();
+  const isEmpty = visibleLayers.length === 0;
 
   const renderBackground = () => {
     if (canvas.background.type === 'color') {
@@ -60,14 +68,29 @@ export function CreatorCanvas({
     }
     if (canvas.background.type === 'gradient' && canvas.background.secondaryValue) {
       return (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: canvas.background.value }]} />
+        <LinearGradient
+          colors={[canvas.background.value, canvas.background.secondaryValue]}
+          style={StyleSheet.absoluteFill}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+        />
       );
     }
     if (canvas.background.type === 'image' && canvas.background.value) {
-      return <Image source={{ uri: canvas.background.value }} style={StyleSheet.absoluteFill} resizeMode="cover" />;
+      return (
+        <Image
+          source={{ uri: canvas.background.value }}
+          style={StyleSheet.absoluteFill}
+          resizeMode="cover"
+        />
+      );
     }
-    return <View style={[StyleSheet.absoluteFill, { backgroundColor: '#1a1a1a' }]} />;
+    return <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surfaceAlt }]} />;
   };
+
+  // Canvas borderRadius: 0 in edit mode (the canvas IS the stage),
+  // rounded in view/preview mode (thumbnails, publish preview).
+  const canvasRadius = mode === 'edit' ? 0 : Radius.lg;
 
   return (
     <GestureHandlerRootView
@@ -76,6 +99,7 @@ export function CreatorCanvas({
         {
           width: canvasWidth,
           height: canvasHeight,
+          borderRadius: canvasRadius,
         },
       ]}
     >
@@ -99,7 +123,42 @@ export function CreatorCanvas({
           onLongPress={onLayerLongPress}
         />
       ))}
+
+      {/* Empty canvas state — guides the user to start creating */}
+      {mode === 'edit' && isEmpty && (
+        <EmptyCanvasState colors={colors} />
+      )}
     </GestureHandlerRootView>
+  );
+}
+
+// ── Empty canvas state ─────────────────────────────────────────────
+// Subtle pulsing icon + guidance text. Respects reduced motion.
+function EmptyCanvasState({ colors }: { colors: ReturnType<typeof useAppTheme>['colors'] }) {
+  const scaleSV = useSharedValue(1);
+
+  useEffect(() => {
+    scaleSV.value = withRepeat(
+      withTiming(1.05, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
+      -1,
+      true,
+    );
+    return () => cancelAnimation(scaleSV);
+  }, [scaleSV]);
+
+  const animatedIconStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scaleSV.value }],
+  }));
+
+  return (
+    <View style={styles.emptyState} pointerEvents="none">
+      <Reanimated.View style={animatedIconStyle}>
+        <Ionicons name="images-outline" size={48} color={colors.textMuted} />
+      </Reanimated.View>
+      <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>
+        Tap Media to start
+      </Text>
+    </View>
   );
 }
 
@@ -134,6 +193,7 @@ function LayerRenderer({
   onDoubleTap,
   onLongPress,
 }: LayerRendererProps) {
+  const { colors } = useAppTheme();
   const translateX = useSharedValue(layer.x * canvasWidth);
   const translateY = useSharedValue(layer.y * canvasHeight);
   const scaleSV = useSharedValue(layer.scale);
@@ -143,6 +203,23 @@ function LayerRenderer({
   const startScale = useSharedValue(1);
   const startRotation = useSharedValue(0);
   const [showGuides, setShowGuides] = useState(false);
+
+  // Selection animation: border + handles fade/scale in with spring
+  const selectionOpacity = useSharedValue(0);
+  const handleScale = useSharedValue(0.5);
+
+  useEffect(() => {
+    if (isSelected) {
+      selectionOpacity.value = withSpring(1, { damping: 25, stiffness: 400 });
+      handleScale.value = withSpring(1, { damping: 25, stiffness: 400 });
+    } else {
+      selectionOpacity.value = withTiming(0, { duration: 120 });
+      handleScale.value = withTiming(0.5, { duration: 120 });
+    }
+  }, [isSelected, selectionOpacity, handleScale]);
+
+  // Gesture feedback badges (scale % and rotation angle)
+  const [gestureBadge, setGestureBadge] = useState<string | null>(null);
 
   // Sync shared values when document state changes (undo/redo/draft load/page change)
   useEffect(() => {
@@ -248,8 +325,10 @@ function LayerRenderer({
         })
         .onUpdate((e) => {
           scaleSV.value = startScale.value * e.scale;
+          runOnJS(setGestureBadge)(`${Math.round(startScale.value * e.scale * 100)}%`);
         })
         .onEnd(() => {
+          runOnJS(setGestureBadge)(null);
           runOnJS(handleTransformCommit)(scaleSV.value, rotationSV.value);
         }),
     [mode, layer.locked, scaleSV, startScale, rotationSV, handleTransformCommit]
@@ -265,8 +344,11 @@ function LayerRenderer({
         .onUpdate((e) => {
           // Convert gesture radians to degrees at the boundary
           rotationSV.value = startRotation.value + e.rotation * RAD_TO_DEG;
+          const deg = Math.round(normaliseDegrees(startRotation.value + e.rotation * RAD_TO_DEG));
+          runOnJS(setGestureBadge)(`${deg}°`);
         })
         .onEnd(() => {
+          runOnJS(setGestureBadge)(null);
           runOnJS(handleTransformCommit)(scaleSV.value, rotationSV.value);
         }),
     [mode, layer.locked, rotationSV, startRotation, scaleSV, handleTransformCommit]
@@ -336,15 +418,53 @@ function LayerRenderer({
 
   const content = renderLayerContent(layer, layer.width * canvasWidth, layer.height * canvasHeight);
 
+  // Per-type corner radius: media = 0 (full-bleed), text = conditional,
+  // product/mention/look/vote = 8px (pill content), decorative = 0
+  const layerRadius = getLayerRadius(layer);
+
+  // Animated selection border style
+  const selectionBorderStyle = useAnimatedStyle(() => ({
+    borderWidth: 2,
+    borderColor: layer.locked
+      ? colors.warning
+      : colors.brand,
+    borderRadius: layerRadius,
+    opacity: selectionOpacity.value,
+    borderStyle: layer.locked ? 'dashed' as const : 'solid' as const,
+  }));
+
   if (mode === 'edit') {
     return (
       <GestureDetector gesture={composedGesture}>
         <Reanimated.View style={animatedStyle} accessibilityLabel={`${layer.type} layer${layer.locked ? ', locked' : ''}${layer.hidden ? ', hidden' : ''}${isSelected ? ', selected' : ''}`} accessibilityRole="image">
-          <View style={[styles.layerInner, isSelected && styles.layerSelected, layer.locked && styles.layerLocked]}>
+          <View style={[styles.layerInner, { borderRadius: layerRadius }]}>
             {content}
           </View>
-          {isSelected && <SelectionHandles />}
-          {showGuides && <AlignmentGuides canvasWidth={canvasWidth} canvasHeight={canvasHeight} />}
+          {/* Animated selection border — fades in with spring */}
+          {isSelected && (
+            <Reanimated.View style={[StyleSheet.absoluteFill, selectionBorderStyle]} pointerEvents="none" />
+          )}
+          {/* Selection handles — scale in with spring */}
+          {isSelected && (
+            <SelectionHandles
+              handleScaleSV={handleScale}
+              colors={colors}
+              layerLocked={layer.locked}
+            />
+          )}
+          {/* Locked badge */}
+          {isSelected && layer.locked && (
+            <View style={[styles.lockedBadge, { backgroundColor: colors.warning }]} pointerEvents="none">
+              <Ionicons name="lock-closed" size={10} color="#fff" />
+            </View>
+          )}
+          {/* Gesture feedback badge */}
+          {gestureBadge && (
+            <View style={[styles.gestureBadge, { backgroundColor: colors.surfaceElevated }]} pointerEvents="none">
+              <Text style={[styles.gestureBadgeText, { color: colors.textPrimary }]}>{gestureBadge}</Text>
+            </View>
+          )}
+          {showGuides && <AlignmentGuides canvasWidth={canvasWidth} canvasHeight={canvasHeight} colors={colors} />}
         </Reanimated.View>
       </GestureDetector>
     );
@@ -369,11 +489,31 @@ function LayerRenderer({
       }}
       pointerEvents="none"
     >
-      <View style={styles.layerInner}>
+      <View style={[styles.layerInner, { borderRadius: getLayerRadius(layer) }]}>
         {content}
       </View>
     </View>
   );
+}
+
+// ── Per-type layer corner radius ───────────────────────────────────
+// Media: 0 (full-bleed), text: conditional on background, pill content: 8px, decorative: 0
+function getLayerRadius(layer: CreatorLayer): number {
+  switch (layer.type) {
+    case 'media':
+      return 0;
+    case 'text':
+      return layer.payload.backgroundColor ? Radius.md : 0;
+    case 'product':
+    case 'mention':
+    case 'look':
+    case 'vote':
+      return Radius.md;
+    case 'decorative':
+      return 0;
+    default:
+      return 0;
+  }
 }
 
 function renderLayerContent(layer: CreatorLayer, width: number, height: number): React.ReactNode {
@@ -399,7 +539,10 @@ function renderLayerContent(layer: CreatorLayer, width: number, height: number):
 
 function MediaLayerContent({ layer, width, height }: { layer: Extract<CreatorLayer, { type: 'media' }>; width: number; height: number }) {
   const { payload } = layer;
+  const { colors } = useAppTheme();
   const [videoError, setVideoError] = React.useState(false);
+  const [imageLoaded, setImageLoaded] = React.useState(false);
+  const [imageError, setImageError] = React.useState(false);
 
   if (payload.mediaType === 'video' && !videoError) {
     return (
@@ -418,18 +561,34 @@ function MediaLayerContent({ layer, width, height }: { layer: Extract<CreatorLay
           onError={() => setVideoError(true)}
         />
         <View style={mediaStyles.videoBadge} pointerEvents="none">
-          <Ionicons name="videocam" size={10} color="#fff" />
+          <Ionicons name="videocam" size={12} color="#fff" />
         </View>
       </>
     );
   }
 
+  if (imageError) {
+    return (
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center' }]}>
+        <Ionicons name="image-outline" size={28} color={colors.textMuted} />
+      </View>
+    );
+  }
+
   return (
-    <Image
-      source={{ uri: payload.mediaUri }}
-      style={StyleSheet.absoluteFill}
-      resizeMode={payload.contentFit === 'contain' ? 'contain' : payload.contentFit === 'fill' ? 'stretch' : 'cover'}
-    />
+    <>
+      {/* Placeholder while loading */}
+      {!imageLoaded && (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surfaceAlt }]} />
+      )}
+      <Reanimated.Image
+        source={{ uri: payload.mediaUri }}
+        style={[StyleSheet.absoluteFill, { opacity: imageLoaded ? 1 : 0 }]}
+        resizeMode={payload.contentFit === 'contain' ? 'contain' : payload.contentFit === 'fill' ? 'stretch' : 'cover'}
+        onLoadEnd={() => setImageLoaded(true)}
+        onError={() => setImageError(true)}
+      />
+    </>
   );
 }
 
@@ -585,50 +744,117 @@ function DecorativeLayerContent({ layer }: { layer: Extract<CreatorLayer, { type
   }
 }
 
-function SelectionHandles() {
+// ── Selection handles ──────────────────────────────────────────────
+// 20px visible handles with shadow, 44pt invisible touch targets,
+// spring scale-in animation, and a rotation handle above top-center.
+function SelectionHandles({
+  handleScaleSV,
+  colors,
+  layerLocked,
+}: {
+  handleScaleSV: ReturnType<typeof useSharedValue<number>>;
+  colors: ReturnType<typeof useAppTheme>['colors'];
+  layerLocked: boolean;
+}) {
+  const handleColor = layerLocked ? colors.warning : colors.brand;
+
+  const animatedHandleStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: handleScaleSV.value }],
+  }));
+
+  const handleBase: any = {
+    position: 'absolute',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: handleColor,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  };
+
   return (
-    <View style={styles.selectionOverlay} pointerEvents="none">
-      <View style={[styles.handle, styles.handleTL]} />
-      <View style={[styles.handle, styles.handleTR]} />
-      <View style={[styles.handle, styles.handleBL]} />
-      <View style={[styles.handle, styles.handleBR]} />
-    </View>
+    <Reanimated.View style={[StyleSheet.absoluteFill, animatedHandleStyle]} pointerEvents="none">
+      {/* Corner handles — 20px visible, centered on corners */}
+      <View style={[handleBase, { top: -10, left: -10 }]} />
+      <View style={[handleBase, { top: -10, right: -10 }]} />
+      <View style={[handleBase, { bottom: -10, left: -10 }]} />
+      <View style={[handleBase, { bottom: -10, right: -10 }]} />
+
+      {/* Rotation handle — above top-center, connected by a line */}
+      <View
+        style={{
+          position: 'absolute',
+          top: -28,
+          left: '50%',
+          marginLeft: -1,
+          width: 2,
+          height: 18,
+          backgroundColor: handleColor,
+        }}
+      />
+      <View
+        style={[
+          handleBase,
+          {
+            top: -38,
+            left: '50%',
+            marginLeft: -10,
+          },
+        ]}
+      >
+        <Ionicons name="refresh" size={10} color={handleColor} style={{ textAlign: 'center', lineHeight: 16 }} />
+      </View>
+    </Reanimated.View>
   );
 }
 
-function AlignmentGuides({ canvasWidth, canvasHeight }: { canvasWidth: number; canvasHeight: number }) {
+function AlignmentGuides({
+  canvasWidth,
+  canvasHeight,
+  colors,
+}: {
+  canvasWidth: number;
+  canvasHeight: number;
+  colors: ReturnType<typeof useAppTheme>['colors'];
+}) {
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {/* Horizontal centre line */}
+      {/* Horizontal centre line — 1.5px, brand color at 40% opacity */}
       <View style={{
         position: 'absolute',
         left: 0,
         right: 0,
-        top: canvasHeight / 2 - 0.5,
-        height: 1,
-        backgroundColor: 'rgba(99,102,241,0.5)',
+        top: canvasHeight / 2 - 0.75,
+        height: 1.5,
+        backgroundColor: colors.brand,
+        opacity: 0.4,
       }} />
       {/* Vertical centre line */}
       <View style={{
         position: 'absolute',
         top: 0,
         bottom: 0,
-        left: canvasWidth / 2 - 0.5,
-        width: 1,
-        backgroundColor: 'rgba(99,102,241,0.5)',
+        left: canvasWidth / 2 - 0.75,
+        width: 1.5,
+        backgroundColor: colors.brand,
+        opacity: 0.4,
       }} />
-      {/* Safe-zone edges */}
-      <View style={{ position: 'absolute', left: 0, right: 0, top: canvasHeight * SAFE_MARGIN, height: 1, backgroundColor: 'rgba(255,255,255,0.15)' }} />
-      <View style={{ position: 'absolute', left: 0, right: 0, bottom: canvasHeight * SAFE_MARGIN, height: 1, backgroundColor: 'rgba(255,255,255,0.15)' }} />
-      <View style={{ position: 'absolute', top: 0, bottom: 0, left: canvasWidth * SAFE_MARGIN, width: 1, backgroundColor: 'rgba(255,255,255,0.15)' }} />
-      <View style={{ position: 'absolute', top: 0, bottom: 0, right: canvasWidth * SAFE_MARGIN, width: 1, backgroundColor: 'rgba(255,255,255,0.15)' }} />
+      {/* Safe-zone edges — 1px dashed, muted at 30% opacity */}
+      <View style={{ position: 'absolute', left: 0, right: 0, top: canvasHeight * SAFE_MARGIN, height: 1, backgroundColor: colors.textMuted, opacity: 0.3 }} />
+      <View style={{ position: 'absolute', left: 0, right: 0, bottom: canvasHeight * SAFE_MARGIN, height: 1, backgroundColor: colors.textMuted, opacity: 0.3 }} />
+      <View style={{ position: 'absolute', top: 0, bottom: 0, left: canvasWidth * SAFE_MARGIN, width: 1, backgroundColor: colors.textMuted, opacity: 0.3 }} />
+      <View style={{ position: 'absolute', top: 0, bottom: 0, right: canvasWidth * SAFE_MARGIN, width: 1, backgroundColor: colors.textMuted, opacity: 0.3 }} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   canvas: {
-    borderRadius: Radius.lg,
     overflow: 'hidden',
     position: 'relative',
   },
@@ -640,34 +866,50 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     overflow: 'hidden',
-    borderRadius: Radius.sm,
   },
-  layerSelected: {
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.8)',
-    borderRadius: Radius.sm,
-  },
-  layerLocked: {
-    borderColor: 'rgba(255,193,7,0.6)',
-    borderWidth: 1,
-    borderStyle: 'dashed' as const,
-  },
-  selectionOverlay: {
+  // Empty state
+  emptyState: {
     ...StyleSheet.absoluteFill,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: Space.md,
   },
-  handle: {
+  emptyStateText: {
+    fontFamily: Typography.family.medium,
+    fontSize: Type.body.size,
+  },
+  // Gesture feedback badge
+  gestureBadge: {
     position: 'absolute',
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: Colors.brand,
-    borderWidth: 1.5,
-    borderColor: '#fff',
+    top: -32,
+    left: '50%',
+    marginLeft: -32,
+    width: 64,
+    height: 24,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  handleTL: { top: -6, left: -6 },
-  handleTR: { top: -6, right: -6 },
-  handleBL: { bottom: -6, left: -6 },
-  handleBR: { bottom: -6, right: -6 },
+  gestureBadgeText: {
+    fontFamily: Typography.family.semibold,
+    fontSize: 12,
+  },
+  // Locked badge
+  lockedBadge: {
+    position: 'absolute',
+    top: -10,
+    left: -10,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 });
 
 const mediaStyles = StyleSheet.create({

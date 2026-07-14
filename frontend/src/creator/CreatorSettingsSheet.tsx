@@ -10,8 +10,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
-import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { useCreator } from './CreatorContext';
+import { SheetContainer, PressScale } from './CreatorAnimations';
+import { Colors } from '../constants/colors';
 
 export interface CreatorSettingsSheetProps {
   visible: boolean;
@@ -20,11 +22,10 @@ export interface CreatorSettingsSheetProps {
 
 export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetProps) {
   const { document, updateMetadata, updateCanvas, saveDraft, isDirty, autosaveStatus, retryAutosave } = useCreator();
+  const { colors } = useAppTheme();
   const [title, setTitle] = useState(document.metadata.title || '');
   const [caption, setCaption] = useState(document.metadata.caption || '');
   const [accessibilityDesc, setAccessibilityDesc] = useState(document.metadata.accessibilityDescription || '');
-
-  if (!visible) return null;
 
   const isLook = document.type === 'look';
 
@@ -41,15 +42,12 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
   }, [accessibilityDesc, updateMetadata]);
 
   return (
-    <View style={styles.overlay}>
-      <Pressable style={styles.backdrop} onPress={onClose} />
-      <View style={styles.sheet}>
-        <View style={styles.handle} />
+    <SheetContainer visible={visible} onClose={onClose} maxHeight={0.8}>
         <View style={styles.header}>
-          <Text style={styles.title}>Settings</Text>
-          <Pressable onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close settings" accessibilityRole="button">
-            <Ionicons name="close" size={20} color={Colors.textSecondary} />
-          </Pressable>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>Settings</Text>
+          <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close settings">
+            <Ionicons name="close" size={22} color={colors.textSecondary} />
+          </PressScale>
         </View>
 
         <ScrollView style={styles.scrollBody} contentContainerStyle={styles.scrollContent}>
@@ -237,8 +235,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
             </Pressable>
           </View>
         </ScrollView>
-      </View>
-    </View>
+    </SheetContainer>
   );
 }
 
@@ -257,33 +254,6 @@ function RatioButton({ label, ratio, current, onSelect }: { label: string; ratio
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    ...StyleSheet.absoluteFill,
-    zIndex: 1000,
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  sheet: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    maxHeight: '80%',
-    backgroundColor: Colors.surface,
-    borderTopLeftRadius: Radius.lg,
-    borderTopRightRadius: Radius.lg,
-    overflow: 'hidden',
-  },
-  handle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.border,
-    alignSelf: 'center',
-    marginTop: Space.sm,
-  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -293,8 +263,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.title.size,
-    color: Colors.textPrimary,
+    fontSize: Type.subtitle.size,
   },
   closeBtn: {
     width: 36,

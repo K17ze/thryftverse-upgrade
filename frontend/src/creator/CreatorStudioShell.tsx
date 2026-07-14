@@ -25,6 +25,7 @@ import { CreatorSettingsSheet } from './CreatorSettingsSheet';
 import { CreatorAssetPicker, type AssetPickerMode } from './CreatorAssetPicker';
 import { CreatorTemplateBrowser } from './CreatorTemplateBrowser';
 import { CreatorPreviewOverlay } from './CreatorPreviewOverlay';
+import { PressScale } from './CreatorAnimations';
 import type { CreatorTemplate } from './templates';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -168,15 +169,13 @@ function CreatorStudioInner() {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* ── Simplified top bar: Back · Status · Next ─────────────────── */}
       <View style={[styles.topBar, { borderBottomColor: colors.border }]}>
-        <Pressable
+        <PressScale
           onPress={handleBack}
           style={styles.topBtn}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           accessibilityLabel="Back"
-          accessibilityRole="button"
         >
-          <Ionicons name="chevron-back" size={26} color={colors.textPrimary} />
-        </Pressable>
+          <Ionicons name="chevron-back" size={28} color={colors.textPrimary} />
+        </PressScale>
 
         {/* Compact centre: type label + dirty indicator / status */}
         <View style={styles.topCenter}>
@@ -194,26 +193,21 @@ function CreatorStudioInner() {
 
         {/* Right: Preview + Next */}
         <View style={styles.topRight}>
-          <Pressable
+          <PressScale
             onPress={() => setShowPreview(true)}
             style={styles.topBtn}
-            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
             accessibilityLabel="Preview"
-            accessibilityRole="button"
           >
-            <Ionicons name="eye-outline" size={22} color={colors.textPrimary} />
-          </Pressable>
-          <Pressable
+            <Ionicons name="eye-outline" size={24} color={colors.textPrimary} />
+          </PressScale>
+          <PressScale
             onPress={() => setShowPublish(true)}
-            style={({ pressed }) => [
-              styles.nextBtn,
-              { backgroundColor: pressed ? colors.brandPressed : colors.brand },
-            ]}
+            style={[styles.nextBtn, { backgroundColor: colors.brand }]}
             accessibilityLabel="Next"
-            accessibilityRole="button"
+            scale={0.97}
           >
             <Text style={[styles.nextBtnText, { color: colors.textInverse }]}>Next</Text>
-          </Pressable>
+          </PressScale>
         </View>
       </View>
 
@@ -226,10 +220,10 @@ function CreatorStudioInner() {
           contentContainerStyle={styles.pageStripContent}
         >
           {document.pages.map((p, i) => {
-            const thumbW = 32;
+            const thumbW = 44;
             const thumbH = Math.floor(thumbW / document.canvas.aspectRatio);
             return (
-              <Pressable
+              <PressScale
                 key={p.id}
                 onPress={() => {
                   selectLayer(null);
@@ -251,10 +245,11 @@ function CreatorStudioInner() {
                 style={[
                   styles.pageThumb,
                   { height: thumbH, backgroundColor: colors.surfaceAlt },
-                  i === activePageIndex && { borderColor: colors.brand },
+                  i === activePageIndex
+                    ? { borderColor: colors.brand, borderWidth: 2 }
+                    : { borderColor: colors.borderSubtle, borderWidth: 1 },
                 ]}
                 accessibilityLabel={`Page ${i + 1}`}
-                accessibilityRole="button"
               >
                 <CreatorCanvas
                   document={document}
@@ -263,21 +258,20 @@ function CreatorStudioInner() {
                   canvasHeight={thumbH}
                   mode="view"
                 />
-              </Pressable>
+              </PressScale>
             );
           })}
           {document.pages.length < 10 && (
-            <Pressable
+            <PressScale
               onPress={() => {
                 selectLayer(null);
                 addPage();
               }}
               style={[styles.addPageBtn, { borderColor: colors.borderSubtle, backgroundColor: colors.surfaceAlt }]}
               accessibilityLabel="Add page"
-              accessibilityRole="button"
             >
-              <Ionicons name="add" size={16} color={colors.textMuted} />
-            </Pressable>
+              <Ionicons name="add" size={20} color={colors.textMuted} />
+            </PressScale>
           )}
         </ScrollView>
       )}
@@ -442,19 +436,15 @@ interface OverflowItemProps {
 
 function OverflowItem({ icon, label, colors, onPress, disabled }: OverflowItemProps) {
   return (
-    <Pressable
+    <PressScale
       onPress={onPress}
       disabled={disabled}
-      style={({ pressed }) => [
-        styles.overflowItem,
-        pressed && { backgroundColor: colors.surfaceAlt },
-      ]}
+      style={[styles.overflowItem, disabled ? { opacity: 0.4 } : {}]}
       accessibilityLabel={label}
-      accessibilityRole="button"
     >
       <Ionicons
         name={icon as any}
-        size={20}
+        size={22}
         color={disabled ? colors.textMuted : colors.textPrimary}
       />
       <Text
@@ -465,7 +455,7 @@ function OverflowItem({ icon, label, colors, onPress, disabled }: OverflowItemPr
       >
         {label}
       </Text>
-    </Pressable>
+    </PressScale>
   );
 }
 
@@ -493,7 +483,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.sm,
-    height: 52,
+    height: 56,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   topBtn: {
@@ -512,21 +502,21 @@ const styles = StyleSheet.create({
   },
   titleText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
+    fontSize: Type.bodyEmphasis.size,
   },
   statusText: {
-    fontSize: 11,
+    fontSize: 12,
     fontFamily: Typography.family.medium,
   },
   dirtyDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     marginTop: 2,
   },
   nextBtn: {
-    paddingHorizontal: Space.md + 4,
-    height: 36,
+    paddingHorizontal: 20,
+    height: 40,
     borderRadius: Radius.sm,
     justifyContent: 'center',
     alignItems: 'center',
@@ -538,29 +528,27 @@ const styles = StyleSheet.create({
   },
   nextBtnText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
+    fontSize: Type.bodyEmphasis.size,
   },
   // ── Page strip ──
   pageStrip: {
-    maxHeight: 64,
+    maxHeight: 80,
   },
   pageStripContent: {
     paddingHorizontal: Space.md,
     gap: Space.sm,
     alignItems: 'center',
-    paddingVertical: Space.xs,
+    paddingVertical: Space.sm,
   },
   pageThumb: {
-    width: 32,
+    width: 44,
     borderRadius: Radius.sm,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'transparent',
     overflow: 'hidden',
   },
   addPageBtn: {
-    width: 32,
+    width: 44,
     height: 44,
     borderRadius: Radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
@@ -573,7 +561,8 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: Space.md,
+    paddingHorizontal: 12,
+    paddingVertical: Space.sm,
   },
   // ── Overflow menu ──
   overflowBackdrop: {
@@ -581,18 +570,18 @@ const styles = StyleSheet.create({
   },
   overflowMenu: {
     position: 'absolute',
-    bottom: 56,
+    bottom: 72,
     right: Space.sm,
-    minWidth: 180,
-    borderRadius: Radius.md,
+    minWidth: 220,
+    borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     paddingVertical: Space.xs,
-    // Shadow
+    // Shadow — deeper elevation for floating menu
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 12,
   },
   overflowItem: {
     flexDirection: 'row',
@@ -600,11 +589,11 @@ const styles = StyleSheet.create({
     gap: Space.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
-    minHeight: 44,
+    minHeight: 48,
   },
   overflowItemText: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
+    fontSize: Type.bodyEmphasis.size,
   },
   overflowDivider: {
     height: StyleSheet.hairlineWidth,

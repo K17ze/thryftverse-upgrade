@@ -23,6 +23,7 @@ import { searchUsers, type UserSearchResult } from '../services/profileApi';
 import { useStore } from '../store/useStore';
 import { fetchLooksFromApi } from '../services/looksApi';
 import { createStableId } from '../utils/createStableId';
+import { SheetContainer, PressScale } from './CreatorAnimations';
 import type { CreatorLayer } from './composition';
 
 export type AssetPickerMode = 'media' | 'product' | 'mention' | 'look' | 'text' | 'shape' | 'vote';
@@ -67,19 +68,17 @@ function AssetPickerContent({ mode, onClose, onAddLayer, editingLayer }: { mode:
 function PickerShell({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   const { colors } = useAppTheme();
   return (
-    <KeyboardAwareScrollView style={styles.overlay} contentContainerStyle={{ flex: 1 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
-      <Pressable style={styles.backdrop} onPress={onClose} />
-      <View style={[styles.sheet, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-        <View style={[styles.handle, { backgroundColor: colors.border }]} />
+    <SheetContainer visible={true} onClose={onClose} maxHeight={0.85}>
+      <KeyboardAwareScrollView contentContainerStyle={{ flex: 1 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" style={{ maxHeight: '100%' }}>
         <View style={styles.header}>
           <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
-          <Pressable onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close picker" accessibilityRole="button">
-            <Ionicons name="close" size={20} color={colors.textSecondary} />
-          </Pressable>
+          <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close picker">
+            <Ionicons name="close" size={22} color={colors.textSecondary} />
+          </PressScale>
         </View>
         {children}
-      </View>
-    </KeyboardAwareScrollView>
+      </KeyboardAwareScrollView>
+    </SheetContainer>
   );
 }
 
@@ -978,16 +977,9 @@ function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
 // ── Styles ─────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  overlay: { ...StyleSheet.absoluteFill, zIndex: 1000 },
-  backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.5)' },
-  sheet: {
-    position: 'absolute', bottom: 0, left: 0, right: 0, maxHeight: '75%',
-    backgroundColor: Colors.surface, borderTopLeftRadius: Radius.lg, borderTopRightRadius: Radius.lg, overflow: 'hidden',
-  },
-  handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: Colors.border, alignSelf: 'center', marginTop: Space.sm },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Space.md, paddingVertical: Space.sm },
-  title: { fontFamily: Typography.family.semibold, fontSize: Type.title.size, color: Colors.textPrimary },
-  closeBtn: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center', borderRadius: Radius.sm },
+  title: { fontFamily: Typography.family.semibold, fontSize: Type.subtitle.size, color: Colors.textPrimary },
+  closeBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center', borderRadius: Radius.sm },
   mediaOptions: { flexDirection: 'row', justifyContent: 'center', gap: Space.lg, paddingVertical: Space.xl },
   mediaOption: { alignItems: 'center', gap: 8, minWidth: 80 },
   mediaOptionLabel: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: Colors.textPrimary },

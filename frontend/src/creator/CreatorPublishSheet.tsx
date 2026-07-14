@@ -15,6 +15,7 @@ import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useCreator } from './CreatorContext';
 import { CreatorCanvas } from './CreatorCanvas';
+import { SheetContainer, PressScale } from './CreatorAnimations';
 import { createLookOnApi } from '../services/looksApi';
 import { createPosterStory } from '../services/postersApi';
 import { CreatorAnalytics } from './creatorAnalytics';
@@ -119,18 +120,15 @@ export function CreatorPublishSheet({ visible, onClose }: CreatorPublishSheetPro
     }
   }, [document]);
 
-  if (!visible) return null;
+  if (!visible && stage === 'review') return null;
 
   return (
-    <View style={styles.overlay}>
-      <Pressable style={styles.backdrop} onPress={handleClose} />
-      <View style={styles.sheet}>
-        <View style={styles.handle} />
+    <SheetContainer visible={visible} onClose={handleClose} maxHeight={0.85}>
         <View style={styles.header}>
           <Text style={styles.title}>Publish</Text>
-          <Pressable onPress={handleClose} style={styles.closeBtn} disabled={stage === 'publishing'} accessibilityLabel="Close publish" accessibilityRole="button">
-            <Ionicons name="close" size={20} color={colors.textSecondary} />
-          </Pressable>
+          <PressScale onPress={handleClose} style={styles.closeBtn} accessibilityLabel="Close publish">
+            <Ionicons name="close" size={22} color={colors.textSecondary} />
+          </PressScale>
         </View>
 
         {stage === 'review' && (
@@ -185,8 +183,7 @@ export function CreatorPublishSheet({ visible, onClose }: CreatorPublishSheetPro
             </Pressable>
           </View>
         )}
-      </View>
-    </View>
+    </SheetContainer>
   );
 }
 
@@ -297,33 +294,6 @@ type ThemeColors = ReturnType<typeof useAppTheme>['colors'];
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    overlay: {
-      ...StyleSheet.absoluteFill,
-      zIndex: 1000,
-    },
-    backdrop: {
-      ...StyleSheet.absoluteFill,
-      backgroundColor: 'rgba(0,0,0,0.5)',
-    },
-    sheet: {
-      position: 'absolute',
-      bottom: 0,
-      left: 0,
-      right: 0,
-      maxHeight: '85%',
-      backgroundColor: colors.surface,
-      borderTopLeftRadius: Radius.lg,
-      borderTopRightRadius: Radius.lg,
-      overflow: 'hidden',
-    },
-    handle: {
-      width: 36,
-      height: 4,
-      borderRadius: 2,
-      backgroundColor: colors.border,
-      alignSelf: 'center',
-      marginTop: Space.sm,
-    },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -333,12 +303,12 @@ function createStyles(colors: ThemeColors) {
     },
     title: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.title.size,
+      fontSize: Type.subtitle.size,
       color: colors.textPrimary,
     },
     closeBtn: {
-      width: 36,
-      height: 36,
+      width: 44,
+      height: 44,
       justifyContent: 'center',
       alignItems: 'center',
       borderRadius: Radius.sm,

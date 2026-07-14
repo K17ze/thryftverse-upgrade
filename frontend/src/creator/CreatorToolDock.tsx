@@ -1,9 +1,10 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useCreator } from './CreatorContext';
+import { PressScale } from './CreatorAnimations';
 import type { CreatorLayer } from './composition';
 import type { AssetPickerMode } from './CreatorAssetPicker';
 
@@ -57,19 +58,15 @@ export function CreatorToolDock({
         contentContainerStyle={styles.scrollContent}
       >
         {tools.map((tool) => (
-          <Pressable
+          <PressScale
             key={tool.label}
             onPress={tool.action}
-            style={({ pressed }) => [
-              styles.toolBtn,
-              { backgroundColor: pressed ? colors.surfaceAlt : 'transparent' },
-            ]}
+            style={styles.toolBtn}
             accessibilityLabel={tool.label}
-            accessibilityRole="button"
           >
             <Ionicons
               name={tool.icon as any}
-              size={22}
+              size={24}
               color={tool.danger ? colors.danger : colors.textSecondary}
             />
             <Text
@@ -78,31 +75,27 @@ export function CreatorToolDock({
             >
               {tool.label}
             </Text>
-          </Pressable>
+          </PressScale>
         ))}
       </ScrollView>
 
       {/* Primary action — separated from editing tools */}
       <View style={[styles.actions, { borderLeftColor: colors.border }]}>
-        <Pressable
+        <PressScale
           onPress={onMore}
-          style={({ pressed }) => [styles.actionBtn, { backgroundColor: pressed ? colors.surfaceAlt : 'transparent' }]}
+          style={styles.actionBtn}
           accessibilityLabel="More options"
-          accessibilityRole="button"
         >
-          <Ionicons name="ellipsis-horizontal" size={22} color={colors.textSecondary} />
-        </Pressable>
-        <Pressable
+          <Ionicons name="ellipsis-horizontal" size={24} color={colors.textSecondary} />
+        </PressScale>
+        <PressScale
           onPress={onPublish}
-          style={({ pressed }) => [
-            styles.publishBtn,
-            { backgroundColor: pressed ? colors.brandPressed : colors.brand },
-          ]}
+          style={[styles.publishBtn, { backgroundColor: colors.brand }]}
           accessibilityLabel="Next"
-          accessibilityRole="button"
+          scale={0.97}
         >
           <Text style={[styles.publishBtnText, { color: colors.textInverse }]}>Next</Text>
-        </Pressable>
+        </PressScale>
       </View>
     </View>
   );
@@ -171,20 +164,20 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   scrollContent: {
-    gap: Space.xs,
+    gap: Space.sm,
     alignItems: 'center',
   },
   toolBtn: {
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 60,
-    minHeight: 48,
+    minWidth: 64,
+    minHeight: 52,
     paddingHorizontal: Space.sm,
     borderRadius: Radius.sm,
-    gap: 3,
+    gap: 4,
   },
   toolLabel: {
-    fontSize: 11,
+    fontSize: 12,
     fontFamily: Typography.family.medium,
   },
   actions: {
@@ -203,14 +196,14 @@ const styles = StyleSheet.create({
     borderRadius: Radius.sm,
   },
   publishBtn: {
-    paddingHorizontal: Space.md + 4,
-    height: 44,
+    paddingHorizontal: 20,
+    height: 40,
     borderRadius: Radius.sm,
     justifyContent: 'center',
     alignItems: 'center',
   },
   publishBtnText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
+    fontSize: Type.bodyEmphasis.size,
   },
 });
