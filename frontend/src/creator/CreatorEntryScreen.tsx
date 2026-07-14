@@ -229,7 +229,7 @@ export function CreatorEntryScreen({
     return (
       <View style={styles.container}>
         <EntryTopBar
-          title={`Create ${documentType === 'look' ? 'Look' : 'Poster'}`}
+          title={documentType === 'poster' ? 'New Story' : 'New Collage'}
           onClose={onClose}
           insets={insets}
         />
@@ -237,7 +237,7 @@ export function CreatorEntryScreen({
           <Ionicons name="images-outline" size={56} color="rgba(255,255,255,0.4)" />
           <Text style={styles.permissionTitle}>Photo access needed</Text>
           <Text style={styles.permissionText}>
-            Allow access to your photos to select media for your {documentType}.
+            Allow access to your photos to select media for your {documentType === 'poster' ? 'story' : 'collage'}.
           </Text>
           <Pressable
             style={styles.permissionBtn}
@@ -261,7 +261,7 @@ export function CreatorEntryScreen({
     return (
       <View style={styles.container}>
         <EntryTopBar
-          title={`Create ${documentType === 'look' ? 'Look' : 'Poster'}`}
+          title={documentType === 'poster' ? 'New Story' : 'New Collage'}
           onClose={onClose}
           insets={insets}
         />
@@ -269,7 +269,7 @@ export function CreatorEntryScreen({
           <Ionicons name="images-outline" size={56} color="rgba(255,255,255,0.4)" />
           <Text style={styles.permissionTitle}>Access your photos</Text>
           <Text style={styles.permissionText}>
-            Select photos and videos from your library to create your {documentType}.
+            Select photos and videos from your library to create your {documentType === 'poster' ? 'story' : 'collage'}.
           </Text>
           <Pressable
             style={styles.permissionBtn}
@@ -289,37 +289,68 @@ export function CreatorEntryScreen({
   }
 
   // ── Main grid view ──
+  const isPoster = documentType === 'poster';
+  const isLook = documentType === 'look';
+
   return (
     <View style={styles.container}>
-      {/* Top bar */}
+      {/* Top bar — different title per mode */}
       <EntryTopBar
-        title={`Create ${documentType === 'look' ? 'Look' : 'Poster'}`}
+        title={isPoster ? 'New Story' : 'New Collage'}
         onClose={onClose}
         insets={insets}
       />
 
-      {/* Camera section — large button at top */}
-      <View style={[styles.cameraSection, { marginTop: insets.top + 50 }]}>
-        <Pressable
-          style={styles.cameraBigBtn}
-          onPress={handleTakePhoto}
-          accessibilityLabel="Take photo with camera"
-        >
-          <LinearGradient
-            colors={['rgba(255,255,255,0.12)', 'rgba(255,255,255,0.04)']}
-            style={styles.cameraBigGradient}
+      {/* Mode-specific hero section */}
+      {isPoster ? (
+        // Poster: video-first, 9:16 preview, story identity
+        <View style={[styles.cameraSection, { marginTop: insets.top + 48 }]}>
+          <Pressable
+            style={styles.cameraBigBtn}
+            onPress={handleTakePhoto}
+            accessibilityLabel="Take photo or video with camera"
           >
-            <Ionicons name="camera" size={36} color="#fff" />
-            <Text style={styles.cameraBigText}>Camera</Text>
-          </LinearGradient>
-        </Pressable>
-      </View>
+            <LinearGradient
+              colors={['rgba(255,255,255,0.12)', 'rgba(255,255,255,0.04)']}
+              style={styles.cameraBigGradient}
+            >
+              <Ionicons name="videocam" size={36} color="#fff" />
+              <View>
+                <Text style={styles.cameraBigText}>Camera</Text>
+                <Text style={styles.cameraBigSubtext}>Tap to capture for your story</Text>
+              </View>
+            </LinearGradient>
+          </Pressable>
+        </View>
+      ) : (
+        // Look: collage-first, 4:5 preview, editorial identity
+        <View style={[styles.cameraSection, { marginTop: insets.top + 48 }]}>
+          <Pressable
+            style={styles.cameraBigBtn}
+            onPress={handleTakePhoto}
+            accessibilityLabel="Take photo with camera"
+          >
+            <LinearGradient
+              colors={['rgba(255,255,255,0.12)', 'rgba(255,255,255,0.04)']}
+              style={styles.cameraBigGradient}
+            >
+              <Ionicons name="images" size={36} color="#fff" />
+              <View>
+                <Text style={styles.cameraBigText}>Camera</Text>
+                <Text style={styles.cameraBigSubtext}>Capture items for your collage</Text>
+              </View>
+            </LinearGradient>
+          </Pressable>
+        </View>
+      )}
 
-      {/* Section label */}
+      {/* Section label — different per mode */}
       <View style={styles.sectionLabelRow}>
-        <Text style={styles.sectionLabelText}>RECENT</Text>
+        <Text style={styles.sectionLabelText}>{isPoster ? 'YOUR ROLL' : 'GALLERY'}</Text>
         {selectedCount > 0 && (
-          <Text style={styles.sectionLabelCount}>{selectedCount} selected</Text>
+          <Text style={styles.sectionLabelCount}>
+            {selectedCount} {isPoster ? 'pages' : 'photos'}
+          </Text>
         )}
       </View>
 
@@ -363,7 +394,7 @@ export function CreatorEntryScreen({
         />
       )}
 
-      {/* Bottom bar with Next / blank canvas */}
+      {/* Bottom bar — different CTA text per mode */}
       <LinearGradient
         colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.7)']}
         style={[styles.bottomBar, { paddingBottom: insets.bottom + 8 }]}
@@ -372,9 +403,9 @@ export function CreatorEntryScreen({
           <Pressable
             style={styles.nextBtn}
             onPress={handleNext}
-            accessibilityLabel="Next — enter editor with selected media"
+            accessibilityLabel={isPoster ? 'Next — create story with selected media' : 'Next — create collage with selected media'}
           >
-            <Text style={styles.nextBtnText}>Next</Text>
+            <Text style={styles.nextBtnText}>{isPoster ? 'Create Story' : 'Create Collage'}</Text>
             <Ionicons name="arrow-forward" size={20} color="#000" />
           </Pressable>
         ) : (
@@ -530,6 +561,11 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 17,
     fontWeight: '600',
+  },
+  cameraBigSubtext: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 13,
+    marginTop: 2,
   },
   // Section label
   sectionLabelRow: {

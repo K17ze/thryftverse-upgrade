@@ -332,7 +332,7 @@ function CreatorStudioInner() {
                   <Ionicons name="close" size={28} color="#fff" />
                 </PressScale>
 
-                {/* Centre: type label + status */}
+                {/* Centre: mode-specific title + status */}
                 <View style={styles.topCenter}>
                   {draftStatusLabel ? (
                     <Text style={styles.statusText} numberOfLines={1}>
@@ -340,7 +340,7 @@ function CreatorStudioInner() {
                     </Text>
                   ) : (
                     <Text style={styles.titleText} numberOfLines={1}>
-                      {isLook ? 'Look' : 'Poster'}
+                      {isLook ? 'Collage' : 'Story'}
                       {isDirty ? ' ·' : ''}
                     </Text>
                   )}
@@ -405,12 +405,15 @@ function CreatorStudioInner() {
               else if (layer.type === 'media') setPickerMode('media');
               else if (layer.type === 'product') setPickerMode('product');
               else if (layer.type === 'mention') setPickerMode('mention');
+              else if (layer.type === 'vote') setPickerMode('vote');
             }}
             onDeleteLayer={(id) => removeLayer(id)}
             onDuplicateLayer={(id) => duplicateLayer(id)}
             onReorderLayer={(id, dir) => reorderLayer(id, dir)}
             onMore={() => setShowOverflow(true)}
             floating={true}
+            onAddPage={isPoster ? () => addPage() : undefined}
+            onLayoutPresets={isLook ? () => setShowTemplates(true) : undefined}
           />
         </LinearGradient>
       </View>
