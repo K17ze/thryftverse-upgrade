@@ -12,18 +12,18 @@ function fileExists(rel: string): boolean {
   return existsSync(resolve(ROOT, rel));
 }
 
-describe('VQ-09D: Bottom Navigation — five-destination model', () => {
+describe('VQ-09D: Bottom Navigation — four-destination model', () => {
   const typesSrc = readSrc('navigation/types.ts');
   const tabNavSrc = readSrc('navigation/TabNavigator.tsx');
   const appNavSrc = readSrc('navigation/AppNavigator.tsx');
 
-  it('TabParamList has exactly 5 destinations: Home, Explore, Create, Inbox, Profile', () => {
+  it('TabParamList has exactly 4 destinations: Home, Explore, Inbox, Profile', () => {
     const tabParamListMatch = typesSrc.match(/export type TabParamList = \{([^}]*)\}/s);
     expect(tabParamListMatch).toBeTruthy();
     const tabParams = tabParamListMatch![1];
     expect(tabParams).toContain('Home: undefined;');
     expect(tabParams).toContain('Explore: undefined;');
-    expect(tabParams).toContain('Create: undefined;');
+    expect(tabParams).not.toContain('Create:');
     expect(tabParams).toContain('Inbox: undefined;');
     expect(tabParams).toContain('Profile: undefined;');
     expect(tabParams).not.toContain('TradeHub');
@@ -34,7 +34,7 @@ describe('VQ-09D: Bottom Navigation — five-destination model', () => {
   it('TabNavigator renders 5 Tab.Screen entries with correct names', () => {
     expect(tabNavSrc).toContain('name="Home"');
     expect(tabNavSrc).toContain('name="Explore"');
-    expect(tabNavSrc).toContain('name="Create"');
+    expect(tabNavSrc).not.toContain('name="Create"');
     expect(tabNavSrc).toContain('name="Inbox"');
     expect(tabNavSrc).toContain('name="Profile"');
     expect(tabNavSrc).not.toContain('name="TradeHub"');
@@ -59,67 +59,32 @@ describe('VQ-09D: Bottom Navigation — five-destination model', () => {
 
 describe('VQ-09D: Central Create control', () => {
   const tabNavSrc = readSrc('navigation/TabNavigator.tsx');
+  const homeSrc = readSrc('screens/HomeScreen.tsx');
   const appNavSrc = readSrc('navigation/AppNavigator.tsx');
   const typesSrc = readSrc('navigation/types.ts');
-  const createCameraSrc = readSrc('screens/CreateCameraScreen.tsx');
 
-  it('Create tab uses a custom tabBarButton (not default icon)', () => {
-    expect(tabNavSrc).toContain('tabBarButton:');
+  it('Create tab is removed from bottom navigation', () => {
+    expect(tabNavSrc).not.toContain('name="Create"');
+    expect(tabNavSrc).not.toContain('handleCreatePress');
+    const typesMatch = typesSrc.match(/export type TabParamList = {[\s\S]*?};/);
+    expect(typesMatch).toBeTruthy();
+    expect(typesMatch![0]).not.toContain('Create:');
   });
 
-  it('Create tab navigates directly to unified camera (no action sheet)', () => {
-    expect(tabNavSrc).toContain('CreateCamera');
-    expect(tabNavSrc).not.toContain('CreateActionSheet');
-    expect(tabNavSrc).not.toContain('createSheetVisible');
+  it('Create button is in HomeScreen header alongside search and notification', () => {
+    expect(homeSrc).toContain('navigation.navigate(\'CreateCamera\'');
+    expect(homeSrc).toContain('name="add"');
+    expect(homeSrc).toContain('name="search"');
+    expect(homeSrc).toContain('name="notifications-outline"');
   });
 
-  it('Create tab has single press path (no redundant tabPress listener)', () => {
-    expect(tabNavSrc).toContain('handleCreatePress');
-    const createSection = tabNavSrc.slice(
-      tabNavSrc.indexOf('name="Create"'),
-      tabNavSrc.indexOf('name="Inbox"')
-    );
-    expect(createSection).not.toContain('listeners:');
-    expect(createSection).not.toContain('tabPress');
-  });
-
-  it('Create tabBarButton preserves accessibilityState and testID from props', () => {
-    expect(tabNavSrc).toContain('accessibilityState={props.accessibilityState}');
-    expect(tabNavSrc).toContain('testID={props.testID}');
-    expect(tabNavSrc).toContain('onLongPress={props.onLongPress}');
-  });
-
-  it('CreateCamera screen is registered in AppNavigator as a full-screen modal', () => {
+  it('CreateCamera screen is registered in AppNavigator', () => {
     expect(appNavSrc).toContain('name="CreateCamera"');
     expect(appNavSrc).toContain('CreateCameraScreen');
-    expect(appNavSrc).toContain('CreateCamera');
   });
 
-  it('CreateCamera route is in RootStackParamList', () => {
-    expect(typesSrc).toContain('CreateCamera:');
-    expect(typesSrc).toContain("mode?: 'visual-search' | 'look' | 'poster'");
-  });
-
-  it('CreateCamera has mode switcher for Visual Search / Look / Poster', () => {
-    expect(createCameraSrc).toContain('visual-search');
-    expect(createCameraSrc).toContain('look');
-    expect(createCameraSrc).toContain('poster');
-  });
-
-  it('CreateCamera routes captures to the correct destination', () => {
-    expect(createCameraSrc).toContain('VisualSearch');
-    expect(createCameraSrc).toContain('CreatorStudio');
-  });
-
-  it('CreateCamera preserves other create actions in overflow menu', () => {
-    expect(createCameraSrc).toContain('Sell');
-    expect(createCameraSrc).toContain('CreateAuction');
-    expect(createCameraSrc).toContain('CreateCoOwn');
-  });
-
-  it('Create control has accessibility label and hint', () => {
-    expect(tabNavSrc).toContain('accessibilityLabel="Create"');
-    expect(tabNavSrc).toContain('accessibilityHint="Opens create actions"');
+  it('Create button has accessibility label', () => {
+    expect(homeSrc).toContain('accessibilityLabel="Create"');
   });
 });
 describe('VQ-09D: Profile tab avatar', () => {
@@ -324,9 +289,12 @@ describe('VQ-09D: Tab interaction behaviour', () => {
     expect(tabNavSrc).toContain('lastTabRef');
   });
 
-  it('Create tab uses custom tabBarButton (single press path, no tabPress listener)', () => {
-    expect(tabNavSrc).toContain('tabBarButton');
-    expect(tabNavSrc).toContain('handleCreatePress');
+  it('Home tab uses standard bottom tab button', () => {
+    const homeSection = tabNavSrc.slice(
+      tabNavSrc.indexOf('name="Home"'),
+      tabNavSrc.indexOf('name="Explore"')
+    );
+    expect(homeSection).toContain('tabBarIcon');
   });
 
   it('Tab bar hides on keyboard', () => {

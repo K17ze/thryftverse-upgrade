@@ -20,7 +20,6 @@ import MyProfileScreen from '../screens/MyProfileScreen';
 const Tab = createBottomTabNavigator<TabParamList>();
 
 const NAV_HEIGHT = 54;
-const CREATE_CONTROL_SIZE = 32;
 const AVATAR_SIZE = 25;
 
 interface TabIconProps {
@@ -111,10 +110,6 @@ export default function TabNavigator() {
   }, [conversations, requestIds]);
   const lastTabRef = useRef<string>('Home');
 
-  const handleCreatePress = useCallback(() => {
-    haptic.light();
-    navigation.navigate('CreateCamera', { mode: 'look' });
-  }, [haptic, navigation]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -163,29 +158,6 @@ export default function TabNavigator() {
               <TabIcon name={focused ? 'compass' : 'compass-outline'} color={color} focused={focused} />
             ),
             tabBarAccessibilityLabel: 'Explore',
-          }}
-        />
-        <Tab.Screen
-          name="Create"
-          component={View}
-          options={{
-            tabBarButton: (props: any) => (
-              <Pressable
-                {...props}
-                style={tabStyles.createButton}
-                onPress={handleCreatePress}
-                onLongPress={props.onLongPress}
-                accessibilityRole="button"
-                accessibilityLabel="Create"
-                accessibilityHint="Opens create actions"
-                accessibilityState={props.accessibilityState}
-                testID={props.testID}
-              >
-                <View style={[tabStyles.createControl, { backgroundColor: colors.brand }]}>
-                  <Ionicons name="add" size={24} color={colors.surface} />
-                </View>
-              </Pressable>
-            ),
           }}
         />
         <Tab.Screen
@@ -258,19 +230,6 @@ const tabStyles = StyleSheet.create({
     fontFamily: Typography.family.bold,
     includeFontPadding: false,
     textAlign: 'center',
-  },
-  createButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 48,
-    height: NAV_HEIGHT,
-  },
-  createControl: {
-    width: CREATE_CONTROL_SIZE,
-    height: CREATE_CONTROL_SIZE,
-    borderRadius: CREATE_CONTROL_SIZE / 2,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   avatarWrap: {
     width: AVATAR_SIZE,
