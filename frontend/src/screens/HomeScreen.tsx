@@ -898,15 +898,6 @@ export default function HomeScreen() {
           <View style={styles.headerRight}>
             <AnimatedPressable
               style={styles.headerBtn}
-              onPress={() => navigation.navigate('CreateCamera', { mode: 'look' })}
-              accessibilityLabel="Create"
-              accessibilityRole="button"
-              accessibilityHint="Opens create camera"
-            >
-              <Ionicons name="add" size={26} color={Colors.textPrimary} />
-            </AnimatedPressable>
-            <AnimatedPressable
-              style={styles.headerBtn}
               onPress={() => navigation.navigate('GlobalSearch')}
               accessibilityLabel="Search listings"
               accessibilityRole="button"
