@@ -269,66 +269,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
 
   const selectedCount = selectedIds.size;
 
-  // ── Permission states ──
-  if (!status) {
-    return (
-      <PickerShell title="Add Media" onClose={onClose}>
-        <View style={styles.mediaLoadingState}>
-          <ActivityIndicator size="large" color={colors.brand} />
-        </View>
-      </PickerShell>
-    );
-  }
-
-  if (!status.granted && !status.canAskAgain) {
-    return (
-      <PickerShell title="Add Media" onClose={onClose}>
-        <View style={styles.mediaPermissionState}>
-          <Ionicons name="lock-closed-outline" size={40} color={colors.textMuted} />
-          <Text style={[styles.mediaPermissionTitle, { color: colors.textPrimary }]}>
-            Photo access needed
-          </Text>
-          <Text style={[styles.mediaPermissionText, { color: colors.textSecondary }]}>
-            Allow access to your photo library to pick media for your creation.
-          </Text>
-          <Pressable
-            onPress={handleOpenSettings}
-            style={[styles.mediaPermissionBtn, { backgroundColor: colors.brand }]}
-            accessibilityLabel="Open settings"
-            accessibilityRole="button"
-          >
-            <Text style={[styles.mediaPermissionBtnText, { color: colors.textInverse }]}>Open settings</Text>
-          </Pressable>
-        </View>
-      </PickerShell>
-    );
-  }
-
-  if (!status.granted) {
-    return (
-      <PickerShell title="Add Media" onClose={onClose}>
-        <View style={styles.mediaPermissionState}>
-          <Ionicons name="images-outline" size={40} color={colors.textMuted} />
-          <Text style={[styles.mediaPermissionTitle, { color: colors.textPrimary }]}>
-            Access your photos
-          </Text>
-          <Text style={[styles.mediaPermissionText, { color: colors.textSecondary }]}>
-            We need access to show your recent photos and videos here.
-          </Text>
-          <Pressable
-            onPress={() => requestPermission()}
-            style={[styles.mediaPermissionBtn, { backgroundColor: colors.brand }]}
-            accessibilityLabel="Grant access"
-            accessibilityRole="button"
-          >
-            <Text style={[styles.mediaPermissionBtnText, { color: colors.textInverse }]}>Allow access</Text>
-          </Pressable>
-        </View>
-      </PickerShell>
-    );
-  }
-
-  // ── Media grid with multi-select ──
+  // ── Hooks that must run on every render (before any early returns) ──
   const renderItem = useCallback(({ item, index }: { item: MediaAsset | 'camera' | 'video'; index: number }) => {
     if (item === 'camera') {
       return (
@@ -393,6 +334,67 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
   const gridData: (MediaAsset | 'camera' | 'video')[] = useMemo(() => {
     return ['camera', 'video', ...assets];
   }, [assets]);
+
+  // ── Permission states (after all hooks) ──
+  if (!status) {
+    return (
+      <PickerShell title="Add Media" onClose={onClose}>
+        <View style={styles.mediaLoadingState}>
+          <ActivityIndicator size="large" color={colors.brand} />
+        </View>
+      </PickerShell>
+    );
+  }
+
+  if (!status.granted && !status.canAskAgain) {
+    return (
+      <PickerShell title="Add Media" onClose={onClose}>
+        <View style={styles.mediaPermissionState}>
+          <Ionicons name="lock-closed-outline" size={40} color={colors.textMuted} />
+          <Text style={[styles.mediaPermissionTitle, { color: colors.textPrimary }]}>
+            Photo access needed
+          </Text>
+          <Text style={[styles.mediaPermissionText, { color: colors.textSecondary }]}>
+            Allow access to your photo library to pick media for your creation.
+          </Text>
+          <Pressable
+            onPress={handleOpenSettings}
+            style={[styles.mediaPermissionBtn, { backgroundColor: colors.brand }]}
+            accessibilityLabel="Open settings"
+            accessibilityRole="button"
+          >
+            <Text style={[styles.mediaPermissionBtnText, { color: colors.textInverse }]}>Open settings</Text>
+          </Pressable>
+        </View>
+      </PickerShell>
+    );
+  }
+
+  if (!status.granted) {
+    return (
+      <PickerShell title="Add Media" onClose={onClose}>
+        <View style={styles.mediaPermissionState}>
+          <Ionicons name="images-outline" size={40} color={colors.textMuted} />
+          <Text style={[styles.mediaPermissionTitle, { color: colors.textPrimary }]}>
+            Access your photos
+          </Text>
+          <Text style={[styles.mediaPermissionText, { color: colors.textSecondary }]}>
+            We need access to show your recent photos and videos here.
+          </Text>
+          <Pressable
+            onPress={() => requestPermission()}
+            style={[styles.mediaPermissionBtn, { backgroundColor: colors.brand }]}
+            accessibilityLabel="Grant access"
+            accessibilityRole="button"
+          >
+            <Text style={[styles.mediaPermissionBtnText, { color: colors.textInverse }]}>Allow access</Text>
+          </Pressable>
+        </View>
+      </PickerShell>
+    );
+  }
+
+  // ── Media grid with multi-select ──
 
   return (
     <SheetContainer visible={true} onClose={selectedCount > 0 ? () => { setSelectedIds(new Set()); } : onClose} maxHeight={0.9}>

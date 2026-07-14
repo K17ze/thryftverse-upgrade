@@ -1,5 +1,5 @@
 import React, { useRef, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Dimensions } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -131,43 +131,44 @@ const CreateActionSheet = ({
       testID="create-action-sheet"
     >
       <View style={[s.sheetContent, { paddingBottom: Math.max(insets.bottom, Space.lg) }]}>
-        <View style={[s.sheetHandle, { backgroundColor: colors.border }]} />
-        <Text style={[s.sheetTitle, { color: colors.textPrimary }]}>Create</Text>
-        <Text style={[s.sheetSubtitle, { color: colors.textMuted }]}>Choose what you'd like to create</Text>
-        <View style={s.sheetList}>
-          {actions.map((action) => (
-            <Pressable
-              key={action.key}
-              style={({ pressed }) => [
-                s.sheetAction,
-                { backgroundColor: colors.surfaceAlt },
-                pressed && s.sheetActionPressed,
-              ]}
-              onPress={() => handlePress(action)}
-              accessibilityRole="button"
-              accessibilityLabel={action.label}
-              accessibilityHint={action.description}
-            >
-              <View style={[s.sheetActionIcon, { backgroundColor: `${colors.brand}14` }]}>
-                <Ionicons
-                  name={action.icon}
-                  size={22}
-                  color={colors.brand}
-                />
-              </View>
-              <View style={s.sheetActionBody}>
-                <Text style={[s.sheetActionLabel, { color: colors.textPrimary }]}>
-                  {action.label}
-                </Text>
-                <Text style={[s.sheetActionDescription, { color: colors.textMuted }]} numberOfLines={1}>
-                  {action.description}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-            </Pressable>
-          ))}
+        <View style={[s.handle, { backgroundColor: colors.border }]} />
+          <Text style={[s.sheetTitle, { color: colors.textPrimary }]}>Create</Text>
+          <Text style={[s.sheetSubtitle, { color: colors.textMuted }]}>Choose what you'd like to create</Text>
+          <View style={s.sheetList}>
+          {actions.map((action, i) => (
+              <Pressable
+                key={action.key}
+                style={({ pressed }) => [
+                  s.sheetAction,
+                  { backgroundColor: colors.surfaceAlt },
+                  i < actions.length - 1 && { marginBottom: Space.xs },
+                  pressed && s.sheetActionPressed,
+                ]}
+                onPress={() => handlePress(action)}
+                accessibilityRole="button"
+                accessibilityLabel={action.label}
+                accessibilityHint={action.description}
+              >
+                <View style={[s.sheetActionIcon, { backgroundColor: `${colors.brand}14` }]}>
+                  <Ionicons
+                    name={action.icon}
+                    size={22}
+                    color={colors.brand}
+                  />
+                </View>
+                <View style={s.sheetActionBody}>
+                  <Text style={[s.sheetActionLabel, { color: colors.textPrimary }]}>
+                    {action.label}
+                  </Text>
+                  <Text style={[s.sheetActionDescription, { color: colors.textMuted }]} numberOfLines={1}>
+                    {action.description}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              </Pressable>
+            ))}
+          </View>
         </View>
-      </View>
     </NativeSheet>
   );
 };
@@ -403,8 +404,13 @@ function sheetStyles(colors: ThemeColors) {
       borderTopRightRadius: Radius.xl,
       paddingTop: Space.sm,
       paddingHorizontal: Space.md,
+      maxHeight: Dimensions.get('window').height * 0.72,
     },
-    sheetHandle: {
+    handleWrap: {
+      alignItems: 'center',
+      paddingBottom: Space.sm,
+    },
+    handle: {
       width: 36,
       height: 4,
       borderRadius: 2,
