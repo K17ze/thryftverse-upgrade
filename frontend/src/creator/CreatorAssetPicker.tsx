@@ -9,10 +9,13 @@ import {
   FlatList,
   Image,
   ActivityIndicator,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as MediaLibrary from 'expo-media-library';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Colors } from '../constants/colors';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { searchListingsFromApi, type ListingSearchResult } from '../services/listingsApi';
@@ -62,15 +65,16 @@ function AssetPickerContent({ mode, onClose, onAddLayer, editingLayer }: { mode:
 }
 
 function PickerShell({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  const { colors } = useAppTheme();
   return (
     <KeyboardAwareScrollView style={styles.overlay} contentContainerStyle={{ flex: 1 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
       <Pressable style={styles.backdrop} onPress={onClose} />
-      <View style={styles.sheet}>
-        <View style={styles.handle} />
+      <View style={[styles.sheet, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+        <View style={[styles.handle, { backgroundColor: colors.border }]} />
         <View style={styles.header}>
-          <Text style={styles.title}>{title}</Text>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
           <Pressable onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close picker" accessibilityRole="button">
-            <Ionicons name="close" size={20} color={Colors.textSecondary} />
+            <Ionicons name="close" size={20} color={colors.textSecondary} />
           </Pressable>
         </View>
         {children}
@@ -97,33 +101,112 @@ function baseLayer(id: string, zIndex: number): Omit<CreatorLayer, 'type' | 'pay
 
 // ── Media Picker ───────────────────────────────────────────────────
 
+const GRID_COLUMNS = 3;
+const { width: SCREEN_W } = Dimensions.get('window');
+const THUMB_SIZE = Math.floor((SCREEN_W - Space.md * 2 - Space.xs * (GRID_COLUMNS - 1)) / GRID_COLUMNS);
+
+interface MediaAsset {
+  id: string;
+  uri: string;
+  mediaType: 'image' | 'video';
+  width: number;
+  height: number;
+  duration?: number;
+}
+
 function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
-  const handlePickImage = useCallback(async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: false,
-      quality: 0.9,
-    });
-    if (!result.canceled && result.assets[0]) {
-      onAddLayer({
-        ...baseLayer(createStableId('media'), 0),
-        type: 'media',
-        width: 1,
-        height: 1,
-        payload: {
-          mediaUri: result.assets[0].uri,
-          mediaType: 'image',
-          contentFit: 'cover',
-          opacity: 1,
-        },
-      });
-      onClose();
+  const { colors } = useAppTheme();
+  const [status, requestPermission] = MediaLibrary.usePermissions();
+  const [assets, setAssets] = useState<MediaAsset[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const cursorRef = useRef<string | undefined>(undefined);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  // Load recent media when permission is granted
+  const loadRecentMedia = useCallback(async (reset: boolean) => {
+    if (reset) {
+      setIsLoading(true);
+      cursorRef.current = undefined;
+    } else {
+      if (!hasMore || loadingMore) return;
+      setLoadingMore(true);
     }
+
+    try {
+      const opts: any = {
+        first: 30,
+        mediaType: ['photo', 'video'],
+        sortBy: [['creationTime', false]],
+      };
+      if (!reset && cursorRef.current) {
+        opts.after = cursorRef.current;
+      }
+
+      const page = await MediaLibrary.getAssetsAsync(opts);
+      if (!mountedRef.current) return;
+
+      const mapped: MediaAsset[] = page.assets.map((a) => ({
+        id: a.id,
+        uri: a.uri,
+        mediaType: a.mediaType === 'video' ? 'video' : 'image',
+        width: a.width,
+        height: a.height,
+        duration: a.duration ? Math.round(a.duration) : undefined,
+      }));
+
+      setAssets((prev) => reset ? mapped : [...prev, ...mapped]);
+      cursorRef.current = page.endCursor;
+      setHasMore(page.hasNextPage);
+    } catch {
+      // Permission or access error — keep the empty state
+      if (reset) setAssets([]);
+      setHasMore(false);
+    } finally {
+      if (mountedRef.current) {
+        if (reset) setIsLoading(false);
+        else setLoadingMore(false);
+      }
+    }
+  }, [hasMore, loadingMore]);
+
+  // Request permission on mount if not determined
+  useEffect(() => {
+    if (status && !status.granted && !status.canAskAgain) {
+      // Permission permanently denied — show settings prompt
+      return;
+    }
+    if (status && status.granted) {
+      loadRecentMedia(true);
+    }
+  }, [status, loadRecentMedia]);
+
+  const handleSelectAsset = useCallback((asset: MediaAsset) => {
+    onAddLayer({
+      ...baseLayer(createStableId('media'), 0),
+      type: 'media',
+      width: 1,
+      height: 1,
+      payload: {
+        mediaUri: asset.uri,
+        mediaType: asset.mediaType,
+        contentFit: 'cover',
+        videoDurationMs: asset.duration,
+        opacity: 1,
+      },
+    });
+    onClose();
   }, [onAddLayer, onClose]);
 
   const handleTakePhoto = useCallback(async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') return;
+    const { status: camStatus } = await ImagePicker.requestCameraPermissionsAsync();
+    if (camStatus !== 'granted') return;
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 0.9,
@@ -168,22 +251,166 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
     }
   }, [onAddLayer, onClose]);
 
+  const handleOpenSettings = useCallback(async () => {
+    const { Linking } = await import('react-native');
+    Linking.openSettings();
+  }, []);
+
+  // ── Permission states ──
+  if (!status) {
+    return (
+      <PickerShell title="Add Media" onClose={onClose}>
+        <View style={styles.mediaLoadingState}>
+          <ActivityIndicator size="large" color={colors.brand} />
+        </View>
+      </PickerShell>
+    );
+  }
+
+  if (!status.granted && !status.canAskAgain) {
+    return (
+      <PickerShell title="Add Media" onClose={onClose}>
+        <View style={styles.mediaPermissionState}>
+          <Ionicons name="lock-closed-outline" size={40} color={colors.textMuted} />
+          <Text style={[styles.mediaPermissionTitle, { color: colors.textPrimary }]}>
+            Photo access needed
+          </Text>
+          <Text style={[styles.mediaPermissionText, { color: colors.textSecondary }]}>
+            Allow access to your photo library to pick media for your creation.
+          </Text>
+          <Pressable
+            onPress={handleOpenSettings}
+            style={[styles.mediaPermissionBtn, { backgroundColor: colors.brand }]}
+            accessibilityLabel="Open settings"
+            accessibilityRole="button"
+          >
+            <Text style={[styles.mediaPermissionBtnText, { color: colors.textInverse }]}>Open settings</Text>
+          </Pressable>
+        </View>
+      </PickerShell>
+    );
+  }
+
+  if (!status.granted) {
+    return (
+      <PickerShell title="Add Media" onClose={onClose}>
+        <View style={styles.mediaPermissionState}>
+          <Ionicons name="images-outline" size={40} color={colors.textMuted} />
+          <Text style={[styles.mediaPermissionTitle, { color: colors.textPrimary }]}>
+            Access your photos
+          </Text>
+          <Text style={[styles.mediaPermissionText, { color: colors.textSecondary }]}>
+            We need access to show your recent photos and videos here.
+          </Text>
+          <Pressable
+            onPress={() => requestPermission()}
+            style={[styles.mediaPermissionBtn, { backgroundColor: colors.brand }]}
+            accessibilityLabel="Grant access"
+            accessibilityRole="button"
+          >
+            <Text style={[styles.mediaPermissionBtnText, { color: colors.textInverse }]}>Allow access</Text>
+          </Pressable>
+        </View>
+      </PickerShell>
+    );
+  }
+
+  // ── Media grid ──
+  const renderItem = useCallback(({ item, index }: { item: MediaAsset | 'camera' | 'video'; index: number }) => {
+    if (item === 'camera') {
+      return (
+        <Pressable
+          onPress={handleTakePhoto}
+          style={[styles.mediaGridCell, { backgroundColor: colors.surfaceAlt }]}
+          accessibilityLabel="Take photo with camera"
+          accessibilityRole="button"
+        >
+          <Ionicons name="camera-outline" size={28} color={colors.textPrimary} />
+        </Pressable>
+      );
+    }
+    if (item === 'video') {
+      return (
+        <Pressable
+          onPress={handlePickVideo}
+          style={[styles.mediaGridCell, { backgroundColor: colors.surfaceAlt }]}
+          accessibilityLabel="Pick video from gallery"
+          accessibilityRole="button"
+        >
+          <Ionicons name="videocam-outline" size={28} color={colors.textPrimary} />
+        </Pressable>
+      );
+    }
+    const asset = item as MediaAsset;
+    return (
+      <Pressable
+        onPress={() => handleSelectAsset(asset)}
+        style={styles.mediaGridCell}
+        accessibilityLabel={`Select ${asset.mediaType} from ${new Date(asset.id).toLocaleDateString()}`}
+        accessibilityRole="button"
+      >
+        <Image
+          source={{ uri: asset.uri }}
+          style={styles.mediaGridThumb}
+          resizeMode="cover"
+        />
+        {asset.mediaType === 'video' && (
+          <View style={styles.mediaGridVideoBadge}>
+            <Ionicons name="play" size={14} color="#fff" />
+            {asset.duration && (
+              <Text style={styles.mediaGridDuration}>
+                {Math.floor(asset.duration / 1000)}s
+              </Text>
+            )}
+          </View>
+        )}
+      </Pressable>
+    );
+  }, [colors, handleTakePhoto, handlePickVideo, handleSelectAsset]);
+
+  // Prepend camera and video buttons to the grid
+  const gridData: (MediaAsset | 'camera' | 'video')[] = useMemo(() => {
+    return ['camera', 'video', ...assets];
+  }, [assets]);
+
   return (
     <PickerShell title="Add Media" onClose={onClose}>
-      <View style={styles.mediaOptions}>
-        <Pressable style={styles.mediaOption} onPress={handlePickImage} accessibilityLabel="Pick from gallery" accessibilityRole="button">
-          <Ionicons name="images-outline" size={28} color={Colors.brand} />
-          <Text style={styles.mediaOptionLabel}>Gallery</Text>
-        </Pressable>
-        <Pressable style={styles.mediaOption} onPress={handleTakePhoto} accessibilityLabel="Take photo" accessibilityRole="button">
-          <Ionicons name="camera-outline" size={28} color={Colors.brand} />
-          <Text style={styles.mediaOptionLabel}>Camera</Text>
-        </Pressable>
-        <Pressable style={styles.mediaOption} onPress={handlePickVideo} accessibilityLabel="Pick video" accessibilityRole="button">
-          <Ionicons name="videocam-outline" size={28} color={Colors.brand} />
-          <Text style={styles.mediaOptionLabel}>Video</Text>
-        </Pressable>
-      </View>
+      {isLoading ? (
+        <View style={styles.mediaLoadingState}>
+          <ActivityIndicator size="large" color={colors.brand} />
+        </View>
+      ) : assets.length === 0 ? (
+        <View style={styles.mediaEmptyState}>
+          <Ionicons name="images-outline" size={40} color={colors.textMuted} />
+          <Text style={[styles.mediaEmptyText, { color: colors.textSecondary }]}>
+            No photos found
+          </Text>
+          <Pressable
+            onPress={handleTakePhoto}
+            style={[styles.mediaPermissionBtn, { backgroundColor: colors.brand }]}
+            accessibilityLabel="Take photo"
+            accessibilityRole="button"
+          >
+            <Text style={[styles.mediaPermissionBtnText, { color: colors.textInverse }]}>Take photo</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <FlatList
+          data={gridData}
+          keyExtractor={(item, index) => typeof item === 'string' ? item : item.id}
+          renderItem={renderItem}
+          numColumns={GRID_COLUMNS}
+          columnWrapperStyle={styles.mediaGridRow}
+          contentContainerStyle={styles.mediaGridContent}
+          onEndReached={() => loadRecentMedia(false)}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={loadingMore ? (
+            <View style={styles.mediaGridFooter}>
+              <ActivityIndicator size="small" color={colors.textMuted} />
+            </View>
+          ) : null}
+        />
+      )}
     </PickerShell>
   );
 }
@@ -764,6 +991,84 @@ const styles = StyleSheet.create({
   mediaOptions: { flexDirection: 'row', justifyContent: 'center', gap: Space.lg, paddingVertical: Space.xl },
   mediaOption: { alignItems: 'center', gap: 8, minWidth: 80 },
   mediaOptionLabel: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: Colors.textPrimary },
+  // ── Media grid ──
+  mediaGridContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
+  mediaGridRow: { gap: Space.xs, marginBottom: Space.xs },
+  mediaGridCell: {
+    width: THUMB_SIZE,
+    height: THUMB_SIZE,
+    borderRadius: Radius.sm,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mediaGridThumb: {
+    width: '100%',
+    height: '100%',
+  },
+  mediaGridVideoBadge: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  mediaGridDuration: {
+    color: '#fff',
+    fontSize: 10,
+    fontFamily: Typography.family.medium,
+  },
+  mediaGridFooter: {
+    paddingVertical: Space.md,
+    alignItems: 'center',
+  },
+  mediaLoadingState: {
+    paddingVertical: Space.xxl,
+    alignItems: 'center',
+  },
+  mediaEmptyState: {
+    paddingVertical: Space.xxl,
+    alignItems: 'center',
+    gap: Space.md,
+  },
+  mediaEmptyText: {
+    fontFamily: Typography.family.medium,
+    fontSize: Type.body.size,
+  },
+  mediaPermissionState: {
+    paddingVertical: Space.xxl,
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingHorizontal: Space.xl,
+  },
+  mediaPermissionTitle: {
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.title.size,
+    marginTop: Space.sm,
+  },
+  mediaPermissionText: {
+    fontFamily: Typography.family.regular,
+    fontSize: Type.body.size,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  mediaPermissionBtn: {
+    paddingHorizontal: Space.lg,
+    height: 44,
+    borderRadius: Radius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: Space.sm,
+  },
+  mediaPermissionBtnText: {
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.body.size,
+  },
   searchRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Space.md, paddingVertical: Space.sm, gap: 8 },
   searchIcon: {},
   searchInput: {
