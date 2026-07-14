@@ -59,9 +59,18 @@ describe('VQ-09D: Bottom Navigation — five-destination model', () => {
 
 describe('VQ-09D: Central Create control', () => {
   const tabNavSrc = readSrc('navigation/TabNavigator.tsx');
+  const appNavSrc = readSrc('navigation/AppNavigator.tsx');
+  const typesSrc = readSrc('navigation/types.ts');
+  const createCameraSrc = readSrc('screens/CreateCameraScreen.tsx');
 
   it('Create tab uses a custom tabBarButton (not default icon)', () => {
     expect(tabNavSrc).toContain('tabBarButton:');
+  });
+
+  it('Create tab navigates directly to unified camera (no action sheet)', () => {
+    expect(tabNavSrc).toContain('CreateCamera');
+    expect(tabNavSrc).not.toContain('CreateActionSheet');
+    expect(tabNavSrc).not.toContain('createSheetVisible');
   });
 
   it('Create tab has single press path (no redundant tabPress listener)', () => {
@@ -80,45 +89,44 @@ describe('VQ-09D: Central Create control', () => {
     expect(tabNavSrc).toContain('onLongPress={props.onLongPress}');
   });
 
-  it('CreateActionSheet uses NativeSheet (not raw Modal)', () => {
-    expect(tabNavSrc).toContain('NativeSheet');
-    expect(tabNavSrc).not.toContain('<Modal');
+  it('CreateCamera screen is registered in AppNavigator as a full-screen modal', () => {
+    expect(appNavSrc).toContain('name="CreateCamera"');
+    expect(appNavSrc).toContain('CreateCameraScreen');
+    expect(appNavSrc).toContain('CreateCamera');
   });
 
-  it('CreateActionSheet does not use unsupported snapPoints', () => {
-    expect(tabNavSrc).not.toContain("snapPoints={['fit']}");
+  it('CreateCamera route is in RootStackParamList', () => {
+    expect(typesSrc).toContain('CreateCamera:');
+    expect(typesSrc).toContain("mode?: 'visual-search' | 'look' | 'poster'");
   });
 
-  it('CreateActionSheet has 5 actions: sell, look, poster, auction, coown', () => {
-    expect(tabNavSrc).toContain("key: 'sell'");
-    expect(tabNavSrc).toContain("key: 'look'");
-    expect(tabNavSrc).toContain("key: 'poster'");
-    expect(tabNavSrc).toContain("key: 'auction'");
-    expect(tabNavSrc).toContain("key: 'coown'");
+  it('CreateCamera has mode switcher for Visual Search / Look / Poster', () => {
+    expect(createCameraSrc).toContain('visual-search');
+    expect(createCameraSrc).toContain('look');
+    expect(createCameraSrc).toContain('poster');
   });
 
-  it('CreateActionSheet navigates to Sell route (not SellScreen)', () => {
-    expect(tabNavSrc).toContain("route: 'Sell'");
-    expect(tabNavSrc).not.toContain("route: 'SellScreen'");
+  it('CreateCamera routes captures to the correct destination', () => {
+    expect(createCameraSrc).toContain('VisualSearch');
+    expect(createCameraSrc).toContain('CreatorStudio');
+  });
+
+  it('CreateCamera preserves other create actions in overflow menu', () => {
+    expect(createCameraSrc).toContain('CreateAuction');
+    expect(createCameraSrc).toContain('CreateCoOwn');
+  });
+
+  it('HomeScreen has a separate + button for the listing flow', () => {
+    const homeSrc = readSrc('screens/HomeScreen.tsx');
+    expect(homeSrc).toContain("navigation.navigate('Sell')");
+    expect(homeSrc).toContain('name="add"');
   });
 
   it('Create control has accessibility label and hint', () => {
     expect(tabNavSrc).toContain('accessibilityLabel="Create"');
     expect(tabNavSrc).toContain('accessibilityHint="Opens create actions"');
   });
-
-  it('CreateActionSheet uses NativeSheet (not raw Modal)', () => {
-    expect(tabNavSrc).toContain('NativeSheet');
-    expect(tabNavSrc).not.toContain('<Modal');
-  });
-
-  it('createSheetVisible state is in the store', () => {
-    const storeSrc = readSrc('store/useStore.ts');
-    expect(storeSrc).toContain('createSheetVisible');
-    expect(storeSrc).toContain('setCreateSheetVisible');
-  });
 });
-
 describe('VQ-09D: Profile tab avatar', () => {
   const tabNavSrc = readSrc('navigation/TabNavigator.tsx');
 

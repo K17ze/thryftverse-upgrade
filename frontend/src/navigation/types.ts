@@ -132,7 +132,6 @@ export type RootStackParamList = {
   NotificationsList: undefined;
   // Phase 28
   ForgotPassword: undefined;
-  VisualSearch: undefined;
   ChangePassword: undefined;
   TwoFactorSetup: undefined;
   WriteReview: { orderId: string };
@@ -142,12 +141,15 @@ export type RootStackParamList = {
   SavedSearches: undefined;
   // Explore / Creator screens
   CreateLook: undefined;
+  CreateCamera: { mode?: 'visual-search' | 'look' | 'poster' } | undefined;
   CreatorStudio: {
     type: 'look' | 'poster';
     draftId?: string;
     templateId?: string;
     sourceDocumentId?: string;
+    initialMediaUri?: string;
   };
+  VisualSearch: { initialImageUri?: string } | undefined;
   CreatorDraftList: undefined;
   CoOwnIssue: { assetId?: string };
   OutfitBuilder: undefined;
@@ -226,8 +228,7 @@ export type RootStackParamList = {
   TradeHub: { destination?: 'auction' | 'co_own' } | undefined;
   // Trust & Verification
   Verification: undefined;
-  // Seller Hub
-  SellerHub: undefined;
+  // Seller analytics (entry via MyListings)
   SellerAnalytics: undefined;
   BundleBag: { sellerId: string; sellerName?: string } | undefined;
 };

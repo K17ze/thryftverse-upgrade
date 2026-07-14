@@ -1,10 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
 import { Space, Radius, Typography } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
+import { useAppTheme } from '../../theme/ThemeContext';
 
 type AttentionKind = 'outbid' | 'leading' | 'ending_soon' | 'won' | 'watching';
 
@@ -19,14 +19,6 @@ interface Props {
   onPress: () => void;
   onAction: () => void;
 }
-
-const CONFIG: Record<AttentionKind, { accent: string; bg: string; border: string }> = {
-  outbid: { accent: Colors.danger, bg: 'rgba(220,38,38,0.06)', border: 'rgba(220,38,38,0.18)' },
-  leading: { accent: Colors.success, bg: 'rgba(22,163,74,0.04)', border: 'transparent' },
-  ending_soon: { accent: Colors.danger, bg: 'rgba(220,38,38,0.06)', border: 'rgba(220,38,38,0.15)' },
-  won: { accent: Colors.brand, bg: 'rgba(244,240,232,0.04)', border: 'transparent' },
-  watching: { accent: Colors.textSecondary, bg: 'transparent', border: 'transparent' },
-};
 
 const KIND_LABEL: Record<AttentionKind, string> = {
   outbid: 'Outbid',
@@ -45,12 +37,25 @@ export function AuctionAttentionStrip({
   onPress,
   onAction,
 }: Props) {
-  const cfg = CONFIG[kind];
+  const { colors } = useAppTheme();
+  
   const isWatching = kind === 'watching';
-  const isUrgent = kind === 'outbid' || kind === 'ending_soon';
+  const accentColor =
+    kind === 'outbid'
+      ? colors.danger
+      : kind === 'leading' || kind === 'won' || kind === 'ending_soon'
+      ? colors.brand
+      : colors.textSecondary;
 
   return (
-    <View style={[styles.container, { backgroundColor: cfg.bg, borderColor: cfg.border }]}>
+    <View style={[
+      styles.container,
+      {
+        backgroundColor: colors.surface,
+        borderColor: colors.border,
+        borderLeftColor: accentColor,
+      }
+    ]}>
       <AnimatedPressable
         style={styles.body}
         scaleValue={0.99}
@@ -61,28 +66,35 @@ export function AuctionAttentionStrip({
         <CachedImage
           uri={imageUrl ?? ''}
           style={styles.thumb}
-          containerStyle={styles.thumbContainer}
+          containerStyle={[styles.thumbContainer, { borderColor: colors.border }]}
           contentFit="cover"
         />
         <View style={styles.content}>
           <View style={styles.headerRow}>
-            <Text style={[styles.kind, { color: cfg.accent }]}>
+            <Text style={[styles.kind, { color: accentColor }]}>
               {KIND_LABEL[kind]}
             </Text>
           </View>
-          <Text style={styles.title} numberOfLines={1}>{title}</Text>
-          <Text style={styles.message} numberOfLines={1}>{message}</Text>
+          <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>{title}</Text>
+          <Text style={[styles.message, { color: colors.textSecondary }]} numberOfLines={1}>{message}</Text>
         </View>
       </AnimatedPressable>
 
       <AnimatedPressable
-        style={[styles.actionBtn, isWatching && styles.actionBtnGhost, isUrgent && styles.actionBtnUrgent]}
+        style={[
+          styles.actionBtn,
+          isWatching && { backgroundColor: 'transparent', borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+          !isWatching && { backgroundColor: colors.brand }
+        ]}
         scaleValue={0.95}
         onPress={onAction}
         accessibilityRole="button"
         accessibilityLabel={actionLabel}
       >
-        <Text style={[styles.actionText, isWatching && styles.actionTextGhost, isUrgent && styles.actionTextUrgent]}>
+        <Text style={[
+          styles.actionText,
+          { color: isWatching ? colors.textSecondary : colors.textInverse }
+        ]}>
           {actionLabel}
         </Text>
       </AnimatedPressable>
@@ -99,6 +111,7 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
+    borderLeftWidth: 3,
     maxHeight: 76,
   },
   body: {
@@ -109,6 +122,7 @@ const styles = StyleSheet.create({
   },
   thumbContainer: {
     borderRadius: Radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
   },
   thumb: {
@@ -133,39 +147,23 @@ const styles = StyleSheet.create({
   title: {
     fontFamily: Typography.family.semibold,
     fontSize: 13,
-    color: Colors.textPrimary,
     letterSpacing: -0.2,
     lineHeight: 17,
   },
   message: {
     fontFamily: Typography.family.regular,
     fontSize: 11,
-    color: Colors.textSecondary,
   },
   actionBtn: {
     paddingHorizontal: Space.sm + 4,
     paddingVertical: Space.sm,
     borderRadius: Radius.full,
-    backgroundColor: Colors.brand,
-  },
-  actionBtnGhost: {
-    backgroundColor: 'transparent',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.borderLight,
-  },
-  actionBtnUrgent: {
-    backgroundColor: Colors.danger,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   actionText: {
     fontFamily: Typography.family.semibold,
     fontSize: 12,
-    color: Colors.textInverse,
     letterSpacing: 0.2,
-  },
-  actionTextGhost: {
-    color: Colors.textSecondary,
-  },
-  actionTextUrgent: {
-    color: '#FFFFFF',
   },
 });

@@ -2235,7 +2235,7 @@ const styles = StyleSheet.create({
   categoryTileName: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: Colors.textInverse,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.1,
   },

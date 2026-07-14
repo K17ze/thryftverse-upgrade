@@ -75,7 +75,7 @@ type NavT = StackNavigationProp<RootStackParamList>;
 
 const HEADER_EXPANDED = 80;
 const HEADER_COLLAPSED = 56;
-const GRID_GAP = 12;
+const GRID_GAP = Space.sm; // 8pt — design contract discovery gutter
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
 const PANEL_BG = Colors.surfaceAlt;
@@ -249,7 +249,7 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
 
         <View style={styles.exploreOverlay}>
           <View style={styles.exploreTag}>
-            <ThryftCartIcon size={11} color="#fff" />
+            <ThryftCartIcon size={11} color={Colors.textInverse} />
             <Text style={styles.exploreTagText}>{formatPrice(item.price ?? 0, 'GBP', { displayMode: 'fiat' })}</Text>
           </View>
         </View>
@@ -597,7 +597,7 @@ export default function HomeScreen() {
         coverImage: vintageItems[0].images?.[0] ?? '',
         itemCount: vintageItems.length,
         curatorName: 'ThryftVerse',
-        accentColor: '#8b5cf6',
+        accentColor: Colors.brand,
       });
     }
 
@@ -609,7 +609,7 @@ export default function HomeScreen() {
         coverImage: streetwearItems[0].images?.[0] ?? '',
         itemCount: streetwearItems.length,
         curatorName: 'ThryftVerse',
-        accentColor: '#f59e0b',
+        accentColor: Colors.brand,
       });
     }
 
@@ -757,7 +757,7 @@ export default function HomeScreen() {
                   />
                 ) : (
                   <View style={[StyleSheet.absoluteFill, { backgroundColor: firstFrame?.backgroundColor ?? Colors.surfaceAlt, justifyContent: 'center', alignItems: 'center' }]}>
-                    <Text style={{ color: '#fff', fontSize: 11, fontFamily: Typography.family.medium, textAlign: 'center', paddingHorizontal: 8 }} numberOfLines={2}>{caption || 'Text story'}</Text>
+                    <Text style={{ color: Colors.textInverse, fontSize: 11, fontFamily: Typography.family.medium, textAlign: 'center', paddingHorizontal: 8 }} numberOfLines={2}>{caption || 'Text story'}</Text>
                   </View>
                 )}
                 <View style={styles.posterShade} />
@@ -768,7 +768,7 @@ export default function HomeScreen() {
 
                 {story.totalFrameCount > 1 && (
                   <View style={styles.frameCountBadge}>
-                    <Ionicons name="layers" size={10} color="#fff" />
+                    <Ionicons name="layers" size={10} color={Colors.textInverse} />
                     <Text style={styles.frameCountBadgeText}>{story.totalFrameCount}</Text>
                   </View>
                 )}
@@ -896,6 +896,15 @@ export default function HomeScreen() {
           </Reanimated.View>
 
           <View style={styles.headerRight}>
+            <AnimatedPressable
+              style={styles.headerBtn}
+              onPress={() => navigation.navigate('Sell')}
+              accessibilityLabel="List an item"
+              accessibilityRole="button"
+              accessibilityHint="Opens sell listing flow"
+            >
+              <Ionicons name="add" size={26} color={Colors.textPrimary} />
+            </AnimatedPressable>
             <AnimatedPressable
               style={styles.headerBtn}
               onPress={() => navigation.navigate('GlobalSearch')}
@@ -1230,7 +1239,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.background,
   },
   notificationBadgeText: {
-    color: '#fff',
+    color: Colors.textInverse,
     fontSize: 10,
     fontFamily: 'Inter_700Bold',
     lineHeight: 12,
@@ -1446,12 +1455,12 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   lookOwnerName: {
-    color: '#fff',
+    color: Colors.textInverse,
     fontSize: 11,
     fontFamily: Typography.family.semibold,
   },
   lookTitle: {
-    color: '#fff',
+    color: Colors.textInverse,
     fontSize: 21,
     fontFamily: Typography.family.extrabold,
     letterSpacing: -0.4,
@@ -1479,7 +1488,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.34)',
   },
   lookMetaText: {
-    color: '#fff',
+    color: Colors.textInverse,
     fontSize: 11,
     fontFamily: Typography.family.semibold,
   },
@@ -1550,7 +1559,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: 'hidden',
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: Colors.textInverse,
     shadowColor: '#000',
     shadowOpacity: 0.3,
     shadowRadius: 4,
@@ -1624,7 +1633,7 @@ const styles = StyleSheet.create({
     borderRadius: 7,
   },
   posterOwnerName: {
-    color: '#fff',
+    color: Colors.textInverse,
     fontSize: 8,
     fontFamily: Typography.family.medium,
     flex: 1,
@@ -1639,7 +1648,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   posterExpiryText: {
-    color: '#fff',
+    color: Colors.textInverse,
     fontSize: 9,
     fontFamily: Typography.family.bold,
   },
@@ -1653,7 +1662,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.44)',
   },
   posterCaption: {
-    color: '#fff',
+    color: Colors.textInverse,
     fontSize: 9,
     lineHeight: 12,
     fontFamily: Typography.family.medium,
@@ -1671,7 +1680,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   frameCountBadgeText: {
-    color: '#fff',
+    color: Colors.textInverse,
     fontSize: 9,
     fontFamily: Typography.family.bold,
   },
@@ -1685,7 +1694,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   unwatchedBadgeText: {
-    color: '#fff',
+    color: Colors.textInverse,
     fontSize: 9,
     fontFamily: Typography.family.bold,
   },
@@ -1755,7 +1764,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   exploreTagText: {
-    color: '#fff',
+    color: Colors.textInverse,
     fontSize: 11,
     fontFamily: Typography.family.semibold,
     letterSpacing: 0.1,
@@ -1808,9 +1817,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.1,
   },
   exploreMessageBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 44,
+    height: 44,
+    borderRadius: Radius.full,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
     backgroundColor: Colors.surfaceAlt,
@@ -1820,11 +1829,11 @@ const styles = StyleSheet.create({
   },
   videoBadge: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    top: Space.xs,
+    right: Space.xs,
+    width: 44,
+    height: 44,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(0,0,0,0.52)',
     alignItems: 'center',
     justifyContent: 'center',

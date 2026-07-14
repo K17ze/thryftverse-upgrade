@@ -11,7 +11,6 @@ import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useStore } from '../store/useStore';
 import { CachedImage } from '../components/CachedImage';
-import { NativeSheet } from '../platform/native/NativeSheet';
 
 import HomeScreen from '../screens/HomeScreen';
 import SearchScreen from '../screens/SearchScreen';
@@ -96,89 +95,11 @@ const ProfileTabIcon = ({ color, focused }: ProfileTabIconProps) => {
   );
 };
 
-const CreateActionSheet = ({
-  visible,
-  onClose,
-  onNavigate,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  onNavigate: (route: string, params?: object) => void;
-}) => {
-  const insets = useSafeAreaInsets();
-  const haptic = useHaptic();
-  const { colors } = useAppTheme();
-  const s = useMemo(() => sheetStyles(colors), [colors]);
-
-  const actions = [
-    { key: 'sell', label: 'List an item', description: 'Sell something on the marketplace', icon: 'pricetag-outline' as const, route: 'Sell' as const },
-    { key: 'look', label: 'Create a Look', description: 'Style and share an outfit', icon: 'shirt-outline' as const, route: 'CreateLook' as const },
-    { key: 'poster', label: 'Create a Poster', description: 'Design a visual poster', icon: 'images-outline' as const, route: 'CreatePoster' as const, params: { mode: 'poster' } },
-    { key: 'auction', label: 'Create auction', description: 'Time-based bidding for an item', icon: 'hammer-outline' as const, route: 'CreateAuction' as const },
-    { key: 'coown', label: 'Create Co-Own', description: 'Shared ownership opportunity', icon: 'people-outline' as const, route: 'CreateCoOwn' as const },
-  ];
-
-  const handlePress = (action: typeof actions[0]) => {
-    haptic.light();
-    onNavigate(action.route, action.params);
-    onClose();
-  };
-
-  return (
-    <NativeSheet
-      visible={visible}
-      onDismiss={onClose}
-      testID="create-action-sheet"
-    >
-      <View style={[s.sheetContent, { paddingBottom: Math.max(insets.bottom, Space.lg) }]}>
-        <View style={[s.sheetHandle, { backgroundColor: colors.border }]} />
-        <Text style={[s.sheetTitle, { color: colors.textPrimary }]}>Create</Text>
-        <Text style={[s.sheetSubtitle, { color: colors.textMuted }]}>Choose what you'd like to create</Text>
-        <View style={s.sheetList}>
-          {actions.map((action) => (
-            <Pressable
-              key={action.key}
-              style={({ pressed }) => [
-                s.sheetAction,
-                { backgroundColor: colors.surfaceAlt },
-                pressed && s.sheetActionPressed,
-              ]}
-              onPress={() => handlePress(action)}
-              accessibilityRole="button"
-              accessibilityLabel={action.label}
-              accessibilityHint={action.description}
-            >
-              <View style={[s.sheetActionIcon, { backgroundColor: `${colors.brand}14` }]}>
-                <Ionicons
-                  name={action.icon}
-                  size={22}
-                  color={colors.brand}
-                />
-              </View>
-              <View style={s.sheetActionBody}>
-                <Text style={[s.sheetActionLabel, { color: colors.textPrimary }]}>
-                  {action.label}
-                </Text>
-                <Text style={[s.sheetActionDescription, { color: colors.textMuted }]} numberOfLines={1}>
-                  {action.description}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-            </Pressable>
-          ))}
-        </View>
-      </View>
-    </NativeSheet>
-  );
-};
-
 export default function TabNavigator() {
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
   const { colors } = useAppTheme();
-  const createSheetVisible = useStore((s) => s.createSheetVisible);
-  const setCreateSheetVisible = useStore((s) => s.setCreateSheetVisible);
   const conversations = useStore((s) => s.conversations);
   const messageRequests = useStore((s) => s.messageRequests);
   const requestIds = React.useMemo(() => new Set(messageRequests), [messageRequests]);
@@ -192,19 +113,8 @@ export default function TabNavigator() {
 
   const handleCreatePress = useCallback(() => {
     haptic.light();
-    setCreateSheetVisible(true);
-  }, [haptic, setCreateSheetVisible]);
-
-  const handleCreateClose = useCallback(() => {
-    setCreateSheetVisible(false);
-  }, [setCreateSheetVisible]);
-
-  const handleCreateNavigate = useCallback(
-    (route: string, params?: object) => {
-      navigation.navigate(route as any, params as any);
-    },
-    [navigation],
-  );
+    navigation.navigate('CreateCamera', { mode: 'look' });
+  }, [haptic, navigation]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -307,11 +217,6 @@ export default function TabNavigator() {
         />
       </Tab.Navigator>
 
-      <CreateActionSheet
-        visible={createSheetVisible}
-        onClose={handleCreateClose}
-        onNavigate={handleCreateNavigate}
-      />
     </View>
   );
 }
@@ -394,64 +299,3 @@ const tabStyles = StyleSheet.create({
 });
 
 // Dynamic sheet styles (theme-aware via colors parameter)
-type ThemeColors = import('../theme/ThemeContext').ThemeColors;
-function sheetStyles(colors: ThemeColors) {
-  return StyleSheet.create({
-    sheetContent: {
-      backgroundColor: colors.surface,
-      borderTopLeftRadius: Radius.xl,
-      borderTopRightRadius: Radius.xl,
-      paddingTop: Space.sm,
-      paddingHorizontal: Space.md,
-    },
-    sheetHandle: {
-      width: 36,
-      height: 4,
-      borderRadius: 2,
-      alignSelf: 'center',
-      marginBottom: Space.sm,
-    },
-    sheetTitle: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.bold,
-    },
-    sheetSubtitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      marginBottom: Space.md,
-    },
-    sheetList: {
-      gap: Space.xs,
-    },
-    sheetAction: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingVertical: Space.sm + 2,
-      paddingHorizontal: Space.sm + 2,
-      gap: Space.sm + 2,
-      borderRadius: Radius.lg,
-    },
-    sheetActionPressed: {
-      opacity: 0.7,
-    },
-    sheetActionIcon: {
-      width: 44,
-      height: 44,
-      borderRadius: Radius.full,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    sheetActionBody: {
-      flex: 1,
-      gap: 2,
-    },
-    sheetActionLabel: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-    },
-    sheetActionDescription: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-    },
-  });
-}

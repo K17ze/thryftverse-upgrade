@@ -50,7 +50,23 @@ export default function VerificationScreen({ navigation }: Props) {
   // Verification status — derived from user + compliance state
   const emailVerified = currentUser?.emailVerified ?? false;
   const kycVerified = coOwnCompliance.kycVerified;
-  const currentTier: VerificationTier = kycVerified ? 'id' : emailVerified ? 'email' : 'email';
+  
+  const hasVerification = emailVerified || kycVerified;
+  const currentTier: VerificationTier = kycVerified ? 'id' : 'email';
+
+  const tierInfo = hasVerification
+    ? VERIFICATION_TIERS[currentTier]
+    : {
+        tier: 'email' as const,
+        label: 'Unverified',
+        icon: 'alert-circle-outline',
+        color: 'textSecondary',
+        description: 'Verify your email address to get started',
+      };
+
+  const iconColor = hasVerification ? colors.brand : colors.textSecondary;
+
+  const iconBgColor = colors.surfaceAlt;
 
   // KYC flow state
   const [kycStep, setKycStep] = React.useState<KycStep>('status');
@@ -124,7 +140,6 @@ export default function VerificationScreen({ navigation }: Props) {
     }
   };
 
-  const tierInfo = VERIFICATION_TIERS[currentTier];
 
   return (
     <FlagshipScreen
@@ -137,11 +152,11 @@ export default function VerificationScreen({ navigation }: Props) {
     >
       {/* ── STATUS CARD ── */}
       <View style={[styles.statusCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <View style={styles.statusIconWrap}>
+        <View style={[styles.statusIconWrap, { backgroundColor: iconBgColor }]}>
           <Ionicons
             name={tierInfo.icon as keyof typeof Ionicons.glyphMap}
-            size={28}
-            color={tierInfo.color === 'brand' ? Colors.brand : Colors.success}
+            size={22}
+            color={iconColor}
           />
         </View>
         <View style={styles.statusBody}>
@@ -158,18 +173,18 @@ export default function VerificationScreen({ navigation }: Props) {
       <SettingsSection title="Verification steps">
         <SettingsRow
           icon="mail-outline"
-          iconColor={Colors.success}
+          iconColor={emailVerified ? colors.brand : colors.textMuted}
           title="Email verified"
           subtitle={emailVerified ? 'Confirmed' : 'Pending — check your inbox'}
-          toggleValue={emailVerified}
-          onToggle={() => {}}
+          value={emailVerified ? 'Confirmed' : 'Pending'}
           isFirst
         />
         <SettingsRow
           icon="card-outline"
-          iconColor={kycVerified ? Colors.success : Colors.textMuted}
+          iconColor={kycVerified ? colors.brand : colors.textMuted}
           title="Identity verification"
           subtitle={kycVerified ? 'ID verified' : 'Verify your identity with a government document'}
+          value={kycVerified ? 'Verified' : 'Start'}
           onPress={handleStartKyc}
           isLast
         />
@@ -259,8 +274,8 @@ export default function VerificationScreen({ navigation }: Props) {
                   style={[
                     styles.docOption,
                     {
-                      borderColor: kycDocumentType === doc ? Colors.brand : colors.border,
-                      backgroundColor: kycDocumentType === doc ? `${Colors.brand}10` : colors.surfaceAlt,
+                      borderColor: kycDocumentType === doc ? colors.brand : colors.border,
+                      backgroundColor: kycDocumentType === doc ? `${colors.brand}10` : colors.surfaceAlt,
                     },
                   ]}
                   onPress={() => setKycDocumentType(doc)}
@@ -271,13 +286,13 @@ export default function VerificationScreen({ navigation }: Props) {
                   <Ionicons
                     name={doc === 'passport' ? 'book-outline' : doc === 'driving_licence' ? 'car-outline' : 'id-card-outline'}
                     size={20}
-                    color={kycDocumentType === doc ? Colors.brand : colors.textSecondary}
+                    color={kycDocumentType === doc ? colors.brand : colors.textSecondary}
                   />
-                  <Text style={[styles.docOptionText, { color: kycDocumentType === doc ? Colors.brand : colors.textPrimary }]}>
+                  <Text style={[styles.docOptionText, { color: kycDocumentType === doc ? colors.brand : colors.textPrimary }]}>
                     {doc === 'passport' ? 'Passport' : doc === 'driving_licence' ? 'Driving licence' : 'National ID'}
                   </Text>
                   {kycDocumentType === doc ? (
-                    <Ionicons name="checkmark-circle" size={18} color={Colors.brand} />
+                    <Ionicons name="checkmark-circle" size={18} color={colors.brand} />
                   ) : null}
                 </Pressable>
               ))}
@@ -362,7 +377,7 @@ export default function VerificationScreen({ navigation }: Props) {
                   accessibilityLabel="Submit verification"
                 >
                   {isSubmittingKyc ? (
-                    <ActivityIndicator size="small" color={Colors.background} />
+                    <ActivityIndicator size="small" color={Colors.textInverse} />
                   ) : (
                     <Text style={styles.flowPrimaryBtnText}>Submit</Text>
                   )}
@@ -377,7 +392,7 @@ export default function VerificationScreen({ navigation }: Props) {
       <SettingsSection title="Tax information (DAC7)">
         <SettingsRow
           icon="document-text-outline"
-          iconColor={dac7Completed ? Colors.success : Colors.textMuted}
+          iconColor={dac7Completed ? colors.brand : colors.textMuted}
           title="DAC7 tax details"
           subtitle={dac7Completed ? 'Tax information provided' : 'Required for EU sellers under DAC7 regulation'}
           onPress={() => setDac7Step(dac7Step === 'status' ? 'details' : 'status')}
@@ -425,8 +440,8 @@ export default function VerificationScreen({ navigation }: Props) {
                     style={[
                       styles.countryChip,
                       {
-                        borderColor: dac7Country === code ? Colors.brand : colors.border,
-                        backgroundColor: dac7Country === code ? `${Colors.brand}10` : colors.surfaceAlt,
+                        borderColor: dac7Country === code ? colors.brand : colors.border,
+                        backgroundColor: dac7Country === code ? `${colors.brand}10` : colors.surfaceAlt,
                       },
                     ]}
                     onPress={() => {
@@ -437,7 +452,7 @@ export default function VerificationScreen({ navigation }: Props) {
                     accessibilityState={{ selected: dac7Country === code }}
                     accessibilityLabel={`Select ${code}`}
                   >
-                    <Text style={[styles.countryChipText, { color: dac7Country === code ? Colors.brand : colors.textPrimary }]}>
+                    <Text style={[styles.countryChipText, { color: dac7Country === code ? colors.brand : colors.textPrimary }]}>
                       {code}
                     </Text>
                   </Pressable>
@@ -453,7 +468,7 @@ export default function VerificationScreen({ navigation }: Props) {
                 <Ionicons
                   name={dac7SelfDeclared ? 'checkbox-outline' : 'square-outline'}
                   size={20}
-                  color={dac7SelfDeclared ? Colors.brand : colors.textMuted}
+                  color={dac7SelfDeclared ? colors.brand : colors.textMuted}
                 />
                 <Text style={[styles.checkboxText, { color: colors.textSecondary }]}>
                   I confirm this tax information is accurate and complete
@@ -478,7 +493,7 @@ export default function VerificationScreen({ navigation }: Props) {
                   accessibilityLabel="Save tax information"
                 >
                   {isSubmittingDac7 ? (
-                    <ActivityIndicator size="small" color={Colors.background} />
+                    <ActivityIndicator size="small" color={Colors.textInverse} />
                   ) : (
                     <Text style={styles.flowPrimaryBtnText}>Save</Text>
                   )}
@@ -516,10 +531,9 @@ const styles = StyleSheet.create({
     marginBottom: Space.md,
   },
   statusIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: `${Colors.success}15`,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -652,7 +666,7 @@ const styles = StyleSheet.create({
   flowPrimaryBtnText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.background,
+    color: Colors.textInverse,
   },
   reviewRow: {
     flexDirection: 'row',

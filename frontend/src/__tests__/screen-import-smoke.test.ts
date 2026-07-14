@@ -250,12 +250,15 @@ describe('VisualSearchScreen static smoke', () => {
     expect(src).not.toContain('ActiveTheme');
   });
 
-  it('shows honest unavailable state', () => {
-    expect(src).toContain('not connected yet');
+  it('shows honest rolling-out note (not a dead-end apology)', () => {
+    expect(src).toContain('AI image matching is coming soon');
+    expect(src).not.toContain('not connected yet');
   });
 
-  it('calls backend visual-search endpoint', () => {
-    expect(src).toContain("'/visual-search'");
+  it('calls backend visual-search endpoint via listingsApi client', () => {
+    expect(src).toContain('visualSearch');
+    const apiSrc = readSrc('services/listingsApi.ts');
+    expect(apiSrc).toContain("'/visual-search'");
   });
 });
 

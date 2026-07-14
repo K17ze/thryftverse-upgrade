@@ -14,6 +14,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
 import { Space, Typography, Radius, Type } from '../theme/designTokens';
+import { useAppTheme } from '../theme/ThemeContext';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
@@ -35,6 +36,7 @@ export default function EditProfileScreen() {
   const { show } = useToast();
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
+  const { colors } = useAppTheme();
   const currentUser = useStore((state) => state.currentUser);
   const twoFactorEnabled = useStore((state) => state.twoFactorEnabled);
   const userAvatar = useStore((state) => state.userAvatar);
@@ -192,7 +194,7 @@ export default function EditProfileScreen() {
       style={[styles.saveBtn, canSave && styles.saveBtnActive]}
     >
       {isSaving ? (
-        <ActivityIndicator size="small" color="#fff" />
+        <ActivityIndicator size="small" color={Colors.textInverse} />
       ) : (
         <Text style={[styles.saveBtnText, canSave && styles.saveBtnTextActive]}>
           Done
@@ -308,8 +310,8 @@ export default function EditProfileScreen() {
               <View style={styles.detailStatusWrap}>
                 {emailVerified ? (
                   <View style={[styles.statusPill, styles.statusPillVerified]}>
-                    <Ionicons name="checkmark-circle" size={12} color={Colors.success} />
-                    <Text style={[styles.statusPillText, { color: Colors.success }]}>Verified</Text>
+                    <Ionicons name="checkmark-circle" size={12} color={Colors.brand} />
+                    <Text style={[styles.statusPillText, { color: Colors.brand }]}>Verified</Text>
                   </View>
                 ) : (
                   <View style={[styles.statusPill, styles.statusPillUnverified]}>
@@ -351,13 +353,13 @@ export default function EditProfileScreen() {
             <View style={styles.detailDivider} />
             <PressableRow
               icon="shield-checkmark-outline"
-              iconColor={twoFactorEnabled ? Colors.success : Colors.textMuted}
+              iconColor={twoFactorEnabled ? Colors.brand : Colors.textMuted}
               title="Two-factor authentication"
               subtitle={twoFactorEnabled ? 'Enabled' : 'Add an extra layer of security'}
               statusPill={
                 twoFactorEnabled ? (
                   <View style={[styles.statusPill, styles.statusPillVerified]}>
-                    <Text style={[styles.statusPillText, { color: Colors.success }]}>On</Text>
+                    <Text style={[styles.statusPillText, { color: Colors.brand }]}>On</Text>
                   </View>
                 ) : (
                   <View style={[styles.statusPill, styles.statusPillUnverified]}>
@@ -379,19 +381,23 @@ export default function EditProfileScreen() {
             onPress={() => (navigation as any).navigate('AccountControl')}
             style={({ pressed }) => [
               styles.accountCard,
-              pressed && styles.accountCardPressed,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+              },
+              pressed && { backgroundColor: colors.surfaceAlt },
             ]}
             accessibilityRole="button"
             accessibilityLabel="Account control — download data or delete account"
           >
-            <View style={[styles.accountIconWrap, { backgroundColor: `${Colors.danger}12` }]}>
-              <Ionicons name="warning-outline" size={20} color={Colors.danger} />
+            <View style={styles.accountIconWrap}>
+              <Ionicons name="shield-outline" size={20} color={colors.textSecondary} />
             </View>
             <View style={styles.accountText}>
-              <Text style={styles.accountTitle}>Account control</Text>
-              <Text style={styles.accountSubtitle}>Download your data or delete your account</Text>
+              <Text style={[styles.accountTitle, { color: colors.textPrimary }]}>Account control</Text>
+              <Text style={[styles.accountSubtitle, { color: colors.textSecondary }]}>Download your data or delete your account</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </Pressable>
         </View>
       </KeyboardAwareScrollView>
@@ -585,7 +591,7 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
   },
   saveBtnTextActive: {
-    color: '#fff',
+    color: Colors.textInverse,
   },
 
   // ── Identity row ──
@@ -783,8 +789,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   statusPillVerified: {
-    backgroundColor: `${Colors.success}12`,
-    borderColor: `${Colors.success}30`,
+    backgroundColor: Colors.surfaceAlt,
+    borderColor: Colors.border,
   },
   statusPillUnverified: {
     backgroundColor: Colors.surfaceAlt,
@@ -844,12 +850,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md - 2,
     borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: `${Colors.danger}30`,
-    backgroundColor: `${Colors.danger}06`,
     minHeight: 56,
-  },
-  accountCardPressed: {
-    backgroundColor: `${Colors.danger}10`,
   },
   accountIconWrap: {
     width: 36,
@@ -866,12 +867,10 @@ const styles = StyleSheet.create({
   accountTitle: {
     fontSize: 15,
     fontFamily: Typography.family.semibold,
-    color: Colors.danger,
   },
   accountSubtitle: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
   },
 
   // ── Phone edit modal — premium bottom sheet ──
@@ -938,6 +937,6 @@ const styles = StyleSheet.create({
   modalBtnPrimaryText: {
     fontSize: 15,
     fontFamily: Typography.family.semibold,
-    color: '#fff',
+    color: Colors.textInverse,
   },
 });

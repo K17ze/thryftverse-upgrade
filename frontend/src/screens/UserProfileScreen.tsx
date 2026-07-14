@@ -616,7 +616,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
             accessibilityHint="Returns to previous screen"
             hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
           >
-            <Ionicons name="arrow-back" size={18} color="#fff" />
+            <Ionicons name="arrow-back" size={18} color={Colors.textInverse} />
           </AnimatedPressable>
           <View style={styles.topUtilityRight}>
             <AnimatedPressable
@@ -627,7 +627,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
               accessibilityRole="button"
               hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
             >
-              <Ionicons name="share-outline" size={18} color="#fff" />
+              <Ionicons name="share-outline" size={18} color={Colors.textInverse} />
             </AnimatedPressable>
             {!isSelfProfile && (
               <AnimatedPressable
@@ -638,7 +638,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
                 accessibilityRole="button"
                 hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
               >
-                <Ionicons name="ellipsis-horizontal" size={18} color="#fff" />
+                <Ionicons name="ellipsis-horizontal" size={18} color={Colors.textInverse} />
               </AnimatedPressable>
             )}
           </View>
@@ -952,7 +952,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
     color: TEXT,
   },
-  listState: { alignItems: 'center', justifyContent: 'center', paddingVertical: Space.xl * 2, paddingHorizontal: Space.md, gap: 8 },
+  listState: { alignItems: 'center', justifyContent: 'center', paddingVertical: Space.xl, paddingHorizontal: Space.md, gap: Space.sm },
   listStateTitle: { fontSize: 15, fontFamily: Typography.family.semibold, color: TEXT },
   listStateSub: { fontSize: 13, fontFamily: Typography.family.regular, color: MUTED, textAlign: 'center' },
   loadMoreIndicator: { paddingVertical: Space.md, alignItems: 'center' },

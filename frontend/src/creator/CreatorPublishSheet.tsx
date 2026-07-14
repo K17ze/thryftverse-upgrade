@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,9 +12,10 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
-import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { useCreator } from './CreatorContext';
 import { CreatorCanvas } from './CreatorCanvas';
+import { SheetContainer, PressScale } from './CreatorAnimations';
 import { createLookOnApi } from '../services/looksApi';
 import { createPosterStory } from '../services/postersApi';
 import { CreatorAnalytics } from './creatorAnalytics';
@@ -34,11 +35,13 @@ export interface CreatorPublishSheetProps {
 export function CreatorPublishSheet({ visible, onClose }: CreatorPublishSheetProps) {
   const { document, saveDraft } = useCreator();
   const navigation = useNavigation<any>();
+  const { colors } = useAppTheme();
   const [stage, setStage] = useState<'review' | 'uploading' | 'publishing' | 'success' | 'error'>('review');
   const [errorMessage, setErrorMessage] = useState('');
   const [publishedId, setPublishedId] = useState('');
   const [uploadProgress, setUploadProgress] = useState('');
   const publishGuardRef = useRef(new PublishGuard());
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const handleClose = useCallback(() => {
     if (stage === 'publishing' || stage === 'uploading') return;
@@ -117,18 +120,15 @@ export function CreatorPublishSheet({ visible, onClose }: CreatorPublishSheetPro
     }
   }, [document]);
 
-  if (!visible) return null;
+  if (!visible && stage === 'review') return null;
 
   return (
-    <View style={styles.overlay}>
-      <Pressable style={styles.backdrop} onPress={handleClose} />
-      <View style={styles.sheet}>
-        <View style={styles.handle} />
+    <SheetContainer visible={visible} onClose={handleClose} maxHeight={0.85}>
         <View style={styles.header}>
           <Text style={styles.title}>Publish</Text>
-          <Pressable onPress={handleClose} style={styles.closeBtn} disabled={stage === 'publishing'} accessibilityLabel="Close publish" accessibilityRole="button">
-            <Ionicons name="close" size={20} color={Colors.textSecondary} />
-          </Pressable>
+          <PressScale onPress={handleClose} style={styles.closeBtn} accessibilityLabel="Close publish">
+            <Ionicons name="close" size={22} color={colors.textSecondary} />
+          </PressScale>
         </View>
 
         {stage === 'review' && (
@@ -137,14 +137,14 @@ export function CreatorPublishSheet({ visible, onClose }: CreatorPublishSheetPro
 
         {stage === 'uploading' && (
           <View style={styles.centerState}>
-            <ActivityIndicator size="large" color={Colors.brand} />
+            <ActivityIndicator size="large" color={colors.brand} />
             <Text style={styles.centerStateText}>{uploadProgress || 'Uploading media...'}</Text>
           </View>
         )}
 
         {stage === 'publishing' && (
           <View style={styles.centerState}>
-            <ActivityIndicator size="large" color={Colors.brand} />
+            <ActivityIndicator size="large" color={colors.brand} />
             <Text style={styles.centerStateText}>Publishing...</Text>
           </View>
         )}
@@ -175,7 +175,7 @@ export function CreatorPublishSheet({ visible, onClose }: CreatorPublishSheetPro
 
         {stage === 'error' && (
           <View style={styles.centerState}>
-            <Ionicons name="warning" size={48} color={Colors.danger} />
+            <Ionicons name="warning" size={48} color={colors.danger} />
             <Text style={styles.centerStateTitle}>Publishing failed</Text>
             <Text style={styles.centerStateText}>{errorMessage}</Text>
             <Pressable onPress={() => setStage('review')} style={styles.retryBtn}>
@@ -183,8 +183,7 @@ export function CreatorPublishSheet({ visible, onClose }: CreatorPublishSheetPro
             </Pressable>
           </View>
         )}
-      </View>
-    </View>
+    </SheetContainer>
   );
 }
 
@@ -198,6 +197,8 @@ function PublishReview({
   onSaveDraft: () => Promise<void>;
 }) {
   const { updateMetadata } = useCreator();
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const canvasWidth = 280;
   const canvasHeight = Math.floor(canvasWidth / document.canvas.aspectRatio);
 
@@ -231,7 +232,7 @@ function PublishReview({
       <TextInput
         style={styles.textInput}
         placeholder="Write a caption..."
-        placeholderTextColor={Colors.textMuted}
+        placeholderTextColor={colors.textMuted}
         value={document.metadata.caption}
         onChangeText={(v) => updateMetadata({ caption: v })}
         multiline
@@ -246,8 +247,8 @@ function PublishReview({
         <Switch
           value={document.metadata.visibility === 'public'}
           onValueChange={(v) => updateMetadata({ visibility: v ? 'public' : 'private' })}
-          trackColor={{ false: Colors.surfaceAlt, true: `${Colors.brand}40` }}
-          thumbColor={document.metadata.visibility === 'public' ? Colors.brand : Colors.textMuted}
+          trackColor={{ false: colors.surfaceAlt, true: `${colors.brand}40` }}
+          thumbColor={document.metadata.visibility === 'public' ? colors.brand : colors.textMuted}
         />
       </View>
 
@@ -259,8 +260,8 @@ function PublishReview({
             <Switch
               value={document.metadata.allowReplies}
               onValueChange={(v) => updateMetadata({ allowReplies: v })}
-              trackColor={{ false: Colors.surfaceAlt, true: `${Colors.brand}40` }}
-              thumbColor={document.metadata.allowReplies ? Colors.brand : Colors.textMuted}
+              trackColor={{ false: colors.surfaceAlt, true: `${colors.brand}40` }}
+              thumbColor={document.metadata.allowReplies ? colors.brand : colors.textMuted}
             />
           </View>
           <View style={styles.toggleRow}>
@@ -268,8 +269,8 @@ function PublishReview({
             <Switch
               value={document.metadata.allowReactions}
               onValueChange={(v) => updateMetadata({ allowReactions: v })}
-              trackColor={{ false: Colors.surfaceAlt, true: `${Colors.brand}40` }}
-              thumbColor={document.metadata.allowReactions ? Colors.brand : Colors.textMuted}
+              trackColor={{ false: colors.surfaceAlt, true: `${colors.brand}40` }}
+              thumbColor={document.metadata.allowReactions ? colors.brand : colors.textMuted}
             />
           </View>
         </>
@@ -278,7 +279,7 @@ function PublishReview({
       {/* Actions */}
       <View style={styles.actionRow}>
         <Pressable onPress={onSaveDraft} style={styles.draftBtn} accessibilityLabel="Save as draft" accessibilityRole="button">
-          <Ionicons name="save-outline" size={18} color={Colors.textSecondary} />
+          <Ionicons name="save-outline" size={18} color={colors.textSecondary} />
           <Text style={styles.draftBtnText}>Save draft</Text>
         </Pressable>
         <Pressable onPress={onPublish} style={styles.publishBtn} accessibilityLabel="Publish now" accessibilityRole="button">
@@ -289,158 +290,135 @@ function PublishReview({
   );
 }
 
-const styles = StyleSheet.create({
-  overlay: {
-    ...StyleSheet.absoluteFill,
-    zIndex: 1000,
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  sheet: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    maxHeight: '85%',
-    backgroundColor: Colors.surface,
-    borderTopLeftRadius: Radius.lg,
-    borderTopRightRadius: Radius.lg,
-    overflow: 'hidden',
-  },
-  handle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.border,
-    alignSelf: 'center',
-    marginTop: Space.sm,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
-  title: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.title.size,
-    color: Colors.textPrimary,
-  },
-  closeBtn: {
-    width: 36,
-    height: 36,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: Radius.sm,
-  },
-  scrollBody: {
-    paddingHorizontal: Space.md,
-  },
-  scrollContent: {
-    paddingBottom: Space.xl,
-    gap: Space.sm,
-  },
-  previewContainer: {
-    alignItems: 'center',
-    paddingVertical: Space.sm,
-    gap: Space.md,
-  },
-  previewScroll: {
-    marginHorizontal: -Space.md,
-  },
-  previewPageWrapper: {
-    marginHorizontal: Space.md,
-  },
-  sectionLabel: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.caption.size,
-    color: Colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  textInput: {
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Radius.md,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    fontSize: Type.body.size,
-    color: Colors.textPrimary,
-    minHeight: 60,
-  },
-  toggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  toggleLabel: {
-    fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
-    color: Colors.textPrimary,
-  },
-  actionRow: {
-    flexDirection: 'row',
-    gap: Space.sm,
-    marginTop: Space.md,
-  },
-  draftBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: Space.md,
-    height: 44,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
-  },
-  draftBtnText: {
-    fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
-    color: Colors.textSecondary,
-  },
-  publishBtn: {
-    flex: 1,
-    height: 44,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.brand,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  publishBtnText: {
-    color: '#fff',
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-  },
-  centerState: {
-    alignItems: 'center',
-    paddingVertical: Space.xl,
-    gap: Space.sm,
-  },
-  centerStateTitle: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.title.size,
-    color: Colors.textPrimary,
-  },
-  centerStateText: {
-    fontFamily: Typography.family.regular,
-    fontSize: Type.body.size,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-  },
-  retryBtn: {
-    paddingHorizontal: Space.md + 4,
-    height: 40,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.brand,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: Space.sm,
-  },
-  retryBtnText: {
-    color: '#fff',
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-  },
-});
+type ThemeColors = ReturnType<typeof useAppTheme>['colors'];
+
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
+    },
+    title: {
+      fontFamily: Typography.family.semibold,
+      fontSize: Type.subtitle.size,
+      color: colors.textPrimary,
+    },
+    closeBtn: {
+      width: 44,
+      height: 44,
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderRadius: Radius.sm,
+    },
+    scrollBody: {
+      paddingHorizontal: Space.md,
+    },
+    scrollContent: {
+      paddingBottom: Space.xl,
+      gap: Space.sm,
+    },
+    previewContainer: {
+      alignItems: 'center',
+      paddingVertical: Space.sm,
+      gap: Space.md,
+    },
+    previewScroll: {
+      marginHorizontal: -Space.md,
+    },
+    previewPageWrapper: {
+      marginHorizontal: Space.md,
+    },
+    sectionLabel: {
+      fontFamily: Typography.family.semibold,
+      fontSize: Type.caption.size,
+      color: colors.textSecondary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    textInput: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: Radius.md,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
+      fontSize: Type.body.size,
+      color: colors.textPrimary,
+      minHeight: 60,
+    },
+    toggleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    toggleLabel: {
+      fontFamily: Typography.family.medium,
+      fontSize: Type.body.size,
+      color: colors.textPrimary,
+    },
+    actionRow: {
+      flexDirection: 'row',
+      gap: Space.sm,
+      marginTop: Space.md,
+    },
+    draftBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: Space.md,
+      height: 44,
+      borderRadius: Radius.md,
+      backgroundColor: colors.surfaceAlt,
+    },
+    draftBtnText: {
+      fontFamily: Typography.family.medium,
+      fontSize: Type.body.size,
+      color: colors.textSecondary,
+    },
+    publishBtn: {
+      flex: 1,
+      height: 44,
+      borderRadius: Radius.md,
+      backgroundColor: colors.brand,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    publishBtnText: {
+      color: colors.textInverse,
+      fontFamily: Typography.family.semibold,
+      fontSize: Type.body.size,
+    },
+    centerState: {
+      alignItems: 'center',
+      paddingVertical: Space.xl,
+      gap: Space.sm,
+    },
+    centerStateTitle: {
+      fontFamily: Typography.family.semibold,
+      fontSize: Type.title.size,
+      color: colors.textPrimary,
+    },
+    centerStateText: {
+      fontFamily: Typography.family.regular,
+      fontSize: Type.body.size,
+      color: colors.textSecondary,
+      textAlign: 'center',
+    },
+    retryBtn: {
+      paddingHorizontal: Space.md + 4,
+      height: 40,
+      borderRadius: Radius.md,
+      backgroundColor: colors.brand,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginTop: Space.sm,
+    },
+    retryBtnText: {
+      color: colors.textInverse,
+      fontFamily: Typography.family.semibold,
+      fontSize: Type.body.size,
+    },
+  });
+}

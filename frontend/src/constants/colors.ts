@@ -34,9 +34,9 @@ const DARK_COLORS = {
   borderLight: '#333333',
 
   // Status (minimal set)
-  danger: '#DC2626',
-  success: '#16A34A',
-  warning: '#F59E0B',
+  danger: '#7e0202',
+  success: '#0c5728',
+  warning: '#f2d097',
 } as const;
 
 const LIGHT_COLORS = {
@@ -63,9 +63,9 @@ const LIGHT_COLORS = {
   borderLight: '#F0F0F0',
 
   // Status (minimal set)
-  danger: '#DC2626',
-  success: '#16A34A',
-  warning: '#F59E0B',
+  danger: '#790e0e',
+  success: '#077c32',
+  warning: '#ffd48a',
 } as const;
 
 // ============================================================================

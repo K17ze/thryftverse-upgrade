@@ -298,13 +298,6 @@ export default function MyProfileScreen() {
         accessibilityLabel: 'View your closet',
       },
       {
-        icon: 'storefront-outline' as const,
-        label: 'Seller Hub',
-        value: allOwnedListings.length > 0 ? `${allOwnedListings.length} listings` : undefined,
-        onPress: () => { haptic.light(); navigation.navigate('SellerHub'); },
-        accessibilityLabel: 'Open seller hub',
-      },
-      {
         icon: 'wallet-outline' as const,
         label: 'Wallet',
         onPress: () => { haptic.light(); navigation.navigate('Wallet'); },
@@ -367,7 +360,7 @@ export default function MyProfileScreen() {
             accessibilityRole="button"
             accessibilityHint="Opens your style and experience preferences"
           >
-            <Ionicons name="apps-outline" size={18} color="#fff" />
+            <Ionicons name="apps-outline" size={18} color={Colors.textInverse} />
           </AnimatedPressable>
 
           <AnimatedPressable
@@ -378,7 +371,7 @@ export default function MyProfileScreen() {
             accessibilityRole="button"
             accessibilityHint="Opens account and app settings"
           >
-            <Ionicons name="settings-outline" size={18} color="#fff" />
+            <Ionicons name="settings-outline" size={18} color={Colors.textInverse} />
           </AnimatedPressable>
         </Reanimated.View>
       </View>
@@ -823,7 +816,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   soldText: {
-    color: '#fff',
+    color: Colors.textInverse,
     fontSize: 14,
     fontFamily: Typography.family.bold,
     letterSpacing: 1,
@@ -847,13 +840,13 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
 
-  // Listings empty state
+  // Listings empty state — compact in-grid prompt, not full blank page
   listingsEmpty: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: Space.xl * 2,
+    paddingVertical: Space.xl,
     paddingHorizontal: Space.md,
-    gap: 8,
+    gap: Space.sm,
   },
   listingsEmptyIcon: {
     width: 48,

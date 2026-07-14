@@ -1,9 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
 import { Typography, Space, Radius } from '../../theme/designTokens';
 import { ListingQualityResult } from '../../utils/listingQuality';
+import { useAppTheme } from '../../theme/ThemeContext';
 
 export interface ListingQualityMeterProps {
   result: ListingQualityResult;
@@ -22,33 +22,33 @@ const TIER_ICON: Record<string, string> = {
  */
 export function ListingQualityMeter({ result, compact }: ListingQualityMeterProps) {
   const { score, tier, tierLabel, missingItems, tips } = result;
-  const barColor = score >= 80 ? Colors.success : score >= 55 ? Colors.brand : Colors.warning;
+  const { colors } = useAppTheme();
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
-          <Ionicons name={TIER_ICON[tier] as keyof typeof Ionicons.glyphMap} size={15} color={barColor} />
-          <Text style={styles.title}>Listing quality</Text>
+          <Ionicons name={TIER_ICON[tier] as keyof typeof Ionicons.glyphMap} size={14} color={colors.textSecondary} />
+          <Text style={[styles.title, { color: colors.textPrimary }]}>Listing quality</Text>
         </View>
         <View style={styles.scoreWrap}>
-          <Text style={[styles.score, { color: barColor }]}>{score}%</Text>
-          <View style={[styles.tierBadge, { backgroundColor: `${barColor}15` }]}>
-            <Text style={[styles.tierText, { color: barColor }]}>{tierLabel}</Text>
+          <Text style={[styles.score, { color: colors.textPrimary }]}>{score}%</Text>
+          <View style={[styles.tierBadge, { backgroundColor: colors.surfaceAlt }]}>
+            <Text style={[styles.tierText, { color: colors.textSecondary }]}>{tierLabel}</Text>
           </View>
         </View>
       </View>
 
-      <View style={styles.barTrack}>
-        <View style={[styles.barFill, { width: `${score}%`, backgroundColor: barColor }]} />
+      <View style={[styles.barTrack, { backgroundColor: colors.surfaceAlt }]}>
+        <View style={[styles.barFill, { width: `${score}%`, backgroundColor: colors.brand }]} />
       </View>
 
       {!compact && missingItems.length > 0 && (
         <View style={styles.itemsRow}>
           {missingItems.slice(0, 5).map((item) => (
-            <View key={item.key} style={styles.missingChip}>
-              <Ionicons name={item.icon as keyof typeof Ionicons.glyphMap} size={10} color={Colors.textMuted} />
-              <Text style={styles.missingChipText}>{item.label}</Text>
+            <View key={item.key} style={[styles.missingChip, { backgroundColor: colors.surfaceAlt, borderWidth: 0 }]}>
+              <Ionicons name={item.icon as keyof typeof Ionicons.glyphMap} size={10} color={colors.textMuted} />
+              <Text style={[styles.missingChipText, { color: colors.textSecondary }]}>{item.label}</Text>
             </View>
           ))}
         </View>
@@ -58,8 +58,8 @@ export function ListingQualityMeter({ result, compact }: ListingQualityMeterProp
         <View style={styles.tipsCol}>
           {tips.slice(0, 3).map((tip, i) => (
             <View key={i} style={styles.tipRow}>
-              <Ionicons name="bulb-outline" size={11} color={Colors.warning} />
-              <Text style={styles.tipText}>{tip}</Text>
+              <Text style={[styles.tipBullet, { color: colors.textMuted }]}>•</Text>
+              <Text style={[styles.tipText, { color: colors.textSecondary }]}>{tip}</Text>
             </View>
           ))}
         </View>
@@ -75,9 +75,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
     gap: 8,
   },
   headerRow: {
@@ -93,7 +91,6 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   scoreWrap: {
     flexDirection: 'row',
@@ -114,14 +111,13 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
   },
   barTrack: {
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.surfaceAlt,
+    height: 2,
+    borderRadius: 1,
     overflow: 'hidden',
   },
   barFill: {
     height: '100%',
-    borderRadius: 2,
+    borderRadius: 1,
   },
   itemsRow: {
     flexDirection: 'row',
@@ -134,13 +130,13 @@ const styles = StyleSheet.create({
     gap: 3,
     paddingHorizontal: 7,
     paddingVertical: 3,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: 'transparent',
     borderRadius: Radius.sm,
+    borderWidth: 1,
   },
   missingChipText: {
     fontSize: 10,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
   },
   tipsCol: {
     gap: 4,
@@ -148,13 +144,17 @@ const styles = StyleSheet.create({
   tipRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 5,
+    gap: 6,
+  },
+  tipBullet: {
+    fontSize: 12,
+    lineHeight: 15,
+    fontFamily: Typography.family.bold,
   },
   tipText: {
     flex: 1,
     fontSize: 11,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
     lineHeight: 15,
   },
 });

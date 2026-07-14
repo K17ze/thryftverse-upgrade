@@ -32,7 +32,7 @@ const BRAND = Colors.brand;
 const TEXT_INVERSE = Colors.textInverse;
 
 const COVER_HEIGHT = 160;
-const AVATAR_SIZE = 84;
+const AVATAR_SIZE = 88; // design contract: 88-96pt seam avatar
 const AVATAR_OVERLAP = AVATAR_SIZE / 2;
 const ACTION_RADIUS = 11;
 const ACTION_HEIGHT = 44;

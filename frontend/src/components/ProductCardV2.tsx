@@ -149,7 +149,7 @@ export function ProductCardV2({
             <Ionicons
               name={hasVideo ? 'videocam' : 'images'}
               size={11}
-              color="#FFFFFF"
+              color={Colors.textInverse}
             />
           </View>
         )}
@@ -166,7 +166,7 @@ export function ProductCardV2({
               accessibilityLabel={isSaved ? 'Remove from saved' : 'Save product'}
               accessibilityHint="Toggles this product in your saved page"
             >
-              <Ionicons name={isSaved ? 'bookmark' : 'bookmark-outline'} size={18} color={isSaved ? Colors.brand : '#FFFFFF'} />
+              <Ionicons name={isSaved ? 'bookmark' : 'bookmark-outline'} size={18} color={isSaved ? Colors.brand : Colors.textInverse} />
             </AnimatedPressable>
           ) : null}
           <View style={styles.favBtn}>
@@ -175,7 +175,7 @@ export function ProductCardV2({
               onToggle={handleToggleFav}
               size={20}
               activeColor={Colors.danger}
-              inactiveColor="#FFFFFF"
+              inactiveColor={Colors.textInverse}
             />
           </View>
         </View>
@@ -331,23 +331,23 @@ const styles = StyleSheet.create({
     top: Space.sm,
     right: Space.sm,
     backgroundColor: 'rgba(0,0,0,0.40)',
-    width: 24,
-    height: 24,
+    width: 44,
+    height: 44,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
   favBtn: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     borderRadius: Radius.full,
     backgroundColor: 'rgba(0,0,0,0.32)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   saveBtn: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     borderRadius: Radius.full,
     backgroundColor: 'rgba(0,0,0,0.32)',
     alignItems: 'center',
@@ -436,7 +436,7 @@ const styles = StyleSheet.create({
   conditionText: {
     fontSize: 10,
     fontFamily: Typography.family.bold,
-    color: '#FFFFFF',
+    color: Colors.textInverse,
     letterSpacing: 0.3,
     textTransform: 'uppercase',
   },

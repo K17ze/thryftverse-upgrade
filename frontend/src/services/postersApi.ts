@@ -82,6 +82,8 @@ export interface PosterStory {
   viewedFrameCount: number;
   totalFrameCount: number;
   uniqueViewerCount?: number;
+  /** Versioned composition document for WYSIWYG viewer rendering. */
+  compositionDocument?: unknown;
 }
 
 export interface PosterStoryListResponse {
@@ -116,6 +118,10 @@ export interface PosterStoryCreateBody {
   expiresInHours?: number;
   posterMode?: 'poster' | 'look';
   frames: PosterStoryCreateFrame[];
+  /** Versioned composition document for WYSIWYG viewer rendering. When
+   * present, the viewer should render this canonical composition instead
+   * of reconstructing from frames/stickers alone. */
+  compositionDocument?: unknown;
 }
 
 // ── Types: Replies ──────────────────────────────────────────────────

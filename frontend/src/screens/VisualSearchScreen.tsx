@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,55 +6,97 @@ import {
   Image,
   ScrollView,
   StatusBar,
+  TextInput,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
+import Reanimated, { FadeIn } from 'react-native-reanimated';
 import * as ImagePicker from 'expo-image-picker';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { Colors } from '../constants/colors';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Radius, Type , Typography  } from '../theme/designTokens';
+import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { useToast } from '../context/ToastContext';
 import { useBackendData } from '../context/BackendDataContext';
-import { MasonryGrid } from '../components/ProductCardV2';
+import { useStore } from '../store/useStore';
+import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGrid';
+import { DiscoverySectionHeader } from '../components/discover/DiscoverySectionHeader';
+import { PremiumSkeletonTile } from '../components/discover/PremiumSkeletonTile';
+import { Listing } from '../data/mockData';
+import { visualSearch } from '../services/listingsApi';
+import VisualSearchCamera from '../components/VisualSearchCamera';
 
 type Props = StackScreenProps<RootStackParamList, 'VisualSearch'>;
 
-export default function VisualSearchScreen({ navigation }: Props) {
+type ResultStatus = 'idle' | 'loading' | 'populated' | 'empty' | 'error';
+
+export default function VisualSearchScreen({ navigation, route }: Props) {
   const { isDark } = useAppTheme();
+  const initialImageUri = route.params?.initialImageUri;
   const { show } = useToast();
   const { listings } = useBackendData();
-  const [imageUri, setImageUri] = useState<string | null>(null);
+  const addSavedSearch = useStore((state) => state.addSavedSearch);
+  const savedSearches = useStore((state) => state.savedSearches);
+
+  const [imageUri, setImageUri] = useState<string | null>(initialImageUri ?? null);
   const [previewFailed, setPreviewFailed] = useState(false);
+  const [description, setDescription] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [brand, setBrand] = useState('');
+  const [minPrice, setMinPrice] = useState('');
+  const [maxPrice, setMaxPrice] = useState('');
+  const [status, setStatus] = useState<ResultStatus>('idle');
+  const [results, setResults] = useState<Listing[]>([]);
+  const [visualMatching, setVisualMatching] = useState(false);
+  const [resultNote, setResultNote] = useState<string | undefined>(undefined);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const handleCapture = useCallback(async () => {
-    try {
-      const permission = await ImagePicker.requestCameraPermissionsAsync();
-      if (!permission.granted) {
-        show('Camera permission required', 'error');
-        return;
+  // Derive available categories from listings for refinement chips.
+  const availableCategories = useMemo(() => {
+    const categoryMap = new Map<string, number>();
+    for (const listing of listings) {
+      const cat = (listing.category ?? '').trim();
+      if (cat) {
+        categoryMap.set(cat, (categoryMap.get(cat) ?? 0) + 1);
       }
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.92,
-      });
-      if (!result.canceled && result.assets?.[0]?.uri) {
-        setPreviewFailed(false);
-        setImageUri(result.assets[0].uri);
-      }
-    } catch {
-      show('Could not open camera', 'error');
     }
-  }, [show]);
+    return Array.from(categoryMap.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([category, count]) => ({ category, count }));
+  }, [listings]);
 
-  const handleGallery = useCallback(async () => {
+  // Derive brand suggestions from listings (top brands).
+  const brandSuggestions = useMemo(() => {
+    const brandMap = new Map<string, number>();
+    for (const listing of listings) {
+      const b = (listing.brand ?? '').trim();
+      if (b) {
+        brandMap.set(b, (brandMap.get(b) ?? 0) + 1);
+      }
+    }
+    return Array.from(brandMap.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([b]) => b);
+  }, [listings]);
+
+  // Reset preview-failed flag whenever a new image is set.
+  useEffect(() => {
+    if (imageUri) setPreviewFailed(false);
+  }, [imageUri]);
+
+  const handlePhotoCapture = useCallback((uri: string) => {
+    setPreviewFailed(false);
+    setImageUri(uri);
+  }, []);
+
+  const openGallery = useCallback(async () => {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
@@ -79,176 +121,546 @@ export default function VisualSearchScreen({ navigation }: Props) {
   const handleRemoveImage = useCallback(() => {
     setPreviewFailed(false);
     setImageUri(null);
+    setStatus('idle');
+    setResults([]);
+    setDescription('');
+    setSelectedCategory(null);
+    setBrand('');
+    setMinPrice('');
+    setMaxPrice('');
   }, []);
 
-  const handleBrowseSimilar = useCallback(() => {
-    navigation.navigate('Browse', { categoryId: 'all', title: 'Browse' });
-  }, [navigation]);
+  // Build the active filter payload from current refinement inputs.
+  const buildFilterPayload = useCallback(() => {
+    const minPriceNum = minPrice.trim() ? Number(minPrice) : undefined;
+    const maxPriceNum = maxPrice.trim() ? Number(maxPrice) : undefined;
+    return {
+      query: description.trim() || undefined,
+      category: selectedCategory ?? undefined,
+      brand: brand.trim() || undefined,
+      minPrice: typeof minPriceNum === 'number' && !Number.isNaN(minPriceNum) ? minPriceNum : undefined,
+      maxPrice: typeof maxPriceNum === 'number' && !Number.isNaN(maxPriceNum) ? maxPriceNum : undefined,
+      sort: 'newest' as const,
+      limit: 48,
+    };
+  }, [description, selectedCategory, brand, minPrice, maxPrice]);
 
-  const handleSearchByText = useCallback(() => {
-    navigation.navigate('GlobalSearch');
-  }, [navigation]);
+  // Client-side fallback filter over cached listings — mirrors BrowseScreen logic.
+  const filterCachedListings = useCallback(
+    (payload: ReturnType<typeof buildFilterPayload>): Listing[] => {
+      const q = (payload.query ?? '').trim().toLowerCase();
+      const cat = (payload.category ?? '').trim().toLowerCase();
+      const b = (payload.brand ?? '').trim().toLowerCase();
+      const min = payload.minPrice;
+      const max = payload.maxPrice;
 
-  const handleBrowseCategory = useCallback((categoryId: string, categoryTitle: string) => {
-    navigation.navigate('Browse', { categoryId, title: categoryTitle });
-  }, [navigation]);
+      return listings.filter((listing) => {
+        if (cat && (listing.category ?? '').toLowerCase() !== cat) return false;
+        if (b && !(listing.brand ?? '').toLowerCase().includes(b)) return false;
+        if (typeof min === 'number' && listing.price < min) return false;
+        if (typeof max === 'number' && listing.price > max) return false;
+        if (q) {
+          const searchable = [listing.title, listing.description, listing.brand, listing.category]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
+          if (!searchable.includes(q)) return false;
+        }
+        return true;
+      });
+    },
+    [listings]
+  );
 
-  // Derive available categories from listings for fallback browsing
-  const availableCategories = React.useMemo(() => {
-    const categoryMap = new Map<string, number>();
-    for (const listing of listings) {
-      const cat = (listing.category ?? '').trim();
-      if (cat) {
-        categoryMap.set(cat, (categoryMap.get(cat) ?? 0) + 1);
+  // Run the visual search: prefer the backend, fall back to cached listings.
+  const runSearch = useCallback(async () => {
+    if (!imageUri) return;
+    setStatus('loading');
+    const payload = buildFilterPayload();
+
+    const apiResult = await visualSearch(payload);
+    let items = apiResult.listings;
+    let usedFallback = apiResult.source === 'fallback';
+
+    if (apiResult.source === 'fallback' || items.length === 0) {
+      // Try client-side filtering over cached listings before declaring empty.
+      const cached = filterCachedListings(payload);
+      if (cached.length > 0) {
+        items = cached;
+        usedFallback = true;
       }
     }
-    return Array.from(categoryMap.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 6)
-      .map(([category, count]) => ({ category, count }));
-  }, [listings]);
+
+    setResults(items);
+    setVisualMatching(apiResult.visualMatching);
+    setResultNote(
+      usedFallback && !apiResult.visualMatching
+        ? 'Showing similar items by category, brand & description. AI image matching is coming soon.'
+        : apiResult.note
+    );
+    setStatus(items.length > 0 ? 'populated' : 'empty');
+  }, [imageUri, buildFilterPayload, filterCachedListings]);
+
+  // Auto-run search once a photo is selected (initial coarse result set).
+  useEffect(() => {
+    if (imageUri && status === 'idle') {
+      void runSearch();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [imageUri]);
+
+  // Re-run when refinement inputs change (debounced via the user's explicit "Apply").
+  const handleApplyFilters = useCallback(() => {
+    if (imageUri) void runSearch();
+  }, [imageUri, runSearch]);
+
+  const handleRefresh = useCallback(async () => {
+    if (!imageUri) return;
+    setRefreshing(true);
+    await runSearch();
+    setTimeout(() => setRefreshing(false), 400);
+  }, [imageUri, runSearch]);
+
+  const handleClearFilters = useCallback(() => {
+    setDescription('');
+    setSelectedCategory(null);
+    setBrand('');
+    setMinPrice('');
+    setMaxPrice('');
+    if (imageUri) {
+      // Re-run with cleared filters on next tick to flush state.
+      setTimeout(() => void runSearch(), 0);
+    }
+  }, [imageUri, runSearch]);
+
+  const handleBrowseCategory = useCallback(
+    (categoryId: string, categoryTitle: string) => {
+      navigation.navigate('Browse', { categoryId, title: categoryTitle });
+    },
+    [navigation]
+  );
+
+  const handlePressItem = useCallback(
+    (item: Listing) => {
+      navigation.navigate('ItemDetail', { itemId: item.id });
+    },
+    [navigation]
+  );
+
+  // Save-search: mirrors BrowseScreen/GlobalSearchScreen truthfully.
+  const saveSearchLabel = useMemo(() => {
+    const parts: string[] = [];
+    if (description.trim()) parts.push(description.trim());
+    else if (selectedCategory) parts.push(selectedCategory);
+    if (brand.trim()) parts.push(brand.trim());
+    return parts.join(' · ') || 'Visual search';
+  }, [description, selectedCategory, brand]);
+
+  const isCurrentSaved = useMemo(() => {
+    return savedSearches.some(
+      (s) =>
+        s.query === saveSearchLabel &&
+        (s.filters.category ?? '') === (selectedCategory ?? '') &&
+        s.filters.brands.join(',') === (brand.trim() ? [brand.trim()].join(',') : '')
+    );
+  }, [savedSearches, saveSearchLabel, selectedCategory, brand]);
+
+  const handleSaveSearch = useCallback(() => {
+    if (!imageUri) return;
+    const minPriceNum = minPrice.trim() ? Number(minPrice) : undefined;
+    const maxPriceNum = maxPrice.trim() ? Number(maxPrice) : undefined;
+    addSavedSearch({
+      query: saveSearchLabel,
+      filters: {
+        brands: brand.trim() ? [brand.trim()] : [],
+        sizes: [],
+        condition: 'Any',
+        sort: 'Newest',
+        category: selectedCategory ?? undefined,
+        minPrice: typeof minPriceNum === 'number' && !Number.isNaN(minPriceNum) ? minPriceNum : undefined,
+        maxPrice: typeof maxPriceNum === 'number' && !Number.isNaN(maxPriceNum) ? maxPriceNum : undefined,
+      },
+      alertsEnabled: true,
+    });
+    show('Search saved with alerts enabled', 'success');
+  }, [imageUri, saveSearchLabel, brand, selectedCategory, minPrice, maxPrice, addSavedSearch, show]);
+
+  const hasActiveFilters =
+    description.trim().length > 0 ||
+    selectedCategory !== null ||
+    brand.trim().length > 0 ||
+    minPrice.trim().length > 0 ||
+    maxPrice.trim().length > 0;
+
+  // ── Visual-query header (photo selected) ──────────────────────────────
+  const renderVisualQueryHeader = () => (
+    <View style={styles.queryHeader}>
+      <View style={styles.queryThumbWrap}>
+        {previewFailed ? (
+          <View style={styles.queryThumb}>
+            <Ionicons name="image-outline" size={24} color={Colors.textMuted} />
+          </View>
+        ) : (
+          <Image
+            source={{ uri: imageUri! }}
+            style={styles.queryThumb}
+            resizeMode="cover"
+            onError={() => setPreviewFailed(true)}
+          />
+        )}
+        <AnimatedPressable
+          style={styles.queryThumbRemove}
+          onPress={handleRemoveImage}
+          activeOpacity={0.85}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Remove photo and start over"
+        >
+          <Ionicons name="close-circle" size={22} color="#fff" />
+        </AnimatedPressable>
+      </View>
+
+      <View style={styles.queryActions}>
+        <AnimatedPressable
+          style={styles.queryActionBtn}
+          onPress={() => setImageUri(null)}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Retake photo with camera"
+        >
+          <Ionicons name="camera-outline" size={18} color={Colors.textPrimary} />
+          <Text style={styles.queryActionText}>Retake</Text>
+        </AnimatedPressable>
+        <AnimatedPressable
+          style={styles.queryActionBtn}
+          onPress={openGallery}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Replace photo from gallery"
+        >
+          <Ionicons name="swap-horizontal-outline" size={18} color={Colors.textPrimary} />
+          <Text style={styles.queryActionText}>Replace</Text>
+        </AnimatedPressable>
+      </View>
+    </View>
+  );
+
+  // ── Multi-modal refinement bar ────────────────────────────────────────
+  const renderRefinementBar = () => (
+    <View style={styles.refinementWrap}>
+      <Text style={styles.refinementLabel}>Describe your photo</Text>
+      <View style={styles.textInputWrap}>
+        <Ionicons name="search-outline" size={18} color={Colors.textMuted} style={styles.textInputIcon} />
+        <TextInput
+          style={styles.textInput}
+          value={description}
+          onChangeText={setDescription}
+          placeholder="e.g. black leather jacket"
+          placeholderTextColor={Colors.textMuted}
+          selectionColor={Colors.brand}
+          returnKeyType="search"
+          onSubmitEditing={handleApplyFilters}
+          accessibilityLabel="Describe the item in your photo"
+        />
+        {description.length > 0 && (
+          <AnimatedPressable onPress={() => setDescription('')} hitSlop={8} accessibilityLabel="Clear description">
+            <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
+          </AnimatedPressable>
+        )}
+      </View>
+
+      {availableCategories.length > 0 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.categoryRail}
+          contentContainerStyle={styles.categoryRailContent}
+        >
+          <AnimatedPressable
+            style={[styles.categoryPill, !selectedCategory && styles.categoryPillActive]}
+            onPress={() => setSelectedCategory(null)}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="All categories"
+            accessibilityState={{ selected: !selectedCategory }}
+          >
+            <Text style={[styles.categoryPillText, !selectedCategory && styles.categoryPillTextActive]}>All</Text>
+          </AnimatedPressable>
+          {availableCategories.map(({ category, count }) => {
+            const active = selectedCategory === category;
+            return (
+              <AnimatedPressable
+                key={category}
+                style={[styles.categoryPill, active && styles.categoryPillActive]}
+                onPress={() => setSelectedCategory(active ? null : category)}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={`Filter by ${category}, ${count} items`}
+                accessibilityState={{ selected: active }}
+              >
+                <Text style={[styles.categoryPillText, active && styles.categoryPillTextActive]}>{category}</Text>
+              </AnimatedPressable>
+            );
+          })}
+        </ScrollView>
+      )}
+
+      <View style={styles.filterRow}>
+        <View style={styles.filterInputWrap}>
+          <Text style={styles.filterInputLabel}>Brand</Text>
+          <TextInput
+            style={styles.filterInput}
+            value={brand}
+            onChangeText={setBrand}
+            placeholder="Any brand"
+            placeholderTextColor={Colors.textMuted}
+            selectionColor={Colors.brand}
+            returnKeyType="done"
+            accessibilityLabel="Filter by brand"
+          />
+        </View>
+        <View style={styles.filterInputWrap}>
+          <Text style={styles.filterInputLabel}>Min £</Text>
+          <TextInput
+            style={styles.filterInput}
+            value={minPrice}
+            onChangeText={setMinPrice}
+            placeholder="0"
+            placeholderTextColor={Colors.textMuted}
+            keyboardType="numeric"
+            selectionColor={Colors.brand}
+            returnKeyType="done"
+            accessibilityLabel="Minimum price in pounds"
+          />
+        </View>
+        <View style={styles.filterInputWrap}>
+          <Text style={styles.filterInputLabel}>Max £</Text>
+          <TextInput
+            style={styles.filterInput}
+            value={maxPrice}
+            onChangeText={setMaxPrice}
+            placeholder="Any"
+            placeholderTextColor={Colors.textMuted}
+            keyboardType="numeric"
+            selectionColor={Colors.brand}
+            returnKeyType="done"
+            accessibilityLabel="Maximum price in pounds"
+          />
+        </View>
+      </View>
+
+      {brandSuggestions.length > 0 && brand.trim().length === 0 && (
+        <View style={styles.suggestionRow}>
+          <Text style={styles.suggestionLabel}>Popular:</Text>
+          {brandSuggestions.slice(0, 4).map((b) => (
+            <AnimatedPressable
+              key={b}
+              style={styles.suggestionChip}
+              onPress={() => setBrand(b)}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={`Set brand to ${b}`}
+            >
+              <Text style={styles.suggestionText}>{b}</Text>
+            </AnimatedPressable>
+          ))}
+        </View>
+      )}
+
+      <View style={styles.refinementActions}>
+        <AppButton
+          title="Apply filters"
+          variant="primary"
+          size="md"
+          onPress={handleApplyFilters}
+          style={styles.applyBtn}
+        />
+        {hasActiveFilters && (
+          <AnimatedPressable
+            style={styles.clearBtn}
+            onPress={handleClearFilters}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Clear all filters"
+          >
+            <Text style={styles.clearBtnText}>Clear</Text>
+          </AnimatedPressable>
+        )}
+      </View>
+    </View>
+  );
+
+  // ── Honest integrated note ────────────────────────────────────────────
+  const renderHonestNote = () => {
+    if (!resultNote) return null;
+    return (
+      <View style={styles.honestNote}>
+        <Ionicons name="information-circle-outline" size={16} color={Colors.textSecondary} />
+        <Text style={styles.honestNoteText}>{resultNote}</Text>
+      </View>
+    );
+  };
+
+  // ── Loading skeleton grid ─────────────────────────────────────────────
+  const renderSkeletonGrid = () => (
+    <View style={styles.skeletonGrid}>
+      {[0, 1, 2, 3, 4, 5].map((i) => (
+        <View
+          key={i}
+          style={[
+            styles.skeletonTile,
+            { aspectRatio: i % 2 === 0 ? 0.8 : 1.2 },
+          ]}
+        >
+          <PremiumSkeletonTile width="100%" height="100%" borderRadius={Radius.lg} />
+        </View>
+      ))}
+    </View>
+  );
+
+  // ── Empty / filtered-empty recovery ───────────────────────────────────
+  const renderEmptyState = () => (
+    <View style={styles.emptyState}>
+      <View style={styles.emptyIconWrap}>
+        <Ionicons name="search-outline" size={36} color={Colors.textMuted} />
+      </View>
+      <Text style={styles.emptyTitle}>No items match your photo filters</Text>
+      <Text style={styles.emptyText}>
+        Try clearing filters, broadening your description, or browse a category instead.
+      </Text>
+      {hasActiveFilters && (
+        <AppButton
+          title="Clear filters"
+          variant="secondary"
+          size="md"
+          onPress={handleClearFilters}
+          style={styles.emptyAction}
+        />
+      )}
+      {availableCategories.length > 0 && (
+        <View style={styles.emptyCategoryRow}>
+          {availableCategories.slice(0, 4).map(({ category }) => (
+            <AnimatedPressable
+              key={category}
+              style={styles.emptyCategoryChip}
+              onPress={() => handleBrowseCategory(category, category)}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={`Browse ${category} instead`}
+            >
+              <Text style={styles.emptyCategoryText}>{category}</Text>
+            </AnimatedPressable>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+
+  // ── Error state with retry ────────────────────────────────────────────
+  const renderErrorState = () => (
+    <View style={styles.emptyState}>
+      <View style={styles.emptyIconWrap}>
+        <Ionicons name="cloud-offline-outline" size={36} color={Colors.textMuted} />
+      </View>
+      <Text style={styles.emptyTitle}>Couldn't load results</Text>
+      <Text style={styles.emptyText}>Check your connection and try again.</Text>
+      <AppButton
+        title="Retry"
+        variant="primary"
+        size="md"
+        onPress={runSearch}
+        style={styles.emptyAction}
+      />
+    </View>
+  );
+
+  // ── Results section ───────────────────────────────────────────────────
+  const renderResults = () => {
+    if (status === 'loading') {
+      return (
+        <View style={styles.resultsSection}>
+          <DiscoverySectionHeader title="Results" kicker="Searching" />
+          {renderSkeletonGrid()}
+        </View>
+      );
+    }
+    if (status === 'empty') {
+      return (
+        <View style={styles.resultsSection}>
+          <DiscoverySectionHeader title="Results" kicker="No matches" />
+          {renderEmptyState()}
+        </View>
+      );
+    }
+    if (status === 'error') {
+      return (
+        <View style={styles.resultsSection}>
+          <DiscoverySectionHeader title="Results" kicker="Error" />
+          {renderErrorState()}
+        </View>
+      );
+    }
+    if (status === 'populated' && results.length > 0) {
+      return (
+        <View style={styles.resultsSection}>
+          <DiscoverySectionHeader
+            title="Results"
+            kicker={`${results.length} item${results.length === 1 ? '' : 's'}`}
+            actionLabel={isCurrentSaved ? 'Saved' : 'Save search'}
+            onAction={isCurrentSaved ? undefined : handleSaveSearch}
+          />
+          {renderHonestNote()}
+          <PinterestMasonryGrid
+            items={results}
+            onPressItem={handlePressItem}
+            numColumns={2}
+            showSaveButton
+            horizontalPadding={0}
+          />
+        </View>
+      );
+    }
+    return null;
+  };
+
+  // When no photo is selected, show the full-screen Google Lens-style camera.
+  if (!imageUri) {
+    return (
+      <>
+        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+        <VisualSearchCamera
+          onPhotoCapture={handlePhotoCapture}
+          onGallery={openGallery}
+          onClose={() => navigation.goBack()}
+          onSavedSearches={() => navigation.navigate('SavedSearches')}
+        />
+      </>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
       <ScreenHeader title="Visual Search" onBack={() => navigation.goBack()} />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        {/* Source selection */}
-        {!imageUri && (
-          <Reanimated.View entering={FadeInDown.duration(300)} style={styles.sourceWrap}>
-            <Text style={styles.sourceTitle}>Find similar items with a photo</Text>
-            <Text style={styles.sourceSub}>
-              Image matching is not connected yet. You can preview a photo, then continue with search or browse.
-            </Text>
-            <View style={styles.sourceRow}>
-              <AnimatedPressable
-                style={styles.sourceBtn}
-                onPress={handleCapture}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel="Take a photo"
-              >
-                <Ionicons name="camera-outline" size={32} color={Colors.brand} />
-                <Text style={styles.sourceBtnText}>Camera</Text>
-              </AnimatedPressable>
-              <AnimatedPressable
-                style={styles.sourceBtn}
-                onPress={handleGallery}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel="Choose a photo from gallery"
-              >
-                <Ionicons name="images-outline" size={32} color={Colors.brand} />
-                <Text style={styles.sourceBtnText}>Gallery</Text>
-              </AnimatedPressable>
-            </View>
-          </Reanimated.View>
-        )}
-
-        {/* Image preview */}
-        {imageUri && (
-          <Reanimated.View entering={FadeInDown.duration(300)} style={styles.previewWrap}>
-            <View style={styles.previewCard}>
-              {previewFailed ? (
-                <View style={styles.previewImg}>
-                  <Ionicons name="image-outline" size={32} color={Colors.textMuted} />
-                </View>
-              ) : (
-                <Image
-                  source={{ uri: imageUri }}
-                  style={styles.previewImg}
-                  resizeMode="cover"
-                  onError={() => setPreviewFailed(true)}
-                />
-              )}
-
-              {/* Framing shows the intended crop without implying active analysis. */}
-              <View style={[styles.cornerBracket, styles.cornerTL]} />
-              <View style={[styles.cornerBracket, styles.cornerTR]} />
-              <View style={[styles.cornerBracket, styles.cornerBL]} />
-              <View style={[styles.cornerBracket, styles.cornerBR]} />
-
-              <AnimatedPressable
-                style={styles.removeBtn}
-                onPress={handleRemoveImage}
-                activeOpacity={0.85}
-                hitSlop={6}
-                accessibilityRole="button"
-                accessibilityLabel="Remove selected photo"
-              >
-                <Ionicons name="close-circle" size={24} color="#fff" />
-              </AnimatedPressable>
-            </View>
-
-            <View style={styles.availabilityCard} accessibilityRole="summary">
-              <View style={styles.availabilityIcon}>
-                <Ionicons name="scan-outline" size={20} color={Colors.textPrimary} />
-              </View>
-              <View style={styles.availabilityCopy}>
-                <Text style={styles.availabilityTitle}>Visual matching is coming soon</Text>
-                <Text style={styles.availabilityText}>
-                  Your photo stays on this device. No scan or upload has been started.
-                </Text>
-              </View>
-            </View>
-
-            <AppButton
-              title="Search by text"
-              variant="primary"
-              size="lg"
-              onPress={handleSearchByText}
-              style={styles.primaryAction}
-            />
-            <AppButton
-              title="Browse all items"
-              variant="secondary"
-              size="md"
-              onPress={handleBrowseSimilar}
-              style={styles.secondaryAction}
-            />
-          </Reanimated.View>
-        )}
-
-        {/* Honest browse fallbacks are available as soon as a photo is selected. */}
-        {imageUri && (
-          <Reanimated.View entering={FadeInDown.duration(400)}>
-            {/* Browse by category fallback */}
-            {availableCategories.length > 0 && (
-              <View style={styles.fallbackSection}>
-                <Text style={styles.fallbackTitle}>Browse by category</Text>
-                <View style={styles.categoryChipsWrap}>
-                  {availableCategories.map(({ category, count }) => (
-                    <AnimatedPressable
-                      key={category}
-                      style={styles.categoryChip}
-                      onPress={() => handleBrowseCategory(category, category)}
-                      activeOpacity={0.8}
-                      accessibilityLabel={`Browse ${category} category, ${count} items`}
-                      accessibilityRole="button"
-                    >
-                      <Text style={styles.categoryChipText}>{category}</Text>
-                      <Text style={styles.categoryChipCount}>{count}</Text>
-                    </AnimatedPressable>
-                  ))}
-                </View>
-              </View>
-            )}
-
-            {/* Nearby listings fallback grid */}
-            {listings.length > 0 && (
-              <View style={styles.fallbackSection}>
-                <Text style={styles.fallbackTitle}>Recently listed items</Text>
-                <MasonryGrid
-                  items={listings.slice(0, 8)}
-                  onPressItem={(item) => navigation.navigate('ItemDetail', { itemId: item.id })}
-                  numColumns={2}
-                  showSaveButton
-                />
-              </View>
-            )}
-          </Reanimated.View>
-        )}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scroll}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={Colors.brand}
+            colors={[Colors.brand]}
+          />
+        }
+        keyboardShouldPersistTaps="handled"
+      >
+        <Reanimated.View entering={FadeIn.duration(300)}>
+          {renderVisualQueryHeader()}
+          {renderRefinementBar()}
+          {renderResults()}
+        </Reanimated.View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -256,76 +668,247 @@ export default function VisualSearchScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  scroll: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
+  scroll: { paddingHorizontal: Space.md, paddingBottom: Space.xxl },
 
-  sourceWrap: { marginTop: Space.lg, alignItems: 'center', gap: Space.sm },
-  sourceTitle: { fontSize: Type.subtitle.size, fontFamily: Typography.family.semibold, color: Colors.textPrimary, textAlign: 'center' },
-  sourceSub: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: Colors.textMuted, textAlign: 'center' },
-  sourceRow: { width: '100%', flexDirection: 'row', gap: Space.md, marginTop: Space.lg },
-  sourceBtn: {
-    flex: 1,
-    aspectRatio: 1,
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
+  // ── Visual-query header ───────────────────────────────────────────────
+  queryHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.sm,
+    gap: Space.md,
+    marginTop: Space.md,
   },
-  sourceBtnText: { fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: Colors.textPrimary },
-
-  previewWrap: { marginTop: Space.lg, alignItems: 'stretch' },
-  previewCard: {
-    width: '100%',
-    aspectRatio: 1,
-    borderRadius: Radius.lg,
+  queryThumbWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: Radius.md,
     overflow: 'hidden',
     backgroundColor: Colors.surfaceAlt,
     position: 'relative',
   },
-  previewImg: { width: '100%', height: '100%' },
-  removeBtn: {
+  queryThumb: { width: '100%', height: '100%' },
+  queryThumbRemove: {
     position: 'absolute',
-    top: 12,
-    right: 12,
+    top: 4,
+    right: 4,
     backgroundColor: 'rgba(0,0,0,0.55)',
-    borderRadius: 20,
-    width: 36,
-    height: 36,
+    borderRadius: 11,
+    width: 22,
+    height: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  queryActions: { flexDirection: 'row', gap: Space.sm },
+  queryActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+  },
+  queryActionText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+    color: Colors.textPrimary,
+  },
 
-  availabilityCard: {
-    marginTop: Space.md,
+  // ── Refinement bar ────────────────────────────────────────────────────
+  refinementWrap: {
+    marginTop: Space.lg,
     padding: Space.md,
     borderRadius: Radius.lg,
     backgroundColor: Colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
     gap: Space.sm,
   },
-  availabilityIcon: {
-    width: 40,
-    height: 40,
+  refinementLabel: {
+    fontSize: Type.metaElevated.size,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textSecondary,
+    letterSpacing: Type.metaElevated.letterSpacing,
+    textTransform: 'uppercase',
+  },
+  textInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.background,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+  },
+  textInputIcon: { marginRight: 2 },
+  textInput: {
+    flex: 1,
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
+    color: Colors.textPrimary,
+    padding: 0,
+  },
+
+  // ── Category rail ─────────────────────────────────────────────────────
+  categoryRail: { marginHorizontal: -4 },
+  categoryRailContent: { paddingHorizontal: 4, gap: 8 },
+  categoryPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.background,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+  },
+  categoryPillActive: {
+    backgroundColor: Colors.brand,
+    borderColor: Colors.brand,
+  },
+  categoryPillText: {
+    fontSize: 13,
+    fontFamily: Typography.family.medium,
+    color: Colors.textPrimary,
+  },
+  categoryPillTextActive: {
+    color: Colors.textInverse,
+  },
+
+  // ── Filter row ────────────────────────────────────────────────────────
+  filterRow: { flexDirection: 'row', gap: 8 },
+  filterInputWrap: { flex: 1, gap: 4 },
+  filterInputLabel: {
+    fontSize: 11,
+    fontFamily: Typography.family.medium,
+    color: Colors.textMuted,
+    letterSpacing: 0.3,
+  },
+  filterInput: {
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.background,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    fontSize: 13,
+    fontFamily: Typography.family.regular,
+    color: Colors.textPrimary,
+  },
+
+  // ── Brand suggestions ─────────────────────────────────────────────────
+  suggestionRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 },
+  suggestionLabel: {
+    fontSize: 11,
+    fontFamily: Typography.family.regular,
+    color: Colors.textMuted,
+  },
+  suggestionChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.surfaceAlt,
+  },
+  suggestionText: {
+    fontSize: 12,
+    fontFamily: Typography.family.medium,
+    color: Colors.textPrimary,
+  },
+
+  // ── Refinement actions ────────────────────────────────────────────────
+  refinementActions: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginTop: 4 },
+  applyBtn: { flex: 1 },
+  clearBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surfaceAlt,
+  },
+  clearBtnText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.medium,
+    color: Colors.textPrimary,
+  },
+
+  // ── Honest note ───────────────────────────────────────────────────────
+  honestNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    paddingHorizontal: Space.sm,
+    paddingVertical: 10,
+    marginBottom: Space.sm,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.md,
+  },
+  honestNoteText: {
+    flex: 1,
+    fontSize: 12,
+    fontFamily: Typography.family.regular,
+    color: Colors.textSecondary,
+    lineHeight: 17,
+  },
+
+  // ── Results ───────────────────────────────────────────────────────────
+  resultsSection: { marginTop: Space.lg },
+  skeletonGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Space.sm,
+  },
+  skeletonTile: {
+    width: '48%',
+    flexGrow: 1,
+  },
+
+  // ── Empty / error ─────────────────────────────────────────────────────
+  emptyState: { alignItems: 'center', gap: Space.sm, paddingVertical: Space.xl, paddingHorizontal: Space.md },
+  emptyIconWrap: {
+    width: 72,
+    height: 72,
     borderRadius: Radius.full,
     backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: Space.xs,
   },
-  availabilityCopy: { flex: 1, gap: 3 },
-  availabilityTitle: { fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: Colors.textPrimary },
-  availabilityText: { fontSize: Type.caption.size, lineHeight: 18, fontFamily: Typography.family.regular, color: Colors.textSecondary },
-  primaryAction: { marginTop: Space.md },
-  secondaryAction: { marginTop: Space.sm },
+  emptyTitle: {
+    fontSize: Type.subtitle.size,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+    textAlign: 'center',
+  },
+  emptyText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  emptyAction: { marginTop: Space.xs },
+  emptyCategoryRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'center',
+    marginTop: Space.sm,
+  },
+  emptyCategoryChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+  },
+  emptyCategoryText: {
+    fontSize: 13,
+    fontFamily: Typography.family.medium,
+    color: Colors.textPrimary,
+  },
 
-  fallbackSection: { marginTop: Space.lg },
-  fallbackTitle: { fontSize: Type.subtitle.size, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginBottom: Space.sm },
-
-  // Category chips
+  // ── Category chips (capture surface) ──────────────────────────────────
   categoryChipsWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -352,16 +935,4 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
     color: Colors.textMuted,
   },
-
-  cornerBracket: {
-    position: 'absolute',
-    width: 24,
-    height: 24,
-    borderColor: '#fff',
-  },
-  cornerTL: { top: 12, left: 12, borderTopWidth: 3, borderLeftWidth: 3, borderTopLeftRadius: 8 },
-  cornerTR: { top: 12, right: 12, borderTopWidth: 3, borderRightWidth: 3, borderTopRightRadius: 8 },
-  cornerBL: { bottom: 12, left: 12, borderBottomWidth: 3, borderLeftWidth: 3, borderBottomLeftRadius: 8 },
-  cornerBR: { bottom: 12, right: 12, borderBottomWidth: 3, borderRightWidth: 3, borderBottomRightRadius: 8 },
-
 });

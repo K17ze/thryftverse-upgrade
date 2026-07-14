@@ -2,6 +2,7 @@ export { CreatorStudioScreen } from './CreatorStudioShell';
 export { CreatorDraftListScreen } from './CreatorDraftListScreen';
 export { CreatorProvider, useCreator } from './CreatorContext';
 export { CreatorCanvas } from './CreatorCanvas';
+export { default as CreatorCamera } from './CreatorCamera';
 export { CreatorAssetPicker } from './CreatorAssetPicker';
 export type { AssetPickerMode } from './CreatorAssetPicker';
 export { CreatorSettingsSheet } from './CreatorSettingsSheet';

@@ -10,8 +10,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
-import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { useCreator } from './CreatorContext';
+import { SheetContainer, PressScale } from './CreatorAnimations';
+import { Colors } from '../constants/colors';
 
 export interface CreatorSettingsSheetProps {
   visible: boolean;
@@ -20,11 +22,10 @@ export interface CreatorSettingsSheetProps {
 
 export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetProps) {
   const { document, updateMetadata, updateCanvas, saveDraft, isDirty, autosaveStatus, retryAutosave } = useCreator();
+  const { colors } = useAppTheme();
   const [title, setTitle] = useState(document.metadata.title || '');
   const [caption, setCaption] = useState(document.metadata.caption || '');
   const [accessibilityDesc, setAccessibilityDesc] = useState(document.metadata.accessibilityDescription || '');
-
-  if (!visible) return null;
 
   const isLook = document.type === 'look';
 
@@ -41,15 +42,12 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
   }, [accessibilityDesc, updateMetadata]);
 
   return (
-    <View style={styles.overlay}>
-      <Pressable style={styles.backdrop} onPress={onClose} />
-      <View style={styles.sheet}>
-        <View style={styles.handle} />
+    <SheetContainer visible={visible} onClose={onClose} maxHeight={0.8}>
         <View style={styles.header}>
-          <Text style={styles.title}>Settings</Text>
-          <Pressable onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close settings" accessibilityRole="button">
-            <Ionicons name="close" size={20} color={Colors.textSecondary} />
-          </Pressable>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>Settings</Text>
+          <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close settings">
+            <Ionicons name="close" size={22} color={colors.textSecondary} />
+          </PressScale>
         </View>
 
         <ScrollView style={styles.scrollBody} contentContainerStyle={styles.scrollContent}>
@@ -66,7 +64,12 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
           />
 
           {/* Shared: Caption */}
-          <Text style={styles.sectionLabel}>Caption</Text>
+          <View style={styles.labelRow}>
+            <Text style={styles.sectionLabel}>Caption</Text>
+            <Text style={[styles.charCount, { color: caption.length > 2000 ? colors.danger : colors.textMuted }]}>
+              {caption.length}/2200
+            </Text>
+          </View>
           <TextInput
             style={[styles.input, styles.textArea]}
             value={caption}
@@ -75,6 +78,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
             placeholder="Add a caption..."
             placeholderTextColor={Colors.textMuted}
             multiline
+            maxLength={2200}
             accessibilityLabel="Caption"
           />
 
@@ -237,53 +241,37 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
             </Pressable>
           </View>
         </ScrollView>
-      </View>
-    </View>
+    </SheetContainer>
   );
 }
 
 function RatioButton({ label, ratio, current, onSelect }: { label: string; ratio: number; current: number; onSelect: (r: number) => void }) {
+  const { colors } = useAppTheme();
   const isActive = Math.abs(current - ratio) < 0.01;
+  // Visual preview: a rectangle showing the aspect ratio shape
+  // Max dimensions: 32x40 box
+  const previewW = ratio <= 1 ? Math.floor(28 * ratio) : 28;
+  const previewH = ratio <= 1 ? 28 : Math.floor(28 / ratio);
   return (
     <Pressable
       onPress={() => onSelect(ratio)}
-      style={[styles.ratioBtn, isActive && styles.ratioBtnActive]}
-      accessibilityLabel={`Canvas ratio ${label}`}
+      style={[
+        styles.ratioBtn,
+        { borderColor: isActive ? colors.brand : colors.border, backgroundColor: isActive ? `${colors.brand}10` : 'transparent' },
+      ]}
+      accessibilityLabel={`Canvas ratio ${label}${isActive ? ', current' : ''}`}
       accessibilityRole="button"
     >
-      <Text style={[styles.ratioBtnText, isActive && styles.ratioBtnTextActive]}>{label}</Text>
+      <View style={[
+        styles.ratioPreview,
+        { width: previewW, height: previewH, backgroundColor: isActive ? colors.brand : colors.textMuted },
+      ]} />
+      <Text style={[styles.ratioBtnText, { color: isActive ? colors.brand : colors.textSecondary }]}>{label}</Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    ...StyleSheet.absoluteFill,
-    zIndex: 1000,
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  sheet: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    maxHeight: '80%',
-    backgroundColor: Colors.surface,
-    borderTopLeftRadius: Radius.lg,
-    borderTopRightRadius: Radius.lg,
-    overflow: 'hidden',
-  },
-  handle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.border,
-    alignSelf: 'center',
-    marginTop: Space.sm,
-  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -293,8 +281,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.title.size,
-    color: Colors.textPrimary,
+    fontSize: Type.subtitle.size,
   },
   closeBtn: {
     width: 36,
@@ -350,24 +337,31 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   ratioBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surfaceAlt,
+    gap: 6,
+    minWidth: 72,
+    minHeight: 72,
   },
-  ratioBtnActive: {
-    borderColor: Colors.brand,
-    backgroundColor: `${Colors.brand}15`,
+  ratioPreview: {
+    borderRadius: 4,
   },
   ratioBtnText: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
-    color: Colors.textPrimary,
+    fontSize: Type.caption.size,
   },
-  ratioBtnTextActive: {
-    color: Colors.brand,
+  labelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  charCount: {
+    fontSize: 12,
+    fontFamily: Typography.family.regular,
   },
   draftSection: {
     marginTop: Space.md,

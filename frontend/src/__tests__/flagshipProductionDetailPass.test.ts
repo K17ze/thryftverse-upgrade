@@ -52,9 +52,11 @@ describe("neutral flagship production detail pass", () => {
 
   it("does not simulate a visual-search scan when the service is unavailable", () => {
     const visualSearch = readSource("screens/VisualSearchScreen.tsx");
-    expect(visualSearch).toContain("No scan or upload has been started.");
+    // Honest rolling-out note instead of a fake scan/analysis simulation.
+    expect(visualSearch).toContain("AI image matching is coming soon");
     expect(visualSearch).not.toContain("setInterval");
     expect(visualSearch).not.toContain("Analysing image");
+    // The endpoint is called via the listingsApi client, not directly via fetchJson in the screen.
     expect(visualSearch).not.toContain("fetchJson('/visual-search'");
     expect(visualSearch).toContain('onError={() => setPreviewFailed(true)}');
     expect(visualSearch.match(/setPreviewFailed\(false\)/g)?.length).toBeGreaterThanOrEqual(3);

@@ -1,4 +1,5 @@
 import type { CreatorDocument, CreatorLayer, CreatorPage } from './composition';
+import { POSTER_DEFAULT_ASPECT_RATIO, LOOK_DEFAULT_ASPECT_RATIO } from './composition';
 
 // ── Look viewer adapter ────────────────────────────────────────────
 
@@ -68,7 +69,7 @@ export function lookToDocument(look: LookViewData): CreatorDocument {
     type: 'look',
     version: 1,
     canvas: {
-      aspectRatio: 0.8,
+      aspectRatio: LOOK_DEFAULT_ASPECT_RATIO,
       background: { type: 'color', value: '#000000' },
     },
     pages: [{ id: 'page_1', layers }],
@@ -254,7 +255,7 @@ export function posterStoryToDocument(story: PosterStoryViewData): CreatorDocume
     type: 'poster',
     version: 1,
     canvas: {
-      aspectRatio: 16 / 9,
+      aspectRatio: POSTER_DEFAULT_ASPECT_RATIO,
       background: { type: 'color', value: '#1a1a1a' },
     },
     pages,

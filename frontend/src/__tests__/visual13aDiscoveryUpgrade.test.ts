@@ -33,11 +33,51 @@ describe('VISUAL-13A Discovery Visual Upgrade', () => {
     expect(global).toContain('FeaturedBoardCard');
   });
 
-  it('4. VisualSearchScreen does not look like a placeholder', () => {
+  it('4. VisualSearchScreen is a premium Google Lens-style visual search surface (not a placeholder)', () => {
     const visual = readFile('screens/VisualSearchScreen.tsx');
-    expect(visual).toContain('sourceTitle');
-    expect(visual).toContain('Find similar items with a photo');
-    expect(visual).toContain('MasonryGrid');
+    const camera = readFile('components/VisualSearchCamera.tsx');
+    // Full-screen in-app camera viewfinder (Google Lens style)
+    expect(visual).toContain('VisualSearchCamera');
+    expect(camera).toContain('CameraView');
+    expect(camera).toContain('shutterOuter');
+    expect(camera).toContain('Gallery');
+    expect(camera).toContain('Switch camera');
+    // Recent gallery thumbnail shortcut (Google Lens bottom-left pattern)
+    expect(camera).toContain('MediaLibrary.getAssetsAsync');
+    expect(camera).toContain('galleryThumb');
+    // Corner brackets + crosshair (framing chrome)
+    expect(camera).toContain('bracketTL');
+    expect(camera).toContain('crosshair');
+    // Permission overlay with Settings action is inside the camera component
+    expect(camera).toContain('Camera access needed');
+    expect(camera).toContain('Enable camera permission in Settings to search with a photo');
+    expect(camera).toContain('Linking.openSettings');
+    // Persistent visual-query header with retake/replace/remove
+    expect(visual).toContain('Retake');
+    expect(visual).toContain('Replace');
+    expect(visual).toContain('Remove photo and start over');
+    // Multi-modal refinement (image + text + category + brand + price)
+    expect(visual).toContain('Describe your photo');
+    expect(visual).toContain('Apply filters');
+    expect(visual).toContain('Min £');
+    expect(visual).toContain('Max £');
+    // Real results via canonical masonry grid
+    expect(visual).toContain('PinterestMasonryGrid');
+    expect(visual).toContain('DiscoverySectionHeader');
+    // Save-search with alerts (truthful)
+    expect(visual).toContain('Save search');
+    expect(visual).toContain('Search saved with alerts enabled');
+    // Honest integrated note (not a dead-end apology card)
+    expect(visual).toContain('AI image matching is coming soon');
+    // State coverage: loading skeleton, empty recovery, error retry
+    expect(visual).toContain('PremiumSkeletonTile');
+    expect(visual).toContain('No items match your photo filters');
+    expect(visual).toContain("Couldn't load results");
+    // The old dead-end apology is gone
+    expect(visual).not.toContain('Visual matching is coming soon');
+    expect(visual).not.toContain('No scan or upload has been started');
+    // Backend visualSearch client is wired
+    expect(visual).toContain('visualSearch');
   });
 
   it('5. CategoryTreeScreen uses VisualCategoryTile and no fake images', () => {

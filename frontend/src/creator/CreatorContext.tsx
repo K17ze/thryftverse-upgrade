@@ -31,7 +31,7 @@ export interface CreatorContextValue {
   selectLayer: (id: string | null) => void;
 
   addLayer: (layer: CreatorLayer) => void;
-  updateLayer: (id: string, updates: Partial<CreatorLayer>) => void;
+  updateLayer: (id: string, updates: Partial<CreatorLayer>, label?: string) => void;
   commitLayerTransform: (id: string, updates: Partial<CreatorLayer>, label: string) => void;
   removeLayer: (id: string) => void;
   duplicateLayer: (id: string) => void;
@@ -66,11 +66,38 @@ export interface CreatorProviderProps {
   draftId?: string;
   templateId?: string;
   sourceDocumentId?: string;
+  initialMediaUri?: string;
 }
 
-export function CreatorProvider({ children, initialType, draftId, templateId, sourceDocumentId }: CreatorProviderProps) {
+export function CreatorProvider({ children, initialType, draftId, templateId, sourceDocumentId, initialMediaUri }: CreatorProviderProps) {
   const initialDoc = useMemo(() => createEmptyDocument(initialType), [initialType]);
   const [document, setDocumentState] = useState<CreatorDocument>(initialDoc);
+  // Seed initial captured/selected media as a layer if provided
+  useEffect(() => {
+    if (!initialMediaUri) return;
+    const mediaLayer: CreatorLayer = {
+      id: createStableId('media'),
+      type: 'media',
+      x: 0.5,
+      y: 0.5,
+      width: 1,
+      height: 1,
+      scale: 1,
+      rotation: 0,
+      zIndex: 0,
+      locked: false,
+      hidden: false,
+      opacity: 1,
+      payload: {
+        mediaUri: initialMediaUri,
+        mediaType: 'image',
+        contentFit: 'cover',
+        opacity: 1,
+      },
+    };
+    setDocumentState((prev) => addLayerToPage(prev, 0, mediaLayer));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialMediaUri]);
   const [activePageIndex, setActivePageIndex] = useState(0);
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
   const [canUndo, setCanUndo] = useState(false);
@@ -186,12 +213,19 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
     CreatorAnalytics.layerAdd(document.type, layer.type);
   }, [activePageIndex, syncHistoryButtons, document.type]);
 
-  const updateLayer = useCallback((id: string, updates: Partial<CreatorLayer>) => {
+  const updateLayer = useCallback((id: string, updates: Partial<CreatorLayer>, label?: string) => {
     setDocumentState((prev) => {
       const doc = updateLayerInPage(prev, activePageIndex, id, updates);
+      doc.updatedAt = new Date().toISOString();
+      // Coalesce rapid updates with the same label into one history entry
+      // This prevents history spam when updateLayer is called in rapid succession
+      historyRef.current.push(doc, label ?? 'Update layer');
+      setIsDirty(true);
+      syncHistoryButtons();
       return doc;
     });
-  }, [activePageIndex]);
+    CreatorAnalytics.layerTransform(document.type, updates.type ?? 'update');
+  }, [activePageIndex, syncHistoryButtons, document.type]);
 
   const commitLayerTransform = useCallback((id: string, updates: Partial<CreatorLayer>, label: string) => {
     setDocumentState((prev) => {

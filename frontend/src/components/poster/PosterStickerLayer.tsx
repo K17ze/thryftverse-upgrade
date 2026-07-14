@@ -156,7 +156,13 @@ function DraggableSticker({
     return (
       <GestureDetector gesture={composedGesture}>
         <Reanimated.View
-          style={[styles.stickerBase, { left: 0, top: 0 }, animatedStyle]}
+          style={[
+            styles.stickerBase,
+            // Offset by half the sticker base size so that (x, y) represents
+            // the CENTER of the sticker, matching the creator's layer model.
+            { left: -STICKER_BASE_HALF_W, top: -STICKER_BASE_HALF_H },
+            animatedStyle,
+          ]}
           pointerEvents="auto"
         >
           <View style={[styles.stickerInner, isSelected && styles.selectedWrap]}>
@@ -174,7 +180,13 @@ function DraggableSticker({
 
   return (
     <Reanimated.View
-      style={[styles.stickerBase, { left: 0, top: 0 }, animatedStyle]}
+      style={[
+        styles.stickerBase,
+        // Offset by half the sticker base size so that (x, y) represents
+        // the CENTER of the sticker, matching the creator's layer model.
+        { left: -STICKER_BASE_HALF_W, top: -STICKER_BASE_HALF_H },
+        animatedStyle,
+      ]}
       pointerEvents="none"
     >
       <View style={styles.stickerInner}>
