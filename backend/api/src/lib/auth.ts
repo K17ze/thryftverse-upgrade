@@ -289,6 +289,30 @@ export async function revokeAllUserSessions(userId: string) {
   );
 }
 
+export async function revokeOtherUserSessions(userId: string, keepSessionId: string) {
+  await db.query(
+    `
+      UPDATE user_sessions
+      SET revoked_at = NOW()
+      WHERE user_id = $1
+        AND id <> $2
+        AND revoked_at IS NULL
+    `,
+    [userId, keepSessionId]
+  );
+
+  await db.query(
+    `
+      UPDATE refresh_tokens
+      SET revoked_at = NOW()
+      WHERE user_id = $1
+        AND session_id <> $2
+        AND revoked_at IS NULL
+    `,
+    [userId, keepSessionId]
+  );
+}
+
 export async function verifyAccessToken(accessToken: string): Promise<AuthenticatedUser | null> {
   let payload: unknown;
 
