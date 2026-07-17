@@ -64,6 +64,10 @@ export interface CoOwnPositionCardProps {
   distributionsLabel?: string;
   /** Portfolio weight (fraction of total portfolio). */
   portfolioWeightPct?: number;
+  /** Doc 10 §3.3: settlement state for pending units. */
+  settlementState?: 'settling' | 'settled';
+  /** Settlement ETA label (e.g. "ETA 2h"). */
+  settlementEtaLabel?: string;
 }
 
 export function CoOwnPositionCard({
@@ -92,6 +96,8 @@ export function CoOwnPositionCard({
   outstandingUnits,
   distributionsLabel,
   portfolioWeightPct,
+  settlementState,
+  settlementEtaLabel,
 }: CoOwnPositionCardProps) {
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
@@ -166,6 +172,16 @@ export function CoOwnPositionCard({
               {reservedUnits > 0 && <StateItem label="Reserved" value={reservedUnits} colors={colors} />}
               {pendingInUnits > 0 && <StateItem label="Pending in" value={pendingInUnits} colors={colors} />}
               {pendingOutUnits > 0 && <StateItem label="Pending out" value={pendingOutUnits} colors={colors} />}
+            </View>
+          )}
+
+          {/* Doc 10 §3.3: settlement state badge for pending units */}
+          {settlementState && settlementState === 'settling' && pendingInUnits > 0 && (
+            <View style={[styles.settlementBadge, { backgroundColor: colors.warning + '12' }]}>
+              <Ionicons name="hourglass-outline" size={11} color={colors.warning} />
+              <Text style={[styles.settlementBadgeText, { color: colors.warning }]} numberOfLines={1}>
+                Settling{settlementEtaLabel ? ` · ${settlementEtaLabel}` : ''} · {pendingInUnits} units pending
+              </Text>
             </View>
           )}
 
@@ -490,6 +506,23 @@ const styles = StyleSheet.create({
     gap: Space.md,
     paddingTop: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  // Doc 10 §3.3: settlement badge
+  settlementBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs + 1,
+    borderRadius: Radius.sm,
+    alignSelf: 'flex-start',
+    marginTop: Space.xs,
+  },
+  settlementBadgeText: {
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.meta.letterSpacing,
   },
   stateItem: {
     gap: 2,

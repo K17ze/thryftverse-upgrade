@@ -7,6 +7,8 @@ import { CachedImage } from '../CachedImage';
 
 export type CoOwnActivityStatus = 'pending' | 'open' | 'partially_filled' | 'filled' | 'cancelled' | 'rejected' | 'expired';
 export type CoOwnActivitySide = 'buy' | 'sell';
+/** Doc 10 §3.3: settlement finality states. */
+export type CoOwnSettlementState = 'executed' | 'settling' | 'settled' | 'reversed' | 'failed';
 
 export interface CoOwnActivityRowProps {
   imageUri?: string | null;
@@ -25,6 +27,10 @@ export interface CoOwnActivityRowProps {
   isPublic?: boolean;
   /** Filled units (for partially_filled status). */
   filledUnits?: number;
+  /** Doc 10 §3.3: settlement finality state. */
+  settlementState?: CoOwnSettlementState;
+  /** Settlement ETA label (e.g. "ETA 2h"). */
+  settlementEtaLabel?: string;
 }
 
 const STATUS_LABELS: Record<CoOwnActivityStatus, { label: string; color: 'success' | 'textSecondary' | 'danger' }> = {
@@ -35,6 +41,14 @@ const STATUS_LABELS: Record<CoOwnActivityStatus, { label: string; color: 'succes
   cancelled: { label: 'Cancelled', color: 'textSecondary' },
   rejected: { label: 'Rejected', color: 'danger' },
   expired: { label: 'Expired', color: 'textSecondary' },
+};
+
+const SETTLEMENT_LABELS: Record<CoOwnSettlementState, { label: string; icon: string }> = {
+  executed: { label: 'Executed · settling', icon: 'sync-outline' },
+  settling: { label: 'Settling', icon: 'hourglass-outline' },
+  settled: { label: 'Settled', icon: 'checkmark-circle-outline' },
+  reversed: { label: 'Reversed', icon: 'swap-horizontal-outline' },
+  failed: { label: 'Settlement failed · reversed', icon: 'alert-circle-outline' },
 };
 
 export function CoOwnActivityRow({
@@ -51,6 +65,8 @@ export function CoOwnActivityRow({
   executionRef,
   isPublic,
   filledUnits,
+  settlementState,
+  settlementEtaLabel,
 }: CoOwnActivityRowProps) {
   const { colors } = useAppTheme();
   const statusCfg = STATUS_LABELS[status];
@@ -59,6 +75,14 @@ export function CoOwnActivityRow({
 
   // Phase 6: status transition indicator
   const showFilledInfo = status === 'partially_filled' && filledUnits != null;
+
+  // Doc 10 §3.3: settlement finality badge
+  const settlementCfg = settlementState ? SETTLEMENT_LABELS[settlementState] : null;
+  const settlementColor = settlementState === 'settled'
+    ? colors.success
+    : settlementState === 'failed' || settlementState === 'reversed'
+      ? colors.danger
+      : colors.textSecondary;
 
   return (
     <Pressable
@@ -102,6 +126,15 @@ export function CoOwnActivityRow({
           <View style={[styles.statusPill, { backgroundColor: statusColor + '18' }]}>
             <Text style={[styles.statusText, { color: statusColor }]}>{statusCfg.label}</Text>
           </View>
+          {/* Doc 10 §3.3: settlement finality badge */}
+          {settlementCfg && (
+            <View style={[styles.settlementPill, { backgroundColor: settlementColor + '12' }]}>
+              <Ionicons name={settlementCfg.icon as any} size={10} color={settlementColor} />
+              <Text style={[styles.settlementText, { color: settlementColor }]} numberOfLines={1}>
+                {settlementCfg.label}{settlementEtaLabel ? ` · ${settlementEtaLabel}` : ''}
+              </Text>
+            </View>
+          )}
           {/* Phase 6: execution reference — immutable, no user identity on public rows */}
           {executionRef && (
             <Text style={[styles.refText, { color: colors.textMuted }]} numberOfLines={1}>
@@ -207,5 +240,19 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
     letterSpacing: Type.meta.letterSpacing,
     fontVariant: ['tabular-nums'],
+  },
+  // Doc 10 §3.3: settlement pill
+  settlementPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: Radius.full,
+  },
+  settlementText: {
+    fontSize: 10,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: 0.3,
   },
 });

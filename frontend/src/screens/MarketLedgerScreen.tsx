@@ -21,7 +21,7 @@ import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { resolveCommerceDestination, type CommerceDestinationSource } from '../platform/commerce';
 import { haptics } from '../utils/haptics';
-import { CoOwnMarketHeader, CoOwnStateCanvas } from '../components/coown';
+import { CoOwnMarketHeader, CoOwnStateCanvas, CoOwnLedgerSummary } from '../components/coown';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 type LedgerFilter = 'ALL' | 'AUCTION' | 'CO-OWN';
@@ -226,6 +226,20 @@ export default function MarketLedgerScreen() {
             </Text>
           </View>
         </View>
+      </Reanimated.View>
+
+      {/* Phase 4: Ledger summary with mark-used + window labels */}
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(40)}>
+        <CoOwnLedgerSummary
+          issuedCount={filteredEntries.filter((e) => e.action === 'buy-units' && e.channel === 'co-own').length}
+          boughtCount={filteredEntries.filter((e) => e.action === 'buy-units').length}
+          soldCount={filteredEntries.filter((e) => e.action === 'sell-units').length}
+          pausedCount={0}
+          markUsedLabel="Last trade"
+          windowLabel="All time"
+          markTimestamp={undefined}
+          isStaleMark={false}
+        />
       </Reanimated.View>
 
       {/* Filter */}
