@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, StatusBar, Pressable, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, useWindowDimensions } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
@@ -183,7 +184,7 @@ export default function AssetDetailScreen() {
   if (isLoading) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <StatusBar translucent backgroundColor="transparent" style={isDark ? 'light' : 'dark'} />
+        <StatusBar style={isDark ? 'light' : 'dark'} />
         <CoOwnAssetDetailSkeleton />
       </View>
     );
@@ -192,7 +193,7 @@ export default function AssetDetailScreen() {
   if (isError || !asset) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <StatusBar translucent backgroundColor="transparent" style={isDark ? 'light' : 'dark'} />
+        <StatusBar style={isDark ? 'light' : 'dark'} />
         <CoOwnStateCanvas
           variant="error"
           title="Item not found"
@@ -272,7 +273,7 @@ export default function AssetDetailScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar translucent backgroundColor="transparent" style={isDark ? 'light' : 'dark'} />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
 
       {/* Collapsed header — appears on scroll */}
       <Reanimated.View style={[styles.collapsedHeader, { paddingTop: Math.max(insets.top, Space.sm), backgroundColor: colors.background }, headerStyle]}>
@@ -732,7 +733,7 @@ export default function AssetDetailScreen() {
                 if (isRecommendationLook(recItem)) {
                   handlePressLook(recItem);
                 } else {
-                  handlePressRecommendation(recItem as RecommendationItem);
+                  handlePressRecommendation(recItem as unknown as RecommendationItem);
                 }
               }}
             />
@@ -750,7 +751,7 @@ export default function AssetDetailScreen() {
                   if (isRecommendationLook(recItem)) {
                     handlePressLook(recItem);
                   } else {
-                    handlePressRecommendation(recItem as RecommendationItem);
+                    handlePressRecommendation(recItem as unknown as RecommendationItem);
                   }
                 }}
               />
