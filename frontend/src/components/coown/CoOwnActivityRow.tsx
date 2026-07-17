@@ -19,6 +19,12 @@ export interface CoOwnActivityRowProps {
   timestamp: string;
   onPress?: () => void;
   index?: number;
+  // Phase 6: execution reference (order id, execution id, corporate-action id)
+  executionRef?: string;
+  /** Whether this row is on a public surface (hides user identity). */
+  isPublic?: boolean;
+  /** Filled units (for partially_filled status). */
+  filledUnits?: number;
 }
 
 const STATUS_LABELS: Record<CoOwnActivityStatus, { label: string; color: 'success' | 'textSecondary' | 'danger' }> = {
@@ -42,18 +48,24 @@ export function CoOwnActivityRow({
   timestamp,
   onPress,
   index = 0,
+  executionRef,
+  isPublic,
+  filledUnits,
 }: CoOwnActivityRowProps) {
   const { colors } = useAppTheme();
   const statusCfg = STATUS_LABELS[status];
   const statusColor = statusCfg.color === 'success' ? colors.success : statusCfg.color === 'danger' ? colors.danger : colors.textSecondary;
   const isBuy = side === 'buy';
 
+  // Phase 6: status transition indicator
+  const showFilledInfo = status === 'partially_filled' && filledUnits != null;
+
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [styles.root, { backgroundColor: colors.background, opacity: pressed ? 0.7 : 1 }]}
       accessibilityRole="button"
-      accessibilityLabel={`${title}, ${isBuy ? 'bought' : 'sold'} ${units} units, ${amountLabel}, ${statusCfg.label}, ${timestamp}`}
+      accessibilityLabel={`${title}, ${isBuy ? 'bought' : 'sold'} ${units} units${showFilledInfo ? `, ${filledUnits} filled` : ''}, ${amountLabel}, ${statusCfg.label}${executionRef ? `, reference ${executionRef}` : ''}, ${timestamp}`}
     >
       <View style={styles.imageWrap}>
         {imageUri ? (
@@ -79,11 +91,23 @@ export function CoOwnActivityRow({
           <Text style={[styles.unitsText, { color: colors.textSecondary }]}>
             {units} units × {unitPriceLabel}
           </Text>
+          {/* Phase 6: filled units for partial fills */}
+          {showFilledInfo && (
+            <Text style={[styles.filledText, { color: colors.success }]}>
+              ({filledUnits} filled)
+            </Text>
+          )}
         </View>
         <View style={styles.footerRow}>
           <View style={[styles.statusPill, { backgroundColor: statusColor + '18' }]}>
             <Text style={[styles.statusText, { color: statusColor }]}>{statusCfg.label}</Text>
           </View>
+          {/* Phase 6: execution reference — immutable, no user identity on public rows */}
+          {executionRef && (
+            <Text style={[styles.refText, { color: colors.textMuted }]} numberOfLines={1}>
+              ref {executionRef}
+            </Text>
+          )}
           <Text style={[styles.timestamp, { color: colors.textMuted }]}>{timestamp}</Text>
         </View>
       </View>
@@ -169,5 +193,19 @@ const styles = StyleSheet.create({
   timestamp: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
+  },
+  // Phase 6: filled + ref
+  filledText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.caption.letterSpacing,
+    fontVariant: ['tabular-nums'],
+  },
+  refText: {
+    flex: 1,
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.meta.letterSpacing,
+    fontVariant: ['tabular-nums'],
   },
 });

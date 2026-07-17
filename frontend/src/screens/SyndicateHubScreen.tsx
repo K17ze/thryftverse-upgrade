@@ -269,7 +269,8 @@ export default function CoOwnHubScreen() {
 
   const isSearching = query.trim().length > 0;
 
-  const gridColumns = screenWidth < 360 ? 1 : 2;
+  // Phase 6: responsive grid — 1 col compact, 2 col phone, 3 col tablet
+  const gridColumns = screenWidth < 360 ? 1 : screenWidth >= 768 ? 3 : 2;
 
   // Real market context — no fabricated volume/growth figures
   const marketContext = React.useMemo(() => {
@@ -546,6 +547,47 @@ export default function CoOwnHubScreen() {
               </View>
             )}
 
+            {/* Phase 2: Active markets — sortable market rows with price truth */}
+            {!isSearching && marketAssets.length > 0 && (
+              <View style={styles.sectionWrap}>
+                <View style={styles.sectionHeader}>
+                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} numberOfLines={1}>Active markets</Text>
+                  <Text style={[styles.sectionCount, { color: colors.textMuted }]} numberOfLines={1}>
+                    {marketAssets.filter((a) => a.isOpen).length} open
+                  </Text>
+                </View>
+                <View style={styles.activeMarketsList}>
+                  {marketAssets
+                    .filter((a) => a.isOpen)
+                    .sort((a, b) => b.createdAt?.localeCompare(a.createdAt ?? '') ?? 0)
+                    .slice(0, 8)
+                    .map((asset, index) => (
+                      <CoOwnAssetTile
+                        key={asset.id}
+                        variant="market"
+                        imageUri={asset.image}
+                        title={asset.title}
+                        unitPriceLabel={formatFromFiat(asset.unitPriceGBP, 'GBP')}
+                        availableUnits={asset.availableUnits}
+                        totalUnits={asset.totalUnits}
+                        status={formatStatus(asset)}
+                        onPress={() => navigation.navigate('AssetDetail', { assetId: asset.id })}
+                        index={index}
+                        marketData={{
+                          ticker: asset.id.slice(0, 6).toUpperCase(),
+                          lastPriceLabel: formatFromFiat(asset.unitPriceGBP, 'GBP'),
+                          lastAgeLabel: undefined,
+                          change24hPct: undefined,
+                          spreadLabel: undefined,
+                          depthLabel: undefined,
+                          marketMode: 'continuous',
+                        }}
+                      />
+                    ))}
+                </View>
+              </View>
+            )}
+
             {/* Search results header */}
             {isSearching && (
               <View style={styles.sectionWrap}>
@@ -735,6 +777,11 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: Space.xs,
     marginBottom: Space.lg,
+  },
+  // Phase 2: active markets list
+  activeMarketsList: {
+    paddingHorizontal: Space.md,
+    gap: Space.xs,
   },
   discoveryGrid: {
     flexDirection: 'row',

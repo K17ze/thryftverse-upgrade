@@ -122,6 +122,14 @@ export default function AssetLeaderboardScreen() {
     [assets]
   );
 
+  // Phase 2: Newest listings — most recently created
+  const newestListings = React.useMemo(
+    () => [...assets]
+      .sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))
+      .slice(0, 5),
+    [assets]
+  );
+
   const renderList = (
     title: string,
     icon: React.ComponentProps<typeof Ionicons>['name'],
@@ -201,7 +209,7 @@ export default function AssetLeaderboardScreen() {
 
       <CoOwnMarketHeader
         title="Leaderboards"
-        subtitle="Top Co-Own items"
+        subtitle="Market activity rankings"
         onBack={handleBack}
       />
 
@@ -236,6 +244,15 @@ export default function AssetLeaderboardScreen() {
           topHolders,
           (asset) => `${asset.holders} holders`,
           2
+        )}
+        {renderList(
+          'Newest listings',
+          'time-outline',
+          newestListings,
+          (asset) => asset.createdAt
+            ? new Date(asset.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+            : '—',
+          3
         )}
         <View style={{ height: Space.xxl }} />
       </ScrollView>

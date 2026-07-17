@@ -33,6 +33,16 @@ interface CachedImageProps {
   emptyIcon?: keyof typeof Ionicons.glyphMap;
   onError?: () => void;
   onLoad?: (event: { source: { width: number; height: number } }) => void;
+  /**
+   * Phase 6: Focal point for art-directed crops.
+   * Values 0-1 for both x and y. Used with contentFit='cover' to
+   * preserve the most important part of the image (e.g. fashion
+   * objects, shoe silhouettes, jewellery centres).
+   *
+   * Source §15: "Do not rely on `cover` blindly. Use category-sensitive
+   * focal positioning when supported safely."
+   */
+  focalPoint?: { x: number; y: number };
 }
 
 const AnimatedLinearGradient = Reanimated.createAnimatedComponent(LinearGradient);
@@ -52,6 +62,7 @@ export function CachedImage({
   emptyIcon,
   onError,
   onLoad,
+  focalPoint,
 }: CachedImageProps) {
   // Honest placeholder for missing images — no blank rectangles
   if (!uri) {
@@ -113,6 +124,11 @@ export function CachedImage({
   const effectiveTransition = reducedMotionEnabled ? 0 : transition;
   const isVideoSource = isVideoUri(uri);
   const useNativeImage = !isVideoSource && /^content:\/\//i.test(uri);
+
+  // Phase 6: focal point → contentPosition for Expo Image
+  const contentPosition = focalPoint
+    ? { top: `${Math.round(focalPoint.y * 100)}%`, left: `${Math.round(focalPoint.x * 100)}%` }
+    : undefined;
 
   const sourceUri = React.useMemo(() => {
     if (!cacheBuster || !uri) return uri;
@@ -219,6 +235,7 @@ export function CachedImage({
             source={{ uri: sourceUri }}
             style={[styles.image, style]}
             contentFit={contentFit}
+            contentPosition={contentPosition}
             transition={effectiveTransition}
             placeholder={blurhash ? { blurhash } : undefined}
             cachePolicy="memory-disk"

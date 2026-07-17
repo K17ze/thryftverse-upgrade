@@ -86,6 +86,8 @@ export default function AssetDetailScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const isCompact = screenWidth < 390;
   const isVeryCompact = screenWidth < 340;
+  // Phase 6: tablet two-column layout
+  const isTablet = screenWidth >= 768;
   const currentUser = useStore((state) => state.currentUser);
   const upsertConversation = useStore((state) => state.upsertConversation);
   const { formatFromFiat } = useFormattedPrice();
@@ -437,46 +439,92 @@ export default function AssetDetailScreen() {
           />
         </Reanimated.View>
 
-        {/* Price chart — sparkline with period selector + candle toggle */}
-        <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(170)}
-          style={styles.sectionWrap}
-        >
-          <CoOwnPriceChart
-            assetId={asset.id}
-            unitPriceGbp={asset.unitPriceGbp}
-            marketMovePct24h={asset.marketMovePct24h ?? 0}
-            volume24hGbp={asset.volume24hGbp ?? 0}
-            lastAgeSeconds={undefined}
-            change24hTimestamp={undefined}
-            candleChart={
-              <CoOwnCandleChart
-                candles={[]}
-                range={candleRange}
-                onRangeChange={setCandleRange}
-                showVolume={showVolume}
+        {/* Phase 6: Tablet two-column layout for price chart + order book.
+            On phone: stacked vertically. On tablet (≥768px): side-by-side. */}
+        {isTablet ? (
+          <View style={styles.tabletTwoCol}>
+            <Reanimated.View
+              entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(170)}
+              style={[styles.sectionWrap, styles.tabletCol]}
+            >
+              <CoOwnPriceChart
+                assetId={asset.id}
+                unitPriceGbp={asset.unitPriceGbp}
+                marketMovePct24h={asset.marketMovePct24h ?? 0}
+                volume24hGbp={asset.volume24hGbp ?? 0}
+                lastAgeSeconds={undefined}
+                change24hTimestamp={undefined}
+                candleChart={
+                  <CoOwnCandleChart
+                    candles={[]}
+                    range={candleRange}
+                    onRangeChange={setCandleRange}
+                    showVolume={showVolume}
+                    lastPrice={asset.unitPriceGbp}
+                    lastAgeSeconds={undefined}
+                  />
+                }
+              />
+            </Reanimated.View>
+            <Reanimated.View
+              entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(180)}
+              style={[styles.sectionWrap, styles.tabletCol]}
+            >
+              <CoOwnOrderBook
+                bids={orderBook.bids as CoOwnBookLevel[]}
+                asks={orderBook.asks as CoOwnBookLevel[]}
+                visibleLevels={10}
                 lastPrice={asset.unitPriceGbp}
                 lastAgeSeconds={undefined}
+                mode={asset.isOpen ? 'continuous' : 'closed'}
+                onSelectLevel={undefined}
               />
-            }
-          />
-        </Reanimated.View>
+            </Reanimated.View>
+          </View>
+        ) : (
+          <>
+            {/* Price chart — sparkline with period selector + candle toggle */}
+            <Reanimated.View
+              entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(170)}
+              style={styles.sectionWrap}
+            >
+              <CoOwnPriceChart
+                assetId={asset.id}
+                unitPriceGbp={asset.unitPriceGbp}
+                marketMovePct24h={asset.marketMovePct24h ?? 0}
+                volume24hGbp={asset.volume24hGbp ?? 0}
+                lastAgeSeconds={undefined}
+                change24hTimestamp={undefined}
+                candleChart={
+                  <CoOwnCandleChart
+                    candles={[]}
+                    range={candleRange}
+                    onRangeChange={setCandleRange}
+                    showVolume={showVolume}
+                    lastPrice={asset.unitPriceGbp}
+                    lastAgeSeconds={undefined}
+                  />
+                }
+              />
+            </Reanimated.View>
 
-        {/* Phase 2: Order book — executable top-of-book + depth */}
-        <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(180)}
-          style={styles.sectionWrap}
-        >
-          <CoOwnOrderBook
-            bids={orderBook.bids as CoOwnBookLevel[]}
-            asks={orderBook.asks as CoOwnBookLevel[]}
-            visibleLevels={5}
-            lastPrice={asset.unitPriceGbp}
-            lastAgeSeconds={undefined}
-            mode={asset.isOpen ? 'continuous' : 'closed'}
-            onSelectLevel={undefined}
-          />
-        </Reanimated.View>
+            {/* Phase 2: Order book — executable top-of-book + depth */}
+            <Reanimated.View
+              entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(180)}
+              style={styles.sectionWrap}
+            >
+              <CoOwnOrderBook
+                bids={orderBook.bids as CoOwnBookLevel[]}
+                asks={orderBook.asks as CoOwnBookLevel[]}
+                visibleLevels={5}
+                lastPrice={asset.unitPriceGbp}
+                lastAgeSeconds={undefined}
+                mode={asset.isOpen ? 'continuous' : 'closed'}
+                onSelectLevel={undefined}
+              />
+            </Reanimated.View>
+          </>
+        )}
 
         {/* Category evidence — editorial details when available */}
         <Reanimated.View
@@ -906,6 +954,18 @@ const styles = StyleSheet.create({
   sectionWrap: {
     paddingHorizontal: Space.md,
     marginTop: Space.lg,
+  },
+  // Phase 6: tablet two-column layout
+  tabletTwoCol: {
+    flexDirection: 'row',
+    gap: Space.md,
+    paddingHorizontal: Space.md,
+    marginTop: Space.lg,
+  },
+  tabletCol: {
+    flex: 1,
+    paddingHorizontal: 0,
+    marginTop: 0,
   },
   sectionTitle: {
     fontSize: Type.subtitle.size,
