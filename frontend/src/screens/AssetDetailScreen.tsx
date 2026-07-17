@@ -56,8 +56,13 @@ import {
   CoOwnValueStrip,
   CoOwnAssetDossier,
   CoOwnRightsSheet,
+  CoOwnOrderBook,
+  CoOwnCandleChart,
   CANONICAL_RIGHTS_LABELS,
   type CoOwnRightsRow,
+  type CoOwnBookLevel,
+  type CoOwnCandleRange,
+  type CoOwnCandle,
 } from '../components/coown';
 
 type RouteT = RouteProp<RootStackParamList, 'AssetDetail'>;
@@ -100,6 +105,9 @@ export default function AssetDetailScreen() {
   const [guideVisible, setGuideVisible] = React.useState(false);
   const [pendingTradeSide, setPendingTradeSide] = React.useState<'buy' | 'sell' | null>(null);
   const [rightsSheetVisible, setRightsSheetVisible] = React.useState(false);
+  // Phase 2: candle chart state
+  const [candleRange, setCandleRange] = React.useState<CoOwnCandleRange>('1W');
+  const [showVolume, setShowVolume] = React.useState(false);
 
   const coOwnCompliance = useStore((s) => s.coOwnCompliance);
   const updateCoOwnCompliance = useStore((s) => s.updateCoOwnCompliance);
@@ -429,7 +437,7 @@ export default function AssetDetailScreen() {
           />
         </Reanimated.View>
 
-        {/* Price chart — sparkline with period selector */}
+        {/* Price chart — sparkline with period selector + candle toggle */}
         <Reanimated.View
           entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(170)}
           style={styles.sectionWrap}
@@ -439,6 +447,34 @@ export default function AssetDetailScreen() {
             unitPriceGbp={asset.unitPriceGbp}
             marketMovePct24h={asset.marketMovePct24h ?? 0}
             volume24hGbp={asset.volume24hGbp ?? 0}
+            lastAgeSeconds={undefined}
+            change24hTimestamp={undefined}
+            candleChart={
+              <CoOwnCandleChart
+                candles={[]}
+                range={candleRange}
+                onRangeChange={setCandleRange}
+                showVolume={showVolume}
+                lastPrice={asset.unitPriceGbp}
+                lastAgeSeconds={undefined}
+              />
+            }
+          />
+        </Reanimated.View>
+
+        {/* Phase 2: Order book — executable top-of-book + depth */}
+        <Reanimated.View
+          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(180)}
+          style={styles.sectionWrap}
+        >
+          <CoOwnOrderBook
+            bids={orderBook.bids as CoOwnBookLevel[]}
+            asks={orderBook.asks as CoOwnBookLevel[]}
+            visibleLevels={5}
+            lastPrice={asset.unitPriceGbp}
+            lastAgeSeconds={undefined}
+            mode={asset.isOpen ? 'continuous' : 'closed'}
+            onSelectLevel={undefined}
           />
         </Reanimated.View>
 
