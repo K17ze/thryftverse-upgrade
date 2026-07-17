@@ -46,11 +46,13 @@ export default function AssetLeaderboardScreen() {
 
   const [assets, setAssets] = React.useState<LeaderboardAsset[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [isError, setIsError] = React.useState(false);
   const [refreshing, setRefreshing] = React.useState(false);
 
   const loadLeaderboard = React.useCallback(() => {
     let cancelled = false;
     setIsLoading(true);
+    setIsError(false);
 
     listCoOwnAssets({ limit: 120 })
       .then((items) => {
@@ -71,6 +73,7 @@ export default function AssetLeaderboardScreen() {
         if (cancelled) return;
         const parsed = parseApiError(err, 'Unable to load leaderboard');
         show(parsed.message, 'error');
+        setIsError(true);
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);
@@ -180,6 +183,24 @@ export default function AssetLeaderboardScreen() {
           onBack={handleBack}
         />
         <CoOwnLeaderboardSkeleton />
+      </SafeAreaView>
+    );
+  }
+
+  if (isError && assets.length === 0) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
+        <CoOwnMarketHeader
+          title="Leaderboards"
+          subtitle="Market activity rankings"
+          onBack={handleBack}
+        />
+        <CoOwnStateCanvas
+          variant="error"
+          actionLabel="Try again"
+          onAction={loadLeaderboard}
+        />
       </SafeAreaView>
     );
   }

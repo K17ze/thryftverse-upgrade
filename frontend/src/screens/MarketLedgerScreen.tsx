@@ -22,7 +22,7 @@ import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { resolveCommerceDestination, type CommerceDestinationSource } from '../platform/commerce';
 import { haptics } from '../utils/haptics';
-import { CoOwnMarketHeader, CoOwnStateCanvas, CoOwnLedgerSummary } from '../components/coown';
+import { CoOwnMarketHeader, CoOwnStateCanvas, CoOwnLedgerSummary, CoOwnActivitySkeleton } from '../components/coown';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 type LedgerFilter = 'ALL' | 'AUCTION' | 'CO-OWN';
@@ -194,6 +194,21 @@ export default function MarketLedgerScreen() {
     if (navigation.canGoBack()) { navigation.goBack(); return; }
     navigation.navigate('Portfolio');
   }, [navigation]);
+
+  // ── Loading state (initial sync, no entries yet) ──
+  if (isSyncingLedger && entries.length === 0) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
+        <CoOwnMarketHeader
+          title="Ledger"
+          subtitle="Market activity and trade history"
+          onBack={handleBack}
+        />
+        <CoOwnActivitySkeleton />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>

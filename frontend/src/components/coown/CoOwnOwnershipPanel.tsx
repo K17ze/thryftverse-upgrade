@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 import { CoOwnNumericText } from '../ui/CoOwnNumericText';
+import type { CoOwnPositionState } from '../../data/coOwnModels';
 
 export type CoOwnSettlementMode = 'GBP' | 'TVUSD' | 'HYBRID';
 
@@ -16,15 +17,11 @@ export interface CoOwnSupplyBuckets {
   treasury?: number;
 }
 
-/** Viewer position state — settled/reserved/pending split (§01 §3, audit blocker 3). */
-export interface CoOwnViewerPosition {
-  settled: number;
-  reservedForSale: number;
-  pendingIn: number;
-  pendingOut: number;
-  /** Labelled denominator — mandatory for ownership %. */
-  outstandingUnits: number;
-}
+/**
+ * Viewer position state — aligned to the canonical CoOwnPositionState.
+ * Kept as an alias for backward compatibility with existing imports.
+ */
+export type CoOwnViewerPosition = CoOwnPositionState;
 
 export interface CoOwnOwnershipPanelProps {
   unitPriceLabel: string;
@@ -81,7 +78,11 @@ export function CoOwnOwnershipPanel({
     : viewerPct;
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+    <View
+      style={[styles.root, { backgroundColor: colors.surface, borderColor: colors.border }]}
+      accessibilityRole="summary"
+      accessibilityLabel={`Ownership panel. ${statusLabel}. ${allocatedPct}% allocated, ${availableUnits} units left. ${viewerSettled > 0 ? `You own ${viewerSettled} settled units, ${computedViewerPct.toFixed(2)}% of ${outstandingDenom.toLocaleString('en-GB')} outstanding.` : ''}${rightsVersion ? ` Rights version ${rightsVersion}.` : ''}`}
+    >
       <View style={styles.headerRow}>
         <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Ownership</Text>
         <View style={styles.headerRight}>

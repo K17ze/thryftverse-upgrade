@@ -42,10 +42,12 @@ import {
   CoOwnStickyActionDock,
   CoOwnRiskDisclosure,
   CoOwnConciergeCTA,
+  CoOwnOfflineBanner,
   type CoOwnTicketOrderType,
   type CoOwnTicketDuration,
 } from '../components/coown';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
+import { useConnectivity } from '../hooks/useConnectivity';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'Trade'>;
@@ -71,6 +73,7 @@ export default function TradeScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const isCompact = screenWidth < 360;
   const scrollBottomPadding = Math.max(insets.bottom, Space.md) + DockConstants.singleActionHeight;
+  const { isOffline } = useConnectivity();
 
   const currentUser = useStore((state) => state.currentUser);
   const checkCoOwnEligibility = useStore((state) => state.checkCoOwnEligibility);
@@ -251,6 +254,8 @@ export default function TradeScreen() {
         subtitle={asset.title}
         onBack={handleBack}
       />
+
+      <CoOwnOfflineBanner isOffline={isOffline} />
 
       <KeyboardAwareScrollView
         style={{ flex: 1 }}

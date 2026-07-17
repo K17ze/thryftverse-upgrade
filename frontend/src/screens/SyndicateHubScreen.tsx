@@ -28,8 +28,10 @@ import {
   CoOwnEducationCard,
   CoOwnHubSkeleton,
   CoOwnStateCanvas,
+  CoOwnOfflineBanner,
   type CoOwnAssetStatus,
 } from '../components/coown';
+import { useConnectivity } from '../hooks/useConnectivity';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -71,6 +73,7 @@ export default function CoOwnHubScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const { listings } = useBackendData();
   const actingUserId = currentUser?.id;
+  const { isOffline } = useConnectivity();
 
   const [query, setQuery] = React.useState('');
   const [sortBy, setSortBy] = React.useState<SortOption>('newest');
@@ -350,6 +353,8 @@ export default function CoOwnHubScreen() {
         onBack={handleBack}
         actions={headerActions}
       />
+
+      <CoOwnOfflineBanner isOffline={isOffline} />
 
       <FlashList
         key={`hub-grid-${gridColumns}`}

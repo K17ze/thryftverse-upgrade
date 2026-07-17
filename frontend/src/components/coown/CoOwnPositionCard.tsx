@@ -7,6 +7,7 @@ import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { CoOwnNumericText } from '../ui/CoOwnNumericText';
+import type { CoOwnPositionState as CanonicalCoOwnPositionState } from '../../data/coOwnModels';
 
 export type CoOwnPositionStatus = 'open' | 'closed' | 'paused';
 
@@ -19,13 +20,12 @@ export interface CoOwnPositionMark {
   isStale?: boolean;
 }
 
-/** Phase 3: reserved/pending split for the position. */
-export interface CoOwnPositionState {
-  settled: number;
-  reservedForSale: number;
-  pendingIn: number;
-  pendingOut: number;
-}
+/**
+ * Phase 3: reserved/pending split — aligned to the canonical model.
+ * `outstandingUnits` is included per the canonical CoOwnPositionState.
+ * Re-exported from coOwnModels.ts for single-source-of-truth.
+ */
+export type CoOwnPositionState = CanonicalCoOwnPositionState;
 
 export interface CoOwnPositionCardProps {
   imageUri?: string | null;
@@ -124,10 +124,9 @@ export function CoOwnPositionCard({
   const pendingOutUnits = positionState?.pendingOut ?? 0;
   const sellableUnits = settledUnits - reservedUnits;
 
-  // Outstanding denominator
-  const outstandingLabel = outstandingUnits != null
-    ? outstandingUnits.toLocaleString('en-GB')
-    : totalUnits.toLocaleString('en-GB');
+  // Outstanding denominator — prefer positionState.outstandingUnits, then the
+  // separate prop, then fall back to totalUnits
+  const outstandingLabel = (positionState?.outstandingUnits ?? outstandingUnits ?? totalUnits).toLocaleString('en-GB');
 
   return (
     <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.delay(Math.min(index, 8) * 40).duration(250)}>

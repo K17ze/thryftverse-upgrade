@@ -17,16 +17,25 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 import { CoOwnNumericText } from '../ui/CoOwnNumericText';
+import type { CoOwn1ZeBalance as CanonicalCoOwn1ZeBalance, CoOwnReconciliationState } from '../../data/coOwnModels';
 
-/** The 1ZE balance — nonnegative buckets (audit blocker 1). */
-export interface CoOwn1ZeBalance {
-  available: number;
-  reservedForOrders: number;
-  redemptionInProgress: number;
-  otherHolds: number;
-  pendingDeposit: number;
-  unsettledSaleProceeds: number;
-}
+/**
+ * The 1ZE balance — aligned to the canonical model in coOwnModels.ts.
+ * The sequencing/trust fields are optional so the component works both
+ * with the full canonical type (when the backend exposes it) and with
+ * the narrow 6-bucket version (during migration).
+ */
+export type CoOwn1ZeBalance = Omit<
+  CanonicalCoOwn1ZeBalance,
+  'settledCustomerClaim' | 'withdrawable' | 'safeguarded' | 'snapshotSequence' | 'serverTimestamp' | 'reconciliationState'
+> & {
+  settledCustomerClaim?: number;
+  withdrawable?: number;
+  safeguarded?: boolean;
+  snapshotSequence?: number;
+  serverTimestamp?: string;
+  reconciliationState?: CoOwnReconciliationState;
+};
 
 export interface CoOwnWalletBreakdownProps {
   balance: CoOwn1ZeBalance;
@@ -58,15 +67,17 @@ export function CoOwnWalletBreakdown({
   const { colors } = useAppTheme();
 
   const settledClaim =
-    balance.available +
-    balance.reservedForOrders +
-    balance.redemptionInProgress +
-    balance.otherHolds;
+    balance.settledCustomerClaim ??
+    (balance.available + balance.reservedForOrders + balance.redemptionInProgress + balance.otherHolds);
 
-  const withdrawable = balance.available; // capped to available
+  const withdrawable = balance.withdrawable ?? balance.available; // capped to available
 
   return (
-    <View style={styles.container}>
+    <View
+      style={styles.container}
+      accessibilityRole="summary"
+      accessibilityLabel={`Wallet breakdown. Spendable now ${balance.available} 1ZE. Settled customer claim ${settledClaim} 1ZE. Withdrawable ${withdrawable} 1ZE.`}
+    >
       {/* ── Spendable now hero ── */}
       <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <Text style={[styles.heroLabel, { color: colors.textMuted }]}>Spendable now</Text>
@@ -212,7 +223,7 @@ function BalanceRow({
   emphasis?: boolean;
 }) {
   return (
-    <View style={styles.balanceRow}>
+    <View style={styles.balanceRow} accessibilityRole="text" accessibilityLabel={`${label}: ${value} 1ZE${caption ? `, ${caption}` : ''}`}>
       <View style={styles.balanceLabelCol}>
         <Text
           style={[

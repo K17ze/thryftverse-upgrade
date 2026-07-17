@@ -28,8 +28,11 @@ import {
   CoOwnWalletBreakdown,
   CoOwnWalletBreakdownSkeleton,
   CoOwnStateCanvas,
+  CoOwnOfflineBanner,
+  CoOwnReconciliationBanner,
   type CoOwn1ZeBalance,
 } from '../components/coown';
+import { useConnectivity } from '../hooks/useConnectivity';
 
 type Props = StackScreenProps<RootStackParamList, 'Wallet'>;
 
@@ -40,6 +43,7 @@ export default function WalletScreen({ navigation }: Props) {
   const { currencyCode, goldRates } = useCurrencyContext();
   const { formatFromIze } = useFormattedPrice();
   const { show } = useToast();
+  const { isOffline } = useConnectivity();
 
   const [balance, setBalance] = React.useState<CoOwn1ZeBalance>({
     available: 0,
@@ -193,6 +197,12 @@ export default function WalletScreen({ navigation }: Props) {
         actions={[
           { icon: 'receipt-outline', label: 'Activity', onPress: handleViewActivity },
         ]}
+      />
+
+      <CoOwnOfflineBanner isOffline={isOffline} />
+      <CoOwnReconciliationBanner
+        isActive={balance.reconciliationState === 'reconciling' || balance.reconciliationState === 'break'}
+        lastReliableTimestamp={balance.serverTimestamp}
       />
 
       <ScrollView

@@ -92,8 +92,23 @@ export function CoOwnTradeReceipt({
   const statusCfg = STATUS_CONFIG[status];
   const statusColor = statusCfg.positive ? colors.success : colors.textSecondary;
 
+  // Composite accessibility label for screen readers
+  const a11yParts: string[] = [
+    `${statusCfg.label}. ${isBuy ? 'Buy' : 'Sell'} ${orderType === 'limit' ? 'limit' : 'protected instant'} order`,
+    `${units} units`,
+  ];
+  if (filledUnits != null) a11yParts.push(`${filledUnits} filled`);
+  if (remainingUnits != null) a11yParts.push(`${remainingUnits} remaining`);
+  if (avgFillPriceLabel) a11yParts.push(`average fill ${avgFillPriceLabel}`);
+  if (worstPriceLabel) a11yParts.push(`worst price ${worstPriceLabel}`);
+  a11yParts.push(`gross ${grossLabel}`, `fee ${feeLabel}`, `${isBuy ? 'total cost' : 'net proceeds'} ${totalLabel}`);
+  a11yParts.push(`settlement ${settlementLabel}`);
+  if (maxReservedLabel) a11yParts.push(`max reserved ${maxReservedLabel}`);
+  if (postTradeUnits != null) a11yParts.push(`after: ${postTradeUnits} units${postTradeOwnershipPct != null ? `, ${postTradeOwnershipPct.toFixed(2)}% of outstanding` : ''}`);
+  if (rightsVersion) a11yParts.push(`rights ${rightsVersion}`);
+
   return (
-    <View style={styles.wrap}>
+    <View style={styles.wrap} accessibilityRole="summary" accessibilityLabel={a11yParts.join('. ')}>
       {/* Status header */}
       <View style={styles.statusHeader}>
         <View style={[styles.statusIconWrap, { backgroundColor: statusColor + '22' }]}>

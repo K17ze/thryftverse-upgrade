@@ -22,6 +22,7 @@ import {
   CoOwnPortfolioSkeleton,
   CoOwnStateCanvas,
   CoOwnPortfolioStorytelling,
+  CoOwnOfflineBanner,
   type CoOwnPositionAction,
 } from '../components/coown';
 import { fetchCoOwnPortfolioPositions, type CoOwnPositionVM, type CoOwnPortfolioSummary } from '../services/coOwnPortfolio';
@@ -31,6 +32,7 @@ import { fetchCoOwnPortfolioPositions, type CoOwnPositionVM, type CoOwnPortfolio
 import { listCoOwnAssets, fetchCoOwnHoldings } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
 import { useBackendData } from '../context/BackendDataContext';
+import { useConnectivity } from '../hooks/useConnectivity';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -44,6 +46,7 @@ export default function PortfolioScreen() {
   const reducedMotionEnabled = useReducedMotion();
   const { width: screenWidth } = useWindowDimensions();
   const { listings } = useBackendData();
+  const { isOffline } = useConnectivity();
 
   const [positions, setPositions] = React.useState<CoOwnPositionVM[]>([]);
   const [summary, setSummary] = React.useState<CoOwnPortfolioSummary>({
@@ -310,6 +313,8 @@ export default function PortfolioScreen() {
           { icon: 'receipt-outline', label: 'Activity', onPress: () => navigation.navigate('CoOwnOrderHistory') },
         ]}
       />
+
+      <CoOwnOfflineBanner isOffline={isOffline} />
 
       <FlashList
         data={positions}

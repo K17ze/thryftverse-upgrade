@@ -101,8 +101,27 @@ export function CoOwnValueStrip({
 }: CoOwnValueStripProps) {
   const { colors } = useAppTheme();
 
+  // Build a composite accessibility label for the entire strip
+  const a11yParts: string[] = [];
+  if (last) a11yParts.push(`Last ${last.price} 1ZE${last.ageSeconds != null ? `, ${formatAge(last.ageSeconds)}` : ''}`);
+  else a11yParts.push('Last: no trades yet');
+  if (bid) a11yParts.push(`Bid ${bid.price} × ${bid.size}`);
+  else a11yParts.push('Bid: no current order');
+  if (ask) a11yParts.push(`Ask ${ask.price} × ${ask.size}`);
+  else a11yParts.push('Ask: no current order');
+  if (spread != null) a11yParts.push(`Spread ${spread}`);
+  if (nav) a11yParts.push(`NAV per unit ${nav.pricePerUnit}, valued ${nav.valuedAt}`);
+  else a11yParts.push('NAV: not yet available');
+  if (premiumPct != null) a11yParts.push(`Premium ${premiumPct}%`);
+  if (nextDistribution) a11yParts.push(`Next distribution ${nextDistribution}`);
+  if (nextReporting) a11yParts.push(`Next reporting ${nextReporting}`);
+
   return (
-    <View style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+    <View
+      style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }]}
+      accessibilityRole="summary"
+      accessibilityLabel={`Value strip. ${a11yParts.join('. ')}`}
+    >
       {/* ── Market column ── */}
       <View style={styles.column}>
         <Text style={[styles.columnHeader, { color: colors.textMuted }]}>Market</Text>

@@ -86,3 +86,15 @@ export { CoOwnRightsSheet, CANONICAL_RIGHTS_LABELS } from './CoOwnRightsSheet';
 export type { CoOwnRightsSheetProps, CoOwnRightsRow } from './CoOwnRightsSheet';
 export { CoOwnWalletBreakdown } from './CoOwnWalletBreakdown';
 export type { CoOwnWalletBreakdownProps, CoOwn1ZeBalance } from './CoOwnWalletBreakdown';
+
+// Canonical model types — single source of truth in coOwnModels.ts
+export type {
+  CoOwnMarketData,
+  CoOwnValuation,
+  CoOwnMarketState,
+  CoOwn1ZeBalance as CanonicalCoOwn1ZeBalance,
+  CoOwnPositionState as CanonicalCoOwnPositionState,
+  CoOwnRightsVersion,
+  CoOwnMarketMode,
+  CoOwnReconciliationState,
+} from '../../data/coOwnModels';
