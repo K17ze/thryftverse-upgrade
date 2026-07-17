@@ -701,7 +701,6 @@ export default function CoOwnHubScreen() {
             </View>
           ) : null
         }
-        estimatedItemSize={(gridColumns === 1 ? 480 : 300) as any}
       />
     </SafeAreaView>
   );

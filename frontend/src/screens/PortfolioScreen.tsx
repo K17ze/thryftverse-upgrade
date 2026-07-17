@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, StatusBar, RefreshControl, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, RefreshControl, useWindowDimensions } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -566,7 +567,6 @@ export default function PortfolioScreen() {
         }
         renderItem={renderPosition}
         ListFooterComponent={<View style={{ height: Space.xxl }} />}
-        estimatedItemSize={220}
       />
 
       {/* Position action sheet */}
