@@ -375,8 +375,8 @@ export const ExchangeLayout = {
   // Order ticket sheet snap points (bottom sheet on mobile)
   ticketSnapCollapsed: 120,
   ticketSnapExpanded: '80%' as const,
-  // Order book row height — deterministic for skeleton match
-  bookRowHeight: 32,
+  // Order book row height — deterministic for skeleton match (44pt touch target)
+  bookRowHeight: 44,
   bookVisibleLevels: 5,      // mobile default; 10 on tablet
   // Market-status strip height
   statusStripHeight: 36,

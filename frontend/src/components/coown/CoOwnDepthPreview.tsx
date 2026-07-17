@@ -122,6 +122,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
     letterSpacing: Type.bodyEmphasis.letterSpacing,
     minWidth: 36,
+    fontVariant: ['tabular-nums'],
     textAlign: 'right',
   },
   caption: {

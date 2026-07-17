@@ -367,6 +367,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
     flexShrink: 0,
     textAlign: 'right',
+    fontVariant: ['tabular-nums'],
   },
   totalRow: {
     flexDirection: 'row',
@@ -396,6 +397,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.bold,
     letterSpacing: -0.5,
     flexShrink: 0,
+    fontVariant: ['tabular-nums'],
   },
   // ── Phase 2.5: max reserved row ──
   maxReservedRow: {
@@ -421,6 +423,7 @@ const styles = StyleSheet.create({
     lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.bold,
     letterSpacing: Type.bodyEmphasis.letterSpacing,
+    fontVariant: ['tabular-nums'],
   },
   // ── Phase 2.5: plain language card ──
   plainLanguageCard: {

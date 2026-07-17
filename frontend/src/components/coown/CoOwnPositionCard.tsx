@@ -130,7 +130,7 @@ export function CoOwnPositionCard({
     : totalUnits.toLocaleString('en-GB');
 
   return (
-    <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.delay(Math.min(index, 8) * 40).duration(300)}>
+    <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.delay(Math.min(index, 8) * 40).duration(250)}>
       <Pressable
         onPress={onPress}
         accessibilityRole="button"
@@ -583,6 +583,7 @@ const styles = StyleSheet.create({
     lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.bold,
     letterSpacing: Type.bodyEmphasis.letterSpacing,
+    fontVariant: ['tabular-nums'],
   },
   localFiat: {
     fontSize: Type.meta.size,
@@ -617,6 +618,7 @@ const styles = StyleSheet.create({
     lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.bold,
     letterSpacing: Type.bodyEmphasis.letterSpacing,
+    fontVariant: ['tabular-nums'],
   },
   premiumNote: {
     fontSize: Type.meta.size,

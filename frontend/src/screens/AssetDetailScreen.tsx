@@ -759,6 +759,20 @@ export default function AssetDetailScreen() {
         )}
       </Reanimated.ScrollView>
 
+      {/* Compact risk reminder — placed before the sticky dock so users
+          see it before tapping Buy/Sell. The full disclosure is in the
+          scrollable content above; this is a reminder, not a replacement.
+          Design.md §G: "Risk/trust disclosures placed before irreversible
+          actions." */}
+      {!isIssuer && (
+        <View style={[styles.riskReminder, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Ionicons name="information-circle-outline" size={12} color={colors.textMuted} />
+          <Text style={[styles.riskReminderText, { color: colors.textMuted }]} numberOfLines={1}>
+            Co-Own units are not guaranteed to rise in value. Liquidity depends on buyer demand.
+          </Text>
+        </View>
+      )}
+
       {/* Sticky action dock — viewer-specific CTAs */}
       <CoOwnStickyActionDock>
         {isIssuer ? (
@@ -966,6 +980,21 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 0,
     marginTop: 0,
+  },
+  // Risk reminder before sticky dock
+  riskReminder: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.xs + 2,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  riskReminderText: {
+    flex: 1,
+    fontSize: 11,
+    fontFamily: Typography.family.regular,
+    letterSpacing: 0.1,
   },
   sectionTitle: {
     fontSize: Type.subtitle.size,

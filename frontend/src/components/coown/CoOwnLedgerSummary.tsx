@@ -39,9 +39,19 @@ export function CoOwnLedgerSummary({
     { icon: 'pause-circle-outline', label: 'Paused', value: pausedCount },
   ];
 
+  const isEmpty = issuedCount === 0 && boughtCount === 0 && soldCount === 0 && pausedCount === 0;
+
   return (
     <View style={[styles.root, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      {items.map((item, i) => (
+      {isEmpty ? (
+        <View style={styles.emptyWrap}>
+          <Ionicons name="receipt-outline" size={16} color={colors.textMuted} />
+          <Text style={[styles.emptyText, { color: colors.textMuted }]}>
+            No activity yet — your trades will appear here.
+          </Text>
+        </View>
+      ) : (
+        items.map((item, i) => (
         <View
           key={item.label}
           style={[
@@ -58,7 +68,8 @@ export function CoOwnLedgerSummary({
           </Text>
           <Text style={[styles.itemLabel, { color: colors.textMuted }]}>{item.label}</Text>
         </View>
-      ))}
+      ))
+      )}
       {/* Phase 6: mark-used + window labels */}
       {(markUsedLabel || windowLabel) && (
         <View
@@ -111,6 +122,20 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     gap: 4,
+  },
+  // Empty state
+  emptyWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.md,
+  },
+  emptyText: {
+    flex: 1,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.caption.letterSpacing,
   },
   itemValue: {
     fontSize: Type.priceList.size,

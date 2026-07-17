@@ -187,6 +187,7 @@ const styles = StyleSheet.create({
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.2,
+    fontVariant: ['tabular-nums'],
   },
   metaRow: {
     flexDirection: 'row',
@@ -206,6 +207,7 @@ const styles = StyleSheet.create({
   unitsText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
+    fontVariant: ['tabular-nums'],
   },
   footerRow: {
     flexDirection: 'row',

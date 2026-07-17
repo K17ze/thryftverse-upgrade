@@ -130,8 +130,8 @@ export function CoOwnCandleChart({
           <Text style={[styles.emptyText, { color: colors.textMuted }]}>
             No trades in this range
           </Text>
-          <Text style={[styles.emptySubtext, { color: colors.textMuted }]}>
-            Candle chart requires trade data
+          <Text style={[styles.emptySubtext, { color: colors.textSecondary }]}>
+            Candle chart requires trade data. Try a wider range, or place a limit order to be the first trade.
           </Text>
         </View>
         <RangeChips
@@ -342,12 +342,14 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   rangeChip: {
-    paddingVertical: 4,
-    paddingHorizontal: Space.sm - 2,
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.sm,
     borderRadius: Radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
-    minWidth: 36,
+    minWidth: 44,
+    minHeight: 44,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   rangeChipText: {
     fontSize: Type.meta.size,
@@ -385,11 +387,13 @@ const styles = StyleSheet.create({
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
     letterSpacing: 0.1,
+    fontVariant: ['tabular-nums'],
   },
   crosshairVol: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
     letterSpacing: 0.1,
+    fontVariant: ['tabular-nums'],
   },
   lastPriceRow: {
     flexDirection: 'row',
@@ -406,6 +410,7 @@ const styles = StyleSheet.create({
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.bold,
     letterSpacing: Type.bodyEmphasis.letterSpacing,
+    fontVariant: ['tabular-nums'],
   },
   lastPriceAge: {
     fontSize: Type.meta.size,

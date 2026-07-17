@@ -81,7 +81,9 @@ export function CoOwnStateCanvas({
   if (variant === 'loading') {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.brand} />
+        <View style={styles.skeletonGraphic} />
+        <View style={styles.skeletonTitle} />
+        <View style={styles.skeletonSubtitle} />
         <Text style={[styles.loadingText, { color: colors.textMuted }]}>
           {title ?? defaults.title}
         </Text>
@@ -107,7 +109,7 @@ export function CoOwnStateCanvas({
         {actionLabel && onAction && (
           <AnimatedPressable
             onPress={onAction}
-            scaleValue={0.96}
+            scaleValue={0.97}
             hapticFeedback="light"
             style={[styles.primaryBtn, { backgroundColor: colors.brand }]}
             accessibilityRole="button"
@@ -119,7 +121,7 @@ export function CoOwnStateCanvas({
         {secondaryActionLabel && onSecondaryAction && (
           <AnimatedPressable
             onPress={onSecondaryAction}
-            scaleValue={0.96}
+            scaleValue={0.97}
             hapticFeedback="light"
             style={[styles.secondaryBtn, { borderColor: colors.border }]}
             accessibilityRole="button"
@@ -145,6 +147,27 @@ const styles = StyleSheet.create({
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     letterSpacing: Type.body.letterSpacing,
+  },
+  // Skeleton placeholders (match final layout geometry)
+  skeletonGraphic: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(128,128,128,0.12)',
+  },
+  skeletonTitle: {
+    width: 140,
+    height: 18,
+    borderRadius: 4,
+    marginTop: Space.md,
+    backgroundColor: 'rgba(128,128,128,0.12)',
+  },
+  skeletonSubtitle: {
+    width: 200,
+    height: 14,
+    borderRadius: 4,
+    marginTop: Space.xs,
+    backgroundColor: 'rgba(128,128,128,0.10)',
   },
   title: {
     fontSize: Type.subtitle.size,

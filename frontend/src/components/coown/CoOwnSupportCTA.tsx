@@ -197,6 +197,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: Space.xs,
     paddingVertical: Space.sm,
+    minHeight: 44,
   },
   historyText: {
     fontSize: Type.body.size,

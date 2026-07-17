@@ -107,6 +107,9 @@ const styles = StyleSheet.create({
     borderRadius: Radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
     flexShrink: 0,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   contactText: {
     fontSize: Type.meta.size,

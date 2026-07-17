@@ -155,7 +155,7 @@ export function CoOwnAssetTile({
 
   // Discovery variant — art-directed tile (original)
   return (
-    <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.delay(Math.min(index, 8) * 40).duration(300)}>
+    <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.delay(Math.min(index, 8) * 40).duration(250)}>
       <AnimatedPressable
         onPress={onPress}
         activeOpacity={0.92}
@@ -259,6 +259,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
     flexShrink: 1,
     minWidth: 0,
+    fontVariant: ['tabular-nums'],
   },
   perUnit: {
     fontSize: Type.caption.size,

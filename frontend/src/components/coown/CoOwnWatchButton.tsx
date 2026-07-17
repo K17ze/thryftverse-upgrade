@@ -31,7 +31,7 @@ export function CoOwnWatchButton({ assetId, assetTitle }: CoOwnWatchButtonProps)
       ]}
       onPress={handlePress}
       activeOpacity={0.8}
-      scaleValue={0.96}
+      scaleValue={0.97}
       hapticFeedback="light"
       accessibilityRole="button"
       accessibilityLabel={

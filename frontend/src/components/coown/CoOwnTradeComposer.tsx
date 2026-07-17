@@ -412,6 +412,7 @@ const styles = StyleSheet.create({
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
     flexShrink: 0,
+    fontVariant: ['tabular-nums'],
   },
   totalRow: {
     flexDirection: 'row',
@@ -442,6 +443,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.bold,
     letterSpacing: -0.5,
     flexShrink: 0,
+    fontVariant: ['tabular-nums'],
   },
   settlementRow: {
     flexDirection: 'row',
@@ -475,6 +477,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
+    minHeight: 44,
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
   },
@@ -520,6 +523,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
     letterSpacing: Type.body.letterSpacing,
     textAlign: 'right',
+    fontVariant: ['tabular-nums'],
   },
   durationRow: {
     flexDirection: 'row',

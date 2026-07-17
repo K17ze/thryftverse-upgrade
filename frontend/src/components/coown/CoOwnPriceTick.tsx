@@ -52,7 +52,7 @@ export interface CoOwnPriceTickProps {
   showSign?: boolean;
 }
 
-const FADE_DURATION = 120;
+const FADE_DURATION = 150;
 const FADE_HOLD = 600;
 
 export function CoOwnPriceTick({

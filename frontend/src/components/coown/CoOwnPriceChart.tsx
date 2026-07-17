@@ -354,13 +354,17 @@ export function CoOwnPriceChart({
         candleChart
       ) : isLoading ? (
         <View style={styles.chartLoading}>
-          <ActivityIndicator size="small" color={colors.textMuted} />
+          <View style={[styles.skeletonLine, { backgroundColor: colors.surfaceAlt, width: '60%' }]} />
+          <View style={[styles.skeletonArea, { backgroundColor: colors.surfaceAlt }]} />
         </View>
       ) : hasError ? (
         <View style={styles.chartEmpty}>
           <Ionicons name="cloud-offline-outline" size={24} color={colors.textMuted} />
           <Text style={[styles.chartEmptyText, { color: colors.textMuted }]}>
             Unable to load price data
+          </Text>
+          <Text style={[styles.chartEmptySubtext, { color: colors.textSecondary }]}>
+            Tap a period to retry, or check your connection.
           </Text>
         </View>
       ) : priceSeries.length < 3 && tradeCount <= 0 ? (
@@ -369,8 +373,8 @@ export function CoOwnPriceChart({
           <Text style={[styles.chartEmptyText, { color: colors.textMuted }]}>
             No trades in this period yet
           </Text>
-          <Text style={[styles.chartEmptySubtext, { color: colors.textMuted }]}>
-            Price reflects the current listing price
+          <Text style={[styles.chartEmptySubtext, { color: colors.textSecondary }]}>
+            Price reflects the current listing price. Place a limit order to be the first trade.
           </Text>
         </View>
       ) : (
@@ -488,6 +492,7 @@ const styles = StyleSheet.create({
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.3,
+    fontVariant: ['tabular-nums'],
   },
   changeBadge: {
     flexDirection: 'row',
@@ -500,18 +505,21 @@ const styles = StyleSheet.create({
   changeText: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
+    fontVariant: ['tabular-nums'],
   },
   periodRow: {
     flexDirection: 'row',
     gap: 6,
   },
   periodChip: {
-    paddingVertical: 5,
-    paddingHorizontal: Space.sm,
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.md,
     borderRadius: Radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
     minWidth: 44,
+    minHeight: 44,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   periodChipText: {
     fontSize: Type.meta.size,
@@ -530,6 +538,16 @@ const styles = StyleSheet.create({
     height: CHART_HEIGHT,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: Space.sm,
+  },
+  skeletonLine: {
+    height: 12,
+    borderRadius: Radius.sm,
+  },
+  skeletonArea: {
+    width: '90%',
+    height: CHART_HEIGHT - 40,
+    borderRadius: Radius.md,
   },
   chartEmpty: {
     height: CHART_HEIGHT,
@@ -568,6 +586,7 @@ const styles = StyleSheet.create({
   footerValue: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
+    fontVariant: ['tabular-nums'],
   },
   // ── Phase 2: a11y summary (visually hidden) ──
   a11ySummary: {
@@ -610,8 +629,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   toggleBtn: {
-    width: 32,
-    height: 32,
+    width: 44,
+    height: 44,
     borderRadius: Radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',

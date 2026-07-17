@@ -167,11 +167,14 @@ export function CoOwnOrderBook({
         onSelectLevel={onSelectLevel}
       />
 
-      {/* Empty state — no open orders */}
+      {/* Empty state — no open orders, with honest next step */}
       {bids.length === 0 && asks.length === 0 && (
         <View style={styles.emptyWrap}>
           <Ionicons name="document-text-outline" size={20} color={colors.textMuted} />
           <Text style={[styles.emptyText, { color: colors.textMuted }]}>No open orders</Text>
+          <Text style={[styles.emptyHint, { color: colors.textSecondary }]}>
+            Place a limit order or request a quote to start trading.
+          </Text>
         </View>
       )}
     </View>
@@ -395,6 +398,7 @@ const styles = StyleSheet.create({
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: Type.body.letterSpacing,
+    fontVariant: ['tabular-nums'],
   },
   levelSize: {
     flex: 1,
@@ -402,6 +406,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
     letterSpacing: Type.body.letterSpacing,
     textAlign: 'right',
+    fontVariant: ['tabular-nums'],
   },
   levelTotal: {
     flex: 1,
@@ -409,6 +414,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
     letterSpacing: Type.body.letterSpacing,
     textAlign: 'right',
+    fontVariant: ['tabular-nums'],
   },
   spreadRow: {
     flexDirection: 'row',
@@ -433,6 +439,7 @@ const styles = StyleSheet.create({
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: Type.body.letterSpacing,
+    fontVariant: ['tabular-nums'],
   },
   spreadRight: {
     flexDirection: 'row',
@@ -449,6 +456,7 @@ const styles = StyleSheet.create({
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.bold,
     letterSpacing: Type.bodyEmphasis.letterSpacing,
+    fontVariant: ['tabular-nums'],
   },
   lastAge: {
     fontSize: Type.meta.size,
@@ -464,6 +472,13 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
+  },
+  emptyHint: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.meta.letterSpacing,
+    textAlign: 'center',
+    paddingHorizontal: Space.md,
   },
   // RFQ state
   rfqWrap: {
@@ -489,6 +504,9 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
     marginTop: Space.xs,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   rfqBtnText: {
     fontSize: Type.body.size,
