@@ -21,6 +21,7 @@ import {
   CoOwnPositionActionSheet,
   CoOwnPortfolioSkeleton,
   CoOwnStateCanvas,
+  CoOwnPortfolioStorytelling,
   type CoOwnPositionAction,
 } from '../components/coown';
 import { fetchCoOwnPortfolioPositions, type CoOwnPositionVM, type CoOwnPortfolioSummary } from '../services/coOwnPortfolio';
@@ -486,6 +487,16 @@ export default function PortfolioScreen() {
                   </Text>
                 </View>
               </View>
+            )}
+
+            {/* Phase 6: Portfolio storytelling — premium of last/NAV explanation */}
+            {performers.best && performers.best.avgEntryPriceGbp > 0 && (
+              <CoOwnPortfolioStorytelling
+                premiumPct={null}
+                lastPriceLabel={formatFromFiat(performers.best.currentValueGbp / performers.best.unitsOwned, 'GBP')}
+                markSourceLabel="Last trade"
+                markAgeLabel={undefined}
+              />
             )}
 
             {/* Watchlist summary */}

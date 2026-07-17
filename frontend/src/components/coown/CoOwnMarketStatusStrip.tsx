@@ -96,6 +96,7 @@ export function CoOwnMarketStatusStrip({
       ]}
       accessibilityRole="header"
       accessibilityLabel={`${MODE_LABEL[mode]} market. ${subtitle}${remaining != null ? `. ${formatCountdown(remaining)} remaining` : ''}`}
+      accessibilityLiveRegion="polite"
     >
       {/* Status dot — shape differentiator for accessibility */}
       <View

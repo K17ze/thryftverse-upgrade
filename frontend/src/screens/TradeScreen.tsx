@@ -41,6 +41,7 @@ import {
   CoOwnStateCanvas,
   CoOwnStickyActionDock,
   CoOwnRiskDisclosure,
+  CoOwnConciergeCTA,
   type CoOwnTicketOrderType,
   type CoOwnTicketDuration,
 } from '../components/coown';
@@ -464,6 +465,28 @@ export default function TradeScreen() {
             </Text>
           </View>
         </Reanimated.View>
+
+        {/* Phase 6: Concierge CTA — shown when the market is thin (no opposite side) */}
+        {simulatedBook.asks.length === 0 && side === 'buy' && (
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
+            <CoOwnConciergeCTA
+              reason="no_opposite_side"
+              assetTitle={asset?.title}
+              onRequestQuote={() => { haptics.tap(); show('Quote request sent. The market maker will respond shortly.', 'info'); }}
+              onContactConcierge={() => { haptics.tap(); show('Connecting you to concierge...', 'info'); }}
+            />
+          </Reanimated.View>
+        )}
+        {simulatedBook.bids.length === 0 && side === 'sell' && (
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
+            <CoOwnConciergeCTA
+              reason="no_opposite_side"
+              assetTitle={asset?.title}
+              onRequestQuote={() => { haptics.tap(); show('Quote request sent. The market maker will respond shortly.', 'info'); }}
+              onContactConcierge={() => { haptics.tap(); show('Connecting you to concierge...', 'info'); }}
+            />
+          </Reanimated.View>
+        )}
 
         {/* Risk disclosure */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(200)}>

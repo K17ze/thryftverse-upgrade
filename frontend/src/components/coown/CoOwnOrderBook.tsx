@@ -292,7 +292,10 @@ function SpreadRow({
             {lastPrice.toFixed(2)}
           </Text>
           {lastAgeSeconds != null && (
-            <Text style={[styles.lastAge, { color: colors.textMuted }]}>
+            <Text
+              style={[styles.lastAge, { color: colors.textMuted }]}
+              accessibilityLabel={`Last trade ${formatAge(lastAgeSeconds)}`}
+            >
               · {formatAge(lastAgeSeconds)}
             </Text>
           )}
