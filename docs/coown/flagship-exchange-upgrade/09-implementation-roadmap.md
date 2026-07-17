@@ -5,6 +5,8 @@
 **Source:** research §15 (phased reconstruction), §16 (controlled pilot), §17 (acceptance criteria).
 **Constraint:** every phase touches canonical files only (`AGENTS.md` §7); no mock fallbacks in production (`AGENTS.md` §11); preserve working functionality (`AGENTS.md` §8).
 
+**Authoritative release gate:** `10-transaction-contracts-and-release-gates.md` is the authoritative specification for all money-moving phases (3–5). The phase exit gates below are summarised; doc 10 §14 contains the full go/no-go checklist. No live order submission, wallet reservation, settlement, redemption, club allocation, or corporate action may ship until the contracts in doc 10 are implemented and tested.
+
 ---
 
 ## 0. Safe implementation boundary (audit verdict — conditional go)
@@ -114,7 +116,22 @@ Pinterest and Instagram influence image composition, navigation economy, and int
 
 ---
 
-## Phase 3 — Order ticket + reservation + confirm (backend dependency: reservation + DvP)
+## Phase 2.5 — Order-ticket UI with mocked/simulated data (SAFE — no live submission)
+
+**Goal:** build and validate the order-ticket visual composition and interaction model using clearly-labelled simulated data. No live order submission, no real reservation. Authorised by the audit ("Order-ticket UI using mocked or clearly simulated data: GO").
+
+**Work:**
+1. `CoOwnTradeComposer` upgrade (§04 B, §05 §1) — collapsed-default + expandable-details ticket.
+2. Estimated fill, worst price, depth impact, reservation display — all computed from a **clearly-labelled simulated book**.
+3. Thin-market action substitution (Request quote / Join auction) — visual only.
+4. `TradeConfirmScreen` receipt layout (§05 §2) — visual only, no submission.
+5. All simulated values labelled "Simulated" or "Mock" in the UI.
+
+**Exit gate:** ticket renders correctly with simulated data; all values labelled "Simulated"; no live submission path; no real reservation; golden screenshot regression tests pass on 4 device widths.
+
+---
+
+## Phase 3 — Order ticket + reservation + confirm (PAUSED — backend dependency: reservation + DvP)
 
 **Goal:** the single highest-impact upgrade — checkout becomes an exchange ticket.
 
@@ -237,10 +254,13 @@ Expand only after measured evidence of reconciliation, comprehension, fair execu
 1. **Phase 0 before Phase 2/3/4** — the UI must be able to render truthfully before it can render real data. **Phase 0 is safe now.**
 2. **Phase 1 safe now** (read-only instrument + market surfaces) — no money moves.
 3. **Phase 2 safe now** (read-only order book + price truth) — no money moves.
-4. **Phase 3 PAUSED** (order ticket + reservation + confirm) — money moves; requires Blockers 2, 4, 5 corrected in backend.
-5. **Phase 4 PAUSED** (portfolio + wallet + ledger) — money moves; requires Blockers 1, 3 corrected in backend.
-6. **Phase 5 PAUSED** (clubs + corporate actions) — requires Blocker 6 + legal approval.
-7. **Phase 6 continuous** — but never as a substitute for Phase 0–4 truth.
+4. **Phase 2.5 safe now** (order-ticket UI with mocked/simulated data) — no live submission, no real reservation. All simulated values labelled.
+5. **Phase 3 PAUSED** (live order ticket + reservation + confirm) — money moves; requires the transaction contracts in `10-transaction-contracts-and-release-gates.md` implemented and tested (order state machine, `computeReservation`, double-entry ledger, matching engine, eligibility gates).
+6. **Phase 4 PAUSED** (portfolio + wallet + ledger) — money moves; requires doc 10 contracts (settlement & finality, ledger invariants, valuation provenance).
+7. **Phase 5 PAUSED** (clubs + corporate actions) — requires doc 10 contracts (CA engine, club edge cases) + legal approval.
+8. **Phase 6 continuous** — but never as a substitute for Phase 0–4 truth.
+
+**Authoritative gate:** `10-transaction-contracts-and-release-gates.md` §14 (phase-by-phase go/no-go checklist) and §15 (final release classification) are the authoritative release gates. The summaries above are derived from doc 10.
 
 ---
 

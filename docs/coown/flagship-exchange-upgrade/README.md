@@ -1,6 +1,6 @@
 # Co-Own Flagship Exchange — UI/UX Upgrade Plan
 
-**Status:** Flagship UI/UX reconstruction specification
+**Status:** Visual foundation complete; transaction specification pending.
 **Prepared:** 17 July 2026
 **Scope:** ThryftVerse Co-Own department — frontend surfaces, components, design tokens, states, motion, accessibility
 **Source inputs:**
@@ -40,18 +40,19 @@ If a proposed UI element does not serve one of these, it does not belong in the 
 
 ## 3. Audit verdict — conditional go
 
-This pack has been audited. The verdict is a **visual-foundation go** and a **transaction-engine no-go** until 7 blockers are corrected in the backend.
+This pack has been audited twice. The current verdict: **visual foundation complete; transaction specification pending.**
 
-**Scores:** Product/visual direction 8/10 · Screen architecture 8/10 · Exchange/business-model completeness 6/10 · Money-moving implementation readiness 4/10.
+**Scores (second audit):** Product/visual direction 8/10 · Screen architecture 8/10 · Exchange/business-model completeness 6/10 · Money-moving implementation readiness 4/10.
 
-**Safe to begin now (visual foundation — no money moves):**
+**GO (visual foundation — no money moves):**
 - Token + typography extensions (dark luxury shades, tabular numerals)
 - `CoOwnNumericText`, exchange geometry, market-state badges
 - Read-only Galleria discovery + asset dossier + value strip + order book display
 - Empty/stale/halted/restricted/thin/reconciliation states
 - Accessibility + responsive screen shells + skeletons
+- Order-ticket UI using mocked or clearly simulated data (all simulated values labelled)
 
-**Paused until blockers are corrected (transaction engine — money moves):**
+**NO-GO (transaction engine — money moves) until the contracts in `10-transaction-contracts-and-release-gates.md` are specified, implemented, and tested:**
 - Wallet + redemption (Blocker 1: nonnegative buckets, `withdrawable ≤ available ≤ settled_claim`)
 - Live order submission (Blocker 2: reservation = full max obligation; Blocker 4: market-data sequencing)
 - Reservations + partial fills (Blocker 2 + Blocker 3: supply invariant)
@@ -60,7 +61,9 @@ This pack has been audited. The verdict is a **visual-foundation go** and a **tr
 - Buyouts + corporate actions (CA engine + record-date snapshot)
 - Issuance activation (Blocker 5: versioned accepted rights, no "Rights TBC" on live instruments)
 
-See `09-implementation-roadmap.md` §0 (Safe implementation boundary) for the full blocker status table.
+**NO-GO (regulatory):** public wording that 1ZE or "in-game currency" bypasses financial regulation. Product classification depends on economic substance and jurisdiction, not the UI label. Specialist financial-regulatory counsel required before launch.
+
+See `09-implementation-roadmap.md` §0 (Safe implementation boundary) for the full blocker status table, and `10-transaction-contracts-and-release-gates.md` §15 (Final release classification) for the authoritative go/no-go.
 
 ## 4. Root-cause framing (why this is not a styling task)
 
@@ -78,34 +81,36 @@ Therefore this upgrade is **model-first and component-system-first**. The plan b
 
 ---
 
-## 4. Document index
+## 5. Document index
 
 | # | Document | Purpose |
 |---|---|---|
 | 01 | `01-economic-model-ui-mapping.md` | Maps the 6 canonical concepts (Asset, Vehicle, Instrument, Market, Position, 1ZE balance) to the UI surfaces that must express them. Replaces the single `CoOwnedAsset` display model in the interface. |
-| 02 | `02-design-tokens-extension.md` | Extends the existing `colors.ts` / `designTokens.ts` with exchange semantics: market states, tabular numerals, up/down, depth, halt — without breaking the current warm-near-black aesthetic. |
+| 02 | `02-design-tokens-extension.md` | Extends the existing `colors.ts` / `designTokens.ts` with exchange semantics: market states, tabular numerals, up/down, depth, halt — without breaking the current warm-near-black aesthetic. Dark luxury shades only. |
 | 03 | `03-screens-specification.md` | Per-screen target composition for every Co-Own screen, with first-viewport hierarchy, sticky actions, and state coverage. Canonical files only. |
 | 04 | `04-components-to-build.md` | The new purpose-built components the exchange requires (order book, depth strip, candle chart, order ticket, market-status strip, NAV/market value strip, 1ZE balance breakdown, etc.) with props and placement. |
-| 05 | `05-order-ticket-and-market-data.md` | The single highest-impact upgrade: `CoOwnTradeComposer` → exchange-grade order ticket with spread, estimated fill, worst price, impact, reservation state, review & confirm. Plus price-truth rules for last/bid/ask/mid/NAV. |
-| 06 | `06-portfolio-wallet-upgrade.md` | `PortfolioScreen` and the 1ZE wallet: position rows with mark source/age, realised/unrealised split, concentration bands; 1ZE sub-balances (available/reserved/pending/withdrawable/safeguarded). |
+| 05 | `05-order-ticket-and-market-data.md` | The single highest-impact upgrade: `CoOwnTradeComposer` → exchange-grade order ticket with spread, estimated fill, worst price, impact, reservation state, review & confirm. Plus price-truth rules for last/bid/ask/mid/NAV. Collapsed default + expandable details. |
+| 06 | `06-portfolio-wallet-upgrade.md` | `PortfolioScreen` and the 1ZE wallet: position rows with mark source/age, realised/unrealised split, concentration bands; 1ZE sub-balances (nonnegative buckets, strict invariant). |
 | 07 | `07-states-motion-accessibility.md` | Loading/empty/filtered-empty/stale/halted/restricted/error/offline states; restrained motion language; full accessibility gates per `AGENTS.md` §17–18. |
 | 08 | `08-reference-app-synthesis.md` | What to borrow from Robinhood, Kalshi, Polymarket, Kite, Upstox — and what Co-Own must **not** imply. Mapped to ThryftVerse aesthetics. |
-| 09 | `09-implementation-roadmap.md` | Phased rollout aligned with the source research §15–16, with exit gates and the controlled pilot. |
+| 09 | `09-implementation-roadmap.md` | Phased rollout aligned with the source research §15–16, with exit gates, the controlled pilot, safe implementation boundary, and 1ZE first-class product states. |
+| 10 | `10-transaction-contracts-and-release-gates.md` | The transaction-engine contracts: canonical entities, order/trade/settlement state machines, double-entry ledger invariants, matching-engine rules, settlement & finality, corporate actions, valuation provenance, eligibility gates, market-data recovery, club edge cases, operational controls, and the phase-by-phase go/no-go checklist. **Authoritative for live-money release.** |
 
 ---
 
-## 5. How to use this folder
+## 6. How to use this folder
 
 1. Read `01-economic-model-ui-mapping.md` first — it defines the vocabulary every other doc uses.
 2. Before touching any screen, read `03-screens-specification.md` for that screen and `05-order-ticket-and-market-data.md` if it touches trading.
 3. Every new component must be checked against `04-components-to-build.md` (props, placement, state coverage) and `07-states-motion-accessibility.md`.
 4. Token additions go through `02-design-tokens-extension.md` so the aesthetic stays coherent.
-5. Phase work follows `09-implementation-roadmap.md`; do not jump to Phase 5 polish before Phase 2 truth lands.
-6. `AGENTS.md` is the always-on charter — this folder operationalises it for Co-Own specifically.
+5. Phase work follows `09-implementation-roadmap.md`; do not jump to Phase 6 polish before Phase 2 truth lands.
+6. **Before any money-moving work (Phases 3–5), read `10-transaction-contracts-and-release-gates.md` in full.** It is the authoritative transaction specification and release gate. No live order submission, wallet reservation, settlement, redemption, club allocation, or corporate action may ship until the contracts in doc 10 are implemented and tested.
+7. `AGENTS.md` is the always-on charter — this folder operationalises it for Co-Own specifically.
 
 ---
 
-## 6. Aesthetic anchor (do not drift)
+## 7. Aesthetic anchor (do not drift)
 
 The current palette is already correct for this work and must be preserved, not replaced. Exchange semantics use **darker luxury shades** — no light, bright, or saturated hues:
 
@@ -124,7 +129,7 @@ Luxury comes from **proportion, media art direction, typography, precision and s
 
 ---
 
-## 7. Workspace verification (per `AGENTS.md` §1)
+## 8. Workspace verification (per `AGENTS.md` §1)
 
 ```text
 Workspace root: C:/Users/User/Desktop/thryftverse-upgrade
