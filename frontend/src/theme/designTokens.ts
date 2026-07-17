@@ -366,3 +366,59 @@ export const DockConstants = {
   /** Stacked compact dock (buttons stacked vertically) — typical total */
   stackedActionHeight: 180,
 } as const;
+
+// ============================================================================
+// EXCHANGE LAYOUT GEOMETRY — Co-Own market surfaces
+// Deterministic geometry for skeletons to match final layouts.
+// ============================================================================
+export const ExchangeLayout = {
+  // Order ticket sheet snap points (bottom sheet on mobile)
+  ticketSnapCollapsed: 120,
+  ticketSnapExpanded: '80%' as const,
+  // Order book row height — deterministic for skeleton match
+  bookRowHeight: 32,
+  bookVisibleLevels: 5,      // mobile default; 10 on tablet
+  // Market-status strip height
+  statusStripHeight: 36,
+  // Value strip (last/bid/ask/mid/NAV) row height
+  valueStripRowHeight: 44,
+  // Chart hero min height on AssetDetail
+  chartHeroMinHeight: 220,
+} as const;
+
+// ============================================================================
+// NUMERIC TYPOGRAPHY — tabular figures for all 1ZE values
+// Inter supports tnum via fontVariant: ['tabular-nums'] — no new font needed.
+// Every 1ZE amount, unit count, percentage, P&L uses a Numeric.* style.
+// ============================================================================
+export const Numeric = {
+  // Prices in lists, totals
+  price: {
+    ...Type.price,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
+    fontFeatureSettings: '"tnum" 1, "lnum" 1',
+  },
+  // Elevated price (20/24/700)
+  priceList: {
+    ...Type.priceList,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
+  },
+  // Hero price (28/32/700)
+  priceLarge: {
+    ...Type.priceLarge,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
+  },
+  // Hero portfolio / wallet value (32/38/700)
+  display: {
+    ...Type.display,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
+  },
+  // Order book, depth, stats grids — compact mono feel
+  mono: {
+    size: 13,
+    lineHeight: 18,
+    weight: '500' as const,
+    letterSpacing: 0,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
+  },
+} as const;

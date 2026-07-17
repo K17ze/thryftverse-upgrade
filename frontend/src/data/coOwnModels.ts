@@ -104,3 +104,139 @@ export interface BuyoutOffer {
   status: 'draft' | 'open' | 'accepted' | 'expired' | 'cancelled';
   expiresAt: string;
 }
+
+// ============================================================================
+// EXCHANGE MODEL EXTENSIONS — Phase 0 truth scaffolding
+// These types extend the display model so the UI can render exchange-grade
+// facts truthfully, failing closed ("—" / "Not available") where the backend
+// does not yet expose them. The existing CoOwnedAsset.currentPricePerShare
+// is deprecated — kept temporarily for migration, not rendered.
+// See docs/coown/flagship-exchange-upgrade/01 + 05 + 10.
+// ============================================================================
+
+/** Market mode — the venue state, not the asset lifecycle. */
+export type CoOwnMarketMode = 'continuous' | 'call_auction' | 'rfq' | 'halted' | 'closed';
+
+/** Reconciliation state — governs whether money movement is safe. */
+export type CoOwnReconciliationState = 'reconciled' | 'reconciling' | 'break';
+
+/** A single price level in the order book. */
+export interface CoOwnBookLevel {
+  price: number;
+  size: number;
+  orderCount?: number;
+  cumulative?: number;
+}
+
+/** Market data with sequencing — prevents inconsistent book/last renders. */
+export interface CoOwnMarketData {
+  // Sequencing — mandatory on every snapshot (audit blocker 4)
+  marketId: string;
+  instrumentId: string;
+  snapshotSequence: number;
+  lastEventSequence: number;
+  serverTimestamp: string;
+  dataAgeSeconds: number;
+  stalenessThresholdSeconds: number;
+  reconciliationState: CoOwnReconciliationState;
+
+  // Price facts — all optional; missing = "—" in the UI
+  last?: { price: number; executedAt: string };
+  bestBid?: { price: number; size: number };
+  bestAsk?: { price: number; size: number };
+  spread?: number;
+  spreadBps?: number;
+  mid?: number;
+  depthWithin2Pct?: number;
+  turnover24h?: number;
+  change24h?: { pct: number; referencePrice: number; windowStart: string };
+  officialClose?: { price: number; closedAt: string };
+  indicativeAuctionPrice?: number;
+
+  // Market microstructure
+  tickSize: number;
+  lotSize: number;
+  tradingSessionState: CoOwnMarketMode;
+}
+
+/** Valuation provenance — every displayed valuation exposes its source. */
+export interface CoOwnValuation {
+  navPerUnit?: number;
+  valuedAt: string;
+  method: string;
+  valuer?: string;
+  rangeLow?: number;
+  rangeHigh?: number;
+  nextScheduled?: string;
+}
+
+/** Market state — session, halt, disclosure. */
+export interface CoOwnMarketState {
+  mode: CoOwnMarketMode;
+  sessionLabel: string;
+  countdownSeconds?: number | null;
+  haltReason?: string;
+  nextSessionAt?: string;
+  tickSize: number;
+  lotSize: number;
+  priceBandPct: number;
+  disclosureVersion: string;
+}
+
+/** 1ZE balance — nonnegative buckets with strict invariant.
+ *  withdrawable ≤ available ≤ settledCustomerClaim
+ *  settledCustomerClaim = available + reservedForOrders + redemptionInProgress + otherHolds
+ *  Pending deposits/proceeds are separate, not in settled claim. */
+export interface CoOwn1ZeBalance {
+  // Settled claim (safeguarded) — nonnegative buckets
+  available: number;
+  reservedForOrders: number;
+  redemptionInProgress: number;
+  otherHolds: number;
+  settledCustomerClaim: number;
+
+  // Pending — separate, not part of settled claim until settled
+  pendingDeposit: number;
+  unsettledSaleProceeds: number;
+
+  // Derived
+  withdrawable: number;
+
+  // Trust
+  safeguarded: boolean;
+  safeguardingPartner?: string;
+
+  // Sequencing
+  snapshotSequence: number;
+  serverTimestamp: string;
+  reconciliationState: CoOwnReconciliationState;
+}
+
+/** Position state — settled/reserved/pending split.
+ *  These are states of existing issued units, not separate supply buckets.
+ *  invariant: settled + reservedForSale + pendingIn + pendingOut ≤ issuedUnits */
+export interface CoOwnPositionState {
+  settled: number;
+  reservedForSale: number;
+  pendingIn: number;
+  pendingOut: number;
+  outstandingUnits: number;
+}
+
+/** Rights row — each must have an answer for live instruments.
+ *  "To be confirmed" only for prelaunch preview; blocks trading on live. */
+export interface CoOwnRightsRow {
+  key: string;
+  label: string;
+  answer: string;
+  documentUrl?: string;
+  isTbc: boolean;
+}
+
+/** Rights version — the disclosure version accepted by the user. */
+export interface CoOwnRightsVersion {
+  version: string;
+  effectiveDate: string;
+  acceptedByUser: boolean;
+  rows: CoOwnRightsRow[];
+}

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, useWindowDimensions } from 'react-native';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius } from '../../theme/designTokens';
+import { Space, Radius, ExchangeLayout } from '../../theme/designTokens';
 
 // ── Shared shimmer-free skeleton primitives ──
 // Deterministic, layout-matching placeholders. No random values.
@@ -199,6 +199,121 @@ export function CoOwnLeaderboardSkeleton() {
           ))}
         </View>
       ))}
+    </View>
+  );
+}
+
+// ── Value strip skeleton (Market/Fundamental/Cash columns) ──
+// Matches CoOwnValueStrip final geometry: 3 columns, height = valueStripRowHeight.
+
+export function CoOwnValueStripSkeleton() {
+  const { width } = useWindowDimensions();
+  const colWidth = (width - Space.md * 2 - Space.sm * 2) / 3;
+
+  return (
+    <View style={[styles.wrap, { paddingVertical: Space.sm }]}>
+      <View style={styles.row}>
+        {[0, 1, 2].map((col) => (
+          <View key={col} style={{ width: colWidth, gap: Space.xs }}>
+            <SkeletonBlock width="60%" height={11} radius={Radius.sm} />
+            <SkeletonBlock width="80%" height={ExchangeLayout.valueStripRowHeight - 16} radius={Radius.sm} />
+            <SkeletonBlock width="50%" height={11} radius={Radius.sm} />
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+// ── Order book skeleton ──
+// Matches CoOwnOrderBook final geometry: 5 levels per side, deterministic row height.
+
+export function CoOwnOrderBookSkeleton() {
+  const { width } = useWindowDimensions();
+  const rowH = ExchangeLayout.bookRowHeight;
+  const levels = ExchangeLayout.bookVisibleLevels;
+
+  return (
+    <View style={[styles.wrap, { paddingVertical: Space.sm }]}>
+      {/* Asks (top, descending) */}
+      {[...Array(levels)].map((_, i) => (
+        <View key={`ask-${i}`} style={{ height: rowH, flexDirection: 'row', alignItems: 'center', gap: Space.sm }}>
+          <SkeletonBlock width={70} height={14} radius={Radius.sm} />
+          <View style={{ flex: 1 }} />
+          <SkeletonBlock width={60} height={14} radius={Radius.sm} />
+        </View>
+      ))}
+      {/* Spread row */}
+      <View style={{ height: rowH, alignItems: 'center', justifyContent: 'center' }}>
+        <SkeletonBlock width={120} height={14} radius={Radius.sm} />
+      </View>
+      {/* Bids (bottom, descending) */}
+      {[...Array(levels)].map((_, i) => (
+        <View key={`bid-${i}`} style={{ height: rowH, flexDirection: 'row', alignItems: 'center', gap: Space.sm }}>
+          <SkeletonBlock width={70} height={14} radius={Radius.sm} />
+          <View style={{ flex: 1 }} />
+          <SkeletonBlock width={60} height={14} radius={Radius.sm} />
+        </View>
+      ))}
+    </View>
+  );
+}
+
+// ── Wallet breakdown skeleton ──
+// Matches CoOwnWalletBreakdown final geometry: hero + settled claim rows + pending section.
+
+export function CoOwnWalletBreakdownSkeleton() {
+  const { width } = useWindowDimensions();
+
+  return (
+    <View style={styles.wrap}>
+      {/* Hero: spendable now */}
+      <SkeletonBlock width={width - Space.md * 2} height={80} radius={Radius.lg} />
+      <View style={styles.sectionGap} />
+      {/* Settled claim rows */}
+      {[0, 1, 2, 3].map((i) => (
+        <View key={i} style={[styles.activityRow, { paddingVertical: Space.sm }]}>
+          <SkeletonBlock width="40%" height={14} radius={Radius.sm} />
+          <View style={{ flex: 1 }} />
+          <SkeletonBlock width={80} height={16} radius={Radius.sm} />
+        </View>
+      ))}
+      <View style={styles.sectionGap} />
+      {/* Pending section */}
+      <SkeletonBlock width="30%" height={12} radius={Radius.sm} />
+      <View style={styles.itemGap} />
+      {[0, 1].map((i) => (
+        <View key={i} style={[styles.activityRow, { paddingVertical: Space.sm }]}>
+          <SkeletonBlock width="35%" height={14} radius={Radius.sm} />
+          <View style={{ flex: 1 }} />
+          <SkeletonBlock width={70} height={16} radius={Radius.sm} />
+        </View>
+      ))}
+    </View>
+  );
+}
+
+// ── Candle chart skeleton ──
+// Matches CoOwnCandleChart final geometry: chart hero min height + range chips.
+
+export function CoOwnCandleChartSkeleton() {
+  const { width } = useWindowDimensions();
+
+  return (
+    <View style={styles.wrap}>
+      {/* Chart area */}
+      <SkeletonBlock
+        width={width - Space.md * 2}
+        height={ExchangeLayout.chartHeroMinHeight}
+        radius={Radius.lg}
+      />
+      <View style={styles.itemGap} />
+      {/* Range chips row */}
+      <View style={styles.row}>
+        {['1D', '1W', '1M', '3M', '1Y', 'ALL'].map((label) => (
+          <SkeletonBlock key={label} width={40} height={28} radius={Radius.full} />
+        ))}
+      </View>
     </View>
   );
 }

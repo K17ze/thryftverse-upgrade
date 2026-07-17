@@ -6,7 +6,16 @@ import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { FlagshipEmptyGraphic } from '../flagship';
 
-export type CoOwnStateVariant = 'loading' | 'empty' | 'error' | 'offline' | 'unavailable';
+export type CoOwnStateVariant =
+  | 'loading'
+  | 'empty'
+  | 'error'
+  | 'offline'
+  | 'unavailable'
+  | 'stale'
+  | 'halted'
+  | 'restricted'
+  | 'thin';
 
 export interface CoOwnStateCanvasProps {
   variant: CoOwnStateVariant;
@@ -18,6 +27,12 @@ export interface CoOwnStateCanvasProps {
   onSecondaryAction?: () => void;
   emptyGraphicVariant?: 'bag' | 'box' | 'search' | 'chat' | 'image';
   icon?: React.ComponentProps<typeof Ionicons>['name'];
+  /** For stale: the timestamp of the last reliable data. */
+  staleTimestamp?: string;
+  /** For halted: the reason for the halt. */
+  haltReason?: string;
+  /** For restricted: the reason for the restriction. */
+  restrictedReason?: string;
   children?: React.ReactNode;
 }
 
@@ -27,6 +42,10 @@ const DEFAULTS: Record<CoOwnStateVariant, { title: string; subtitle: string; ico
   error: { title: 'Could not load', subtitle: 'Tap below to try again.', icon: 'alert-circle-outline', graphic: 'box' },
   offline: { title: 'You are offline', subtitle: 'Check your connection and try again.', icon: 'cloud-offline-outline', graphic: 'search' },
   unavailable: { title: 'Not available', subtitle: 'This feature is not available right now.', icon: 'lock-closed-outline', graphic: 'image' },
+  stale: { title: 'Data stale', subtitle: 'Showing the last reliable data. Reconnecting…', icon: 'time-outline', graphic: 'search' },
+  halted: { title: 'Trading halted', subtitle: 'Trading is temporarily suspended.', icon: 'pause-circle-outline', graphic: 'box' },
+  restricted: { title: 'Not eligible in your region', subtitle: 'This instrument is not available for trading in your jurisdiction.', icon: 'lock-closed-outline', graphic: 'image' },
+  thin: { title: 'Thin market', subtitle: 'No active orders on one side. Use limit orders or request a quote.', icon: 'water-outline', graphic: 'search' },
 };
 
 export function CoOwnStateCanvas({
@@ -39,10 +58,25 @@ export function CoOwnStateCanvas({
   onSecondaryAction,
   emptyGraphicVariant,
   icon,
+  staleTimestamp,
+  haltReason,
+  restrictedReason,
   children,
 }: CoOwnStateCanvasProps) {
   const { colors } = useAppTheme();
   const defaults = DEFAULTS[variant];
+
+  // Build context-aware subtitle for exchange states
+  let resolvedSubtitle = subtitle ?? defaults.subtitle;
+  if (!subtitle) {
+    if (variant === 'stale' && staleTimestamp) {
+      resolvedSubtitle = `Last reliable data: ${staleTimestamp}. Reconnecting…`;
+    } else if (variant === 'halted' && haltReason) {
+      resolvedSubtitle = `Trading halted: ${haltReason}`;
+    } else if (variant === 'restricted' && restrictedReason) {
+      resolvedSubtitle = restrictedReason;
+    }
+  }
 
   if (variant === 'loading') {
     return (
@@ -66,7 +100,7 @@ export function CoOwnStateCanvas({
         {title ?? defaults.title}
       </Text>
       <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-        {subtitle ?? defaults.subtitle}
+        {resolvedSubtitle}
       </Text>
       {children}
       <View style={styles.actionRow}>

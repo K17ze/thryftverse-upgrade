@@ -49,6 +49,10 @@ export {
   CoOwnTradeSkeleton,
   CoOwnCreateStudioSkeleton,
   CoOwnLeaderboardSkeleton,
+  CoOwnValueStripSkeleton,
+  CoOwnOrderBookSkeleton,
+  CoOwnWalletBreakdownSkeleton,
+  CoOwnCandleChartSkeleton,
 } from './CoOwnSkeletons';
 export { CoOwnStateCanvas } from './CoOwnStateCanvas';
 export type { CoOwnStateCanvasProps, CoOwnStateVariant } from './CoOwnStateCanvas';
