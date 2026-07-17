@@ -18,6 +18,11 @@ import {
   sanitizeTradeQuantityInput,
   CO_OWN_FEE_RATE,
   TradeSide,
+  computeReservation,
+  estimateFill,
+  computeDepthWithinBand,
+  generateSimulatedBook,
+  DEFAULT_FEE_SCHEDULE,
 } from '../utils/tradeFlow';
 import { parseApiError } from '../lib/apiClient';
 import { fetchCoOwnAssetById, fetchCoOwnHoldings } from '../services/marketApi';
@@ -36,6 +41,8 @@ import {
   CoOwnStateCanvas,
   CoOwnStickyActionDock,
   CoOwnRiskDisclosure,
+  type CoOwnTicketOrderType,
+  type CoOwnTicketDuration,
 } from '../components/coown';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 
@@ -45,6 +52,12 @@ type RouteT = RouteProp<RootStackParamList, 'Trade'>;
 const TRADE_SIDE_OPTIONS: Array<{ value: TradeSide; label: string; accessibilityLabel: string }> = [
   { value: 'buy', label: 'Buy', accessibilityLabel: 'Buy side' },
   { value: 'sell', label: 'Sell', accessibilityLabel: 'Sell side' },
+];
+
+// Phase 2.5: order-type selector options
+const ORDER_TYPE_OPTIONS: Array<{ value: CoOwnTicketOrderType; label: string; accessibilityLabel: string }> = [
+  { value: 'protected_instant', label: 'Protected instant', accessibilityLabel: 'Protected instant — marketable limit with visible protection price' },
+  { value: 'limit', label: 'Limit', accessibilityLabel: 'Limit — resting order' },
 ];
 
 export default function TradeScreen() {
@@ -66,6 +79,9 @@ export default function TradeScreen() {
   const [quantityInput, setQuantityInput] = React.useState('1');
   const [offerPriceInput, setOfferPriceInput] = React.useState('');
   const [isSubmittingOrder, setIsSubmittingOrder] = React.useState(false);
+  // Phase 2.5: exchange-grade order type + duration
+  const [ticketOrderType, setTicketOrderType] = React.useState<CoOwnTicketOrderType>('protected_instant');
+  const [ticketDuration, setTicketDuration] = React.useState<CoOwnTicketDuration>('GFD');
 
   const [asset, setAsset] = React.useState<any>(null);
   const [yourUnits, setYourUnits] = React.useState(0);
@@ -110,6 +126,43 @@ export default function TradeScreen() {
     () => buildTradeQuote({ orderMode, side, quantityInput, limitPriceInput: offerPriceInput, marketPrice }),
     [marketPrice, offerPriceInput, orderMode, quantityInput, side]
   );
+
+  // Phase 2.5: simulated book + fill estimate + reservation + depth
+  const simulatedBook = React.useMemo(
+    () => generateSimulatedBook(marketPrice),
+    [marketPrice]
+  );
+
+  const protectionPrice = ticketOrderType === 'limit' && quote.hasLimitPrice
+    ? quote.limitPrice
+    : marketPrice;
+
+  const reservation = React.useMemo(
+    () => computeReservation(side, quote.quantity, protectionPrice, DEFAULT_FEE_SCHEDULE, 0),
+    [side, quote.quantity, protectionPrice]
+  );
+
+  const fillEstimate = React.useMemo(
+    () => estimateFill(side, quote.quantity, simulatedBook),
+    [side, quote.quantity, simulatedBook]
+  );
+
+  const depthContext = React.useMemo(() => {
+    const { depthUnits, midPrice } = computeDepthWithinBand(side, simulatedBook);
+    return {
+      orderUnits: quote.quantity,
+      depthUnits,
+      slippageBeyondDepth: fillEstimate.slippageBeyondDepth,
+      midPrice,
+    };
+  }, [side, simulatedBook, quote.quantity, fillEstimate.slippageBeyondDepth]);
+
+  const postTradePreview = React.useMemo(() => {
+    const unitsAfter = side === 'buy' ? yourUnits + quote.quantity : yourUnits - quote.quantity;
+    const outstandingUnits = asset?.totalUnits ?? 0;
+    const ownershipPct = outstandingUnits > 0 ? (unitsAfter / outstandingUnits) * 100 : 0;
+    return { unitsAfter, ownershipPct, outstandingUnits };
+  }, [side, quote.quantity, yourUnits, asset?.totalUnits]);
 
   const eligibility = asset ? checkCoOwnEligibility(asset.settlementMode) : { ok: false, message: 'Asset not found' };
   const canSubmit = isTradeSubmitEnabled({ assetFound: !!asset, eligibility, quote });
@@ -230,7 +283,7 @@ export default function TradeScreen() {
           </Reanimated.View>
         )}
 
-        {/* Trade composer — product identity, availability, quote */}
+        {/* Trade composer — product identity, availability, quote, reservation, expandable details */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)}>
           <CoOwnTradeComposer
             imageUri={asset.imageUrl}
@@ -247,8 +300,92 @@ export default function TradeScreen() {
             availableUnits={availableUnits}
             sellableUnits={yourUnits}
             maxUnits={maxUnits}
+            orderType={ticketOrderType}
+            protectionPrice={protectionPrice}
+            reservation={{
+              totalReserve1ZE: reservation.totalReserve1ZE,
+              totalReserveUnits: reservation.totalReserveUnits,
+            }}
+            fillEstimate={{
+              avgFillPrice: fillEstimate.avgFillPrice,
+              worstPrice: fillEstimate.worstPrice,
+              unitsFilled: fillEstimate.unitsFilled,
+              slippageBeyondDepth: fillEstimate.slippageBeyondDepth,
+              gross: fillEstimate.gross,
+            }}
+            depthContext={depthContext}
+            duration={ticketDuration}
+            postTradePreview={postTradePreview}
+            rightsVersion={asset.rightsVersion ?? undefined}
           />
         </Reanimated.View>
+
+        {/* Order-type selector — Protected instant / Limit */}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(90)}>
+          <View style={[styles.inputCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.inputLabel, { color: colors.textMuted }]}>Order type</Text>
+            <AppSegmentControl
+              options={ORDER_TYPE_OPTIONS}
+              value={ticketOrderType}
+              onChange={(v) => { setTicketOrderType(v); haptics.selection(); }}
+              fullWidth
+            />
+            <Text style={[styles.marketHint, { color: colors.textMuted }]} numberOfLines={2}>
+              {ticketOrderType === 'protected_instant'
+                ? 'Marketable limit with visible protection price. Never uncapped in an illiquid asset.'
+                : 'Resting order. Queued until matched at your limit price.'}
+            </Text>
+          </View>
+        </Reanimated.View>
+
+        {/* Duration selector — only for limit orders */}
+        {ticketOrderType === 'limit' && (
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(100)}>
+            <View style={[styles.inputCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[styles.inputLabel, { color: colors.textMuted }]}>Duration</Text>
+              <View style={styles.durationRow}>
+                <AnimatedPressable
+                  onPress={() => { setTicketDuration('GFD'); haptics.tap(); }}
+                  style={[
+                    styles.durationChip,
+                    {
+                      backgroundColor: ticketDuration === 'GFD' ? colors.brand : colors.surfaceAlt,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Good for day"
+                  accessibilityState={{ selected: ticketDuration === 'GFD' }}
+                  scaleValue={0.96}
+                  hapticFeedback="light"
+                >
+                  <Text style={[styles.durationText, { color: ticketDuration === 'GFD' ? colors.background : colors.textSecondary }]}>
+                    GFD
+                  </Text>
+                </AnimatedPressable>
+                <AnimatedPressable
+                  onPress={() => { setTicketDuration('GTC90'); haptics.tap(); }}
+                  style={[
+                    styles.durationChip,
+                    {
+                      backgroundColor: ticketDuration === 'GTC90' ? colors.brand : colors.surfaceAlt,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Good till cancelled, 90 days"
+                  accessibilityState={{ selected: ticketDuration === 'GTC90' }}
+                  scaleValue={0.96}
+                  hapticFeedback="light"
+                >
+                  <Text style={[styles.durationText, { color: ticketDuration === 'GTC90' ? colors.background : colors.textSecondary }]}>
+                    GTC 90d
+                  </Text>
+                </AnimatedPressable>
+              </View>
+            </View>
+          </Reanimated.View>
+        )}
 
         {/* Market context summary */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(100)}>
@@ -461,5 +598,22 @@ const styles = StyleSheet.create({
   },
   submitBtn: {
     flex: 1,
+  },
+  // ── Phase 2.5: duration selector ──
+  durationRow: {
+    flexDirection: 'row',
+    gap: Space.sm,
+  },
+  durationChip: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  durationText: {
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.body.letterSpacing,
   },
 });
