@@ -34,6 +34,12 @@ export interface CoOwnPortfolioSummary {
   totalUnrealizedGbp: number;
   totalRealizedGbp: number;
   positionCount: number;
+  // Phase 3: distributions + today's change + data quality
+  totalDistributionsGbp?: number;
+  todayChangeGbp?: number;
+  todayChangePct?: number;
+  todayChangeTimestamp?: string;
+  staleMarkCount?: number;
 }
 
 export interface CoOwnPortfolioResult {

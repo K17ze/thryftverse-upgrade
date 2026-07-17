@@ -23,7 +23,7 @@ import {
   CoOwnStateCanvas,
   type CoOwnPositionAction,
 } from '../components/coown';
-import { fetchCoOwnPortfolioPositions, type CoOwnPositionVM } from '../services/coOwnPortfolio';
+import { fetchCoOwnPortfolioPositions, type CoOwnPositionVM, type CoOwnPortfolioSummary } from '../services/coOwnPortfolio';
 // listCoOwnAssets and fetchCoOwnHoldings are re-exported here for transparency.
 // The coOwnPortfolio adapter composes them internally; importing them here
 // keeps the screen's data dependencies visible and auditable.
@@ -45,12 +45,17 @@ export default function PortfolioScreen() {
   const { listings } = useBackendData();
 
   const [positions, setPositions] = React.useState<CoOwnPositionVM[]>([]);
-  const [summary, setSummary] = React.useState({
+  const [summary, setSummary] = React.useState<CoOwnPortfolioSummary>({
     totalValueGbp: 0,
     totalUnits: 0,
     totalUnrealizedGbp: 0,
     totalRealizedGbp: 0,
     positionCount: 0,
+    totalDistributionsGbp: 0,
+    todayChangeGbp: 0,
+    todayChangePct: 0,
+    todayChangeTimestamp: '',
+    staleMarkCount: 0,
   });
   const [isLoading, setIsLoading] = React.useState(true);
   const [isError, setIsError] = React.useState(false);
@@ -97,6 +102,12 @@ export default function PortfolioScreen() {
     if (navigation.canGoBack()) { navigation.goBack(); return; }
     navigation.navigate('CoOwnHub');
   }, [navigation]);
+
+  // Phase 3: derived summary values with defaults (fields are optional from the service)
+  const todayChangeGbp = summary.todayChangeGbp ?? 0;
+  const todayChangePct = summary.todayChangePct ?? 0;
+  const totalDistributionsGbp = summary.totalDistributionsGbp ?? 0;
+  const staleMarkCount = summary.staleMarkCount ?? 0;
 
   // Allocation bars — only when real positions exist
   const allocationBars = React.useMemo(() => {
@@ -320,10 +331,44 @@ export default function PortfolioScreen() {
                 {formatFromFiat(summary.totalValueGbp, 'GBP')}
               </Text>
 
+              {/* Phase 3: today's change with timestamp */}
+              {todayChangeGbp !== 0 && (
+                <View style={styles.todayChangeRow}>
+                  <Text
+                    style={[
+                      styles.todayChangeValue,
+                      { color: todayChangeGbp >= 0 ? colors.success : colors.danger },
+                    ]}
+                  >
+                    {todayChangeGbp >= 0 ? '+' : '-'}{formatFromFiat(Math.abs(todayChangeGbp), 'GBP')}
+                  </Text>
+                  <Text style={[styles.todayChangePct, { color: todayChangeGbp >= 0 ? colors.success : colors.danger }]}>
+                    ({todayChangeGbp >= 0 ? '+' : ''}{todayChangePct.toFixed(2)}%)
+                  </Text>
+                  <Ionicons
+                    name={todayChangeGbp >= 0 ? 'arrow-up' : 'arrow-down'}
+                    size={12}
+                    color={todayChangeGbp >= 0 ? colors.success : colors.danger}
+                  />
+                  {summary.todayChangeTimestamp ? (
+                    <Text style={[styles.todayChangeTime, { color: colors.textMuted }]} numberOfLines={1}>
+                      · as of {summary.todayChangeTimestamp}
+                    </Text>
+                  ) : null}
+                </View>
+              )}
+
+              {/* Phase 3: 4-tile summary — total return / unrealised / realised / distributions */}
               <View style={[styles.summaryStats, { borderColor: colors.border }]}>
                 <View style={styles.summaryStat}>
-                  <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]} numberOfLines={1}>Units</Text>
-                  <Text style={[styles.summaryStatValue, { color: colors.textPrimary }]} numberOfLines={1}>{summary.totalUnits}</Text>
+                  <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]} numberOfLines={1}>Total return</Text>
+                  <Text style={[
+                    styles.summaryStatValue,
+                    { color: (summary.totalUnrealizedGbp + summary.totalRealizedGbp) >= 0 ? colors.success : colors.danger },
+                  ]} numberOfLines={1}>
+                    {(summary.totalUnrealizedGbp + summary.totalRealizedGbp) >= 0 ? '+' : '-'}
+                    {formatFromFiat(Math.abs(summary.totalUnrealizedGbp + summary.totalRealizedGbp), 'GBP')}
+                  </Text>
                 </View>
                 <View style={[styles.summaryStat, { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.border }]}>
                   <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]} numberOfLines={1}>Unrealised</Text>
@@ -343,7 +388,26 @@ export default function PortfolioScreen() {
                     {summary.totalRealizedGbp >= 0 ? '+' : '-'}{formatFromFiat(Math.abs(summary.totalRealizedGbp), 'GBP')}
                   </Text>
                 </View>
+                <View style={[styles.summaryStat, { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.border }]}>
+                  <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]} numberOfLines={1}>Distrib.</Text>
+                  <Text style={[
+                    styles.summaryStatValue,
+                    { color: totalDistributionsGbp >= 0 ? colors.success : colors.danger },
+                  ]} numberOfLines={1}>
+                    +{formatFromFiat(totalDistributionsGbp, 'GBP')}
+                  </Text>
+                </View>
               </View>
+
+              {/* Phase 3: data-quality note — only when true */}
+              {staleMarkCount > 0 && (
+                <View style={[styles.dataQualityNote, { backgroundColor: colors.warning + '12' }]}>
+                  <Ionicons name="time-outline" size={12} color={colors.warning} />
+                  <Text style={[styles.dataQualityText, { color: colors.warning }]} numberOfLines={2}>
+                    Data quality: {staleMarkCount} {staleMarkCount === 1 ? 'position has' : 'positions have'} stale marks ({'>'}24h)
+                  </Text>
+                </View>
+              )}
             </View>
 
             {/* Best / worst performer highlight — quick at-a-glance insight */}
@@ -734,5 +798,47 @@ const styles = StyleSheet.create({
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     lineHeight: 17,
+  },
+  // ── Phase 3: today's change row ──
+  todayChangeRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: Space.xs,
+    flexWrap: 'wrap',
+  },
+  todayChangeValue: {
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
+  },
+  todayChangePct: {
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.medium,
+    letterSpacing: Type.body.letterSpacing,
+  },
+  todayChangeTime: {
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.meta.letterSpacing,
+  },
+  // ── Phase 3: data-quality note ──
+  dataQualityNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs + 2,
+    borderRadius: Radius.sm,
+    marginTop: Space.sm,
+  },
+  dataQualityText: {
+    flex: 1,
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.meta.letterSpacing,
   },
 });
