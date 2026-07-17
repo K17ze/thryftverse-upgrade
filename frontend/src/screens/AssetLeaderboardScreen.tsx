@@ -21,7 +21,9 @@ import {
   CoOwnMarketHeader,
   CoOwnLeaderboardSkeleton,
   CoOwnStateCanvas,
+  CoOwnOfflineBanner,
 } from '../components/coown';
+import { useConnectivity } from '../hooks/useConnectivity';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -43,6 +45,7 @@ export default function AssetLeaderboardScreen() {
   const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
   const reducedMotionEnabled = useReducedMotion();
+  const { isOffline } = useConnectivity();
 
   const [assets, setAssets] = React.useState<LeaderboardAsset[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -234,6 +237,8 @@ export default function AssetLeaderboardScreen() {
         subtitle="Market activity rankings"
         onBack={handleBack}
       />
+
+      <CoOwnOfflineBanner isOffline={isOffline} />
 
       <ScrollView
         contentContainerStyle={styles.content}

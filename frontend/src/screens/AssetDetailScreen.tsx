@@ -59,12 +59,14 @@ import {
   CoOwnRightsSheet,
   CoOwnOrderBook,
   CoOwnCandleChart,
+  CoOwnOfflineBanner,
   CANONICAL_RIGHTS_LABELS,
   type CoOwnRightsRow,
   type CoOwnBookLevel,
   type CoOwnCandleRange,
   type CoOwnCandle,
 } from '../components/coown';
+import { useConnectivity } from '../hooks/useConnectivity';
 
 type RouteT = RouteProp<RootStackParamList, 'AssetDetail'>;
 type NavT = StackNavigationProp<RootStackParamList>;
@@ -78,11 +80,23 @@ interface RecommendationItem {
   [key: string]: unknown;
 }
 
+/** Format rights version for the badge — spec wants "v2 · Jul 2026" format.
+ *  Accepts raw strings like "Rights v1", "v2", or "v2 · Jul 2026" and normalises. */
+function formatRightsVersion(raw: string): string {
+  // Already formatted
+  if (raw.includes('·')) return raw;
+  // Extract version number if present
+  const versionMatch = raw.match(/v\d+/i);
+  const version = versionMatch ? versionMatch[0].toLowerCase() : raw;
+  return version;
+}
+
 export default function AssetDetailScreen() {
   const navigation = useNavigation<NavT>();
   const route = useRoute<RouteT>();
   const { colors, isDark } = useAppTheme();
   const reducedMotionEnabled = useReducedMotion();
+  const { isOffline } = useConnectivity();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
   const isCompact = screenWidth < 390;
@@ -301,6 +315,8 @@ export default function AssetDetailScreen() {
           </AnimatedPressable>
         </View>
       </Reanimated.View>
+
+      <CoOwnOfflineBanner isOffline={isOffline} />
 
       <Reanimated.ScrollView
         showsVerticalScrollIndicator={false}
@@ -613,7 +629,7 @@ export default function AssetDetailScreen() {
             {asset.rightsVersion && (
               <View style={[styles.rightsVersionChip, { backgroundColor: colors.surfaceAlt }]}>
                 <Text style={[styles.rightsVersionText, { color: colors.textMuted }]} numberOfLines={1}>
-                  {asset.rightsVersion}
+                  {formatRightsVersion(asset.rightsVersion)}
                 </Text>
               </View>
             )}
@@ -774,9 +790,32 @@ export default function AssetDetailScreen() {
         </View>
       )}
 
-      {/* Sticky action dock — viewer-specific CTAs */}
+      {/* Sticky action dock — viewer-specific CTAs.
+          Rights incomplete check: blocks trading for live instruments with TBC rows. */}
       <CoOwnStickyActionDock>
-        {isIssuer ? (
+        {(() => {
+          const rightsRows = CANONICAL_RIGHTS_LABELS.map((label) => {
+            const row = (asset.rightsRows as CoOwnRightsRow[] | undefined)?.find((r) => r.label === label);
+            return row ?? { label, answer: 'To be confirmed', isTbc: true };
+          });
+          const hasIncompleteRights = rightsRows.some((r) => r.isTbc);
+
+          if (hasIncompleteRights && !isIssuer && asset.isOpen) {
+            return (
+              <View style={[styles.issuerDock, { backgroundColor: colors.warning + '12', borderColor: colors.warning + '40' }]}>
+                <View style={[styles.issuerDockIcon, { backgroundColor: colors.warning + '22' }]}>
+                  <Ionicons name="document-text-outline" size={16} color={colors.warning} />
+                </View>
+                <View style={styles.issuerDockBody}>
+                  <Text style={[styles.issuerDockTitle, { color: colors.textPrimary }]} numberOfLines={1}>Rights incomplete</Text>
+                  <Text style={[styles.issuerDockText, { color: colors.textMuted }]} numberOfLines={1}>
+                    Not yet tradable
+                  </Text>
+                </View>
+              </View>
+            );
+          }
+          return isIssuer ? (
           <View style={[styles.issuerDock, { backgroundColor: colors.brand + '14', borderColor: colors.brand + '40' }]}>
             <View style={[styles.issuerDockIcon, { backgroundColor: colors.brand + '22' }]}>
               <Ionicons name="storefront-outline" size={16} color={colors.brand} />
@@ -850,7 +889,8 @@ export default function AssetDetailScreen() {
               />
             </View>
           </View>
-        )}
+        );
+        })()}
       </CoOwnStickyActionDock>
 
       {/* Save to collection + share */}

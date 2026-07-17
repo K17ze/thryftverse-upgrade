@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
+import { CoOwnNumericText } from '../ui/CoOwnNumericText';
 
 export type CoOwnReceiptStatus = 'pending' | 'open' | 'partially_filled' | 'filled' | 'cancelled' | 'rejected' | 'expired';
 
@@ -163,18 +164,18 @@ export function CoOwnTradeReceipt({
         </View>
         <View style={[styles.receiptRow, { borderColor: colors.border }]}>
           <Text style={[styles.receiptLabel, { color: colors.textMuted }]} numberOfLines={1}>Units</Text>
-          <Text style={[styles.receiptValue, { color: colors.textPrimary }]} numberOfLines={1}>{units}</Text>
+          <CoOwnNumericText value={units} unit="units" size="price" align="right" />
         </View>
         {filledUnits != null ? (
           <View style={[styles.receiptRow, { borderColor: colors.border }]}>
             <Text style={[styles.receiptLabel, { color: colors.textMuted }]} numberOfLines={1}>Filled</Text>
-            <Text style={[styles.receiptValue, { color: colors.textPrimary }]} numberOfLines={1}>{filledUnits}</Text>
+            <CoOwnNumericText value={filledUnits} unit="units" size="price" align="right" />
           </View>
         ) : null}
         {remainingUnits != null ? (
           <View style={[styles.receiptRow, { borderColor: colors.border }]}>
             <Text style={[styles.receiptLabel, { color: colors.textMuted }]} numberOfLines={1}>Remaining</Text>
-            <Text style={[styles.receiptValue, { color: colors.textPrimary }]} numberOfLines={1}>{remainingUnits}</Text>
+            <CoOwnNumericText value={remainingUnits} unit="units" size="price" align="right" />
           </View>
         ) : null}
         {avgFillPriceLabel && (

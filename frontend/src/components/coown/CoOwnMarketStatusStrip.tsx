@@ -24,6 +24,10 @@ export interface CoOwnMarketStatusStripProps {
   nextSessionAt?: string;
   disclosureVersion?: string;
   onOpenRights?: () => void;
+  /** Whether market data is stale (dataAgeSeconds > stalenessThresholdSeconds). */
+  dataStale?: boolean;
+  /** Age label for stale data (e.g. "3m ago"). */
+  dataStaleAgeLabel?: string;
 }
 
 /** Format countdown seconds as "Hh Mm" or "Mm Ss" — factual, not gamified. */
@@ -53,6 +57,8 @@ export function CoOwnMarketStatusStrip({
   nextSessionAt,
   disclosureVersion,
   onOpenRights,
+  dataStale,
+  dataStaleAgeLabel,
 }: CoOwnMarketStatusStripProps) {
   const { colors } = useAppTheme();
   const marketColor = MARKET_COLORS[mode === 'call_auction' ? 'auction' : mode];
@@ -138,6 +144,19 @@ export function CoOwnMarketStatusStrip({
           colors={colors}
         />
       )}
+
+      {/* Data stale badge — shown when dataAgeSeconds > stalenessThresholdSeconds */}
+      {dataStale && (
+        <View
+          style={[styles.staleBadge, { backgroundColor: colors.warning + '18', borderColor: colors.warning + '40' }]}
+          accessibilityLabel={`Data stale${dataStaleAgeLabel ? `, last updated ${dataStaleAgeLabel}` : ''}`}
+        >
+          <Ionicons name="time-outline" size={10} color={colors.warning} />
+          <Text style={[styles.staleBadgeText, { color: colors.warning }]} numberOfLines={1}>
+            Data stale{dataStaleAgeLabel ? ` · ${dataStaleAgeLabel}` : ''}
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -205,6 +224,20 @@ const styles = StyleSheet.create({
   separator: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
+  },
+  staleBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: Radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  staleBadgeText: {
+    fontSize: Type.meta.size - 1,
+    fontFamily: Typography.family.medium,
+    letterSpacing: 0.2,
   },
   sessionLabel: {
     flex: 1,

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, StatusBar, ScrollView, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, useWindowDimensions } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
@@ -8,6 +9,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { AppButton } from '../components/ui/AppButton';
+import { HoldToSubmitButton } from '../components/ui/HoldToSubmitButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -38,6 +40,11 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
 
   const isBuy = side === 'buy';
   const settlementLabel = 'GBP';
+
+  // Hold-to-submit threshold: orders > 5,000 1ZE OR > 5% of public float.
+  // We don't have public float in route params, so use total value as proxy.
+  // 1ZE ≈ 1 GBP for threshold purposes (conservative).
+  const requireHold = netValue > 5000;
 
   const handleConfirm = async () => {
     if (isSubmitting) return;
@@ -145,21 +152,12 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
             hapticFeedback="medium"
             accessibilityLabel="Cancel order"
           />
-          <AppButton
+          <HoldToSubmitButton
+            requireHold={requireHold}
             title={isBuy ? 'Confirm buy' : 'Confirm sell'}
-            variant="primary"
-            size="lg"
-            style={[styles.confirmBtn, isCompactDock && styles.confirmBtnCompact]}
-            onPress={handleConfirm}
+            iconName={isBuy ? 'arrow-up-circle-outline' : 'arrow-down-circle-outline'}
+            onSubmit={handleConfirm}
             disabled={isSubmitting}
-            hapticFeedback="heavy"
-            icon={
-              <Ionicons
-                name={isBuy ? 'arrow-up-circle-outline' : 'arrow-down-circle-outline'}
-                size={16}
-                color={colors.background}
-              />
-            }
             accessibilityLabel={isBuy ? 'Confirm buy order' : 'Confirm sell order'}
           />
         </View>

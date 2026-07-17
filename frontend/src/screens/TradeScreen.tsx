@@ -171,6 +171,10 @@ export default function TradeScreen() {
   const eligibility = asset ? checkCoOwnEligibility(asset.settlementMode) : { ok: false, message: 'Asset not found' };
   const canSubmit = isTradeSubmitEnabled({ assetFound: !!asset, eligibility, quote });
 
+  // Thin market: no opposite side → substitute "Review order" with "Request quote"
+  const isThinMarket = (side === 'buy' && simulatedBook.asks.length === 0)
+    || (side === 'sell' && simulatedBook.bids.length === 0);
+
   const haptic = useHaptic();
 
   const handleSubmit = async () => {
@@ -499,19 +503,34 @@ export default function TradeScreen() {
         </Reanimated.View>
       </KeyboardAwareScrollView>
 
-      {/* Sticky action dock */}
+      {/* Sticky action dock — thin-market substitution per spec §05 */}
       <CoOwnStickyActionDock>
-        <AppButton
-          title="Review order"
-          icon={<Ionicons name="arrow-forward" size={18} color={colors.background} />}
-          onPress={handleSubmit}
-          disabled={!canSubmit || isSubmittingOrder}
-          variant="primary"
-          size="lg"
-          hapticFeedback="medium"
-          accessibilityLabel={`Review ${side} order`}
-          style={styles.submitBtn}
-        />
+        {isThinMarket ? (
+          <View style={styles.thinMarketDock}>
+            <AppButton
+              title={side === 'buy' ? 'Request quote' : 'Request quote'}
+              icon={<Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.background} />}
+              onPress={() => { haptics.tap(); show('Quote request sent. The market maker will respond shortly.', 'info'); }}
+              variant="primary"
+              size="lg"
+              hapticFeedback="medium"
+              accessibilityLabel="Request quote for thin market"
+              style={styles.submitBtn}
+            />
+          </View>
+        ) : (
+          <AppButton
+            title="Review order"
+            icon={<Ionicons name="arrow-forward" size={18} color={colors.background} />}
+            onPress={handleSubmit}
+            disabled={!canSubmit || isSubmittingOrder}
+            variant="primary"
+            size="lg"
+            hapticFeedback="medium"
+            accessibilityLabel={`Review ${side} order`}
+            style={styles.submitBtn}
+          />
+        )}
       </CoOwnStickyActionDock>
     </SafeAreaView>
   );
@@ -626,6 +645,9 @@ const styles = StyleSheet.create({
   },
   submitBtn: {
     flex: 1,
+  },
+  thinMarketDock: {
+    width: '100%',
   },
   // ── Phase 2.5: duration selector ──
   durationRow: {

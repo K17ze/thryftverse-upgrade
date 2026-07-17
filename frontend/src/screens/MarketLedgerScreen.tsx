@@ -22,7 +22,8 @@ import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { resolveCommerceDestination, type CommerceDestinationSource } from '../platform/commerce';
 import { haptics } from '../utils/haptics';
-import { CoOwnMarketHeader, CoOwnStateCanvas, CoOwnLedgerSummary, CoOwnActivitySkeleton } from '../components/coown';
+import { CoOwnMarketHeader, CoOwnStateCanvas, CoOwnLedgerSummary, CoOwnActivitySkeleton, CoOwnOfflineBanner } from '../components/coown';
+import { useConnectivity } from '../hooks/useConnectivity';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 type LedgerFilter = 'ALL' | 'AUCTION' | 'CO-OWN';
@@ -100,6 +101,7 @@ export default function MarketLedgerScreen() {
   const coOwnRuntime = useStore((state) => state.coOwnRuntime);
   const viewerId = currentUser?.id ?? '';
   const reducedMotionEnabled = useReducedMotion();
+  const { isOffline } = useConnectivity();
 
   const [filter, setFilter] = React.useState<LedgerFilter>('ALL');
   const [remoteEntries, setRemoteEntries] = React.useState<LedgerEntry[]>([]);
@@ -220,6 +222,8 @@ export default function MarketLedgerScreen() {
         onBack={handleBack}
       />
 
+      <CoOwnOfflineBanner isOffline={isOffline} />
+
       {/* Summary card */}
       <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -277,7 +281,6 @@ export default function MarketLedgerScreen() {
         showsVerticalScrollIndicator={false}
         onEndReached={() => void loadMoreRemoteLedger()}
         onEndReachedThreshold={0.5}
-        estimatedItemSize={92}
         renderItem={({ item, index }) => {
           const isAuction = item.channel === 'auction';
           const side = item.action === 'sell-units' ? 'sell' as const : 'buy' as const;

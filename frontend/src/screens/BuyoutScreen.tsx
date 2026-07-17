@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, StatusBar, ScrollView, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, useWindowDimensions } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
@@ -177,28 +178,10 @@ export default function BuyoutScreen() {
               <View style={[styles.statusIconWrap, { backgroundColor: colors.surfaceAlt }]}>
                 <Ionicons name="lock-closed-outline" size={28} color={colors.textMuted} />
               </View>
-              <Text style={[styles.statusTitle, { color: colors.textPrimary }]}>Buyout is not available yet</Text>
+              <Text style={[styles.statusTitle, { color: colors.textPrimary }]}>Asset-level exit</Text>
               <Text style={[styles.statusBody, { color: colors.textSecondary }]}>
-                Full buyout — including offer acceptance, rejection, cancellation, and settlement — is not yet supported for this Co-Own.
+                Asset-level exit is initiated by the vehicle operator per the rights document. Contact concierge to register interest.
               </Text>
-              <Text style={[styles.statusBody, { color: colors.textSecondary }]}>
-                When buyout is enabled, you will be able to make an offer on the remaining {remainingUnits} units, track acceptance from other co-owners, and complete the transfer through a server-verified process.
-              </Text>
-
-              <View style={styles.futureFeatures}>
-                <View style={styles.futureFeatureRow}>
-                  <Ionicons name="checkmark" size={14} color={colors.textMuted} />
-                  <Text style={[styles.futureFeatureText, { color: colors.textSecondary }]}>Server-calculated buyout price</Text>
-                </View>
-                <View style={styles.futureFeatureRow}>
-                  <Ionicons name="checkmark" size={14} color={colors.textMuted} />
-                  <Text style={[styles.futureFeatureText, { color: colors.textSecondary }]}>Co-owner acceptance tracking</Text>
-                </View>
-                <View style={styles.futureFeatureRow}>
-                  <Ionicons name="checkmark" size={14} color={colors.textMuted} />
-                  <Text style={[styles.futureFeatureText, { color: colors.textSecondary }]}>Settlement and transfer receipt</Text>
-                </View>
-              </View>
             </View>
           )}
         </Reanimated.View>
