@@ -14,9 +14,9 @@ export type { CoOwnPositionCardProps, CoOwnPositionStatus } from './CoOwnPositio
 export { CoOwnPositionActionSheet } from './CoOwnPositionActionSheet';
 export type { CoOwnPositionActionSheetProps, CoOwnPositionAction } from './CoOwnPositionActionSheet';
 export { CoOwnOwnershipPanel } from './CoOwnOwnershipPanel';
-export type { CoOwnOwnershipPanelProps, CoOwnSettlementMode } from './CoOwnOwnershipPanel';
-export { CoOwnIssuerCard } from './CoOwnIssuerCard';
-export type { CoOwnIssuerCardProps } from './CoOwnIssuerCard';
+export type { CoOwnOwnershipPanelProps, CoOwnSettlementMode, CoOwnSupplyBuckets, CoOwnViewerPosition } from './CoOwnOwnershipPanel';
+export { CoOwnIssuerCard, CoOwnVehicleCard } from './CoOwnIssuerCard';
+export type { CoOwnIssuerCardProps, CoOwnVehicleFields, CoOwnVehicleDocument } from './CoOwnIssuerCard';
 export { CoOwnTrustPanel } from './CoOwnTrustPanel';
 export type { CoOwnTrustPanelProps } from './CoOwnTrustPanel';
 export { CoOwnRiskDisclosure } from './CoOwnRiskDisclosure';
@@ -56,3 +56,11 @@ export {
 } from './CoOwnSkeletons';
 export { CoOwnStateCanvas } from './CoOwnStateCanvas';
 export type { CoOwnStateCanvasProps, CoOwnStateVariant } from './CoOwnStateCanvas';
+export { CoOwnMarketStatusStrip } from './CoOwnMarketStatusStrip';
+export type { CoOwnMarketStatusStripProps } from './CoOwnMarketStatusStrip';
+export { CoOwnValueStrip } from './CoOwnValueStrip';
+export type { CoOwnValueStripProps } from './CoOwnValueStrip';
+export { CoOwnAssetDossier } from './CoOwnAssetDossier';
+export type { CoOwnAssetDossierProps, CoOwnDossierProvenanceEvent, CoOwnDossierCondition, CoOwnDossierCustody, CoOwnDossierAppraisal } from './CoOwnAssetDossier';
+export { CoOwnRightsSheet, CANONICAL_RIGHTS_LABELS } from './CoOwnRightsSheet';
+export type { CoOwnRightsSheetProps, CoOwnRightsRow } from './CoOwnRightsSheet';

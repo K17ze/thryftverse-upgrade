@@ -3,8 +3,28 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { CoOwnNumericText } from '../ui/CoOwnNumericText';
 
 export type CoOwnSettlementMode = 'GBP' | 'TVUSD' | 'HYBRID';
+
+/** Supply buckets — the instrument series structure (§01 §3). */
+export interface CoOwnSupplyBuckets {
+  authorised?: number;
+  issued?: number;
+  publicFloat?: number;
+  sponsorLocked?: number;
+  treasury?: number;
+}
+
+/** Viewer position state — settled/reserved/pending split (§01 §3, audit blocker 3). */
+export interface CoOwnViewerPosition {
+  settled: number;
+  reservedForSale: number;
+  pendingIn: number;
+  pendingOut: number;
+  /** Labelled denominator — mandatory for ownership %. */
+  outstandingUnits: number;
+}
 
 export interface CoOwnOwnershipPanelProps {
   unitPriceLabel: string;
@@ -17,6 +37,14 @@ export interface CoOwnOwnershipPanelProps {
   feePct: number;
   holderCount: number;
   status: 'open' | 'closed' | 'paused';
+  /** New: supply buckets (authorised/issued/float/locked/treasury). Optional — fail closed. */
+  supply?: CoOwnSupplyBuckets;
+  /** New: viewer position state (settled/reserved/pending). Optional — fall back to viewerUnits. */
+  viewerPosition?: CoOwnViewerPosition;
+  /** New: rights version badge. Optional. */
+  rightsVersion?: string;
+  /** New: release schedule link for sponsor locked units. Optional. */
+  sponsorLockedReleaseNote?: string;
 }
 
 export function CoOwnOwnershipPanel({
@@ -30,6 +58,10 @@ export function CoOwnOwnershipPanel({
   feePct,
   holderCount,
   status,
+  supply,
+  viewerPosition,
+  rightsVersion,
+  sponsorLockedReleaseNote,
 }: CoOwnOwnershipPanelProps) {
   const { colors } = useAppTheme();
 
@@ -37,13 +69,33 @@ export function CoOwnOwnershipPanel({
   const statusLabel = status === 'open' ? 'Available' : status === 'paused' ? 'Paused' : 'Fully allocated';
   const statusColor = status === 'open' ? colors.success : status === 'paused' ? colors.textSecondary : colors.textMuted;
 
+  // Use viewerPosition if available, fall back to legacy viewerUnits/viewerPct
+  const hasViewerPosition = viewerPosition != null;
+  const viewerSettled = hasViewerPosition ? viewerPosition!.settled : viewerUnits;
+  const viewerReserved = hasViewerPosition ? viewerPosition!.reservedForSale : 0;
+  const viewerPendingIn = hasViewerPosition ? viewerPosition!.pendingIn : 0;
+  const viewerPendingOut = hasViewerPosition ? viewerPosition!.pendingOut : 0;
+  const outstandingDenom = hasViewerPosition ? viewerPosition!.outstandingUnits : totalUnits;
+  const computedViewerPct = hasViewerPosition && outstandingDenom > 0
+    ? (viewerSettled / outstandingDenom) * 100
+    : viewerPct;
+
   return (
     <View style={[styles.root, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <View style={styles.headerRow}>
         <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Ownership</Text>
-        <View style={[styles.statusPill, { backgroundColor: statusColor + '22' }]}>
-          <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-          <Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>
+        <View style={styles.headerRight}>
+          {rightsVersion && (
+            <View style={[styles.rightsBadge, { backgroundColor: colors.surfaceAlt }]}>
+              <Text style={[styles.rightsBadgeText, { color: colors.textMuted }]} numberOfLines={1}>
+                {rightsVersion}
+              </Text>
+            </View>
+          )}
+          <View style={[styles.statusPill, { backgroundColor: statusColor + '22' }]}>
+            <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+            <Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>
+          </View>
         </View>
       </View>
 
@@ -55,20 +107,39 @@ export function CoOwnOwnershipPanel({
         </View>
       </View>
 
-      <View style={[styles.statsGrid, { borderColor: colors.border }]}>
-        <View style={styles.statItem}>
-          <Text style={[styles.statLabel, { color: colors.textMuted }]}>Total units</Text>
-          <Text style={[styles.statValue, { color: colors.textPrimary }]}>{totalUnits}</Text>
+      {/* Supply section — new. Falls back to legacy stats grid when not provided. */}
+      {supply ? (
+        <View style={[styles.supplySection, { borderColor: colors.border }]}>
+          <Text style={[styles.supplyHeader, { color: colors.textMuted }]}>Supply</Text>
+          <View style={styles.supplyRows}>
+            <SupplyRow label="Authorised" value={supply.authorised} colors={colors} />
+            <SupplyRow label="Issued" value={supply.issued} colors={colors} />
+            <SupplyRow label="Public float" value={supply.publicFloat} colors={colors} />
+            <SupplyRow
+              label="Sponsor locked"
+              value={supply.sponsorLocked}
+              colors={colors}
+              note={sponsorLockedReleaseNote}
+            />
+            <SupplyRow label="Treasury" value={supply.treasury} colors={colors} />
+          </View>
         </View>
-        <View style={[styles.statItem, { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.border }]}>
-          <Text style={[styles.statLabel, { color: colors.textMuted }]}>Available</Text>
-          <Text style={[styles.statValue, { color: colors.textPrimary }]}>{availableUnits}</Text>
+      ) : (
+        <View style={[styles.statsGrid, { borderColor: colors.border }]}>
+          <View style={styles.statItem}>
+            <Text style={[styles.statLabel, { color: colors.textMuted }]}>Total units</Text>
+            <Text style={[styles.statValue, { color: colors.textPrimary }]}>{totalUnits}</Text>
+          </View>
+          <View style={[styles.statItem, { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.border }]}>
+            <Text style={[styles.statLabel, { color: colors.textMuted }]}>Available</Text>
+            <Text style={[styles.statValue, { color: colors.textPrimary }]}>{availableUnits}</Text>
+          </View>
+          <View style={[styles.statItem, { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.border }]}>
+            <Text style={[styles.statLabel, { color: colors.textMuted }]}>Holders</Text>
+            <Text style={[styles.statValue, { color: colors.textPrimary }]}>{holderCount}</Text>
+          </View>
         </View>
-        <View style={[styles.statItem, { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.border }]}>
-          <Text style={[styles.statLabel, { color: colors.textMuted }]}>Holders</Text>
-          <Text style={[styles.statValue, { color: colors.textPrimary }]}>{holderCount}</Text>
-        </View>
-      </View>
+      )}
 
       <View style={styles.allocationBlock}>
         <View style={styles.allocationHeader}>
@@ -80,22 +151,44 @@ export function CoOwnOwnershipPanel({
         </View>
       </View>
 
-      {viewerUnits > 0 ? (
+      {viewerSettled > 0 || viewerPendingIn > 0 ? (
         <View style={[styles.viewerBlock, { backgroundColor: colors.surfaceAlt }]}>
           <View style={styles.viewerHeader}>
             <Ionicons name="person-circle" size={18} color={colors.brand} />
             <Text style={[styles.viewerTitle, { color: colors.textPrimary }]}>Your position</Text>
           </View>
-          <View style={styles.viewerStats}>
-            <View style={styles.viewerStat}>
-              <Text style={[styles.viewerStatLabel, { color: colors.textMuted }]}>Units</Text>
-              <Text style={[styles.viewerStatValue, { color: colors.textPrimary }]}>{viewerUnits}</Text>
+          {hasViewerPosition ? (
+            <View style={styles.viewerPositionGrid}>
+              <ViewerStat label="Settled" value={viewerSettled} colors={colors} />
+              {viewerReserved > 0 && <ViewerStat label="Reserved for sale" value={viewerReserved} colors={colors} />}
+              {viewerPendingIn > 0 && <ViewerStat label="Pending in" value={viewerPendingIn} colors={colors} />}
+              {viewerPendingOut > 0 && <ViewerStat label="Pending out" value={viewerPendingOut} colors={colors} />}
+              <View style={styles.viewerOwnershipRow}>
+                <Text style={[styles.viewerStatLabel, { color: colors.textMuted }]}>Ownership</Text>
+                <CoOwnNumericText
+                  value={computedViewerPct}
+                  unit="pct"
+                  size="price"
+                  precision={2}
+                  align="left"
+                />
+                <Text style={[styles.viewerDenomLabel, { color: colors.textMuted }]}>
+                  of {outstandingDenom.toLocaleString('en-GB')}
+                </Text>
+              </View>
             </View>
-            <View style={styles.viewerStat}>
-              <Text style={[styles.viewerStatLabel, { color: colors.textMuted }]}>Ownership</Text>
-              <Text style={[styles.viewerStatValue, { color: colors.textPrimary }]}>{viewerPct}%</Text>
+          ) : (
+            <View style={styles.viewerStats}>
+              <View style={styles.viewerStat}>
+                <Text style={[styles.viewerStatLabel, { color: colors.textMuted }]}>Units</Text>
+                <Text style={[styles.viewerStatValue, { color: colors.textPrimary }]}>{viewerUnits}</Text>
+              </View>
+              <View style={styles.viewerStat}>
+                <Text style={[styles.viewerStatLabel, { color: colors.textMuted }]}>Ownership</Text>
+                <Text style={[styles.viewerStatValue, { color: colors.textPrimary }]}>{viewerPct}%</Text>
+              </View>
             </View>
-          </View>
+          )}
         </View>
       ) : null}
 
@@ -109,6 +202,65 @@ export function CoOwnOwnershipPanel({
           <Text style={[styles.footerText, { color: colors.textSecondary }]}>{feePct}% fee</Text>
         </View>
       </View>
+    </View>
+  );
+}
+
+/** A supply row — label on left, value on right, optional note. */
+function SupplyRow({
+  label,
+  value,
+  colors,
+  note,
+}: {
+  label: string;
+  value: number | undefined;
+  colors: ReturnType<typeof useAppTheme>['colors'];
+  note?: string;
+}) {
+  return (
+    <View style={styles.supplyRow}>
+      <Text style={[styles.supplyRowLabel, { color: colors.textSecondary }]}>{label}</Text>
+      <View style={styles.supplyRowRight}>
+        {note && (
+          <Text style={[styles.supplyRowNote, { color: colors.textMuted }]} numberOfLines={1}>
+            {note}
+          </Text>
+        )}
+        {value != null ? (
+          <CoOwnNumericText
+            value={value}
+            unit="units"
+            size="price"
+            align="right"
+          />
+        ) : (
+          <Text style={[styles.supplyRowMissing, { color: colors.textMuted }]}>—</Text>
+        )}
+      </View>
+    </View>
+  );
+}
+
+/** A viewer position stat. */
+function ViewerStat({
+  label,
+  value,
+  colors,
+}: {
+  label: string;
+  value: number;
+  colors: ReturnType<typeof useAppTheme>['colors'];
+}) {
+  return (
+    <View style={styles.viewerStatCol}>
+      <Text style={[styles.viewerStatLabel, { color: colors.textMuted }]}>{label}</Text>
+      <CoOwnNumericText
+        value={value}
+        unit="units"
+        size="price"
+        align="left"
+      />
     </View>
   );
 }
@@ -260,5 +412,88 @@ const styles = StyleSheet.create({
   footerText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
+  },
+  // ── New styles for supply section ──
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  rightsBadge: {
+    paddingHorizontal: Space.sm,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
+  },
+  rightsBadgeText: {
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    fontFamily: Typography.family.medium,
+    letterSpacing: Type.meta.letterSpacing,
+  },
+  supplySection: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingVertical: Space.sm,
+    gap: Space.xs,
+  },
+  supplyHeader: {
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.metaElevated.letterSpacing,
+    textTransform: 'uppercase',
+  },
+  supplyRows: {
+    gap: Space.xs,
+  },
+  supplyRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    minHeight: 22,
+  },
+  supplyRowLabel: {
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.body.letterSpacing,
+  },
+  supplyRowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+  },
+  supplyRowNote: {
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.meta.letterSpacing,
+  },
+  supplyRowMissing: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+  },
+  // ── New styles for viewer position grid ──
+  viewerPositionGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Space.md,
+  },
+  viewerStatCol: {
+    gap: 2,
+    minWidth: 80,
+  },
+  viewerOwnershipRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: Space.xs,
+    width: '100%',
+    paddingTop: Space.xs,
+  },
+  viewerDenomLabel: {
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.meta.letterSpacing,
   },
 });

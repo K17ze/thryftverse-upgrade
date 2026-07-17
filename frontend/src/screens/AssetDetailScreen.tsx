@@ -52,6 +52,12 @@ import {
   CoOwnPriceChart,
   CoOwnWatchButton,
   CoOwnFirstTradeGuide,
+  CoOwnMarketStatusStrip,
+  CoOwnValueStrip,
+  CoOwnAssetDossier,
+  CoOwnRightsSheet,
+  CANONICAL_RIGHTS_LABELS,
+  type CoOwnRightsRow,
 } from '../components/coown';
 
 type RouteT = RouteProp<RootStackParamList, 'AssetDetail'>;
@@ -93,6 +99,7 @@ export default function AssetDetailScreen() {
   const [orderBookExpanded, setOrderBookExpanded] = React.useState(false);
   const [guideVisible, setGuideVisible] = React.useState(false);
   const [pendingTradeSide, setPendingTradeSide] = React.useState<'buy' | 'sell' | null>(null);
+  const [rightsSheetVisible, setRightsSheetVisible] = React.useState(false);
 
   const coOwnCompliance = useStore((s) => s.coOwnCompliance);
   const updateCoOwnCompliance = useStore((s) => s.updateCoOwnCompliance);
@@ -330,6 +337,35 @@ export default function AssetDetailScreen() {
           ) : null}
         </Reanimated.View>
 
+        {/* Value strip — three-column Market/Fundamental/Cash.
+            Replaces the single-price display. Fails closed ("—") for
+            facts the backend does not yet expose. Never zero, never fabricated. */}
+        <Reanimated.View
+          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(100)}
+          style={styles.sectionWrap}
+        >
+          <CoOwnValueStrip
+            last={bestBid || bestAsk ? undefined : undefined}
+            bid={bestBid ? { price: bestBid.unitPriceGbp ?? 0, size: bestBid.units ?? 0 } : undefined}
+            ask={bestAsk ? { price: bestAsk.unitPriceGbp ?? 0, size: bestAsk.units ?? 0 } : undefined}
+            spread={bestBid && bestAsk ? Math.abs((bestAsk.unitPriceGbp ?? 0) - (bestBid.unitPriceGbp ?? 0)) : undefined}
+            nav={undefined}
+            premiumPct={null}
+            nextDistribution={null}
+            nextReporting={null}
+          />
+        </Reanimated.View>
+
+        {/* Market-status strip — sticky-on-scroll, single source of truth
+            for market microstructure state. Fails closed to "Closed" when
+            the backend does not expose market mode. */}
+        <CoOwnMarketStatusStrip
+          mode={asset.isOpen ? 'continuous' : 'closed'}
+          sessionLabel={asset.isOpen ? 'Open' : 'Closed'}
+          disclosureVersion={asset.rightsVersion ?? undefined}
+          onOpenRights={() => setRightsSheetVisible(true)}
+        />
+
         {/* Issuer card — trustworthy identity */}
         <Reanimated.View
           entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(120)}
@@ -434,6 +470,70 @@ export default function AssetDetailScreen() {
             storageInfo={asset.storageInfo ?? null}
             possessionInfo={asset.possessionInfo ?? null}
           />
+        </Reanimated.View>
+
+        {/* Asset dossier — provenance/condition/custody/insurance/appraisal.
+            Renders only when the backend exposes dossier data. Fails closed
+            (not rendered) when absent — never fabricated. */}
+        {(asset.provenance || asset.conditionGrade || asset.custodyLocation || asset.appraisalValue) && (
+          <Reanimated.View
+            entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(220)}
+            style={styles.sectionWrap}
+          >
+            <CoOwnAssetDossier
+              provenance={asset.provenance}
+              condition={asset.conditionGrade ? {
+                grade: asset.conditionGrade,
+                reportUri: asset.conditionReportUri,
+                inspectedAt: asset.conditionInspectedAt,
+              } : undefined}
+              custody={asset.custodyLocation ? {
+                location: asset.custodyLocation,
+                custodian: asset.custodyCustodian ?? '—',
+                insured: asset.custodyInsured ?? false,
+                policyRef: asset.custodyPolicyRef,
+              } : undefined}
+              appraisal={asset.appraisalValue ? {
+                value: asset.appraisalValue,
+                currency: asset.appraisalCurrency ?? 'GBP',
+                valuedAt: asset.appraisalValuedAt ?? '—',
+                method: asset.appraisalMethod ?? '—',
+                valuer: asset.appraisalValuer,
+                rangeLow: asset.appraisalRangeLow,
+                rangeHigh: asset.appraisalRangeHigh,
+                nextScheduled: asset.appraisalNextScheduled,
+              } : undefined}
+            />
+          </Reanimated.View>
+        )}
+
+        {/* Rights & risks entry — opens the 13-row rights sheet modal.
+            Each row must have an answer or "To be confirmed" (prelaunch only). */}
+        <Reanimated.View
+          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(240)}
+          style={styles.sectionWrap}
+        >
+          <Pressable
+            style={[styles.rightsEntry, { borderColor: colors.border }]}
+            onPress={() => setRightsSheetVisible(true)}
+            accessibilityRole="button"
+            accessibilityLabel="View rights and risks"
+          >
+            <View style={styles.rightsEntryLeft}>
+              <Ionicons name="document-text-outline" size={16} color={colors.textSecondary} />
+              <Text style={[styles.rightsEntryText, { color: colors.textPrimary }]}>
+                Rights & risks
+              </Text>
+            </View>
+            {asset.rightsVersion && (
+              <View style={[styles.rightsVersionChip, { backgroundColor: colors.surfaceAlt }]}>
+                <Text style={[styles.rightsVersionText, { color: colors.textMuted }]} numberOfLines={1}>
+                  {asset.rightsVersion}
+                </Text>
+              </View>
+            )}
+            <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+          </Pressable>
         </Reanimated.View>
 
         {/* Risk disclosure — honest limitations */}
@@ -681,6 +781,19 @@ export default function AssetDetailScreen() {
         onClose={() => { setGuideVisible(false); setPendingTradeSide(null); }}
         onComplete={handleGuideComplete}
         onContinueToTrade={pendingTradeSide ? handleGuideContinueToTrade : undefined}
+      />
+
+      {/* Rights & risks sheet — 13-row modal.
+          Rows fail closed to "To be confirmed" when the backend does not
+          expose the answer. For live instruments, TBC rows block trading. */}
+      <CoOwnRightsSheet
+        visible={rightsSheetVisible}
+        onClose={() => setRightsSheetVisible(false)}
+        disclosureVersion={asset.rightsVersion ?? 'Rights v1'}
+        rights={CANONICAL_RIGHTS_LABELS.map((label) => {
+          const row = (asset.rightsRows as CoOwnRightsRow[] | undefined)?.find((r) => r.label === label);
+          return row ?? { label, answer: 'To be confirmed', isTbc: true };
+        })}
       />
     </View>
   );
@@ -963,5 +1076,39 @@ const styles = StyleSheet.create({
   dockPrimaryBtnStacked: {
     flex: 0,
     width: '100%',
+  },
+  // ── Rights & risks entry ──
+  rightsEntry: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.md,
+    borderRadius: Radius.lg,
+    borderWidth: 0.5,
+  },
+  rightsEntryLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    flex: 1,
+  },
+  rightsEntryText: {
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
+  },
+  rightsVersionChip: {
+    paddingHorizontal: Space.sm,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
+  },
+  rightsVersionText: {
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    fontFamily: Typography.family.medium,
+    letterSpacing: Type.meta.letterSpacing,
   },
 });
