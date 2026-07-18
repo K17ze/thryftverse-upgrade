@@ -45,6 +45,7 @@ import {
   CoOwnConciergeCTA,
   CoOwnOfflineBanner,
   CoOwnReconciliationBanner,
+  CoOwnValueStrip,
   CANONICAL_RIGHTS_LABELS,
   type CoOwnRightsRow,
   type CoOwnTicketOrderType,
@@ -283,6 +284,19 @@ export default function TradeScreen() {
 
       <CoOwnOfflineBanner isOffline={isOffline} />
       <CoOwnReconciliationBanner isActive={false} />
+
+      {/* Compact value strip — spec 03 §3.2: last/bid/ask/spread one line */}
+      <CoOwnValueStrip
+        last={{ price: asset.unitPriceGbp, ageSeconds: null }}
+        nav={asset.appraisalValue && asset.totalUnits > 0 ? {
+          pricePerUnit: asset.appraisalValue / asset.totalUnits,
+          valuedAt: asset.appraisalValuedAt ?? '—',
+          method: asset.appraisalMethod ?? '—',
+        } : undefined}
+        premiumPct={asset.appraisalValue && asset.totalUnits > 0
+          ? ((asset.unitPriceGbp - (asset.appraisalValue / asset.totalUnits)) / (asset.appraisalValue / asset.totalUnits)) * 100
+          : null}
+      />
 
       <KeyboardAwareScrollView
         style={{ flex: 1 }}
