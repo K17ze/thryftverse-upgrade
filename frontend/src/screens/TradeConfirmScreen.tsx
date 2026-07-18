@@ -46,6 +46,13 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
   // 1ZE ≈ 1 GBP for threshold purposes (conservative).
   const requireHold = netValue > 5000;
 
+  // Per spec 05 §3.2: receipt must show max reserved (full obligation).
+  // For buys: total including fee. For sells: units being sold.
+  const maxReservedLabel = isBuy ? formatFromFiat(netValue, 'GBP') : `${quantity} units`;
+
+  // Per spec 05 §3.2: market warning for illiquid assets.
+  const marketWarning = 'Co-Own units are illiquid. Exit may require time or may not be possible at the quoted price.';
+
   const handleConfirm = async () => {
     if (isSubmitting) return;
 
@@ -135,6 +142,8 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
             totalCaption={isBuy ? 'Including 1% fee' : 'After 1% fee'}
             settlementLabel={settlementLabel}
             status="pending"
+            maxReservedLabel={maxReservedLabel}
+            marketWarning={marketWarning}
           />
         </Reanimated.View>
 

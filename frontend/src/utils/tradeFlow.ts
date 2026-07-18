@@ -346,6 +346,23 @@ export function isTradeSubmitEnabled(input: {
   );
 }
 
+/** Returns the first reason the submit button is disabled, or null if enabled.
+ *  Per spec 05 §1: "Review button disabled-with-reason for all 7 failure conditions." */
+export function getTradeSubmitDisabledReason(input: {
+  assetFound: boolean;
+  eligibility: TradeEligibility;
+  quote: TradeQuote;
+  hasIncompleteRights?: boolean;
+}): string | null {
+  if (!input.assetFound) return 'Asset not loaded';
+  if (input.hasIncompleteRights) return 'Rights incomplete — not yet tradable';
+  if (!input.eligibility.ok) return input.eligibility.message ?? 'Trading restricted';
+  if (!input.quote.isValidQty) return 'Enter a valid quantity';
+  if (input.quote.quantity > CO_OWN_MAX_UNITS) return `Maximum ${CO_OWN_MAX_UNITS} units per order`;
+  if (input.quote.orderMode === 'limit' && !input.quote.hasLimitPrice) return 'Enter a limit price';
+  return null;
+}
+
 export function evaluateTradeSubmit(input: TradeSubmitInput): TradeSubmitDecision {
   const quote = buildTradeQuote(input);
 

@@ -14,6 +14,7 @@ import {
   buildTradeQuote,
   evaluateTradeSubmit,
   isTradeSubmitEnabled,
+  getTradeSubmitDisabledReason,
   sanitizeTradePriceInput,
   sanitizeTradeQuantityInput,
   CO_OWN_FEE_RATE,
@@ -187,6 +188,10 @@ export default function TradeScreen() {
 
   const eligibility = asset ? checkCoOwnEligibility(asset.settlementMode) : { ok: false, message: 'Asset not found' };
   const canSubmit = isTradeSubmitEnabled({ assetFound: !!asset, eligibility, quote }) && !hasIncompleteRights;
+  const submitDisabledReason = React.useMemo(
+    () => getTradeSubmitDisabledReason({ assetFound: !!asset, eligibility, quote, hasIncompleteRights }),
+    [asset, eligibility, quote, hasIncompleteRights],
+  );
 
   // Thin market: no opposite side → substitute "Review order" with "Request quote"
   const isThinMarket = (side === 'buy' && simulatedBook.asks.length === 0)
@@ -552,17 +557,24 @@ export default function TradeScreen() {
             />
           </View>
         ) : (
-          <AppButton
-            title="Review order"
-            icon={<Ionicons name="arrow-forward" size={18} color={colors.background} />}
-            onPress={handleSubmit}
-            disabled={!canSubmit || isSubmittingOrder}
-            variant="primary"
-            size="lg"
-            hapticFeedback="medium"
-            accessibilityLabel={`Review ${side} order`}
-            style={styles.submitBtn}
-          />
+          <View style={styles.submitDockWrap}>
+            <AppButton
+              title="Review order"
+              icon={<Ionicons name="arrow-forward" size={18} color={colors.background} />}
+              onPress={handleSubmit}
+              disabled={!canSubmit || isSubmittingOrder}
+              variant="primary"
+              size="lg"
+              hapticFeedback="medium"
+              accessibilityLabel={`Review ${side} order${submitDisabledReason ? ` — ${submitDisabledReason}` : ''}`}
+              style={styles.submitBtn}
+            />
+            {!canSubmit && submitDisabledReason && (
+              <Text style={[styles.submitDisabledReason, { color: colors.textMuted }]} numberOfLines={1}>
+                {submitDisabledReason}
+              </Text>
+            )}
+          </View>
         )}
       </CoOwnStickyActionDock>
     </SafeAreaView>
@@ -678,6 +690,16 @@ const styles = StyleSheet.create({
   },
   submitBtn: {
     flex: 1,
+  },
+  submitDockWrap: {
+    width: '100%',
+    gap: Space.xs,
+  },
+  submitDisabledReason: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.caption.letterSpacing,
+    textAlign: 'center',
   },
   thinMarketDock: {
     width: '100%',
