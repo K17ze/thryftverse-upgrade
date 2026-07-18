@@ -15,6 +15,7 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useToast } from '../context/ToastContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { CoOwnNumericText } from '../components/ui/CoOwnNumericText';
 import { haptics } from '../utils/haptics';
 import {
   CoOwnMarketHeader,
@@ -123,6 +124,31 @@ export default function PortfolioScreen() {
       ratio: (p.unitsOwned * p.unitPriceGbp) / summary.totalValueGbp,
       title: p.title,
     }));
+  }, [positions, summary.totalValueGbp]);
+
+  // Issuer concentration bands — privacy-safe (spec 06 §1.2)
+  // Groups positions by issuer, computes concentration %, rounds to 5% bands.
+  // Never names the issuer — shows "Top issuer", "2nd issuer", etc.
+  const issuerBands = React.useMemo(() => {
+    if (positions.length === 0 || summary.totalValueGbp <= 0) return [];
+    const byIssuer = new Map<string, number>();
+    for (const p of positions) {
+      const value = p.unitsOwned * p.unitPriceGbp;
+      byIssuer.set(p.issuerId, (byIssuer.get(p.issuerId) ?? 0) + value);
+    }
+    const sorted = [...byIssuer.entries()].sort((a, b) => b[1] - a[1]);
+    const ORDINALS = ['Top', '2nd', '3rd', '4th', '5th'];
+    return sorted.slice(0, 5).map(([_, value], i) => {
+      const pct = (value / summary.totalValueGbp) * 100;
+      const bandLow = Math.floor(pct / 5) * 5;
+      const bandHigh = bandLow + 5;
+      return {
+        id: `issuer-${i}`,
+        label: `${ORDINALS[i] ?? `${i + 1}th`} issuer`,
+        band: `${bandLow}–${bandHigh}%`,
+        ratio: value / summary.totalValueGbp,
+      };
+    });
   }, [positions, summary.totalValueGbp]);
 
   // Best / worst performer — derived from unrealized P&L percentage
@@ -336,21 +362,27 @@ export default function PortfolioScreen() {
             {/* Portfolio summary — ownership surface, not a finance dashboard */}
             <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Portfolio value</Text>
-              <Text style={[styles.summaryValue, { color: colors.textPrimary }]} numberOfLines={1}>
-                {formatFromFiat(summary.totalValueGbp, 'GBP')}
-              </Text>
+              <CoOwnNumericText
+                value={summary.totalValueGbp}
+                unit="GBP"
+                size="priceLarge"
+                align="left"
+                showUnit={false}
+                color={colors.textPrimary}
+              />
 
               {/* Phase 3: today's change with timestamp */}
               {todayChangeGbp !== 0 && (
                 <View style={styles.todayChangeRow}>
-                  <Text
-                    style={[
-                      styles.todayChangeValue,
-                      { color: todayChangeGbp >= 0 ? colors.success : colors.danger },
-                    ]}
-                  >
-                    {todayChangeGbp >= 0 ? '+' : '-'}{formatFromFiat(Math.abs(todayChangeGbp), 'GBP')}
-                  </Text>
+                  <CoOwnNumericText
+                    value={todayChangeGbp}
+                    unit="GBP"
+                    size="price"
+                    signed
+                    showUnit={false}
+                    showGlyph={false}
+                    color={todayChangeGbp >= 0 ? colors.success : colors.danger}
+                  />
                   <Text style={[styles.todayChangePct, { color: todayChangeGbp >= 0 ? colors.success : colors.danger }]}>
                     ({todayChangeGbp >= 0 ? '+' : ''}{todayChangePct.toFixed(2)}%)
                   </Text>
@@ -371,40 +403,51 @@ export default function PortfolioScreen() {
               <View style={[styles.summaryStats, { borderColor: colors.border }]}>
                 <View style={styles.summaryStat}>
                   <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]} numberOfLines={1}>Total return</Text>
-                  <Text style={[
-                    styles.summaryStatValue,
-                    { color: (summary.totalUnrealizedGbp + summary.totalRealizedGbp) >= 0 ? colors.success : colors.danger },
-                  ]} numberOfLines={1}>
-                    {(summary.totalUnrealizedGbp + summary.totalRealizedGbp) >= 0 ? '+' : '-'}
-                    {formatFromFiat(Math.abs(summary.totalUnrealizedGbp + summary.totalRealizedGbp), 'GBP')}
-                  </Text>
+                  <CoOwnNumericText
+                    value={summary.totalUnrealizedGbp + summary.totalRealizedGbp}
+                    unit="GBP"
+                    size="priceList"
+                    signed
+                    showUnit={false}
+                    showGlyph={false}
+                    color={(summary.totalUnrealizedGbp + summary.totalRealizedGbp) >= 0 ? colors.success : colors.danger}
+                  />
                 </View>
                 <View style={[styles.summaryStat, { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.border }]}>
                   <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]} numberOfLines={1}>Unrealised</Text>
-                  <Text style={[
-                    styles.summaryStatValue,
-                    { color: summary.totalUnrealizedGbp >= 0 ? colors.success : colors.danger },
-                  ]} numberOfLines={1}>
-                    {summary.totalUnrealizedGbp >= 0 ? '+' : '-'}{formatFromFiat(Math.abs(summary.totalUnrealizedGbp), 'GBP')}
-                  </Text>
+                  <CoOwnNumericText
+                    value={summary.totalUnrealizedGbp}
+                    unit="GBP"
+                    size="priceList"
+                    signed
+                    showUnit={false}
+                    showGlyph={false}
+                    color={summary.totalUnrealizedGbp >= 0 ? colors.success : colors.danger}
+                  />
                 </View>
                 <View style={[styles.summaryStat, { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.border }]}>
                   <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]} numberOfLines={1}>Realised</Text>
-                  <Text style={[
-                    styles.summaryStatValue,
-                    { color: summary.totalRealizedGbp >= 0 ? colors.success : colors.danger },
-                  ]} numberOfLines={1}>
-                    {summary.totalRealizedGbp >= 0 ? '+' : '-'}{formatFromFiat(Math.abs(summary.totalRealizedGbp), 'GBP')}
-                  </Text>
+                  <CoOwnNumericText
+                    value={summary.totalRealizedGbp}
+                    unit="GBP"
+                    size="priceList"
+                    signed
+                    showUnit={false}
+                    showGlyph={false}
+                    color={summary.totalRealizedGbp >= 0 ? colors.success : colors.danger}
+                  />
                 </View>
                 <View style={[styles.summaryStat, { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.border }]}>
                   <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]} numberOfLines={1}>Distrib.</Text>
-                  <Text style={[
-                    styles.summaryStatValue,
-                    { color: totalDistributionsGbp >= 0 ? colors.success : colors.danger },
-                  ]} numberOfLines={1}>
-                    +{formatFromFiat(totalDistributionsGbp, 'GBP')}
-                  </Text>
+                  <CoOwnNumericText
+                    value={totalDistributionsGbp}
+                    unit="GBP"
+                    size="priceList"
+                    signed
+                    showUnit={false}
+                    showGlyph={false}
+                    color={totalDistributionsGbp >= 0 ? colors.success : colors.danger}
+                  />
                 </View>
               </View>
 
@@ -431,9 +474,14 @@ export default function PortfolioScreen() {
                     <Text style={[styles.performerTitle, { color: colors.textPrimary }]} numberOfLines={1}>
                       {performers.best.title}
                     </Text>
-                    <Text style={[styles.performerValue, { color: colors.success }]} numberOfLines={1}>
-                      +{((performers.best.unrealizedPnlGbp / (performers.best.avgEntryPriceGbp * performers.best.unitsOwned)) * 100).toFixed(1)}%
-                    </Text>
+                    <CoOwnNumericText
+                      value={(performers.best.unrealizedPnlGbp / (performers.best.avgEntryPriceGbp * performers.best.unitsOwned)) * 100}
+                      unit="pct"
+                      size="price"
+                      signed
+                      showGlyph={false}
+                      color={colors.success}
+                    />
                   </View>
                 )}
                 {performers.worst && (
@@ -445,9 +493,14 @@ export default function PortfolioScreen() {
                     <Text style={[styles.performerTitle, { color: colors.textPrimary }]} numberOfLines={1}>
                       {performers.worst.title}
                     </Text>
-                    <Text style={[styles.performerValue, { color: colors.danger }]} numberOfLines={1}>
-                      {((performers.worst.unrealizedPnlGbp / (performers.worst.avgEntryPriceGbp * performers.worst.unitsOwned)) * 100).toFixed(1)}%
-                    </Text>
+                    <CoOwnNumericText
+                      value={(performers.worst.unrealizedPnlGbp / (performers.worst.avgEntryPriceGbp * performers.worst.unitsOwned)) * 100}
+                      unit="pct"
+                      size="price"
+                      signed
+                      showGlyph={false}
+                      color={colors.danger}
+                    />
                   </View>
                 )}
               </View>
@@ -457,12 +510,19 @@ export default function PortfolioScreen() {
             {allocationBars.length > 0 && (
               <View style={[styles.allocationCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <Text style={[styles.allocationTitle, { color: colors.textPrimary }]}>Allocation</Text>
+                <Text style={[styles.allocationSubtitle, { color: colors.textMuted }]}>By asset</Text>
                 <View style={styles.barsContainer}>
                   {allocationBars.map((bar) => (
                     <View key={bar.id} style={styles.barItem}>
                       <View style={styles.barHeader}>
                         <Text style={[styles.barLabel, { color: colors.textSecondary }]} numberOfLines={1}>{bar.title}</Text>
-                        <Text style={[styles.barPct, { color: colors.textMuted }]}>{(bar.ratio * 100).toFixed(1)}%</Text>
+                        <CoOwnNumericText
+                          value={bar.ratio * 100}
+                          unit="pct"
+                          size="mono"
+                          showUnit={false}
+                          color={colors.textMuted}
+                        />
                       </View>
                       <View style={[styles.barTrack, { backgroundColor: colors.surfaceAlt }]}>
                         <View style={[styles.barFill, { width: `${bar.ratio * 100}%`, backgroundColor: colors.brand }]} />
@@ -470,6 +530,28 @@ export default function PortfolioScreen() {
                     </View>
                   ))}
                 </View>
+
+                {/* Issuer concentration bands — privacy-safe (spec 06 §1.2) */}
+                {issuerBands.length > 1 && (
+                  <View style={[styles.issuerSection, { borderTopColor: colors.border }]}>
+                    <Text style={[styles.allocationSubtitle, { color: colors.textMuted }]}>By issuer concentration</Text>
+                    <View style={styles.barsContainer}>
+                      {issuerBands.map((band) => (
+                        <View key={band.id} style={styles.barItem}>
+                          <View style={styles.barHeader}>
+                            <Text style={[styles.barLabel, { color: colors.textSecondary }]} numberOfLines={1}>
+                              {band.label}
+                            </Text>
+                            <Text style={[styles.barPct, { color: colors.textMuted }]}>{band.band}</Text>
+                          </View>
+                          <View style={[styles.barTrack, { backgroundColor: colors.surfaceAlt }]}>
+                            <View style={[styles.barFill, { width: `${band.ratio * 100}%`, backgroundColor: colors.textSecondary }]} />
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                )}
               </View>
             )}
 
@@ -490,9 +572,15 @@ export default function PortfolioScreen() {
                       From closed positions
                     </Text>
                   </View>
-                  <Text style={[styles.realisedAmount, { color: summary.totalRealizedGbp >= 0 ? colors.success : colors.danger }]} numberOfLines={1}>
-                    {summary.totalRealizedGbp >= 0 ? '+' : '-'}{formatFromFiat(Math.abs(summary.totalRealizedGbp), 'GBP')}
-                  </Text>
+                  <CoOwnNumericText
+                    value={summary.totalRealizedGbp}
+                    unit="GBP"
+                    size="price"
+                    signed
+                    showUnit={false}
+                    showGlyph={false}
+                    color={summary.totalRealizedGbp >= 0 ? colors.success : colors.danger}
+                  />
                 </View>
               </View>
             )}
@@ -676,6 +764,18 @@ const styles = StyleSheet.create({
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: -0.3,
+  },
+  allocationSubtitle: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.caption.letterSpacing,
+    marginTop: 2,
+    marginBottom: Space.xs,
+  },
+  issuerSection: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    marginTop: Space.md,
+    paddingTop: Space.md,
   },
   barsContainer: {
     gap: Space.sm,

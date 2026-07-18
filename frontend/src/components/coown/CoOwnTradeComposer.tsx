@@ -47,9 +47,9 @@ export interface CoOwnTradeComposerProps {
   mode: CoOwnTradeMode;
   units: number;
   unitPriceLabel: string;
-  grossLabel: string;
-  feeLabel: string;
-  totalLabel: string;
+  grossLabel: React.ReactNode;
+  feeLabel: React.ReactNode;
+  totalLabel: React.ReactNode;
   totalCaption: string;
   settlementLabel: string;
   availableUnits: number;
@@ -159,11 +159,11 @@ export function CoOwnTradeComposer({
           <Text style={[styles.quoteLabel, { color: colors.textSecondary }]} numberOfLines={1}>
             {units} units × {unitPriceLabel}
           </Text>
-          <Text style={[styles.quoteValue, { color: colors.textPrimary }]} numberOfLines={1}>{grossLabel}</Text>
+          <View style={styles.quoteValueWrap}>{grossLabel}</View>
         </View>
         <View style={[styles.quoteRow, { borderColor: colors.border }]}>
           <Text style={[styles.quoteLabel, { color: colors.textMuted }]} numberOfLines={1}>Fee (1%)</Text>
-          <Text style={[styles.quoteValue, { color: colors.textSecondary }]} numberOfLines={1}>{feeLabel}</Text>
+          <View style={styles.quoteValueWrap}>{feeLabel}</View>
         </View>
         <View style={[styles.totalRow, { borderColor: colors.border }]}>
           <View style={styles.totalLabelWrap}>
@@ -172,7 +172,7 @@ export function CoOwnTradeComposer({
             </Text>
             <Text style={[styles.totalCaption, { color: colors.textMuted }]} numberOfLines={1}>{totalCaption}</Text>
           </View>
-          <Text style={[styles.totalValue, { color: colors.textPrimary }]} numberOfLines={1}>{totalLabel}</Text>
+          <View style={styles.totalValueWrap}>{totalLabel}</View>
         </View>
 
         {/* Reservation line — from computeReservation() */}
@@ -295,23 +295,27 @@ function DetailRow({
   emphasis,
 }: {
   label: string;
-  value: string;
+  value: React.ReactNode;
   colors: ReturnType<typeof useAppTheme>['colors'];
   emphasis?: boolean;
 }) {
   return (
     <View style={styles.detailRow}>
       <Text style={[styles.detailRowLabel, { color: colors.textMuted }]}>{label}</Text>
-      <Text
-        style={[
-          styles.detailRowValue,
-          { color: emphasis ? colors.textPrimary : colors.textSecondary },
-          emphasis && { fontFamily: Typography.family.bold },
-        ]}
-        numberOfLines={1}
-      >
-        {value}
-      </Text>
+      {typeof value === 'string' || typeof value === 'number' ? (
+        <Text
+          style={[
+            styles.detailRowValue,
+            { color: emphasis ? colors.textPrimary : colors.textSecondary },
+            emphasis && { fontFamily: Typography.family.bold },
+          ]}
+          numberOfLines={1}
+        >
+          {value}
+        </Text>
+      ) : (
+        <View style={styles.detailRowValueWrap}>{value}</View>
+      )}
     </View>
   );
 }
@@ -414,6 +418,10 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     fontVariant: ['tabular-nums'],
   },
+  quoteValueWrap: {
+    flexShrink: 0,
+    alignItems: 'flex-end',
+  },
   totalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -444,6 +452,10 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
     flexShrink: 0,
     fontVariant: ['tabular-nums'],
+  },
+  totalValueWrap: {
+    flexShrink: 0,
+    alignItems: 'flex-end',
   },
   settlementRow: {
     flexDirection: 'row',
@@ -524,6 +536,9 @@ const styles = StyleSheet.create({
     letterSpacing: Type.body.letterSpacing,
     textAlign: 'right',
     fontVariant: ['tabular-nums'],
+  },
+  detailRowValueWrap: {
+    alignItems: 'flex-end',
   },
   durationRow: {
     flexDirection: 'row',

@@ -45,6 +45,7 @@ import {
   CoOwnReconciliationBanner,
   type CoOwn1ZeBalance,
 } from '../components/coown';
+import { CoOwnNumericText } from '../components/ui/CoOwnNumericText';
 import { useConnectivity } from '../hooks/useConnectivity';
 
 type Props = StackScreenProps<RootStackParamList, 'Wallet'>;
@@ -536,15 +537,19 @@ export default function WalletScreen({ navigation }: Props) {
                   accessibilityLabel={`Amount in ${currencyCode}`}
                   accessibilityHint="Enter the amount to convert into 1ZE."
                 />
-                <SummaryRow label="Gross 1ZE" value={formatIzeAmount(loadGrossIze)} colors={colors} />
+                <SummaryRow
+                  label="Gross 1ZE"
+                  value={<CoOwnNumericText value={loadGrossIze} unit="1ZE" size="priceList" align="right" />}
+                  colors={colors}
+                />
                 <SummaryRow
                   label={`Platform fee (${loadFeeRateLabel})`}
-                  value={`${formatIzeAmount(loadFeeIze)} · ${formatFromFiat(loadFeeFiat, currencyCode, { displayMode: 'fiat' })}`}
+                  value={<CoOwnNumericText value={loadFeeIze} unit="1ZE" size="priceList" align="right" />}
                   colors={colors}
                 />
                 <SummaryRow
                   label="Net 1ZE credited"
-                  value={`${formatIzeAmount(loadNetIze)} · ${formatFromIze(loadNetIze, { displayMode: 'fiat' })}`}
+                  value={<CoOwnNumericText value={loadNetIze} unit="1ZE" size="price" align="right" />}
                   colors={colors}
                   total
                 />
@@ -580,10 +585,14 @@ export default function WalletScreen({ navigation }: Props) {
                   accessibilityLabel={`Amount in ${currencyCode}`}
                   accessibilityHint="Enter the fiat amount to buy 1ZE."
                 />
-                <SummaryRow label="You will receive" value={formatIzeAmount(buyIzeAmount)} colors={colors} />
+                <SummaryRow
+                  label="You will receive"
+                  value={<CoOwnNumericText value={buyIzeAmount} unit="1ZE" size="priceList" align="right" />}
+                  colors={colors}
+                />
                 <SummaryRow
                   label="Rate"
-                  value={`1 1ZE = ${formatFromIze(1, { displayMode: 'fiat' })}`}
+                  value={<CoOwnNumericText value={1 / toIze(1, currencyCode, goldRates)} unit={currencyCode} size="priceList" align="right" showUnit={false} />}
                   colors={colors}
                   total
                 />
@@ -628,9 +637,9 @@ export default function WalletScreen({ navigation }: Props) {
               accessibilityLabel="Amount in 1ZE"
               accessibilityHint="Enter the 1ZE amount to convert to fiat."
             />
-            <SummaryRow label={`Gross ${currencyCode}`} value={formatFromFiat(convertFiatValue, currencyCode, { displayMode: 'fiat' })} colors={colors} />
-            <SummaryRow label={`Platform fee (${convertFeeRateLabel})`} value={formatFromFiat(convertFee, currencyCode, { displayMode: 'fiat' })} colors={colors} />
-            <SummaryRow label="Net fiat credited" value={formatFromFiat(convertNetFiat, currencyCode, { displayMode: 'fiat' })} colors={colors} total />
+            <SummaryRow label={`Gross ${currencyCode}`} value={<CoOwnNumericText value={convertFiatValue} size="priceList" align="right" showUnit={false} />} colors={colors} />
+            <SummaryRow label={`Platform fee (${convertFeeRateLabel})`} value={<CoOwnNumericText value={convertFee} size="priceList" align="right" showUnit={false} />} colors={colors} />
+            <SummaryRow label="Net fiat credited" value={<CoOwnNumericText value={convertNetFiat} size="price" align="right" showUnit={false} />} colors={colors} total />
             <AppButton
               title={isProcessing ? 'Processing…' : 'Convert to Fiat'}
               onPress={handleConvertIzeToFiat}
@@ -699,7 +708,7 @@ function SummaryRow({
   total,
 }: {
   label: string;
-  value: string;
+  value: React.ReactNode;
   colors: ReturnType<typeof useAppTheme>['colors'];
   total?: boolean;
 }) {
@@ -707,7 +716,7 @@ function SummaryRow({
     <View
       style={[styles.summaryRow, total && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, marginTop: Space.xs, paddingTop: Space.xs }]}
       accessibilityRole="text"
-      accessibilityLabel={`${label}: ${value}`}
+      accessibilityLabel={label}
     >
       <Text
         style={[
@@ -718,15 +727,7 @@ function SummaryRow({
       >
         {label}
       </Text>
-      <Text
-        style={[
-          styles.summaryValue,
-          { color: total ? colors.textPrimary : colors.textPrimary },
-          total && { fontFamily: Typography.family.semibold },
-        ]}
-      >
-        {value}
-      </Text>
+      {value}
     </View>
   );
 }

@@ -47,6 +47,7 @@ import {
   type CoOwnTicketOrderType,
   type CoOwnTicketDuration,
 } from '../components/coown';
+import { CoOwnNumericText } from '../components/ui/CoOwnNumericText';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { useConnectivity } from '../hooks/useConnectivity';
 
@@ -306,9 +307,9 @@ export default function TradeScreen() {
             mode={orderMode}
             units={quote.quantity}
             unitPriceLabel={formatFromFiat(marketPrice, 'GBP')}
-            grossLabel={formatFromFiat(quote.grossValue, 'GBP')}
-            feeLabel={formatFromFiat(quote.fee, 'GBP')}
-            totalLabel={formatFromFiat(quote.netValue, 'GBP')}
+            grossLabel={<CoOwnNumericText value={quote.grossValue} unit="GBP" size="priceList" align="right" showUnit={false} />}
+            feeLabel={<CoOwnNumericText value={quote.fee} unit="GBP" size="priceList" align="right" showUnit={false} />}
+            totalLabel={<CoOwnNumericText value={quote.netValue} unit="GBP" size="priceLarge" align="right" showUnit={false} />}
             totalCaption={side === 'buy' ? 'Including 1% fee' : 'After 1% fee'}
             settlementLabel={settlementLabel}
             availableUnits={availableUnits}
