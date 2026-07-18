@@ -71,7 +71,6 @@ export type RootStackParamList = {
   EditGroup: { conversationId: string };
   UserProfile: { userId: string; isMe?: boolean };
   // Profile sub-screens
-  Balance: undefined;
   Wallet: undefined;
   MyOrders: undefined;
   Personalisation: undefined;

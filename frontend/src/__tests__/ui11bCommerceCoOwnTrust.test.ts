@@ -75,7 +75,7 @@ describe('UI-11B commerce + co-own trust UI rebuild', () => {
   // 6. Financial screens do not show fake balances
   it('financial screens do not hardcode balance amounts', () => {
     const screens = [
-      'screens/BalanceScreen.tsx',
+      'screens/WalletScreen.tsx',
       'screens/WithdrawScreen.tsx',
       'screens/BalanceHistoryScreen.tsx',
       'screens/PaymentsScreen.tsx',
@@ -98,7 +98,7 @@ describe('UI-11B commerce + co-own trust UI rebuild', () => {
       'screens/CheckoutScreen.tsx',
       'screens/SuccessScreen.tsx',
       'screens/PaymentsScreen.tsx',
-      'screens/BalanceScreen.tsx',
+      'screens/WalletScreen.tsx',
       'screens/WithdrawScreen.tsx',
       'screens/BalanceHistoryScreen.tsx',
       'screens/TradeHubScreen.tsx',
@@ -130,7 +130,7 @@ describe('UI-11B commerce + co-own trust UI rebuild', () => {
       'screens/CheckoutScreen.tsx',
       'screens/SuccessScreen.tsx',
       'screens/PaymentsScreen.tsx',
-      'screens/BalanceScreen.tsx',
+      'screens/WalletScreen.tsx',
       'screens/WithdrawScreen.tsx',
       'screens/BalanceHistoryScreen.tsx',
       'screens/TradeHubScreen.tsx',
@@ -164,7 +164,7 @@ describe('UI-11B commerce + co-own trust UI rebuild', () => {
       'screens/CheckoutScreen.tsx',
       'screens/SuccessScreen.tsx',
       'screens/PaymentsScreen.tsx',
-      'screens/BalanceScreen.tsx',
+      'screens/WalletScreen.tsx',
       'screens/WithdrawScreen.tsx',
       'screens/BalanceHistoryScreen.tsx',
       'screens/TradeHubScreen.tsx',
@@ -193,7 +193,7 @@ describe('UI-11B commerce + co-own trust UI rebuild', () => {
   it('financial screens do not nest ElevatedSurface inside list sections', () => {
     const screens = [
       'screens/PaymentsScreen.tsx',
-      'screens/BalanceScreen.tsx',
+      'screens/WalletScreen.tsx',
       'screens/WithdrawScreen.tsx',
     ];
     for (const screen of screens) {

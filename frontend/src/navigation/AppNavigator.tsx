@@ -52,7 +52,6 @@ import EditGroupScreen from '../screens/EditGroupScreen';
 import UserProfileScreen from '../screens/UserProfileScreen';
 
 // Profile Subs
-import BalanceScreen from '../screens/BalanceScreen';
 import WalletScreen from '../screens/WalletScreen';
 import MyOrdersScreen from '../screens/MyOrdersScreen';
 import PersonalisationScreen from '../screens/PersonalisationScreen';
@@ -264,7 +263,6 @@ export default function AppNavigator() {
       <Stack.Screen name="BotBuilder" component={BotBuilderScreen} options={modalScreenOptions} />
       <Stack.Screen name="EditGroup" component={EditGroupScreen} />
       <Stack.Screen name="UserProfile" component={UserProfileScreen} />
-      <Stack.Screen name="Balance" component={BalanceScreen} />
       <Stack.Screen name="Wallet" component={WalletScreen} />
       <Stack.Screen name="MyOrders" component={MyOrdersScreen} />
       <Stack.Screen name="Personalisation" component={PersonalisationScreen} />

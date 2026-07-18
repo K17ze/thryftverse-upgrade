@@ -1,4 +1,5 @@
 import { fetchJson } from '../lib/apiClient';
+import { ENABLE_RUNTIME_MOCKS } from '../constants/runtimeFlags';
 
 export type PaymentIntentChannel =
   | 'commerce'
@@ -418,9 +419,40 @@ export async function burnIze(input: {
 }
 
 export async function getIzePosition(userId: string, fiatCurrency = 'GBP') {
-  return fetchJson<WalletIzePositionResponse>(
-    `/wallet/1ze/${encodeURIComponent(userId)}/position?fiatCurrency=${encodeURIComponent(fiatCurrency)}`
-  );
+  try {
+    return await fetchJson<WalletIzePositionResponse>(
+      `/wallet/1ze/${encodeURIComponent(userId)}/position?fiatCurrency=${encodeURIComponent(fiatCurrency)}`
+    );
+  } catch (err) {
+    if (ENABLE_RUNTIME_MOCKS) {
+      console.warn('[walletApi] /wallet/1ze/position failed — returning dev mock fallback:', err instanceof Error ? err.message : err);
+      const now = new Date();
+      const expires = new Date(now.getTime() + 60_000);
+      return {
+        ok: true as const,
+        userId,
+        rate: {
+          currency: fiatCurrency,
+          ratePerGram: 75.42,
+          source: 'dev-mock',
+          fetchedAt: now.toISOString(),
+          expiresAt: expires.toISOString(),
+          isFallback: true,
+          isOverride: false,
+        },
+        balances: {
+          userIze: 2_659_574, // 2,659.574 1ZE in mg
+          userFiatValue: 200_00, // £200.00 in minor units
+          outstandingIze: 0,
+          circulatingIze: 1_000_000_000,
+          supplyDeltaIze: 0,
+          supplyParityRatio: 1,
+          liquidityBufferIze: 50_000_000,
+        },
+      };
+    }
+    throw err;
+  }
 }
 
 // Convert 1ze to Fiat (for withdrawal)
