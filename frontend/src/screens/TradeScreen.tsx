@@ -43,6 +43,7 @@ import {
   CoOwnRiskDisclosure,
   CoOwnConciergeCTA,
   CoOwnOfflineBanner,
+  CoOwnReconciliationBanner,
   type CoOwnTicketOrderType,
   type CoOwnTicketDuration,
 } from '../components/coown';
@@ -81,7 +82,9 @@ export default function TradeScreen() {
 
   const [side, setSide] = React.useState<TradeSide>(route.params?.side ?? 'buy');
   const [quantityInput, setQuantityInput] = React.useState('1');
-  const [offerPriceInput, setOfferPriceInput] = React.useState('');
+  const [offerPriceInput, setOfferPriceInput] = React.useState(
+    route.params?.limitPrice ? String(route.params.limitPrice) : ''
+  );
   const [isSubmittingOrder, setIsSubmittingOrder] = React.useState(false);
   // Phase 2.5: exchange-grade order type + duration
   const [ticketOrderType, setTicketOrderType] = React.useState<CoOwnTicketOrderType>('protected_instant');
@@ -260,6 +263,7 @@ export default function TradeScreen() {
       />
 
       <CoOwnOfflineBanner isOffline={isOffline} />
+      <CoOwnReconciliationBanner isActive={false} />
 
       <KeyboardAwareScrollView
         style={{ flex: 1 }}
@@ -481,8 +485,8 @@ export default function TradeScreen() {
             <CoOwnConciergeCTA
               reason="no_opposite_side"
               assetTitle={asset?.title}
-              onRequestQuote={() => { haptics.tap(); show('Quote request sent. The market maker will respond shortly.', 'info'); }}
-              onContactConcierge={() => { haptics.tap(); show('Connecting you to concierge...', 'info'); }}
+              onRequestQuote={() => { haptics.tap(); navigation.navigate('HelpSupport'); }}
+              onContactConcierge={() => { haptics.tap(); navigation.navigate('HelpSupport'); }}
             />
           </Reanimated.View>
         )}
@@ -491,8 +495,8 @@ export default function TradeScreen() {
             <CoOwnConciergeCTA
               reason="no_opposite_side"
               assetTitle={asset?.title}
-              onRequestQuote={() => { haptics.tap(); show('Quote request sent. The market maker will respond shortly.', 'info'); }}
-              onContactConcierge={() => { haptics.tap(); show('Connecting you to concierge...', 'info'); }}
+              onRequestQuote={() => { haptics.tap(); navigation.navigate('HelpSupport'); }}
+              onContactConcierge={() => { haptics.tap(); navigation.navigate('HelpSupport'); }}
             />
           </Reanimated.View>
         )}
@@ -508,13 +512,13 @@ export default function TradeScreen() {
         {isThinMarket ? (
           <View style={styles.thinMarketDock}>
             <AppButton
-              title={side === 'buy' ? 'Request quote' : 'Request quote'}
+              title="Contact concierge"
               icon={<Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.background} />}
-              onPress={() => { haptics.tap(); show('Quote request sent. The market maker will respond shortly.', 'info'); }}
+              onPress={() => { haptics.tap(); navigation.navigate('HelpSupport'); }}
               variant="primary"
               size="lg"
               hapticFeedback="medium"
-              accessibilityLabel="Request quote for thin market"
+              accessibilityLabel="Contact concierge for thin market assistance"
               style={styles.submitBtn}
             />
           </View>

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, Pressable, useWindowDimensions } fr
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { haptics } from '../utils/haptics';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import Reanimated, {
@@ -60,6 +61,7 @@ import {
   CoOwnOrderBook,
   CoOwnCandleChart,
   CoOwnOfflineBanner,
+  CoOwnReconciliationBanner,
   CANONICAL_RIGHTS_LABELS,
   type CoOwnRightsRow,
   type CoOwnBookLevel,
@@ -125,6 +127,8 @@ export default function AssetDetailScreen() {
   // Phase 2: candle chart state
   const [candleRange, setCandleRange] = React.useState<CoOwnCandleRange>('1W');
   const [showVolume, setShowVolume] = React.useState(false);
+  // Market-data staleness tracking (spec 07 §1.4)
+  const [dataLoadedAt, setDataLoadedAt] = React.useState<number | null>(null);
 
   const coOwnCompliance = useStore((s) => s.coOwnCompliance);
   const updateCoOwnCompliance = useStore((s) => s.updateCoOwnCompliance);
@@ -154,6 +158,7 @@ export default function AssetDetailScreen() {
         if (cancelled) return;
         setAsset(fetchedAsset);
         setOrderBook(fetchedBook);
+        setDataLoadedAt(Date.now());
         const holding = holdings.find((h) => h.assetId === assetId);
         setYourUnits(holding?.unitsOwned ?? 0);
       })
@@ -171,6 +176,25 @@ export default function AssetDetailScreen() {
   }, [assetId, currentUser?.id, show]);
 
   // ── Hooks must run before conditional returns (Rules of Hooks) ──
+
+  // Market-data staleness computation (spec 07 §1.4)
+  // Uses asset.updatedAt as the data source timestamp; falls back to
+  // the load time when updatedAt is absent. Stale threshold: 24h.
+  const STALENESS_THRESHOLD_SECONDS = 24 * 60 * 60;
+  const { dataStale, dataStaleAgeLabel } = React.useMemo(() => {
+    if (!asset || !dataLoadedAt) return { dataStale: false, dataStaleAgeLabel: undefined };
+    const sourceTimestamp = asset.updatedAt ? new Date(asset.updatedAt).getTime() : dataLoadedAt;
+    const ageSeconds = Math.max(0, (Date.now() - sourceTimestamp) / 1000);
+    const stale = ageSeconds > STALENESS_THRESHOLD_SECONDS;
+    if (!stale) return { dataStale: false, dataStaleAgeLabel: undefined };
+    const ageLabel = ageSeconds > 86400 * 2
+      ? `${Math.floor(ageSeconds / 86400)}d ago`
+      : ageSeconds > 3600
+        ? `${Math.floor(ageSeconds / 3600)}h ago`
+        : `${Math.floor(ageSeconds / 60)}m ago`;
+    return { dataStale: true, dataStaleAgeLabel: ageLabel };
+  }, [asset, dataLoadedAt]);
+
   const viewModel = React.useMemo(() => {
     if (!asset) return null;
     return buildCoOwnViewModel({
@@ -273,6 +297,18 @@ export default function AssetDetailScreen() {
     navigation.navigate('Trade', { assetId: asset.id, side });
   };
 
+  // Order book level tap → pre-fill the trade ticket with the selected price (spec 04 §A3)
+  const handleSelectOrderBookLevel = (bookSide: 'bid' | 'ask', price: number) => {
+    haptics.tap();
+    const tradeSide: 'buy' | 'sell' = bookSide === 'ask' ? 'buy' : 'sell';
+    if (!coOwnCompliance.educationCompleted) {
+      setPendingTradeSide(tradeSide);
+      setGuideVisible(true);
+      return;
+    }
+    navigation.navigate('Trade', { assetId: asset.id, side: tradeSide, limitPrice: price });
+  };
+
   const handleGuideComplete = () => {
     updateCoOwnCompliance({ educationCompleted: true });
     setGuideVisible(false);
@@ -317,6 +353,7 @@ export default function AssetDetailScreen() {
       </Reanimated.View>
 
       <CoOwnOfflineBanner isOffline={isOffline} />
+      <CoOwnReconciliationBanner isActive={false} />
 
       <Reanimated.ScrollView
         showsVerticalScrollIndicator={false}
@@ -391,6 +428,8 @@ export default function AssetDetailScreen() {
           sessionLabel={asset.isOpen ? 'Open' : 'Closed'}
           disclosureVersion={asset.rightsVersion ?? undefined}
           onOpenRights={() => setRightsSheetVisible(true)}
+          dataStale={dataStale}
+          dataStaleAgeLabel={dataStaleAgeLabel}
         />
 
         {/* Issuer card — trustworthy identity */}
@@ -453,6 +492,14 @@ export default function AssetDetailScreen() {
             feePct={feePct}
             holderCount={asset.holders}
             status={asset.isOpen ? (availableUnits > 0 ? 'open' : 'closed') : 'paused'}
+            supply={{
+              authorised: totalUnits,
+              issued: totalUnits - availableUnits,
+              publicFloat: totalUnits - availableUnits,
+              sponsorLocked: 0,
+              treasury: availableUnits,
+            }}
+            rightsVersion={asset.rightsVersion ?? undefined}
           />
         </Reanimated.View>
 
@@ -494,7 +541,7 @@ export default function AssetDetailScreen() {
                 lastPrice={asset.unitPriceGbp}
                 lastAgeSeconds={undefined}
                 mode={asset.isOpen ? 'continuous' : 'closed'}
-                onSelectLevel={undefined}
+                onSelectLevel={handleSelectOrderBookLevel}
               />
             </Reanimated.View>
           </View>
@@ -537,7 +584,7 @@ export default function AssetDetailScreen() {
                 lastPrice={asset.unitPriceGbp}
                 lastAgeSeconds={undefined}
                 mode={asset.isOpen ? 'continuous' : 'closed'}
-                onSelectLevel={undefined}
+                onSelectLevel={handleSelectOrderBookLevel}
               />
             </Reanimated.View>
           </>

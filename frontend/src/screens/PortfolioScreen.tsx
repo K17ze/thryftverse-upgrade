@@ -24,6 +24,7 @@ import {
   CoOwnStateCanvas,
   CoOwnPortfolioStorytelling,
   CoOwnOfflineBanner,
+  CoOwnReconciliationBanner,
   type CoOwnPositionAction,
 } from '../components/coown';
 import { fetchCoOwnPortfolioPositions, type CoOwnPositionVM, type CoOwnPortfolioSummary } from '../services/coOwnPortfolio';
@@ -316,6 +317,7 @@ export default function PortfolioScreen() {
       />
 
       <CoOwnOfflineBanner isOffline={isOffline} />
+      <CoOwnReconciliationBanner isActive={false} />
 
       <FlashList
         data={positions}

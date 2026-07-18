@@ -40,7 +40,7 @@ export type RootStackParamList = {
   MarketLedger: undefined;
   CoOwnHub: undefined;
   AssetDetail: { assetId: string };
-  Trade: { assetId: string; side: 'buy' | 'sell' };
+  Trade: { assetId: string; side: 'buy' | 'sell'; limitPrice?: number };
   Portfolio: undefined;
   CoOwnOrderHistory: undefined;
   AssetLeaderboard: undefined;

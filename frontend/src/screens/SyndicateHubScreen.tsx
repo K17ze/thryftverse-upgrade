@@ -29,6 +29,7 @@ import {
   CoOwnHubSkeleton,
   CoOwnStateCanvas,
   CoOwnOfflineBanner,
+  CoOwnReconciliationBanner,
   type CoOwnAssetStatus,
 } from '../components/coown';
 import { useConnectivity } from '../hooks/useConnectivity';
@@ -355,6 +356,7 @@ export default function CoOwnHubScreen() {
       />
 
       <CoOwnOfflineBanner isOffline={isOffline} />
+      <CoOwnReconciliationBanner isActive={false} />
 
       <FlashList
         key={`hub-grid-${gridColumns}`}

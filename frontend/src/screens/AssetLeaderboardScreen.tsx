@@ -22,6 +22,7 @@ import {
   CoOwnLeaderboardSkeleton,
   CoOwnStateCanvas,
   CoOwnOfflineBanner,
+  CoOwnReconciliationBanner,
 } from '../components/coown';
 import { useConnectivity } from '../hooks/useConnectivity';
 
@@ -239,6 +240,7 @@ export default function AssetLeaderboardScreen() {
       />
 
       <CoOwnOfflineBanner isOffline={isOffline} />
+      <CoOwnReconciliationBanner isActive={false} />
 
       <ScrollView
         contentContainerStyle={styles.content}
