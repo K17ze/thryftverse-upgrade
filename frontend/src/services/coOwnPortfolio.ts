@@ -26,6 +26,8 @@ export interface CoOwnPositionVM {
   isOpen: boolean;
   status: 'open' | 'closed' | 'paused';
   createdAt: string;
+  /** Asset category/class from linked listing — used for "By class" allocation. */
+  category?: string;
   /** Position state split per spec 10 §3.3. Optional — fail closed (all settled) when backend doesn't expose. */
   positionState?: {
     settled: number;
@@ -92,10 +94,14 @@ export async function fetchCoOwnPortfolioPositions(
       // 2. linked listing cover image (listing.images[0])
       // 3. null → CoOwnPositionCard shows fallback graphic
       let resolvedImage = asset.imageUrl;
-      if (!resolvedImage && asset.listingId && listings) {
+      let resolvedCategory: string | undefined;
+      if (asset.listingId && listings) {
         const linkedListing = listings.find((l) => l.id === asset.listingId);
         if (linkedListing?.images?.length) {
-          resolvedImage = linkedListing.images[0];
+          if (!resolvedImage) resolvedImage = linkedListing.images[0];
+        }
+        if (linkedListing?.category) {
+          resolvedCategory = linkedListing.category;
         }
       }
 
@@ -105,6 +111,7 @@ export async function fetchCoOwnPortfolioPositions(
         issuerId: asset.issuerId,
         title: asset.title,
         imageUrl: resolvedImage,
+        category: resolvedCategory,
         unitsOwned: h.unitsOwned,
         totalUnits: asset.totalUnits,
         ownershipPct,

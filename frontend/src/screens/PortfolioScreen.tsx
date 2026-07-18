@@ -151,6 +151,24 @@ export default function PortfolioScreen() {
     });
   }, [positions, summary.totalValueGbp]);
 
+  // By class allocation — groups positions by asset category (spec 06 §1.2)
+  const classBars = React.useMemo(() => {
+    if (positions.length === 0 || summary.totalValueGbp <= 0) return [];
+    const byClass = new Map<string, number>();
+    for (const p of positions) {
+      const cls = p.category ?? 'Other';
+      const value = p.unitsOwned * p.unitPriceGbp;
+      byClass.set(cls, (byClass.get(cls) ?? 0) + value);
+    }
+    return [...byClass.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([cls, value]) => ({
+        id: `class-${cls}`,
+        label: cls.charAt(0).toUpperCase() + cls.slice(1),
+        ratio: value / summary.totalValueGbp,
+      }));
+  }, [positions, summary.totalValueGbp]);
+
   // Best / worst performer — derived from unrealized P&L percentage
   const performers = React.useMemo(() => {
     if (positions.length === 0) return { best: null as CoOwnPositionVM | null, worst: null as CoOwnPositionVM | null };
@@ -537,6 +555,32 @@ export default function PortfolioScreen() {
                     </View>
                   ))}
                 </View>
+
+                {/* By class allocation — spec 06 §1.2 */}
+                {classBars.length > 0 && (
+                  <View style={[styles.issuerSection, { borderTopColor: colors.border }]}>
+                    <Text style={[styles.allocationSubtitle, { color: colors.textMuted }]}>By class</Text>
+                    <View style={styles.barsContainer}>
+                      {classBars.map((bar) => (
+                        <View key={bar.id} style={styles.barItem}>
+                          <View style={styles.barHeader}>
+                            <Text style={[styles.barLabel, { color: colors.textSecondary }]} numberOfLines={1}>{bar.label}</Text>
+                            <CoOwnNumericText
+                              value={bar.ratio * 100}
+                              unit="pct"
+                              size="mono"
+                              showUnit={false}
+                              color={colors.textMuted}
+                            />
+                          </View>
+                          <View style={[styles.barTrack, { backgroundColor: colors.surfaceAlt }]}>
+                            <View style={[styles.barFill, { width: `${bar.ratio * 100}%`, backgroundColor: colors.textSecondary }]} />
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                )}
 
                 {/* Issuer concentration bands — privacy-safe (spec 06 §1.2) */}
                 {issuerBands.length > 1 && (
