@@ -409,14 +409,21 @@ export default function AssetDetailScreen() {
           style={styles.sectionWrap}
         >
           <CoOwnValueStrip
-            last={bestBid || bestAsk ? undefined : undefined}
+            last={{ price: asset.unitPriceGbp, ageSeconds: dataStaleAgeLabel ? 86400 : null }}
             bid={bestBid ? { price: bestBid.unitPriceGbp ?? 0, size: bestBid.units ?? 0 } : undefined}
             ask={bestAsk ? { price: bestAsk.unitPriceGbp ?? 0, size: bestAsk.units ?? 0 } : undefined}
             spread={bestBid && bestAsk ? Math.abs((bestAsk.unitPriceGbp ?? 0) - (bestBid.unitPriceGbp ?? 0)) : undefined}
-            nav={undefined}
-            premiumPct={null}
+            nav={asset.appraisalValue && totalUnits > 0 ? {
+              pricePerUnit: asset.appraisalValue / totalUnits,
+              valuedAt: asset.appraisalValuedAt ?? '—',
+              method: asset.appraisalMethod ?? '—',
+              valuer: asset.appraisalValuer,
+            } : undefined}
+            premiumPct={asset.appraisalValue && totalUnits > 0
+              ? ((asset.unitPriceGbp - (asset.appraisalValue / totalUnits)) / (asset.appraisalValue / totalUnits)) * 100
+              : null}
             nextDistribution={null}
-            nextReporting={null}
+            nextReporting={asset.appraisalNextScheduled ?? null}
           />
         </Reanimated.View>
 
