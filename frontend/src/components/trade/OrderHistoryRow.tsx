@@ -9,7 +9,29 @@ import { AppStatusPill } from '../ui/AppStatusPill';
 import { Meta, BodyEmphasis, Body } from '../ui/Text';
 
 export type OrderSide = 'buy' | 'sell';
-export type OrderStatus = 'open' | 'partially_filled' | 'filled' | 'cancelled' | 'rejected';
+// Use the canonical OrderStatus from coOwnModels (12-state machine per spec 10 §2.1-2.2)
+export type OrderStatus = import('../../data/coOwnModels').OrderStatus;
+
+const STATUS_LABELS: Record<string, string> = {
+  draft: 'Draft',
+  submitted: 'Submitted',
+  accepted: 'Accepted',
+  open: 'Open',
+  partial: 'Partial',
+  filled: 'Filled',
+  cancel_pending: 'Cancelling',
+  cancelled: 'Cancelled',
+  replace_pending: 'Replacing',
+  halted_open: 'Halted',
+  expired: 'Expired',
+  rejected: 'Rejected',
+  // Legacy compat — map old status to display label
+  partially_filled: 'Partial',
+};
+
+function statusLabel(status: string): string {
+  return STATUS_LABELS[status] ?? status;
+}
 
 interface OrderHistoryRowProps {
   id: string;
@@ -38,15 +60,24 @@ function resolveSideColor(side: OrderSide): string {
   return side === 'buy' ? Colors.brand : Colors.textSecondary;
 }
 
-function resolveStatusTone(status: OrderStatus) {
+function resolveStatusTone(status: string) {
   switch (status) {
     case 'filled':
       return 'positive' as const;
     case 'open':
+    case 'accepted':
+    case 'submitted':
       return 'warning' as const;
+    case 'partial':
     case 'partially_filled':
+    case 'replace_pending':
       return 'accent' as const;
+    case 'cancel_pending':
+    case 'halted_open':
+      return 'warning' as const;
     case 'cancelled':
+    case 'expired':
+    case 'draft':
       return 'neutral' as const;
     case 'rejected':
       return 'negative' as const;
@@ -99,7 +130,7 @@ export function OrderHistoryRow({
           <BodyEmphasis style={styles.title} numberOfLines={1}>
             {assetTitle}
           </BodyEmphasis>
-          <AppStatusPill tone={resolveStatusTone(status)} label={status} size="sm" />
+          <AppStatusPill tone={resolveStatusTone(status)} label={statusLabel(status)} size="sm" />
         </View>
 
         <View style={styles.metaRow}>

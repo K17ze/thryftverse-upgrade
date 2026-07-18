@@ -26,6 +26,7 @@ import { parseApiError } from '../lib/apiClient';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { haptics } from '../utils/haptics';
 import { CoOwnMarketHeader, CoOwnStateCanvas } from '../components/coown';
+import type { OrderStatus } from '../data/coOwnModels';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -42,7 +43,7 @@ interface HistoryEntry {
   pricePerShare: number;
   totalAmount: number;
   fee: number;
-  status: 'open' | 'partially_filled' | 'filled' | 'cancelled' | 'rejected';
+  status: OrderStatus;
   filledQuantity: number;
   createdAt: string;
   source: 'seeded' | 'ledger' | 'backend';
@@ -83,8 +84,11 @@ function mapRemoteHistoryToEntries(history: MarketHistoryItem[]): HistoryEntry[]
       const quantity = Math.max(0, item.units ?? 0);
       const pricePerShare = item.unitPriceGbp ?? (quantity > 0 ? Number((item.amountGbp / quantity).toFixed(4)) : 0);
       const rawStatus = item.status;
+      // Map backend status to canonical OrderStatus. If the backend sends
+      // a legacy 'partially_filled', map it to 'partial' (canonical).
       const status: HistoryEntry['status'] =
-        rawStatus === 'open' || rawStatus === 'partially_filled' || rawStatus === 'filled' || rawStatus === 'cancelled' || rawStatus === 'rejected'
+        rawStatus === 'partially_filled' ? 'partial'
+        : rawStatus === 'open' || rawStatus === 'filled' || rawStatus === 'cancelled' || rawStatus === 'rejected'
           ? rawStatus
           : 'open';
       return {
