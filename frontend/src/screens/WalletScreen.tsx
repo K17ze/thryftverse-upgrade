@@ -53,8 +53,8 @@ type Props = StackScreenProps<RootStackParamList, 'Wallet'>;
 /** Add-flow mode: 'load' converts external fiat → 1ZE; 'buy' uses fiat balance → 1ZE. */
 type AddMode = 'load' | 'buy';
 
-const LOAD_IZE_FEE_RATE = 0.01;       // 1% platform spread on external load
-const CONVERT_FEE_RATE = 0.005;       // 0.5% fee on 1ZE → fiat redemption
+// Fee rates sourced from the central config in tradeFlow.ts (single source of truth)
+import { CO_OWN_LOAD_FEE_RATE as LOAD_IZE_FEE_RATE, CO_OWN_CONVERT_FEE_RATE as CONVERT_FEE_RATE } from '../utils/tradeFlow';
 
 export default function WalletScreen({ navigation }: Props) {
   const { colors, isDark } = useAppTheme();
@@ -73,6 +73,13 @@ export default function WalletScreen({ navigation }: Props) {
     otherHolds: 0,
     pendingDeposit: 0,
     unsettledSaleProceeds: 0,
+    settledCustomerClaim: 0,
+    withdrawable: 0,
+    safeguarded: false,
+    safeguardingPartner: undefined,
+    snapshotSequence: 0,
+    serverTimestamp: '',
+    reconciliationState: 'reconciled',
   });
   // Fiat balance kept in parallel for the "Buy 1ZE with fiat balance" flow.
   const [availableFiatBalance, setAvailableFiatBalance] = useState(0);
@@ -682,8 +689,19 @@ export default function WalletScreen({ navigation }: Props) {
             <Text style={[styles.infoTitle, { color: colors.textPrimary }]}>Safeguarding & redemption</Text>
           </View>
           <Text style={[styles.infoBody, { color: colors.textMuted }]}>
-            Customer 1ZE is safeguarded at our banking partner. Redemption to {currencyCode} typically
+            Customer 1ZE is safeguarded{balance.safeguardingPartner ? ` at ${balance.safeguardingPartner}` : ' at our banking partner'}. Redemption to {currencyCode} typically
             settles same business day for amounts under £X; larger amounts settle T+1.
+          </Text>
+        </View>
+
+        {/* ── 1ZE disclosure — what 1ZE is, per research doc §1.1 ── */}
+        <View style={[styles.infoCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.infoHeader}>
+            <Ionicons name="information-circle-outline" size={15} color={colors.textSecondary} />
+            <Text style={[styles.infoTitle, { color: colors.textPrimary }]}>About 1ZE</Text>
+          </View>
+          <Text style={[styles.infoBody, { color: colors.textMuted }]}>
+            1ZE is the platform's single settlement unit for Co-Own transactions. Its value is derived from live gold rates and may fluctuate. 1ZE is not a cryptocurrency or investment product — it is the medium through which Co-Own units are priced, traded and settled.
           </Text>
         </View>
 

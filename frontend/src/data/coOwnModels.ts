@@ -32,7 +32,53 @@ export interface ShareHolding {
 
 export type OrderSide = 'buy' | 'sell';
 export type OrderType = 'market' | 'limit';
-export type OrderStatus = 'pending' | 'filled' | 'partial' | 'cancelled';
+
+/**
+ * Full order lifecycle state machine per spec 10 §2.1-2.2.
+ *
+ *   draft → submitted → accepted → open → partial → filled
+ *                                            ├── cancel_pending → cancelled
+ *                                            └── (market halt) → halted_open → [reopen or cancelled]
+ *   submitted → rejected          (validation fail)
+ *   accepted  → rejected          (pre-trade risk fail)
+ *   open      → expired           (GFD end-of-session / GTT timeout)
+ *
+ * Terminal states: filled, cancelled, expired, rejected (immutable).
+ */
+export type OrderStatus =
+  | 'draft'
+  | 'submitted'
+  | 'accepted'
+  | 'open'
+  | 'partial'
+  | 'filled'
+  | 'cancel_pending'
+  | 'cancelled'
+  | 'replace_pending'
+  | 'halted_open'
+  | 'expired'
+  | 'rejected';
+
+/**
+ * Settlement lifecycle per spec 10 §3.1.
+ *
+ *   matched → confirmed → settlement_pending → settled
+ *                │              ├── settlement_failed → [retry or reversed]
+ *                └── broken     └── reversed
+ *                                   └── corrected (compensating entries)
+ *
+ * "Executed" = matched/confirmed/settlement_pending (not yet owned).
+ * "Owned" = settled (legally/economically effective).
+ */
+export type TradeSettlementStatus =
+  | 'matched'
+  | 'confirmed'
+  | 'settlement_pending'
+  | 'settled'
+  | 'settlement_failed'
+  | 'reversed'
+  | 'corrected'
+  | 'broken';
 
 export interface TradeOrder {
   id: string;
@@ -48,6 +94,15 @@ export interface TradeOrder {
   filledQuantity: number;
   createdAt: string;
   filledAt?: string;
+  /** Settlement lifecycle per spec 10 §3.1. Optional — fail closed when backend doesn't expose. */
+  settlementStatus?: TradeSettlementStatus;
+  /** Settled quantity vs pending settlement (spec 10 §3.5). settledQty + pendingSettlementQty = filledQuantity. */
+  settledQty?: number;
+  pendingSettlementQty?: number;
+  /** Idempotency key supplied by client (spec 10 §1). */
+  idempotencyKey?: string;
+  /** Rejection reason if status === 'rejected'. */
+  rejectionReason?: string;
 }
 
 export interface OrderBookEntry {

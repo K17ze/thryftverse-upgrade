@@ -58,12 +58,16 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
     setIsSubmitting(true);
 
     try {
+      // Generate a client-side idempotency key per spec 10 §1.
+      // This prevents duplicate order submissions on network retry.
+      const idempotencyKey = `${currentUser.id}-${assetId}-${side}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const remoteOrder = await placeCoOwnOrder(assetId, {
         userId: currentUser.id,
         side,
         units: quantity,
         orderType: orderMode,
         limitPriceGbp,
+        idempotencyKey,
       });
 
       if (remoteOrder.order.status === 'rejected') {

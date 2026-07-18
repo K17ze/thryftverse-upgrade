@@ -37,6 +37,14 @@ import { useConnectivity } from '../hooks/useConnectivity';
 type NavT = StackNavigationProp<RootStackParamList>;
 
 type SortOption = 'newest' | 'available' | 'allocation';
+type HubSegment = 'active' | 'auctions' | 'new_issues' | 'watchlist';
+
+const SEGMENT_LABELS: Record<HubSegment, string> = {
+  active: 'Active',
+  auctions: 'Auctions',
+  new_issues: 'New issues',
+  watchlist: 'Watchlist',
+};
 
 interface HubAsset {
   id: string;
@@ -78,6 +86,7 @@ export default function CoOwnHubScreen() {
 
   const [query, setQuery] = React.useState('');
   const [sortBy, setSortBy] = React.useState<SortOption>('newest');
+  const [activeSegment, setActiveSegment] = React.useState<HubSegment>('active');
   const [remoteAssets, setRemoteAssets] = React.useState<HubAsset[]>([]);
   const [holdings, setHoldings] = React.useState<Map<string, { units: number; avgEntry: number; realized: number }>>(new Map());
   const [isSyncing, setIsSyncing] = React.useState(true);
@@ -357,6 +366,65 @@ export default function CoOwnHubScreen() {
 
       <CoOwnOfflineBanner isOffline={isOffline} />
       <CoOwnReconciliationBanner isActive={false} />
+
+      {/* Market-status banner — spec 03 §1.2: exchange session state across all listed instruments.
+          Thin, only shown when there are open or auction instruments. Hide if all closed. */}
+      {!isSearching && marketContext.openItems > 0 && (
+        <View style={[styles.marketStatusBanner, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+          <View style={[styles.marketStatusDot, { backgroundColor: colors.success }]} />
+          <Text style={[styles.marketStatusText, { color: colors.textSecondary }]} numberOfLines={1}>
+            Continuous · {marketContext.openItems} {marketContext.openItems === 1 ? 'instrument' : 'instruments'} live
+          </Text>
+        </View>
+      )}
+
+      {/* Segment rail — spec 03 §1.3: Active · Auctions · New issues · Watchlist */}
+      {!isSearching && (
+        <View style={[styles.segmentRail, { borderBottomColor: colors.border }]}>
+          {(['active', 'auctions', 'new_issues', 'watchlist'] as HubSegment[]).map((seg) => {
+            // Auctions and Watchlist tabs — truthfully show count or disable
+            const segCount = seg === 'active'
+              ? marketAssets.filter((a) => a.isOpen && a.availableUnits > 0).length
+              : seg === 'new_issues'
+                ? marketAssets.filter((a) => {
+                    const created = new Date(a.createdAt ?? 0);
+                    const daysSince = (Date.now() - created.getTime()) / (1000 * 60 * 60 * 24);
+                    return daysSince <= 7;
+                  }).length
+                : seg === 'watchlist'
+                  ? 0 // Watchlist not yet implemented — truthful zero
+                  : 0; // Auctions not yet implemented — truthful zero
+            const isDisabled = seg === 'auctions' && segCount === 0;
+            const isActive = activeSegment === seg;
+            return (
+              <AnimatedPressable
+                key={seg}
+                onPress={() => {
+                  if (isDisabled) return;
+                  haptics.selection();
+                  setActiveSegment(seg);
+                }}
+                style={styles.segmentTab}
+                accessibilityRole="button"
+                accessibilityLabel={`${SEGMENT_LABELS[seg]} tab${segCount > 0 ? `, ${segCount} items` : ''}`}
+                accessibilityState={{ selected: isActive, disabled: isDisabled }}
+                disabled={isDisabled}
+              >
+                <Text style={[
+                  styles.segmentTabText,
+                  {
+                    color: isActive ? colors.textPrimary : isDisabled ? colors.textMuted : colors.textSecondary,
+                    fontFamily: isActive ? Typography.family.semibold : Typography.family.regular,
+                  },
+                ]} numberOfLines={1}>
+                  {SEGMENT_LABELS[seg]}
+                </Text>
+                {isActive && <View style={[styles.segmentIndicator, { backgroundColor: colors.textPrimary }]} />}
+              </AnimatedPressable>
+            );
+          })}
+        </View>
+      )}
 
       <FlashList
         key={`hub-grid-${gridColumns}`}
@@ -717,6 +785,50 @@ const styles = StyleSheet.create({
   },
   searchWrap: {
     marginBottom: Space.md,
+  },
+  // ── Market-status banner (spec 03 §1.2) ──
+  marketStatusBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  marketStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  marketStatusText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.caption.letterSpacing,
+  },
+  // ── Segment rail (spec 03 §1.3) ──
+  segmentRail: {
+    flexDirection: 'row',
+    paddingHorizontal: Space.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  segmentTab: {
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.sm,
+    marginRight: Space.sm,
+    alignItems: 'center',
+    position: 'relative',
+  },
+  segmentTabText: {
+    fontSize: Type.body.size,
+    letterSpacing: Type.body.letterSpacing,
+  },
+  segmentIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    left: Space.sm,
+    right: Space.sm,
+    height: 2,
+    borderRadius: 1,
   },
   sortRow: {
     flexDirection: 'row',

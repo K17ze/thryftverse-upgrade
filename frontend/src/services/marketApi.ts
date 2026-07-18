@@ -393,6 +393,8 @@ interface PlaceCoOwnOrderInput {
   units: number;
   orderType?: 'market' | 'limit';
   limitPriceGbp?: number;
+  /** Client-supplied idempotency key per spec 10 §1. Prevents duplicate orders on retry. */
+  idempotencyKey?: string;
 }
 
 interface CreateCoOwnBuyoutOfferInput {

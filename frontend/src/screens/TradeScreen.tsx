@@ -44,6 +44,8 @@ import {
   CoOwnConciergeCTA,
   CoOwnOfflineBanner,
   CoOwnReconciliationBanner,
+  CANONICAL_RIGHTS_LABELS,
+  type CoOwnRightsRow,
   type CoOwnTicketOrderType,
   type CoOwnTicketDuration,
 } from '../components/coown';
@@ -130,6 +132,17 @@ export default function TradeScreen() {
   const marketPrice = asset ? asset.unitPriceGbp : 0;
   const orderMode = offerPriceInput.trim().length > 0 ? 'limit' : 'market';
 
+  // Spec 10 §9.3: "TBC only for prelaunch preview; blocks trading on live."
+  // If any rights row is TBC, trading is blocked — even if navigated directly.
+  const hasIncompleteRights = React.useMemo(() => {
+    if (!asset) return false;
+    const rightsRows = CANONICAL_RIGHTS_LABELS.map((label) => {
+      const row = (asset.rightsRows as CoOwnRightsRow[] | undefined)?.find((r) => r.label === label);
+      return row ?? { label, answer: 'To be confirmed', isTbc: true };
+    });
+    return rightsRows.some((r) => r.isTbc);
+  }, [asset]);
+
   const quote = React.useMemo(
     () => buildTradeQuote({ orderMode, side, quantityInput, limitPriceInput: offerPriceInput, marketPrice }),
     [marketPrice, offerPriceInput, orderMode, quantityInput, side]
@@ -173,7 +186,7 @@ export default function TradeScreen() {
   }, [side, quote.quantity, yourUnits, asset?.totalUnits]);
 
   const eligibility = asset ? checkCoOwnEligibility(asset.settlementMode) : { ok: false, message: 'Asset not found' };
-  const canSubmit = isTradeSubmitEnabled({ assetFound: !!asset, eligibility, quote });
+  const canSubmit = isTradeSubmitEnabled({ assetFound: !!asset, eligibility, quote }) && !hasIncompleteRights;
 
   // Thin market: no opposite side → substitute "Review order" with "Request quote"
   const isThinMarket = (side === 'buy' && simulatedBook.asks.length === 0)
@@ -294,6 +307,21 @@ export default function TradeScreen() {
                 <Text style={[styles.alertTitle, { color: colors.danger }]}>Trading restricted</Text>
               </View>
               <Text style={[styles.alertText, { color: colors.textSecondary }]}>{eligibility.message}</Text>
+            </View>
+          </Reanimated.View>
+        )}
+
+        {/* Rights incomplete alert — spec 10 §9.3: TBC blocks trading on live instruments */}
+        {hasIncompleteRights && (
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(70)}>
+            <View style={[styles.alertCard, { backgroundColor: colors.warning + '12', borderColor: colors.warning + '40' }]}>
+              <View style={styles.alertRow}>
+                <Ionicons name="document-text-outline" size={16} color={colors.warning} />
+                <Text style={[styles.alertTitle, { color: colors.warning }]}>Rights incomplete</Text>
+              </View>
+              <Text style={[styles.alertText, { color: colors.textSecondary }]}>
+                This instrument has rights rows marked "To be confirmed". Trading is blocked until all rights are confirmed.
+              </Text>
             </View>
           </Reanimated.View>
         )}

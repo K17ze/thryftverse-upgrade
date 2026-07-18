@@ -3,6 +3,14 @@ import { sanitizeDecimalInput, sanitizeIntegerInput } from './currencyAuthoringF
 export const CO_OWN_FEE_RATE = 0.01;
 export const CO_OWN_MAX_UNITS = 20;
 
+// ── Wallet fee rates — single source of truth for all fee percentages ──
+/** 1% platform fee on Co-Own trades (buy/sell). */
+export const CO_OWN_TRADE_FEE_RATE = 0.01;
+/** 1% platform spread on external load (fiat → 1ZE). */
+export const CO_OWN_LOAD_FEE_RATE = 0.01;
+/** 0.5% fee on 1ZE → fiat redemption. */
+export const CO_OWN_CONVERT_FEE_RATE = 0.005;
+
 export type TradeOrderMode = 'market' | 'limit';
 export type TradeSide = 'buy' | 'sell';
 

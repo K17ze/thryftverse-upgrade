@@ -493,8 +493,18 @@ export default function AssetDetailScreen() {
             holderCount={asset.holders}
             status={asset.isOpen ? (availableUnits > 0 ? 'open' : 'closed') : 'paused'}
             supply={{
+              // Per spec 10 §3.2 supply equation:
+              //   authorised >= issued = investorSettled + sponsorLocked + treasury
+              //   publicFloat = investorSettled - transferRestricted - locked
+              // Backend exposes totalUnits (issued) and availableUnits (treasury/unsold).
+              // authorised = totalUnits (backend doesn't distinguish authorised vs issued yet)
+              // issued = totalUnits (all units are issued)
+              // treasury = availableUnits (issued but held by vehicle for sale)
+              // investorSettled = totalUnits - availableUnits (sold to investors)
+              // publicFloat = totalUnits - availableUnits (investor-held, freely tradable)
+              // sponsorLocked = 0 (not exposed by backend — fail closed)
               authorised: totalUnits,
-              issued: totalUnits - availableUnits,
+              issued: totalUnits,
               publicFloat: totalUnits - availableUnits,
               sponsorLocked: 0,
               treasury: availableUnits,
@@ -682,6 +692,82 @@ export default function AssetDetailScreen() {
             )}
             <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
           </Pressable>
+        </Reanimated.View>
+
+        {/* Valuation provenance — spec 10 §8.1: every displayed valuation exposes
+            method, valuer, date, range. Fails closed with "—" when backend
+            doesn't expose. Never presents appraisal as executable market price. */}
+        <Reanimated.View
+          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(230)}
+          style={styles.sectionWrap}
+        >
+          <View style={[styles.valuationCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.valuationTitle, { color: colors.textPrimary }]}>Valuation</Text>
+            <View style={styles.valuationGrid}>
+              <View style={styles.valuationRow}>
+                <Text style={[styles.valuationLabel, { color: colors.textMuted }]}>Method</Text>
+                <Text style={[styles.valuationValue, { color: colors.textSecondary }]}>
+                  {asset.appraisalMethod ?? '—'}
+                </Text>
+              </View>
+              <View style={styles.valuationRow}>
+                <Text style={[styles.valuationLabel, { color: colors.textMuted }]}>Valuer</Text>
+                <Text style={[styles.valuationValue, { color: colors.textSecondary }]}>
+                  {asset.appraisalValuer ?? '—'}
+                </Text>
+              </View>
+              <View style={styles.valuationRow}>
+                <Text style={[styles.valuationLabel, { color: colors.textMuted }]}>Effective date</Text>
+                <Text style={[styles.valuationValue, { color: colors.textSecondary }]}>
+                  {asset.appraisalValuedAt ?? '—'}
+                </Text>
+              </View>
+              <View style={styles.valuationRow}>
+                <Text style={[styles.valuationLabel, { color: colors.textMuted }]}>Next review</Text>
+                <Text style={[styles.valuationValue, { color: colors.textSecondary }]}>
+                  {asset.appraisalNextScheduled ?? '—'}
+                </Text>
+              </View>
+              <View style={[styles.valuationRow, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: Space.xs, marginTop: Space.xs }]}>
+                <Text style={[styles.valuationLabel, { color: colors.textMuted }]}>NAV/unit</Text>
+                <Text style={[styles.valuationValue, { color: colors.textPrimary, fontFamily: Typography.family.semibold }]}>
+                  {asset.appraisalValue ? `${formatFromFiat(asset.appraisalValue / totalUnits, 'GBP')}` : '—'}
+                </Text>
+              </View>
+              <View style={styles.valuationRow}>
+                <Text style={[styles.valuationLabel, { color: colors.textMuted }]}>Range</Text>
+                <Text style={[styles.valuationValue, { color: colors.textSecondary }]}>
+                  {asset.appraisalRangeLow && asset.appraisalRangeHigh
+                    ? `${formatFromFiat(asset.appraisalRangeLow, 'GBP')} – ${formatFromFiat(asset.appraisalRangeHigh, 'GBP')}`
+                    : '—'}
+                </Text>
+              </View>
+              <View style={styles.valuationRow}>
+                <Text style={[styles.valuationLabel, { color: colors.textMuted }]}>Last trade</Text>
+                <Text style={[styles.valuationValue, { color: colors.textSecondary }]}>
+                  {formatFromFiat(asset.unitPriceGbp, 'GBP')}
+                </Text>
+              </View>
+              {asset.appraisalValue && totalUnits > 0 && (
+                <View style={styles.valuationRow}>
+                  <Text style={[styles.valuationLabel, { color: colors.textMuted }]}>Premium/Discount</Text>
+                  <Text style={[
+                    styles.valuationValue,
+                    { color: asset.unitPriceGbp > (asset.appraisalValue / totalUnits) ? colors.success : colors.danger },
+                  ]}>
+                    {(() => {
+                      const navPerUnit = asset.appraisalValue / totalUnits;
+                      const pct = ((asset.unitPriceGbp - navPerUnit) / navPerUnit) * 100;
+                      return `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}% vs NAV`;
+                    })()}
+                  </Text>
+                </View>
+              )}
+            </View>
+            <Text style={[styles.valuationNote, { color: colors.textMuted }]}>
+              NAV is an appraisal, not an executable price. Last trade is the only executable price.
+            </Text>
+          </View>
         </Reanimated.View>
 
         {/* Risk disclosure — honest limitations */}
@@ -1289,6 +1375,46 @@ const styles = StyleSheet.create({
   dockPrimaryBtnStacked: {
     flex: 0,
     width: '100%',
+  },
+  // ── Valuation provenance (spec 10 §8.1) ──
+  valuationCard: {
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Space.md,
+  },
+  valuationTitle: {
+    fontSize: Type.subtitle.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: -0.3,
+    marginBottom: Space.sm,
+  },
+  valuationGrid: {
+    gap: Space.xs,
+  },
+  valuationRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 2,
+  },
+  valuationLabel: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.caption.letterSpacing,
+  },
+  valuationValue: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.medium,
+    letterSpacing: Type.body.letterSpacing,
+    fontVariant: ['tabular-nums'],
+    textAlign: 'right',
+  },
+  valuationNote: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.caption.letterSpacing,
+    marginTop: Space.sm,
+    fontStyle: 'italic',
   },
   // ── Rights & risks entry ──
   rightsEntry: {
