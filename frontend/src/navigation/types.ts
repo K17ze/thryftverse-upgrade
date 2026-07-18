@@ -46,6 +46,17 @@ export type RootStackParamList = {
   AssetLeaderboard: undefined;
   Buyout: { assetId: string };
   CoOwnOnboarding: undefined;
+  CorporateActionDetail: {
+    assetId: string;
+    actionType: string;
+    dateLabel: string;
+    effectLabel: string;
+    amountLabel?: string;
+    status: string;
+    recordDateLabel?: string;
+    paymentDateLabel?: string;
+  };
+  DistributionHistory: { assetId?: string } | undefined;
   Chat: {
     conversationId: string;
     focusQuery?: string;

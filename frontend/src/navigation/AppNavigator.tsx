@@ -37,6 +37,8 @@ import BundleBagScreen from '../screens/BundleBagScreen';
 import CoOwnOrderHistoryScreen from '../screens/SyndicateOrderHistoryScreen';
 import AssetLeaderboardScreen from '../screens/AssetLeaderboardScreen';
 import BuyoutScreen from '../screens/BuyoutScreen';
+import CorporateActionDetailScreen from '../screens/CorporateActionDetailScreen';
+import DistributionHistoryScreen from '../screens/DistributionHistoryScreen';
 import CoOwnOnboardingScreen from '../screens/SyndicateOnboardingScreen';
 import ChatScreen from '../screens/ChatScreen';
 import CreateGroupChatScreen from '../screens/CreateGroupChatScreen';
@@ -250,6 +252,8 @@ export default function AppNavigator() {
       <Stack.Screen name="CoOwnOrderHistory" component={CoOwnOrderHistoryScreen} />
       <Stack.Screen name="AssetLeaderboard" component={AssetLeaderboardScreen} />
       <Stack.Screen name="Buyout" component={BuyoutScreen} />
+      <Stack.Screen name="CorporateActionDetail" component={CorporateActionDetailScreen} />
+      <Stack.Screen name="DistributionHistory" component={DistributionHistoryScreen} />
       <Stack.Screen name="CoOwnOnboarding" component={CoOwnOnboardingScreen} options={modalScreenOptions} />
       <Stack.Screen name="Chat" component={ChatScreen} />
       <Stack.Screen name="CreateGroupChat" component={CreateGroupChatScreen} options={modalScreenOptions} />

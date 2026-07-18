@@ -26,6 +26,16 @@ export interface CoOwnPositionVM {
   isOpen: boolean;
   status: 'open' | 'closed' | 'paused';
   createdAt: string;
+  /** Position state split per spec 10 §3.3. Optional — fail closed (all settled) when backend doesn't expose. */
+  positionState?: {
+    settled: number;
+    reservedForSale: number;
+    pendingIn: number;
+    pendingOut: number;
+    outstandingUnits: number;
+  };
+  /** Settlement state for pending units per spec 10 §3.3. */
+  settlementState?: 'settling' | 'settled';
 }
 
 export interface CoOwnPortfolioSummary {

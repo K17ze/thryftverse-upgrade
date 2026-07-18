@@ -223,6 +223,11 @@ export default function PortfolioScreen() {
       icon: 'receipt-outline',
       onPress: () => navigation.navigate('CoOwnOrderHistory'),
     });
+    actions.push({
+      label: 'Distribution history',
+      icon: 'cash-outline',
+      onPress: () => navigation.navigate('DistributionHistory', { assetId: p.assetId }),
+    });
     return actions;
   }, [actionSheetAsset, navigation]);
 
@@ -259,6 +264,8 @@ export default function PortfolioScreen() {
           onBuyMore={() => handleBuyMore(item)}
           onSell={() => handleSell(item)}
           index={index}
+          positionState={item.positionState}
+          settlementState={item.settlementState}
         />
       </Reanimated.View>
     );
@@ -643,15 +650,26 @@ export default function PortfolioScreen() {
             {/* Section header */}
             <View style={styles.sectionRow}>
               <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Your positions</Text>
-              <AnimatedPressable
-                onPress={() => { haptics.tap(); navigation.navigate('AssetLeaderboard'); }}
-                accessibilityRole="button"
-                accessibilityLabel="Open asset leaderboards"
-                scaleValue={0.96}
-                hapticFeedback="light"
-              >
-                <Text style={[styles.sectionLink, { color: colors.textSecondary }]}>Leaderboards</Text>
-              </AnimatedPressable>
+              <View style={styles.sectionActions}>
+                <AnimatedPressable
+                  onPress={() => { haptics.tap(); navigation.navigate('DistributionHistory', {}); }}
+                  accessibilityRole="button"
+                  accessibilityLabel="View distribution history"
+                  scaleValue={0.96}
+                  hapticFeedback="light"
+                >
+                  <Text style={[styles.sectionLink, { color: colors.textSecondary }]}>Distributions</Text>
+                </AnimatedPressable>
+                <AnimatedPressable
+                  onPress={() => { haptics.tap(); navigation.navigate('AssetLeaderboard'); }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Open asset leaderboards"
+                  scaleValue={0.96}
+                  hapticFeedback="light"
+                >
+                  <Text style={[styles.sectionLink, { color: colors.textSecondary }]}>Leaderboards</Text>
+                </AnimatedPressable>
+              </View>
             </View>
           </View>
         }
@@ -811,6 +829,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: Space.md,
+  },
+  sectionActions: {
+    flexDirection: 'row',
+    gap: Space.md,
   },
   realisedCard: {
     borderRadius: Radius.lg,
