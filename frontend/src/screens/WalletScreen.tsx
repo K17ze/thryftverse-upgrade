@@ -626,7 +626,7 @@ export default function WalletScreen({ navigation }: Props) {
               <Text style={[styles.flowTitle, { color: colors.textPrimary }]}>Redeem 1ZE</Text>
             </View>
             <Text style={[styles.flowHint, { color: colors.textMuted }]}>
-              Convert your 1ZE to {currencyCode} for withdrawal. Redemption typically settles same business day.
+              Convert your 1ZE to {currencyCode} for withdrawal. Settlement details are confirmed at the time of each request.
             </Text>
 
             <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Amount in 1ZE</Text>
@@ -689,8 +689,9 @@ export default function WalletScreen({ navigation }: Props) {
             <Text style={[styles.infoTitle, { color: colors.textPrimary }]}>Safeguarding & redemption</Text>
           </View>
           <Text style={[styles.infoBody, { color: colors.textMuted }]}>
-            Customer 1ZE is safeguarded{balance.safeguardingPartner ? ` at ${balance.safeguardingPartner}` : ' at our banking partner'}. Redemption to {currencyCode} typically
-            settles same business day for amounts under £X; larger amounts settle T+1.
+            {balance.safeguarded
+              ? `Customer 1ZE is safeguarded${balance.safeguardingPartner ? ` at ${balance.safeguardingPartner}` : ''}. Redemption to ${currencyCode} settlement details are confirmed at the time of each request.`
+              : `Customer 1ZE safeguarding is being finalised. Redemption to ${currencyCode} will be available once safeguarding is confirmed.`}
           </Text>
         </View>
 

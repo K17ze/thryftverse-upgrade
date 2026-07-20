@@ -6,7 +6,7 @@ import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 import { CoOwnNumericText } from '../ui/CoOwnNumericText';
 import type { CoOwnPositionState } from '../../data/coOwnModels';
 
-export type CoOwnSettlementMode = 'GBP' | 'TVUSD' | 'HYBRID';
+export type CoOwnSettlementMode = 'GBP' | 'TVUSD' | 'HYBRID' | 'ONEZE';
 
 /** Supply buckets — the instrument series structure (§01 §3). */
 export interface CoOwnSupplyBuckets {
@@ -62,7 +62,10 @@ export function CoOwnOwnershipPanel({
 }: CoOwnOwnershipPanelProps) {
   const { colors } = useAppTheme();
 
-  const settlementLabel = settlementMode === 'GBP' ? 'GBP' : settlementMode === 'TVUSD' ? 'TVUSD' : 'GBP + TVUSD';
+  const settlementLabel = settlementMode === 'GBP' ? 'GBP'
+    : settlementMode === 'TVUSD' ? 'TVUSD'
+    : settlementMode === 'ONEZE' ? '1ZE'
+    : 'GBP + TVUSD';
   const statusLabel = status === 'open' ? 'Available' : status === 'paused' ? 'Paused' : 'Fully allocated';
   const statusColor = status === 'open' ? colors.success : status === 'paused' ? colors.textSecondary : colors.textMuted;
 
@@ -84,7 +87,12 @@ export function CoOwnOwnershipPanel({
       accessibilityLabel={`Ownership panel. ${statusLabel}. ${allocatedPct}% allocated, ${availableUnits} units left. ${viewerSettled > 0 ? `You own ${viewerSettled} settled units, ${computedViewerPct.toFixed(2)}% of ${outstandingDenom.toLocaleString('en-GB')} outstanding.` : ''}${rightsVersion ? ` Rights version ${rightsVersion}.` : ''}`}
     >
       <View style={styles.headerRow}>
-        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Ownership</Text>
+        <View style={styles.headerLeft}>
+          <Text style={[styles.sectionEyebrow, { color: colors.textMuted }]} numberOfLines={1}>
+            OWNERSHIP
+          </Text>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Your stake</Text>
+        </View>
         <View style={styles.headerRight}>
           {rightsVersion && (
             <View style={[styles.rightsBadge, { backgroundColor: colors.surfaceAlt }]}>
@@ -269,19 +277,31 @@ function ViewerStat({
 const styles = StyleSheet.create({
   root: {
     borderRadius: Radius.lg,
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
     gap: Space.md,
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-end',
+  },
+  headerLeft: {
+    gap: 2,
+    flex: 1,
+    minWidth: 0,
+  },
+  sectionEyebrow: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: 1.0,
+    textTransform: 'uppercase',
   },
   sectionTitle: {
-    fontSize: Type.subtitle.size,
+    fontSize: Type.title.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: -0.3,
+    letterSpacing: -0.4,
+    lineHeight: Type.title.lineHeight,
   },
   statusPill: {
     flexDirection: 'row',

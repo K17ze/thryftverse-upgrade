@@ -1,7 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, useWindowDimensions } from 'react-native';
+import { StyleSheet as RNStyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
@@ -39,10 +41,10 @@ export function CoOwnFeaturedAsset({
   index = 0,
 }: CoOwnFeaturedAssetProps) {
   const { colors } = useAppTheme();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const reducedMotion = useReducedMotion();
-  const imageHeight = Math.min(width * 0.7, 320);
-  const allocatedPct = totalUnits > 0 ? Math.round(((totalUnits - availableUnits) / totalUnits) * 100) : 0;
+  // Editorial hero: 60% of viewport height, capped at 420px for tablets
+  const heroHeight = Math.min(height * 0.6, 420);
 
   const statusLabel = status === 'open' ? 'Available' : status === 'paused' ? 'Paused' : 'Fully allocated';
   const statusColor = status === 'open' ? colors.success : status === 'paused' ? colors.textSecondary : colors.textMuted;
@@ -56,57 +58,56 @@ export function CoOwnFeaturedAsset({
       >
         <View style={styles.imageWrap}>
           {imageUri ? (
-            <CachedImage uri={imageUri} style={[styles.image, { height: imageHeight }]} contentFit="cover" transition={300} />
+            <CachedImage uri={imageUri} style={[styles.image, { height: heroHeight }]} contentFit="cover" transition={300} />
           ) : (
-            <View style={[styles.image, styles.imageFallback, { height: imageHeight, backgroundColor: colors.surfaceAlt }]}>
+            <View style={[styles.image, styles.imageFallback, { height: heroHeight, backgroundColor: colors.surfaceAlt }]}>
               <Ionicons name="image-outline" size={40} color={colors.textMuted} />
               <Text style={[styles.imageFallbackText, { color: colors.textMuted }]}>No photo yet</Text>
             </View>
           )}
-          <View style={[styles.statusOverlay, { backgroundColor: statusColor + 'E6' }]}>
-            <View style={[styles.statusDot, { backgroundColor: colors.background }]} />
-            <Text style={[styles.statusText, { color: colors.background }]} numberOfLines={1}>{statusLabel}</Text>
-          </View>
-        </View>
 
-        <View style={styles.content}>
-          {categoryEyebrow ? (
-            <Text style={[styles.eyebrow, { color: colors.textSecondary }]} numberOfLines={1}>{categoryEyebrow}</Text>
-          ) : null}
-          <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={2}>{title}</Text>
+          {/* Gradient overlay for text legibility on any image */}
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.45)', 'rgba(0,0,0,0.78)']}
+            locations={[0, 0.55, 1]}
+            style={styles.gradientOverlay}
+            pointerEvents="none"
+          />
 
-          <View style={styles.priceRow}>
-            <Text style={[styles.unitPrice, { color: colors.textPrimary }]} numberOfLines={1}>{unitPriceLabel}</Text>
-            <Text style={[styles.perUnit, { color: colors.textSecondary }]}>per unit</Text>
+          {/* Status chip — top-left, glassy, restrained */}
+          <View style={styles.statusOverlay}>
+            <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+            <Text style={styles.statusText} numberOfLines={1}>{statusLabel}</Text>
           </View>
 
-          <View style={styles.allocationRow}>
-            <View style={[styles.allocationBarBg, { backgroundColor: colors.surfaceAlt }]}>
-              <View style={[styles.allocationBarFill, { width: `${Math.min(allocatedPct, 100)}%`, backgroundColor: colors.brand }]} />
+          {/* Editorial content overlaid on image — bottom-left */}
+          <View style={styles.heroContent}>
+            {categoryEyebrow ? (
+              <Text style={styles.eyebrow} numberOfLines={1}>{categoryEyebrow}</Text>
+            ) : null}
+            <Text style={styles.title} numberOfLines={2}>{title}</Text>
+            <View style={styles.heroMetaRow}>
+              <Text style={styles.heroPriceLine} numberOfLines={1}>
+                From {unitPriceLabel}
+              </Text>
+              <Text style={styles.heroDivider}>·</Text>
+              <Text style={styles.heroAvailability} numberOfLines={1}>
+                {availableUnits} of {totalUnits} units
+              </Text>
             </View>
-            <Text style={[styles.allocationText, { color: colors.textSecondary }]} numberOfLines={1}>
-              {allocatedPct}% owned · {availableUnits} of {totalUnits} units available
-            </Text>
+
+            {onAction ? (
+              <Pressable
+                onPress={(e) => { e.stopPropagation(); onAction(); }}
+                style={styles.actionBtn}
+                accessibilityRole="button"
+                accessibilityLabel={actionLabel}
+              >
+                <Text style={styles.actionText}>{actionLabel}</Text>
+                <Ionicons name="arrow-forward" size={15} color="#FFFFFF" />
+              </Pressable>
+            ) : null}
           </View>
-
-          {issuerLabel ? (
-            <View style={styles.issuerRow}>
-              <Ionicons name="shield-checkmark-outline" size={14} color={colors.textSecondary} />
-              <Text style={[styles.issuerText, { color: colors.textSecondary }]} numberOfLines={1}>{issuerLabel}</Text>
-            </View>
-          ) : null}
-
-          {onAction ? (
-            <Pressable
-              onPress={(e) => { e.stopPropagation(); onAction(); }}
-              style={[styles.actionBtn, { backgroundColor: colors.brand }]}
-              accessibilityRole="button"
-              accessibilityLabel={actionLabel}
-            >
-              <Text style={[styles.actionText, { color: colors.background }]}>{actionLabel}</Text>
-              <Ionicons name="arrow-forward" size={16} color={colors.background} />
-            </Pressable>
-          ) : null}
         </View>
       </Pressable>
     </Reanimated.View>
@@ -133,6 +134,15 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.medium,
     letterSpacing: 0.2,
   },
+  // Gradient overlay for text legibility on any image
+  gradientOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: '60%',
+  },
+  // Glassy status chip — restrained, not a colored pill
   statusOverlay: {
     position: 'absolute',
     top: Space.sm,
@@ -141,93 +151,89 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 5,
     borderRadius: Radius.full,
+    backgroundColor: 'rgba(0,0,0,0.45)',
   },
   statusDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   statusText: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: 0.3,
+    color: 'rgba(255,255,255,0.95)',
   },
-  content: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.md,
+  // Editorial content overlaid on image — bottom-left
+  heroContent: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: Space.lg,
+    paddingTop: Space.xl,
     paddingBottom: Space.lg,
-    gap: Space.xs,
+    gap: 6,
   },
   eyebrow: {
     fontSize: Type.metaElevated.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: 0.8,
+    letterSpacing: 1.0,
     textTransform: 'uppercase',
+    color: 'rgba(255,255,255,0.85)',
   },
   title: {
     fontSize: Type.display.size,
     fontFamily: Typography.family.bold,
-    lineHeight: 36,
+    lineHeight: 34,
     letterSpacing: -0.5,
-    marginBottom: Space.xs,
+    color: '#FFFFFF',
+    marginBottom: 2,
   },
-  priceRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 6,
-    marginBottom: Space.sm,
-  },
-  unitPrice: {
-    fontSize: Type.priceLarge.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: -0.5,
-  },
-  perUnit: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-  },
-  allocationRow: {
-    gap: 6,
-    marginBottom: Space.sm,
-  },
-  allocationBarBg: {
-    height: 4,
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  allocationBarFill: {
-    height: 4,
-    borderRadius: 2,
-  },
-  allocationText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-  },
-  issuerRow: {
+  heroMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: Space.sm,
+    flexWrap: 'wrap',
+    marginBottom: Space.xs,
   },
-  issuerText: {
-    fontSize: Type.caption.size,
+  heroPriceLine: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    color: 'rgba(255,255,255,0.95)',
+    fontVariant: ['tabular-nums'],
+  },
+  heroDivider: {
+    fontSize: Type.body.size,
+    color: 'rgba(255,255,255,0.5)',
+  },
+  heroAvailability: {
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    flex: 1,
+    color: 'rgba(255,255,255,0.78)',
+    fontVariant: ['tabular-nums'],
   },
+  // Quieter action button — glassy outline, not a loud colored block
   actionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    minHeight: 48,
-    paddingVertical: Space.sm + 4,
-    borderRadius: Radius.lg,
-    marginTop: Space.xs,
+    gap: 6,
+    minHeight: 40,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.full,
+    marginTop: 4,
+    alignSelf: 'flex-start',
+    paddingHorizontal: Space.md + 2,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.28)',
   },
   actionText: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
+    color: '#FFFFFF',
   },
 });

@@ -81,7 +81,7 @@ export type { CoOwnMarketStatusStripProps } from './CoOwnMarketStatusStrip';
 export { CoOwnValueStrip } from './CoOwnValueStrip';
 export type { CoOwnValueStripProps } from './CoOwnValueStrip';
 export { CoOwnAssetDossier } from './CoOwnAssetDossier';
-export type { CoOwnAssetDossierProps, CoOwnDossierProvenanceEvent, CoOwnDossierCondition, CoOwnDossierCustody, CoOwnDossierAppraisal } from './CoOwnAssetDossier';
+export type { CoOwnAssetDossierProps, CoOwnDossierProvenanceEvent, CoOwnDossierCondition, CoOwnDossierStorage, CoOwnDossierAppraisal } from './CoOwnAssetDossier';
 export { CoOwnRightsSheet, CANONICAL_RIGHTS_LABELS } from './CoOwnRightsSheet';
 export type { CoOwnRightsSheetProps, CoOwnRightsRow } from './CoOwnRightsSheet';
 export { CoOwnWalletBreakdown } from './CoOwnWalletBreakdown';

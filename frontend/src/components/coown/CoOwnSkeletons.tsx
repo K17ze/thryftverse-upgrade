@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, StyleSheet, useWindowDimensions, DimensionValue } from 'react-native';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, ExchangeLayout } from '../../theme/designTokens';
 
@@ -7,7 +7,7 @@ import { Space, Radius, ExchangeLayout } from '../../theme/designTokens';
 // Deterministic, layout-matching placeholders. No random values.
 // Resemble the final layout shape so the loading → populated transition is smooth.
 
-function SkeletonBlock({ width, height, radius = Radius.md }: { width: number | string; height: number; radius?: number }) {
+function SkeletonBlock({ width, height, radius = Radius.md }: { width: DimensionValue; height: number; radius?: number }) {
   const { colors } = useAppTheme();
   return <View style={{ width, height, borderRadius: radius, backgroundColor: colors.surfaceAlt }} />;
 }

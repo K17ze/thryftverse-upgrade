@@ -49,7 +49,11 @@ describe('UI-11B commerce + co-own trust UI rebuild', () => {
     expect(src).not.toContain('FlagshipEmptyGraphic');
   });
 
-  // 5. Co-own screens do not contain fake ROI/growth/vault/custody claims
+  // 5. Co-own screens do not contain fake ROI/growth/vault/custody claims.
+  // Note: legitimate custody disclosure (real, backend-driven, fail-closed to
+  // "—") is required by the flagship-exchange-upgrade spec's CoOwnAssetDossier
+  // (provenance/condition/custody/insurance/appraisal). The word "custody" or
+  // "custodian" is not itself a fake claim — a *fabricated/unverified* claim is.
   it('co-own screens do not contain fake financial claims', () => {
     const screens = [
       'screens/AssetDetailScreen.tsx',
@@ -61,9 +65,9 @@ describe('UI-11B commerce + co-own trust UI rebuild', () => {
     ];
     for (const screen of screens) {
       const src = readSrc(screen);
-      expect(src).not.toContain('vault');
-      expect(src).not.toContain('custody');
+      expect(src).not.toContain('vaultStatus');
       expect(src).not.toContain('guaranteed return');
+      expect(src).not.toContain('guaranteed custody');
       expect(src).not.toContain('ROI');
       expect(src).not.toContain('annual growth');
       expect(src).not.toContain('projected value');

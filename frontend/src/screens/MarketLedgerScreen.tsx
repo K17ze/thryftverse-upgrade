@@ -371,7 +371,7 @@ const styles = StyleSheet.create({
     marginHorizontal: Space.md,
     marginBottom: Space.md,
     borderRadius: Radius.lg,
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
   },
   summaryStat: {

@@ -115,7 +115,7 @@ const styles = StyleSheet.create({
   root: {
     flexDirection: 'row',
     borderRadius: Radius.lg,
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     paddingVertical: Space.md,
   },
   item: {

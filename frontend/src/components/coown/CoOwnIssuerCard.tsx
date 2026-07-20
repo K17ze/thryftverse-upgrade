@@ -194,7 +194,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.md,
     borderRadius: Radius.lg,
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
   },
   avatarWrap: {

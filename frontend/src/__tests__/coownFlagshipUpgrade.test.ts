@@ -62,7 +62,10 @@ describe('COOWN-FLAGSHIP: Co-Own department flagship upgrade', () => {
 
     it('BuyoutScreen shows unavailable state', () => {
       const src = readSrc('screens/BuyoutScreen.tsx');
-      expect(src).toContain('not available');
+      // Asset-level exit is operator-initiated per rights, not a self-service
+      // buyout flow the backend doesn't support — the screen says so honestly.
+      expect(src).toContain('Asset-level exit');
+      expect(src).toContain('initiated by the vehicle operator');
     });
   });
 

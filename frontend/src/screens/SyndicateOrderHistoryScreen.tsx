@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, StatusBar, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, RefreshControl } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -238,7 +239,6 @@ export default function CoOwnOrderHistoryScreen() {
         showsVerticalScrollIndicator={false}
         onEndReached={() => void loadMoreRemoteHistory()}
         onEndReachedThreshold={0.5}
-        estimatedItemSize={92}
         renderItem={({ item, index }) => (
           <Reanimated.View
             entering={

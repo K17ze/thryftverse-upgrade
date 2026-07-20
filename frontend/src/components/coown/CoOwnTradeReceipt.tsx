@@ -313,7 +313,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.md,
     borderRadius: Radius.lg,
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
   },
   imageWrap: {
@@ -360,7 +360,7 @@ const styles = StyleSheet.create({
   },
   receiptCard: {
     borderRadius: Radius.lg,
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
     gap: 0,
   },
@@ -444,7 +444,7 @@ const styles = StyleSheet.create({
   // ── Phase 2.5: plain language card ──
   plainLanguageCard: {
     borderRadius: Radius.lg,
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
     gap: Space.xs,
   },

@@ -270,7 +270,8 @@ export default function TradeScreen() {
   const availableUnits = Math.max(0, asset.availableUnits);
   const sellableUnits = side === 'sell' ? yourUnits : availableUnits;
   const maxUnits = side === 'sell' ? yourUnits : availableUnits;
-  const settlementLabel = asset.settlementMode === 'GBP' ? 'GBP' : asset.settlementMode === 'TVUSD' ? 'TVUSD' : 'GBP + TVUSD';
+  // 1ZE is the canonical settlement unit. GBP/TVUSD are secondary references.
+  const settlementLabel = '1ZE';
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -345,6 +346,17 @@ export default function TradeScreen() {
           </Reanimated.View>
         )}
 
+        {/* Illustrative-data disclaimer — the order book, fill estimate, depth
+            and slippage figures below are derived from a local simulated book,
+            not live market data. They are illustrative only and do not represent
+            executable quotes. Authoritative preview requires server-side matching. */}
+        <View style={[styles.illustrativeBanner, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+          <Ionicons name="information-circle-outline" size={13} color={colors.textMuted} />
+          <Text style={[styles.illustrativeBannerText, { color: colors.textMuted }]} numberOfLines={2}>
+            Fill estimate, depth and slippage are illustrative only — not live market data.
+          </Text>
+        </View>
+
         {/* Trade composer — product identity, availability, quote, reservation, expandable details */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)}>
           <CoOwnTradeComposer
@@ -354,9 +366,9 @@ export default function TradeScreen() {
             mode={orderMode}
             units={quote.quantity}
             unitPriceLabel={formatFromFiat(marketPrice, 'GBP')}
-            grossLabel={<CoOwnNumericText value={quote.grossValue} unit="GBP" size="priceList" align="right" showUnit={false} />}
-            feeLabel={<CoOwnNumericText value={quote.fee} unit="GBP" size="priceList" align="right" showUnit={false} />}
-            totalLabel={<CoOwnNumericText value={quote.netValue} unit="GBP" size="priceLarge" align="right" showUnit={false} />}
+            grossLabel={<CoOwnNumericText value={quote.grossValue} unit="1ZE" size="priceList" align="right" showUnit={false} />}
+            feeLabel={<CoOwnNumericText value={quote.fee} unit="1ZE" size="priceList" align="right" showUnit={false} />}
+            totalLabel={<CoOwnNumericText value={quote.netValue} unit="1ZE" size="priceLarge" align="right" showUnit={false} />}
             totalCaption={side === 'buy' ? 'Including 1% fee' : 'After 1% fee'}
             settlementLabel={settlementLabel}
             availableUnits={availableUnits}
@@ -382,9 +394,13 @@ export default function TradeScreen() {
           />
         </Reanimated.View>
 
-        {/* Order-type selector — Protected instant / Limit */}
+        {/* ── Unified order ticket ──
+            One surface containing: order type, quantity, limit price, duration,
+            and market context. Previously these were separate cards forcing the
+            user to move between editable fields and the calculated result. */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(90)}>
-          <View style={[styles.inputCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={[styles.ticketCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            {/* Order type */}
             <Text style={[styles.inputLabel, { color: colors.textMuted }]}>Order type</Text>
             <AppSegmentControl
               options={ORDER_TYPE_OPTIONS}
@@ -397,113 +413,56 @@ export default function TradeScreen() {
                 ? 'Marketable limit with visible protection price. Never uncapped in an illiquid asset.'
                 : 'Resting order. Queued until matched at your limit price.'}
             </Text>
-          </View>
-        </Reanimated.View>
 
-        {/* Duration selector — only for limit orders */}
-        {ticketOrderType === 'limit' && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(100)}>
-            <View style={[styles.inputCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <Text style={[styles.inputLabel, { color: colors.textMuted }]}>Duration</Text>
-              <View style={styles.durationRow}>
-                <AnimatedPressable
-                  onPress={() => { setTicketDuration('GFD'); haptics.tap(); }}
-                  style={[
-                    styles.durationChip,
-                    {
-                      backgroundColor: ticketDuration === 'GFD' ? colors.brand : colors.surfaceAlt,
-                      borderColor: colors.border,
-                    },
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Good for day"
-                  accessibilityState={{ selected: ticketDuration === 'GFD' }}
-                  scaleValue={0.96}
-                  hapticFeedback="light"
-                >
-                  <Text style={[styles.durationText, { color: ticketDuration === 'GFD' ? colors.background : colors.textSecondary }]}>
-                    GFD
+            <View style={[styles.ticketDivider, { backgroundColor: colors.border }]} />
+
+            {/* Quantity + availability context */}
+            <View style={styles.ticketRow}>
+              <View style={styles.ticketFieldWrap}>
+                <Text style={[styles.inputLabel, { color: colors.textMuted }]}>Quantity</Text>
+                <AppInput
+                  value={quantityInput}
+                  onChangeText={(v) => setQuantityInput(sanitizeTradeQuantityInput(v))}
+                  keyboardType="number-pad"
+                  placeholder="1"
+                  suffix="units"
+                  accessibilityLabel="Trade quantity"
+                />
+                {maxUnits > 0 && (
+                  <AnimatedPressable
+                    onPress={() => { haptics.tap(); setQuantityInput(String(maxUnits)); }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Set quantity to maximum ${maxUnits} units`}
+                    scaleValue={0.96}
+                    hapticFeedback="light"
+                  >
+                    <Text style={[styles.maxLink, { color: colors.textSecondary }]}>Max: {maxUnits}</Text>
+                  </AnimatedPressable>
+                )}
+              </View>
+              <View style={styles.ticketContextCol}>
+                <View style={styles.contextItem}>
+                  <Text style={[styles.contextLabel, { color: colors.textMuted }]}>Available</Text>
+                  <Text style={[styles.contextValue, { color: colors.textPrimary }]}>
+                    {availableUnits}
                   </Text>
-                </AnimatedPressable>
-                <AnimatedPressable
-                  onPress={() => { setTicketDuration('GTC90'); haptics.tap(); }}
-                  style={[
-                    styles.durationChip,
-                    {
-                      backgroundColor: ticketDuration === 'GTC90' ? colors.brand : colors.surfaceAlt,
-                      borderColor: colors.border,
-                    },
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Good till cancelled, 90 days"
-                  accessibilityState={{ selected: ticketDuration === 'GTC90' }}
-                  scaleValue={0.96}
-                  hapticFeedback="light"
-                >
-                  <Text style={[styles.durationText, { color: ticketDuration === 'GTC90' ? colors.background : colors.textSecondary }]}>
-                    GTC 90d
+                </View>
+                <View style={styles.contextItem}>
+                  <Text style={[styles.contextLabel, { color: colors.textMuted }]}>You own</Text>
+                  <Text style={[styles.contextValue, { color: yourUnits > 0 ? colors.brand : colors.textPrimary }]}>
+                    {yourUnits}
                   </Text>
-                </AnimatedPressable>
+                </View>
+                <View style={styles.contextItem}>
+                  <Text style={[styles.contextLabel, { color: colors.textMuted }]}>Fee</Text>
+                  <Text style={[styles.contextValue, { color: colors.textPrimary }]}>1%</Text>
+                </View>
               </View>
             </View>
-          </Reanimated.View>
-        )}
 
-        {/* Market context summary */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(100)}>
-          <View style={[styles.contextCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={styles.contextRow}>
-              <View style={styles.contextItem}>
-                <Text style={[styles.contextLabel, { color: colors.textMuted }]}>Available</Text>
-                <Text style={[styles.contextValue, { color: colors.textPrimary }]}>
-                  {availableUnits} {availableUnits === 1 ? 'unit' : 'units'}
-                </Text>
-              </View>
-              <View style={[styles.contextDivider, { backgroundColor: colors.border }]} />
-              <View style={styles.contextItem}>
-                <Text style={[styles.contextLabel, { color: colors.textMuted }]}>Your units</Text>
-                <Text style={[styles.contextValue, { color: yourUnits > 0 ? colors.brand : colors.textPrimary }]}>
-                  {yourUnits}
-                </Text>
-              </View>
-              <View style={[styles.contextDivider, { backgroundColor: colors.border }]} />
-              <View style={styles.contextItem}>
-                <Text style={[styles.contextLabel, { color: colors.textMuted }]}>Fee</Text>
-                <Text style={[styles.contextValue, { color: colors.textPrimary }]}>1%</Text>
-              </View>
-            </View>
-          </View>
-        </Reanimated.View>
+            <View style={[styles.ticketDivider, { backgroundColor: colors.border }]} />
 
-        {/* Quantity selector */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
-          <View style={[styles.inputCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.inputLabel, { color: colors.textMuted }]}>Quantity</Text>
-            <AppInput
-              value={quantityInput}
-              onChangeText={(v) => setQuantityInput(sanitizeTradeQuantityInput(v))}
-              keyboardType="number-pad"
-              placeholder="1"
-              suffix="units"
-              accessibilityLabel="Trade quantity"
-            />
-            {maxUnits > 0 && (
-              <AnimatedPressable
-                onPress={() => { haptics.tap(); setQuantityInput(String(maxUnits)); }}
-                accessibilityRole="button"
-                accessibilityLabel={`Set quantity to maximum ${maxUnits} units`}
-                scaleValue={0.96}
-                hapticFeedback="light"
-              >
-                <Text style={[styles.maxLink, { color: colors.textSecondary }]}>Max: {maxUnits}</Text>
-              </AnimatedPressable>
-            )}
-          </View>
-        </Reanimated.View>
-
-        {/* Limit price (optional) */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(160)}>
-          <View style={[styles.inputCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            {/* Limit price (optional) */}
             <View style={styles.limitRow}>
               <Text style={[styles.inputLabel, { color: colors.textMuted }]} numberOfLines={1}>Limit price (optional)</Text>
               <View style={[styles.modePill, { backgroundColor: orderMode === 'limit' ? colors.brand : colors.surfaceAlt }]}>
@@ -524,6 +483,54 @@ export default function TradeScreen() {
                 ? `Market price: ${formatFromFiat(marketPrice, 'GBP')} per unit`
                 : `Limit order at ${formatFromFiat(quote.limitPrice ?? 0, 'GBP')} per unit`}
             </Text>
+
+            {/* Duration — only for limit orders */}
+            {ticketOrderType === 'limit' && (
+              <>
+                <View style={[styles.ticketDivider, { backgroundColor: colors.border }]} />
+                <Text style={[styles.inputLabel, { color: colors.textMuted }]}>Duration</Text>
+                <View style={styles.durationRow}>
+                  <AnimatedPressable
+                    onPress={() => { setTicketDuration('GFD'); haptics.tap(); }}
+                    style={[
+                      styles.durationChip,
+                      {
+                        backgroundColor: ticketDuration === 'GFD' ? colors.brand : colors.surfaceAlt,
+                        borderColor: colors.border,
+                      },
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Good for day"
+                    accessibilityState={{ selected: ticketDuration === 'GFD' }}
+                    scaleValue={0.96}
+                    hapticFeedback="light"
+                  >
+                    <Text style={[styles.durationText, { color: ticketDuration === 'GFD' ? colors.background : colors.textSecondary }]}>
+                      GFD
+                    </Text>
+                  </AnimatedPressable>
+                  <AnimatedPressable
+                    onPress={() => { setTicketDuration('GTC90'); haptics.tap(); }}
+                    style={[
+                      styles.durationChip,
+                      {
+                        backgroundColor: ticketDuration === 'GTC90' ? colors.brand : colors.surfaceAlt,
+                        borderColor: colors.border,
+                      },
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Good till cancelled, 90 days"
+                    accessibilityState={{ selected: ticketDuration === 'GTC90' }}
+                    scaleValue={0.96}
+                    hapticFeedback="light"
+                  >
+                    <Text style={[styles.durationText, { color: ticketDuration === 'GTC90' ? colors.background : colors.textSecondary }]}>
+                      GTC 90d
+                    </Text>
+                  </AnimatedPressable>
+                </View>
+              </>
+            )}
           </View>
         </Reanimated.View>
 
@@ -633,31 +640,56 @@ const styles = StyleSheet.create({
   },
   inputCard: {
     borderRadius: Radius.lg,
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
     gap: Space.sm,
     marginBottom: Space.md,
   },
-  contextCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+  illustrativeBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.xs,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 2,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
     marginBottom: Space.md,
   },
-  contextRow: {
+  illustrativeBannerText: {
+    flex: 1,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    lineHeight: Type.caption.lineHeight,
+  },
+  // ── Unified order ticket ──
+  ticketCard: {
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Space.md,
+    gap: Space.sm,
+    marginBottom: Space.md,
+  },
+  ticketDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginVertical: Space.xs,
+  },
+  ticketRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: Space.md,
+  },
+  ticketFieldWrap: {
+    flex: 1,
+    gap: Space.xs,
+  },
+  ticketContextCol: {
+    width: 100,
+    gap: Space.xs,
+    paddingTop: Space.sm,
   },
   contextItem: {
-    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 2,
-  },
-  contextDivider: {
-    width: StyleSheet.hairlineWidth,
-    height: 28,
   },
   contextLabel: {
     fontSize: Type.meta.size,

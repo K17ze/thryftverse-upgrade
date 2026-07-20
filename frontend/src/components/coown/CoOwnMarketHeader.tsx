@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
+import { StyleSheet as RNStyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../../theme/ThemeContext';
@@ -116,7 +117,7 @@ const styles = StyleSheet.create({
     width: ICON_SIZE,
     height: ICON_SIZE,
     borderRadius: Radius.md,
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -128,6 +129,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'flex-start',
     marginHorizontal: Space.sm,
+    gap: 2,
   },
   title: {
     fontSize: Type.title.size,
@@ -136,11 +138,10 @@ const styles = StyleSheet.create({
     lineHeight: Type.title.lineHeight,
   },
   subtitle: {
-    fontSize: Type.caption.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-    lineHeight: Type.caption.lineHeight,
-    marginTop: 2,
+    letterSpacing: Type.body.letterSpacing,
+    lineHeight: Type.body.lineHeight,
   },
   actionsRow: {
     flexDirection: 'row',

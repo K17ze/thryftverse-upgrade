@@ -38,8 +38,18 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Idempotency key per spec 10 §1: generated once per order attempt and reused
+  // across retries so a network retry cannot post a duplicate order. A truly
+  // new order only happens when the user navigates back to TradeScreen and
+  // re-confirms, which mounts a fresh instance of this screen (fresh key).
+  const idempotencyKeyRef = React.useRef<string | null>(null);
+  if (!idempotencyKeyRef.current) {
+    idempotencyKeyRef.current = `${currentUser?.id ?? 'anon'}-${assetId}-${side}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+
   const isBuy = side === 'buy';
-  const settlementLabel = 'GBP';
+  // 1ZE is the canonical settlement unit. GBP is a secondary reference.
+  const settlementLabel = '1ZE';
 
   // Hold-to-submit threshold: orders > 5,000 1ZE OR > 5% of public float.
   // We don't have public float in route params, so use total value as proxy.
@@ -65,20 +75,22 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
     setIsSubmitting(true);
 
     try {
-      // Generate a client-side idempotency key per spec 10 §1.
-      // This prevents duplicate order submissions on network retry.
-      const idempotencyKey = `${currentUser.id}-${assetId}-${side}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      // Reuse the same idempotency key for this order attempt on every retry
+      // (spec 10 §1) — a replayed command must return the original result,
+      // never post a duplicate order.
       const remoteOrder = await placeCoOwnOrder(assetId, {
         userId: currentUser.id,
         side,
         units: quantity,
         orderType: orderMode,
         limitPriceGbp,
-        idempotencyKey,
+        idempotencyKey: idempotencyKeyRef.current!,
       });
 
       if (remoteOrder.order.status === 'rejected') {
         show('Order rejected by matching engine.', 'error');
+        // Definitive rejection — a genuinely new order needs a new key.
+        idempotencyKeyRef.current = null;
         return;
       }
       if (remoteOrder.order.status === 'open' || remoteOrder.order.status === 'partially_filled') {
@@ -92,8 +104,13 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
       const parsedError = parseApiError(error, 'Unable to submit order');
       if (!parsedError.isNetworkError) {
         show(parsedError.message, parsedError.status && parsedError.status >= 500 ? 'error' : 'info');
+        // Non-network failure at this point is treated as recoverable-but-distinct
+        // by the backend's own idempotency dedup; keep the key so a user retry
+        // after fixing the cause (e.g. re-authenticating) still dedupes correctly.
       } else {
         show('Trading engine unavailable. Please retry once connection is restored.', 'error');
+        // Network error: the request may or may not have reached the server.
+        // Keep the same key so retry is a safe no-op/duplicate-return, not a new order.
       }
     } finally {
       setIsSubmitting(false);

@@ -209,7 +209,7 @@ export function CoOwnConciergeCTA({
 const styles = StyleSheet.create({
   container: {
     borderRadius: Radius.lg,
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
     gap: Space.sm,
   },

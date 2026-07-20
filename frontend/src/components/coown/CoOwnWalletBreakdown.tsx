@@ -114,30 +114,44 @@ export function CoOwnWalletBreakdown({
           )}
         </View>
 
-        <BalanceRow
-          label="Available"
-          value={balance.available}
-          caption="← spendable now"
-          colors={colors}
-          emphasis
-        />
-        <BalanceRow
-          label="Reserved for orders"
-          value={balance.reservedForOrders}
-          caption={openBuyOrderCount ? `${openBuyOrderCount} open ${openBuyOrderCount === 1 ? 'order' : 'orders'}` : undefined}
-          colors={colors}
-        />
-        <BalanceRow
-          label="Redemption pending"
-          value={balance.redemptionInProgress}
-          caption={redemptionEta ? `to GBP · ETA ${redemptionEta}` : undefined}
-          colors={colors}
-        />
-        <BalanceRow
-          label="Other holds"
-          value={balance.otherHolds}
-          colors={colors}
-        />
+        {settledClaim === 0 ? (
+          <Text style={[styles.emptyClaimText, { color: colors.textMuted }]}>
+            No settled 1ZE yet. Add 1ZE to start trading Co-Own units.
+          </Text>
+        ) : (
+          <>
+            <BalanceRow
+              label="Available"
+              value={balance.available}
+              caption="← spendable now"
+              colors={colors}
+              emphasis
+            />
+            {balance.reservedForOrders > 0 && (
+              <BalanceRow
+                label="Reserved for orders"
+                value={balance.reservedForOrders}
+                caption={openBuyOrderCount ? `${openBuyOrderCount} open ${openBuyOrderCount === 1 ? 'order' : 'orders'}` : undefined}
+                colors={colors}
+              />
+            )}
+            {balance.redemptionInProgress > 0 && (
+              <BalanceRow
+                label="Redemption pending"
+                value={balance.redemptionInProgress}
+                caption={redemptionEta ? `to GBP · ETA ${redemptionEta}` : undefined}
+                colors={colors}
+              />
+            )}
+            {balance.otherHolds > 0 && (
+              <BalanceRow
+                label="Other holds"
+                value={balance.otherHolds}
+                colors={colors}
+              />
+            )}
+          </>
+        )}
 
         {/* Total settled claim */}
         <View style={[styles.totalRow, { borderColor: colors.border }]}>
@@ -199,8 +213,7 @@ export function CoOwnWalletBreakdown({
           <Ionicons name="information-circle-outline" size={13} color={colors.textMuted} />
           <Text style={[styles.safeguardInfoText, { color: colors.textMuted }]}>
             Customer 1ZE is safeguarded at {safeguardingPartner}. Redemption to GBP
-            typically settles same business day for amounts under £X; larger amounts
-            settle T+1.
+            settlement timing depends on your bank and amount.
           </Text>
         </View>
       )}
@@ -257,7 +270,7 @@ const styles = StyleSheet.create({
   },
   heroCard: {
     borderRadius: Radius.lg,
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
     gap: Space.xs,
   },
@@ -283,7 +296,7 @@ const styles = StyleSheet.create({
   },
   sectionCard: {
     borderRadius: Radius.lg,
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
     gap: Space.sm,
   },
@@ -321,6 +334,12 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
     letterSpacing: Type.meta.letterSpacing,
     fontStyle: 'italic',
+  },
+  emptyClaimText: {
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.regular,
+    paddingVertical: Space.sm,
   },
   balanceRow: {
     flexDirection: 'row',

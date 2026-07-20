@@ -352,7 +352,7 @@ interface StoreState {
   coOwnRuntime: Record<string, CoOwnRuntimeState>;
   coOwnCompliance: CoOwnComplianceProfile;
   updateCoOwnCompliance: (updates: Partial<CoOwnComplianceProfile>) => void;
-  checkCoOwnEligibility: (settlementMode?: 'GBP' | 'TVUSD' | 'HYBRID') => CoOwnEligibilityResult;
+  checkCoOwnEligibility: (settlementMode?: 'GBP' | 'TVUSD' | 'HYBRID' | 'ONEZE') => CoOwnEligibilityResult;
   buyCoOwnUnits: (asset: CoOwnAsset, buyerId: string, units: number) => TradeActionResult;
   sellCoOwnUnits: (asset: CoOwnAsset, sellerId: string, units: number) => TradeActionResult;
   marketLedger: MarketLedgerEntry[];
@@ -860,7 +860,7 @@ export const useStore = create<StoreState>()(
         ...updates,
       },
     })),
-  checkCoOwnEligibility: (_settlementMode = 'HYBRID') => {
+  checkCoOwnEligibility: (_settlementMode = 'ONEZE') => {
     return { ok: true };
   },
   buyCoOwnUnits: (asset, buyerId, units) => {

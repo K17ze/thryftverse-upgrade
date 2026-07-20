@@ -85,9 +85,9 @@ export default function InviteFriendsScreen({ navigation }: Props) {
   // Loyalty tier derived from referral activity
   const loyaltyTier = useMemo(() => {
     const { rewarded } = referralStats;
-    if (rewarded >= 10) return { name: 'Gold', icon: 'trophy', color: '#FFD700', nextThreshold: null, progress: 100 };
-    if (rewarded >= 3) return { name: 'Silver', icon: 'medal', color: '#C0C0C0', nextThreshold: 10, progress: (rewarded / 10) * 100 };
-    return { name: 'Bronze', icon: 'ribbon', color: '#CD7F32', nextThreshold: 3, progress: (rewarded / 3) * 100 };
+    if (rewarded >= 10) return { name: 'Gold', icon: 'trophy', color: ACCENT, nextThreshold: null, progress: 100 };
+    if (rewarded >= 3) return { name: 'Silver', icon: 'medal', color: MUTED, nextThreshold: 10, progress: (rewarded / 10) * 100 };
+    return { name: 'Bronze', icon: 'ribbon', color: BORDER, nextThreshold: 3, progress: (rewarded / 3) * 100 };
   }, [referralStats.rewarded]);
 
   const handleShare = async () => {

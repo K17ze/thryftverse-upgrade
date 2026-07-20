@@ -2381,6 +2381,98 @@ async function saveWalletIdempotentResponse(
   );
 }
 
+// ── Co-Own order idempotency (spec 10 §1) ──
+// Prevents duplicate order placement on network retry. The client generates
+// a stable idempotency key per order attempt and reuses it across retries.
+
+async function getCoOwnOrderIdempotentResponse(
+  client: DbQueryable,
+  input: {
+    assetId: string;
+    userId: string;
+    idempotencyKey: string;
+    requestHash: string;
+  }
+): Promise<Record<string, unknown> | null> {
+  const result = await client.query<{
+    request_hash: string;
+    response_body: Record<string, unknown>;
+  }>(
+    `
+      SELECT request_hash, response_body
+      FROM coown_order_idempotency
+      WHERE asset_id = $1
+        AND user_id = $2
+        AND idempotency_key = $3
+      LIMIT 1
+    `,
+    [input.assetId, input.userId, input.idempotencyKey]
+  );
+
+  const row = result.rows[0];
+  if (!row) {
+    return null;
+  }
+
+  if (row.request_hash !== input.requestHash) {
+    throw createApiError(
+      'IDEMPOTENCY_KEY_REUSED',
+      'Idempotency key was already used with a different order payload'
+    );
+  }
+
+  return row.response_body;
+}
+
+async function saveCoOwnOrderIdempotentResponse(
+  client: DbQueryable,
+  input: {
+    assetId: string;
+    userId: string;
+    idempotencyKey: string;
+    requestHash: string;
+    responseStatus: number;
+    responseBody: Record<string, unknown>;
+  }
+): Promise<void> {
+  await client.query(
+    `
+      INSERT INTO coown_order_idempotency (
+        idempotency_key, asset_id, user_id, request_hash,
+        response_status, response_body
+      )
+      VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+      ON CONFLICT (asset_id, user_id, idempotency_key)
+      DO NOTHING
+    `,
+    [
+      input.idempotencyKey,
+      input.assetId,
+      input.userId,
+      input.requestHash,
+      input.responseStatus,
+      toJsonString(input.responseBody),
+    ]
+  );
+}
+
+function hashCoOwnOrderPayload(payload: {
+  side: string;
+  units: number;
+  orderType: string;
+  limitPriceGbp?: number | null;
+}): string {
+  return crypto
+    .createHash('sha256')
+    .update(JSON.stringify({
+      side: payload.side,
+      units: payload.units,
+      orderType: payload.orderType,
+      limitPriceGbp: payload.limitPriceGbp ?? null,
+    }))
+    .digest('hex');
+}
+
 export function hashGroupCreatePayload(payload: unknown): string {
   return chatGroupHashPayload(payload);
 }
@@ -31956,7 +32048,7 @@ app.get('/co-own/assets', async (request) => {
     available_units: number;
     unit_price_gbp: number | string;
     unit_price_stable: number | string;
-    settlement_mode: 'GBP' | 'TVUSD' | 'HYBRID';
+    settlement_mode: 'GBP' | 'TVUSD' | 'HYBRID' | 'ONEZE';
     issuer_jurisdiction: string | null;
     market_move_pct_24h: number | string;
     holders: number;
@@ -32026,7 +32118,7 @@ app.post('/co-own/assets', async (request, reply) => {
     totalUnits: z.number().int().min(1).max(20),
     unitPriceGbp: z.number().positive(),
     unitPriceStable: z.number().positive(),
-    settlementMode: z.enum(['GBP', 'TVUSD', 'HYBRID']),
+    settlementMode: z.enum(['GBP', 'TVUSD', 'HYBRID', 'ONEZE']).default('ONEZE'),
     issuerJurisdiction: z.string().min(2).max(10).optional(),
   });
 
@@ -32063,7 +32155,7 @@ app.post('/co-own/assets', async (request, reply) => {
     available_units: number;
     unit_price_gbp: number | string;
     unit_price_stable: number | string;
-    settlement_mode: 'GBP' | 'TVUSD' | 'HYBRID';
+    settlement_mode: 'GBP' | 'TVUSD' | 'HYBRID' | 'ONEZE';
     issuer_jurisdiction: string | null;
     market_move_pct_24h: number | string;
     holders: number;
@@ -32307,9 +32399,11 @@ async function applyCoOwnTransfer(
         units,
         unit_price_gbp,
         notional_gbp,
-        fee_gbp
+        fee_gbp,
+        settlement_status,
+        settled_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'settled', NOW())
     `,
     [
       input.assetId,
@@ -32323,6 +32417,92 @@ async function applyCoOwnTransfer(
       input.feeGbp,
     ]
   );
+
+  // ── Atomic DvP settlement (1ZE payment side) ──
+  // Delivery (units, above) and payment (1ZE, below) happen in the same
+  // transaction. If either fails, the whole trade rolls back.
+  // 1ZE amounts are in milligrams (mg). 1 1ZE = 1000 mg.
+  // Conversion: 1ZE ≈ 1 GBP (canonical rate per spec 10 §2).
+  const buyerPays1zeMg = Math.ceil(roundTo(notionalGbp + input.feeGbp, 4) * 1000);
+  const sellerReceives1zeMg = Math.floor(roundTo(Math.max(0, notionalGbp - input.feeGbp), 4) * 1000);
+
+  if (buyerPays1zeMg > 0) {
+    // Debit buyer's wallet
+    const buyerWalletResult = await client.query<{ id: string; oneze_balance_mg: string }>(
+      `SELECT id, oneze_balance_mg::text FROM wallets WHERE user_id = $1 FOR UPDATE`,
+      [input.buyerId]
+    );
+    const buyerWallet = buyerWalletResult.rows[0];
+    if (!buyerWallet) {
+      throw createApiError('WALLET_NOT_FOUND', 'Buyer wallet not found', { buyerId: input.buyerId });
+    }
+    const buyerBalanceMg = Number(buyerWallet.oneze_balance_mg);
+    if (buyerBalanceMg < buyerPays1zeMg) {
+      throw createApiError(
+        'INSUFFICIENT_1ZE_BALANCE',
+        'Buyer has insufficient 1ZE balance for settlement',
+        {
+          buyerId: input.buyerId,
+          required1zeMg: buyerPays1zeMg,
+          available1zeMg: buyerBalanceMg,
+        }
+      );
+    }
+
+    const buyerBalanceAfter = buyerBalanceMg - buyerPays1zeMg;
+    const tradeTxId = `coown_trade_${input.buyOrderId ?? 'x'}_${input.sellOrderId ?? 'x'}_${Date.now()}`;
+
+    await client.query(
+      `UPDATE wallets SET oneze_balance_mg = $2, version = version + 1, updated_at = NOW() WHERE id = $1`,
+      [buyerWallet.id, buyerBalanceAfter]
+    );
+
+    await client.query(
+      `
+        INSERT INTO wallet_ledger (wallet_id, tx_id, asset, amount, balance_after, kind, ref_type, ref_id, metadata)
+        VALUES ($1, $2, '1ZE', $3, $4, 'CO_OWN_TRADE', 'coOwn_trade', $5, $6::jsonb)
+      `,
+      [
+        buyerWallet.id,
+        tradeTxId,
+        -buyerPays1zeMg,
+        buyerBalanceAfter,
+        String(input.buyOrderId ?? ''),
+        JSON.stringify({ assetId: input.assetId, units, side: 'buy', notionalGbp, feeGbp: input.feeGbp }),
+      ]
+    );
+
+    // Credit seller's wallet (if seller is not the issuer/primary)
+    if (sellerReceives1zeMg > 0 && input.enforceSellerHolding) {
+      const sellerWalletResult = await client.query<{ id: string; oneze_balance_mg: string }>(
+        `SELECT id, oneze_balance_mg::text FROM wallets WHERE user_id = $1 FOR UPDATE`,
+        [input.sellerId]
+      );
+      const sellerWallet = sellerWalletResult.rows[0];
+      if (sellerWallet) {
+        const sellerBalanceAfter = Number(sellerWallet.oneze_balance_mg) + sellerReceives1zeMg;
+        await client.query(
+          `UPDATE wallets SET oneze_balance_mg = $2, version = version + 1, updated_at = NOW() WHERE id = $1`,
+          [sellerWallet.id, sellerBalanceAfter]
+        );
+
+        await client.query(
+          `
+            INSERT INTO wallet_ledger (wallet_id, tx_id, asset, amount, balance_after, kind, ref_type, ref_id, metadata)
+            VALUES ($1, $2, '1ZE', $3, $4, 'CO_OWN_TRADE', 'coOwn_trade', $5, $6::jsonb)
+          `,
+          [
+            sellerWallet.id,
+            tradeTxId,
+            sellerReceives1zeMg,
+            sellerBalanceAfter,
+            String(input.sellOrderId ?? ''),
+            JSON.stringify({ assetId: input.assetId, units, side: 'sell', notionalGbp, feeGbp: input.feeGbp }),
+          ]
+        );
+      }
+    }
+  }
 
   if (input.feeGbp > 0 && await ledgerTablesAvailable(client)) {
     const platformRevenueAccountId = await ensureLedgerAccount(
@@ -32378,6 +32558,73 @@ async function recalcCoOwnHolders(client: PoolClient, assetId: string): Promise<
 
   return Number(result.rows[0]?.count ?? '0');
 }
+
+// ── Settlement status ──
+// Returns the settlement state of a user's trades. With atomic DvP, all
+// trades are settled at execution time, but this endpoint provides a
+// queryable surface for the frontend and future async settlement flows.
+
+app.get('/co-own/settlements', async (request, reply) => {
+  const querySchema = z.object({
+    userId: z.string().min(2),
+    status: z.enum(['pending', 'settled', 'failed', 'reversed']).optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+    cursor: z.string().optional(),
+  });
+
+  const query = querySchema.parse(request.query);
+  const cursorDate = query.cursor ? new Date(query.cursor) : new Date(0);
+
+  const result = await db.query<{
+    id: string;
+    asset_id: string;
+    buyer_id: string;
+    seller_id: string;
+    units: number;
+    unit_price_gbp: string;
+    notional_gbp: string;
+    fee_gbp: string;
+    settlement_status: string;
+    settled_at: string | null;
+    created_at: string;
+  }>(
+    `
+      SELECT
+        id, asset_id, buyer_id, seller_id, units,
+        unit_price_gbp::text, notional_gbp::text, fee_gbp::text,
+        settlement_status, settled_at, created_at
+      FROM coOwn_trades
+      WHERE (buyer_id = $1 OR seller_id = $1)
+        AND ($2::text IS NULL OR settlement_status = $2)
+        AND created_at < $3
+      ORDER BY created_at DESC
+      LIMIT $4
+    `,
+    [query.userId, query.status ?? null, cursorDate, query.limit]
+  );
+
+  reply.code(200);
+  return {
+    ok: true,
+    settlements: result.rows.map((row) => ({
+      id: String(row.id),
+      assetId: row.asset_id,
+      buyerId: row.buyer_id,
+      sellerId: row.seller_id,
+      units: row.units,
+      unitPriceGbp: Number(row.unit_price_gbp),
+      notionalGbp: Number(row.notional_gbp),
+      feeGbp: Number(row.fee_gbp),
+      settlementStatus: row.settlement_status as 'pending' | 'settled' | 'failed' | 'reversed',
+      settledAt: row.settled_at,
+      createdAt: row.created_at,
+      role: row.buyer_id === query.userId ? 'buyer' : 'seller',
+    })),
+    nextCursor: result.rows.length === query.limit
+      ? result.rows[result.rows.length - 1].created_at
+      : null,
+  };
+});
 
 app.get('/co-own/assets/:assetId/orders', async (request, reply) => {
   const paramsSchema = z.object({ assetId: z.string().min(2) });
@@ -32565,6 +32812,400 @@ app.get('/co-own/assets/:assetId/holdings', async (request, reply) => {
   };
 });
 
+// ── Order preview (authoritative server-side) ──
+// Returns an authoritative preview of what an order would look like if
+// placed now: estimated fill price, depth, slippage, fees, reservation,
+// and eligibility. This replaces the client-side generateSimulatedBook().
+// The preview is non-binding — the actual order may differ if the order
+// book changes between preview and placement.
+
+app.post('/co-own/assets/:assetId/orders/preview', async (request, reply) => {
+  const paramsSchema = z.object({ assetId: z.string().min(2) });
+  const bodySchema = z.object({
+    userId: z.string().min(2),
+    side: z.enum(['buy', 'sell']),
+    units: z.number().int().min(1).max(20),
+    orderType: z.enum(['market', 'limit']).default('market'),
+    limitPriceGbp: z.number().positive().optional(),
+  });
+
+  const { assetId } = paramsSchema.parse(request.params);
+  const payload = bodySchema.parse(request.body);
+
+  const assetResult = await db.query<{
+    id: string;
+    unit_price_gbp: number | string;
+    unit_price_stable: number | string;
+    available_units: number;
+    total_units: number;
+    is_open: boolean;
+  }>(
+    `
+      SELECT id, unit_price_gbp, unit_price_stable, available_units, total_units, is_open
+      FROM coOwn_assets
+      WHERE id = $1
+    `,
+    [assetId]
+  );
+
+  const asset = assetResult.rows[0];
+  if (!asset) {
+    reply.code(404);
+    return { ok: false, error: 'Co-Own asset not found' };
+  }
+
+  if (!asset.is_open) {
+    reply.code(409);
+    return { ok: false, error: 'Co-Own asset is closed for trading' };
+  }
+
+  const referencePriceGbp = Number(asset.unit_price_gbp);
+  const orderPriceGbp =
+    payload.orderType === 'limit'
+      ? roundTo(payload.limitPriceGbp ?? referencePriceGbp, 4)
+      : referencePriceGbp;
+
+  // Query the real order book for the opposite side
+  const oppositeSide = payload.side === 'buy' ? 'sell' : 'buy';
+  const restingOrders = await db.query<{
+    units: number;
+    remaining_units: number;
+    unit_price_gbp: string;
+  }>(
+    `
+      SELECT units, remaining_units, unit_price_gbp::text
+      FROM coOwn_orders
+      WHERE asset_id = $1
+        AND side = $2
+        AND status IN ('open', 'partially_filled')
+        AND (
+          $3::numeric IS NULL
+          OR ($4 = 'buy' AND unit_price_gbp <= $3)
+          OR ($4 = 'sell' AND unit_price_gbp >= $3)
+        )
+      ORDER BY
+        CASE WHEN $4 = 'buy' THEN unit_price_gbp END ASC,
+        CASE WHEN $4 = 'sell' THEN unit_price_gbp END DESC,
+        id ASC
+    `,
+    [assetId, oppositeSide, payload.orderType === 'limit' ? payload.limitPriceGbp : null, payload.side]
+  );
+
+  // Walk the book to estimate fill
+  let remainingUnits = payload.units;
+  let filledUnits = 0;
+  let grossNotional = 0;
+  let worstPrice = 0;
+  let avgFillPrice = 0;
+  let slippageBeyondDepth = false;
+
+  for (const resting of restingOrders.rows) {
+    if (remainingUnits <= 0) break;
+    const restingRemaining = resting.remaining_units;
+    if (restingRemaining <= 0) continue;
+
+    const fillUnits = Math.min(remainingUnits, restingRemaining);
+    const tradePrice = Number(resting.unit_price_gbp);
+    grossNotional = roundTo(grossNotional + fillUnits * tradePrice, 4);
+    worstPrice = tradePrice;
+    remainingUnits -= fillUnits;
+    filledUnits += fillUnits;
+  }
+
+  // For buy market orders, also check primary issuance (issuer inventory)
+  if (payload.side === 'buy' && remainingUnits > 0 && asset.available_units > 0) {
+    const primaryFillUnits = Math.min(remainingUnits, asset.available_units);
+    grossNotional = roundTo(grossNotional + primaryFillUnits * referencePriceGbp, 4);
+    if (worstPrice === 0) worstPrice = referencePriceGbp;
+    remainingUnits -= primaryFillUnits;
+    filledUnits += primaryFillUnits;
+  }
+
+  if (filledUnits > 0) {
+    avgFillPrice = roundTo(grossNotional / filledUnits, 4);
+  }
+  if (remainingUnits > 0) {
+    slippageBeyondDepth = true;
+  }
+
+  const fee = roundTo(grossNotional * CO_OWN_TRADE_FEE_RATE, 4);
+  const total =
+    payload.side === 'buy'
+      ? roundTo(grossNotional + fee, 4)
+      : roundTo(Math.max(0, grossNotional - fee), 4);
+
+  // Eligibility check (non-blocking — just informational in preview)
+  const eligibility = await evaluateMarketEligibility(db, {
+    userId: payload.userId,
+    market: 'co-own',
+    orderNotionalGbp: grossNotional,
+  });
+
+  reply.code(200);
+  return {
+    ok: true,
+    preview: {
+      assetId,
+      side: payload.side,
+      units: payload.units,
+      orderType: payload.orderType,
+      limitPriceGbp: payload.limitPriceGbp ?? null,
+      referencePriceGbp,
+      orderPriceGbp,
+      estimatedFill: {
+        filledUnits,
+        remainingUnits: Math.max(0, remainingUnits),
+        avgFillPrice,
+        worstPrice,
+        grossNotional,
+        slippageBeyondDepth,
+      },
+      fee,
+      total,
+      feeRate: CO_OWN_TRADE_FEE_RATE,
+      availableUnits: asset.available_units,
+      totalUnits: asset.total_units,
+      eligibility: {
+        allowed: eligibility.allowed,
+        code: eligibility.code ?? null,
+        message: eligibility.message,
+      },
+      // Non-binding disclaimer
+      binding: false,
+      validUntil: new Date(Date.now() + 15_000).toISOString(), // 15s preview window
+    },
+  };
+});
+
+// ── Order reservation ──
+// Reserves funds (for buys) or units (for sells) for a pending order.
+// The reservation holds the funds so a concurrent order cannot overspend.
+// Reservations expire after 60s and are released on order placement,
+// cancellation, or expiry.
+
+const CO_OWN_RESERVATION_TTL_MS = 60_000; // 60 seconds
+
+app.post('/co-own/assets/:assetId/orders/reserve', async (request, reply) => {
+  const paramsSchema = z.object({ assetId: z.string().min(2) });
+  const bodySchema = z.object({
+    userId: z.string().min(2),
+    side: z.enum(['buy', 'sell']),
+    units: z.number().int().min(1).max(20),
+    orderType: z.enum(['market', 'limit']).default('market'),
+    limitPriceGbp: z.number().positive().optional(),
+    idempotencyKey: z.string().min(8).max(140).optional(),
+  });
+
+  const { assetId } = paramsSchema.parse(request.params);
+  const payload = bodySchema.parse(request.body);
+  await ensureUserExists(payload.userId);
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Expire any prior active reservations for this user+asset
+    await client.query(
+      `
+        UPDATE coown_order_reservations
+        SET status = 'expired', updated_at = NOW()
+        WHERE user_id = $1 AND asset_id = $2 AND status = 'active'
+      `,
+      [payload.userId, assetId]
+    );
+
+    // Lock the asset row
+    const assetResult = await client.query<{
+      id: string;
+      unit_price_gbp: number | string;
+      available_units: number;
+      is_open: boolean;
+    }>(
+      `SELECT id, unit_price_gbp, available_units, is_open FROM coOwn_assets WHERE id = $1 FOR UPDATE`,
+      [assetId]
+    );
+    const asset = assetResult.rows[0];
+    if (!asset) {
+      await client.query('ROLLBACK');
+      reply.code(404);
+      return { ok: false, error: 'Co-Own asset not found' };
+    }
+    if (!asset.is_open) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: 'Co-Own asset is closed for trading' };
+    }
+
+    const referencePriceGbp = Number(asset.unit_price_gbp);
+    const orderPriceGbp =
+      payload.orderType === 'limit'
+        ? roundTo(payload.limitPriceGbp ?? referencePriceGbp, 4)
+        : referencePriceGbp;
+    const grossNotional = roundTo(payload.units * orderPriceGbp, 4);
+    const fee = roundTo(grossNotional * CO_OWN_TRADE_FEE_RATE, 4);
+    const total = payload.side === 'buy' ? roundTo(grossNotional + fee, 4) : roundTo(Math.max(0, grossNotional - fee), 4);
+
+    let reserved1zeMg = 0;
+    let reservedUnits = 0;
+
+    if (payload.side === 'buy') {
+      // Reserve 1ZE from the wallet (convert GBP notional to 1ZE mg)
+      // 1ZE = 1000mg, and we use the asset's stable price for 1ZE conversion
+      // For now, use the reference price as the 1ZE/GBP rate (1 1ZE ≈ 1 GBP)
+      const reserve1ze = roundTo(total, 4); // 1ZE amount
+      reserved1zeMg = Math.ceil(reserve1ze * 1000); // convert to mg
+
+      // Check wallet balance
+      const walletResult = await client.query<{ oneze_balance_mg: string }>(
+        `SELECT oneze_balance_mg::text FROM wallets WHERE user_id = $1 FOR UPDATE`,
+        [payload.userId]
+      );
+      const wallet = walletResult.rows[0];
+      if (!wallet) {
+        await client.query('ROLLBACK');
+        reply.code(404);
+        return { ok: false, error: 'Wallet not found' };
+      }
+
+      // Compute currently-reserved amount from other active reservations
+      const otherReservedResult = await client.query<{ total: string }>(
+        `
+          SELECT COALESCE(SUM(reserved_1ze_mg), 0)::text AS total
+          FROM coown_order_reservations
+          WHERE user_id = $1 AND status = 'active' AND id <> $2
+        `,
+        [payload.userId, '']
+      );
+      const otherReservedMg = Number(otherReservedResult.rows[0]?.total ?? 0);
+      const availableMg = Number(wallet.oneze_balance_mg) - otherReservedMg;
+
+      if (availableMg < reserved1zeMg) {
+        await client.query('ROLLBACK');
+        reply.code(409);
+        return {
+          ok: false,
+          error: `Insufficient 1ZE balance. Required: ${(reserved1zeMg / 1000).toFixed(2)} 1ZE, available: ${(availableMg / 1000).toFixed(2)} 1ZE`,
+          code: 'INSUFFICIENT_1ZE',
+        };
+      }
+    } else {
+      // Reserve Co-Own units from the user's holding
+      reservedUnits = payload.units;
+      const holdingResult = await client.query<{ units_owned: number }>(
+        `SELECT units_owned FROM coOwn_holdings WHERE user_id = $1 AND asset_id = $2 FOR UPDATE`,
+        [payload.userId, assetId]
+      );
+      const holding = holdingResult.rows[0];
+      const unitsOwned = holding?.units_owned ?? 0;
+
+      // Compute currently-reserved units from other active sell reservations
+      const otherReservedResult = await client.query<{ total: number }>(
+        `
+          SELECT COALESCE(SUM(reserved_units), 0) AS total
+          FROM coown_order_reservations
+          WHERE user_id = $1 AND asset_id = $2 AND status = 'active'
+        `,
+        [payload.userId, assetId]
+      );
+      const otherReservedUnits = Number(otherReservedResult.rows[0]?.total ?? 0);
+      const availableUnits = unitsOwned - otherReservedUnits;
+
+      if (availableUnits < reservedUnits) {
+        await client.query('ROLLBACK');
+        reply.code(409);
+        return {
+          ok: false,
+          error: `Insufficient units to sell. Required: ${reservedUnits}, available: ${availableUnits}`,
+          code: 'INSUFFICIENT_UNITS',
+        };
+      }
+    }
+
+    const reservationId = `res_${crypto.randomUUID()}`;
+    const expiresAt = new Date(Date.now() + CO_OWN_RESERVATION_TTL_MS);
+
+    await client.query(
+      `
+        INSERT INTO coown_order_reservations (
+          id, user_id, asset_id, side,
+          reserved_1ze_mg, reserved_units,
+          reference_price_gbp, estimated_total_gbp, estimated_fee_gbp,
+          expires_at, status
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'active')
+      `,
+      [
+        reservationId,
+        payload.userId,
+        assetId,
+        payload.side,
+        reserved1zeMg,
+        reservedUnits,
+        referencePriceGbp,
+        total,
+        fee,
+        expiresAt,
+      ]
+    );
+
+    await client.query('COMMIT');
+
+    reply.code(201);
+    return {
+      ok: true,
+      reservation: {
+        id: reservationId,
+        assetId,
+        userId: payload.userId,
+        side: payload.side,
+        reserved1zeMg,
+        reservedUnits,
+        referencePriceGbp,
+        estimatedTotalGbp: total,
+        estimatedFeeGbp: fee,
+        expiresAt: expiresAt.toISOString(),
+        status: 'active',
+      },
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    reply.code(500);
+    return {
+      ok: false,
+      error: `Unable to reserve order: ${(error as Error).message}`,
+    };
+  } finally {
+    client.release();
+  }
+});
+
+// Cancel a reservation (release the held funds/units)
+app.delete('/co-own/assets/:assetId/orders/reserve/:reservationId', async (request, reply) => {
+  const paramsSchema = z.object({
+    assetId: z.string().min(2),
+    reservationId: z.string().min(8),
+  });
+  const { assetId, reservationId } = paramsSchema.parse(request.params);
+
+  const result = await db.query(
+    `
+      UPDATE coown_order_reservations
+      SET status = 'cancelled', updated_at = NOW()
+      WHERE id = $1 AND asset_id = $2 AND status = 'active'
+      RETURNING id
+    `,
+    [reservationId, assetId]
+  );
+
+  if (result.rows.length === 0) {
+    reply.code(404);
+    return { ok: false, error: 'Reservation not found or already released' };
+  }
+
+  reply.code(200);
+  return { ok: true, reservationId };
+});
+
 app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
   const paramsSchema = z.object({ assetId: z.string().min(2) });
   const bodySchema = z.object({
@@ -32573,6 +33214,7 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
     units: z.number().int().min(1).max(20),
     orderType: z.enum(['market', 'limit']).default('market'),
     limitPriceGbp: z.number().positive().optional(),
+    idempotencyKey: z.string().min(8).max(140).optional(),
   }).superRefine((value, ctx) => {
     if (value.orderType === 'limit' && !value.limitPriceGbp) {
       ctx.addIssue({
@@ -32594,6 +33236,33 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
   const { assetId } = paramsSchema.parse(request.params);
   const payload = bodySchema.parse(request.body);
   await ensureUserExists(payload.userId);
+
+  // ── Idempotency check (spec 10 §1) ──
+  // If the client supplies an idempotency key, check for a prior response.
+  // A replayed request with the same key + same payload returns the original
+  // response. A replayed request with the same key but different payload is
+  // rejected as a key-reuse conflict.
+  const idempotencyRequestHash = payload.idempotencyKey
+    ? hashCoOwnOrderPayload({
+        side: payload.side,
+        units: payload.units,
+        orderType: payload.orderType,
+        limitPriceGbp: payload.limitPriceGbp ?? null,
+      })
+    : null;
+
+  if (payload.idempotencyKey && idempotencyRequestHash) {
+    const idempotentResponse = await getCoOwnOrderIdempotentResponse(db, {
+      assetId,
+      userId: payload.userId,
+      idempotencyKey: payload.idempotencyKey,
+      requestHash: idempotencyRequestHash,
+    });
+    if (idempotentResponse) {
+      reply.code(200);
+      return idempotentResponse;
+    }
+  }
 
   const client = await db.connect();
   let amlAlert: { alertId: string; status: string } | null = null;
@@ -33109,7 +33778,7 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
     });
 
     reply.code(201);
-    return {
+    const responseBody = {
       ok: true,
       order: {
         id: incomingOrder.rows[0].id,
@@ -33145,6 +33814,21 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
         }
         : null,
     };
+
+    // Save idempotent response so a network retry with the same key returns
+    // this original result instead of placing a duplicate order.
+    if (payload.idempotencyKey && idempotencyRequestHash) {
+      await saveCoOwnOrderIdempotentResponse(client, {
+        assetId,
+        userId: payload.userId,
+        idempotencyKey: payload.idempotencyKey,
+        requestHash: idempotencyRequestHash,
+        responseStatus: 201,
+        responseBody,
+      });
+    }
+
+    return responseBody;
   } catch (error) {
     await client.query('ROLLBACK');
 

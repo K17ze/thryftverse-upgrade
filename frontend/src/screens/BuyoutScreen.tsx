@@ -225,7 +225,7 @@ const styles = StyleSheet.create({
   },
   positionCard: {
     borderRadius: Radius.lg,
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
     gap: 0,
     marginBottom: Space.lg,
@@ -247,7 +247,7 @@ const styles = StyleSheet.create({
   },
   statusCard: {
     borderRadius: Radius.lg,
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
     gap: Space.sm,
     alignItems: 'center',

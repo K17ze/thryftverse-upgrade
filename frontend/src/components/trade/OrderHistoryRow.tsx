@@ -68,7 +68,6 @@ function resolveStatusTone(status: string) {
     case 'accepted':
     case 'submitted':
       return 'warning' as const;
-    case 'partial':
     case 'partially_filled':
     case 'replace_pending':
       return 'accent' as const;

@@ -299,7 +299,7 @@ const styles = StyleSheet.create({
   },
   sectionCard: {
     borderRadius: Radius.lg,
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
     marginBottom: Space.lg,
   },

@@ -106,11 +106,14 @@ export function CoOwnTradeComposer({
   const isBuy = side === 'buy';
   const maxForSide = isBuy ? Math.min(availableUnits, maxUnits) : sellableUnits;
 
-  // Reservation line text — from the authoritative computeReservation()
+  // Reservation line text — from computeReservation() (client-side estimate).
+  // Labelled as an estimate, not an authoritative server reservation, per
+  // spec 10 §1: the actual reservation is confirmed by the backend at order
+  // submission, not by this local calculation.
   const reservationLine = reservation
     ? isBuy
-      ? `${reservation.totalReserve1ZE.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 1ZE will be reserved`
-      : `${reservation.totalReserveUnits} units will be reserved`
+      ? `Est. ${reservation.totalReserve1ZE.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 1ZE required (confirmed at review)`
+      : `Est. ${reservation.totalReserveUnits} units to sell (confirmed at review)`
     : null;
 
   return (
@@ -208,10 +211,21 @@ export function CoOwnTradeComposer({
 
       {detailsExpanded && (
         <View style={[styles.detailsSection, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          {/* Estimated fill + depth impact are computed from a deterministic
+              illustrative book (Phase 2.5 — no live order book exists yet).
+              Label honestly so this cannot be mistaken for real market depth. */}
+          {(fillEstimate || depthContext) && (
+            <View style={styles.illustrativeNoteWrap}>
+              <Text style={[styles.illustrativeNote, { color: colors.textMuted }]}>
+                Illustrative — not live market data. Actual fill depends on the real order book at execution.
+              </Text>
+            </View>
+          )}
+
           {/* Estimated fill */}
           {fillEstimate && (
             <View style={styles.detailBlock}>
-              <Text style={[styles.detailHeader, { color: colors.textMuted }]}>Estimated fill</Text>
+              <Text style={[styles.detailHeader, { color: colors.textMuted }]}>Estimated fill (illustrative)</Text>
               <DetailRow label="Avg fill price" value={`${fillEstimate.avgFillPrice.toFixed(2)} 1ZE`} colors={colors} />
               <DetailRow label="Worst price" value={`${fillEstimate.worstPrice.toFixed(2)} 1ZE`} colors={colors} />
               <DetailRow label="Units" value={String(fillEstimate.unitsFilled)} colors={colors} />
@@ -329,7 +343,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.md,
     borderRadius: Radius.lg,
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
   },
   imageWrap: {
@@ -394,7 +408,7 @@ const styles = StyleSheet.create({
   },
   quoteCard: {
     borderRadius: Radius.lg,
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
     gap: Space.sm,
   },
@@ -501,12 +515,21 @@ const styles = StyleSheet.create({
   },
   detailsSection: {
     borderRadius: Radius.lg,
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
     gap: Space.md,
   },
   detailBlock: {
     gap: Space.xs,
+  },
+  illustrativeNoteWrap: {
+    paddingBottom: 2,
+  },
+  illustrativeNote: {
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.regular,
+    fontStyle: 'italic',
   },
   detailHeader: {
     fontSize: Type.meta.size,

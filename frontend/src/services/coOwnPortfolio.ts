@@ -16,7 +16,7 @@ export interface CoOwnPositionVM {
   ownershipPct: number;
   unitPriceGbp: number;
   unitPriceStable: number;
-  settlementMode: 'GBP' | 'TVUSD' | 'HYBRID';
+  settlementMode: 'GBP' | 'TVUSD' | 'HYBRID' | 'ONEZE';
   currentValueGbp: number;
   avgEntryPriceGbp: number;
   realizedPnlGbp: number;

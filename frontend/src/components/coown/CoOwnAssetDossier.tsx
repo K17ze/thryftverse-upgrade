@@ -1,5 +1,5 @@
 /**
- * CoOwnAssetDossier — the Galleria-quality provenance/condition/custody/
+ * CoOwnAssetDossier — the Galleria-quality provenance/condition/storage/
  * insurance/appraisal panel.
  *
  * Four sections, each with a header and rows. Appraisal shows value + date
@@ -28,7 +28,7 @@ export interface CoOwnDossierCondition {
   inspectedAt?: string;
 }
 
-export interface CoOwnDossierCustody {
+export interface CoOwnDossierStorage {
   location: string;
   custodian: string;
   insured: boolean;
@@ -49,7 +49,7 @@ export interface CoOwnDossierAppraisal {
 export interface CoOwnAssetDossierProps {
   provenance?: CoOwnDossierProvenanceEvent[];
   condition?: CoOwnDossierCondition;
-  custody?: CoOwnDossierCustody;
+  storage?: CoOwnDossierStorage;
   appraisal?: CoOwnDossierAppraisal;
 }
 
@@ -134,11 +134,11 @@ function InfoRow({
 export function CoOwnAssetDossier({
   provenance,
   condition,
-  custody,
+  storage,
   appraisal,
 }: CoOwnAssetDossierProps) {
   const { colors } = useAppTheme();
-  const hasAny = provenance?.length || condition || custody || appraisal;
+  const hasAny = provenance?.length || condition || storage || appraisal;
   if (!hasAny) return null;
 
   return (
@@ -186,20 +186,20 @@ export function CoOwnAssetDossier({
         </View>
       )}
 
-      {/* ── Custody ── */}
-      {custody && (
+      {/* ── Storage ── */}
+      {storage && (
         <View style={styles.section}>
-          <SectionHeader icon="shield-checkmark-outline" title="Custody" colors={colors} />
-          <InfoRow label="Location" value={custody.location} colors={colors} />
-          <InfoRow label="Custodian" value={custody.custodian} colors={colors} />
+          <SectionHeader icon="shield-checkmark-outline" title="Storage" colors={colors} />
+          <InfoRow label="Location" value={storage.location} colors={colors} />
+          <InfoRow label="Custodian" value={storage.custodian} colors={colors} />
           <InfoRow
             label="Insured"
-            value={custody.insured ? 'Yes' : 'Not insured'}
+            value={storage.insured ? 'Yes' : 'Not insured'}
             colors={colors}
-            valueColor={custody.insured ? colors.success : colors.danger}
+            valueColor={storage.insured ? colors.success : colors.danger}
           />
-          {custody.policyRef && (
-            <InfoRow label="Policy ref" value={custody.policyRef} colors={colors} />
+          {storage.policyRef && (
+            <InfoRow label="Policy ref" value={storage.policyRef} colors={colors} />
           )}
         </View>
       )}
@@ -248,7 +248,7 @@ export function CoOwnAssetDossier({
 const styles = StyleSheet.create({
   root: {
     borderRadius: Radius.lg,
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
     gap: Space.md,
   },

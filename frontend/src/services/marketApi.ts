@@ -129,7 +129,7 @@ export interface MarketAuctionBidResult {
   } | null;
 }
 
-export type CoOwnSettlementMode = 'GBP' | 'TVUSD' | 'HYBRID';
+export type CoOwnSettlementMode = 'GBP' | 'TVUSD' | 'HYBRID' | 'ONEZE';
 
 export interface MarketCoOwnAsset {
   id: string;
@@ -1111,6 +1111,166 @@ export async function placeCoOwnOrder(
   );
 }
 
+// ── Order preview (authoritative server-side) ──
+// Replaces the client-side generateSimulatedBook() with a server-side
+// preview that walks the real order book. Non-binding — the actual order
+// may differ if the book changes between preview and placement.
+
+export interface CoOwnOrderPreviewInput {
+  userId: string;
+  side: CoOwnOrderSide;
+  units: number;
+  orderType?: 'market' | 'limit';
+  limitPriceGbp?: number;
+}
+
+export interface CoOwnOrderPreviewResponse {
+  ok: true;
+  preview: {
+    assetId: string;
+    side: CoOwnOrderSide;
+    units: number;
+    orderType: 'market' | 'limit';
+    limitPriceGbp: number | null;
+    referencePriceGbp: number;
+    orderPriceGbp: number;
+    estimatedFill: {
+      filledUnits: number;
+      remainingUnits: number;
+      avgFillPrice: number;
+      worstPrice: number;
+      grossNotional: number;
+      slippageBeyondDepth: boolean;
+    };
+    fee: number;
+    total: number;
+    feeRate: number;
+    availableUnits: number;
+    totalUnits: number;
+    eligibility: {
+      allowed: boolean;
+      code: string | null;
+      message: string;
+    };
+    binding: boolean;
+    validUntil: string;
+  };
+}
+
+export async function previewCoOwnOrder(
+  assetId: string,
+  input: CoOwnOrderPreviewInput
+): Promise<CoOwnOrderPreviewResponse> {
+  return fetchJson<CoOwnOrderPreviewResponse>(
+    `/co-own/assets/${encodeURIComponent(assetId)}/orders/preview`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    }
+  );
+}
+
+// ── Order reservation ──
+// Reserves funds (for buys) or units (for sells) for a pending order.
+// The reservation holds the funds so a concurrent order cannot overspend.
+// Reservations expire after 60s.
+
+export interface CoOwnOrderReservationInput {
+  userId: string;
+  side: CoOwnOrderSide;
+  units: number;
+  orderType?: 'market' | 'limit';
+  limitPriceGbp?: number;
+  idempotencyKey?: string;
+}
+
+export interface CoOwnOrderReservationResponse {
+  ok: true;
+  reservation: {
+    id: string;
+    assetId: string;
+    userId: string;
+    side: CoOwnOrderSide;
+    reserved1zeMg: number;
+    reservedUnits: number;
+    referencePriceGbp: number;
+    estimatedTotalGbp: number;
+    estimatedFeeGbp: number;
+    expiresAt: string;
+    status: 'active' | 'placed' | 'cancelled' | 'expired';
+  };
+}
+
+export async function reserveCoOwnOrder(
+  assetId: string,
+  input: CoOwnOrderReservationInput
+): Promise<CoOwnOrderReservationResponse> {
+  return fetchJson<CoOwnOrderReservationResponse>(
+    `/co-own/assets/${encodeURIComponent(assetId)}/orders/reserve`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    }
+  );
+}
+
+export async function cancelCoOwnOrderReservation(
+  assetId: string,
+  reservationId: string
+): Promise<{ ok: true; reservationId: string }> {
+  return fetchJson<{ ok: true; reservationId: string }>(
+    `/co-own/assets/${encodeURIComponent(assetId)}/orders/reserve/${encodeURIComponent(reservationId)}`,
+    { method: 'DELETE' }
+  );
+}
+
+// ── Settlement status ──
+// Returns the settlement state of a user's trades. With atomic DvP, all
+// trades are settled at execution time.
+
+export type CoOwnSettlementStatus = 'pending' | 'settled' | 'failed' | 'reversed';
+
+export interface CoOwnSettlement {
+  id: string;
+  assetId: string;
+  buyerId: string;
+  sellerId: string;
+  units: number;
+  unitPriceGbp: number;
+  notionalGbp: number;
+  feeGbp: number;
+  settlementStatus: CoOwnSettlementStatus;
+  settledAt: string | null;
+  createdAt: string;
+  role: 'buyer' | 'seller';
+}
+
+export interface CoOwnSettlementsResponse {
+  ok: true;
+  settlements: CoOwnSettlement[];
+  nextCursor: string | null;
+}
+
+export async function fetchCoOwnSettlements(
+  params: {
+    userId: string;
+    status?: CoOwnSettlementStatus;
+    limit?: number;
+    cursor?: string;
+  }
+): Promise<CoOwnSettlementsResponse> {
+  const searchParams = new URLSearchParams();
+  searchParams.set('userId', params.userId);
+  if (params.status) searchParams.set('status', params.status);
+  if (params.limit) searchParams.set('limit', String(params.limit));
+  if (params.cursor) searchParams.set('cursor', params.cursor);
+  return fetchJson<CoOwnSettlementsResponse>(
+    `/co-own/settlements?${searchParams.toString()}`
+  );
+}
+
 export interface CreateCoOwnAssetInput {
   id?: string;
   listingId: string;
@@ -1120,7 +1280,7 @@ export interface CreateCoOwnAssetInput {
   totalUnits: number;
   unitPriceGbp: number;
   unitPriceStable?: number;
-  settlementMode?: 'GBP' | 'TVUSD' | 'HYBRID';
+  settlementMode?: 'GBP' | 'TVUSD' | 'HYBRID' | 'ONEZE';
   issuerJurisdiction?: string;
 }
 

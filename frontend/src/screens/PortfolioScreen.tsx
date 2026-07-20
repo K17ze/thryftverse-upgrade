@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, RefreshControl, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, RefreshControl, useWindowDimensions, Pressable } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -68,6 +68,8 @@ export default function PortfolioScreen() {
   const [isError, setIsError] = React.useState(false);
   const [refreshing, setRefreshing] = React.useState(false);
   const [actionSheetAsset, setActionSheetAsset] = React.useState<CoOwnPositionVM | null>(null);
+  const [allocationExpanded, setAllocationExpanded] = React.useState(false);
+  const [activePortfolioTab, setActivePortfolioTab] = React.useState<'positions' | 'insights'>('positions');
 
   const loadPortfolio = React.useCallback(() => {
     if (!currentUser?.id) { setIsLoading(false); return; }
@@ -371,7 +373,7 @@ export default function PortfolioScreen() {
       <CoOwnReconciliationBanner isActive={false} />
 
       <FlashList
-        data={positions}
+        data={activePortfolioTab === 'positions' ? positions : []}
         keyExtractor={(item) => item.assetId}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
@@ -389,7 +391,7 @@ export default function PortfolioScreen() {
               <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Portfolio value</Text>
               <CoOwnNumericText
                 value={summary.totalValueGbp}
-                unit="GBP"
+                unit="1ZE"
                 size="priceLarge"
                 align="left"
                 showUnit={false}
@@ -401,7 +403,7 @@ export default function PortfolioScreen() {
                 <View style={styles.todayChangeRow}>
                   <CoOwnNumericText
                     value={todayChangeGbp}
-                    unit="GBP"
+                    unit="1ZE"
                     size="price"
                     signed
                     showUnit={false}
@@ -430,7 +432,7 @@ export default function PortfolioScreen() {
                   <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]} numberOfLines={1}>Total return</Text>
                   <CoOwnNumericText
                     value={summary.totalUnrealizedGbp + summary.totalRealizedGbp}
-                    unit="GBP"
+                    unit="1ZE"
                     size="priceList"
                     signed
                     showUnit={false}
@@ -442,7 +444,7 @@ export default function PortfolioScreen() {
                   <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]} numberOfLines={1}>Unrealised</Text>
                   <CoOwnNumericText
                     value={summary.totalUnrealizedGbp}
-                    unit="GBP"
+                    unit="1ZE"
                     size="priceList"
                     signed
                     showUnit={false}
@@ -454,7 +456,7 @@ export default function PortfolioScreen() {
                   <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]} numberOfLines={1}>Realised</Text>
                   <CoOwnNumericText
                     value={summary.totalRealizedGbp}
-                    unit="GBP"
+                    unit="1ZE"
                     size="priceList"
                     signed
                     showUnit={false}
@@ -466,7 +468,7 @@ export default function PortfolioScreen() {
                   <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]} numberOfLines={1}>Distrib.</Text>
                   <CoOwnNumericText
                     value={totalDistributionsGbp}
-                    unit="GBP"
+                    unit="1ZE"
                     size="priceList"
                     signed
                     showUnit={false}
@@ -487,84 +489,140 @@ export default function PortfolioScreen() {
               )}
             </View>
 
-            {/* Best / worst performer highlight — quick at-a-glance insight */}
+            {/* Tab toggle — Positions (default) vs Insights.
+                Positions shows holdings immediately; Insights moves allocations,
+                P&L decomposition, performers and storytelling to a separate tab. */}
+            <View style={[styles.portfolioTabRow, { borderColor: colors.border }]}>
+              <Pressable
+                onPress={() => { haptics.selection(); setActivePortfolioTab('positions'); }}
+                style={[styles.portfolioTab, activePortfolioTab === 'positions' && { borderBottomColor: colors.textPrimary }]}
+                accessibilityRole="tab"
+                accessibilityLabel="Positions tab"
+                accessibilityState={{ selected: activePortfolioTab === 'positions' }}
+              >
+                <Text style={[
+                  styles.portfolioTabText,
+                  {
+                    color: activePortfolioTab === 'positions' ? colors.textPrimary : colors.textSecondary,
+                    fontFamily: activePortfolioTab === 'positions' ? Typography.family.semibold : Typography.family.regular,
+                  },
+                ]}>
+                  Positions
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => { haptics.selection(); setActivePortfolioTab('insights'); }}
+                style={[styles.portfolioTab, activePortfolioTab === 'insights' && { borderBottomColor: colors.textPrimary }]}
+                accessibilityRole="tab"
+                accessibilityLabel="Insights tab"
+                accessibilityState={{ selected: activePortfolioTab === 'insights' }}
+              >
+                <Text style={[
+                  styles.portfolioTabText,
+                  {
+                    color: activePortfolioTab === 'insights' ? colors.textPrimary : colors.textSecondary,
+                    fontFamily: activePortfolioTab === 'insights' ? Typography.family.semibold : Typography.family.regular,
+                  },
+                ]}>
+                  Insights
+                </Text>
+              </Pressable>
+            </View>
+
+            {/* ── Insights tab ──
+                Allocations, P&L decomposition, performers, realised returns,
+                storytelling and watchlist — moved here from the default view
+                to keep the Positions tab calm and focused. */}
+            {activePortfolioTab === 'insights' && (
+            <>
+            {/* Position insight — calm, factual summary replacing gamification.
+                Shows the best and worst positions by unrealized P&L without
+                "TOP PERFORMER" / "LAGGING" labels that gamify holding. */}
             {(performers.best || performers.worst) && (
-              <View style={styles.performerRow}>
-                {performers.best && (
-                  <View style={[styles.performerCard, { backgroundColor: colors.surface, borderColor: `${colors.success}40` }]}>
-                    <View style={styles.performerHeader}>
-                      <Ionicons name="trending-up-outline" size={13} color={colors.success} />
-                      <Text style={[styles.performerLabel, { color: colors.success }]}>TOP PERFORMER</Text>
-                    </View>
-                    <Text style={[styles.performerTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+              <View style={[styles.insightCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                {performers.best && performers.best.avgEntryPriceGbp > 0 && (
+                  <Pressable
+                    style={styles.insightRow}
+                    onPress={() => handlePositionPress(performers.best!)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Best position: ${performers.best.title}`}
+                  >
+                    <Ionicons name="arrow-up-outline" size={14} color={colors.success} />
+                    <Text style={[styles.insightLabel, { color: colors.textMuted }]} numberOfLines={1}>
+                      Best position
+                    </Text>
+                    <Text style={[styles.insightTitle, { color: colors.textPrimary }]} numberOfLines={1}>
                       {performers.best.title}
                     </Text>
                     <CoOwnNumericText
                       value={(performers.best.unrealizedPnlGbp / (performers.best.avgEntryPriceGbp * performers.best.unitsOwned)) * 100}
                       unit="pct"
-                      size="price"
+                      size="mono"
                       signed
                       showGlyph={false}
                       color={colors.success}
                     />
-                  </View>
+                  </Pressable>
                 )}
-                {performers.worst && (
-                  <View style={[styles.performerCard, { backgroundColor: colors.surface, borderColor: `${colors.danger}40` }]}>
-                    <View style={styles.performerHeader}>
-                      <Ionicons name="trending-down-outline" size={13} color={colors.danger} />
-                      <Text style={[styles.performerLabel, { color: colors.danger }]}>LAGGING</Text>
-                    </View>
-                    <Text style={[styles.performerTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+                {performers.worst && performers.worst.avgEntryPriceGbp > 0 && performers.worst.assetId !== performers.best?.assetId && (
+                  <Pressable
+                    style={[styles.insightRow, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }]}
+                    onPress={() => handlePositionPress(performers.worst!)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Worst position: ${performers.worst.title}`}
+                  >
+                    <Ionicons name="arrow-down-outline" size={14} color={colors.danger} />
+                    <Text style={[styles.insightLabel, { color: colors.textMuted }]} numberOfLines={1}>
+                      Worst position
+                    </Text>
+                    <Text style={[styles.insightTitle, { color: colors.textPrimary }]} numberOfLines={1}>
                       {performers.worst.title}
                     </Text>
                     <CoOwnNumericText
                       value={(performers.worst.unrealizedPnlGbp / (performers.worst.avgEntryPriceGbp * performers.worst.unitsOwned)) * 100}
                       unit="pct"
-                      size="price"
+                      size="mono"
                       signed
                       showGlyph={false}
                       color={colors.danger}
                     />
-                  </View>
+                  </Pressable>
                 )}
               </View>
             )}
 
-            {/* Allocation bars — only when real */}
+            {/* Allocation breakdowns — collapsible for progressive disclosure.
+                Collapsed by default to calm the screen; expands on tap. */}
             {allocationBars.length > 0 && (
               <View style={[styles.allocationCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <Text style={[styles.allocationTitle, { color: colors.textPrimary }]}>Allocation</Text>
-                <Text style={[styles.allocationSubtitle, { color: colors.textMuted }]}>By asset</Text>
-                <View style={styles.barsContainer}>
-                  {allocationBars.map((bar) => (
-                    <View key={bar.id} style={styles.barItem}>
-                      <View style={styles.barHeader}>
-                        <Text style={[styles.barLabel, { color: colors.textSecondary }]} numberOfLines={1}>{bar.title}</Text>
-                        <CoOwnNumericText
-                          value={bar.ratio * 100}
-                          unit="pct"
-                          size="mono"
-                          showUnit={false}
-                          color={colors.textMuted}
-                        />
-                      </View>
-                      <View style={[styles.barTrack, { backgroundColor: colors.surfaceAlt }]}>
-                        <View style={[styles.barFill, { width: `${bar.ratio * 100}%`, backgroundColor: colors.brand }]} />
-                      </View>
-                    </View>
-                  ))}
-                </View>
-
-                {/* By class allocation — spec 06 §1.2 */}
-                {classBars.length > 0 && (
-                  <View style={[styles.issuerSection, { borderTopColor: colors.border }]}>
-                    <Text style={[styles.allocationSubtitle, { color: colors.textMuted }]}>By class</Text>
+                <Pressable
+                  style={styles.allocationHeader}
+                  onPress={() => setAllocationExpanded((prev) => !prev)}
+                  accessibilityRole="button"
+                  accessibilityLabel={allocationExpanded ? 'Collapse allocation breakdown' : 'Expand allocation breakdown'}
+                  accessibilityState={{ expanded: allocationExpanded }}
+                >
+                  <View>
+                    <Text style={[styles.allocationTitle, { color: colors.textPrimary }]}>Allocation</Text>
+                    <Text style={[styles.allocationSubtitle, { color: colors.textMuted }]} numberOfLines={1}>
+                      {allocationBars.length} {allocationBars.length === 1 ? 'asset' : 'assets'}
+                      {classBars.length > 0 ? ` · ${classBars.length} ${classBars.length === 1 ? 'class' : 'classes'}` : ''}
+                    </Text>
+                  </View>
+                  <Ionicons
+                    name={allocationExpanded ? 'chevron-up-outline' : 'chevron-down-outline'}
+                    size={18}
+                    color={colors.textSecondary}
+                  />
+                </Pressable>
+                {allocationExpanded && (
+                  <>
+                    <Text style={[styles.allocationSubtitle, { color: colors.textMuted }]}>By asset</Text>
                     <View style={styles.barsContainer}>
-                      {classBars.map((bar) => (
+                      {allocationBars.map((bar) => (
                         <View key={bar.id} style={styles.barItem}>
                           <View style={styles.barHeader}>
-                            <Text style={[styles.barLabel, { color: colors.textSecondary }]} numberOfLines={1}>{bar.label}</Text>
+                            <Text style={[styles.barLabel, { color: colors.textSecondary }]} numberOfLines={1}>{bar.title}</Text>
                             <CoOwnNumericText
                               value={bar.ratio * 100}
                               unit="pct"
@@ -574,34 +632,60 @@ export default function PortfolioScreen() {
                             />
                           </View>
                           <View style={[styles.barTrack, { backgroundColor: colors.surfaceAlt }]}>
-                            <View style={[styles.barFill, { width: `${bar.ratio * 100}%`, backgroundColor: colors.textSecondary }]} />
+                            <View style={[styles.barFill, { width: `${bar.ratio * 100}%`, backgroundColor: colors.brand }]} />
                           </View>
                         </View>
                       ))}
                     </View>
-                  </View>
-                )}
 
-                {/* Issuer concentration bands — privacy-safe (spec 06 §1.2) */}
-                {issuerBands.length > 1 && (
-                  <View style={[styles.issuerSection, { borderTopColor: colors.border }]}>
-                    <Text style={[styles.allocationSubtitle, { color: colors.textMuted }]}>By issuer concentration</Text>
-                    <View style={styles.barsContainer}>
-                      {issuerBands.map((band) => (
-                        <View key={band.id} style={styles.barItem}>
-                          <View style={styles.barHeader}>
-                            <Text style={[styles.barLabel, { color: colors.textSecondary }]} numberOfLines={1}>
-                              {band.label}
-                            </Text>
-                            <Text style={[styles.barPct, { color: colors.textMuted }]}>{band.band}</Text>
-                          </View>
-                          <View style={[styles.barTrack, { backgroundColor: colors.surfaceAlt }]}>
-                            <View style={[styles.barFill, { width: `${band.ratio * 100}%`, backgroundColor: colors.textSecondary }]} />
-                          </View>
+                    {/* By class allocation — spec 06 §1.2 */}
+                    {classBars.length > 0 && (
+                      <View style={[styles.issuerSection, { borderTopColor: colors.border }]}>
+                        <Text style={[styles.allocationSubtitle, { color: colors.textMuted }]}>By class</Text>
+                        <View style={styles.barsContainer}>
+                          {classBars.map((bar) => (
+                            <View key={bar.id} style={styles.barItem}>
+                              <View style={styles.barHeader}>
+                                <Text style={[styles.barLabel, { color: colors.textSecondary }]} numberOfLines={1}>{bar.label}</Text>
+                                <CoOwnNumericText
+                                  value={bar.ratio * 100}
+                                  unit="pct"
+                                  size="mono"
+                                  showUnit={false}
+                                  color={colors.textMuted}
+                                />
+                              </View>
+                              <View style={[styles.barTrack, { backgroundColor: colors.surfaceAlt }]}>
+                                <View style={[styles.barFill, { width: `${bar.ratio * 100}%`, backgroundColor: colors.textSecondary }]} />
+                              </View>
+                            </View>
+                          ))}
                         </View>
-                      ))}
-                    </View>
-                  </View>
+                      </View>
+                    )}
+
+                    {/* Issuer concentration bands — privacy-safe (spec 06 §1.2) */}
+                    {issuerBands.length > 1 && (
+                      <View style={[styles.issuerSection, { borderTopColor: colors.border }]}>
+                        <Text style={[styles.allocationSubtitle, { color: colors.textMuted }]}>By issuer concentration</Text>
+                        <View style={styles.barsContainer}>
+                          {issuerBands.map((band) => (
+                            <View key={band.id} style={styles.barItem}>
+                              <View style={styles.barHeader}>
+                                <Text style={[styles.barLabel, { color: colors.textSecondary }]} numberOfLines={1}>
+                                  {band.label}
+                                </Text>
+                                <Text style={[styles.barPct, { color: colors.textMuted }]}>{band.band}</Text>
+                              </View>
+                              <View style={[styles.barTrack, { backgroundColor: colors.surfaceAlt }]}>
+                                <View style={[styles.barFill, { width: `${band.ratio * 100}%`, backgroundColor: colors.textSecondary }]} />
+                              </View>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+                  </>
                 )}
               </View>
             )}
@@ -625,7 +709,7 @@ export default function PortfolioScreen() {
                   </View>
                   <CoOwnNumericText
                     value={summary.totalRealizedGbp}
-                    unit="GBP"
+                    unit="1ZE"
                     size="price"
                     signed
                     showUnit={false}
@@ -690,7 +774,14 @@ export default function PortfolioScreen() {
                 </View>
               </View>
             </View>
+            </>
+            )}
 
+            {/* ── Positions tab ──
+                Positions list shows immediately after the summary when the
+                Positions tab is active. No insights chrome above it. */}
+            {activePortfolioTab === 'positions' && (
+            <>
             {/* Section header */}
             <View style={styles.sectionRow}>
               <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Your positions</Text>
@@ -715,6 +806,8 @@ export default function PortfolioScreen() {
                 </AnimatedPressable>
               </View>
             </View>
+            </>
+            )}
           </View>
         }
         renderItem={renderPosition}
@@ -746,15 +839,15 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     borderRadius: Radius.lg,
-    borderWidth: 0.5,
-    padding: Space.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Space.lg,
     gap: Space.sm,
     marginBottom: Space.lg,
   },
   summaryLabel: {
     fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    letterSpacing: 0.3,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: 1.0,
     textTransform: 'uppercase',
   },
   summaryValue: {
@@ -785,47 +878,65 @@ const styles = StyleSheet.create({
   },
   allocationCard: {
     borderRadius: Radius.lg,
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
     gap: Space.sm,
     marginBottom: Space.lg,
   },
-  performerRow: {
+  // ── Portfolio tab toggle ──
+  portfolioTabRow: {
     flexDirection: 'row',
-    gap: Space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     marginBottom: Space.lg,
+    marginTop: Space.md,
   },
-  performerCard: {
-    flex: 1,
-    borderRadius: Radius.md,
-    borderWidth: 0.5,
-    padding: Space.sm,
-    gap: 4,
+  portfolioTab: {
+    paddingVertical: Space.sm + 2,
+    paddingHorizontal: Space.md,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+    marginRight: Space.sm,
   },
-  performerHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  performerLabel: {
-    fontSize: 9,
-    fontFamily: Typography.family.bold,
-    letterSpacing: 0.5,
-  },
-  performerTitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+  portfolioTabText: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.regular,
     letterSpacing: -0.2,
   },
-  performerValue: {
-    fontSize: Type.bodyEmphasis.size,
-    fontFamily: Typography.family.bold,
-    fontVariant: ['tabular-nums'],
+  // ── Position insight (calm replacement for gamification cards) ──
+  insightCard: {
+    borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: Space.lg,
+    overflow: 'hidden',
+  },
+  insightRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.md,
+  },
+  insightLabel: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+  },
+  insightTitle: {
+    flex: 1,
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.medium,
+    letterSpacing: -0.2,
+    minWidth: 0,
   },
   allocationTitle: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: -0.3,
+  },
+  allocationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Space.xs,
   },
   allocationSubtitle: {
     fontSize: Type.caption.size,
@@ -880,7 +991,7 @@ const styles = StyleSheet.create({
   },
   realisedCard: {
     borderRadius: Radius.lg,
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
     marginBottom: Space.lg,
   },
@@ -954,7 +1065,7 @@ const styles = StyleSheet.create({
   },
   rightsCard: {
     borderRadius: Radius.lg,
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
     gap: Space.sm,
     marginBottom: Space.lg,
