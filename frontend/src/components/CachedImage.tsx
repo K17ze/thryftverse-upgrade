@@ -64,18 +64,6 @@ export function CachedImage({
   onLoad,
   focalPoint,
 }: CachedImageProps) {
-  // Honest placeholder for missing images — no blank rectangles
-  if (!uri) {
-    return (
-      <View style={[styles.container, containerStyle]}>
-        <ImageEmptyGraphic
-          label={emptyLabel}
-          icon={emptyIcon}
-          style={[styles.image, style]}
-        />
-      </View>
-    );
-  }
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
   const reducedMotionEnabled = useReducedMotion();
@@ -168,6 +156,19 @@ export function CachedImage({
     previewOpacity.value = withTiming(0, { duration: 80 });
     onError?.();
   }, [imageOpacity, previewOpacity, onError]);
+
+  // Honest placeholder for missing images — no blank rectangles
+  if (!uri) {
+    return (
+      <View style={[styles.container, containerStyle]}>
+        <ImageEmptyGraphic
+          label={emptyLabel}
+          icon={emptyIcon}
+          style={[styles.image, style]}
+        />
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, containerStyle]}>

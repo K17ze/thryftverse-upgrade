@@ -2,7 +2,6 @@ import React from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { StyleSheet as RNStyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -34,10 +33,9 @@ export function CoOwnMarketHeader({
   showBackButton = true,
 }: CoOwnMarketHeaderProps) {
   const { colors } = useAppTheme();
-  const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top + Space.xs }, style]}>
+    <View style={[styles.root, style]}>
       <View style={styles.row}>
         {showBackButton && onBack ? (
           <AnimatedPressable
@@ -55,11 +53,11 @@ export function CoOwnMarketHeader({
         )}
 
         <View style={styles.titleWrap}>
-          <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>
+          <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>
             {title}
           </Text>
           {subtitle ? (
-            <Text style={[styles.subtitle, { color: colors.textSecondary }]} numberOfLines={1}>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={1.3}>
               {subtitle}
             </Text>
           ) : null}
@@ -86,7 +84,7 @@ export function CoOwnMarketHeader({
                 <Ionicons name={action.icon} size={18} color={isPrimary ? colors.background : colors.textPrimary} />
                 {action.badge != null && action.badge > 0 && (
                   <View style={[styles.badge, { backgroundColor: isPrimary ? colors.background : colors.brand, borderColor: colors.background }]}>
-                    <Text style={[styles.badgeText, { color: isPrimary ? colors.brand : colors.background }]}>
+                    <Text style={[styles.badgeText, { color: isPrimary ? colors.brand : colors.background }]} maxFontSizeMultiplier={1.1}>
                       {action.badge > 9 ? '9+' : action.badge}
                     </Text>
                   </View>
@@ -100,18 +98,17 @@ export function CoOwnMarketHeader({
   );
 }
 
-const ICON_SIZE = 38;
+const ICON_SIZE = 44;
 
 const styles = StyleSheet.create({
   root: {
     paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    minHeight: 48,
+    minHeight: 56,
   },
   iconBtn: {
     width: ICON_SIZE,

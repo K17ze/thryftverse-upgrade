@@ -16,34 +16,37 @@ function SkeletonBlock({ width, height, radius = Radius.md }: { width: Dimension
 
 export function CoOwnHubSkeleton() {
   const { width } = useWindowDimensions();
-  const isCompact = width < 360;
-  const heroHeight = Math.min(width * 0.62, 280);
-  const cardWidth = isCompact ? width - Space.md * 2 : (width - Space.md * 3) / 2;
-  const cardImageHeight = isCompact ? cardWidth * 0.8 : cardWidth * 1.25;
+  const highlightWidth = Math.round(Math.min(width * 0.86, 380));
+  const highlightHeight = Math.round(Math.min(260, Math.max(228, width * 0.63)));
 
   return (
-    <View style={styles.wrap}>
-      <SkeletonBlock width={width - Space.md * 2} height={heroHeight + 120} radius={Radius.lg} />
-      <View style={styles.sectionGap} />
-      {isCompact ? (
+    <View style={styles.hubSkeleton}>
+      <View style={styles.hubHeadingSkeleton}>
+        <SkeletonBlock width={120} height={11} radius={Radius.sm} />
+        <SkeletonBlock width={70} height={11} radius={Radius.sm} />
+      </View>
+      <View style={styles.hubHighlightRow}>
+        <SkeletonBlock width={highlightWidth} height={highlightHeight} radius={Radius.xl} />
+        <SkeletonBlock width={Math.max(16, width - highlightWidth - Space.xl)} height={highlightHeight} radius={Radius.xl} />
+      </View>
+      <View style={styles.hubIndicatorSkeleton}>
+        <SkeletonBlock width={34} height={10} radius={Radius.sm} />
+      </View>
+      <SkeletonBlock width={width - Space.xl} height={42} radius={Radius.md} />
+      <View style={styles.hubTabsSkeleton}>
+        {[0, 1, 2, 3].map((index) => <SkeletonBlock key={index} width={64} height={14} radius={Radius.sm} />)}
+      </View>
+      <View style={styles.hubSectionHeadingSkeleton}>
         <View style={styles.columnGap}>
-          <SkeletonBlock width={cardWidth} height={cardImageHeight + 80} radius={Radius.md} />
-          <View style={styles.rowGap} />
-          <SkeletonBlock width={cardWidth} height={cardImageHeight + 80} radius={Radius.md} />
+          <SkeletonBlock width={90} height={10} radius={Radius.sm} />
+          <SkeletonBlock width={110} height={24} radius={Radius.sm} />
         </View>
-      ) : (
-        <>
-          <View style={styles.row}>
-            <SkeletonBlock width={cardWidth} height={cardImageHeight + 80} radius={Radius.md} />
-            <SkeletonBlock width={cardWidth} height={cardImageHeight + 80} radius={Radius.md} />
-          </View>
-          <View style={styles.rowGap} />
-          <View style={styles.row}>
-            <SkeletonBlock width={cardWidth} height={cardImageHeight + 80} radius={Radius.md} />
-            <SkeletonBlock width={cardWidth} height={cardImageHeight + 80} radius={Radius.md} />
-          </View>
-        </>
-      )}
+        <SkeletonBlock width={42} height={14} radius={Radius.sm} />
+      </View>
+      <View style={styles.hubPositionRow}>
+        <SkeletonBlock width={280} height={168} radius={Radius.xl} />
+        <SkeletonBlock width={Math.max(24, width - 308)} height={168} radius={Radius.xl} />
+      </View>
     </View>
   );
 }
@@ -319,6 +322,54 @@ export function CoOwnCandleChartSkeleton() {
 }
 
 const styles = StyleSheet.create({
+  hubSkeleton: {
+    paddingTop: Space.sm,
+    alignItems: 'center',
+    gap: Space.sm,
+    overflow: 'hidden',
+  },
+  hubHeadingSkeleton: {
+    width: '100%',
+    minHeight: 28,
+    paddingHorizontal: Space.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  hubHighlightRow: {
+    width: '100%',
+    paddingLeft: Space.md,
+    flexDirection: 'row',
+    gap: 12,
+  },
+  hubIndicatorSkeleton: {
+    width: '100%',
+    minHeight: 28,
+    paddingHorizontal: Space.md,
+    justifyContent: 'center',
+  },
+  hubTabsSkeleton: {
+    width: '100%',
+    minHeight: 50,
+    paddingHorizontal: Space.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  hubSectionHeadingSkeleton: {
+    width: '100%',
+    paddingHorizontal: Space.md,
+    paddingTop: Space.md,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+  },
+  hubPositionRow: {
+    width: '100%',
+    paddingLeft: Space.md,
+    flexDirection: 'row',
+    gap: 12,
+  },
   wrap: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,

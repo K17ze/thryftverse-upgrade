@@ -116,6 +116,29 @@ describe('COOWN-FLAGSHIP: Co-Own department flagship upgrade', () => {
       const src = readSrc('screens/SyndicateHubScreen.tsx');
       expect(src).toContain('CoOwnEducationCard');
     });
+
+    it('SyndicateHubScreen uses a looping market highlights carousel', () => {
+      const src = readSrc('screens/SyndicateHubScreen.tsx');
+      const carousel = readSrc('components/coown/CoOwnMarketHighlightsCarousel.tsx');
+      expect(src).toContain('CoOwnMarketHighlightsCarousel');
+      expect(carousel).toContain('snapToInterval');
+      expect(carousel).toContain('scrollToIndex');
+      expect(carousel).toContain('onMomentumScrollEnd');
+    });
+
+    it('SyndicateHubScreen restores compact positions inline', () => {
+      const src = readSrc('screens/SyndicateHubScreen.tsx');
+      expect(src).toContain('CoOwnCompactPositionCard');
+      expect(src).toContain('YOUR PORTFOLIO');
+      expect(src).toContain("navigation.navigate('Portfolio')");
+    });
+
+    it('SyndicateHubScreen keeps market tabs sticky and listing controls inline', () => {
+      const src = readSrc('screens/SyndicateHubScreen.tsx');
+      expect(src).toContain('stickyHeaderIndices');
+      expect(src).toContain('Market search and sorting');
+      expect(src).not.toContain('CoOwnFeaturedAsset');
+    });
   });
 
   // ── 7. TradeScreen has product identity and review flow ──
