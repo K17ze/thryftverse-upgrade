@@ -5,9 +5,9 @@ import Svg, { Path, Defs, LinearGradient, Stop, Rect, Circle } from 'react-nativ
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
-import { useFormattedPrice } from '../../hooks/useFormattedPrice';
-import { listCoOwnAssetOrders, MarketCoOwnOrder } from '../../services/marketApi';
+import { listCoOwnExecutions, MarketCoOwnExecution } from '../../services/marketApi';
 import { haptics } from '../../utils/haptics';
+import { formatCoOwnIze } from '../../utils/currency';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -42,39 +42,17 @@ const PERIOD_MS: Record<Period, number> = {
 
 const PERIOD_LABELS: Period[] = ['1D', '1W', '1M', 'ALL'];
 
-/** Build a price series from filled orders within the period window. */
-function buildPriceSeries(orders: MarketCoOwnOrder[], period: Period, currentPrice: number): PricePoint[] {
+/** Build a price series only from authoritative settled executions. */
+function buildPriceSeries(executions: MarketCoOwnExecution[], period: Period): PricePoint[] {
   const now = Date.now();
   const cutoff = now - PERIOD_MS[period];
-  const filled = orders
-    .filter((o) => o.status === 'filled')
-    .filter((o) => new Date(o.createdAt).getTime() >= cutoff)
-    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-
-  if (filled.length === 0) {
-    // No trades in window — return a flat line at the current price
-    return [
-      { timestamp: now - PERIOD_MS[period === 'ALL' ? '1W' : period], price: currentPrice },
-      { timestamp: now, price: currentPrice },
-    ];
-  }
-
-  const points: PricePoint[] = filled.map((o) => ({
-    timestamp: new Date(o.createdAt).getTime(),
-    price: o.unitPriceGbp,
-  }));
-
-  // Anchor the start to the period cutoff with the first known price
-  if (points[0].timestamp > cutoff + 60_000) {
-    points.unshift({ timestamp: Math.max(cutoff, points[0].timestamp - 3600_000), price: points[0].price });
-  }
-
-  // Anchor the end to now with the current price
-  if (points[points.length - 1].timestamp < now - 60_000) {
-    points.push({ timestamp: now, price: currentPrice });
-  }
-
-  return points;
+  return executions
+    .filter((execution) => new Date(execution.executedAt).getTime() >= cutoff)
+    .sort((a, b) => new Date(a.executedAt).getTime() - new Date(b.executedAt).getTime())
+    .map((execution) => ({
+      timestamp: new Date(execution.executedAt).getTime(),
+      price: execution.unitPriceGbp,
+    }));
 }
 
 /** Build an SVG path string for the sparkline. */
@@ -146,11 +124,10 @@ export function CoOwnPriceChart({
   candleChart,
 }: CoOwnPriceChartProps) {
   const { colors } = useAppTheme();
-  const { formatFromFiat } = useFormattedPrice();
   const [period, setPeriod] = useState<Period>('1W');
   const [chartMode, setChartMode] = useState<ChartMode>('line');
   const [showVolume, setShowVolume] = useState(false);
-  const [orders, setOrders] = useState<MarketCoOwnOrder[]>([]);
+  const [executions, setExecutions] = useState<MarketCoOwnExecution[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
 
@@ -158,10 +135,10 @@ export function CoOwnPriceChart({
     let cancelled = false;
     setIsLoading(true);
     setHasError(false);
-    listCoOwnAssetOrders(assetId, { limit: 100 })
+    listCoOwnExecutions(assetId, { limit: 200 })
       .then((fetched) => {
         if (cancelled) return;
-        setOrders(fetched);
+        setExecutions(fetched.items);
       })
       .catch(() => {
         if (cancelled) return;
@@ -174,8 +151,8 @@ export function CoOwnPriceChart({
   }, [assetId]);
 
   const priceSeries = useMemo(
-    () => buildPriceSeries(orders, period, unitPriceGbp),
-    [orders, period, unitPriceGbp],
+    () => buildPriceSeries(executions, period),
+    [executions, period],
   );
 
   const handlePeriodChange = useCallback((p: Period) => {
@@ -207,7 +184,7 @@ export function CoOwnPriceChart({
     [priceSeries],
   );
 
-  const tradeCount = priceSeries.length - 2; // Subtract the two anchor points
+  const tradeCount = priceSeries.length;
 
   const periodHigh = priceSeries.length > 0 ? Math.max(...priceSeries.map((p) => p.price)) : unitPriceGbp;
   const periodLow = priceSeries.length > 0 ? Math.min(...priceSeries.map((p) => p.price)) : unitPriceGbp;
@@ -252,7 +229,7 @@ export function CoOwnPriceChart({
         </View>
         <View style={styles.headerRight}>
           <Text style={[styles.currentPrice, { color: colors.textPrimary }]}>
-            {formatFromFiat(unitPriceGbp, 'GBP')}
+            {formatCoOwnIze(unitPriceGbp)}
           </Text>
           <View style={[styles.changeBadge, { backgroundColor: `${changeColor}15` }]}>
             <Ionicons
@@ -367,14 +344,16 @@ export function CoOwnPriceChart({
             Tap a period to retry, or check your connection.
           </Text>
         </View>
-      ) : priceSeries.length < 3 && tradeCount <= 0 ? (
+      ) : priceSeries.length < 2 ? (
         <View style={styles.chartEmpty}>
           <Ionicons name="bar-chart-outline" size={24} color={colors.textMuted} />
           <Text style={[styles.chartEmptyText, { color: colors.textMuted }]}>
-            No trades in this period yet
+            {tradeCount === 0 ? 'No executions in this period' : 'One execution in this period'}
           </Text>
           <Text style={[styles.chartEmptySubtext, { color: colors.textSecondary }]}>
-            Price reflects the current listing price. Place a limit order to be the first trade.
+            {tradeCount === 0
+              ? 'A chart appears only after real settled trades. The listing price is not fabricated as history.'
+              : 'One settled execution is shown in market activity; a trend needs at least two executions.'}
           </Text>
         </View>
       ) : (
@@ -400,7 +379,7 @@ export function CoOwnPriceChart({
               />
             ) : null}
             {/* Phase 2: sparse-trade marks — discrete dots at each trade point */}
-            {priceSeries.slice(1, -1).map((point, i) => {
+            {priceSeries.map((point, i) => {
               const timestamps = priceSeries.map((p) => p.timestamp);
               const prices = priceSeries.map((p) => p.price);
               const minT = Math.min(...timestamps);
@@ -430,21 +409,21 @@ export function CoOwnPriceChart({
         <View style={styles.footerItem}>
           <Text style={[styles.footerLabel, { color: colors.textMuted }]}>High</Text>
           <Text style={[styles.footerValue, { color: colors.textPrimary }]}>
-            {formatFromFiat(periodHigh, 'GBP')}
+            {formatCoOwnIze(periodHigh)}
           </Text>
         </View>
         <View style={[styles.footerDivider, { backgroundColor: colors.border }]} />
         <View style={styles.footerItem}>
           <Text style={[styles.footerLabel, { color: colors.textMuted }]}>Low</Text>
           <Text style={[styles.footerValue, { color: colors.textPrimary }]}>
-            {formatFromFiat(periodLow, 'GBP')}
+            {formatCoOwnIze(periodLow)}
           </Text>
         </View>
         <View style={[styles.footerDivider, { backgroundColor: colors.border }]} />
         <View style={styles.footerItem}>
           <Text style={[styles.footerLabel, { color: colors.textMuted }]}>24h volume</Text>
           <Text style={[styles.footerValue, { color: colors.textPrimary }]}>
-            {formatFromFiat(volume24hGbp, 'GBP')}
+            {formatCoOwnIze(volume24hGbp)}
           </Text>
         </View>
         <View style={[styles.footerDivider, { backgroundColor: colors.border }]} />

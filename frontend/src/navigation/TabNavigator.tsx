@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useMemo } from 'react';
+import React, { useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import { TabParamList, RootStackParamList } from './types';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Typography } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useStore } from '../store/useStore';
@@ -19,9 +19,9 @@ import MyProfileScreen from '../screens/MyProfileScreen';
 
 const Tab = createBottomTabNavigator<TabParamList>();
 
-const NAV_HEIGHT = 54;
-const CREATE_CONTROL_SIZE = 32;
-const AVATAR_SIZE = 25;
+const NAV_HEIGHT = 60;
+const CREATE_CONTROL_SIZE = 36;
+const AVATAR_SIZE = 27;
 
 interface TabIconProps {
   name: keyof typeof Ionicons.glyphMap;
@@ -41,7 +41,7 @@ const TabIcon = ({ name, nameFocused, color, focused, badgeCount }: TabIconProps
 
   return (
     <View style={tabStyles.tabIconWrap}>
-      <Ionicons name={iconName} size={23} color={color} />
+      <Ionicons name={iconName} size={24} color={color} />
       {displayBadge && (
         <View
           style={[tabStyles.badge, { backgroundColor: colors.danger, borderColor: colors.surface }]}
@@ -124,12 +124,13 @@ export default function TabNavigator() {
           tabBarShowLabel: false,
           tabBarHideOnKeyboard: true,
           tabBarStyle: {
-            ...tabStyles.fixedTabBar,
-            backgroundColor: colors.surface,
-            borderTopColor: colors.borderSubtle,
-            height: NAV_HEIGHT + Math.max(insets.bottom, 0),
-            paddingBottom: Math.max(insets.bottom, 0),
-            paddingHorizontal: 0,
+            ...tabStyles.floatingTabBar,
+            backgroundColor: colors.surfaceElevated,
+            borderColor: colors.border,
+            shadowColor: colors.shadow,
+            height: NAV_HEIGHT,
+            bottom: Math.max(insets.bottom, Space.sm),
+            paddingBottom: 0,
           },
           tabBarItemStyle: tabStyles.tabBarItem,
           tabBarActiveTintColor: colors.textPrimary,
@@ -223,10 +224,18 @@ export default function TabNavigator() {
 
 // Static layout styles (no theme-dependent colors)
 const tabStyles = StyleSheet.create({
-  fixedTabBar: {
+  floatingTabBar: {
+    position: 'absolute',
+    left: Space.md,
+    right: Space.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    shadowColor: 'transparent',
-    elevation: 0,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.xxl,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    elevation: 8,
+    overflow: 'hidden',
   },
   tabBarItem: {
     alignItems: 'center',

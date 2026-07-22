@@ -242,7 +242,8 @@ describe('COOWN-FLAGSHIP: Co-Own department flagship upgrade', () => {
     it('AssetLeaderboardScreen uses CoOwnMarketHeader', () => {
       const src = readSrc('screens/AssetLeaderboardScreen.tsx');
       expect(src).toContain('CoOwnMarketHeader');
-      expect(src).toContain('Leaderboards');
+      expect(src).toContain('Market overview');
+      expect(src).not.toContain('Most co-owners');
     });
 
     it('AssetLeaderboardScreen uses CoOwnLeaderboardSkeleton', () => {

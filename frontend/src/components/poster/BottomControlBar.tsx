@@ -7,7 +7,7 @@ import {
   Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as MediaLibrary from 'expo-media-library';
+import type * as MediaLibrary from 'expo-media-library/legacy';
 
 interface BottomControlBarProps {
   onGalleryPress: () => void;

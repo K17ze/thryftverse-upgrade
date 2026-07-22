@@ -226,6 +226,19 @@ interface WalletIzePositionResponse {
   balances: {
     userIze: number;
     userFiatValue: number;
+    availableIze: number;
+    reservedForOrders: number;
+    redemptionInProgress: number;
+    otherHolds: number;
+    pendingDeposit: number;
+    unsettledSaleProceeds: number;
+    settledCustomerClaim: number;
+    withdrawable: number;
+    safeguarded: boolean;
+    safeguardingPartner: string | null;
+    snapshotSequence: number;
+    serverTimestamp: string;
+    reconciliationState: 'reconciled' | 'reconciling' | 'break';
     outstandingIze: number;
     circulatingIze?: number;
     supplyDeltaIze?: number;
@@ -433,16 +446,29 @@ export async function getIzePosition(userId: string, fiatCurrency = 'GBP') {
         userId,
         rate: {
           currency: fiatCurrency,
-          ratePerGram: 75.42,
-          source: 'dev-mock',
+          ratePerGram: 1,
+          source: 'fixed_par:GBP:1ZE',
           fetchedAt: now.toISOString(),
           expiresAt: expires.toISOString(),
           isFallback: true,
           isOverride: false,
         },
         balances: {
-          userIze: 2_659_574, // 2,659.574 1ZE in mg
-          userFiatValue: 200_00, // £200.00 in minor units
+          userIze: 2_659.574,
+          userFiatValue: 2_659.574,
+          availableIze: 2_659.574,
+          reservedForOrders: 0,
+          redemptionInProgress: 0,
+          otherHolds: 0,
+          pendingDeposit: 0,
+          unsettledSaleProceeds: 0,
+          settledCustomerClaim: 2_659.574,
+          withdrawable: 2_659.574,
+          safeguarded: false,
+          safeguardingPartner: null,
+          snapshotSequence: 0,
+          serverTimestamp: now.toISOString(),
+          reconciliationState: 'reconciling' as const,
           outstandingIze: 0,
           circulatingIze: 1_000_000_000,
           supplyDeltaIze: 0,

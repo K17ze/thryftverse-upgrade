@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { Space, Radius, Type, TypeStyles, Typography } from '../../theme/designTokens';
@@ -59,7 +59,7 @@ export function ChatListingContextBar({
             />
           ) : (
             <View style={[styles.thumb, styles.thumbFallback]}>
-              <Ionicons name="pricetag-outline" size={16} color={Colors.textMuted} />
+              <Text style={styles.thumbFallbackText}>{title.slice(0, 2).toUpperCase()}</Text>
             </View>
           )}
           <View style={styles.info}>
@@ -69,18 +69,18 @@ export function ChatListingContextBar({
               <Text style={styles.availability}>{availability}</Text>
             </View>
           </View>
-          {onTitlePress && (
-            <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
-          )}
         </AnimatedPressable>
-        <Pressable
+        <AnimatedPressable
           onPress={() => setCollapsed((c) => !c)}
+          activeOpacity={0.7}
+          scaleValue={0.92}
+          hapticFeedback="light"
           accessibilityRole="button"
           accessibilityLabel={collapsed ? 'Expand listing actions' : 'Collapse listing actions'}
           style={styles.collapseBtn}
         >
-          <Ionicons name={collapsed ? 'chevron-down-outline' : 'chevron-up-outline'} size={16} color={Colors.textMuted} />
-        </Pressable>
+          <Ionicons name={collapsed ? 'ellipsis-horizontal' : 'close'} size={18} color={Colors.textSecondary} />
+        </AnimatedPressable>
       </View>
       {!collapsed && (
         <View style={styles.actionsRow}>
@@ -122,7 +122,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.border,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
+    paddingVertical: Space.xs + 2,
     gap: Space.sm,
   },
   rowContainer: {
@@ -137,20 +137,28 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   collapseBtn: {
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  thumb: {
     width: 44,
     height: 44,
-    borderRadius: Radius.sm,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surfaceAlt,
+  },
+  thumb: {
+    width: 48,
+    height: 48,
+    borderRadius: Radius.md,
     backgroundColor: Colors.surfaceAlt,
   },
   thumbFallback: {
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  thumbFallbackText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textSecondary,
+    letterSpacing: 0.8,
   },
   info: {
     flex: 1,
@@ -187,7 +195,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
-    paddingVertical: 8,
+    minHeight: 44,
     borderRadius: Radius.md,
     backgroundColor: Colors.textPrimary,
   },
@@ -202,7 +210,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
-    paddingVertical: 8,
+    minHeight: 44,
     borderRadius: Radius.md,
     backgroundColor: Colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,

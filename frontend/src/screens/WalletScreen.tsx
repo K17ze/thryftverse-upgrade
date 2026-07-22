@@ -10,6 +10,7 @@ import {
   LayoutAnimation,
   Platform,
   Pressable,
+  Linking,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,14 +25,14 @@ import { Space, Radius, Type, Typography, DockConstants } from '../theme/designT
 import { AppButton } from '../components/ui/AppButton';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { haptics } from '../utils/haptics';
-import { toIze, formatIzeAmount } from '../utils/currency';
-import { convertDisplayToGbpAmount } from '../utils/currencyAuthoringFlows';
+import { formatIzeAmount } from '../utils/currency';
+import { convertDisplayToGbpAmount, convertGbpToDisplayAmount } from '../utils/currencyAuthoringFlows';
 import { parseApiError } from '../lib/apiClient';
 import {
   getIzePosition,
+  getWalletSnapshot,
   getIzeQuote,
   createPaymentIntent,
-  confirmPaymentIntent,
   mintIze,
   buyIze,
   convertIzeToFiat,
@@ -61,7 +62,7 @@ export default function WalletScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const currentUser = useStore((state) => state.currentUser);
   const { currencyCode, goldRates } = useCurrencyContext();
-  const { formatFromIze, formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
   const { isOffline } = useConnectivity();
 
@@ -109,19 +110,28 @@ export default function WalletScreen({ navigation }: Props) {
     setIsLoading(true);
     setIsError(false);
 
-    getIzePosition(currentUser.id, currencyCode)
-      .then((position) => {
+    Promise.all([
+      getIzePosition(currentUser.id, currencyCode),
+      getWalletSnapshot(currentUser.id).catch(() => null),
+    ])
+      .then(([position, fiatWallet]) => {
         if (cancelled) return;
-        const availableIze = position.balances.userIze / 1000; // mg → 1ZE
         setBalance({
-          available: availableIze,
-          reservedForOrders: 0, // Backend does not yet expose this split
-          redemptionInProgress: 0,
-          otherHolds: 0,
-          pendingDeposit: 0,
-          unsettledSaleProceeds: 0,
+          available: position.balances.availableIze,
+          reservedForOrders: position.balances.reservedForOrders,
+          redemptionInProgress: position.balances.redemptionInProgress,
+          otherHolds: position.balances.otherHolds,
+          pendingDeposit: position.balances.pendingDeposit,
+          unsettledSaleProceeds: position.balances.unsettledSaleProceeds,
+          settledCustomerClaim: position.balances.settledCustomerClaim,
+          withdrawable: position.balances.withdrawable,
+          safeguarded: position.balances.safeguarded,
+          safeguardingPartner: position.balances.safeguardingPartner ?? undefined,
+          snapshotSequence: position.balances.snapshotSequence,
+          serverTimestamp: position.balances.serverTimestamp,
+          reconciliationState: position.balances.reconciliationState,
         });
-        setAvailableFiatBalance(position.balances.userFiatValue);
+        setAvailableFiatBalance(fiatWallet?.snapshot.availableGbp ?? 0);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -161,30 +171,31 @@ export default function WalletScreen({ navigation }: Props) {
 
   // ── Derived values for Add / Redeem flows ──
   const availableIze = balance.available;
+  const isWalletOperational = balance.reconciliationState === 'reconciled' && !isOffline;
 
   const loadFiatValue = Number(loadFiatInput || '0');
-  const loadGrossIze = toIze(loadFiatValue, currencyCode, goldRates);
+  const loadGrossIze = convertDisplayToGbpAmount(loadFiatValue, currencyCode, goldRates);
   const loadFeeIze = loadGrossIze * LOAD_IZE_FEE_RATE;
   const loadNetIze = Math.max(0, loadGrossIze - loadFeeIze);
   const loadFeeFiat = loadFiatValue * LOAD_IZE_FEE_RATE;
-  const canLoadIze = Number.isFinite(loadFiatValue) && loadFiatValue > 0 && !isProcessing;
+  const canLoadIze = Number.isFinite(loadFiatValue) && loadFiatValue > 0 && !isProcessing && isWalletOperational;
   const loadFeeRateLabel = `${Math.round(LOAD_IZE_FEE_RATE * 100)}%`;
 
   const buyFiatValue = Number(buyFiatInput || '0');
-  const buyIzeAmount = toIze(buyFiatValue, currencyCode, goldRates);
-  const canBuyIze = Number.isFinite(buyFiatValue) && buyFiatValue > 0 && buyFiatValue <= availableFiatBalance && !isProcessing;
+  const buyIzeAmount = convertDisplayToGbpAmount(buyFiatValue, currencyCode, goldRates);
+  const canBuyIze = Number.isFinite(buyFiatValue) && buyFiatValue > 0 && buyFiatValue <= availableFiatBalance && !isProcessing && isWalletOperational;
 
   const convertIzeValue = Number(convertIzeInput || '0');
-  const convertFiatValue = convertIzeValue * (1 / toIze(1, currencyCode, goldRates));
+  const convertFiatValue = convertGbpToDisplayAmount(convertIzeValue, currencyCode, goldRates);
   const convertFee = convertFiatValue * CONVERT_FEE_RATE;
   const convertNetFiat = Math.max(0, convertFiatValue - convertFee);
-  const canConvertIze = Number.isFinite(convertIzeValue) && convertIzeValue > 0 && convertIzeValue <= availableIze && !isProcessing;
+  const canConvertIze = Number.isFinite(convertIzeValue) && convertIzeValue > 0 && convertIzeValue <= availableIze && !isProcessing && isWalletOperational;
   const convertFeeRateLabel = `${Math.round(CONVERT_FEE_RATE * 100)}%`;
 
   // ── Local-fiat indication for spendable hero ──
-  const localFiatRate = toIze(1, currencyCode, goldRates) > 0 ? 1 / toIze(1, currencyCode, goldRates) : 0;
+  const localFiatRate = convertGbpToDisplayAmount(1, currencyCode, goldRates);
   const localFiatLabel = balance.available > 0 && localFiatRate > 0
-    ? `≈ ${formatFromIze(balance.available)}`
+    ? `≈ ${formatFromFiat(balance.available, 'GBP', { displayMode: 'fiat' })}`
     : undefined;
 
   // ── Handlers (preserved from BalanceScreen — real API calls) ──
@@ -232,16 +243,16 @@ export default function WalletScreen({ navigation }: Props) {
         },
       });
 
-      let settledIntent = intentResponse.intent;
+      const settledIntent = intentResponse.intent;
       if (settledIntent.status !== 'succeeded') {
-        const confirmation = await confirmPaymentIntent(settledIntent.id, {
-          simulateStatus: 'succeeded',
-          payload: { source: 'wallet_screen_manual_confirm' },
-        });
-        settledIntent = confirmation.intent;
-      }
-      if (settledIntent.status !== 'succeeded') {
-        throw new Error('Payment intent could not be settled. Please try again.');
+        if (settledIntent.nextActionUrl && await Linking.canOpenURL(settledIntent.nextActionUrl)) {
+          await Linking.openURL(settledIntent.nextActionUrl);
+          setLoadFiatInput('');
+          show('Payment is pending. 1ZE is credited only after provider confirmation.', 'info');
+        } else {
+          show('This payment provider cannot complete checkout on this device.', 'error');
+        }
+        return;
       }
 
       const mintResult = await mintIze({
@@ -261,8 +272,6 @@ export default function WalletScreen({ navigation }: Props) {
         },
       });
 
-      const netCreditedFiatGbp = mintResult.operation.netFiatAmount ?? mintResult.operation.fiatAmount;
-      setAvailableFiatBalance((prev) => Number((prev + Number(netCreditedFiatGbp.toFixed(2))).toFixed(2)));
       setLoadFiatInput('');
       show(`Loaded ${formatIzeAmount(mintResult.operation.izeAmount)} into your wallet.`, 'success');
       // Refresh the canonical balance so the spendable hero updates.
@@ -456,6 +465,7 @@ export default function WalletScreen({ navigation }: Props) {
             accessibilityHint={activeFlow === 'add' ? 'Collapses the add 1ZE form' : 'Expands the add 1ZE form'}
             hapticFeedback="medium"
             style={styles.actionBtn}
+            disabled={!isWalletOperational}
           />
           <AppButton
             title="Redeem 1ZE"
@@ -467,7 +477,7 @@ export default function WalletScreen({ navigation }: Props) {
             accessibilityHint={activeFlow === 'redeem' ? 'Collapses the redeem 1ZE form' : 'Expands the redeem 1ZE form'}
             hapticFeedback="medium"
             style={styles.actionBtn}
-            disabled={balance.available <= 0}
+            disabled={balance.available <= 0 || !isWalletOperational}
           />
         </View>
 
@@ -599,7 +609,7 @@ export default function WalletScreen({ navigation }: Props) {
                 />
                 <SummaryRow
                   label="Rate"
-                  value={<CoOwnNumericText value={1 / toIze(1, currencyCode, goldRates)} unit={currencyCode} size="priceList" align="right" showUnit={false} />}
+                  value={<CoOwnNumericText value={localFiatRate} unit={currencyCode} size="priceList" align="right" showUnit={false} />}
                   colors={colors}
                   total
                 />
@@ -702,17 +712,10 @@ export default function WalletScreen({ navigation }: Props) {
             <Text style={[styles.infoTitle, { color: colors.textPrimary }]}>About 1ZE</Text>
           </View>
           <Text style={[styles.infoBody, { color: colors.textMuted }]}>
-            1ZE is the platform's single settlement unit for Co-Own transactions. Its value is derived from live gold rates and may fluctuate. 1ZE is not a cryptocurrency or investment product — it is the medium through which Co-Own units are priced, traded and settled.
+            1ZE is the platform's single settlement unit for Co-Own transactions. For the UK market, 1ZE is maintained at a £1.00 reference par before disclosed fees. It is the medium through which Co-Own units are priced, traded and settled.
           </Text>
         </View>
 
-        {/* ── Statements ── */}
-        <View style={[styles.statementsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Text style={[styles.statementsTitle, { color: colors.textPrimary }]}>Statements</Text>
-          <Text style={[styles.statementsNote, { color: colors.textMuted }]}>
-            PDF and CSV statements will be available here.
-          </Text>
-        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -933,27 +936,6 @@ const styles = StyleSheet.create({
   infoBody: {
     fontSize: Type.caption.size,
     lineHeight: Type.caption.lineHeight + 2,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-  },
-
-  // ── Statements ──
-  statementsCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
-    gap: Space.xs,
-    marginTop: Space.md,
-  },
-  statementsTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
-  },
-  statementsNote: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
     letterSpacing: Type.caption.letterSpacing,
   },

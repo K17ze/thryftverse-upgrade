@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type, TypeStyles } from '../../theme/designTokens';
+import { Space, Control, Type, TypeStyles } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 
 export type FlagshipHeaderVariant = 'pushed' | 'modal' | 'large';
@@ -78,14 +78,15 @@ export function FlagshipHeader({
       <View style={styles.row}>
         {showBackButton && effectiveOnBack ? (
           <AnimatedPressable
-            style={[styles.iconBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
+            style={styles.iconBtn}
             onPress={effectiveOnBack}
             accessibilityRole="button"
             accessibilityLabel={isModal ? 'Close' : 'Go back'}
             scaleValue={0.92}
             hapticFeedback="light"
+            activeOpacity={0.62}
           >
-            <Ionicons name={effectiveBackIcon as any} size={24} color={colors.textPrimary} />
+            <Ionicons name={effectiveBackIcon as any} size={Control.icon} color={colors.textPrimary} />
           </AnimatedPressable>
         ) : (
           <View style={styles.iconBtnPlaceholder} />
@@ -114,12 +115,12 @@ export function FlagshipHeader({
   );
 }
 
-const ICON_SIZE = 44;
+const ICON_SIZE = Control.hit;
 
 const styles = StyleSheet.create({
   root: {
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 4,
+    paddingVertical: 6,
     minHeight: 56,
   },
   row: {
@@ -130,8 +131,6 @@ const styles = StyleSheet.create({
   iconBtn: {
     width: ICON_SIZE,
     height: ICON_SIZE,
-    borderRadius: Radius.md,
-    borderWidth: 0.5,
     justifyContent: 'center',
     alignItems: 'center',
   },

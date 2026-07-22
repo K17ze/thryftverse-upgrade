@@ -33,18 +33,34 @@ function statusLabel(status: string): string {
   return STATUS_LABELS[status] ?? status;
 }
 
+function formatOrderTimestamp(value: string): string {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return value;
+
+  const now = new Date();
+  const sameYear = date.getFullYear() === now.getFullYear();
+  const dayLabel = date.toLocaleDateString(undefined, sameYear
+    ? { day: 'numeric', month: 'short' }
+    : { day: 'numeric', month: 'short', year: '2-digit' });
+  const timeLabel = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  return `${dayLabel} · ${timeLabel}`;
+}
+
 interface OrderHistoryRowProps {
   id: string;
   side: OrderSide;
   type: 'market' | 'limit';
   assetTitle: string;
   quantity: number;
+  filledQuantity?: number;
   pricePerShare: string;
   totalAmount: string;
   fee?: string;
   status: OrderStatus;
   timestamp: string;
   onPress?: () => void;
+  onCancel?: () => void;
+  isCancelling?: boolean;
   issuerHandle?: string;
   issuerAvatar?: string;
   canMessageIssuer?: boolean;
@@ -90,11 +106,14 @@ export function OrderHistoryRow({
   type,
   assetTitle,
   quantity,
+  filledQuantity,
   pricePerShare,
   totalAmount,
   status,
   timestamp,
   onPress,
+  onCancel,
+  isCancelling = false,
   issuerHandle,
   issuerAvatar,
   canMessageIssuer = false,
@@ -134,15 +153,30 @@ export function OrderHistoryRow({
 
         <View style={styles.metaRow}>
           <Meta style={styles.metaLabel} numberOfLines={1}>
-            {side.toUpperCase()}  {type}  {quantity} units
+            {side.toUpperCase()}  {type}  {status === 'partial' && filledQuantity != null
+              ? `${filledQuantity} of ${quantity} filled`
+              : `${quantity} units`}
           </Meta>
-          <Meta style={styles.timestamp} numberOfLines={1}>{timestamp}</Meta>
+          <Meta style={styles.timestamp} numberOfLines={1}>{formatOrderTimestamp(timestamp)}</Meta>
         </View>
 
         <View style={styles.priceRow}>
           <Body style={styles.price} numberOfLines={1}>{pricePerShare} / share</Body>
           <BodyEmphasis style={styles.total} numberOfLines={1}>{totalAmount}</BodyEmphasis>
         </View>
+
+        {onCancel ? (
+          <AnimatedPressable
+            onPress={onCancel}
+            style={styles.cancelAction}
+            scaleValue={0.97}
+            accessibilityRole="button"
+            accessibilityLabel={`Cancel ${side} order for ${assetTitle}`}
+          >
+            <Ionicons name="close-circle-outline" size={15} color={Colors.textSecondary} />
+            <Meta style={styles.cancelText}>{isCancelling ? 'Cancelling…' : 'Cancel remaining'}</Meta>
+          </AnimatedPressable>
+        ) : null}
 
         {issuerHandle && onPressIssuer && (
           <View style={styles.issuerRow}>
@@ -231,8 +265,8 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   timestamp: {
-    textTransform: 'lowercase',
     flexShrink: 0,
+    fontVariant: ['tabular-nums'],
   },
   priceRow: {
     flexDirection: 'row',
@@ -248,6 +282,18 @@ const styles = StyleSheet.create({
   total: {
     fontVariant: ['tabular-nums'],
     flexShrink: 0,
+  },
+  cancelAction: {
+    alignSelf: 'flex-start',
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: Space.xs,
+    paddingRight: Space.sm,
+  },
+  cancelText: {
+    color: Colors.textSecondary,
   },
   issuerRow: {
     flexDirection: 'row',

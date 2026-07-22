@@ -47,7 +47,7 @@ export const CoOwnCompactPositionCard = React.memo(function CoOwnCompactPosition
     : gainDirection === 'down'
       ? colors.danger
       : colors.textSecondary;
-  const progress = Math.min(100, Math.max(2, portfolioWeightPct ?? ownershipPct));
+  const progress = Math.min(100, Math.max(0, portfolioWeightPct ?? ownershipPct));
 
   return (
     <AnimatedPressable
@@ -56,7 +56,7 @@ export const CoOwnCompactPositionCard = React.memo(function CoOwnCompactPosition
       scaleValue={0.985}
       activeOpacity={0.94}
       accessibilityRole="button"
-      accessibilityLabel={`${title}, ${unitsOwned} units, ${ownershipPct.toFixed(2)} percent ownership, position value ${positionValueLabel}${hasGainLoss ? `, ${gainDirection} ${gainLossLabel}, ${Math.abs(gainLossPct ?? 0).toFixed(2)} percent` : ''}`}
+      accessibilityLabel={`${title}, ${unitsOwned} units, ${ownershipPct.toFixed(2)} percent ownership, position value ${positionValueLabel}${portfolioWeightPct != null ? `, ${portfolioWeightPct.toFixed(1)} percent of portfolio` : ''}${hasGainLoss ? `, ${gainDirection} ${gainLossLabel}, ${Math.abs(gainLossPct ?? 0).toFixed(2)} percent` : ''}`}
       accessibilityHint="Opens your position"
     >
       <View style={styles.topRow}>
@@ -98,27 +98,35 @@ export const CoOwnCompactPositionCard = React.memo(function CoOwnCompactPosition
 
       <View style={styles.footerRow}>
         <View style={styles.performanceWrap}>
-          {hasGainLoss ? (
-            <View style={styles.performanceRow}>
-              <Ionicons
-                name={gainDirection === 'up' ? 'arrow-up' : gainDirection === 'down' ? 'arrow-down' : 'remove'}
-                size={12}
-                color={gainColor}
-              />
-              <Text style={[styles.performanceText, { color: gainColor }]} numberOfLines={1} maxFontSizeMultiplier={1.25}>
-                {gainLossLabel} · {gainLossPct! > 0 ? '+' : ''}{gainLossPct!.toFixed(2)}%
-              </Text>
-            </View>
-          ) : (
-            <Text style={[styles.performanceText, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>Performance unavailable</Text>
-          )}
+          <View style={styles.performanceMetaRow}>
+            {hasGainLoss ? (
+              <View style={styles.performanceRow}>
+                <Ionicons
+                  name={gainDirection === 'up' ? 'arrow-up' : gainDirection === 'down' ? 'arrow-down' : 'remove'}
+                  size={12}
+                  color={gainColor}
+                />
+                <Text style={[styles.performanceText, { color: gainColor }]} numberOfLines={1} maxFontSizeMultiplier={1.25}>
+                  {gainLossLabel} · {gainLossPct! > 0 ? '+' : ''}{gainLossPct!.toFixed(2)}%
+                </Text>
+              </View>
+            ) : (
+              <Text style={[styles.performanceText, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1.3}>Performance unavailable</Text>
+            )}
+            <Text style={[styles.progressContext, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>
+              {progress.toFixed(1)}%
+            </Text>
+          </View>
           <View style={[styles.progressTrack, { backgroundColor: colors.surfaceAlt }]}> 
             <View style={[styles.progressFill, { width: `${progress}%`, backgroundColor: colors.textSecondary }]} />
           </View>
         </View>
-        <View style={styles.viewAffordance}>
-          <Text style={[styles.viewText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.25}>View position</Text>
-          <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+        <View
+          style={[styles.viewAffordance, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+        >
+          <Ionicons name="arrow-forward" size={15} color={colors.textSecondary} />
         </View>
       </View>
     </AnimatedPressable>
@@ -233,15 +241,31 @@ const styles = StyleSheet.create({
     gap: 5,
     minWidth: 0,
   },
+  performanceMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Space.xs,
+  },
   performanceRow: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
   },
   performanceText: {
+    flexShrink: 1,
     fontSize: Type.meta.size,
     lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.semibold,
+    fontVariant: ['tabular-nums'],
+  },
+  progressContext: {
+    flexShrink: 0,
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    fontFamily: Typography.family.medium,
     fontVariant: ['tabular-nums'],
   },
   progressTrack: {
@@ -254,15 +278,12 @@ const styles = StyleSheet.create({
     borderRadius: 1,
   },
   viewAffordance: {
-    minHeight: 28,
-    flexDirection: 'row',
+    width: 32,
+    height: 32,
+    borderRadius: Radius.xl,
+    borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
-    gap: 2,
+    justifyContent: 'center',
     flexShrink: 0,
-  },
-  viewText: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.semibold,
   },
 });

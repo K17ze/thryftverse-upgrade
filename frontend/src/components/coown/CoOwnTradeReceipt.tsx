@@ -13,7 +13,7 @@ export interface CoOwnTradeReceiptProps {
   title: string;
   orderId?: string | number;
   side: 'buy' | 'sell';
-  orderType: 'market' | 'limit';
+  orderType: 'market' | 'limit' | 'protected_instant';
   units: number;
   filledUnits?: number;
   remainingUnits?: number;
@@ -159,7 +159,7 @@ export function CoOwnTradeReceipt({
           <Text style={[styles.receiptLabel, { color: colors.textMuted }]} numberOfLines={1}>Order type</Text>
           <Text style={[styles.receiptValue, { color: colors.textPrimary }]} numberOfLines={1}>
             {orderType === 'limit' ? 'Limit' : 'Protected instant'}
-            {orderType === 'limit' && limitPriceLabel ? ` (${limitPriceLabel})` : ''}
+            {limitPriceLabel ? ` (${limitPriceLabel})` : ''}
           </Text>
         </View>
         <View style={[styles.receiptRow, { borderColor: colors.border }]}>

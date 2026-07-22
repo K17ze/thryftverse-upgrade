@@ -45,6 +45,36 @@ const { width: SCREEN_W } = Dimensions.get('window');
 const CONDITION_OPTIONS = ['New with tags', 'Very good', 'Good', 'Satisfactory'];
 const AUCTION_DURATIONS = [24, 48, 72, 168];
 
+type PublishedMedia = {
+  url: string;
+  width?: number;
+  height?: number;
+};
+
+function resolvePublishedMedia(
+  draftItems: ListingMediaDraftItem[],
+  queue: MediaUploadQueue,
+): PublishedMedia[] {
+  const queuedById = new Map(queue.getItems().map((item) => [item.id, item]));
+
+  return draftItems.flatMap((item) => {
+    const queued = queuedById.get(item.id);
+    const url = queued?.publicUrl
+      ?? item.publicUrl
+      ?? (item.source === 'remote' ? item.uri : null);
+
+    if (!url) {
+      return [];
+    }
+
+    return [{
+      url,
+      width: queued?.asset.width ?? item.width,
+      height: queued?.asset.height ?? item.height,
+    }];
+  });
+}
+
 export default function SellScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
@@ -474,6 +504,8 @@ export default function SellScreen() {
               fileName: m.fileName || m.uri.split('/').pop() || 'photo.jpg',
               mimeType: m.mimeType || 'image/jpeg',
               kind: m.kind,
+              width: m.width,
+              height: m.height,
             }))
           );
           await queue.run();
@@ -486,7 +518,8 @@ export default function SellScreen() {
             })
           );
         }
-        const uploadedUrls = mediaDraftItems.map((m) => m.publicUrl || m.uri).filter((u): u is string => !!u);
+        const uploadedMedia = resolvePublishedMedia(mediaDraftItems, queue);
+        const uploadedUrls = uploadedMedia.map((item) => item.url);
         const coverImage = uploadedUrls[0] ?? '';
         const listingId = `listing_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
         await createListingOnApi({
@@ -511,6 +544,8 @@ export default function SellScreen() {
             listingId,
             imageUrl: uploadedUrls[i],
             sortOrder: i,
+            mediaWidth: uploadedMedia[i]?.width,
+            mediaHeight: uploadedMedia[i]?.height,
           });
         }
         clearSellDraft();
@@ -549,6 +584,8 @@ export default function SellScreen() {
           fileName: m.fileName || m.uri.split('/').pop() || 'photo.jpg',
           mimeType: m.mimeType || 'image/jpeg',
           kind: m.kind,
+          width: m.width,
+          height: m.height,
         }));
         queue.addAssets(assets);
         await queue.run();
@@ -567,7 +604,8 @@ export default function SellScreen() {
         );
       }
 
-      const uploadedUrls: string[] = mediaDraftItems.map((m) => m.publicUrl || m.uri).filter((u): u is string => !!u);
+      const uploadedMedia = resolvePublishedMedia(mediaDraftItems, queue);
+      const uploadedUrls = uploadedMedia.map((item) => item.url);
       const coverImage = uploadedUrls[0] ?? '';
       let listingId = publishedListingIdRef.current;
 
@@ -600,6 +638,8 @@ export default function SellScreen() {
           listingId,
           imageUrl: uploadedUrls[i],
           sortOrder: i,
+          mediaWidth: uploadedMedia[i]?.width,
+          mediaHeight: uploadedMedia[i]?.height,
         });
       }
 

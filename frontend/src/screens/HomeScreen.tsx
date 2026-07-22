@@ -50,32 +50,33 @@ import { HorizontalRail } from '../components/HorizontalRail';
 // Phase 3: Removed SyncStatusPill (status indicator clutter reduced)
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { EmptyState } from '../components/EmptyState';
-import { SkeletonLoader } from '../components/SkeletonLoader';
 import { PremiumSkeletonTile } from '../components/discover/PremiumSkeletonTile';
-import { ThryftCartIcon } from '../components/icons/ThryftCartIcon';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { MasonryGrid, ProductCardV2 } from '../components/ProductCardV2';
 import { DoubleTapHeart } from '../components/DoubleTapHeart';
 import { getBackendSyncStatus } from '../utils/syncStatus';
 import { isVideoUri } from '../utils/media';
 import { AppButton } from '../components/ui/AppButton';
-import { Space, Radius, Elevation } from '../theme/designTokens';
+import { Space, Radius, Type } from '../theme/designTokens';
 import { T } from '../components/ui/Text';
 import { Typography } from '../theme/designTokens';
-import { EditorialDiscoveryHero } from '../components/discover/EditorialDiscoveryHero';
 import { DiscoverySectionHeader } from '../components/discover/DiscoverySectionHeader';
 import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGrid';
 import { ProductAnalytics } from '../platform/product/productAnalytics';
-import { CuratedCollectionsRail, type CuratedCollection } from '../components/product';
-import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { useFollowingFeed } from '../hooks/useFollowingFeed';
 import { resolveListingMediaHeightRatio } from '../utils/listingMediaGeometry';
+import { safeValidateDocument, type CreatorDocument } from '../creator/composition';
+import { CreatorCanvas } from '../creator/CreatorCanvas';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
-const HEADER_EXPANDED = 80;
+const HEADER_EXPANDED = 64;
 const HEADER_COLLAPSED = 56;
 const GRID_GAP = Space.sm; // 8pt — design contract discovery gutter
+const MISSING_MEDIA_HEIGHT_RATIO = 1;
+const POSTER_CARD_WIDTH = 76;
+const POSTER_CARD_HEIGHT = 135;
+const LISTING_CARD_CHROME_HEIGHT = 110;
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
 const PANEL_BG = Colors.surfaceAlt;
@@ -161,6 +162,7 @@ type ExploreTile = {
   sellerId?: string;
   price?: number;
   caption: string;
+  category?: string;
   aspectRatio: number;
   isSaved?: boolean;
 };
@@ -175,6 +177,88 @@ type StoryBubble = {
   status: StoryStatus;
   isSaved?: boolean;
 };
+
+const PosterStoryArtwork = React.memo(function PosterStoryArtwork({ story }: { story: PosterStory }) {
+  const firstFrame = story.frames[0];
+  const composition = React.useMemo<CreatorDocument | null>(() => {
+    if (!story.compositionDocument) return null;
+    const result = safeValidateDocument(story.compositionDocument);
+    return result.success && result.data?.type === 'poster' ? result.data : null;
+  }, [story.compositionDocument]);
+  const compositionPage = composition?.pages[0] ?? null;
+
+  if (composition && compositionPage) {
+    return (
+      <CreatorCanvas
+        document={composition}
+        page={compositionPage}
+        canvasWidth={POSTER_CARD_WIDTH}
+        canvasHeight={POSTER_CARD_HEIGHT}
+        mode="preview"
+      />
+    );
+  }
+
+  if (isVideoUri(firstFrame?.mediaUrl ?? '')) {
+    return (
+      <Video
+        source={{ uri: firstFrame.mediaUrl }}
+        style={styles.posterImage}
+        resizeMode={ResizeMode.COVER}
+        shouldPlay={false}
+        isLooping
+        isMuted
+      />
+    );
+  }
+
+  if (firstFrame?.mediaUrl) {
+    return <CachedImage uri={firstFrame.mediaUrl} style={styles.posterImage} contentFit="cover" />;
+  }
+
+  const backgroundColor = firstFrame?.backgroundColor ?? Colors.surfaceAlt;
+  return (
+    <LinearGradient
+      colors={[backgroundColor, '#111111']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.posterTextArtwork}
+    >
+      <View style={styles.posterTextArtworkOrb} />
+      <Ionicons name="sparkles-outline" size={14} color="rgba(255,255,255,0.72)" />
+      <Text style={styles.posterTextArtworkCopy} numberOfLines={4}>
+        {firstFrame?.caption || 'Poster'}
+      </Text>
+    </LinearGradient>
+  );
+});
+
+function ListingMediaPlaceholder({ category }: { category?: string }) {
+  const normalized = category?.toLowerCase() ?? '';
+  const icon: React.ComponentProps<typeof Ionicons>['name'] = normalized.includes('shoe')
+    ? 'footsteps-outline'
+    : normalized.includes('bag')
+      ? 'bag-handle-outline'
+      : normalized.includes('jewel') || normalized.includes('watch')
+        ? 'diamond-outline'
+        : 'shirt-outline';
+
+  return (
+    <LinearGradient
+      colors={[Colors.surfaceAlt, Colors.background]}
+      start={{ x: 0.08, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.listingMediaPlaceholder}
+      accessibilityLabel="Product image unavailable"
+    >
+      <View style={styles.listingMediaPlaceholderOrbLarge} />
+      <View style={styles.listingMediaPlaceholderOrbSmall} />
+      <View style={styles.listingMediaPlaceholderIcon}>
+        <Ionicons name={icon} size={28} color={Colors.textMuted} />
+      </View>
+    </LinearGradient>
+  );
+}
 
 interface ExploreGridItemProps {
   item: ExploreTile;
@@ -234,26 +318,30 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
             style={styles.exploreSharedMedia}
             sharedTransitionTag={sharedTag}
           >
-            <MediaPreview
-              uri={item.mediaUri}
-              posterUri={item.posterUri}
-              style={styles.exploreImage}
-              autoPlay={item.mediaType === 'video'}
-              loop
-              muted
-              contentFit="cover"
-              isVisible
-            />
+            {item.mediaUri ? (
+              <MediaPreview
+                uri={item.mediaUri}
+                posterUri={item.posterUri}
+                style={styles.exploreImage}
+                autoPlay={item.mediaType === 'video'}
+                loop
+                muted
+                contentFit="cover"
+                isVisible
+              />
+            ) : (
+              <ListingMediaPlaceholder category={item.category} />
+            )}
           </SharedTransitionView>
         </DoubleTapHeart>
-
-        <View style={styles.exploreOverlay}>
-          <View style={styles.exploreTag}>
-            <ThryftCartIcon size={11} color={Colors.textInverse} />
-            <Text style={styles.exploreTagText}>{formatPrice(item.price ?? 0, 'GBP', { displayMode: 'fiat' })}</Text>
-          </View>
-        </View>
       </AnimatedPressable>
+
+      <View style={styles.exploreDetails}>
+        <Text style={styles.exploreTitle} numberOfLines={2}>{item.caption}</Text>
+        <Text style={styles.explorePrice} numberOfLines={1}>
+          {formatPrice(item.price ?? 0, 'GBP', { displayMode: 'fiat' })}
+        </Text>
+      </View>
 
       {(sellerUsername || item.sellerId) && (
         <View style={styles.exploreSellerRow}>
@@ -262,7 +350,7 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
             onPress={() => item.sellerId && onPressSellerProfile(item.sellerId)}
             activeOpacity={0.8}
             accessibilityRole="button"
-            accessibilityLabel={`Seller: ${sellerUsername ?? item.sellerId}`}
+            accessibilityLabel={sellerUsername ? `Seller: @${sellerUsername}` : 'Open seller profile'}
           >
             {sellerAvatar ? (
               <CachedImage
@@ -272,11 +360,11 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
               />
             ) : (
               <View style={styles.exploreSellerAvatarFallback}>
-                <Ionicons name="person" size={10} color={Colors.textMuted} />
+                <Ionicons name="person" size={12} color={Colors.textMuted} />
               </View>
             )}
             <Text style={styles.exploreSellerText} numberOfLines={1}>
-              {sellerUsername ?? item.sellerId}
+              @{sellerUsername ?? item.sellerId}
             </Text>
           </AnimatedPressable>
           <AnimatedPressable
@@ -286,7 +374,8 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
             accessibilityRole="button"
             accessibilityLabel="Message seller"
           >
-            <Ionicons name="chatbubble-outline" size={13} color={Colors.textSecondary} />
+            <Ionicons name="chatbubble-outline" size={14} color={Colors.textPrimary} />
+            <Text style={styles.exploreMessageText}>Chat</Text>
           </AnimatedPressable>
         </View>
       )}
@@ -300,8 +389,6 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const notificationCount = useStore((state) => state.notificationCount);
-  const hasSeenPoster = useStore((state) => state.hasSeenPoster);
-  const customPosters = useStore((state) => state.customPosters);
   const { formatFromFiat } = useFormattedPrice();
   const haptic = useHaptic();
   const { listings, source, isSyncing, lastError, refreshListings, loadMoreListings, hasMore, isLoadingMore } = useBackendData();
@@ -482,61 +569,11 @@ export default function HomeScreen() {
   const showFeedLoadingSkeleton = isSyncing && !lastError;
 
   const gridTileWidth = React.useMemo(
-    () => (windowWidth - GRID_GAP * 3) / 2,
+    () => Math.floor((windowWidth - (Space.md * 2) - GRID_GAP) / 2),
     [windowWidth],
   );
 
   const wishlist = useStore((state) => state.wishlist);
-
-  // Editorial hero items — server-driven with graceful fallback
-  const [serverHeroItems, setServerHeroItems] = React.useState<
-    { id: string; uri: string; title: string; subtitle: string; ctaLabel: string; ctaRoute?: string }[]
-  >([]);
-
-  React.useEffect(() => {
-    let mounted = true;
-    fetch(`${process.env.EXPO_PUBLIC_API_URL ?? ''}/content/editorial-hero`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (!mounted || !data?.items?.length) return;
-        setServerHeroItems(
-          data.items.map((h: any) => ({
-            id: h.id,
-            uri: h.uri ?? '',
-            title: h.title ?? '',
-            subtitle: h.subtitle ?? '',
-            ctaLabel: h.ctaLabel ?? 'Explore',
-            ctaRoute: h.ctaRoute,
-          })),
-        );
-      })
-      .catch(() => {
-        // Backend endpoint not available — use fallback items below
-      });
-    return () => { mounted = false; };
-  }, []);
-
-  const heroItems = React.useMemo(() => {
-    const buildAction = (route: string | undefined, fallbackCategoryId: string, fallbackTitle: string) => {
-      if (route === 'auction') return () => navigation.navigate('AuctionHome');
-      if (route === 'coown') return () => navigation.navigate('CoOwnHub');
-      return () => navigation.navigate('Browse', { categoryId: fallbackCategoryId, title: fallbackTitle });
-    };
-
-    if (serverHeroItems.length > 0) {
-      return serverHeroItems.map((h) => ({
-        ...h,
-        ctaAction: buildAction(h.ctaRoute, 'all', h.title),
-      }));
-    }
-
-    // Fallback: UI placeholder for future curated content
-    return [
-      { id: 'hero1', uri: '', title: 'The Archive Drop', subtitle: 'Curated vintage essentials', ctaLabel: 'Explore', ctaAction: () => navigation.navigate('Browse', { categoryId: 'all', title: 'The Archive Drop' }) },
-      { id: 'hero2', uri: '', title: 'Summer Layers', subtitle: 'Lightweight fits for the season', ctaLabel: 'Shop', ctaAction: () => navigation.navigate('Browse', { categoryId: 'all', title: 'Summer Layers' }) },
-      { id: 'hero3', uri: '', title: 'Streetwear Daily', subtitle: 'New arrivals every day', ctaLabel: 'Browse', ctaAction: () => navigation.navigate('Browse', { categoryId: 'all', title: 'Streetwear Daily' }) },
-    ];
-  }, [serverHeroItems, navigation]);
 
   const exploreData = React.useMemo<ExploreTile[]>(() => {
     return listings.map((item): ExploreTile => {
@@ -554,67 +591,14 @@ export default function HomeScreen() {
         routeId: item.id,
         sellerId: item.sellerId,
         caption: item.title,
-        aspectRatio: resolveListingMediaHeightRatio(item),
+        category: item.subcategory || item.category,
+        aspectRatio: primaryMediaUri
+          ? resolveListingMediaHeightRatio(item)
+          : MISSING_MEDIA_HEIGHT_RATIO,
         isSaved: wishlist.includes(item.id),
       };
     });
   }, [listings, wishlist]);
-
-  // Curated collections — editorial picks
-  const curatedCollections = React.useMemo<CuratedCollection[]>(() => {
-    // Build collections from real listing data
-    const luxuryItems = listings.filter((l) => l.price > 200).slice(0, 12);
-    const vintageItems = listings.filter((l) =>
-      l.condition?.toLowerCase().includes('vintage') ||
-      l.title?.toLowerCase().includes('vintage') ||
-      l.brand?.toLowerCase().includes('vintage')
-    ).slice(0, 12);
-    const streetwearItems = listings.filter((l) =>
-      l.category?.toLowerCase().includes('street') ||
-      l.subcategory?.toLowerCase().includes('street') ||
-      l.title?.toLowerCase().includes('street')
-    ).slice(0, 12);
-
-    const collections: CuratedCollection[] = [];
-
-    if (luxuryItems.length > 0) {
-      collections.push({
-        id: 'luxury_edit',
-        title: 'Luxury Edit',
-        subtitle: 'Investment pieces under £500',
-        coverImage: luxuryItems[0].images?.[0] ?? '',
-        itemCount: luxuryItems.length,
-        curatorName: 'ThryftVerse',
-        accentColor: Colors.brand,
-      });
-    }
-
-    if (vintageItems.length > 0) {
-      collections.push({
-        id: 'vintage_finds',
-        title: 'Vintage Finds',
-        subtitle: 'One-of-a-kind archival pieces',
-        coverImage: vintageItems[0].images?.[0] ?? '',
-        itemCount: vintageItems.length,
-        curatorName: 'ThryftVerse',
-        accentColor: Colors.brand,
-      });
-    }
-
-    if (streetwearItems.length > 0) {
-      collections.push({
-        id: 'streetwear_staples',
-        title: 'Streetwear Staples',
-        subtitle: 'Daily-driver grails',
-        coverImage: streetwearItems[0].images?.[0] ?? '',
-        itemCount: streetwearItems.length,
-        curatorName: 'ThryftVerse',
-        accentColor: Colors.brand,
-      });
-    }
-
-    return collections;
-  }, [listings]);
 
   // Following feed: transform following listings into the same ExploreTile shape
   const followingExploreData = React.useMemo<ExploreTile[]>(() => {
@@ -633,7 +617,10 @@ export default function HomeScreen() {
         routeId: item.id,
         sellerId: item.sellerId,
         caption: item.title,
-        aspectRatio: resolveListingMediaHeightRatio(item),
+        category: item.subcategory || item.category,
+        aspectRatio: primaryMediaUri
+          ? resolveListingMediaHeightRatio(item)
+          : MISSING_MEDIA_HEIGHT_RATIO,
         isSaved: wishlist.includes(item.id),
       };
     });
@@ -650,7 +637,7 @@ export default function HomeScreen() {
     const columnHeights = [0, 0];
 
     activeFeedData.forEach((tile, originalIndex) => {
-      const tileHeight = Math.round(gridTileWidth * tile.aspectRatio) + (tile.sellerId && tile.routeId ? 38 : 0);
+      const tileHeight = Math.round(gridTileWidth * tile.aspectRatio) + LISTING_CARD_CHROME_HEIGHT;
       const targetIndex = columnHeights[0] <= columnHeights[1] ? 0 : 1;
       columns[targetIndex].push({ tile, originalIndex });
       columnHeights[targetIndex] += tileHeight + GRID_GAP;
@@ -667,54 +654,36 @@ export default function HomeScreen() {
     if (postersLoading) {
       return (
         <View style={styles.postersSection}>
-          <View style={styles.sectionRow}>
-            <Text style={styles.sectionTitle}>Posters</Text>
+          <View style={styles.posterSectionHeading}>
+            <Text style={styles.posterSectionTitle}>Posters</Text>
+            <Text style={styles.posterSectionSubtitle}>Fresh edits from the community</Text>
           </View>
           <HorizontalRail contentContainerStyle={styles.postersScroll}>
-            {Array.from({ length: 4 }).map((_, i) => (
-              <View key={`poster_skeleton_${i}`} style={styles.posterCard}>
-                <SkeletonLoader width={120} height={152} borderRadius={Radius.md} />
-              </View>
+            {Array.from({ length: 4 }).map((_, index) => (
+              <PremiumSkeletonTile
+                key={`poster-skeleton-${index}`}
+                width={POSTER_CARD_WIDTH}
+                height={POSTER_CARD_HEIGHT}
+                borderRadius={Radius.md}
+              />
             ))}
           </HorizontalRail>
         </View>
       );
     }
 
+    if (realPosters.length === 0) return null;
+
     return (
       <View style={styles.postersSection}>
-        <View style={styles.sectionRow}>
-          <Text style={styles.sectionTitle}>Posters</Text>
+        <View style={styles.posterSectionHeading}>
+          <Text style={styles.posterSectionTitle}>Posters</Text>
+          <Text style={styles.posterSectionSubtitle}>Fresh edits from the community</Text>
         </View>
 
         <HorizontalRail
           contentContainerStyle={styles.postersScroll}
         >
-          <AnimatedPressable
-            style={styles.posterCard}
-            activeOpacity={0.9}
-            onPress={() => { haptic.light(); navigation.navigate('CreatorStudio', { type: 'poster' }); }}
-            accessibilityLabel="Create a new poster"
-            accessibilityRole="button"
-            accessibilityHint="Opens poster creator for auction or promotion posts"
-          >
-            <View style={styles.posterCreateTile}>
-              <View style={styles.posterCreateIcon}>
-                <Ionicons name="add" size={24} color={Colors.background} />
-              </View>
-              <Text style={styles.posterCreateLabel}>Create Poster</Text>
-            </View>
-          </AnimatedPressable>
-
-          {realPosters.length === 0 && !postersLoading && (
-            <View style={styles.posterCard}>
-              <View style={[styles.posterTile, { justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.surfaceAlt }]}>
-                <Ionicons name="images-outline" size={28} color={Colors.textMuted} />
-                <Text style={{ fontSize: 12, color: Colors.textMuted, marginTop: 6, textAlign: 'center' }}>No posters yet</Text>
-              </View>
-            </View>
-          )}
-
           {(() => {
             // Sort stories: unwatched-first, then watched
             const sortedPosters = [...realPosters].sort((a, b) => {
@@ -724,7 +693,6 @@ export default function HomeScreen() {
             const unwatchedCount = realPosters.filter((s) => !s.seenByViewer).length;
             return sortedPosters.map((story, idx) => {
             const firstFrame = story.frames[0];
-            const mediaUrl = firstFrame?.mediaUrl ?? '';
             const caption = firstFrame?.caption ?? '';
             const isUnwatched = !story.seenByViewer;
             // Show unwatched badge on the first unwatched story
@@ -740,31 +708,14 @@ export default function HomeScreen() {
               accessibilityHint="Opens poster story viewer"
             >
               <View style={[styles.posterTile, isUnwatched ? styles.posterTileUnseen : styles.posterTileSeen, isUnwatched && styles.posterTileRing]}>
-                {isVideoUri(mediaUrl) ? (
-                  <Video
-                    source={{ uri: mediaUrl }}
-                    style={styles.posterImage}
-                    resizeMode={ResizeMode.COVER}
-                    shouldPlay
-                    isLooping
-                    isMuted
-                  />
-                ) : mediaUrl ? (
-                  <CachedImage
-                    uri={mediaUrl}
-                    style={styles.posterImage}
-                    contentFit="cover"
-                  />
-                ) : (
-                  <View style={[StyleSheet.absoluteFill, { backgroundColor: firstFrame?.backgroundColor ?? Colors.surfaceAlt, justifyContent: 'center', alignItems: 'center' }]}>
-                    <Text style={{ color: Colors.textInverse, fontSize: 11, fontFamily: Typography.family.medium, textAlign: 'center', paddingHorizontal: 8 }} numberOfLines={2}>{caption || 'Text story'}</Text>
-                  </View>
-                )}
+                <PosterStoryArtwork story={story} />
                 <View style={styles.posterShade} />
 
-                <View style={styles.posterBottomOverlay}>
-                  <Text style={styles.posterCaption} numberOfLines={2}>{caption}</Text>
-                </View>
+                {!story.compositionDocument && firstFrame?.mediaType !== 'text' && caption ? (
+                  <View style={styles.posterBottomOverlay}>
+                    <Text style={styles.posterCaption} numberOfLines={2}>{caption}</Text>
+                  </View>
+                ) : null}
 
                 {story.totalFrameCount > 1 && (
                   <View style={styles.frameCountBadge}>
@@ -781,9 +732,14 @@ export default function HomeScreen() {
               </View>
 
               <View style={styles.posterCardMetaRow}>
-                <Text style={isUnwatched ? styles.posterFreshMeta : styles.posterSeenMeta}>
-                  {isUnwatched ? 'New' : 'Seen'}
+                <Text style={styles.posterUserName} numberOfLines={1}>
+                  @{story.creator.username ?? story.creatorId}
                 </Text>
+                <View
+                  style={isUnwatched ? styles.posterFreshDot : styles.posterSeenDot}
+                  accessible
+                  accessibilityLabel={isUnwatched ? 'New poster' : 'Seen poster'}
+                />
               </View>
             </AnimatedPressable>
             );
@@ -791,15 +747,6 @@ export default function HomeScreen() {
           })()}
         </HorizontalRail>
 
-        {lastError ? (
-          <SyncRetryBanner
-            message="Sync is unavailable. Showing cached items."
-            onRetry={() => void handleRefresh()}
-            isRetrying={isSyncing || refreshing}
-            telemetryContext="home_feed_sync"
-            containerStyle={styles.feedStatusBanner}
-          />
-        ) : null}
       </View>
     );
   };
@@ -888,7 +835,7 @@ export default function HomeScreen() {
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
 
       <Reanimated.View style={[styles.floatingHeaderShell, headerHeightStyle, headerShadowStyle]}>
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.surfaceAlt }]} />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.background }]} />
 
         <View style={[styles.headerForeground, { paddingTop: insets.top + 2, paddingBottom: 8 }]}>
           <Reanimated.View style={[headerTitleStyle, styles.headerTitleWrap]}>
@@ -902,8 +849,10 @@ export default function HomeScreen() {
               accessibilityLabel="List an item"
               accessibilityRole="button"
               accessibilityHint="Opens sell listing flow"
+              activeOpacity={0.58}
+              scaleValue={0.94}
             >
-              <Ionicons name="add" size={26} color={Colors.textPrimary} />
+              <Ionicons name="add" size={24} color={Colors.textPrimary} />
             </AnimatedPressable>
             <AnimatedPressable
               style={styles.headerBtn}
@@ -911,6 +860,8 @@ export default function HomeScreen() {
               accessibilityLabel="Search listings"
               accessibilityRole="button"
               accessibilityHint="Opens global search"
+              activeOpacity={0.58}
+              scaleValue={0.94}
             >
               <Ionicons name="search" size={22} color={Colors.textPrimary} />
             </AnimatedPressable>
@@ -920,6 +871,8 @@ export default function HomeScreen() {
               accessibilityLabel={notificationCount > 0 ? `Notifications, ${notificationCount} unread` : 'Notifications'}
               accessibilityRole="button"
               accessibilityHint="Opens notifications center"
+              activeOpacity={0.58}
+              scaleValue={0.94}
             >
               <Ionicons name="notifications-outline" size={22} color={Colors.textPrimary} />
               {notificationCount > 0 && (
@@ -937,7 +890,7 @@ export default function HomeScreen() {
       <Reanimated.ScrollView
         ref={scrollRef}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.feedContent, { paddingTop: headerCollapsedHeight + 2 }]}
+        contentContainerStyle={[styles.feedContent, { paddingTop: headerExpandedHeight + Space.sm }]}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
         {...({ onEndReached: () => { if (hasMore && !isLoadingMore) void loadMoreListings(); }, onEndReachedThreshold: 0.5 } as any)}
@@ -953,66 +906,61 @@ export default function HomeScreen() {
       >
         {renderPosters()}
 
-        {/* Editorial Hero — renders when real imagery is configured */}
-        {heroItems.some((h) => h.uri.trim().length > 0) && (
-          <View style={{ marginBottom: Space.md }}>
-            <EditorialDiscoveryHero items={heroItems.filter((h) => h.uri.trim().length > 0)} autoPlayInterval={6000} />
-          </View>
-        )}
-
         {renderNewListingsBanner()}
 
-        {/* Curated collections rail */}
-        {curatedCollections.length > 0 && (
-          <CuratedCollectionsRail
-            collections={curatedCollections}
-            onOpenCollection={(collectionId) => {
-              // Navigate to browse with a category filter matching the collection
-              const collectionMap: Record<string, { categoryId: string; title: string }> = {
-                luxury_edit: { categoryId: 'all', title: 'Luxury Edit' },
-                vintage_finds: { categoryId: 'all', title: 'Vintage Finds' },
-                streetwear_staples: { categoryId: 'all', title: 'Streetwear Staples' },
-              };
-              const config = collectionMap[collectionId];
-              if (config) {
-                navigation.navigate('Browse', { categoryId: config.categoryId, title: config.title });
-              }
-            }}
+        {lastError ? (
+          <SyncRetryBanner
+            message="Sync is unavailable. Showing cached items."
+            onRetry={() => void handleRefresh()}
+            isRetrying={isSyncing || refreshing}
+            telemetryContext="home_feed_sync"
+            containerStyle={styles.feedStatusBanner}
           />
-        )}
+        ) : null}
 
-        {/* For You | Following segment control */}
-        <View style={styles.feedSegmentRow}>
-          <AppSegmentControl
-            options={[
-              { value: 'foryou', label: 'For You', accessibilityLabel: 'For You feed' },
-              {
-                value: 'following',
-                label: followingFeed.listings.length > 0
-                  ? `Following · ${followingFeed.listings.length}`
-                  : 'Following',
-                accessibilityLabel: 'Following feed',
-              },
-            ]}
-            value={feedMode}
-            onChange={(next) => {
-              haptic.selection();
-              setFeedMode(next);
-            }}
-            fullWidth
-            style={styles.feedSegment}
-          />
+        <DiscoverySectionHeader
+          kicker={feedMode === 'following' ? 'Latest from people you follow' : undefined}
+          title="Explore"
+          actionLabel="See all"
+          onAction={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
+          style={styles.feedDiscoveryHeader}
+        />
+
+        <View style={styles.feedTabBar} accessibilityRole="tablist">
+          {(['foryou', 'following'] as const).map((option) => {
+            const isSelected = feedMode === option;
+            const label = option === 'foryou' ? 'For you' : 'Following';
+            return (
+              <AnimatedPressable
+                key={option}
+                style={styles.feedTab}
+                onPress={() => {
+                  if (!isSelected) {
+                    haptic.selection();
+                    setFeedMode(option);
+                  }
+                }}
+                activeOpacity={0.68}
+                scaleValue={0.98}
+                accessibilityRole="tab"
+                accessibilityLabel={option === 'foryou'
+                  ? 'For you feed'
+                  : `Following feed${followingFeed.listings.length > 0 ? `, ${followingFeed.listings.length} listings` : ''}`}
+                accessibilityState={{ selected: isSelected }}
+              >
+                <Text style={[styles.feedTabLabel, isSelected && styles.feedTabLabelActive]} numberOfLines={1}>
+                  {label}
+                </Text>
+                {option === 'following' && followingFeed.listings.length > 0 ? (
+                  <Text style={[styles.feedTabCount, isSelected && styles.feedTabCountActive]}>
+                    {followingFeed.listings.length}
+                  </Text>
+                ) : null}
+                {isSelected ? <View style={styles.feedTabIndicator} /> : null}
+              </AnimatedPressable>
+            );
+          })}
         </View>
-
-        {feedMode === 'foryou' && (
-          <DiscoverySectionHeader
-            kicker="Fresh from the community"
-            title="Explore"
-            actionLabel="See all"
-            onAction={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
-            style={{ marginTop: Space.sm }}
-          />
-        )}
 
         {showFeedLoadingSkeleton || showFollowingLoading ? (
           renderExploreLoadingState()
@@ -1181,7 +1129,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.borderLight,
-    ...Elevation.subtle, // ELEVATED: Subtle shadow for depth
   },
   headerForeground: {
     flex: 1,
@@ -1195,12 +1142,12 @@ const styles = StyleSheet.create({
     paddingRight: 10,
   },
   brandTitle: {
-    fontSize: 26, // Slightly reduced
-    fontFamily: Typography.family.bold, // Changed from ExtraBold for elegance
-    letterSpacing: 2, // Luxury spacing (ELEVATED)
+    fontSize: 22,
+    fontFamily: Typography.family.bold,
+    letterSpacing: 0.8,
     color: Colors.textPrimary,
     lineHeight: 30,
-    textTransform: 'uppercase', // ELEVATED: Uppercase like luxury brands
+    textTransform: 'uppercase',
   },
   brandSubtitle: {
     marginTop: 2,
@@ -1211,18 +1158,13 @@ const styles = StyleSheet.create({
   },
   headerRight: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 2,
   },
   headerBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.surfaceAlt,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    ...Elevation.subtle, // ELEVATED: Subtle shadow
   },
   notificationBadge: {
     position: 'absolute',
@@ -1247,13 +1189,65 @@ const styles = StyleSheet.create({
   feedContent: {
     paddingBottom: 120,
   },
-  feedSegmentRow: {
-    paddingHorizontal: 16,
-    marginBottom: 4,
-    marginTop: 4,
+  feedDiscoveryHeader: {
+    marginTop: 0,
+    marginBottom: 2,
   },
-  feedSegment: {
-    flex: 1,
+  feedTabBar: {
+    minHeight: 46,
+    marginHorizontal: Space.md,
+    marginBottom: Space.md,
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: Space.lg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+  },
+  feedTab: {
+    minWidth: 76,
+    minHeight: 44,
+    paddingHorizontal: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    position: 'relative',
+  },
+  feedTabLabel: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.medium,
+    color: Colors.textMuted,
+  },
+  feedTabLabelActive: {
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+  },
+  feedTabCount: {
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 5,
+    borderRadius: Radius.full,
+    overflow: 'hidden',
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    fontSize: Type.meta.size,
+    lineHeight: 20,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textSecondary,
+    backgroundColor: Colors.surfaceAlt,
+  },
+  feedTabCountActive: {
+    color: Colors.textInverse,
+    backgroundColor: Colors.textPrimary,
+  },
+  feedTabIndicator: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: -1,
+    height: 2,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.textPrimary,
   },
   newListingsBannerWrap: {
     marginTop: 6,
@@ -1500,12 +1494,31 @@ const styles = StyleSheet.create({
   },
 
   postersSection: {
-    marginTop: 0,
-    paddingBottom: 8,
+    marginTop: Space.xs,
+    paddingBottom: Space.sm + 2,
+  },
+  posterSectionHeading: {
+    paddingHorizontal: Space.md,
+    marginBottom: Space.xs + 2,
+  },
+  posterSectionTitle: {
+    color: Colors.textPrimary,
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
+    fontFamily: Typography.family.bold,
+    letterSpacing: -0.3,
+  },
+  posterSectionSubtitle: {
+    marginTop: 2,
+    color: Colors.textMuted,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.regular,
   },
   postersScroll: {
-    paddingHorizontal: 16,
-    gap: 14,
+    paddingHorizontal: Space.md,
+    paddingBottom: 2,
+    gap: Space.sm,
   },
   feedStatusBanner: {
     marginTop: 10,
@@ -1513,17 +1526,14 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   posterCard: {
-
-    width: 120,
+    width: POSTER_CARD_WIDTH,
   },
   posterTile: {
-
-    width: 120,
-
-    height: 152,
-    borderRadius: 12,
+    width: POSTER_CARD_WIDTH,
+    height: POSTER_CARD_HEIGHT,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
-    marginBottom: 5,
+    marginBottom: Space.xs,
     position: 'relative',
     backgroundColor: Colors.surfaceAlt,
   },
@@ -1546,9 +1556,33 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  posterTextArtwork: {
+    ...StyleSheet.absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Space.sm,
+    gap: Space.xs,
+  },
+  posterTextArtworkOrb: {
+    position: 'absolute',
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    top: -42,
+    right: -34,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  posterTextArtworkCopy: {
+    color: Colors.textInverse,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.bold,
+    textAlign: 'center',
+    letterSpacing: -0.2,
+  },
   posterShade: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.2)',
+    backgroundColor: 'rgba(0,0,0,0.08)',
   },
   posterAvatarOverlay: {
     position: 'absolute',
@@ -1575,32 +1609,6 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     borderRadius: 12,
-  },
-  posterCreateTile: {
-
-    width: 120,
-
-    height: 152,
-    borderRadius: 12,
-    marginBottom: 5,
-    backgroundColor: Colors.textPrimary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  posterCreateIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.16)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  posterCreateLabel: {
-    color: Colors.background,
-    fontSize: 10,
-    fontFamily: Typography.family.semibold,
-    textAlign: 'center',
   },
   posterTopRow: {
     position: 'absolute',
@@ -1702,25 +1710,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: Space.xs,
   },
   posterUserName: {
-    fontSize: 9,
+    flex: 1,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: Colors.textSecondary,
   },
-  posterFreshMeta: {
-    fontSize: 10,
-    fontFamily: Typography.family.bold,
-    color: Colors.brand,
-    letterSpacing: 0.3,
-    textTransform: 'uppercase',
+  posterFreshDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: Colors.brand,
   },
-  posterSeenMeta: {
-    fontSize: 10,
-    fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
-    letterSpacing: 0.3,
-    textTransform: 'uppercase',
+  posterSeenDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: Colors.border,
   },
 
   masonryGrid: {
@@ -1734,13 +1742,14 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   exploreItemBox: {
-    borderRadius: Radius.md,
-    overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: Colors.background,
     // Pinterest feel: no border, no shadow — image is the card
   },
   exploreMediaWrap: {
     position: 'relative',
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
+    backgroundColor: Colors.surfaceAlt,
   },
   exploreSharedMedia: {
     ...StyleSheet.absoluteFill,
@@ -1749,30 +1758,66 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  exploreOverlay: {
-    position: 'absolute',
-    left: 10,
-    bottom: 10,
-  },
-  exploreTag: {
-    flexDirection: 'row',
+  listingMediaPlaceholder: {
+    flex: 1,
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 8,
+    justifyContent: 'center',
+    overflow: 'hidden',
   },
-  exploreTagText: {
-    color: Colors.textInverse,
-    fontSize: 11,
+  listingMediaPlaceholderOrbLarge: {
+    position: 'absolute',
+    width: 170,
+    height: 170,
+    borderRadius: 85,
+    top: -76,
+    right: -64,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    backgroundColor: 'rgba(255,255,255,0.28)',
+  },
+  listingMediaPlaceholderOrbSmall: {
+    position: 'absolute',
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    bottom: -44,
+    left: -30,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+  },
+  listingMediaPlaceholderIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    backgroundColor: Colors.background,
+  },
+  exploreDetails: {
+    paddingTop: Space.sm,
+    paddingHorizontal: 2,
+    gap: 2,
+  },
+  exploreTitle: {
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: 0.1,
+    color: Colors.textPrimary,
+    letterSpacing: -0.2,
+  },
+  explorePrice: {
+    color: Colors.textPrimary,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.bold,
+    fontVariant: ['tabular-nums'],
   },
   exploreSellerRow: {
-    marginTop: 7,
-    marginHorizontal: 8,
-    marginBottom: 8,
+    minHeight: 40,
+    marginTop: 2,
+    paddingHorizontal: 2,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -1780,31 +1825,26 @@ const styles = StyleSheet.create({
   },
   exploreSellerChip: {
     flex: 1,
-    minHeight: 28,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surfaceAlt,
+    minHeight: 40,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 8,
-    ...Elevation.subtle, // ELEVATED: Use design system
+    gap: Space.xs,
+    paddingRight: Space.xs,
   },
   exploreSellerAvatarWrap: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
   },
   exploreSellerAvatar: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
   },
   exploreSellerAvatarFallback: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Colors.surfaceAlt,
@@ -1812,27 +1852,30 @@ const styles = StyleSheet.create({
   exploreSellerText: {
     flex: 1,
     color: Colors.textSecondary,
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: 0.1,
   },
   exploreMessageBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surfaceAlt,
+    minWidth: 44,
+    height: 40,
+    paddingHorizontal: Space.xs + 2,
+    flexDirection: 'row',
+    gap: 4,
     alignItems: 'center',
     justifyContent: 'center',
-    ...Elevation.subtle, // ELEVATED: Use design system
+  },
+  exploreMessageText: {
+    color: Colors.textPrimary,
+    fontSize: 10,
+    fontFamily: Typography.family.semibold,
   },
   videoBadge: {
     position: 'absolute',
     top: Space.xs,
     right: Space.xs,
-    width: 44,
-    height: 44,
+    width: 28,
+    height: 28,
     borderRadius: Radius.full,
     backgroundColor: 'rgba(0,0,0,0.52)',
     alignItems: 'center',

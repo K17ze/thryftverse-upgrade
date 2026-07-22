@@ -11,6 +11,13 @@ interface ApiConversationPayload {
   ownerId: string | null;
   itemId: string | null;
   participantIds: string[];
+  participantProfiles?: Array<{
+    id: string;
+    username: string;
+    displayName: string | null;
+    avatar: string | null;
+    emailVerified: boolean;
+  }>;
   botIds: string[];
   lastMessage: string;
   lastMessageTime: string;
@@ -120,6 +127,7 @@ function mapApiConversationToApp(
     ownerId: payload.ownerId ?? undefined,
     itemId: payload.itemId ?? undefined,
     participantIds: payload.participantIds,
+    participantProfiles: payload.participantProfiles,
     botIds: payload.botIds,
     lastMessage: latestMessage,
     lastMessageTime: latestMessageTime,

@@ -330,6 +330,8 @@ export default function EditListingScreen() {
           fileName: m.fileName || m.uri.split('/').pop() || 'photo.jpg',
           mimeType: m.mimeType || 'image/jpeg',
           kind: m.kind,
+          width: m.width,
+          height: m.height,
         }));
         queue.addAssets(assets);
         await queue.run();
@@ -365,6 +367,8 @@ export default function EditListingScreen() {
             listingId: itemId,
             imageUrl: qi.publicUrl!,
             sortOrder: existingRemotePhotos.length + i,
+            mediaWidth: qi.asset.width,
+            mediaHeight: qi.asset.height,
           });
         }
       }

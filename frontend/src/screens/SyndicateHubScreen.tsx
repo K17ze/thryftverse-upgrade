@@ -10,7 +10,7 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
@@ -39,11 +39,11 @@ import {
   type CoOwnMarketHighlight,
 } from '../components/coown';
 import { useConnectivity } from '../hooks/useConnectivity';
-import { formatCoOwnIze, toIze } from '../utils/currency';
+import { formatCoOwnIze } from '../utils/currency';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 type SortOption = 'newest' | 'available' | 'allocation';
-type HubSegment = 'active' | 'auctions' | 'new_issues' | 'watchlist';
+type HubSegment = 'active' | 'new_issues' | 'watchlist';
 
 interface HubAsset {
   id: string;
@@ -68,7 +68,6 @@ interface HubAsset {
 
 type HubRow =
   | { kind: 'highlights'; key: 'highlights' }
-  | { kind: 'status'; key: 'status' }
   | { kind: 'tabs'; key: 'tabs' }
   | { kind: 'positions'; key: 'positions' }
   | { kind: 'instrumentsHeader'; key: 'instruments-header' }
@@ -76,14 +75,13 @@ type HubRow =
   | { kind: 'instrumentsEmpty'; key: 'instruments-empty' }
   | { kind: 'remaining'; key: 'remaining' };
 
-const SEGMENTS: HubSegment[] = ['active', 'auctions', 'new_issues', 'watchlist'];
+const SEGMENTS: HubSegment[] = ['active', 'new_issues', 'watchlist'];
 const SORT_OPTIONS: SortOption[] = ['newest', 'available', 'allocation'];
 const POSITION_CARD_WIDTH = COOWN_POSITION_CARD_WIDTH;
 const POSITION_CARD_GAP = 12;
 const POSITION_SNAP_INTERVAL = POSITION_CARD_WIDTH + POSITION_CARD_GAP;
 const SEGMENT_LABELS: Record<HubSegment, string> = {
   active: 'Active',
-  auctions: 'Auctions',
   new_issues: 'New issues',
   watchlist: 'Watchlist',
 };
@@ -93,11 +91,14 @@ const SORT_LABELS: Record<SortOption, string> = {
   allocation: 'Allocation',
 };
 const SECTION_TITLES: Record<HubSegment, string> = {
-  active: 'Active instruments',
-  auctions: 'Auctions',
+  active: 'Open markets',
   new_issues: 'New issues',
   watchlist: 'Watchlist',
 };
+
+function normalizeInitialSegment(value: 'active' | 'auctions' | 'new_issues' | 'watchlist' | undefined): HubSegment {
+  return value === 'new_issues' || value === 'watchlist' ? value : 'active';
+}
 
 function getFocalPoint(category: string): { x: number; y: number } {
   const normalized = category.toLowerCase();
@@ -119,10 +120,11 @@ function getStatusLabel(asset: HubAsset): string {
 
 export default function CoOwnHubScreen() {
   const navigation = useNavigation<NavT>();
+  const route = useRoute<RouteProp<RootStackParamList, 'CoOwnHub'>>();
   const currentUser = useStore((state) => state.currentUser);
   const coOwnWatchlist = useStore((state) => state.coOwnWatchlist);
   const toggleCoOwnWatch = useStore((state) => state.toggleCoOwnWatch);
-  const { formatFromFiat, goldRates } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
   const { colors, isDark } = useAppTheme();
   const { width: screenWidth } = useWindowDimensions();
@@ -134,7 +136,7 @@ export default function CoOwnHubScreen() {
   const [isSearchExpanded, setIsSearchExpanded] = React.useState(false);
   const [isSortExpanded, setIsSortExpanded] = React.useState(false);
   const [sortBy, setSortBy] = React.useState<SortOption>('newest');
-  const [activeSegment, setActiveSegment] = React.useState<HubSegment>('active');
+  const [activeSegment, setActiveSegment] = React.useState<HubSegment>(normalizeInitialSegment(route.params?.initialSegment));
   const [remoteAssets, setRemoteAssets] = React.useState<HubAsset[]>([]);
   const [holdings, setHoldings] = React.useState<Map<string, { units: number; avgEntry: number; realized: number }>>(new Map());
   const [isSyncing, setIsSyncing] = React.useState(true);
@@ -215,6 +217,12 @@ export default function CoOwnHubScreen() {
     return cleanup;
   }, [loadData]);
 
+  React.useEffect(() => {
+    if (route.params?.initialSegment) {
+      setActiveSegment(normalizeInitialSegment(route.params.initialSegment));
+    }
+  }, [route.params?.initialSegment]);
+
   const handleBack = React.useCallback(() => {
     if (navigation.canGoBack()) {
       navigation.goBack();
@@ -266,7 +274,6 @@ export default function CoOwnHubScreen() {
     const now = Date.now();
     return {
       active: marketAssets.filter((asset) => asset.isOpen && asset.availableUnits > 0).length,
-      auctions: 0,
       new_issues: marketAssets.filter((asset) => {
         const createdAt = new Date(asset.createdAt).getTime();
         return Number.isFinite(createdAt) && now - createdAt <= 7 * 24 * 60 * 60 * 1000;
@@ -280,7 +287,6 @@ export default function CoOwnHubScreen() {
     const normalized = query.trim().toLowerCase();
     const segmentFiltered = marketAssets.filter((asset) => {
       if (activeSegment === 'active') return asset.isOpen && asset.availableUnits > 0;
-      if (activeSegment === 'auctions') return false;
       if (activeSegment === 'watchlist') return coOwnWatchlist.includes(asset.id);
       const createdAt = new Date(asset.createdAt).getTime();
       return Number.isFinite(createdAt) && now - createdAt <= 7 * 24 * 60 * 60 * 1000;
@@ -303,15 +309,9 @@ export default function CoOwnHubScreen() {
     });
   }, [activeSegment, coOwnWatchlist, marketAssets, query, sortBy]);
 
-  const marketContext = React.useMemo(() => {
-    const openItems = marketAssets.filter((asset) => asset.isOpen && asset.availableUnits > 0).length;
-    const totalAvailableUnits = marketAssets.reduce((sum, asset) => sum + Math.max(0, asset.availableUnits), 0);
-    return { openItems, totalAvailableUnits };
-  }, [marketAssets]);
-
   const format1ze = React.useCallback(
-    (valueGbp: number) => formatCoOwnIze(toIze(valueGbp, 'GBP', goldRates)),
-    [goldRates]
+    (value1ze: number) => formatCoOwnIze(value1ze),
+    []
   );
 
   const formatLocal = React.useCallback((valueGbp: number) => (
@@ -366,7 +366,6 @@ export default function CoOwnHubScreen() {
   const hubRows = React.useMemo<HubRow[]>(() => {
     const rows: HubRow[] = [
       { kind: 'highlights', key: 'highlights' },
-      { kind: 'status', key: 'status' },
       { kind: 'tabs', key: 'tabs' },
       { kind: 'positions', key: 'positions' },
       { kind: 'instrumentsHeader', key: 'instruments-header' },
@@ -418,28 +417,25 @@ export default function CoOwnHubScreen() {
       <View style={styles.tabsRow} accessibilityRole="tablist">
         {SEGMENTS.map((segment) => {
           const isActive = activeSegment === segment;
-          const isDisabled = segment === 'auctions' && segmentCounts.auctions === 0;
           return (
             <AnimatedPressable
               key={segment}
               onPress={() => {
-                if (isDisabled) return;
                 haptics.selection();
                 setActiveSegment(segment);
               }}
               style={styles.tab}
               scaleValue={0.98}
               activeOpacity={0.72}
-              disabled={isDisabled}
               accessibilityRole="tab"
               accessibilityLabel={`${SEGMENT_LABELS[segment]} tab, ${segmentCounts[segment]} items`}
-              accessibilityState={{ selected: isActive, disabled: isDisabled }}
+              accessibilityState={{ selected: isActive }}
             >
               <Text
                 style={[
                   styles.tabText,
                   {
-                    color: isActive ? colors.textPrimary : isDisabled ? colors.textMuted : colors.textSecondary,
+                    color: isActive ? colors.textPrimary : colors.textSecondary,
                     fontFamily: isActive ? Typography.family.semibold : Typography.family.regular,
                   },
                 ]}
@@ -464,25 +460,6 @@ export default function CoOwnHubScreen() {
             <Text style={[styles.highlightsHint, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>{highlights.length > 1 ? 'Swipe to explore' : 'Featured market'}</Text>
           </View>
           <CoOwnMarketHighlightsCarousel items={highlights} onPressItem={handleHighlightPress} />
-        </View>
-      );
-    }
-
-    if (item.kind === 'status') {
-      const isOpen = marketContext.openItems > 0;
-      return (
-        <View style={[styles.marketStatusStrip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}> 
-          <View style={[styles.marketStatusDot, { backgroundColor: isOpen ? colors.success : colors.textMuted }]} />
-          <Text style={[styles.marketStatusLabel, { color: colors.textPrimary }]} numberOfLines={1} maxFontSizeMultiplier={1.25}>
-            {isOpen ? 'Continuous market' : 'Market paused'}
-          </Text>
-          <View style={[styles.marketStatusDivider, { backgroundColor: colors.border }]} />
-          <Text style={[styles.marketStatusMeta, { color: colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={1.3}>
-            {marketContext.openItems} {marketContext.openItems === 1 ? 'instrument' : 'instruments'} live
-          </Text>
-          <Text style={[styles.marketStatusUnits, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1.3}>
-            {marketContext.totalAvailableUnits} units
-          </Text>
         </View>
       );
     }
@@ -563,7 +540,7 @@ export default function CoOwnHubScreen() {
               <Text style={[styles.sectionEyebrow, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>MARKETPLACE</Text>
               <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.2}>{SECTION_TITLES[activeSegment]}</Text>
             </View>
-            <Text style={[styles.resultCount, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>{filteredAssets.length} results</Text>
+            <Text style={[styles.resultCount, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>{filteredAssets.length} {filteredAssets.length === 1 ? 'market' : 'markets'}</Text>
           </View>
           <View style={styles.marketControls}>
             {isSearchExpanded ? (
@@ -571,7 +548,7 @@ export default function CoOwnHubScreen() {
                 <AppInput
                   value={query}
                   onChangeText={setQuery}
-                  placeholder="Search instruments"
+                  placeholder="Search markets"
                   prefix={<Ionicons name="search-outline" size={16} color={colors.textMuted} />}
                   suffix={
                     <AnimatedPressable
@@ -588,7 +565,7 @@ export default function CoOwnHubScreen() {
                     </AnimatedPressable>
                   }
                   autoFocus
-                  accessibilityLabel="Search active instruments"
+                  accessibilityLabel="Search open markets"
                 />
               </View>
             ) : (
@@ -600,7 +577,7 @@ export default function CoOwnHubScreen() {
                 }}
                 style={[styles.controlButton, styles.searchControl, { backgroundColor: colors.surface, borderColor: colors.border }]}
                 accessibilityRole="button"
-                accessibilityLabel="Search active instruments"
+                accessibilityLabel="Search open markets"
               >
                 <Ionicons name="search-outline" size={17} color={colors.textSecondary} />
                 <Text style={[styles.controlText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.25}>Search</Text>
@@ -685,11 +662,9 @@ export default function CoOwnHubScreen() {
     if (item.kind === 'instrumentsEmpty') {
       const title = activeSegment === 'watchlist'
         ? 'Your watchlist is empty'
-        : activeSegment === 'auctions'
-          ? 'No auctions are live'
-          : query.trim()
-            ? 'No matching instruments'
-            : 'No instruments in this market';
+        : query.trim()
+          ? 'No matching markets'
+          : 'No markets available';
       const subtitle = activeSegment === 'watchlist'
         ? 'Use the bookmark control on an instrument to keep it here.'
         : query.trim()
@@ -760,7 +735,6 @@ export default function CoOwnHubScreen() {
     isSearchExpanded,
     isSortExpanded,
     loadData,
-    marketContext,
     navigation,
     query,
     renderPosition,
@@ -801,7 +775,6 @@ export default function CoOwnHubScreen() {
           subtitle="When issuers list items for shared ownership, you will find them here."
           actionLabel="Issue a Co-Own"
           onAction={() => {
-            haptics.tap();
             navigation.navigate('CreateCoOwn');
           }}
           secondaryActionLabel="Learn how it works"
@@ -862,47 +835,6 @@ const styles = StyleSheet.create({
     fontSize: Type.meta.size,
     lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.regular,
-  },
-  marketStatusStrip: {
-    minHeight: 42,
-    marginHorizontal: Space.md,
-    marginBottom: Space.sm,
-    paddingHorizontal: Space.md,
-    borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-  },
-  marketStatusDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    flexShrink: 0,
-  },
-  marketStatusLabel: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.semibold,
-    flexShrink: 0,
-  },
-  marketStatusDivider: {
-    width: StyleSheet.hairlineWidth,
-    height: 16,
-  },
-  marketStatusMeta: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
-  marketStatusUnits: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.medium,
-    fontVariant: ['tabular-nums'],
-    flexShrink: 0,
   },
   tabsSurface: {
     minHeight: 50,
@@ -1083,7 +1015,7 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   sortOption: {
-    minHeight: 36,
+    minHeight: 44,
     paddingHorizontal: 12,
     borderRadius: Radius.full,
     borderWidth: StyleSheet.hairlineWidth,

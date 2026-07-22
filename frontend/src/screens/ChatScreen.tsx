@@ -42,6 +42,7 @@ import {
   sendConversationMessageOnApi,
   deleteConversationMessageOnApi,
 } from "../services/chatApi";
+import { fetchPublicProfile, PublicProfileUser } from "../services/profileApi";
 
 import { useToast } from "../context/ToastContext";
 
@@ -176,9 +177,23 @@ const DEFAULT_BUYER_QUICK_REPLIES = [
   "Could you share more photos?",
 ];
 
+function parseMessageDate(dateStr: string): Date | null {
+  const legacyMatch = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?$/);
+  const d = legacyMatch
+    ? new Date(
+        Number(legacyMatch[3]),
+        Number(legacyMatch[2]) - 1,
+        Number(legacyMatch[1]),
+        Number(legacyMatch[4] ?? 12),
+        Number(legacyMatch[5] ?? 0),
+      )
+    : new Date(dateStr);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 function formatDateSeparator(dateStr: string): string | null {
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return null;
+  const d = parseMessageDate(dateStr);
+  if (!d) return null;
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const input = new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -193,6 +208,15 @@ function formatDateSeparator(dateStr: string): string | null {
     day: "numeric",
     month: "short",
   });
+}
+
+function formatMessageTime(dateStr?: string): string | undefined {
+  if (!dateStr) return undefined;
+  const hasExplicitTime = /T\d{2}:\d{2}|\b\d{1,2}:\d{2}\b/.test(dateStr);
+  if (!hasExplicitTime) return undefined;
+  const d = parseMessageDate(dateStr);
+  if (!d) return undefined;
+  return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 }
 
 export default function ChatScreen({ navigation, route }: Props) {
@@ -256,8 +280,12 @@ export default function ChatScreen({ navigation, route }: Props) {
       map.set(currentUser.id, currentUser.username);
     }
 
+    for (const participant of conversation?.participantProfiles ?? []) {
+      map.set(participant.id, participant.displayName || participant.username);
+    }
+
     return map;
-  }, [currentUser?.id, currentUser?.username]);
+  }, [conversation?.participantProfiles, currentUser?.id, currentUser?.username]);
 
   const profileMediaOverrides = useStore(
     (state) => state.profileMediaOverrides,
@@ -555,10 +583,32 @@ export default function ChatScreen({ navigation, route }: Props) {
     route.params?.partnerUserId,
   ]);
 
+  const [partnerProfile, setPartnerProfile] = useState<PublicProfileUser | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setPartnerProfile(null);
+    if (!resolvedPartnerId) return () => { active = false; };
+    fetchPublicProfile(resolvedPartnerId)
+      .then((profile) => {
+        if (active) setPartnerProfile(profile);
+      })
+      .catch(() => {
+        // The conversation remains usable when a public profile is unavailable.
+      });
+    return () => {
+      active = false;
+    };
+  }, [resolvedPartnerId]);
+
   const deployedBotIds = conversation?.botIds ?? [];
 
+  const partnerSummary = resolvedPartnerId
+    ? conversation?.participantProfiles?.find((participant) => participant.id === resolvedPartnerId)
+    : undefined;
+
   const sellerHandle = resolvedPartnerId
-    ? (userLookup.get(resolvedPartnerId) ?? "Thryft user")
+    ? (partnerProfile?.displayName || partnerProfile?.username || partnerSummary?.displayName || partnerSummary?.username || userLookup.get(resolvedPartnerId) || "Thryft user")
     : "Thryft user";
 
   const searchMatches = useMemo(() => {
@@ -1156,9 +1206,9 @@ export default function ChatScreen({ navigation, route }: Props) {
     const indices = new Set<number>();
     const extractDate = (d?: string) => {
       if (!d) return "";
-      // Extract YYYY-MM-DD portion if available
-      const match = d.match(/^(\d{4}-\d{2}-\d{2})/);
-      return match ? match[1] : (d.split("T")[0] ?? d.split(" ")[0] ?? "");
+      const parsed = parseMessageDate(d);
+      if (!parsed) return d;
+      return `${parsed.getFullYear()}-${parsed.getMonth()}-${parsed.getDate()}`;
     };
     for (let i = 0; i < messages.length; i++) {
       if (i === 0) {
@@ -1235,9 +1285,6 @@ export default function ChatScreen({ navigation, route }: Props) {
       const content = (
         <View key={msg.id} style={styles.statusWrap}>
           <MarketplaceChatCard type="purchase_status" text={msg.text} />
-          <Text style={styles.statusHint}>
-            Open My Orders for tracking information.
-          </Text>
         </View>
       );
       return dateSeparator ? (
@@ -1316,10 +1363,8 @@ export default function ChatScreen({ navigation, route }: Props) {
             type="system"
             systemTitle={msg.systemTitle}
             text={msg.text}
+            systemVerified={provenance.isProtected}
           />
-          {provenance.isProtected && (
-            <Text style={styles.systemProvenanceBadge}>Verified</Text>
-          )}
         </View>
       );
       return dateSeparator ? (
@@ -1407,7 +1452,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             text={msg.text ?? ""}
             isMe={isMe}
             senderLabel={isGroup && !isMe ? msg.senderLabel : undefined}
-            timestamp={isLastInCluster ? msg.date || "just now" : undefined}
+            timestamp={isLastInCluster ? formatMessageTime(msg.date) : undefined}
             isTranslated={translatedMessageIds.has(msg.id)}
             status={
               isMe
@@ -1529,6 +1574,8 @@ export default function ChatScreen({ navigation, route }: Props) {
       (resolvedPartnerId
         ? profileMediaOverrides[resolvedPartnerId]?.avatar
         : undefined) ||
+      partnerProfile?.avatar ||
+      partnerSummary?.avatar ||
       null
     : null;
   const topBarTitle = isGroup
@@ -1561,6 +1608,7 @@ export default function ChatScreen({ navigation, route }: Props) {
           avatarUrl={avatarUri}
           initials={topBarInitials}
           variant={isGroup ? "group" : "dm"}
+          isVerified={!isGroup && (partnerProfile?.emailVerified === true || partnerSummary?.emailVerified === true)}
           onBack={() => navigation.goBack()}
           onSearch={() => {
             if (isSearchActive) {
@@ -2037,7 +2085,8 @@ const styles = StyleSheet.create({
   },
 
   messageList: {
-    paddingVertical: Space.sm,
+    paddingTop: Space.sm,
+    paddingBottom: Space.md,
   },
 
   dateWrap: {
@@ -2064,30 +2113,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
-  systemProvenanceBadge: {
-    fontSize: Type.meta.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.brand,
-    marginTop: 2,
-  },
-
-  statusHint: {
-    fontSize: Type.meta.size,
-    fontFamily: TypeStyles.body.fontFamily,
-    color: Colors.textMuted,
-    marginTop: Space.xs,
-    textAlign: "center",
-  },
-
   msgRow: {
-    flexDirection: "row",
-    alignItems: "flex-end",
+    flexDirection: "column",
+    width: "100%",
     gap: Space.xs,
-    paddingHorizontal: Space.md,
+    paddingHorizontal: 0,
   },
 
   msgRowRight: {
-    flexDirection: "row-reverse",
+    alignItems: "stretch",
   },
 
   linkPreviewWrap: {
@@ -2128,9 +2162,9 @@ const styles = StyleSheet.create({
   },
 
   composerWrap: {
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.sm + 4,
-    paddingTop: Space.xs,
+    paddingHorizontal: 0,
+    paddingBottom: 0,
+    paddingTop: 0,
     backgroundColor: Colors.surface,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: Colors.border,

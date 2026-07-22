@@ -26,6 +26,7 @@ import { fetchCoOwnAssetById, fetchCoOwnOrderBook, fetchCoOwnHoldings } from '..
 import { parseApiError } from '../lib/apiClient';
 import { useToast } from '../context/ToastContext';
 import { CO_OWN_FEE_RATE } from '../utils/tradeFlow';
+import { formatCoOwnIze } from '../utils/currency';
 import {
   CommerceMediaStage,
   CategoryEvidence,
@@ -491,7 +492,7 @@ export default function AssetDetailScreen() {
           style={styles.sectionWrap}
         >
           <CoOwnOwnershipPanel
-            unitPriceLabel={formatFromFiat(asset.unitPriceGbp, 'GBP')}
+            unitPriceLabel={formatCoOwnIze(asset.unitPriceGbp)}
             totalUnits={totalUnits}
             availableUnits={availableUnits}
             allocatedPct={allocatedPct}
@@ -809,7 +810,7 @@ export default function AssetDetailScreen() {
                 <View style={styles.valuationRow}>
                   <Text style={[styles.valuationLabel, { color: colors.textMuted }]}>Last trade</Text>
                   <Text style={[styles.valuationValue, { color: colors.textSecondary }]}>
-                    {formatFromFiat(asset.unitPriceGbp, 'GBP')}
+                    {formatCoOwnIze(asset.unitPriceGbp)}
                   </Text>
                 </View>
                 {asset.appraisalValue && totalUnits > 0 && (
@@ -980,7 +981,7 @@ export default function AssetDetailScreen() {
           <View style={[styles.dockRow, isCompact && styles.dockRowCompact]}>
             <View style={[styles.dockPriceSection, isCompact && styles.dockPriceSectionCompact]}>
               <Text style={[styles.dockPriceLabel, { color: colors.textMuted }]} numberOfLines={1}>Unit price</Text>
-              <Text style={[styles.dockPriceValue, { color: colors.textPrimary }]} numberOfLines={1}>{formatFromFiat(asset.unitPriceGbp, 'GBP')}</Text>
+              <Text style={[styles.dockPriceValue, { color: colors.textPrimary }]} numberOfLines={1}>{formatCoOwnIze(asset.unitPriceGbp)}</Text>
             </View>
             <View style={[styles.dockActions, isCompact && styles.dockActionsCompact, isVeryCompact && isHolder && styles.dockActionsStacked]}>
               {isHolder && (

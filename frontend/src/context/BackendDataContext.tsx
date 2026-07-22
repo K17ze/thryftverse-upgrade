@@ -1,5 +1,5 @@
 import React from 'react';
-import { Listing, MOCK_LISTINGS } from '../data/mockData';
+import { Listing, MOCK_LISTINGS, MOCK_USERS } from '../data/mockData';
 import { getApiBaseUrl } from '../lib/apiClient';
 import { fetchListingsFromApi } from '../services/listingsApi';
 import { ENABLE_RUNTIME_MOCKS } from '../constants/runtimeFlags';
@@ -22,6 +22,21 @@ interface BackendDataContextValue {
 
 const BackendDataContext = React.createContext<BackendDataContextValue | undefined>(undefined);
 
+const DEVELOPMENT_LISTINGS = MOCK_LISTINGS.map((listing) => {
+  const seller = MOCK_USERS.find((candidate) => candidate.id === listing.sellerId);
+  return {
+    ...listing,
+    seller: seller ? {
+      id: seller.id,
+      username: seller.username,
+      avatar: seller.avatar || null,
+      rating: seller.rating,
+      reviewCount: seller.reviewCount,
+      location: seller.location,
+    } : null,
+  } satisfies Listing;
+});
+
 export function BackendDataProvider({ children }: { children: React.ReactNode }) {
   const [listings, setListings] = React.useState<Listing[]>([]);
   const [source] = React.useState<'api'>('api');
@@ -41,7 +56,7 @@ export function BackendDataProvider({ children }: { children: React.ReactNode })
       setHasMore(Boolean(result.nextCursor));
       setLastError(result.error ?? null);
     } else if (ENABLE_RUNTIME_MOCKS) {
-      setListings(MOCK_LISTINGS);
+      setListings(DEVELOPMENT_LISTINGS);
       setCursor(undefined);
       setHasMore(false);
       setLastError(null);

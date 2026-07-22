@@ -183,6 +183,51 @@ When reference apps are studied, the goal is to match or exceed their quality, n
 
 Then produce a ThryftVerse surface that embodies those same principles.
 
+### Comparative visual-fidelity protocol
+
+Flagship quality is judged by the rendered silhouette and small geometry, not by the presence of tokens. Before changing a visual surface, compare the current native render with the supplied benchmark at the same approximate viewport width and record the delta in these terms:
+
+```text
+dominant object → content density → visible surfaces → radii → strokes → icon chrome → typography → media crop → motion → states
+```
+
+The following are hard implementation constraints:
+
+- **Separate hit area from visible shape.** A control may require a 44pt target while showing only a 20–24pt glyph. Do not render a 44pt grey circle or square merely to satisfy accessibility.
+- **Visible containment must have meaning.** Use a persistent fill or outline only for selection, primary action, input boundary, status, media contrast, or grouping that is unclear without it. Ordinary Back, search, overflow, camera, notification and chevron controls default to transparent 44pt targets.
+- **Surface budget.** Above the fold, use at most one dominant non-media panel. Do not wrap every row, icon, filter and section in separate grey surfaces. Flat canvas, spacing and hairlines are the default utility structure.
+- **Radius budget.** Use no more than two non-avatar radius sizes in one viewport unless a modal is present. Radius communicates role: 8–12pt compact utility, 12–16pt media/fields, 20pt+ only for a genuinely dominant panel or dock.
+- **Stroke grammar.** Separators are hairline; fields and explicit outlines are 1pt; 2pt is reserved for focus or selection. Never mix arbitrary 0.5, 1, 1.5 and 2pt outlines in the same component family.
+- **Icon grammar.** A region uses one icon family, one optical size band and a stable outline/filled-state rule. Standard navigation glyphs are 20–24pt. Small metadata glyphs are 14–18pt. Novelty symbols do not replace clear product language.
+- **Density target.** A normal list viewport should expose roughly 4–6 useful rows. A discovery viewport should expose at least two meaningful media objects or the beginning of the next module. Empty space must support focus, not compensate for oversized chrome.
+- **Text budget.** The first viewport normally uses no more than three type sizes and one eyebrow. Remove duplicate headings, decorative subtitles and labels that merely name an obvious object.
+- **Media storytelling.** On discovery, profile and creator surfaces, real media must be the primary colour and visual anchor. Generic grey placeholder cards never become the dominant first-viewport story.
+- **No card-on-card composition.** A nested surface requires a distinct interaction or state boundary. Otherwise flatten it.
+- **Light/dark parity.** Geometry, hierarchy and information density remain identical across themes. Dark mode is not permission to add translucent containers or glow.
+
+Before accepting a screen, perform both checks:
+
+1. **Thumbnail test:** at roughly 25% scale, the primary object and reading order remain obvious; repeated rounded rectangles do not dominate the silhouette.
+2. **Squint test:** blur or squint at the screen; media/identity/content should dominate, while navigation and utility chrome recede.
+
+If three or more screens exhibit the same visual defect, inspect and correct the shared primitive first. Screen-local compensation is allowed only when that screen has a genuinely different information hierarchy.
+
+### Visual delta evidence
+
+For a meaningful flagship pass, retain local before/after captures and compare at least:
+
+```text
+first useful content Y-position
+number of useful objects above fold
+visible rounded-container count
+largest non-media control size
+icon optical size and line-weight consistency
+content occluded by sticky navigation/docks
+loading vs final geometry shift
+```
+
+Do not commit captures unless requested. A TypeScript pass cannot override an obviously inferior native render.
+
 ---
 
 ## 5. REFERENCE HIERARCHY

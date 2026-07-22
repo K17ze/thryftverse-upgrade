@@ -22,6 +22,7 @@ import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { resolveCommerceDestination, type CommerceDestinationSource } from '../platform/commerce';
 import { haptics } from '../utils/haptics';
+import { formatCoOwnIze } from '../utils/currency';
 import { CoOwnMarketHeader, CoOwnStateCanvas, CoOwnLedgerSummary, CoOwnActivitySkeleton, CoOwnOfflineBanner, CoOwnReconciliationBanner } from '../components/coown';
 import { useConnectivity } from '../hooks/useConnectivity';
 
@@ -269,7 +270,7 @@ export default function MarketLedgerScreen() {
           <AppSegmentControl
             options={FILTER_OPTIONS}
             value={filter}
-            onChange={(v) => { haptics.selection(); setFilter(v); }}
+            onChange={setFilter}
             fullWidth
           />
         </View>
@@ -286,6 +287,9 @@ export default function MarketLedgerScreen() {
           const isAuction = item.channel === 'auction';
           const side = item.action === 'sell-units' ? 'sell' as const : 'buy' as const;
           const title = item.action === 'bid' ? 'Bid submitted' : item.action === 'win' ? 'Auction settlement' : item.action === 'sell-units' ? 'Units sold' : 'Units purchased';
+          const unitPrice = item.units && item.units > 0 ? item.amountGBP / item.units : item.amountGBP;
+          const cashflow = getEntryCashflow(item);
+          const signedCoOwnTotal = `${cashflow >= 0 ? '+' : '−'}${formatCoOwnIze(Math.abs(cashflow))}`;
 
           return (
             <Reanimated.View
@@ -301,8 +305,8 @@ export default function MarketLedgerScreen() {
                 type="market"
                 assetTitle={title}
                 quantity={item.units ?? 1}
-                pricePerShare={formatMoney(item.amountGBP)}
-                totalAmount={formatSignedMoney(getEntryCashflow(item))}
+                pricePerShare={isAuction ? formatMoney(unitPrice) : formatCoOwnIze(unitPrice)}
+                totalAmount={isAuction ? formatSignedMoney(cashflow) : signedCoOwnTotal}
                 status={item.action === 'bid' ? 'open' : 'filled'}
                 timestamp={relativeTime(item.timestamp)}
                 onPress={() => {

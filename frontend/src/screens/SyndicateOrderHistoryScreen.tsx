@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, RefreshControl } from 'react-native';
+import { Alert, View, Text, StyleSheet, RefreshControl } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -10,22 +10,23 @@ import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
-import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import {
   MarketHistoryCursor,
   MarketHistoryItem,
+  cancelCoOwnOrder,
   listUserMarketHistory,
 } from '../services/marketApi';
 import { CO_OWN_FEE_RATE } from '../utils/tradeFlow';
 import { useToast } from '../context/ToastContext';
 import { OrderHistoryRow } from '../components/trade';
-import { AppSegmentControl } from '../components/ui/AppSegmentControl';
+import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { parseApiError } from '../lib/apiClient';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { haptics } from '../utils/haptics';
+import { formatCoOwnIze } from '../utils/currency';
 import { CoOwnMarketHeader, CoOwnStateCanvas } from '../components/coown';
 import type { OrderStatus } from '../data/coOwnModels';
 
@@ -57,10 +58,10 @@ const SIDE_FILTERS: Array<{ value: SideFilter; label: string; accessibilityLabel
 ];
 
 const DATE_FILTERS: Array<{ value: DateFilter; label: string; accessibilityLabel: string }> = [
-  { value: 'all', label: 'ALL', accessibilityLabel: 'Show all time' },
-  { value: '24h', label: '24H', accessibilityLabel: 'Show last 24 hours' },
-  { value: '7d', label: '7D', accessibilityLabel: 'Show last 7 days' },
-  { value: '30d', label: '30D', accessibilityLabel: 'Show last 30 days' },
+  { value: 'all', label: 'All time', accessibilityLabel: 'Show all time' },
+  { value: '24h', label: 'Past 24 hours', accessibilityLabel: 'Show last 24 hours' },
+  { value: '7d', label: 'Past 7 days', accessibilityLabel: 'Show last 7 days' },
+  { value: '30d', label: 'Past 30 days', accessibilityLabel: 'Show last 30 days' },
 ];
 
 const PAGE_SIZE = 80;
@@ -103,7 +104,7 @@ function mapRemoteHistoryToEntries(history: MarketHistoryItem[]): HistoryEntry[]
         totalAmount: item.amountGbp,
         fee: item.feeGbp ?? Number((item.amountGbp * CO_OWN_FEE_RATE).toFixed(2)),
         status,
-        filledQuantity: status === 'filled' ? quantity : 0,
+        filledQuantity: Math.max(0, item.filledUnits ?? (status === 'filled' ? quantity : 0)),
         createdAt: item.timestamp,
         source: 'backend',
       };
@@ -114,13 +115,14 @@ function mapRemoteHistoryToEntries(history: MarketHistoryItem[]): HistoryEntry[]
 export default function CoOwnOrderHistoryScreen() {
   const navigation = useNavigation<NavT>();
   const { colors, isDark } = useAppTheme();
+  const { show } = useToast();
   const currentUser = useStore((state) => state.currentUser);
-  const { formatFromFiat } = useFormattedPrice();
   const viewerId = currentUser?.id;
   const reducedMotionEnabled = useReducedMotion();
 
   const [sideFilter, setSideFilter] = React.useState<SideFilter>('all');
   const [dateFilter, setDateFilter] = React.useState<DateFilter>('all');
+  const [isPeriodPickerVisible, setIsPeriodPickerVisible] = React.useState(false);
   const [remoteEntries, setRemoteEntries] = React.useState<HistoryEntry[]>([]);
   const [isSyncingRemote, setIsSyncingRemote] = React.useState(false);
   const [isRemoteAvailable, setIsRemoteAvailable] = React.useState(false);
@@ -128,6 +130,7 @@ export default function CoOwnOrderHistoryScreen() {
   const [nextCursor, setNextCursor] = React.useState<MarketHistoryCursor | null>(null);
   const [isLoadingMore, setIsLoadingMore] = React.useState(false);
   const [refreshing, setRefreshing] = React.useState(false);
+  const [cancellingOrderId, setCancellingOrderId] = React.useState<string | null>(null);
 
   const syncRemoteHistory = React.useCallback(async () => {
     if (!viewerId) {
@@ -179,6 +182,38 @@ export default function CoOwnOrderHistoryScreen() {
     }
   }, [hasMoreRemote, isLoadingMore, isRemoteAvailable, isSyncingRemote, nextCursor, viewerId]);
 
+  const requestCancelOrder = React.useCallback((item: HistoryEntry) => {
+    if (!viewerId || item.source !== 'backend') return;
+    const orderId = Number(item.id.replace(/^coOwn_order_/, ''));
+    if (!Number.isInteger(orderId) || orderId <= 0) return;
+    Alert.alert(
+      'Cancel remaining order?',
+      `Any unfilled ${item.side} units will be cancelled and the reserved ${item.side === 'buy' ? '1ZE' : 'units'} released.`,
+      [
+        { text: 'Keep order', style: 'cancel' },
+        {
+          text: 'Cancel remaining',
+          style: 'destructive',
+          onPress: () => {
+            setCancellingOrderId(item.id);
+            void cancelCoOwnOrder(item.assetId, orderId, viewerId)
+              .then(() => {
+                setRemoteEntries((previous) => previous.map((entry) => (
+                  entry.id === item.id ? { ...entry, status: 'cancelled' as const } : entry
+                )));
+                show('Remaining order cancelled and reservation released.', 'success');
+              })
+              .catch((error) => {
+                const parsed = parseApiError(error, 'Unable to cancel this order');
+                show(parsed.message, 'error');
+              })
+              .finally(() => setCancellingOrderId(null));
+          },
+        },
+      ]
+    );
+  }, [show, viewerId]);
+
   React.useEffect(() => { void syncRemoteHistory(); }, [syncRemoteHistory]);
 
   const handleRefresh = React.useCallback(async () => {
@@ -211,25 +246,56 @@ export default function CoOwnOrderHistoryScreen() {
 
       <CoOwnMarketHeader
         title="Activity"
-        subtitle="Your Co-Own order history"
+        subtitle="Orders and executions"
         onBack={handleBack}
       />
 
-      <View style={styles.filtersWrap}>
-        <AppSegmentControl
-          options={SIDE_FILTERS}
-          value={sideFilter}
-          onChange={(v) => { haptics.selection(); setSideFilter(v); }}
-          fullWidth
-        />
-        <View style={styles.filterRow}>
-          <AppSegmentControl
-            options={DATE_FILTERS}
-            value={dateFilter}
-            onChange={(v) => { haptics.selection(); setDateFilter(v); }}
-            fullWidth
-          />
+      <View style={[styles.filterToolbar, { borderBottomColor: colors.border }]}>
+        <View style={styles.sideTabs} accessibilityRole="tablist">
+          {SIDE_FILTERS.map((filter) => {
+            const selected = sideFilter === filter.value;
+            return (
+              <AnimatedPressable
+                key={filter.value}
+                style={styles.sideTab}
+                onPress={() => {
+                  haptics.selection();
+                  setSideFilter(filter.value);
+                }}
+                activeOpacity={0.68}
+                accessibilityRole="tab"
+                accessibilityLabel={filter.accessibilityLabel}
+                accessibilityState={{ selected }}
+              >
+                <Text style={[
+                  styles.sideTabText,
+                  { color: selected ? colors.textPrimary : colors.textMuted },
+                  selected && styles.sideTabTextActive,
+                ]}>
+                  {filter.label.charAt(0) + filter.label.slice(1).toLowerCase()}
+                </Text>
+                {selected ? <View style={[styles.sideTabIndicator, { backgroundColor: colors.textPrimary }]} /> : null}
+              </AnimatedPressable>
+            );
+          })}
         </View>
+        <AnimatedPressable
+          style={[styles.periodButton, { backgroundColor: colors.surfaceAlt }]}
+          onPress={() => {
+            haptics.tap();
+            setIsPeriodPickerVisible(true);
+          }}
+          activeOpacity={0.72}
+          accessibilityRole="button"
+          accessibilityLabel={`Time period, ${DATE_FILTERS.find((filter) => filter.value === dateFilter)?.label ?? 'All time'}`}
+          accessibilityState={{ expanded: isPeriodPickerVisible }}
+        >
+          <Ionicons name="calendar-clear-outline" size={16} color={colors.textSecondary} />
+          <Text style={[styles.periodButtonText, { color: colors.textSecondary }]} numberOfLines={1}>
+            {DATE_FILTERS.find((filter) => filter.value === dateFilter)?.label ?? 'All time'}
+          </Text>
+          <Ionicons name="chevron-down" size={14} color={colors.textMuted} />
+        </AnimatedPressable>
       </View>
 
       <FlashList
@@ -253,10 +319,15 @@ export default function CoOwnOrderHistoryScreen() {
               type={item.type}
               assetTitle={item.assetTitle}
               quantity={item.quantity}
-              pricePerShare={formatFromFiat(item.pricePerShare, 'GBP')}
-              totalAmount={formatFromFiat(item.totalAmount, 'GBP')}
+              filledQuantity={item.filledQuantity}
+              pricePerShare={formatCoOwnIze(item.pricePerShare)}
+              totalAmount={formatCoOwnIze(item.totalAmount)}
               status={item.status}
               timestamp={item.createdAt}
+              onCancel={item.source === 'backend' && (item.status === 'open' || item.status === 'partial')
+                ? () => requestCancelOrder(item)
+                : undefined}
+              isCancelling={cancellingOrderId === item.id}
               onPress={() => { haptics.tap(); navigation.navigate('AssetDetail', { assetId: item.assetId }); }}
             />
           </Reanimated.View>
@@ -295,6 +366,21 @@ export default function CoOwnOrderHistoryScreen() {
           />
         }
       />
+
+      <BottomSheetPicker
+        visible={isPeriodPickerVisible}
+        onClose={() => setIsPeriodPickerVisible(false)}
+        title="Time period"
+        options={DATE_FILTERS.map((filter) => filter.label)}
+        selectedValue={DATE_FILTERS.find((filter) => filter.value === dateFilter)?.label}
+        onSelect={(label) => {
+          const selected = DATE_FILTERS.find((filter) => filter.label === label);
+          if (selected) {
+            haptics.selection();
+            setDateFilter(selected.value);
+          }
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -303,13 +389,59 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  filtersWrap: {
+  filterToolbar: {
+    minHeight: 54,
     paddingHorizontal: Space.md,
-    marginBottom: Space.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     gap: Space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  filterRow: {
-    marginTop: Space.xs,
+  sideTabs: {
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    alignItems: 'stretch',
+  },
+  sideTab: {
+    minWidth: 54,
+    minHeight: 54,
+    paddingHorizontal: Space.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  sideTabText: {
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.medium,
+  },
+  sideTabTextActive: {
+    fontFamily: Typography.family.semibold,
+  },
+  sideTabIndicator: {
+    position: 'absolute',
+    bottom: -StyleSheet.hairlineWidth,
+    width: 24,
+    height: 2,
+    borderRadius: 1,
+  },
+  periodButton: {
+    minWidth: 106,
+    maxWidth: 148,
+    minHeight: 40,
+    paddingHorizontal: Space.sm,
+    borderRadius: Radius.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  periodButtonText: {
+    flexShrink: 1,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.medium,
   },
   listContent: {
     paddingBottom: Space.xl,

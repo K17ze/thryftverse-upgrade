@@ -33,6 +33,8 @@ export function DiscoverySectionHeader({
           style={styles.actionBtn}
           onPress={onAction}
           activeOpacity={0.8}
+          hitSlop={8}
+          accessibilityRole="button"
           accessibilityLabel={`${actionLabel} ${title}`}
         >
           <Text style={styles.actionLabel}>{actionLabel}</Text>

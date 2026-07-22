@@ -20,6 +20,7 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsRow } from '../components/settings/SettingsRow';
 import { SettingsInfoBanner } from '../components/settings/SettingsInfoBanner';
 import { haptics } from '../utils/haptics';
+import { useAppTheme } from '../theme/ThemeContext';
 
 type Props = StackScreenProps<RootStackParamList, 'PushNotifications'>;
 
@@ -34,6 +35,7 @@ function formatHour(hour: number): string {
 const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => i);
 
 export default function PushNotificationsScreen({ navigation }: Props) {
+  const { colors } = useAppTheme();
   const currentUser = useStore((state) => state.currentUser);
   const { show } = useToast();
   const {

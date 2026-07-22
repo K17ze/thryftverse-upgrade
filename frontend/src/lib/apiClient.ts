@@ -79,6 +79,20 @@ function normalizeBaseUrl(url: string) {
   return url.replace(/\/$/, '');
 }
 
+function normalizeConfiguredBaseUrlForPlatform(url: string) {
+  const normalized = normalizeBaseUrl(url);
+
+  // A development .env commonly uses localhost so iOS/web can reach the host
+  // service. Android emulators resolve localhost to the emulator itself; use
+  // the standard host bridge without making every developer maintain a second
+  // environment file. Production HTTPS hosts pass through unchanged.
+  if (Platform.OS === 'android' && /^http:\/\/(localhost|127\.0\.0\.1)(?=[:/]|$)/i.test(normalized)) {
+    return normalized.replace(/^http:\/\/(localhost|127\.0\.0\.1)/i, 'http://10.0.2.2');
+  }
+
+  return normalized;
+}
+
 function extractHost(input: unknown) {
   if (typeof input !== 'string' || input.trim().length === 0) {
     return null;
@@ -110,7 +124,7 @@ function getExpoDevelopmentHost() {
 export function getApiBaseUrl() {
   const configured = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
   if (configured) {
-    return normalizeBaseUrl(configured);
+    return normalizeConfiguredBaseUrlForPlatform(configured);
   }
 
   const developmentHost = getExpoDevelopmentHost();

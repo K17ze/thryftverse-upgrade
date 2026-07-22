@@ -9,7 +9,6 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 import { Colors } from '../../constants/colors';
-import { KeyboardStickyView } from '../../platform/keyboard/KeyboardProvider';
 import type { PosterReactionType } from '../../services/postersApi';
 
 const REACTIONS: Array<{ type: PosterReactionType; icon: string; label: string }> = [
@@ -56,7 +55,12 @@ export function PosterReactionReplyBar({
     return (
       <View style={styles.container}>
         {onShowActivity && (
-          <Pressable style={styles.activityBtn} onPress={onShowActivity}>
+          <Pressable
+            style={({ pressed }) => [styles.activityBtn, pressed && styles.controlPressed]}
+            onPress={onShowActivity}
+            accessibilityRole="button"
+            accessibilityLabel="Open poster activity"
+          >
             <Ionicons name="people-outline" size={18} color="#fff" />
             <Text style={styles.activityBtnText}>Activity</Text>
           </Pressable>
@@ -66,9 +70,7 @@ export function PosterReactionReplyBar({
   }
 
   return (
-    <KeyboardStickyView
-      style={styles.container}
-    >
+    <View style={styles.container}>
       {showReactions && allowReactions && (
         <View style={styles.reactionTray}>
           {REACTIONS.map((r) => (
@@ -99,7 +101,7 @@ export function PosterReactionReplyBar({
         {allowReactions && (
           <Pressable
             onPress={() => setShowReactions(!showReactions)}
-            style={styles.emojiBtn}
+            style={({ pressed }) => [styles.emojiBtn, pressed && styles.controlPressed]}
             accessibilityLabel="Show reactions"
             accessibilityRole="button"
           >
@@ -121,12 +123,17 @@ export function PosterReactionReplyBar({
         )}
 
         {allowReplies && replyText.trim().length > 0 && (
-          <Pressable onPress={handleSendReply} style={styles.sendBtn} accessibilityLabel="Send reply">
+          <Pressable
+            onPress={handleSendReply}
+            style={({ pressed }) => [styles.sendBtn, pressed && styles.controlPressed]}
+            accessibilityLabel="Send reply"
+            accessibilityRole="button"
+          >
             <Ionicons name="send" size={20} color="#fff" />
           </Pressable>
         )}
       </View>
-    </KeyboardStickyView>
+    </View>
   );
 }
 
@@ -145,9 +152,9 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
   },
   reactionBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.1)',
@@ -163,16 +170,16 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   emojiBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.35)',
   },
   replyInput: {
     flex: 1,
-    minHeight: 40,
+    minHeight: 44,
     borderRadius: Radius.full,
     paddingHorizontal: Space.md,
     backgroundColor: 'rgba(0,0,0,0.35)',
@@ -181,9 +188,9 @@ const styles = StyleSheet.create({
     fontSize: Type.body.size,
   },
   sendBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: Colors.brand,
@@ -197,6 +204,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md + 4,
     paddingVertical: Space.sm,
     alignSelf: 'flex-start',
+    minHeight: 44,
+  },
+  controlPressed: {
+    opacity: 0.72,
+    transform: [{ scale: 0.98 }],
   },
   activityBtnText: {
     color: '#fff',

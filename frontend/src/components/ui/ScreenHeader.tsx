@@ -1,10 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Space, Radius, Type } from '../../theme/designTokens';
+import { Space, Control, Type } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Typography } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
 
 export type ScreenHeaderVariant = 'standard' | 'large' | 'minimal' | 'modal';
 
@@ -27,10 +27,11 @@ export function ScreenHeader({
   variant = 'standard',
   style,
   showBackButton = true,
-  backButtonColor = Colors.textPrimary,
+  backButtonColor,
   backIcon = 'arrow-back',
   subtitle,
 }: ScreenHeaderProps) {
+  const { colors } = useAppTheme();
   const titleSize = variant === 'large' ? Type.title.size : Type.subtitle.size;
   const titleFamily = variant === 'large' ? Typography.family.bold : Typography.family.semibold;
   const titleLineHeight = variant === 'large' ? Type.title.lineHeight : Type.subtitle.lineHeight;
@@ -46,8 +47,9 @@ export function ScreenHeader({
           accessibilityHint="Returns to the previous screen"
           scaleValue={0.92}
           hapticFeedback="light"
+          activeOpacity={0.62}
         >
-          <Ionicons name={backIcon} size={24} color={backButtonColor} />
+          <Ionicons name={backIcon} size={Control.icon} color={backButtonColor ?? colors.textPrimary} />
         </AnimatedPressable>
       ) : (
         <View style={styles.backBtnPlaceholder} />
@@ -57,6 +59,7 @@ export function ScreenHeader({
         <Text
           style={[
             styles.title,
+            { color: colors.textPrimary },
             {
               fontSize: titleSize,
               fontFamily: titleFamily,
@@ -68,6 +71,11 @@ export function ScreenHeader({
         >
           {title}
         </Text>
+        {subtitle ? (
+          <Text style={[styles.subtitle, { color: colors.textSecondary }]} numberOfLines={1}>
+            {subtitle}
+          </Text>
+        ) : null}
       </View>
 
       <View style={styles.rightSlot}>
@@ -83,21 +91,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md - Space.xs,
-    paddingVertical: Space.md - Space.xs,
+    paddingVertical: 6,
     minHeight: 56,
   },
   backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
-    borderWidth: 0.5,
-    borderColor: Colors.border,
+    width: Control.hit,
+    height: Control.hit,
     justifyContent: 'center',
     alignItems: 'center',
   },
   backBtnPlaceholder: {
-    width: 44,
+    width: Control.hit,
   },
   titleContainer: {
     flex: 1,
@@ -105,14 +109,21 @@ const styles = StyleSheet.create({
     marginHorizontal: Space.sm,
   },
   title: {
-    color: Colors.textPrimary,
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.regular,
+    marginTop: 1,
+    textAlign: 'center',
   },
   rightSlot: {
-    minWidth: 44,
+    minWidth: Control.hit,
     alignItems: 'flex-end',
     justifyContent: 'center',
   },
   spacer: {
-    width: 44,
+    width: Control.hit,
   },
 });

@@ -1783,7 +1783,23 @@ export const useStore = create<StoreState>()(
     {
       name: 'thryftverse-store',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 1,
+      version: 2,
+      migrate: (persistedState, version) => {
+        const state = persistedState as Partial<StoreState>;
+        if (version < 2 && ENABLE_RUNTIME_MOCKS && state.conversations) {
+          return {
+            ...state,
+            conversations: state.conversations.map((conversation) => {
+              if (conversation.participantProfiles?.length) return conversation;
+              const canonicalMock = MOCK_CONVERSATIONS.find((item) => item.id === conversation.id);
+              return canonicalMock?.participantProfiles?.length
+                ? { ...conversation, participantProfiles: canonicalMock.participantProfiles }
+                : conversation;
+            }),
+          };
+        }
+        return state;
+      },
       partialize: (state) => ({
         // Only persist user-critical data, not transient UI state
         wishlist: state.wishlist,

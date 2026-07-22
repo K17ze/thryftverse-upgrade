@@ -97,7 +97,6 @@ export function CoOwnConciergeCTA({
   };
 
   const handleContactConcierge = () => {
-    haptics.tap();
     onContactConcierge?.();
   };
 

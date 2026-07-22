@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, useWindowDimensions } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,8 +12,7 @@ import { AppButton } from '../components/ui/AppButton';
 import { HoldToSubmitButton } from '../components/ui/HoldToSubmitButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
-import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { placeCoOwnOrder } from '../services/marketApi';
+import { cancelCoOwnOrderReservation, placeCoOwnOrder } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
 import { useStore } from '../store/useStore';
 import {
@@ -26,17 +25,41 @@ import {
 type Props = StackScreenProps<RootStackParamList, 'TradeConfirm'>;
 
 export default function TradeConfirmScreen({ navigation, route }: Props) {
-  const { assetId, assetTitle, assetImageUrl, side, quantity, totalValue, fee, netValue, orderMode, limitPriceGbp } = route.params;
+  const {
+    assetId,
+    assetTitle,
+    assetImageUrl,
+    side,
+    quantity,
+    totalValue,
+    fee,
+    netValue,
+    orderMode,
+    ticketOrderType,
+    limitPriceGbp,
+    averageFillPriceGbp,
+    worstPriceGbp,
+    estimatedFilledUnits,
+    estimatedRemainingUnits,
+    reservationId,
+    reservationExpiresAt,
+    previewValidUntil,
+    maxReserved1ze,
+    marketDataTimestamp,
+  } = route.params;
   const { colors, isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const isCompactDock = width < 360;
   const haptic = useHaptic();
   const { show } = useToast();
-  const { formatFromFiat } = useFormattedPrice();
   const currentUser = useStore((state) => state.currentUser);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isReleasing, setIsReleasing] = useState(false);
+  const [nowMs, setNowMs] = useState(Date.now());
+  const reservationPlacedRef = React.useRef(false);
+  const reservationReleasedRef = React.useRef(false);
 
   // Idempotency key per spec 10 §1: generated once per order attempt and reused
   // across retries so a network retry cannot post a duplicate order. A truly
@@ -58,13 +81,49 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
 
   // Per spec 05 §3.2: receipt must show max reserved (full obligation).
   // For buys: total including fee. For sells: units being sold.
-  const maxReservedLabel = isBuy ? formatFromFiat(netValue, 'GBP') : `${quantity} units`;
+  const format1ze = React.useCallback((value: number) => (
+    `${value.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 1ZE`
+  ), []);
+  const maxReservedLabel = isBuy ? format1ze(maxReserved1ze) : `${quantity} units`;
+  const reservationExpiryMs = Date.parse(reservationExpiresAt);
+  const previewExpiryMs = Date.parse(previewValidUntil);
+  const validUntilMs = Math.min(reservationExpiryMs, previewExpiryMs);
+  const secondsRemaining = Number.isFinite(validUntilMs)
+    ? Math.max(0, Math.ceil((validUntilMs - nowMs) / 1000))
+    : 0;
+  const isExpired = secondsRemaining <= 0;
+
+  useEffect(() => {
+    const interval = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const releaseReservation = React.useCallback(async () => {
+    if (reservationPlacedRef.current || reservationReleasedRef.current) return;
+    reservationReleasedRef.current = true;
+    try {
+      await cancelCoOwnOrderReservation(assetId, reservationId);
+    } catch {
+      reservationReleasedRef.current = false;
+    }
+  }, [assetId, reservationId]);
+
+  useEffect(() => () => {
+    if (!reservationPlacedRef.current && !reservationReleasedRef.current) {
+      void cancelCoOwnOrderReservation(assetId, reservationId);
+    }
+  }, [assetId, reservationId]);
 
   // Per spec 05 §3.2: market warning for illiquid assets.
   const marketWarning = 'Co-Own units are illiquid. Exit may require time or may not be possible at the quoted price.';
 
   const handleConfirm = async () => {
     if (isSubmitting) return;
+
+    if (isExpired) {
+      show('This quote expired. Return to refresh the live market preview.', 'info');
+      return;
+    }
 
     if (!currentUser?.id) {
       show('Sign in is required to place an order.', 'error');
@@ -84,13 +143,18 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
         units: quantity,
         orderType: orderMode,
         limitPriceGbp,
+        reservationId,
         idempotencyKey: idempotencyKeyRef.current!,
       });
+
+      reservationPlacedRef.current = true;
 
       if (remoteOrder.order.status === 'rejected') {
         show('Order rejected by matching engine.', 'error');
         // Definitive rejection — a genuinely new order needs a new key.
         idempotencyKeyRef.current = null;
+        reservationPlacedRef.current = false;
+        await releaseReservation();
         return;
       }
       if (remoteOrder.order.status === 'open' || remoteOrder.order.status === 'partially_filled') {
@@ -117,14 +181,15 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
     }
   };
 
-  const handleCancel = () => {
-    haptic.medium();
+  const handleCancel = async () => {
+    if (isReleasing) return;
+    setIsReleasing(true);
+    await releaseReservation();
+    setIsReleasing(false);
     navigation.goBack();
   };
 
-  const handleBack = () => {
-    navigation.goBack();
-  };
+  const handleBack = handleCancel;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -149,16 +214,21 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
             imageUri={assetImageUrl}
             title={assetTitle ?? 'Co-Own asset'}
             side={side}
-            orderType={orderMode}
+            orderType={ticketOrderType}
             units={quantity}
-            unitPriceLabel={quantity > 0 ? formatFromFiat(totalValue / quantity, 'GBP') : formatFromFiat(0, 'GBP')}
-            limitPriceLabel={orderMode === 'limit' && limitPriceGbp != null ? formatFromFiat(limitPriceGbp, 'GBP') : undefined}
-            grossLabel={formatFromFiat(totalValue, 'GBP')}
-            feeLabel={formatFromFiat(fee, 'GBP')}
-            totalLabel={formatFromFiat(netValue, 'GBP')}
+            filledUnits={estimatedFilledUnits}
+            remainingUnits={estimatedRemainingUnits}
+            unitPriceLabel={quantity > 0 ? format1ze(totalValue / quantity) : format1ze(0)}
+            limitPriceLabel={format1ze(limitPriceGbp)}
+            avgFillPriceLabel={averageFillPriceGbp > 0 ? format1ze(averageFillPriceGbp) : 'No immediate fill'}
+            worstPriceLabel={worstPriceGbp > 0 ? format1ze(worstPriceGbp) : 'No immediate fill'}
+            grossLabel={format1ze(totalValue)}
+            feeLabel={format1ze(fee)}
+            totalLabel={format1ze(netValue)}
             totalCaption={isBuy ? 'Including 1% fee' : 'After 1% fee'}
             settlementLabel={settlementLabel}
             status="pending"
+            timestamp={`Quote ${secondsRemaining}s · market ${new Date(marketDataTimestamp).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`}
             maxReservedLabel={maxReservedLabel}
             marketWarning={marketWarning}
           />
@@ -187,8 +257,10 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
             title={isBuy ? 'Confirm buy' : 'Confirm sell'}
             iconName={isBuy ? 'arrow-up-circle-outline' : 'arrow-down-circle-outline'}
             onSubmit={handleConfirm}
-            disabled={isSubmitting}
-            accessibilityLabel={isBuy ? 'Confirm buy order' : 'Confirm sell order'}
+            disabled={isSubmitting || isReleasing || isExpired}
+            accessibilityLabel={isExpired
+              ? 'Quote expired. Return to refresh.'
+              : `${isBuy ? 'Confirm buy order' : 'Confirm sell order'}. Quote expires in ${secondsRemaining} seconds.`}
           />
         </View>
       </CoOwnStickyActionDock>

@@ -23,6 +23,7 @@ interface MarketplaceChatCardProps {
   offer?: OfferData;
   text?: string;
   systemTitle?: string;
+  systemVerified?: boolean;
   formattedPrice?: string;
   formattedOriginalPrice?: string;
   commerceState?: {
@@ -100,6 +101,7 @@ export function MarketplaceChatCard({
   offer,
   text,
   systemTitle,
+  systemVerified = false,
   formattedPrice,
   formattedOriginalPrice,
   commerceState,
@@ -143,9 +145,11 @@ export function MarketplaceChatCard({
           </View>
         )}
         <View style={styles.offerPriceRow}>
-          <Ionicons name="pricetag-outline" size={14} color={Colors.textMuted} />
-          <Text style={styles.offerPrice}>{priceLabel}</Text>
-          <Text style={styles.offerStrike}>{origLabel}</Text>
+          <View style={styles.offerPriceIdentity}>
+            <Ionicons name="pricetag-outline" size={15} color={Colors.textMuted} />
+            <Text style={styles.offerPrice} numberOfLines={1}>{priceLabel}</Text>
+            <Text style={styles.offerStrike} numberOfLines={1}>{origLabel}</Text>
+          </View>
           {discountPct >= 5 ? (
             <View style={styles.offerDiscountBadge}>
               <Text style={styles.offerDiscountText}>-{discountPct}%</Text>
@@ -186,18 +190,18 @@ export function MarketplaceChatCard({
           </View>
         )}
         {/* Action buttons — only show when pending and not expired */}
-        {!isMe && !status && !isExpired && (
+        {!isMe && (status === undefined || status === 'pending') && !isExpired && (
           <View style={styles.offerActions}>
             <AnimatedPressable style={styles.offerPass} onPress={onDecline} activeOpacity={0.85} scaleValue={0.96} hapticFeedback="light" accessibilityRole="button" accessibilityLabel="Decline offer">
-              <Text style={styles.offerPassText}>Pass</Text>
+              <Text style={styles.offerPassText} numberOfLines={1}>Pass</Text>
             </AnimatedPressable>
             {onCounter && (
               <AnimatedPressable style={styles.offerCounter} onPress={onCounter} activeOpacity={0.85} scaleValue={0.96} hapticFeedback="light" accessibilityRole="button" accessibilityLabel="Counter offer">
-                <Text style={styles.offerCounterText}>Counter</Text>
+                <Text style={styles.offerCounterText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.88}>Counter</Text>
               </AnimatedPressable>
             )}
             <AnimatedPressable style={styles.offerAccept} onPress={onAccept} activeOpacity={0.85} scaleValue={0.96} hapticFeedback="medium" accessibilityRole="button" accessibilityLabel="Accept offer">
-              <Text style={styles.offerAcceptText}>Accept</Text>
+              <Text style={styles.offerAcceptText} numberOfLines={1}>Accept</Text>
             </AnimatedPressable>
           </View>
         )}
@@ -210,10 +214,12 @@ export function MarketplaceChatCard({
     return (
       <View style={styles.statusInline}>
         <View style={styles.statusInlineIcon}>
-          <Ionicons name="cube-outline" size={12} color={Colors.textMuted} />
+          <Ionicons name="cube-outline" size={16} color={Colors.textSecondary} />
         </View>
-        <Text style={styles.statusInlineTitle}>{lines[0]}</Text>
-        <Text style={styles.statusInlineBody}>{lines.slice(1).join('\n')}</Text>
+        <View style={styles.statusInlineCopy}>
+          <Text style={styles.statusInlineTitle}>{lines[0]}</Text>
+          {lines.length > 1 ? <Text style={styles.statusInlineBody}>{lines.slice(1).join('\n')}</Text> : null}
+        </View>
       </View>
     );
   }
@@ -246,14 +252,20 @@ export function MarketplaceChatCard({
     return (
       <View style={styles.systemEvent}>
         <View style={styles.systemEventIcon}>
-          <Ionicons name="shield-outline" size={12} color={Colors.textMuted} />
+          <Ionicons name="shield-checkmark-outline" size={16} color={Colors.textSecondary} />
         </View>
-        {systemTitle ? (
-          <Text style={styles.systemEventTitle}>{systemTitle}</Text>
-        ) : null}
-        {text ? (
-          <Text style={styles.systemEventText}>{text}</Text>
-        ) : null}
+        <View style={styles.systemEventCopy}>
+          <View style={styles.systemEventHeading}>
+            {systemTitle ? <Text style={styles.systemEventTitle}>{systemTitle}</Text> : null}
+            {systemVerified ? (
+              <View style={styles.verifiedPill} accessibilityLabel="Verified system update">
+                <Ionicons name="checkmark" size={10} color={Colors.textSecondary} />
+                <Text style={styles.verifiedText}>Verified</Text>
+              </View>
+            ) : null}
+          </View>
+          {text ? <Text style={styles.systemEventText}>{text}</Text> : null}
+        </View>
       </View>
     );
   }
@@ -278,11 +290,16 @@ function StatusBadge({ tone, label, icon }: { tone: 'positive' | 'negative' | 'n
 
 const styles = StyleSheet.create({
   offerBlock: {
-    maxWidth: '80%',
+    width: '86%',
+    maxWidth: 340,
+    minWidth: 270,
     gap: Space.xs,
     backgroundColor: Colors.surfaceAlt,
-    borderRadius: Radius.md,
-    padding: Space.sm,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+    padding: Space.sm + 2,
+    marginHorizontal: Space.md,
   },
   offerBlockMe: {
     alignSelf: 'flex-end',
@@ -296,10 +313,18 @@ const styles = StyleSheet.create({
   offerPriceRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Space.sm,
+  },
+  offerPriceIdentity: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: Space.xs,
   },
   offerPrice: {
-    fontSize: Type.body.size,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
   },
@@ -308,6 +333,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
     color: Colors.textMuted,
     textDecorationLine: 'line-through',
+    flexShrink: 1,
   },
   offerDiscountBadge: {
     backgroundColor: `${Colors.success}18`,
@@ -359,15 +385,17 @@ const styles = StyleSheet.create({
   },
   offerActions: {
     flexDirection: 'row',
-    gap: Space.sm,
-    marginTop: 2,
+    gap: Space.xs,
+    marginTop: Space.xs,
   },
   offerPass: {
     flex: 1,
+    minWidth: 0,
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
-    borderRadius: Radius.sm,
+    paddingHorizontal: Space.xs,
+    borderRadius: Radius.md,
     backgroundColor: Colors.surface,
   },
   offerPassText: {
@@ -377,10 +405,12 @@ const styles = StyleSheet.create({
   },
   offerCounter: {
     flex: 1,
+    minWidth: 0,
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
-    borderRadius: Radius.sm,
+    paddingHorizontal: 2,
+    borderRadius: Radius.md,
     backgroundColor: Colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
@@ -392,10 +422,12 @@ const styles = StyleSheet.create({
   },
   offerAccept: {
     flex: 1,
+    minWidth: 0,
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
-    borderRadius: Radius.sm,
+    paddingHorizontal: Space.xs,
+    borderRadius: Radius.md,
     backgroundColor: Colors.textPrimary,
   },
   offerAcceptText: {
@@ -405,36 +437,44 @@ const styles = StyleSheet.create({
   },
   statusInline: {
     alignSelf: 'center',
-    maxWidth: '85%',
-    alignItems: 'center',
-    gap: 2,
-    paddingVertical: Space.sm,
-    paddingHorizontal: Space.md,
+    width: '100%',
+    maxWidth: 352,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.sm,
+    paddingVertical: Space.sm + 2,
+    paddingHorizontal: Space.sm + 2,
     backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
   },
   statusInlineIcon: {
-    width: 24,
-    height: 24,
+    width: 34,
+    height: 34,
     borderRadius: Radius.full,
     backgroundColor: Colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 2,
+    flexShrink: 0,
+  },
+  statusInlineCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
   },
   statusInlineTitle: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
-    textAlign: 'center',
+    color: Colors.textPrimary,
+    textAlign: 'left',
   },
   statusInlineBody: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-    textAlign: 'center',
+    color: Colors.textSecondary,
+    textAlign: 'left',
+    lineHeight: Type.meta.lineHeight + 2,
   },
   noticeInline: {
     flexDirection: 'row',
@@ -453,34 +493,64 @@ const styles = StyleSheet.create({
   },
   systemEvent: {
     alignSelf: 'center',
-    maxWidth: '85%',
-    alignItems: 'center',
-    gap: Space.xs,
-    paddingVertical: Space.sm,
-    paddingHorizontal: Space.md,
-    backgroundColor: Colors.surfaceAlt,
+    width: '100%',
+    maxWidth: 352,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.sm,
+    paddingVertical: Space.sm + 2,
+    paddingHorizontal: Space.sm + 2,
+    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
   },
   systemEventIcon: {
-    width: 24,
-    height: 24,
+    width: 34,
+    height: 34,
     borderRadius: Radius.full,
     backgroundColor: Colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
+    flexShrink: 0,
+  },
+  systemEventCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 3,
+  },
+  systemEventHeading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: Space.xs,
   },
   systemEventTitle: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
-    textAlign: 'center',
+    color: Colors.textPrimary,
+    textAlign: 'left',
+    flexShrink: 1,
   },
   systemEventText: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-    textAlign: 'center',
+    color: Colors.textSecondary,
+    textAlign: 'left',
+    lineHeight: Type.meta.lineHeight + 2,
+  },
+  verifiedPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingHorizontal: Space.xs,
+    paddingVertical: 2,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.surfaceAlt,
+  },
+  verifiedText: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.medium,
+    color: Colors.textSecondary,
   },
 });

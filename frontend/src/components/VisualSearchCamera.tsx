@@ -10,7 +10,7 @@ import {
   GestureResponderEvent,
 } from 'react-native';
 import { CameraView, useCameraPermissions, CameraType } from 'expo-camera';
-import * as MediaLibrary from 'expo-media-library';
+import * as MediaLibrary from 'expo-media-library/legacy';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
@@ -59,15 +59,20 @@ export default function VisualSearchCamera({
   React.useEffect(() => {
     let cancelled = false;
     async function loadRecent() {
-      const mediaPermission = await MediaLibrary.requestPermissionsAsync(false);
-      if (!mediaPermission.granted || cancelled) return;
-      const page = await MediaLibrary.getAssetsAsync({
-        mediaType: 'photo',
-        sortBy: [['creationTime', false]],
-        first: 1,
-      });
-      if (!cancelled && page.assets[0]?.uri) {
-        setLastImageUri(page.assets[0].uri);
+      try {
+        const mediaPermission = await MediaLibrary.requestPermissionsAsync(false);
+        if (!mediaPermission.granted || cancelled) return;
+        const page = await MediaLibrary.getAssetsAsync({
+          mediaType: 'photo',
+          sortBy: [['creationTime', false]],
+          first: 1,
+        });
+        if (!cancelled && page.assets[0]?.uri) {
+          setLastImageUri(page.assets[0].uri);
+        }
+      } catch {
+        // The thumbnail is optional; visual search remains usable if the
+        // platform library is unavailable or its permission changes.
       }
     }
     void loadRecent();

@@ -101,7 +101,7 @@ export function ChatComposerBar({
       {safetyWarning && !dangerWarning && !cautionWarning ? (
         <View style={styles.safetyBanner}>
           <Ionicons name="shield-outline" size={12} color={Colors.textMuted} />
-          <Text style={styles.safetyBannerText}>{safetyWarning}</Text>
+          <Text style={styles.safetyBannerText} numberOfLines={2}>{safetyWarning}</Text>
         </View>
       ) : null}
 
@@ -158,7 +158,7 @@ export function ChatComposerBar({
               accessibilityRole="button"
               accessibilityLabel={`Quick reply: ${qr.label}`}
             >
-              <Text style={styles.quickReplyText}>{qr.label}</Text>
+              <Text style={styles.quickReplyText} numberOfLines={1}>{qr.label}</Text>
             </Pressable>
           ))}
         </ScrollView>
@@ -256,7 +256,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.xs,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.xs + 2,
+    paddingVertical: Space.xs,
     backgroundColor: `${Colors.danger}08`,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: `${Colors.danger}20`,
@@ -266,6 +266,7 @@ const styles = StyleSheet.create({
     fontSize: Type.meta.size,
     fontFamily: TypeStyles.body.fontFamily,
     color: Colors.textMuted,
+    lineHeight: Type.meta.lineHeight + 1,
   },
   dangerBanner: {
     flexDirection: 'row',
@@ -350,6 +351,7 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xs,
   },
   quickReplyChip: {
+    maxWidth: 210,
     paddingHorizontal: Space.sm + 2,
     paddingVertical: 6,
     borderRadius: Radius.lg,
@@ -365,7 +367,7 @@ const styles = StyleSheet.create({
   inputRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    paddingHorizontal: Space.sm,
+    paddingHorizontal: Space.md,
     paddingVertical: Platform.OS === 'ios' ? 8 : 6,
     gap: Space.xs + 2,
   },

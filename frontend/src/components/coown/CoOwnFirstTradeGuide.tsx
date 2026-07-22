@@ -18,7 +18,6 @@ export interface CoOwnFirstTradeGuideProps {
 
 interface GuideStep {
   icon: React.ComponentProps<typeof Ionicons>['name'];
-  iconColor: string;
   title: string;
   body: string;
   keyTakeaway?: string;
@@ -29,38 +28,33 @@ interface GuideStep {
 const GUIDE_STEPS: GuideStep[] = [
   {
     icon: 'pie-chart-outline',
-    iconColor: '#6366f1',
     title: 'What you own',
-    body: 'A unit represents a share of ownership in a physical item. You own a fraction of the item, not the item itself. Multiple people can own units of the same item.',
-    keyTakeaway: 'You own a fraction, not the whole item',
+    body: 'Each instrument has a finite number of asset-specific units. Your settled units and ownership percentage are recorded against that instrument; 1ZE is the currency used to place and settle orders.',
+    keyTakeaway: 'Asset units are ownership; 1ZE is settlement currency',
   },
   {
     icon: 'cart-outline',
-    iconColor: '#10b981',
     title: 'How buying works',
-    body: 'Buy available units at the listed unit price. Settlement can be in GBP, TVUSD, or both. A 1% fee applies to each trade. Your units appear in your portfolio immediately after settlement.',
-    keyTakeaway: '1% fee per trade · instant settlement',
+    body: 'Choose a quantity and review the protected price, maximum 1ZE reservation, fees, and estimated result before submitting. An accepted order may fill fully, partially, or remain open.',
+    keyTakeaway: 'Review the maximum reservation before submitting',
   },
   {
     icon: 'swap-horizontal-outline',
-    iconColor: '#f59e0b',
     title: 'How selling works',
-    body: 'List your units for sale at market or a limit price. Buyers must match your offer for the trade to fill. There is no guarantee your units will sell quickly — it depends on buyer demand.',
-    keyTakeaway: 'Selling depends on buyer demand',
+    body: 'Only settled, unreserved units can be offered for sale. A limit order fills only when compatible demand is available, so an exit can take time or may not fill at your chosen price.',
+    keyTakeaway: 'An exit is not guaranteed',
   },
   {
     icon: 'warning-outline',
-    iconColor: '#ef4444',
     title: 'Liquidity & risk',
-    body: 'Co-Own units are not cash. Values can go down as well as up. Selling may take time. Buyout of the full asset is not currently supported. Only invest what you can afford to hold.',
+    body: 'Co-Own units are not cash. Prices can move, market data can become stale, and thin markets may use an auction or request-for-quote flow. Only commit value you can afford to hold.',
     keyTakeaway: 'Only invest what you can afford to hold',
   },
   {
     icon: 'shield-checkmark-outline',
-    iconColor: '#6366f1',
-    title: 'Authenticity & storage',
-    body: 'Every Co-Own item is authenticated before listing. Physical items are held in secure storage while units are outstanding. You can report issues at any time from the asset page.',
-    keyTakeaway: 'Authenticated · securely stored',
+    title: 'Rights & custody',
+    body: 'Read the instrument dossier for its recorded provenance, custody, insurance, valuation, transfer limits, and current rights version. If required rights remain incomplete, trading stays disabled.',
+    keyTakeaway: 'Rights are instrument-specific and versioned',
   },
 ];
 
@@ -80,6 +74,7 @@ export function CoOwnFirstTradeGuide({
 
   const isLastStep = currentStep === GUIDE_STEPS.length - 1;
   const step = GUIDE_STEPS[currentStep];
+  const stepIconColor = currentStep === 3 ? colors.warning : colors.textPrimary;
 
   const handleNext = useCallback(() => {
     if (isLastStep) {
@@ -97,7 +92,6 @@ export function CoOwnFirstTradeGuide({
       onClose();
       return;
     }
-    haptics.tap();
     setCurrentStep((prev) => prev - 1);
     scrollRef.current?.scrollTo({ x: 0, y: 0, animated: false });
   }, [currentStep, onClose]);
@@ -127,7 +121,7 @@ export function CoOwnFirstTradeGuide({
     >
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={[styles.sheet, { backgroundColor: colors.background }]} onPress={(e) => e.stopPropagation()}>
-          <View style={styles.handle} />
+          <View style={[styles.handle, { backgroundColor: colors.border }]} />
 
           {/* Header */}
           <View style={styles.header}>
@@ -136,9 +130,9 @@ export function CoOwnFirstTradeGuide({
                 <Ionicons name="school-outline" size={18} color={colors.brand} />
               </View>
               <View>
-                <Text style={[styles.title, { color: colors.textPrimary }]}>First trade guide</Text>
+                <Text style={[styles.title, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.25}>Before your first order</Text>
                 <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-                  5 things to know before you start
+                  Ownership, settlement and exit in five steps
                 </Text>
               </View>
             </View>
@@ -174,8 +168,8 @@ export function CoOwnFirstTradeGuide({
             showsVerticalScrollIndicator={false}
           >
             <View style={[styles.stepCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <View style={[styles.stepIconWrap, { backgroundColor: `${step.iconColor}15` }]}>
-                <Ionicons name={step.icon as any} size={32} color={step.iconColor} />
+              <View style={[styles.stepIconWrap, { backgroundColor: colors.surfaceAlt }]}>
+                <Ionicons name={step.icon as any} size={32} color={stepIconColor} />
               </View>
               <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>{step.title}</Text>
               <Text style={[styles.stepBody, { color: colors.textSecondary }]}>
@@ -287,7 +281,6 @@ const styles = StyleSheet.create({
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: 'rgba(0,0,0,0.15)',
     alignSelf: 'center',
     marginTop: Space.sm,
     marginBottom: Space.xs,

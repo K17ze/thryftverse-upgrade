@@ -8,7 +8,6 @@ import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
-import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useToast } from '../context/ToastContext';
 import {
   buildTradeQuote,
@@ -22,11 +21,17 @@ import {
   computeReservation,
   estimateFill,
   computeDepthWithinBand,
-  generateSimulatedBook,
   DEFAULT_FEE_SCHEDULE,
 } from '../utils/tradeFlow';
 import { parseApiError } from '../lib/apiClient';
-import { fetchCoOwnAssetById, fetchCoOwnHoldings } from '../services/marketApi';
+import {
+  fetchCoOwnAssetById,
+  fetchCoOwnHoldings,
+  fetchCoOwnOrderBook,
+  previewCoOwnOrder,
+  reserveCoOwnOrder,
+  type CoOwnOrderBookSnapshot,
+} from '../services/marketApi';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
@@ -34,7 +39,6 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { Space, Radius, Type, Typography, DockConstants } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useHaptic } from '../hooks/useHaptic';
-import { haptics } from '../utils/haptics';
 import {
   CoOwnMarketHeader,
   CoOwnTradeComposer,
@@ -54,6 +58,7 @@ import {
 import { CoOwnNumericText } from '../components/ui/CoOwnNumericText';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { useConnectivity } from '../hooks/useConnectivity';
+import { formatCoOwnIze } from '../utils/currency';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'Trade'>;
@@ -83,7 +88,6 @@ export default function TradeScreen() {
 
   const currentUser = useStore((state) => state.currentUser);
   const checkCoOwnEligibility = useStore((state) => state.checkCoOwnEligibility);
-  const { formatFromFiat } = useFormattedPrice();
 
   const [side, setSide] = React.useState<TradeSide>(route.params?.side ?? 'buy');
   const [quantityInput, setQuantityInput] = React.useState('1');
@@ -97,6 +101,7 @@ export default function TradeScreen() {
 
   const [asset, setAsset] = React.useState<any>(null);
   const [yourUnits, setYourUnits] = React.useState(0);
+  const [orderBook, setOrderBook] = React.useState<CoOwnOrderBookSnapshot | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isError, setIsError] = React.useState(false);
 
@@ -111,10 +116,12 @@ export default function TradeScreen() {
     Promise.all([
       fetchCoOwnAssetById(tradeAssetId),
       currentUser?.id ? fetchCoOwnHoldings(currentUser.id).catch(() => []) : Promise.resolve([]),
+      fetchCoOwnOrderBook(tradeAssetId, { limit: 40 }),
     ])
-      .then(([fetchedAsset, holdings]) => {
+      .then(([fetchedAsset, holdings, fetchedOrderBook]) => {
         if (cancelled) return;
         setAsset(fetchedAsset);
+        setOrderBook(fetchedOrderBook);
         const holding = holdings.find((h) => h.assetId === tradeAssetId);
         setYourUnits(holding?.unitsOwned ?? 0);
       })
@@ -132,7 +139,17 @@ export default function TradeScreen() {
   }, [tradeAssetId, currentUser?.id, show]);
 
   const marketPrice = asset ? asset.unitPriceGbp : 0;
-  const orderMode = offerPriceInput.trim().length > 0 ? 'limit' : 'market';
+  const orderMode = 'limit' as const;
+  const bestBid = orderBook?.bids[0]?.unitPriceGbp ?? 0;
+  const bestAsk = orderBook?.asks[0]?.unitPriceGbp ?? 0;
+  const protectedReferencePrice = side === 'buy' ? bestAsk : bestBid;
+  const protectedLimitPrice = protectedReferencePrice > 0
+    ? Number((protectedReferencePrice * (side === 'buy' ? 1.02 : 0.98)).toFixed(4))
+    : 0;
+  const enteredLimitPrice = Number(offerPriceInput);
+  const effectiveLimitPrice = ticketOrderType === 'protected_instant'
+    ? protectedLimitPrice
+    : Number.isFinite(enteredLimitPrice) ? enteredLimitPrice : 0;
 
   // Spec 10 §9.3: "TBC only for prelaunch preview; blocks trading on live."
   // If any rights row is TBC, trading is blocked — even if navigated directly.
@@ -146,19 +163,22 @@ export default function TradeScreen() {
   }, [asset]);
 
   const quote = React.useMemo(
-    () => buildTradeQuote({ orderMode, side, quantityInput, limitPriceInput: offerPriceInput, marketPrice }),
-    [marketPrice, offerPriceInput, orderMode, quantityInput, side]
+    () => buildTradeQuote({
+      orderMode,
+      side,
+      quantityInput,
+      limitPriceInput: effectiveLimitPrice > 0 ? String(effectiveLimitPrice) : '',
+      marketPrice,
+    }),
+    [effectiveLimitPrice, marketPrice, quantityInput, side]
   );
 
-  // Phase 2.5: simulated book + fill estimate + reservation + depth
-  const simulatedBook = React.useMemo(
-    () => generateSimulatedBook(marketPrice),
-    [marketPrice]
-  );
+  const visibleBook = React.useMemo(() => ({
+    bids: (orderBook?.bids ?? []).map((level) => ({ price: level.unitPriceGbp, size: level.units })),
+    asks: (orderBook?.asks ?? []).map((level) => ({ price: level.unitPriceGbp, size: level.units })),
+  }), [orderBook]);
 
-  const protectionPrice = ticketOrderType === 'limit' && quote.hasLimitPrice
-    ? quote.limitPrice
-    : marketPrice;
+  const protectionPrice = quote.hasLimitPrice ? quote.limitPrice : 0;
 
   const reservation = React.useMemo(
     () => computeReservation(side, quote.quantity, protectionPrice, DEFAULT_FEE_SCHEDULE, 0),
@@ -166,19 +186,19 @@ export default function TradeScreen() {
   );
 
   const fillEstimate = React.useMemo(
-    () => estimateFill(side, quote.quantity, simulatedBook),
-    [side, quote.quantity, simulatedBook]
+    () => estimateFill(side, quote.quantity, visibleBook),
+    [side, quote.quantity, visibleBook]
   );
 
   const depthContext = React.useMemo(() => {
-    const { depthUnits, midPrice } = computeDepthWithinBand(side, simulatedBook);
+    const { depthUnits, midPrice } = computeDepthWithinBand(side, visibleBook);
     return {
       orderUnits: quote.quantity,
       depthUnits,
       slippageBeyondDepth: fillEstimate.slippageBeyondDepth,
       midPrice,
     };
-  }, [side, simulatedBook, quote.quantity, fillEstimate.slippageBeyondDepth]);
+  }, [side, visibleBook, quote.quantity, fillEstimate.slippageBeyondDepth]);
 
   const postTradePreview = React.useMemo(() => {
     const unitsAfter = side === 'buy' ? yourUnits + quote.quantity : yourUnits - quote.quantity;
@@ -188,15 +208,26 @@ export default function TradeScreen() {
   }, [side, quote.quantity, yourUnits, asset?.totalUnits]);
 
   const eligibility = asset ? checkCoOwnEligibility(asset.settlementMode) : { ok: false, message: 'Asset not found' };
-  const canSubmit = isTradeSubmitEnabled({ assetFound: !!asset, eligibility, quote }) && !hasIncompleteRights;
-  const submitDisabledReason = React.useMemo(
-    () => getTradeSubmitDisabledReason({ assetFound: !!asset, eligibility, quote, hasIncompleteRights }),
-    [asset, eligibility, quote, hasIncompleteRights],
-  );
+  const marketIsAuthoritative = orderBook?.source === 'live'
+    && orderBook.reconciliationState === 'reconciled'
+    && Boolean(orderBook.serverTimestamp);
+  const canSubmit = isTradeSubmitEnabled({ assetFound: !!asset, eligibility, quote })
+    && !hasIncompleteRights
+    && marketIsAuthoritative
+    && !isOffline;
+  const submitDisabledReason = React.useMemo(() => {
+    const tradeReason = getTradeSubmitDisabledReason({ assetFound: !!asset, eligibility, quote, hasIncompleteRights });
+    if (tradeReason) return tradeReason;
+    if (isOffline) return 'Reconnect to review this order';
+    if (orderBook?.source !== 'live') return 'Live market data is unavailable';
+    if (orderBook.reconciliationState !== 'reconciled') return 'Market reconciliation is in progress';
+    if (!orderBook.serverTimestamp) return 'Market timestamp is unavailable';
+    return null;
+  }, [asset, eligibility, hasIncompleteRights, isOffline, orderBook, quote]);
 
   // Thin market: no opposite side → substitute "Review order" with "Request quote"
-  const isThinMarket = (side === 'buy' && simulatedBook.asks.length === 0)
-    || (side === 'sell' && simulatedBook.bids.length === 0);
+  const isThinMarket = (side === 'buy' && visibleBook.asks.length === 0)
+    || (side === 'sell' && visibleBook.bids.length === 0);
 
   const haptic = useHaptic();
 
@@ -204,26 +235,68 @@ export default function TradeScreen() {
     if (isSubmittingOrder) return;
 
     const decision = evaluateTradeSubmit({
-      orderMode, side, quantityInput, limitPriceInput: offerPriceInput, marketPrice,
+      orderMode, side, quantityInput, limitPriceInput: String(effectiveLimitPrice), marketPrice,
       assetFound: !!asset, eligibility, maxSellUnits: yourUnits,
     });
 
     if (!decision.ok) { show(decision.message, 'error'); return; }
     if (!asset) { show('Asset not found', 'error'); return; }
 
-    haptic.medium();
-    navigation.navigate('TradeConfirm', {
-      assetId: asset.id,
-      assetTitle: asset.title,
-      assetImageUrl: asset.imageUrl,
-      side,
-      quantity: quote.quantity,
-      totalValue: quote.grossValue,
-      fee: quote.fee,
-      netValue: quote.netValue,
-      orderMode,
-      limitPriceGbp: orderMode === 'limit' && quote.hasLimitPrice ? quote.limitPrice : undefined,
-    });
+    if (!currentUser?.id) { show('Sign in is required to trade.', 'error'); return; }
+    if (!marketIsAuthoritative || !orderBook) {
+      show('Live market data is unavailable. Trading remains paused.', 'error');
+      return;
+    }
+
+    setIsSubmittingOrder(true);
+    try {
+      const command = {
+        userId: currentUser.id,
+        side,
+        units: quote.quantity,
+        orderType: orderMode,
+        limitPriceGbp: effectiveLimitPrice,
+      } as const;
+      const previewResponse = await previewCoOwnOrder(asset.id, command);
+      const preview = previewResponse.preview;
+      if (!preview.eligibility.allowed) {
+        show(preview.eligibility.message || 'This order is not eligible.', 'error');
+        return;
+      }
+      const reservationResponse = await reserveCoOwnOrder(asset.id, {
+        ...command,
+        idempotencyKey: `reserve_${currentUser.id}_${asset.id}_${Date.now()}`,
+      });
+      const reserved = reservationResponse.reservation;
+      haptic.medium();
+      navigation.navigate('TradeConfirm', {
+        assetId: asset.id,
+        assetTitle: asset.title,
+        assetImageUrl: asset.imageUrl,
+        side,
+        quantity: quote.quantity,
+        totalValue: preview.estimatedFill.grossNotional,
+        fee: preview.fee,
+        netValue: preview.total,
+        orderMode,
+        ticketOrderType,
+        limitPriceGbp: effectiveLimitPrice,
+        averageFillPriceGbp: preview.estimatedFill.avgFillPrice,
+        worstPriceGbp: preview.estimatedFill.worstPrice,
+        estimatedFilledUnits: preview.estimatedFill.filledUnits,
+        estimatedRemainingUnits: preview.estimatedFill.remainingUnits,
+        reservationId: reserved.id,
+        reservationExpiresAt: reserved.expiresAt,
+        previewValidUntil: preview.validUntil,
+        maxReserved1ze: reserved.reserved1zeMg / 1000,
+        marketDataTimestamp: orderBook.serverTimestamp,
+      });
+    } catch (error) {
+      const parsed = parseApiError(error, 'Unable to prepare this order');
+      show(parsed.message, 'error');
+    } finally {
+      setIsSubmittingOrder(false);
+    }
   };
 
   const handleBack = React.useCallback(() => {
@@ -267,9 +340,10 @@ export default function TradeScreen() {
     );
   }
 
-  const availableUnits = Math.max(0, asset.availableUnits);
-  const sellableUnits = side === 'sell' ? yourUnits : availableUnits;
-  const maxUnits = side === 'sell' ? yourUnits : availableUnits;
+  const executableUnits = side === 'buy'
+    ? visibleBook.asks.reduce((total, level) => total + level.size, 0)
+    : visibleBook.bids.reduce((total, level) => total + level.size, 0);
+  const maxUnits = side === 'sell' ? Math.min(yourUnits, executableUnits || yourUnits) : executableUnits;
   // 1ZE is the canonical settlement unit. GBP/TVUSD are secondary references.
   const settlementLabel = '1ZE';
 
@@ -284,7 +358,9 @@ export default function TradeScreen() {
       />
 
       <CoOwnOfflineBanner isOffline={isOffline} />
-      <CoOwnReconciliationBanner isActive={false} />
+      <CoOwnReconciliationBanner
+        isActive={Boolean(orderBook && orderBook.reconciliationState !== 'reconciled')}
+      />
 
       {/* Compact value strip — spec 03 §3.2: last/bid/ask/spread one line */}
       <CoOwnValueStrip
@@ -312,7 +388,7 @@ export default function TradeScreen() {
           <AppSegmentControl
             options={TRADE_SIDE_OPTIONS}
             value={side}
-            onChange={(v) => { setSide(v); haptics.selection(); }}
+            onChange={setSide}
             fullWidth
             style={styles.sideSwitcher}
           />
@@ -346,14 +422,22 @@ export default function TradeScreen() {
           </Reanimated.View>
         )}
 
-        {/* Illustrative-data disclaimer — the order book, fill estimate, depth
-            and slippage figures below are derived from a local simulated book,
-            not live market data. They are illustrative only and do not represent
-            executable quotes. Authoritative preview requires server-side matching. */}
-        <View style={[styles.illustrativeBanner, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
-          <Ionicons name="information-circle-outline" size={13} color={colors.textMuted} />
-          <Text style={[styles.illustrativeBannerText, { color: colors.textMuted }]} numberOfLines={2}>
-            Fill estimate, depth and slippage are illustrative only — not live market data.
+        <View style={[
+          styles.illustrativeBanner,
+          {
+            backgroundColor: marketIsAuthoritative ? colors.success + '10' : colors.warning + '12',
+            borderColor: marketIsAuthoritative ? colors.success + '35' : colors.warning + '40',
+          },
+        ]}>
+          <Ionicons
+            name={marketIsAuthoritative ? 'pulse-outline' : 'pause-circle-outline'}
+            size={14}
+            color={marketIsAuthoritative ? colors.success : colors.warning}
+          />
+          <Text style={[styles.illustrativeBannerText, { color: colors.textSecondary }]} numberOfLines={3}>
+            {marketIsAuthoritative
+              ? `Live order book · snapshot ${orderBook?.snapshotSequence ?? 0}. A server preview and reservation are required before confirmation.`
+              : 'Trading paused. Displayed depth may be a development fallback and is never treated as an executable quote.'}
           </Text>
         </View>
 
@@ -365,13 +449,13 @@ export default function TradeScreen() {
             side={side}
             mode={orderMode}
             units={quote.quantity}
-            unitPriceLabel={formatFromFiat(marketPrice, 'GBP')}
+            unitPriceLabel={formatCoOwnIze(marketPrice)}
             grossLabel={<CoOwnNumericText value={quote.grossValue} unit="1ZE" size="priceList" align="right" showUnit={false} />}
             feeLabel={<CoOwnNumericText value={quote.fee} unit="1ZE" size="priceList" align="right" showUnit={false} />}
             totalLabel={<CoOwnNumericText value={quote.netValue} unit="1ZE" size="priceLarge" align="right" showUnit={false} />}
             totalCaption={side === 'buy' ? 'Including 1% fee' : 'After 1% fee'}
             settlementLabel={settlementLabel}
-            availableUnits={availableUnits}
+            availableUnits={executableUnits}
             sellableUnits={yourUnits}
             maxUnits={maxUnits}
             orderType={ticketOrderType}
@@ -405,7 +489,7 @@ export default function TradeScreen() {
             <AppSegmentControl
               options={ORDER_TYPE_OPTIONS}
               value={ticketOrderType}
-              onChange={(v) => { setTicketOrderType(v); haptics.selection(); }}
+              onChange={setTicketOrderType}
               fullWidth
             />
             <Text style={[styles.marketHint, { color: colors.textMuted }]} numberOfLines={2}>
@@ -430,7 +514,7 @@ export default function TradeScreen() {
                 />
                 {maxUnits > 0 && (
                   <AnimatedPressable
-                    onPress={() => { haptics.tap(); setQuantityInput(String(maxUnits)); }}
+                    onPress={() => setQuantityInput(String(maxUnits))}
                     accessibilityRole="button"
                     accessibilityLabel={`Set quantity to maximum ${maxUnits} units`}
                     scaleValue={0.96}
@@ -442,9 +526,9 @@ export default function TradeScreen() {
               </View>
               <View style={styles.ticketContextCol}>
                 <View style={styles.contextItem}>
-                  <Text style={[styles.contextLabel, { color: colors.textMuted }]}>Available</Text>
+                  <Text style={[styles.contextLabel, { color: colors.textMuted }]}>Executable</Text>
                   <Text style={[styles.contextValue, { color: colors.textPrimary }]}>
-                    {availableUnits}
+                    {executableUnits}
                   </Text>
                 </View>
                 <View style={styles.contextItem}>
@@ -462,26 +546,33 @@ export default function TradeScreen() {
 
             <View style={[styles.ticketDivider, { backgroundColor: colors.border }]} />
 
-            {/* Limit price (optional) */}
+            {/* Every order is capped: protected instant is a marketable limit. */}
             <View style={styles.limitRow}>
-              <Text style={[styles.inputLabel, { color: colors.textMuted }]} numberOfLines={1}>Limit price (optional)</Text>
-              <View style={[styles.modePill, { backgroundColor: orderMode === 'limit' ? colors.brand : colors.surfaceAlt }]}>
-                <Text style={[styles.modePillText, { color: orderMode === 'limit' ? colors.background : colors.textSecondary }]} numberOfLines={1}>
-                  {orderMode === 'limit' ? 'LIMIT' : 'MARKET'}
+              <Text style={[styles.inputLabel, { color: colors.textMuted }]} numberOfLines={1}>
+                {ticketOrderType === 'protected_instant' ? 'Protection price' : 'Limit price'}
+              </Text>
+              <View style={[styles.modePill, { backgroundColor: colors.brand }]}>
+                <Text style={[styles.modePillText, { color: colors.background }]} numberOfLines={1}>
+                  CAPPED
                 </Text>
               </View>
             </View>
             <AppInput
-              value={offerPriceInput}
+              value={ticketOrderType === 'protected_instant'
+                ? (protectedLimitPrice > 0 ? String(protectedLimitPrice) : '')
+                : offerPriceInput}
               onChangeText={(v) => setOfferPriceInput(sanitizeTradePriceInput(v))}
               keyboardType="decimal-pad"
-              placeholder={`Market: ${formatFromFiat(marketPrice, 'GBP')}`}
-              accessibilityLabel="Limit price"
+              placeholder={ticketOrderType === 'protected_instant' ? 'Waiting for live ask or bid' : 'Enter limit price'}
+              editable={ticketOrderType === 'limit'}
+              accessibilityLabel={ticketOrderType === 'protected_instant' ? 'Protected maximum price' : 'Limit price'}
             />
             <Text style={[styles.marketHint, { color: colors.textMuted }]} numberOfLines={2}>
-              {orderMode === 'market'
-                ? `Market price: ${formatFromFiat(marketPrice, 'GBP')} per unit`
-                : `Limit order at ${formatFromFiat(quote.limitPrice ?? 0, 'GBP')} per unit`}
+              {ticketOrderType === 'protected_instant'
+                ? (protectedLimitPrice > 0
+                  ? `Never executes beyond ${protectedLimitPrice.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 1ZE per unit.`
+                  : 'A protected order needs a live opposite-side quote.')
+                : `Rests until matched at ${effectiveLimitPrice.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 1ZE or better.`}
             </Text>
 
             {/* Duration — only for limit orders */}
@@ -491,7 +582,7 @@ export default function TradeScreen() {
                 <Text style={[styles.inputLabel, { color: colors.textMuted }]}>Duration</Text>
                 <View style={styles.durationRow}>
                   <AnimatedPressable
-                    onPress={() => { setTicketDuration('GFD'); haptics.tap(); }}
+                    onPress={() => setTicketDuration('GFD')}
                     style={[
                       styles.durationChip,
                       {
@@ -510,7 +601,7 @@ export default function TradeScreen() {
                     </Text>
                   </AnimatedPressable>
                   <AnimatedPressable
-                    onPress={() => { setTicketDuration('GTC90'); haptics.tap(); }}
+                    onPress={() => setTicketDuration('GTC90')}
                     style={[
                       styles.durationChip,
                       {
@@ -535,23 +626,23 @@ export default function TradeScreen() {
         </Reanimated.View>
 
         {/* Phase 6: Concierge CTA — shown when the market is thin (no opposite side) */}
-        {simulatedBook.asks.length === 0 && side === 'buy' && (
+        {visibleBook.asks.length === 0 && side === 'buy' && (
           <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
             <CoOwnConciergeCTA
               reason="no_opposite_side"
               assetTitle={asset?.title}
-              onRequestQuote={() => { haptics.tap(); navigation.navigate('HelpSupport'); }}
-              onContactConcierge={() => { haptics.tap(); navigation.navigate('HelpSupport'); }}
+              onRequestQuote={() => navigation.navigate('HelpSupport')}
+              onContactConcierge={() => navigation.navigate('HelpSupport')}
             />
           </Reanimated.View>
         )}
-        {simulatedBook.bids.length === 0 && side === 'sell' && (
+        {visibleBook.bids.length === 0 && side === 'sell' && (
           <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
             <CoOwnConciergeCTA
               reason="no_opposite_side"
               assetTitle={asset?.title}
-              onRequestQuote={() => { haptics.tap(); navigation.navigate('HelpSupport'); }}
-              onContactConcierge={() => { haptics.tap(); navigation.navigate('HelpSupport'); }}
+              onRequestQuote={() => navigation.navigate('HelpSupport')}
+              onContactConcierge={() => navigation.navigate('HelpSupport')}
             />
           </Reanimated.View>
         )}
@@ -569,7 +660,7 @@ export default function TradeScreen() {
             <AppButton
               title="Contact concierge"
               icon={<Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.background} />}
-              onPress={() => { haptics.tap(); navigation.navigate('HelpSupport'); }}
+              onPress={() => navigation.navigate('HelpSupport')}
               variant="primary"
               size="lg"
               hapticFeedback="medium"

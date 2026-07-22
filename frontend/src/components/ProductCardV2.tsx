@@ -7,7 +7,7 @@ import React, { useState } from 'react';
 import { View, StyleSheet, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
-import { Space, Radius } from '../theme/designTokens';
+import { Space, Radius, Control } from '../theme/designTokens';
 import { T, Price } from './ui/Text';
 import { AnimatedPressable } from './AnimatedPressable';
 import { CachedImage } from './CachedImage';
@@ -42,6 +42,8 @@ interface ProductCardV2Props {
   mediaAspectRatio?: number;
   /** Enable staggered entrance animation (default true) */
   enableEntranceAnimation?: boolean;
+  onPressSeller?: () => void;
+  onMessageSeller?: () => void;
 }
 
 export function ProductCardV2({
@@ -52,6 +54,8 @@ export function ProductCardV2({
   visualOnly = false,
   mediaAspectRatio,
   enableEntranceAnimation = true,
+  onPressSeller,
+  onMessageSeller,
 }: ProductCardV2Props) {
   const isFav = useStore((state) => state.isWishlisted(item.id));
   const toggleFav = useStore((state) => state.toggleWishlist);
@@ -72,7 +76,7 @@ export function ProductCardV2({
   const hasVideo = usableImages.some((uri) => isVideoUri(uri));
   const hasMultiple = usableImages.length > 1;
   const showPlaceholder = !hasUsableImage || imageFailed;
-  const sellerUsername = item.seller?.username ?? null;
+  const sellerUsername = item.seller?.username ?? item.sellerId ?? null;
   const sellerAvatar = item.seller?.avatar ?? null;
 
   const handleToggleFav = () => {
@@ -148,7 +152,7 @@ export function ProductCardV2({
           <View style={styles.mediaBadge}>
             <Ionicons
               name={hasVideo ? 'videocam' : 'images'}
-              size={11}
+              size={13}
               color={Colors.textInverse}
             />
           </View>
@@ -158,7 +162,7 @@ export function ProductCardV2({
         <View style={styles.actionButtonsRow}>
           {showSaveButton ? (
             <AnimatedPressable
-              style={styles.saveBtn}
+              style={styles.actionHitTarget}
               onPress={handleToggleSave}
               {...PressPresets.iconButton}
               hitSlop={6}
@@ -166,17 +170,21 @@ export function ProductCardV2({
               accessibilityLabel={isSaved ? 'Remove from saved' : 'Save product'}
               accessibilityHint="Toggles this product in your saved page"
             >
-              <Ionicons name={isSaved ? 'bookmark' : 'bookmark-outline'} size={18} color={isSaved ? Colors.brand : Colors.textInverse} />
+              <View style={styles.actionChrome}>
+                <Ionicons name={isSaved ? 'bookmark' : 'bookmark-outline'} size={18} color={isSaved ? Colors.brand : Colors.textInverse} />
+              </View>
             </AnimatedPressable>
           ) : null}
-          <View style={styles.favBtn}>
-            <AnimatedHeart
-              isActive={isFav}
-              onToggle={handleToggleFav}
-              size={20}
-              activeColor={Colors.danger}
-              inactiveColor={Colors.textInverse}
-            />
+          <View style={styles.actionHitTarget}>
+            <View style={styles.actionChrome}>
+              <AnimatedHeart
+                isActive={isFav}
+                onToggle={handleToggleFav}
+                size={19}
+                activeColor={Colors.danger}
+                inactiveColor={Colors.textInverse}
+              />
+            </View>
           </View>
         </View>
       </AnimatedPressable>
@@ -184,6 +192,7 @@ export function ProductCardV2({
       {/* Info - Clean hierarchy */}
       {!visualOnly && (
         <View style={styles.info}>
+          <Text style={styles.title} numberOfLines={2}>{item.title}</Text>
           <View style={styles.priceRow}>
             <View style={styles.priceWrap}>
               <Price amount={item.price} />
@@ -202,6 +211,16 @@ export function ProductCardV2({
           {item.size ? <T.Caption numberOfLines={1} style={{ marginTop: 1 }}>{item.size}</T.Caption> : null}
           {sellerUsername ? (
             <View style={styles.sellerRow}>
+              <AnimatedPressable
+                style={styles.sellerIdentity}
+                onPress={onPressSeller}
+                disabled={!onPressSeller}
+                activeOpacity={0.68}
+                scaleValue={0.98}
+                accessible={Boolean(onPressSeller)}
+                accessibilityRole="button"
+                accessibilityLabel={`Open @${sellerUsername}'s profile`}
+              >
               {sellerAvatar ? (
                 <CachedImage
                   uri={sellerAvatar}
@@ -212,10 +231,24 @@ export function ProductCardV2({
                 // Premium compact seller placeholder — keeps alignment and
                 // avoids awkward whitespace when avatar is missing.
                 <View style={styles.sellerAvatarPlaceholder}>
-                  <Ionicons name="person" size={9} color={Colors.textMuted} />
+                  <Ionicons name="person" size={10} color={Colors.textMuted} />
                 </View>
               )}
               <Text style={styles.sellerName} numberOfLines={1}>@{sellerUsername}</Text>
+              </AnimatedPressable>
+              {onMessageSeller ? (
+                <AnimatedPressable
+                  style={styles.messageButton}
+                  onPress={onMessageSeller}
+                  activeOpacity={0.62}
+                  scaleValue={0.94}
+                  hapticFeedback="light"
+                  accessibilityRole="button"
+                  accessibilityLabel={`Message @${sellerUsername}`}
+                >
+                  <Ionicons name="chatbubble-outline" size={17} color={Colors.textPrimary} />
+                </AnimatedPressable>
+              ) : null}
             </View>
           ) : null}
         </View>
@@ -254,7 +287,7 @@ export function MasonryGrid({ items, onPressItem, numColumns = 2, showSaveButton
   items.forEach((item, index) => {
     const aspect = resolveListingMediaAspectRatio(item);
     const imgHeight = 160 / aspect; // approximate; actual width varies
-    const infoHeight = visualOnly ? 0 : 42;
+    const infoHeight = visualOnly ? 0 : 112;
     const itemHeight = imgHeight + infoHeight + Space.sm;
 
     let shortestCol = 0;
@@ -331,25 +364,23 @@ const styles = StyleSheet.create({
     top: Space.sm,
     right: Space.sm,
     backgroundColor: 'rgba(0,0,0,0.40)',
-    width: 44,
-    height: 44,
+    width: 28,
+    height: 28,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  favBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.32)',
+  actionHitTarget: {
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  saveBtn: {
-    width: 44,
-    height: 44,
+  actionChrome: {
+    width: Control.chrome,
+    height: Control.chrome,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.32)',
+    backgroundColor: 'rgba(0,0,0,0.48)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -359,14 +390,21 @@ const styles = StyleSheet.create({
     right: Space.sm,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
+    gap: 0,
   },
 
   // Info - Clean hierarchy
   info: {
     paddingTop: Space.sm,
-    paddingHorizontal: Space.xs,
-    gap: 3,
+    paddingHorizontal: 2,
+    gap: 2,
+  },
+  title: {
+    fontSize: 14,
+    lineHeight: 19,
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+    letterSpacing: -0.15,
   },
   priceRow: {
     flexDirection: 'row',
@@ -396,8 +434,16 @@ const styles = StyleSheet.create({
   sellerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: 2,
+    minHeight: 40,
+    marginTop: 1,
+  },
+  sellerIdentity: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
   },
   sellerAvatar: {
     width: 14,
@@ -419,6 +465,13 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.medium,
     color: Colors.textSecondary,
     flex: 1,
+  },
+  messageButton: {
+    width: Control.hit,
+    height: Control.hit,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: -8,
   },
   // Condition & price-drop badges
   conditionBadge: {

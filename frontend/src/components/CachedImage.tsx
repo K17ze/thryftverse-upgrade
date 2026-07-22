@@ -13,10 +13,10 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../constants/colors';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { isVideoUri } from '../utils/media';
 import { ImageEmptyGraphic } from './ImageEmptyGraphic';
+import { useAppTheme } from '../theme/ThemeContext';
 
 interface CachedImageProps {
   uri: string;
@@ -29,7 +29,7 @@ interface CachedImageProps {
   priority?: 'low' | 'normal' | 'high';
   isVisible?: boolean;
   cacheBuster?: string;
-    emptyLabel?: string;
+  emptyLabel?: string;
   emptyIcon?: keyof typeof Ionicons.glyphMap;
   onError?: () => void;
   onLoad?: (event: { source: { width: number; height: number } }) => void;
@@ -58,12 +58,13 @@ export function CachedImage({
   priority = 'normal',
   isVisible = true,
   cacheBuster,
-    emptyLabel,
+  emptyLabel,
   emptyIcon,
   onError,
   onLoad,
   focalPoint,
 }: CachedImageProps) {
+  const { colors } = useAppTheme();
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
   const reducedMotionEnabled = useReducedMotion();
@@ -149,7 +150,7 @@ export function CachedImage({
     }
   }, [imageOpacity, previewOpacity, reducedMotionEnabled, onLoad]);
 
-    const handleError = React.useCallback(() => {
+  const handleError = React.useCallback(() => {
     setFailed(true);
     setLoaded(true);
     imageOpacity.value = withTiming(1, { duration: 0 });
@@ -160,7 +161,7 @@ export function CachedImage({
   // Honest placeholder for missing images — no blank rectangles
   if (!uri) {
     return (
-      <View style={[styles.container, containerStyle]}>
+      <View style={[styles.container, style as StyleProp<ViewStyle>, { backgroundColor: colors.surface }, containerStyle]}>
         <ImageEmptyGraphic
           label={emptyLabel}
           icon={emptyIcon}
@@ -171,7 +172,7 @@ export function CachedImage({
   }
 
   return (
-    <View style={[styles.container, containerStyle]}>
+    <View style={[styles.container, style as StyleProp<ViewStyle>, { backgroundColor: colors.surface }, containerStyle]}>
       {/* Premium fallback for failed loads (404, network error, etc.) —
           never leaves a broken/blank image rectangle. */}
       {failed ? (
@@ -184,7 +185,7 @@ export function CachedImage({
       <>
       {/* Shimmer placeholder */}
       {!loaded && (
-        <View style={[StyleSheet.absoluteFill, styles.shimmerBase]}>
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surfaceAlt }]}>
           <AnimatedLinearGradient
             colors={['transparent', 'rgba(255,255,255,0.06)', 'transparent']}
             start={{ x: 0, y: 0.5 }}
@@ -256,10 +257,6 @@ export function CachedImage({
 const styles = StyleSheet.create({
   container: {
     overflow: 'hidden',
-    backgroundColor: Colors.surface,
-  },
-  shimmerBase: {
-    backgroundColor: Colors.surface,
   },
   image: {
     width: '100%',

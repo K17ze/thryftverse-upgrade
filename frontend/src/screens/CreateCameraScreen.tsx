@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import CreatorCamera from '../creator/CreatorCamera';
 import { useHaptic } from '../hooks/useHaptic';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
@@ -35,6 +36,12 @@ const OVERFLOW_ACTIONS = [
   { key: 'coown', label: 'Create Co-Own', route: 'CreateCoOwn' as const },
 ];
 
+const MODE_CONTEXT: Record<CreateMode, string> = {
+  'visual-search': 'Find an item',
+  look: 'Build a look',
+  poster: 'Create a poster',
+};
+
 export default function CreateCameraScreen({ navigation, route }: Props) {
   const initialMode: CreateMode =
     route.params?.mode === 'visual-search' || route.params?.mode === 'poster'
@@ -42,6 +49,7 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
       : 'look';
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
+  const reducedMotion = useReducedMotion();
   const { show } = useToast();
   const { colors } = useAppTheme();
   const { width: screenWidth } = useWindowDimensions();
@@ -52,26 +60,39 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
   const opacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    if (reducedMotion) {
+      opacity.setValue(1);
+      return;
+    }
     Animated.timing(opacity, {
       toValue: 1,
       duration: 240,
       useNativeDriver: true,
       easing: Easing.out(Easing.ease),
     }).start();
-  }, [opacity]);
+  }, [opacity, reducedMotion]);
 
   const activeIndex = MODES.findIndex((m) => m.key === mode);
+  const deckWidth = Math.min(screenWidth - (Space.md * 2), 520);
+  const segmentWidth = (deckWidth - (Space.xs * 2)) / MODES.length;
 
-  const handleModeChange = useCallback((newMode: CreateMode, index: number) => {
+  useEffect(() => {
+    if (reducedMotion) {
+      indicatorX.setValue(activeIndex * segmentWidth);
+      return;
+    }
+    Animated.spring(indicatorX, {
+      toValue: activeIndex * segmentWidth,
+      useNativeDriver: true,
+      friction: 9,
+      tension: 70,
+    }).start();
+  }, [activeIndex, indicatorX, reducedMotion, segmentWidth]);
+
+  const handleModeChange = useCallback((newMode: CreateMode) => {
     haptic.selection();
     setMode(newMode);
-    Animated.spring(indicatorX, {
-      toValue: index * (screenWidth / MODES.length),
-      useNativeDriver: true,
-      friction: 8,
-      tension: 60,
-    }).start();
-  }, [haptic, indicatorX, screenWidth]);
+  }, [haptic]);
 
   const handleCapture = useCallback((uri: string) => {
     if (mode === 'visual-search') {
@@ -113,26 +134,95 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
     navigation.navigate(route as any);
   }, [navigation]);
 
+  const handleOpenTemplates = useCallback(() => {
+    if (mode === 'visual-search') return;
+    haptic.selection();
+    navigation.navigate('CreatorStudio', {
+      type: mode,
+      startBlank: true,
+      openTemplates: true,
+    });
+  }, [haptic, mode, navigation]);
+
+  const handleBlankCanvas = useCallback(() => {
+    if (mode === 'visual-search') return;
+    haptic.selection();
+    navigation.navigate('CreatorStudio', { type: mode, startBlank: true });
+  }, [haptic, mode, navigation]);
+
+  const handleDrafts = useCallback(() => {
+    haptic.selection();
+    navigation.navigate('CreatorDraftList');
+  }, [haptic, navigation]);
+
+  const handleSavedSearches = useCallback(() => {
+    haptic.selection();
+    navigation.navigate('SavedSearches');
+  }, [haptic, navigation]);
+
+  const contextualTools = useMemo(() => {
+    if (mode === 'visual-search') {
+      return [
+        { key: 'saved', label: 'Saved searches', icon: 'bookmark-outline' as const, onPress: handleSavedSearches },
+      ];
+    }
+
+    return [
+      { key: 'templates', label: 'Templates', icon: 'grid-outline' as const, onPress: handleOpenTemplates },
+      { key: 'blank', label: 'Blank', icon: 'add-outline' as const, onPress: handleBlankCanvas },
+      { key: 'drafts', label: 'Drafts', icon: 'document-text-outline' as const, onPress: handleDrafts },
+    ];
+  }, [handleBlankCanvas, handleDrafts, handleOpenTemplates, handleSavedSearches, mode]);
+
   const renderModeSwitcher = useCallback(() => {
-    const segmentWidth = screenWidth / MODES.length;
     return (
-      <View style={[s.modeSwitcher, { bottom: Math.max(insets.bottom, 16) + 110 }]} pointerEvents="box-none">
-        <Animated.View style={[s.switcherContainer, { opacity }]}>
+      <Animated.View
+        style={[
+          s.creatorDeck,
+          {
+            bottom: Math.max(insets.bottom, 12) + 126,
+            width: deckWidth,
+            opacity,
+          },
+        ]}
+      >
+        <View style={s.contextHeader}>
+          <Text style={s.contextTitle}>{MODE_CONTEXT[mode]}</Text>
+          <View style={s.toolRow}>
+            {contextualTools.map((tool) => (
+              <Pressable
+                key={tool.key}
+                style={({ pressed }) => [s.toolButton, pressed && s.controlPressed]}
+                onPress={tool.onPress}
+                accessibilityRole="button"
+                accessibilityLabel={tool.label}
+              >
+                <Ionicons name={tool.icon} size={17} color="#fff" />
+                <Text style={s.toolLabel} numberOfLines={1}>{tool.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+
+        <View style={[s.switcherContainer, { width: deckWidth }]} accessibilityRole="radiogroup">
           <Animated.View
             style={[
               s.activeIndicator,
               {
-                width: segmentWidth - Space.sm,
-                backgroundColor: 'rgba(255,255,255,0.25)',
+                width: segmentWidth,
                 transform: [{ translateX: indicatorX }],
               },
             ]}
           />
-          {MODES.map((m, index) => (
+          {MODES.map((m) => (
             <Pressable
               key={m.key}
-              style={s.modeButton}
-              onPress={() => handleModeChange(m.key, index)}
+              style={({ pressed }) => [
+                s.modeButton,
+                { width: segmentWidth },
+                pressed && s.controlPressed,
+              ]}
+              onPress={() => handleModeChange(m.key)}
               accessibilityRole="radio"
               accessibilityState={{ checked: mode === m.key }}
               accessibilityLabel={m.label}
@@ -153,10 +243,22 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
               </Text>
             </Pressable>
           ))}
-        </Animated.View>
-      </View>
+        </View>
+      </Animated.View>
     );
-  }, [mode, handleModeChange, indicatorX, insets.bottom, opacity, screenWidth]);
+  }, [contextualTools, deckWidth, handleModeChange, indicatorX, insets.bottom, mode, opacity, segmentWidth]);
+
+  const renderOverflowButton = useCallback(() => (
+    <Pressable
+      style={({ pressed }) => [s.topIconBtn, pressed && s.controlPressed]}
+      onPress={() => { haptic.light(); setShowOverflow((value) => !value); }}
+      accessibilityLabel="More create options"
+      accessibilityRole="button"
+      accessibilityState={{ expanded: showOverflow }}
+    >
+      <Ionicons name="ellipsis-horizontal" size={24} color="#fff" />
+    </Pressable>
+  ), [haptic, showOverflow]);
 
   return (
     <View style={s.container}>
@@ -168,25 +270,8 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
         onGallery={handleGallery}
         onClose={handleClose}
         renderBottomOverlay={renderModeSwitcher}
+        renderTopRightAccessory={renderOverflowButton}
       />
-
-      {/* Top-right overflow menu for other create actions */}
-      <View
-        style={[
-          s.overflowWrap,
-          { paddingTop: Math.max(insets.top, 16) + 8, paddingRight: 12 },
-        ]}
-        pointerEvents="box-none"
-      >
-        <Pressable
-          style={s.overflowBtn}
-          onPress={() => { haptic.light(); setShowOverflow((v) => !v); }}
-          accessibilityLabel="More create options"
-          accessibilityRole="button"
-        >
-          <Ionicons name="ellipsis-horizontal" size={24} color="#fff" />
-        </Pressable>
-      </View>
 
       {showOverflow && (
         <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
@@ -229,32 +314,73 @@ const s = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
-  modeSwitcher: {
+  creatorDeck: {
     position: 'absolute',
-    left: 0,
-    right: 0,
+    alignSelf: 'center',
+    borderRadius: Radius.xl,
+    padding: Space.xs,
+    backgroundColor: 'rgba(10,10,10,0.72)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.18)',
+    overflow: 'hidden',
+  },
+  contextHeader: {
+    paddingHorizontal: Space.xs,
+    paddingTop: 2,
+    paddingBottom: Space.xs,
+  },
+  contextTitle: {
+    paddingHorizontal: 4,
+    paddingBottom: 5,
+    color: 'rgba(255,255,255,0.72)',
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.meta.size,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+  toolRow: {
+    minHeight: 40,
+    flexDirection: 'row',
+    gap: Space.xs,
+  },
+  toolButton: {
+    flex: 1,
+    minHeight: 40,
+    borderRadius: Radius.md,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: Space.xs,
+  },
+  toolLabel: {
+    color: '#fff',
+    fontFamily: Typography.family.medium,
+    fontSize: Type.meta.size,
   },
   switcherContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 24,
+    height: 48,
+    borderRadius: Radius.lg,
     padding: Space.xs,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(0,0,0,0.38)',
   },
   activeIndicator: {
     position: 'absolute',
+    left: Space.xs,
     top: Space.xs,
     bottom: Space.xs,
-    borderRadius: 20,
+    borderRadius: Radius.md,
+    backgroundColor: 'rgba(255,255,255,0.2)',
   },
   modeButton: {
-    flex: 1,
+    height: 40,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: Space.xs + 2,
-    paddingHorizontal: Space.sm,
+    paddingHorizontal: Space.xs,
     zIndex: 1,
   },
   modeIcon: {
@@ -264,19 +390,17 @@ const s = StyleSheet.create({
     fontFamily: Typography.family.medium,
     fontSize: Type.caption.size,
   },
-  overflowWrap: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    zIndex: 10,
-  },
-  overflowBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  topIconBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: 'rgba(0,0,0,0.35)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  controlPressed: {
+    opacity: 0.7,
+    transform: [{ scale: 0.98 }],
   },
   overflowMenu: {
     position: 'absolute',

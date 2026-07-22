@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
 import { Space, Typography, Radius, Type } from '../theme/designTokens';
@@ -27,6 +28,7 @@ import { updateMyProfile } from '../services/profileApi';
 import { updateUserProfile as updateUserProfileApi } from '../services/accountApi';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { queryKeys } from '../platform/server/queryKeys';
 
 const VERIFIED_LABEL = 'Verified';
 const UNVERIFIED_LABEL = 'Not verified';
@@ -37,6 +39,7 @@ export default function EditProfileScreen() {
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
   const { colors } = useAppTheme();
+  const queryClient = useQueryClient();
   const currentUser = useStore((state) => state.currentUser);
   const twoFactorEnabled = useStore((state) => state.twoFactorEnabled);
   const userAvatar = useStore((state) => state.userAvatar);
@@ -135,6 +138,9 @@ export default function EditProfileScreen() {
       }
 
       await fetchMyProfile();
+      if (user?.id) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.user.profile(user.id) });
+      }
       show('Profile updated', 'success');
       navigation.goBack();
     } catch (err: any) {

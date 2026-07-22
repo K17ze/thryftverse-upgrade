@@ -194,6 +194,8 @@ export interface MarketHistoryItem {
   referenceId: string;
   amountGbp: number;
   units: number | null;
+  filledUnits?: number | null;
+  remainingUnits?: number | null;
   unitPriceGbp: number | null;
   feeGbp: number | null;
   status: 'open' | 'partially_filled' | 'filled' | 'cancelled' | 'rejected' | null;
@@ -393,6 +395,8 @@ interface PlaceCoOwnOrderInput {
   units: number;
   orderType?: 'market' | 'limit';
   limitPriceGbp?: number;
+  /** Active server reservation created immediately before confirmation. */
+  reservationId: string;
   /** Client-supplied idempotency key per spec 10 §1. Prevents duplicate orders on retry. */
   idempotencyKey?: string;
 }
@@ -891,7 +895,7 @@ function getMockCoOwnAssets(): MarketCoOwnAsset[] {
       settlementMode: 'HYBRID',
       holders: 65,
       volume24hGbp: 1200,
-      imageUrl: 'https://images.unsplash.com/photo-1584937887424-8f5a4f9f6e5e?w=800',
+      imageUrl: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=800',
       createdAtMinAgo: 320,
     }),
     mockCoOwnAsset('mock-coown-2', 'Rolex Submariner Date 126610LN', {
@@ -915,7 +919,7 @@ function getMockCoOwnAssets(): MarketCoOwnAsset[] {
       settlementMode: 'TVUSD',
       holders: 0,
       volume24hGbp: 0,
-      imageUrl: 'https://images.unsplash.com/photo-1584937887424-8f5a4f9f6e5e?w=800',
+      imageUrl: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=800',
       createdAtMinAgo: 30,
     }),
     mockCoOwnAsset('mock-coown-4', 'Patek Philippe Nautilus 5711/1A', {
@@ -927,7 +931,7 @@ function getMockCoOwnAssets(): MarketCoOwnAsset[] {
       settlementMode: 'HYBRID',
       holders: 25,
       volume24hGbp: 5200,
-      imageUrl: 'https://images.unsplash.com/photo-1524594152303-9fd13543fe6e?w=800',
+      imageUrl: 'https://images.unsplash.com/photo-1547996160-81dfa63595aa?w=800',
       createdAtMinAgo: 480,
     }),
     mockCoOwnAsset('mock-coown-5', 'Chanel Classic Flap Medium Black', {
@@ -939,7 +943,7 @@ function getMockCoOwnAssets(): MarketCoOwnAsset[] {
       settlementMode: 'GBP',
       holders: 52,
       volume24hGbp: 1800,
-      imageUrl: 'https://images.unsplash.com/photo-1584937887424-8f5a4f9f6e5e?w=800',
+      imageUrl: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=800',
       createdAtMinAgo: 200,
     }),
     mockCoOwnAsset('mock-coown-6', 'Audemars Piguet Royal Oak 15500ST', {
@@ -951,7 +955,7 @@ function getMockCoOwnAssets(): MarketCoOwnAsset[] {
       settlementMode: 'TVUSD',
       holders: 0,
       volume24hGbp: 0,
-      imageUrl: 'https://images.unsplash.com/photo-1524594152303-9fd13543fe6e?w=800',
+      imageUrl: 'https://images.unsplash.com/photo-1547996160-81dfa63595aa?w=800',
       createdAtMinAgo: 15,
     }),
     mockCoOwnAsset('mock-coown-7', 'Gucci Dionysus Small GG Supreme', {
@@ -963,7 +967,7 @@ function getMockCoOwnAssets(): MarketCoOwnAsset[] {
       settlementMode: 'HYBRID',
       holders: 72,
       volume24hGbp: 600,
-      imageUrl: 'https://images.unsplash.com/photo-1584937887424-8f5a4f9f6e5e?w=800',
+      imageUrl: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=800',
       createdAtMinAgo: 120,
     }),
     mockCoOwnAsset('mock-coown-8', 'Cartier Santos Large Steel', {
@@ -1063,23 +1067,67 @@ interface GetCoOwnOrderBookResponse {
   ok: true;
   bids: CoOwnOrderBookEntry[];
   asks: CoOwnOrderBookEntry[];
+  snapshotSequence?: number;
+  eventSequence?: number;
+  serverTimestamp?: string;
+  lastExecutionTimestamp?: string | null;
+  stalenessThresholdSeconds?: number;
+  reconciliationState?: 'reconciled' | 'reconciling' | 'break';
+}
+
+export interface CoOwnOrderBookSnapshot {
+  bids: CoOwnOrderBookEntry[];
+  asks: CoOwnOrderBookEntry[];
+  snapshotSequence: number;
+  eventSequence: number;
+  serverTimestamp: string;
+  lastExecutionTimestamp: string | null;
+  stalenessThresholdSeconds: number;
+  reconciliationState: 'reconciled' | 'reconciling' | 'break';
+  source: 'live' | 'development-fallback';
+}
+
+export interface MarketCoOwnExecution {
+  id: number;
+  assetId: string;
+  units: number;
+  unitPriceGbp: number;
+  notionalGbp: number;
+  executedAt: string;
+}
+
+interface ListCoOwnExecutionsResponse {
+  ok: true;
+  serverTimestamp: string;
+  items: MarketCoOwnExecution[];
 }
 
 export async function fetchCoOwnOrderBook(
   assetId: string,
   options: { limit?: number } = {}
-): Promise<{ bids: CoOwnOrderBookEntry[]; asks: CoOwnOrderBookEntry[] }> {
+): Promise<CoOwnOrderBookSnapshot> {
   const query = toQuery({ limit: options.limit });
   try {
     const payload = await fetchJson<GetCoOwnOrderBookResponse>(
       `/co-own/assets/${encodeURIComponent(assetId)}/orderbook${query}`
     );
-    return { bids: payload.bids, asks: payload.asks };
+    return {
+      bids: payload.bids,
+      asks: payload.asks,
+      snapshotSequence: payload.snapshotSequence ?? 0,
+      eventSequence: payload.eventSequence ?? payload.snapshotSequence ?? 0,
+      serverTimestamp: payload.serverTimestamp ?? '',
+      lastExecutionTimestamp: payload.lastExecutionTimestamp ?? null,
+      stalenessThresholdSeconds: payload.stalenessThresholdSeconds ?? 30,
+      reconciliationState: payload.reconciliationState ?? 'reconciling',
+      source: 'live',
+    };
   } catch (err) {
     if (ENABLE_RUNTIME_MOCKS) {
       console.warn('[marketApi] /co-own/orderbook failed — returning dev mock fallback:', err instanceof Error ? err.message : err);
       const mockAsset = getMockCoOwnAssets().find((a) => a.id === assetId);
       const basePrice = mockAsset?.unitPriceGbp ?? 50;
+      const now = new Date().toISOString();
       return {
         bids: [
           { side: 'buy', unitPriceGbp: basePrice - 1, units: 8, orderCount: 3 },
@@ -1091,6 +1139,13 @@ export async function fetchCoOwnOrderBook(
           { side: 'sell', unitPriceGbp: basePrice + 2, units: 12, orderCount: 4 },
           { side: 'sell', unitPriceGbp: basePrice + 3, units: 18, orderCount: 6 },
         ],
+        snapshotSequence: 0,
+        eventSequence: 0,
+        serverTimestamp: now,
+        lastExecutionTimestamp: null,
+        stalenessThresholdSeconds: 30,
+        reconciliationState: 'reconciling',
+        source: 'development-fallback',
       };
     }
     throw err;
@@ -1223,6 +1278,24 @@ export async function cancelCoOwnOrderReservation(
   return fetchJson<{ ok: true; reservationId: string }>(
     `/co-own/assets/${encodeURIComponent(assetId)}/orders/reserve/${encodeURIComponent(reservationId)}`,
     { method: 'DELETE' }
+  );
+}
+
+export async function cancelCoOwnOrder(
+  assetId: string,
+  orderId: number,
+  userId: string
+): Promise<{
+  ok: true;
+  order: { id: number; status: 'cancelled'; filledUnits: number; remainingUnits: 0 };
+}> {
+  return fetchJson(
+    `/co-own/assets/${encodeURIComponent(assetId)}/orders/${orderId}/cancel`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId }),
+    }
   );
 }
 
@@ -1407,4 +1480,13 @@ export async function listUserMarketHistory(
     }
     throw err;
   }
+}
+
+export async function listCoOwnExecutions(
+  assetId: string,
+  options?: { limit?: number }
+): Promise<ListCoOwnExecutionsResponse> {
+  return fetchJson<ListCoOwnExecutionsResponse>(
+    `/co-own/assets/${encodeURIComponent(assetId)}/executions${toQuery({ limit: options?.limit ?? 200 })}`
+  );
 }

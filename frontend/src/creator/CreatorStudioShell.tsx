@@ -49,6 +49,7 @@ function layerTypeLabel(type: CreatorLayer['type']): string {
 
 function CreatorStudioInner() {
   const navigation = useNavigation<any>();
+  const route = useRoute<any>();
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const { document, activePageIndex, setActivePageIndex, selectedLayerId, selectLayer, canUndo, canRedo, undo, redo, isDirty, removeLayer, duplicateLayer, reorderLayer, updateLayer, addLayer, addPage, removePage, duplicatePage, commitLayerTransform, autosaveStatus, isLoadingDraft, setDocument, saveDraft } = useCreator();
@@ -58,10 +59,10 @@ function CreatorStudioInner() {
   const [showSettings, setShowSettings] = useState(false);
   const [pickerMode, setPickerMode] = useState<AssetPickerMode | null>(null);
   const [editingLayer, setEditingLayer] = useState<CreatorLayer | null>(null);
-  const [showTemplates, setShowTemplates] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(Boolean(route.params?.openTemplates));
   const [showOverflow, setShowOverflow] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
-  const [entryComplete, setEntryComplete] = useState(false);
+  const [entryComplete, setEntryComplete] = useState(Boolean(route.params?.startBlank));
 
   // Show entry screen when document is empty and not loading a draft/template
   const hasContent = document.pages.some((p) => p.layers.length > 0);

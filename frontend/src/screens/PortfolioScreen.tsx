@@ -71,10 +71,15 @@ export default function PortfolioScreen() {
   const [allocationExpanded, setAllocationExpanded] = React.useState(false);
   const [activePortfolioTab, setActivePortfolioTab] = React.useState<'positions' | 'insights'>('positions');
 
-  const loadPortfolio = React.useCallback(() => {
-    if (!currentUser?.id) { setIsLoading(false); return; }
+  const loadPortfolio = React.useCallback((mode: 'initial' | 'refresh' = 'initial') => {
+    if (!currentUser?.id) {
+      setIsLoading(false);
+      setRefreshing(false);
+      return;
+    }
     let cancelled = false;
-    setIsLoading(true);
+    if (mode === 'refresh') setRefreshing(true);
+    else setIsLoading(true);
     setIsError(false);
 
     fetchCoOwnPortfolioPositions(currentUser.id, listings)
@@ -90,7 +95,10 @@ export default function PortfolioScreen() {
         setIsError(true);
       })
       .finally(() => {
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) {
+          setIsLoading(false);
+          setRefreshing(false);
+        }
       });
 
     return () => { cancelled = true; };
@@ -102,9 +110,7 @@ export default function PortfolioScreen() {
   }, [loadPortfolio]);
 
   const handleRefresh = React.useCallback(() => {
-    setRefreshing(true);
-    loadPortfolio();
-    setTimeout(() => setRefreshing(false), 800);
+    loadPortfolio('refresh');
   }, [loadPortfolio]);
 
   const handleBack = React.useCallback(() => {
@@ -325,7 +331,7 @@ export default function PortfolioScreen() {
         <CoOwnStateCanvas
           variant="error"
           actionLabel="Try again"
-          onAction={loadPortfolio}
+          onAction={() => loadPortfolio()}
         />
       </SafeAreaView>
     );
@@ -349,7 +355,7 @@ export default function PortfolioScreen() {
           title="No positions yet"
           subtitle="Your Co-Own portfolio will appear here once you purchase units."
           actionLabel="Browse items"
-          onAction={() => { haptics.tap(); navigation.navigate('CoOwnHub'); }}
+          onAction={() => navigation.navigate('CoOwnHub')}
           emptyGraphicVariant="bag"
         />
       </SafeAreaView>
@@ -734,9 +740,9 @@ export default function PortfolioScreen() {
             {coOwnWatchlist.length > 0 && (
               <AnimatedPressable
                 style={[styles.watchlistRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                onPress={() => { haptics.tap(); navigation.navigate('AssetLeaderboard'); }}
+                onPress={() => navigation.navigate('CoOwnHub', { initialSegment: 'watchlist' })}
                 accessibilityRole="button"
-                accessibilityLabel={`View ${coOwnWatchlist.length} watched assets`}
+                accessibilityLabel={`Open watchlist with ${coOwnWatchlist.length} watched assets`}
                 scaleValue={0.98}
                 hapticFeedback="light"
               >
@@ -754,25 +760,12 @@ export default function PortfolioScreen() {
             )}
 
             {/* Ownership rights — what Co-Own entitles */}
-            <View style={[styles.rightsCard, { backgroundColor: `${colors.brand}08`, borderColor: `${colors.brand}25` }]}>
+            <View style={[styles.rightsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <View style={styles.rightsHeader}>
-                <Ionicons name="shield-checkmark-outline" size={14} color={colors.brand} />
-                <Text style={[styles.rightsTitle, { color: colors.textPrimary }]}>Your ownership rights</Text>
+                <Ionicons name="document-text-outline" size={14} color={colors.textSecondary} />
+                <Text style={[styles.rightsTitle, { color: colors.textPrimary }]}>Rights are instrument-specific</Text>
               </View>
-              <View style={styles.rightsList}>
-                <View style={styles.rightsItem}>
-                  <Ionicons name="checkmark-circle-outline" size={11} color={colors.brand} />
-                  <Text style={[styles.rightsText, { color: colors.textSecondary }]}>Trade units on the open market</Text>
-                </View>
-                <View style={styles.rightsItem}>
-                  <Ionicons name="checkmark-circle-outline" size={11} color={colors.brand} />
-                  <Text style={[styles.rightsText, { color: colors.textSecondary }]}>Request a buyout for your share</Text>
-                </View>
-                <View style={styles.rightsItem}>
-                  <Ionicons name="checkmark-circle-outline" size={11} color={colors.brand} />
-                  <Text style={[styles.rightsText, { color: colors.textSecondary }]}>View full asset provenance & ledger</Text>
-                </View>
-              </View>
+              <Text style={[styles.rightsText, { color: colors.textSecondary }]}>Open a position to review its current rights version, safeguarding arrangements, transfer limits and available exit routes.</Text>
             </View>
             </>
             )}
@@ -787,7 +780,7 @@ export default function PortfolioScreen() {
               <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Your positions</Text>
               <View style={styles.sectionActions}>
                 <AnimatedPressable
-                  onPress={() => { haptics.tap(); navigation.navigate('DistributionHistory', {}); }}
+                  onPress={() => navigation.navigate('DistributionHistory', {})}
                   accessibilityRole="button"
                   accessibilityLabel="View distribution history"
                   scaleValue={0.96}
@@ -796,13 +789,13 @@ export default function PortfolioScreen() {
                   <Text style={[styles.sectionLink, { color: colors.textSecondary }]}>Distributions</Text>
                 </AnimatedPressable>
                 <AnimatedPressable
-                  onPress={() => { haptics.tap(); navigation.navigate('AssetLeaderboard'); }}
+                  onPress={() => navigation.navigate('AssetLeaderboard')}
                   accessibilityRole="button"
-                  accessibilityLabel="Open asset leaderboards"
+                  accessibilityLabel="Open market overview"
                   scaleValue={0.96}
                   hapticFeedback="light"
                 >
-                  <Text style={[styles.sectionLink, { color: colors.textSecondary }]}>Leaderboards</Text>
+                  <Text style={[styles.sectionLink, { color: colors.textSecondary }]}>Market overview</Text>
                 </AnimatedPressable>
               </View>
             </View>

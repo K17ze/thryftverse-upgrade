@@ -36,6 +36,8 @@ export const Radius = {
   lg: 12,
   /** 16px - Large cards, containers */
   xl: 16,
+  /** 24px - Navigation docks and genuinely dominant panels only */
+  xxl: 24,
   /** 999px - Pills, avatars, floating buttons, tags */
   full: 999,
 } as const;
@@ -421,4 +423,29 @@ export const Numeric = {
     letterSpacing: 0,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
+} as const;
+
+// ============================================================================
+// CONTROL GEOMETRY (hit area and visible chrome are deliberately separate)
+// ============================================================================
+export const Control = {
+  /** Minimum practical touch target. This is not the visible button size. */
+  hit: 44,
+  /** Compact visible background used only when a control needs containment. */
+  chromeCompact: 32,
+  /** Standard visible background used for prominent contained controls. */
+  chrome: 36,
+  /** Standard navigation/action glyph. */
+  icon: 22,
+  /** Compact inline glyph. */
+  iconCompact: 18,
+} as const;
+
+export const Stroke = {
+  /** Subtle separators and grouped-list hairlines. */
+  hairline: 0.5,
+  /** Fields and intentionally outlined controls. */
+  standard: 1,
+  /** Selection/focus only; never routine card decoration. */
+  emphasis: 2,
 } as const;

@@ -35,7 +35,9 @@ export interface CoOwnMarketHighlightsCarouselProps {
   onPressItem: (item: CoOwnMarketHighlight) => void;
 }
 
-const GAP = 12;
+// Match the 16dp leading gutter so the preceding loop item never peeks in
+// from the left; only the next market is used as the directional affordance.
+const GAP = 16;
 
 export function CoOwnMarketHighlightsCarousel({
   items,
@@ -43,8 +45,8 @@ export function CoOwnMarketHighlightsCarousel({
 }: CoOwnMarketHighlightsCarouselProps) {
   const { colors } = useAppTheme();
   const { width } = useWindowDimensions();
-  const cardWidth = Math.round(Math.min(width * 0.86, 380));
-  const cardHeight = Math.round(Math.min(260, Math.max(228, width * 0.63)));
+  const cardWidth = Math.round(Math.min(width * 0.84, 372));
+  const cardHeight = Math.round(Math.min(240, Math.max(218, width * 0.58)));
   const interval = cardWidth + GAP;
   const isLooping = items.length > 1;
   const loopItems = React.useMemo(
@@ -251,8 +253,8 @@ const styles = StyleSheet.create({
   },
   title: {
     color: '#FFFFFF',
-    fontSize: Type.title.size,
-    lineHeight: 28,
+    fontSize: 20,
+    lineHeight: 24,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.45,
     maxWidth: '92%',
@@ -310,15 +312,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.90)',
   },
   marketAction: {
-    minHeight: 36,
+    minHeight: 32,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    paddingHorizontal: 12,
-    borderRadius: Radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.42)',
-    backgroundColor: 'rgba(0,0,0,0.24)',
+    paddingLeft: 8,
   },
   marketActionText: {
     color: '#FFFFFF',
