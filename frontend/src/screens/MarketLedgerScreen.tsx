@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, StatusBar, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, RefreshControl } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,7 +22,9 @@ import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { resolveCommerceDestination, type CommerceDestinationSource } from '../platform/commerce';
 import { haptics } from '../utils/haptics';
-import { CoOwnMarketHeader, CoOwnStateCanvas } from '../components/coown';
+import { formatCoOwnIze } from '../utils/currency';
+import { CoOwnMarketHeader, CoOwnStateCanvas, CoOwnLedgerSummary, CoOwnActivitySkeleton, CoOwnOfflineBanner, CoOwnReconciliationBanner } from '../components/coown';
+import { useConnectivity } from '../hooks/useConnectivity';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 type LedgerFilter = 'ALL' | 'AUCTION' | 'CO-OWN';
@@ -99,6 +102,7 @@ export default function MarketLedgerScreen() {
   const coOwnRuntime = useStore((state) => state.coOwnRuntime);
   const viewerId = currentUser?.id ?? '';
   const reducedMotionEnabled = useReducedMotion();
+  const { isOffline } = useConnectivity();
 
   const [filter, setFilter] = React.useState<LedgerFilter>('ALL');
   const [remoteEntries, setRemoteEntries] = React.useState<LedgerEntry[]>([]);
@@ -194,6 +198,21 @@ export default function MarketLedgerScreen() {
     navigation.navigate('Portfolio');
   }, [navigation]);
 
+  // ── Loading state (initial sync, no entries yet) ──
+  if (isSyncingLedger && entries.length === 0) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
+        <CoOwnMarketHeader
+          title="Ledger"
+          subtitle="Market activity and trade history"
+          onBack={handleBack}
+        />
+        <CoOwnActivitySkeleton />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
@@ -203,6 +222,9 @@ export default function MarketLedgerScreen() {
         subtitle="Market activity and trade history"
         onBack={handleBack}
       />
+
+      <CoOwnOfflineBanner isOffline={isOffline} />
+      <CoOwnReconciliationBanner isActive={false} />
 
       {/* Summary card */}
       <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
@@ -228,13 +250,27 @@ export default function MarketLedgerScreen() {
         </View>
       </Reanimated.View>
 
+      {/* Phase 4: Ledger summary with mark-used + window labels */}
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(40)}>
+        <CoOwnLedgerSummary
+          issuedCount={filteredEntries.filter((e) => e.action === 'buy-units' && e.channel === 'co-own').length}
+          boughtCount={filteredEntries.filter((e) => e.action === 'buy-units').length}
+          soldCount={filteredEntries.filter((e) => e.action === 'sell-units').length}
+          pausedCount={0}
+          markUsedLabel="Last trade"
+          windowLabel="All time"
+          markTimestamp={undefined}
+          isStaleMark={false}
+        />
+      </Reanimated.View>
+
       {/* Filter */}
       <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)}>
         <View style={styles.filterWrap}>
           <AppSegmentControl
             options={FILTER_OPTIONS}
             value={filter}
-            onChange={(v) => { haptics.selection(); setFilter(v); }}
+            onChange={setFilter}
             fullWidth
           />
         </View>
@@ -247,11 +283,13 @@ export default function MarketLedgerScreen() {
         showsVerticalScrollIndicator={false}
         onEndReached={() => void loadMoreRemoteLedger()}
         onEndReachedThreshold={0.5}
-        estimatedItemSize={92}
         renderItem={({ item, index }) => {
           const isAuction = item.channel === 'auction';
           const side = item.action === 'sell-units' ? 'sell' as const : 'buy' as const;
           const title = item.action === 'bid' ? 'Bid submitted' : item.action === 'win' ? 'Auction settlement' : item.action === 'sell-units' ? 'Units sold' : 'Units purchased';
+          const unitPrice = item.units && item.units > 0 ? item.amountGBP / item.units : item.amountGBP;
+          const cashflow = getEntryCashflow(item);
+          const signedCoOwnTotal = `${cashflow >= 0 ? '+' : '−'}${formatCoOwnIze(Math.abs(cashflow))}`;
 
           return (
             <Reanimated.View
@@ -267,8 +305,8 @@ export default function MarketLedgerScreen() {
                 type="market"
                 assetTitle={title}
                 quantity={item.units ?? 1}
-                pricePerShare={formatMoney(item.amountGBP)}
-                totalAmount={formatSignedMoney(getEntryCashflow(item))}
+                pricePerShare={isAuction ? formatMoney(unitPrice) : formatCoOwnIze(unitPrice)}
+                totalAmount={isAuction ? formatSignedMoney(cashflow) : signedCoOwnTotal}
                 status={item.action === 'bid' ? 'open' : 'filled'}
                 timestamp={relativeTime(item.timestamp)}
                 onPress={() => {
@@ -337,7 +375,7 @@ const styles = StyleSheet.create({
     marginHorizontal: Space.md,
     marginBottom: Space.md,
     borderRadius: Radius.lg,
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
   },
   summaryStat: {

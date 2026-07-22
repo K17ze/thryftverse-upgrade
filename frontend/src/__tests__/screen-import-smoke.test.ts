@@ -384,8 +384,8 @@ describe('PaymentsScreen static smoke', () => {
   });
 });
 
-describe('BalanceScreen static smoke', () => {
-  const src = readSrc('screens/BalanceScreen.tsx');
+describe('WalletScreen static smoke', () => {
+  const src = readSrc('screens/WalletScreen.tsx');
 
   it('does not hardcode availableBalance', () => {
     expect(src).not.toContain('useState(120.5)');
@@ -442,7 +442,7 @@ describe('SuccessScreen static smoke', () => {
 // premium primitives. The guardrail was an obsolete static check that forced UI deformation.
 const PREMIUM_SCREENS = [
   'PaymentsScreen.tsx',
-  'BalanceScreen.tsx',
+  'WalletScreen.tsx',
   'PostageScreen.tsx',
   'SettingsScreen.tsx',
   // AccountSettingsScreen removed — it is now a thin redirect wrapper to
@@ -492,7 +492,7 @@ describe('Double-boxing guardrails', () => {
   const DOUBLE_BOXING_SCREENS = [
     'PaymentsScreen.tsx',
     'PostageScreen.tsx',
-    'BalanceScreen.tsx',
+    'WalletScreen.tsx',
     // AccountSettingsScreen removed — redirect wrapper has no nesting.
     'SettingsScreen.tsx',
   ];

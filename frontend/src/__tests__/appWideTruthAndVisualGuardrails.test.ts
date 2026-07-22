@@ -45,7 +45,7 @@ describe('app-wide truth and visual guardrails', () => {
     'screens/CheckoutScreen.tsx',
     'screens/SuccessScreen.tsx',
     'screens/PaymentsScreen.tsx',
-    'screens/BalanceScreen.tsx',
+    'screens/WalletScreen.tsx',
     'screens/WithdrawScreen.tsx',
     'screens/BalanceHistoryScreen.tsx',
     'screens/TradeHubScreen.tsx',

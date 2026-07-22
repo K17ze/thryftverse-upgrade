@@ -262,9 +262,15 @@ export default function InboxScreen() {
 
     }
 
+    for (const conversation of conversations) {
+      for (const participant of conversation.participantProfiles ?? []) {
+        map.set(participant.id, participant.displayName || participant.username);
+      }
+    }
+
     return map;
 
-  }, [currentUser?.id, currentUser?.username]);
+  }, [conversations, currentUser?.id, currentUser?.username]);
 
 
 
@@ -611,6 +617,9 @@ export default function InboxScreen() {
     const safeDisplayTitle = String(displayTitle ?? 'Thryft user');
     const isRequest = messageRequests.includes(item.id);
     const isMuted = mutedIds.includes(item.id);
+    const counterpartySummary = counterpartyId
+      ? item.participantProfiles?.find((participant) => participant.id === counterpartyId)
+      : undefined;
 
     const avatarEl = isGroup ? (
       <View style={styles.groupAvatar}>
@@ -624,8 +633,8 @@ export default function InboxScreen() {
         )}
       </View>
     ) : (
-          <AvatarRing
-        uri={item.avatar ?? (counterpartyId ? profileMediaOverrides[counterpartyId]?.avatar ?? undefined : undefined)}
+      <AvatarRing
+        uri={item.avatar ?? (counterpartyId ? profileMediaOverrides[counterpartyId]?.avatar ?? counterpartySummary?.avatar ?? undefined : undefined)}
         size={56}
         isUnread={item.unread}
             ringWidth={2}

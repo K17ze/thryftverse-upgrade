@@ -7,7 +7,6 @@ import {
   Text,
   StyleSheet,
   StatusBar,
-  TextInput,
   Dimensions,
   RefreshControl,
 } from 'react-native';
@@ -24,7 +23,6 @@ import { EmptyState } from '../components/EmptyState';
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { useBackendData } from '../context/BackendDataContext';
 import { Type , Typography, Space, Radius  } from '../theme/designTokens';
-import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGrid';
 import PulseTab from '../components/explore/PulseTab';
 import LooksTab from '../components/explore/LooksTab';
@@ -37,13 +35,11 @@ const EXPLORE_TABS = [
   { value: 'discover', label: 'Discover' },
   { value: 'pulse', label: 'Pulse' },
   { value: 'looks', label: 'Looks' },
-  { value: 'edit', label: 'Edit' },
+  { value: 'edit', label: 'Trending' },
 ];
 
 // Main screen
 export default function SearchScreen() {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
   const navigation = useNavigation<NavT>();
   const { listings, isSyncing, lastError, refreshListings } = useBackendData();
 
@@ -75,6 +71,12 @@ export default function SearchScreen() {
           <PinterestMasonryGrid
             items={listings}
             onPressItem={(item) => navigation.navigate('ItemDetail', { itemId: item.id })}
+            onPressSeller={(item) => navigation.navigate('UserProfile', { userId: item.sellerId })}
+            onMessageSeller={(item) => navigation.navigate('Chat', {
+              conversationId: `${item.sellerId}_${item.id}`,
+              focusQuery: '',
+              partnerUserId: item.sellerId,
+            })}
             showSaveButton
             enableEntranceAnimation
           />
@@ -94,47 +96,30 @@ export default function SearchScreen() {
 
       {/* -- Header -- */}
       <View style={styles.headerRow}>
-        <View style={styles.headerTitleBlock}>
-          <Text style={styles.headerLabel}>DISCOVER</Text>
-          <Text style={styles.hugeTitle}>Explore</Text>
-        </View>
-        <View style={styles.headerRight}>
-          <View style={styles.creatorActions}>
-            <AnimatedPressable style={styles.iconCircle} onPress={() => navigation.navigate('CreatorStudio', { type: 'look' })}>
-              <Ionicons name="camera-outline" size={18} color={Colors.textPrimary} />
-            </AnimatedPressable>
-            <AnimatedPressable style={styles.iconCircle} onPress={() => navigation.navigate('GlobalSearch')}>
-              <Ionicons name="compass-outline" size={18} color={Colors.textPrimary} />
-            </AnimatedPressable>
-          </View>
-        </View>
+        <Text style={styles.hugeTitle}>Explore</Text>
       </View>
 
       {/* -- Search Bar -- */}
       <View style={styles.searchRow}>
-        <View style={[styles.searchBar, isSearchFocused && styles.searchBarFocused]}>
-          <Ionicons name="search" size={20} color={Colors.textMuted} style={{ marginLeft: 4 }} />
-          <TextInput
-            style={styles.searchInput}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder="Search Thryftverse"
-            placeholderTextColor={Colors.textMuted}
-            onFocus={() => setIsSearchFocused(true)}
-            onBlur={() => setIsSearchFocused(false)}
-            selectionColor={Colors.brand}
-            returnKeyType="search"
-          />
-          {searchQuery.length > 0 ? (
-            <AnimatedPressable onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={20} color={Colors.textMuted} />
-            </AnimatedPressable>
-          ) : (
-            <AnimatedPressable onPress={() => navigation.navigate('VisualSearch')} activeOpacity={0.85} accessibilityLabel="Visual search" accessibilityRole="button">
-              <Ionicons name="camera-outline" size={22} color={Colors.textMuted} style={{ marginRight: 4 }} />
-            </AnimatedPressable>
-          )}
-        </View>
+        <AnimatedPressable
+          style={styles.searchBar}
+          onPress={() => navigation.navigate('GlobalSearch')}
+          activeOpacity={0.76}
+          accessibilityRole="search"
+          accessibilityLabel="Search items, brands and people"
+        >
+          <Ionicons name="search" size={19} color={Colors.textMuted} />
+          <Text style={styles.searchPlaceholder} numberOfLines={1}>Search items, brands and people</Text>
+        </AnimatedPressable>
+        <AnimatedPressable
+          style={styles.visualSearchButton}
+          onPress={() => navigation.navigate('VisualSearch')}
+          activeOpacity={0.76}
+          accessibilityLabel="Search with an image"
+          accessibilityRole="button"
+        >
+          <Ionicons name="camera-outline" size={20} color={Colors.textPrimary} />
+        </AnimatedPressable>
       </View>
 
       {/* -- Sync Error Banner -- */}
@@ -168,13 +153,27 @@ export default function SearchScreen() {
             />
           }
         >
-          <AppSegmentControl
-            options={EXPLORE_TABS}
-            value={activeTab}
-            onChange={(v) => setActiveTab(v as 'discover' | 'pulse' | 'looks' | 'edit')}
-            style={{ marginHorizontal: 16, marginBottom: 12 }}
-            fullWidth
-          />
+          <View style={styles.exploreTabs} accessibilityRole="tablist">
+            {EXPLORE_TABS.map((tab) => {
+              const selected = activeTab === tab.value;
+              return (
+                <AnimatedPressable
+                  key={tab.value}
+                  style={styles.exploreTab}
+                  onPress={() => setActiveTab(tab.value as 'discover' | 'pulse' | 'looks' | 'edit')}
+                  activeOpacity={0.68}
+                  accessibilityRole="tab"
+                  accessibilityLabel={`${tab.label} explore tab`}
+                  accessibilityState={{ selected }}
+                >
+                  <Text style={[styles.exploreTabText, selected && styles.exploreTabTextActive]} numberOfLines={1}>
+                    {tab.label}
+                  </Text>
+                  {selected ? <View style={styles.exploreTabIndicator} /> : null}
+                </AnimatedPressable>
+              );
+            })}
+          </View>
 
           {/* Empty state when no listings and not loading */}
           {listings.length === 0 && !isSyncing && !lastError ? (
@@ -209,31 +208,15 @@ const styles = StyleSheet.create({
 
   // Header
   headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
     paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 16,
-  },
-  headerTitleBlock: {
-    gap: 2,
-  },
-  headerLabel: {
-    fontSize: 10,
-    fontFamily: Typography.family.semibold,
-    color: Colors.brand,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
+    paddingTop: 8,
+    paddingBottom: 12,
   },
   hugeTitle: {
     fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
     color: Colors.textPrimary,
     letterSpacing: -0.5,
-  },
-  headerRight: {
-    alignItems: 'flex-end',
   },
   itemCount: {
     fontSize: 13,
@@ -266,46 +249,76 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
 
-  creatorActions: {
+  // Search
+  searchRow: {
+    paddingHorizontal: 16,
+    paddingBottom: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
+    gap: 10,
   },
-  iconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  searchBar: {
+    flex: 1,
+    minHeight: 46,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
     backgroundColor: Colors.surfaceAlt,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderRadius: Radius.lg,
+    paddingHorizontal: 14,
+  },
+  searchPlaceholder: {
+    flex: 1,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    color: Colors.textMuted,
+    fontFamily: Typography.family.regular,
+    letterSpacing: 0.08,
+  },
+  visualSearchButton: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
-  // Search
-  searchRow: { paddingHorizontal: 16, paddingBottom: 12 },
-  searchBar: {
+  exploreTabs: {
+    minHeight: 48,
+    marginBottom: 10,
+    paddingHorizontal: 8,
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    alignItems: 'stretch',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
   },
-  searchBarFocused: {
-    backgroundColor: Colors.background,
-    borderColor: Colors.brand,
-  },
-  searchInput: {
+  exploreTab: {
     flex: 1,
-    fontSize: 16,
-    color: Colors.textPrimary,
+    minWidth: 0,
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    paddingHorizontal: 4,
+  },
+  exploreTabText: {
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.medium,
-    letterSpacing: 0.08,
+    color: Colors.textMuted,
+  },
+  exploreTabTextActive: {
+    fontFamily: Typography.family.semibold,
+    color: Colors.textPrimary,
+  },
+  exploreTabIndicator: {
+    position: 'absolute',
+    bottom: -StyleSheet.hairlineWidth,
+    width: 28,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: Colors.textPrimary,
   },
 
   // Tabs
@@ -360,7 +373,7 @@ const styles = StyleSheet.create({
 
   // Lists
   listContent: { paddingHorizontal: 16, paddingBottom: 120 },
-  gridContent: { paddingHorizontal: 12, paddingBottom: 120 },
+  gridContent: { paddingBottom: 120 },
   gridRow: { justifyContent: 'space-between' },
   wishlistLoadingGrid: {
     flexDirection: 'row',

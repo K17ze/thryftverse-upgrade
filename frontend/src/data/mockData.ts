@@ -168,6 +168,13 @@ export interface Conversation {
   itemId?: string;
   ownerId?: string;
   participantIds?: string[];
+  participantProfiles?: Array<{
+    id: string;
+    username: string;
+    displayName?: string | null;
+    avatar?: string | null;
+    emailVerified?: boolean;
+  }>;
   botIds?: string[];
   lastMessage: string;
   lastMessageTime: string;
@@ -570,6 +577,9 @@ export const MOCK_CONVERSATIONS: Conversation[] = [
     id: 'c1',
     type: 'dm',
     sellerId: 'u1',
+    participantProfiles: [
+      { id: 'u1', username: 'mariefullery', displayName: null, avatar: null, emailVerified: true },
+    ],
     itemId: 'l2',
     lastMessage: "Sorry, I'm tied up at the moment – I'll p...",
     lastMessageTime: '13 hours ago',

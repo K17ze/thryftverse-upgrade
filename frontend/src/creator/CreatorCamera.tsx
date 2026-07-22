@@ -11,7 +11,7 @@ import {
   Linking,
 } from 'react-native';
 import { CameraView, useCameraPermissions, CameraType } from 'expo-camera';
-import * as MediaLibrary from 'expo-media-library';
+import * as MediaLibrary from 'expo-media-library/legacy';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -50,6 +50,8 @@ export interface CreatorCameraProps {
   onClose: () => void;
   /** Optional render prop for the bottom overlay (e.g. mode switcher) */
   renderBottomOverlay?: () => React.ReactNode;
+  /** Optional control rendered beside the canonical flash control. */
+  renderTopRightAccessory?: () => React.ReactNode;
 }
 
 export default function CreatorCamera({
@@ -58,6 +60,7 @@ export default function CreatorCamera({
   onGallery,
   onClose,
   renderBottomOverlay,
+  renderTopRightAccessory,
 }: CreatorCameraProps) {
   const { show } = useToast();
   const insets = useSafeAreaInsets();
@@ -87,15 +90,20 @@ export default function CreatorCamera({
   useEffect(() => {
     let cancelled = false;
     async function loadRecent() {
-      const mediaPermission = await MediaLibrary.requestPermissionsAsync(false);
-      if (!mediaPermission.granted || cancelled) return;
-      const page = await MediaLibrary.getAssetsAsync({
-        mediaType: ['photo', 'video'],
-        sortBy: [['creationTime', false]],
-        first: 1,
-      });
-      if (!cancelled && page.assets[0]?.uri) {
-        setLastImageUri(page.assets[0].uri);
+      try {
+        const mediaPermission = await MediaLibrary.requestPermissionsAsync(false);
+        if (!mediaPermission.granted || cancelled) return;
+        const page = await MediaLibrary.getAssetsAsync({
+          mediaType: ['photo', 'video'],
+          sortBy: [['creationTime', false]],
+          first: 1,
+        });
+        if (!cancelled && page.assets[0]?.uri) {
+          setLastImageUri(page.assets[0].uri);
+        }
+      } catch {
+        // The thumbnail is optional; camera capture remains usable if the
+        // platform library is unavailable or its permission changes.
       }
     }
     void loadRecent();
@@ -228,8 +236,8 @@ export default function CreatorCamera({
       {/* Corner brackets — framing guide (same as VisualSearchCamera) */}
       <View style={styles.bracketTL} />
       <View style={styles.bracketTR} />
-      <View style={styles.bracketBL} />
-      <View style={styles.bracketBR} />
+      <View style={[styles.bracketBL, renderBottomOverlay && styles.bracketBottomWithDeck]} />
+      <View style={[styles.bracketBR, renderBottomOverlay && styles.bracketBottomWithDeck]} />
 
       {/* Center crosshair (same as VisualSearchCamera) */}
       <View style={styles.crosshair} pointerEvents="none">
@@ -244,6 +252,7 @@ export default function CreatorCamera({
         </Pressable>
 
         <View style={styles.topRightControls}>
+          {renderTopRightAccessory?.()}
           <Pressable
             style={styles.topIconBtn}
             onPress={toggleFlash}
@@ -289,9 +298,11 @@ export default function CreatorCamera({
       </View>
 
       {/* Mode indicator — same position as VisualSearchCamera (bottom: 120, centered) */}
-      <View style={styles.modePill} pointerEvents="none">
-        <Text style={styles.modeText}>{modeLabel}</Text>
-      </View>
+      {!renderBottomOverlay && (
+        <View style={styles.modePill} pointerEvents="none">
+          <Text style={styles.modeText}>{modeLabel}</Text>
+        </View>
+      )}
 
       {/* Optional bottom overlay (e.g. mode switcher) rendered above bottom controls */}
       {renderBottomOverlay?.()}
@@ -408,6 +419,9 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.85)',
     borderBottomRightRadius: 12,
   },
+  bracketBottomWithDeck: {
+    bottom: '35%',
+  },
   // Crosshair — same as VisualSearchCamera
   crosshair: {
     position: 'absolute',
@@ -449,9 +463,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   topIconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: 'rgba(0,0,0,0.35)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -481,12 +495,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-around',
     paddingHorizontal: 24,
-    paddingTop: 16,
+    paddingTop: 10,
+    minHeight: 120,
   },
   galleryBtn: {
     alignItems: 'center',
     gap: 6,
-    width: 64,
+    width: 72,
+    minHeight: 64,
+    justifyContent: 'center',
   },
   galleryThumb: {
     width: 44,
@@ -499,7 +516,9 @@ const styles = StyleSheet.create({
   facingBtn: {
     alignItems: 'center',
     gap: 6,
-    width: 64,
+    width: 72,
+    minHeight: 64,
+    justifyContent: 'center',
   },
   bottomLabel: {
     fontFamily: Typography.family.medium,

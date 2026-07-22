@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, StatusBar, ScrollView, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, useWindowDimensions } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -170,7 +171,7 @@ export default function CreateCoOwnScreen() {
         totalUnits,
         unitPriceGbp: unitPriceGBP,
         unitPriceStable,
-        settlementMode: 'TVUSD',
+        settlementMode: 'ONEZE',
       });
       show('Co-Own issued successfully', 'success');
       navigation.goBack();
@@ -341,7 +342,6 @@ export default function CreateCoOwnScreen() {
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.listingListContent}
                 renderItem={renderListingCard}
-                estimatedItemSize={180}
               />
 
               {selectedListing && (
@@ -592,7 +592,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.md,
     borderRadius: Radius.lg,
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
     marginTop: Space.lg,
   },
@@ -622,7 +622,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.md,
     borderRadius: Radius.lg,
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
   },
   contextImage: {
@@ -645,7 +645,7 @@ const styles = StyleSheet.create({
   },
   formCard: {
     borderRadius: Radius.lg,
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
     gap: Space.sm,
   },
@@ -681,7 +681,7 @@ const styles = StyleSheet.create({
   },
   estimateCard: {
     borderRadius: Radius.lg,
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
     gap: Space.sm,
   },
@@ -717,7 +717,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.md,
     borderRadius: Radius.lg,
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
   },
   reviewAssetImage: {
@@ -740,7 +740,7 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     borderRadius: Radius.lg,
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
     gap: 0,
   },

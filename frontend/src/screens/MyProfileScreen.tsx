@@ -40,7 +40,6 @@ import { LookPreviewCard } from '../components/profile';
 import { MyProfileIdentityHero } from '../components/profile/MyProfileIdentityHero';
 import { ProfileUtilityRail } from '../components/profile/ProfileUtilityRail';
 import { MyProfileTabRail } from '../components/profile/MyProfileTabRail';
-import { ProfileCompletenessIndicator } from '../components/profile/ProfileCompletenessIndicator';
 import { useSellerTrust } from '../platform/product';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useProfileMediaUpload } from '../hooks/useProfileMediaUpload';
@@ -426,19 +425,6 @@ export default function MyProfileScreen() {
           ) : null}
 
           {/* Profile completeness indicator — only shows when incomplete */}
-          <ProfileCompletenessIndicator
-            input={{
-              avatar: confirmedAvatarRemote,
-              coverPhoto: confirmedCoverRemote,
-              bio: user.bio,
-              location: user.location,
-              website: user.website,
-              emailVerified: user.emailVerified,
-              hasListings: allOwnedListings.length > 0,
-            }}
-            onCompleteProfile={() => (navigation as any).navigate('EditProfile')}
-          />
-
           {/* ── 8. COMPACT MARKETPLACE UTILITY RAIL ── */}
           <ProfileUtilityRail items={utilityItems} />
 

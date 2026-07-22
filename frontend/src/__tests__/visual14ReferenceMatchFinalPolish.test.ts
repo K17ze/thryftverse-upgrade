@@ -91,7 +91,7 @@ describe('VISUAL-14 Reference-Match Final Polish', () => {
       'InboxScreen.tsx',
       'ChatScreen.tsx',
       'WithdrawScreen.tsx',
-      'BalanceScreen.tsx',
+      'WalletScreen.tsx',
     ];
     for (const s of screens) {
       const src = read(resolve(SCREENS, s));

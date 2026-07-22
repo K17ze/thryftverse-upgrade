@@ -309,7 +309,14 @@ export async function fetchUserListingsFromApi(
   return fetchJson<ListingsResponse>(`/users/${encodeURIComponent(userId)}/listings${qs ? `?${qs}` : ''}`);
 }
 
-export async function createListingImageOnApi(body: { id: string; listingId: string; imageUrl: string; sortOrder: number }): Promise<{ ok: boolean }> {
+export async function createListingImageOnApi(body: {
+  id: string;
+  listingId: string;
+  imageUrl: string;
+  sortOrder: number;
+  mediaWidth?: number;
+  mediaHeight?: number;
+}): Promise<{ ok: boolean }> {
   return fetchJson<{ ok: boolean }>('/listing-images', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

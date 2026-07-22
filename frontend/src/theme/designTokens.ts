@@ -36,6 +36,8 @@ export const Radius = {
   lg: 12,
   /** 16px - Large cards, containers */
   xl: 16,
+  /** 24px - Navigation docks and genuinely dominant panels only */
+  xxl: 24,
   /** 999px - Pills, avatars, floating buttons, tags */
   full: 999,
 } as const;
@@ -365,4 +367,85 @@ export const DockConstants = {
   dualActionHeight: 132,
   /** Stacked compact dock (buttons stacked vertically) — typical total */
   stackedActionHeight: 180,
+} as const;
+
+// ============================================================================
+// EXCHANGE LAYOUT GEOMETRY — Co-Own market surfaces
+// Deterministic geometry for skeletons to match final layouts.
+// ============================================================================
+export const ExchangeLayout = {
+  // Order ticket sheet snap points (bottom sheet on mobile)
+  ticketSnapCollapsed: 120,
+  ticketSnapExpanded: '80%' as const,
+  // Order book row height — deterministic for skeleton match (44pt touch target)
+  bookRowHeight: 44,
+  bookVisibleLevels: 5,      // mobile default; 10 on tablet
+  // Market-status strip height
+  statusStripHeight: 36,
+  // Value strip (last/bid/ask/mid/NAV) row height
+  valueStripRowHeight: 44,
+  // Chart hero min height on AssetDetail
+  chartHeroMinHeight: 220,
+} as const;
+
+// ============================================================================
+// NUMERIC TYPOGRAPHY — tabular figures for all 1ZE values
+// Inter supports tnum via fontVariant: ['tabular-nums'] — no new font needed.
+// Every 1ZE amount, unit count, percentage, P&L uses a Numeric.* style.
+// ============================================================================
+export const Numeric = {
+  // Prices in lists, totals
+  price: {
+    ...Type.price,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
+    fontFeatureSettings: '"tnum" 1, "lnum" 1',
+  },
+  // Elevated price (20/24/700)
+  priceList: {
+    ...Type.priceList,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
+  },
+  // Hero price (28/32/700)
+  priceLarge: {
+    ...Type.priceLarge,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
+  },
+  // Hero portfolio / wallet value (32/38/700)
+  display: {
+    ...Type.display,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
+  },
+  // Order book, depth, stats grids — compact mono feel
+  mono: {
+    size: 13,
+    lineHeight: 18,
+    weight: '500' as const,
+    letterSpacing: 0,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
+  },
+} as const;
+
+// ============================================================================
+// CONTROL GEOMETRY (hit area and visible chrome are deliberately separate)
+// ============================================================================
+export const Control = {
+  /** Minimum practical touch target. This is not the visible button size. */
+  hit: 44,
+  /** Compact visible background used only when a control needs containment. */
+  chromeCompact: 32,
+  /** Standard visible background used for prominent contained controls. */
+  chrome: 36,
+  /** Standard navigation/action glyph. */
+  icon: 22,
+  /** Compact inline glyph. */
+  iconCompact: 18,
+} as const;
+
+export const Stroke = {
+  /** Subtle separators and grouped-list hairlines. */
+  hairline: 0.5,
+  /** Fields and intentionally outlined controls. */
+  standard: 1,
+  /** Selection/focus only; never routine card decoration. */
+  emphasis: 2,
 } as const;

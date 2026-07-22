@@ -1,4 +1,9 @@
 import { fetchJson } from '../lib/apiClient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getFreshPosters, POSTER_TEMPLATES } from '../data/posters';
+import { ENABLE_RUNTIME_MOCKS } from '../constants/runtimeFlags';
+
+const POSTER_STORY_CACHE_KEY = 'thryftverse.poster-stories.cache.v1';
 
 // ── Types: Stickers ─────────────────────────────────────────────────
 
@@ -88,6 +93,81 @@ export interface PosterStory {
 
 export interface PosterStoryListResponse {
   items: PosterStory[];
+}
+
+function getDevelopmentPosterStories(): PosterStory[] {
+  if (!ENABLE_RUNTIME_MOCKS) return [];
+
+  return getFreshPosters().map((poster) => {
+    const template = POSTER_TEMPLATES.find((candidate) => candidate.id === poster.templateId);
+    return {
+      id: poster.id,
+      creatorId: poster.uploaderId,
+      creator: {
+        id: poster.uploaderId,
+        username: poster.uploader?.username ?? null,
+        avatar: poster.uploader?.avatar || null,
+      },
+      audience: 'public',
+      allowReplies: true,
+      allowReactions: true,
+      status: 'active',
+      expiresAt: new Date(poster.expiresAtMs).toISOString(),
+      createdAt: poster.createdAt,
+      frames: [{
+        id: `${poster.id}_frame_0`,
+        mediaUrl: poster.image,
+        caption: poster.caption,
+        mediaType: poster.image ? 'image' : 'text',
+        sortOrder: 0,
+        durationMs: 5000,
+        backgroundColor: template?.thumbnailColor ?? '#1A1A1A',
+        textOverlay: null,
+        stickers: [],
+        viewCount: 0,
+        reactions: {},
+        viewerReaction: null,
+        seenByViewer: false,
+      }],
+      seenByViewer: false,
+      viewedFrameCount: 0,
+      totalFrameCount: 1,
+      uniqueViewerCount: 0,
+    } satisfies PosterStory;
+  });
+}
+
+async function readCachedPosterStories(): Promise<PosterStory[]> {
+  try {
+    const cached = await AsyncStorage.getItem(POSTER_STORY_CACHE_KEY);
+    if (!cached) return [];
+    const parsed = JSON.parse(cached) as PosterStoryListResponse;
+    return Array.isArray(parsed.items) ? parsed.items : [];
+  } catch {
+    return [];
+  }
+}
+
+async function writeCachedPosterStories(items: PosterStory[]) {
+  try {
+    await AsyncStorage.setItem(POSTER_STORY_CACHE_KEY, JSON.stringify({ items }));
+  } catch {
+    // A successful live response remains usable when local persistence fails.
+  }
+}
+
+function filterPosterStories(items: PosterStory[], options?: {
+  creatorId?: string;
+  active?: boolean;
+  limit?: number;
+}) {
+  const now = Date.now();
+  const filtered = items.filter((story) => {
+    if (options?.creatorId && story.creatorId !== options.creatorId) return false;
+    if (options?.active && (story.status !== 'active' || new Date(story.expiresAt).getTime() <= now)) return false;
+    return story.status !== 'deleted';
+  });
+  return typeof options?.limit === 'number' ? filtered.slice(0, options.limit) : filtered;
 }
 
 export interface PosterStoryCreateFrame {
@@ -254,11 +334,35 @@ export async function fetchPosterStories(options?: {
   if (options?.active !== undefined) params.set('active', String(options.active));
   if (options?.limit) params.set('limit', String(options.limit));
   const qs = params.toString();
-  return fetchJson<PosterStoryListResponse>(`/poster-stories${qs ? `?${qs}` : ''}`);
+  try {
+    const response = await fetchJson<PosterStoryListResponse>(`/poster-stories${qs ? `?${qs}` : ''}`);
+    if (!options?.creatorId && options?.active !== false && response.items.length > 0) {
+      void writeCachedPosterStories(response.items);
+    }
+    return response;
+  } catch (error) {
+    const cached = filterPosterStories(await readCachedPosterStories(), options);
+    if (cached.length > 0) return { items: cached };
+
+    const developmentStories = filterPosterStories(getDevelopmentPosterStories(), options);
+    if (developmentStories.length > 0) return { items: developmentStories };
+
+    throw error;
+  }
 }
 
 export async function fetchPosterStoryById(storyId: string): Promise<PosterStory> {
-  return fetchJson<PosterStory>(`/poster-stories/${storyId}`);
+  try {
+    return await fetchJson<PosterStory>(`/poster-stories/${storyId}`);
+  } catch (error) {
+    const fallbackStories = [
+      ...(await readCachedPosterStories()),
+      ...getDevelopmentPosterStories(),
+    ];
+    const fallback = fallbackStories.find((story) => story.id === storyId);
+    if (fallback) return fallback;
+    throw error;
+  }
 }
 
 export async function deletePosterStory(storyId: string): Promise<{ ok: boolean }> {

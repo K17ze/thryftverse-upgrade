@@ -10,8 +10,8 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
-import { Colors } from '../../constants/colors';
-import { Typography } from '../../theme/designTokens';
+import { Radius, Stroke, Typography } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
 
 interface AppInputProps extends Omit<TextInputProps, 'style'> {
   label?: string;
@@ -51,17 +51,19 @@ export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
   },
   ref
 ) {
+  const { colors } = useAppTheme();
   const [isFocused, setIsFocused] = useState(false);
   const hasError = Boolean(errorText);
 
   return (
     <View style={containerStyle}>
-      {label ? <Text style={[styles.label, labelStyle]}>{label}</Text> : null}
+      {label ? <Text style={[styles.label, { color: colors.textSecondary }, labelStyle]}>{label}</Text> : null}
       <View
         style={[
           styles.inputWrap,
-          isFocused && !hasError && styles.inputWrapFocused,
-          hasError && styles.inputWrapError,
+          { backgroundColor: colors.input, borderColor: colors.border },
+          isFocused && !hasError && { backgroundColor: colors.background, borderColor: colors.brand, borderWidth: Stroke.emphasis },
+          hasError && { backgroundColor: colors.background, borderColor: colors.danger },
           !editable && styles.inputWrapDisabled,
           inputContainerStyle,
         ]}
@@ -76,15 +78,15 @@ export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
           onChangeText={onChangeText}
           keyboardType={keyboardType}
           placeholder={placeholder}
-          placeholderTextColor={placeholderTextColor ?? Colors.textMuted}
-          style={[styles.input, inputStyle]}
+          placeholderTextColor={placeholderTextColor ?? colors.textMuted}
+          style={[styles.input, { color: colors.textPrimary }, inputStyle]}
           onFocus={(e) => { setIsFocused(true); onFocus?.(e); }}
           onBlur={(e) => { setIsFocused(false); onBlur?.(e); }}
         />
         {suffix}
       </View>
-      {errorText ? <Text style={[styles.errorText, helperStyle]}>{errorText}</Text> : null}
-      {!errorText && helperText ? <Text style={[styles.helperText, helperStyle]}>{helperText}</Text> : null}
+      {errorText ? <Text style={[styles.errorText, { color: colors.danger }, helperStyle]}>{errorText}</Text> : null}
+      {!errorText && helperText ? <Text style={[styles.helperText, { color: colors.textMuted }, helperStyle]}>{helperText}</Text> : null}
     </View>
   );
 });
@@ -92,36 +94,24 @@ export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
 const styles = StyleSheet.create({
   label: {
     marginBottom: 6,
-    color: Colors.textSecondary,
-    fontSize: 12,
-    fontFamily: Typography.family.bold,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: 0,
   },
   inputWrap: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.xl,
+    borderWidth: Stroke.standard,
     paddingHorizontal: 14,
     minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  inputWrapFocused: {
-    borderColor: Colors.textSecondary,
-    backgroundColor: Colors.surface,
-  },
-  inputWrapError: {
-    borderColor: Colors.danger,
-    backgroundColor: Colors.background,
-  },
   inputWrapDisabled: {
     opacity: 0.6,
   },
   prefixText: {
-    color: Colors.textMuted,
     fontSize: 12,
     fontFamily: Typography.family.bold,
   },
@@ -131,21 +121,18 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    color: Colors.textPrimary,
     fontSize: 15,
     fontFamily: Typography.family.medium,
     paddingVertical: 10,
   },
   helperText: {
     marginTop: 7,
-    color: Colors.textMuted,
     fontSize: 11,
     lineHeight: 16,
     fontFamily: Typography.family.medium,
   },
   errorText: {
     marginTop: 7,
-    color: Colors.danger,
     fontSize: 11,
     lineHeight: 16,
     fontFamily: Typography.family.semibold,

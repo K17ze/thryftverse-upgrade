@@ -16,7 +16,7 @@ export interface CoOwnPositionVM {
   ownershipPct: number;
   unitPriceGbp: number;
   unitPriceStable: number;
-  settlementMode: 'GBP' | 'TVUSD' | 'HYBRID';
+  settlementMode: 'GBP' | 'TVUSD' | 'HYBRID' | 'ONEZE';
   currentValueGbp: number;
   avgEntryPriceGbp: number;
   realizedPnlGbp: number;
@@ -26,6 +26,18 @@ export interface CoOwnPositionVM {
   isOpen: boolean;
   status: 'open' | 'closed' | 'paused';
   createdAt: string;
+  /** Asset category/class from linked listing — used for "By class" allocation. */
+  category?: string;
+  /** Position state split per spec 10 §3.3. Optional — fail closed (all settled) when backend doesn't expose. */
+  positionState?: {
+    settled: number;
+    reservedForSale: number;
+    pendingIn: number;
+    pendingOut: number;
+    outstandingUnits: number;
+  };
+  /** Settlement state for pending units per spec 10 §3.3. */
+  settlementState?: 'settling' | 'settled';
 }
 
 export interface CoOwnPortfolioSummary {
@@ -34,6 +46,12 @@ export interface CoOwnPortfolioSummary {
   totalUnrealizedGbp: number;
   totalRealizedGbp: number;
   positionCount: number;
+  // Phase 3: distributions + today's change + data quality
+  totalDistributionsGbp?: number;
+  todayChangeGbp?: number;
+  todayChangePct?: number;
+  todayChangeTimestamp?: string;
+  staleMarkCount?: number;
 }
 
 export interface CoOwnPortfolioResult {
@@ -76,10 +94,14 @@ export async function fetchCoOwnPortfolioPositions(
       // 2. linked listing cover image (listing.images[0])
       // 3. null → CoOwnPositionCard shows fallback graphic
       let resolvedImage = asset.imageUrl;
-      if (!resolvedImage && asset.listingId && listings) {
+      let resolvedCategory: string | undefined;
+      if (asset.listingId && listings) {
         const linkedListing = listings.find((l) => l.id === asset.listingId);
         if (linkedListing?.images?.length) {
-          resolvedImage = linkedListing.images[0];
+          if (!resolvedImage) resolvedImage = linkedListing.images[0];
+        }
+        if (linkedListing?.category) {
+          resolvedCategory = linkedListing.category;
         }
       }
 
@@ -89,6 +111,7 @@ export async function fetchCoOwnPortfolioPositions(
         issuerId: asset.issuerId,
         title: asset.title,
         imageUrl: resolvedImage,
+        category: resolvedCategory,
         unitsOwned: h.unitsOwned,
         totalUnits: asset.totalUnits,
         ownershipPct,

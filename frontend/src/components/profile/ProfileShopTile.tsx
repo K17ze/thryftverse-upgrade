@@ -130,5 +130,3 @@ const styles = StyleSheet.create({
 });
 
 export { ProfileShopTile };
-
-export { ProfileShopTile };

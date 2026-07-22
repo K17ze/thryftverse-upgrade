@@ -54,7 +54,7 @@ export function CoOwnRiskDisclosure({ risks = DEFAULT_RISKS, onReportIssue }: Co
 const styles = StyleSheet.create({
   root: {
     borderRadius: Radius.lg,
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
     gap: Space.sm,
   },

@@ -38,14 +38,27 @@ export type RootStackParamList = {
       }
     | undefined;
   MarketLedger: undefined;
-  CoOwnHub: undefined;
+  CoOwnHub: {
+    initialSegment?: 'active' | 'auctions' | 'new_issues' | 'watchlist';
+  } | undefined;
   AssetDetail: { assetId: string };
-  Trade: { assetId: string; side: 'buy' | 'sell' };
+  Trade: { assetId: string; side: 'buy' | 'sell'; limitPrice?: number };
   Portfolio: undefined;
   CoOwnOrderHistory: undefined;
   AssetLeaderboard: undefined;
   Buyout: { assetId: string };
   CoOwnOnboarding: undefined;
+  CorporateActionDetail: {
+    assetId: string;
+    actionType: string;
+    dateLabel: string;
+    effectLabel: string;
+    amountLabel?: string;
+    status: string;
+    recordDateLabel?: string;
+    paymentDateLabel?: string;
+  };
+  DistributionHistory: { assetId?: string } | undefined;
   Chat: {
     conversationId: string;
     focusQuery?: string;
@@ -71,7 +84,6 @@ export type RootStackParamList = {
   EditGroup: { conversationId: string };
   UserProfile: { userId: string; isMe?: boolean };
   // Profile sub-screens
-  Balance: undefined;
   Wallet: undefined;
   MyOrders: undefined;
   Personalisation: undefined;
@@ -148,6 +160,8 @@ export type RootStackParamList = {
     templateId?: string;
     sourceDocumentId?: string;
     initialMediaUri?: string;
+    startBlank?: boolean;
+    openTemplates?: boolean;
   };
   VisualSearch: { initialImageUri?: string } | undefined;
   CreatorDraftList: undefined;
@@ -219,8 +233,18 @@ export type RootStackParamList = {
     totalValue: number;
     fee: number;
     netValue: number;
-    orderMode: 'market' | 'limit';
-    limitPriceGbp?: number;
+    orderMode: 'limit';
+    ticketOrderType: 'protected_instant' | 'limit';
+    limitPriceGbp: number;
+    averageFillPriceGbp: number;
+    worstPriceGbp: number;
+    estimatedFilledUnits: number;
+    estimatedRemainingUnits: number;
+    reservationId: string;
+    reservationExpiresAt: string;
+    previewValidUntil: string;
+    maxReserved1ze: number;
+    marketDataTimestamp: string;
   };
   // Diagnostic — dev only
   RuntimeSmokeTest: undefined;

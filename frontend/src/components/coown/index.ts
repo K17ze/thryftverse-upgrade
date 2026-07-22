@@ -5,18 +5,24 @@ export { CoOwnFeaturedHero } from './CoOwnFeaturedHero';
 export type { CoOwnFeaturedHeroProps } from './CoOwnFeaturedHero';
 export { CoOwnFeaturedAsset } from './CoOwnFeaturedAsset';
 export type { CoOwnFeaturedAssetProps, CoOwnAssetStatus } from './CoOwnFeaturedAsset';
+export { CoOwnMarketHighlightsCarousel } from './CoOwnMarketHighlightsCarousel';
+export type { CoOwnMarketHighlight, CoOwnMarketHighlightsCarouselProps } from './CoOwnMarketHighlightsCarousel';
+export { CoOwnCompactPositionCard, COOWN_POSITION_CARD_WIDTH } from './CoOwnCompactPositionCard';
+export type { CoOwnCompactPositionCardProps } from './CoOwnCompactPositionCard';
+export { CoOwnInstrumentCard } from './CoOwnInstrumentCard';
+export type { CoOwnInstrumentCardProps } from './CoOwnInstrumentCard';
 export { CoOwnAssetTile } from './CoOwnAssetTile';
-export type { CoOwnAssetTileProps } from './CoOwnAssetTile';
+export type { CoOwnAssetTileProps, CoOwnAssetTileVariant, CoOwnMarketTileData } from './CoOwnAssetTile';
 export { CoOwnDiscoveryCard } from './CoOwnDiscoveryCard';
 export type { CoOwnDiscoveryCardProps } from './CoOwnDiscoveryCard';
 export { CoOwnPositionCard } from './CoOwnPositionCard';
-export type { CoOwnPositionCardProps, CoOwnPositionStatus } from './CoOwnPositionCard';
+export type { CoOwnPositionCardProps, CoOwnPositionStatus, CoOwnPositionMark, CoOwnPositionState } from './CoOwnPositionCard';
 export { CoOwnPositionActionSheet } from './CoOwnPositionActionSheet';
 export type { CoOwnPositionActionSheetProps, CoOwnPositionAction } from './CoOwnPositionActionSheet';
 export { CoOwnOwnershipPanel } from './CoOwnOwnershipPanel';
-export type { CoOwnOwnershipPanelProps, CoOwnSettlementMode } from './CoOwnOwnershipPanel';
-export { CoOwnIssuerCard } from './CoOwnIssuerCard';
-export type { CoOwnIssuerCardProps } from './CoOwnIssuerCard';
+export type { CoOwnOwnershipPanelProps, CoOwnSettlementMode, CoOwnSupplyBuckets, CoOwnViewerPosition } from './CoOwnOwnershipPanel';
+export { CoOwnIssuerCard, CoOwnVehicleCard } from './CoOwnIssuerCard';
+export type { CoOwnIssuerCardProps, CoOwnVehicleFields, CoOwnVehicleDocument } from './CoOwnIssuerCard';
 export { CoOwnTrustPanel } from './CoOwnTrustPanel';
 export type { CoOwnTrustPanelProps } from './CoOwnTrustPanel';
 export { CoOwnRiskDisclosure } from './CoOwnRiskDisclosure';
@@ -24,19 +30,39 @@ export type { CoOwnRiskDisclosureProps } from './CoOwnRiskDisclosure';
 export { CoOwnStickyActionDock } from './CoOwnStickyActionDock';
 export type { CoOwnStickyActionDockProps } from './CoOwnStickyActionDock';
 export { CoOwnTradeComposer } from './CoOwnTradeComposer';
-export type { CoOwnTradeComposerProps, CoOwnTradeSide, CoOwnTradeMode } from './CoOwnTradeComposer';
+export type { CoOwnTradeComposerProps, CoOwnTradeSide, CoOwnTradeMode, CoOwnTicketOrderType, CoOwnTicketDuration, CoOwnFillEstimate, CoOwnDepthContext, CoOwnPostTradePreview } from './CoOwnTradeComposer';
 export { CoOwnTradeReceipt } from './CoOwnTradeReceipt';
 export type { CoOwnTradeReceiptProps, CoOwnReceiptStatus } from './CoOwnTradeReceipt';
+export { CoOwnDepthPreview } from './CoOwnDepthPreview';
+export type { CoOwnDepthPreviewProps } from './CoOwnDepthPreview';
 export { CoOwnIssueStudioStep } from './CoOwnIssueStudioStep';
 export type { CoOwnIssueStudioStepProps } from './CoOwnIssueStudioStep';
 export { CoOwnActivityRow } from './CoOwnActivityRow';
-export type { CoOwnActivityRowProps, CoOwnActivityStatus, CoOwnActivitySide } from './CoOwnActivityRow';
+export type { CoOwnActivityRowProps, CoOwnActivityStatus, CoOwnActivitySide, CoOwnSettlementState } from './CoOwnActivityRow';
 export { CoOwnLedgerSummary } from './CoOwnLedgerSummary';
 export type { CoOwnLedgerSummaryProps } from './CoOwnLedgerSummary';
 export { CoOwnEducationCard } from './CoOwnEducationCard';
 export type { CoOwnEducationCardProps, CoOwnEducationTopic } from './CoOwnEducationCard';
 export { CoOwnPriceChart } from './CoOwnPriceChart';
 export type { CoOwnPriceChartProps } from './CoOwnPriceChart';
+export { CoOwnOrderBook } from './CoOwnOrderBook';
+export type { CoOwnOrderBookProps, CoOwnBookLevel, CoOwnBookMode } from './CoOwnOrderBook';
+export { CoOwnCandleChart } from './CoOwnCandleChart';
+export type { CoOwnCandleChartProps, CoOwnCandle, CoOwnCandleRange } from './CoOwnCandleChart';
+export { CoOwnPriceTick } from './CoOwnPriceTick';
+export type { CoOwnPriceTickProps, PriceTickDirection } from './CoOwnPriceTick';
+export { CoOwnPortfolioStorytelling } from './CoOwnPortfolioStorytelling';
+export type { CoOwnPortfolioStorytellingProps } from './CoOwnPortfolioStorytelling';
+export { CoOwnConciergeCTA } from './CoOwnConciergeCTA';
+export type { CoOwnConciergeCTAProps, ConciergeReason } from './CoOwnConciergeCTA';
+export { CoOwnOfflineBanner } from './CoOwnOfflineBanner';
+export type { CoOwnOfflineBannerProps } from './CoOwnOfflineBanner';
+export { CoOwnReconciliationBanner } from './CoOwnReconciliationBanner';
+export type { CoOwnReconciliationBannerProps } from './CoOwnReconciliationBanner';
+export { CoOwnCorporateActionRow } from './CoOwnCorporateActionRow';
+export type { CoOwnCorporateActionRowProps, CoOwnCorporateActionType, CoOwnCorporateActionStatus } from './CoOwnCorporateActionRow';
+export { CoOwnSupportCTA } from './CoOwnSupportCTA';
+export type { CoOwnSupportCTAProps } from './CoOwnSupportCTA';
 export { CoOwnWatchButton } from './CoOwnWatchButton';
 export type { CoOwnWatchButtonProps } from './CoOwnWatchButton';
 export { CoOwnFirstTradeGuide } from './CoOwnFirstTradeGuide';
@@ -49,6 +75,32 @@ export {
   CoOwnTradeSkeleton,
   CoOwnCreateStudioSkeleton,
   CoOwnLeaderboardSkeleton,
+  CoOwnValueStripSkeleton,
+  CoOwnOrderBookSkeleton,
+  CoOwnWalletBreakdownSkeleton,
+  CoOwnCandleChartSkeleton,
 } from './CoOwnSkeletons';
 export { CoOwnStateCanvas } from './CoOwnStateCanvas';
 export type { CoOwnStateCanvasProps, CoOwnStateVariant } from './CoOwnStateCanvas';
+export { CoOwnMarketStatusStrip } from './CoOwnMarketStatusStrip';
+export type { CoOwnMarketStatusStripProps } from './CoOwnMarketStatusStrip';
+export { CoOwnValueStrip } from './CoOwnValueStrip';
+export type { CoOwnValueStripProps } from './CoOwnValueStrip';
+export { CoOwnAssetDossier } from './CoOwnAssetDossier';
+export type { CoOwnAssetDossierProps, CoOwnDossierProvenanceEvent, CoOwnDossierCondition, CoOwnDossierStorage, CoOwnDossierAppraisal } from './CoOwnAssetDossier';
+export { CoOwnRightsSheet, CANONICAL_RIGHTS_LABELS } from './CoOwnRightsSheet';
+export type { CoOwnRightsSheetProps, CoOwnRightsRow } from './CoOwnRightsSheet';
+export { CoOwnWalletBreakdown } from './CoOwnWalletBreakdown';
+export type { CoOwnWalletBreakdownProps, CoOwn1ZeBalance } from './CoOwnWalletBreakdown';
+
+// Canonical model types — single source of truth in coOwnModels.ts
+export type {
+  CoOwnMarketData,
+  CoOwnValuation,
+  CoOwnMarketState,
+  CoOwn1ZeBalance as CanonicalCoOwn1ZeBalance,
+  CoOwnPositionState as CanonicalCoOwnPositionState,
+  CoOwnRightsVersion,
+  CoOwnMarketMode,
+  CoOwnReconciliationState,
+} from '../../data/coOwnModels';

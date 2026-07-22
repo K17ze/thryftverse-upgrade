@@ -22,6 +22,7 @@ import Reanimated, {
   runOnJS,
 } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Space, Radius } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 
@@ -111,6 +112,7 @@ export function SheetContainer({
   maxHeight = 0.85,
 }: SheetContainerProps) {
   const { colors } = useAppTheme();
+  const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const translateY = useSharedValue(1000);
   const backdropOpacity = useSharedValue(0);
@@ -148,7 +150,7 @@ export function SheetContainer({
   if (!visible && !mountedRef.current) return null;
 
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents={visible ? 'auto' : 'none'}>
+    <View style={[StyleSheet.absoluteFill, sheetStyles.layer]} pointerEvents={visible ? 'auto' : 'none'}>
       {/* Backdrop */}
       <Reanimated.View style={[StyleSheet.absoluteFill, backdropStyle, { backgroundColor: colors.overlay }]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close sheet" accessibilityRole="button" />
@@ -163,6 +165,7 @@ export function SheetContainer({
             borderTopLeftRadius: Radius.xl,
             borderTopRightRadius: Radius.xl,
             maxHeight: `${maxHeight * 100}%`,
+            paddingBottom: Math.max(insets.bottom, Space.lg),
           },
           sheetStyle,
         ]}
@@ -178,13 +181,16 @@ export function SheetContainer({
 }
 
 const sheetStyles = StyleSheet.create({
+  layer: {
+    zIndex: 300,
+    elevation: 24,
+  },
   sheet: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
     paddingTop: Space.xs,
-    paddingBottom: Space.xl,
   },
   handleContainer: {
     alignItems: 'center',

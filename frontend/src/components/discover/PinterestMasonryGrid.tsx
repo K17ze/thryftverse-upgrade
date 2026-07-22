@@ -10,6 +10,8 @@ import { resolveListingMediaAspectRatio } from '../../utils/listingMediaGeometry
 interface Props {
   items: Listing[];
   onPressItem: (item: Listing) => void;
+  onPressSeller?: (item: Listing) => void;
+  onMessageSeller?: (item: Listing) => void;
   numColumns?: number;
   showSaveButton?: boolean;
   visualOnly?: boolean;
@@ -21,6 +23,8 @@ interface Props {
 export function PinterestMasonryGrid({
   items,
   onPressItem,
+  onPressSeller,
+  onMessageSeller,
   numColumns = 2,
   showSaveButton = false,
   visualOnly = false,
@@ -40,7 +44,8 @@ export function PinterestMasonryGrid({
     items.forEach((item, idx) => {
       const aspect = resolveListingMediaAspectRatio(item);
       const imgHeight = colWidth / aspect;
-      const infoHeight = visualOnly ? 0 : 42;
+      const titleLines = item.title.length > 22 ? 2 : 1;
+      const infoHeight = visualOnly ? 0 : 68 + titleLines * 19;
       const itemHeight = imgHeight + infoHeight + gap;
 
       // Find shortest column
@@ -78,6 +83,8 @@ export function PinterestMasonryGrid({
                   visualOnly={visualOnly}
                   mediaAspectRatio={resolveListingMediaAspectRatio(item)}
                   enableEntranceAnimation={false}
+                  onPressSeller={onPressSeller ? () => onPressSeller(item) : undefined}
+                  onMessageSeller={onMessageSeller ? () => onMessageSeller(item) : undefined}
                 />
               </Reanimated.View>
             ) : (
@@ -90,6 +97,8 @@ export function PinterestMasonryGrid({
                 visualOnly={visualOnly}
                 mediaAspectRatio={resolveListingMediaAspectRatio(item)}
                 enableEntranceAnimation={false}
+                onPressSeller={onPressSeller ? () => onPressSeller(item) : undefined}
+                onMessageSeller={onMessageSeller ? () => onMessageSeller(item) : undefined}
               />
             )
           ))}

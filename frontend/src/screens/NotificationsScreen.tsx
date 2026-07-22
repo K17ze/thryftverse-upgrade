@@ -71,40 +71,18 @@ type NotificationCard = {
 
 type NotificationFilter = 'all' | 'order' | 'new_item' | 'review' | 'price' | 'auction';
 
-const FILTER_TABS: { key: NotificationFilter; label: string; icon: string }[] = [
-  { key: 'all', label: 'All', icon: 'notifications-outline' },
-  { key: 'order', label: 'Orders', icon: 'cube-outline' },
-  { key: 'new_item', label: 'Items', icon: 'shirt-outline' },
-  { key: 'review', label: 'Reviews', icon: 'star-outline' },
-  { key: 'price', label: 'Price', icon: 'pricetag-outline' },
-  { key: 'auction', label: 'Auctions', icon: 'gavel-outline' },
+const FILTER_TABS: { key: NotificationFilter; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'order', label: 'Orders' },
+  { key: 'new_item', label: 'Items' },
+  { key: 'review', label: 'Reviews' },
+  { key: 'price', label: 'Prices' },
+  { key: 'auction', label: 'Auctions' },
 ];
 
 const PANEL_BG = Colors.surface;
 const PANEL_ALT = Colors.surfaceAlt;
 const PANEL_BORDER = Colors.border;
-const BRAND = Colors.brand;
-
-function getNotifIcon(type: NotificationCardType): { name: string; color: string; bg: string } {
-  switch (type) {
-    case 'new_item':
-      return { name: 'shirt-outline', color: Colors.textSecondary, bg: `${Colors.textSecondary}15` };
-    case 'like':
-      return { name: 'heart', color: Colors.danger, bg: `${Colors.danger}15` };
-    case 'review':
-      return { name: 'star', color: Colors.success, bg: `${Colors.success}15` };
-    case 'order':
-      return { name: 'cube-outline', color: Colors.success, bg: `${Colors.success}15` };
-    case 'price':
-      return { name: 'pricetag-outline', color: BRAND, bg: `${BRAND}15` };
-    case 'resolution':
-      return { name: 'headset-outline', color: Colors.textSecondary, bg: `${Colors.textSecondary}15` };
-    case 'auction':
-      return { name: 'gavel-outline', color: '#E8A93C', bg: '#E8A93C15' };
-    default:
-      return { name: 'notifications-outline', color: Colors.textMuted, bg: PANEL_ALT };
-  }
-}
 
 function parsePayloadEvent(payload: Record<string, unknown>): string {
   const candidate = payload.event;
@@ -581,24 +559,13 @@ export default function NotificationsScreen() {
                 accessibilityLabel={`Filter: ${tab.label}${count > 0 ? `, ${count} items` : ''}`}
                 accessibilityState={{ selected: isActive }}
               >
-                <Ionicons
-                  name={tab.icon as never}
-                  size={13}
-                  color={isActive ? Colors.brand : Colors.textMuted}
-                />
                 <Text
                   style={[styles.filterTabText, isActive && styles.filterTabTextActive]}
                   numberOfLines={1}
                 >
                   {tab.label}
                 </Text>
-                {count > 0 && (
-                  <View style={[styles.filterTabBadge, isActive && styles.filterTabBadgeActive]}>
-                    <Text style={[styles.filterTabBadgeText, isActive && styles.filterTabBadgeTextActive]}>
-                      {count > 99 ? '99+' : count}
-                    </Text>
-                  </View>
-                )}
+                {isActive ? <View style={styles.filterTabIndicator} /> : null}
               </Pressable>
             );
           })}
@@ -610,7 +577,7 @@ export default function NotificationsScreen() {
         <View style={styles.summaryBannerRow}>
           {unreadCount > 0 ? (
             <View style={styles.unreadSummaryBadge}>
-              <Ionicons name="notifications" size={12} color={Colors.brand} />
+              <View style={styles.unreadSummaryDot} />
               <Text style={styles.unreadSummaryText}>
                 {unreadCount} unread {unreadCount === 1 ? 'notification' : 'notifications'}
               </Text>
@@ -650,10 +617,10 @@ export default function NotificationsScreen() {
           <Text style={styles.sectionTitle}>{title}</Text>
         )}
         renderItem={({ item, index }) => {
-          const icon = getNotifIcon(item.type);
           const listingId = typeof item.payload.listingId === 'string' ? item.payload.listingId : undefined;
           const actorUserId = item.actorUserId ?? getPayloadString(item.payload, ['sellerId', 'actorUserId', 'fromUserId', 'counterpartyUserId']);
           const actorHandle = item.actorUsername ?? actorUserId ?? null;
+          const visualUri = item.itemImage || item.actorAvatar || '';
 
           return (
             <Reanimated.View
@@ -695,7 +662,13 @@ export default function NotificationsScreen() {
                       style={styles.notifImageShared}
                       sharedTransitionTag={listingId ? `image-${listingId}-0` : undefined}
                     >
-                      <CachedImage uri={item.itemImage} style={styles.notifImage} contentFit="cover" />
+                      <CachedImage
+                        uri={visualUri}
+                        style={styles.notifImage}
+                        contentFit="cover"
+                        emptyIcon="notifications-outline"
+                        emptyLabel={item.title || 'Notification'}
+                      />
                     </SharedTransitionView>
                   </View>
 
@@ -709,9 +682,6 @@ export default function NotificationsScreen() {
                       {item.body || item.text}
                     </Text>
                     <View style={styles.notifMetaRow}>
-                      <View style={[styles.notifTypeIcon, { backgroundColor: icon.bg }]}>
-                        <Ionicons name={icon.name as never} size={12} color={icon.color} />
-                      </View>
                       {item.aggregatedCount && item.aggregatedCount > 1 ? (
                         <View style={styles.notifAggregatedRow}>
                           {item.actorAvatar ? (
@@ -792,7 +762,7 @@ export default function NotificationsScreen() {
             />
           ) : activeFilter !== 'all' && notifications.length > 0 ? (
             <EmptyState
-              icon={(FILTER_TABS.find((t) => t.key === activeFilter)?.icon ?? 'notifications-outline') as any}
+              icon="notifications-outline"
               title={`No ${FILTER_TABS.find((t) => t.key === activeFilter)?.label.toLowerCase() ?? 'notifications'} yet`}
               subtitle="Switch to 'All' to see everything."
               iconColor={Colors.textMuted}
@@ -822,58 +792,40 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
 
   filterTabsRow: {
-    paddingVertical: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.border,
   },
   filterTabsContent: {
     paddingHorizontal: 16,
-    gap: 8,
+    gap: 20,
   },
   filterTab: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 16,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    minHeight: 32,
+    justifyContent: 'center',
+    minHeight: 46,
+    position: 'relative',
   },
   filterTabActive: {
-    backgroundColor: `${Colors.brand}15`,
-    borderColor: Colors.brand,
+    backgroundColor: 'transparent',
   },
   filterTabText: {
-    fontSize: 12,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.medium,
     color: Colors.textMuted,
   },
   filterTabTextActive: {
-    color: Colors.brand,
+    color: Colors.textPrimary,
     fontFamily: Typography.family.semibold,
   },
-  filterTabBadge: {
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    paddingHorizontal: 5,
-    backgroundColor: Colors.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  filterTabBadgeActive: {
-    backgroundColor: Colors.brand,
-  },
-  filterTabBadgeText: {
-    fontSize: 10,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
-  },
-  filterTabBadgeTextActive: {
-    color: Colors.background,
+  filterTabIndicator: {
+    position: 'absolute',
+    bottom: -StyleSheet.hairlineWidth,
+    left: 0,
+    right: 0,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: Colors.textPrimary,
   },
 
   swipeActionContainer: {
@@ -918,16 +870,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     paddingHorizontal: 16,
-    paddingBottom: 8,
+    paddingTop: 10,
+    paddingBottom: 4,
   },
   unreadSummaryBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: Radius.full,
-    backgroundColor: `${Colors.brand}12`,
+    minHeight: 32,
+  },
+  unreadSummaryDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.brand,
   },
   unreadSummaryText: {
     fontSize: 12,
@@ -963,18 +919,12 @@ const styles = StyleSheet.create({
   },
 
   notifCard: {
-    backgroundColor: PANEL_BG,
-    borderRadius: 20,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    borderLeftWidth: 3,
-    borderLeftColor: 'transparent',
+    backgroundColor: Colors.background,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: PANEL_BORDER,
   },
   notifCardUnread: {
     backgroundColor: Colors.surfaceAlt,
-    borderColor: Colors.border,
-    borderLeftColor: Colors.brand,
   },
   notifMainTap: {
     padding: Space.md,
@@ -994,7 +944,7 @@ const styles = StyleSheet.create({
   },
 
   notifImageWrap: {
-    width: 52, height: 52, borderRadius: 14,
+    width: 52, height: 52, borderRadius: 10,
     overflow: 'hidden',
     backgroundColor: PANEL_ALT,
     borderWidth: 1,
@@ -1024,10 +974,6 @@ const styles = StyleSheet.create({
   notifTextUnread: { color: Colors.textPrimary, fontFamily: Typography.family.medium },
 
   notifMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  notifTypeIcon: {
-    width: 22, height: 22, borderRadius: 11,
-    alignItems: 'center', justifyContent: 'center',
-  },
   notifTime: { fontSize: 12, color: Colors.textMuted, fontFamily: Typography.family.regular },
   notifAggregatedRow: {
     flexDirection: 'row',

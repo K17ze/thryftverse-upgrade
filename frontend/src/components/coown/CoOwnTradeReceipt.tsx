@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
+import { CoOwnNumericText } from '../ui/CoOwnNumericText';
 
 export type CoOwnReceiptStatus = 'pending' | 'open' | 'partially_filled' | 'filled' | 'cancelled' | 'rejected' | 'expired';
 
@@ -12,7 +13,7 @@ export interface CoOwnTradeReceiptProps {
   title: string;
   orderId?: string | number;
   side: 'buy' | 'sell';
-  orderType: 'market' | 'limit';
+  orderType: 'market' | 'limit' | 'protected_instant';
   units: number;
   filledUnits?: number;
   remainingUnits?: number;
@@ -25,6 +26,26 @@ export interface CoOwnTradeReceiptProps {
   settlementLabel: string;
   status: CoOwnReceiptStatus;
   timestamp?: string;
+  // ── Phase 2.5: exchange-grade additions (all optional — fail closed) ──
+  /** Prominent max-reserved amount (full obligation from computeReservation). */
+  maxReservedLabel?: string;
+  /** Estimated average fill price. */
+  avgFillPriceLabel?: string;
+  /** Worst price the order would execute at. */
+  worstPriceLabel?: string;
+  /** Post-trade position: units after + ownership % of outstanding. */
+  postTradeUnits?: number;
+  postTradeOwnershipPct?: number;
+  postTradeOutstanding?: number;
+  /** Local-fiat indication. */
+  localFiatLabel?: string;
+  localFiatSource?: string;
+  /** Market & liquidity warning. */
+  marketWarning?: string;
+  /** Disclosure version. */
+  rightsVersion?: string;
+  /** Vehicle name for plain-language explanation. */
+  vehicleName?: string;
 }
 
 const STATUS_CONFIG: Record<CoOwnReceiptStatus, { label: string; icon: string; positive: boolean }> = {
@@ -55,14 +76,40 @@ export function CoOwnTradeReceipt({
   settlementLabel,
   status,
   timestamp,
+  maxReservedLabel,
+  avgFillPriceLabel,
+  worstPriceLabel,
+  postTradeUnits,
+  postTradeOwnershipPct,
+  postTradeOutstanding,
+  localFiatLabel,
+  localFiatSource,
+  marketWarning,
+  rightsVersion,
+  vehicleName,
 }: CoOwnTradeReceiptProps) {
   const { colors } = useAppTheme();
   const isBuy = side === 'buy';
   const statusCfg = STATUS_CONFIG[status];
   const statusColor = statusCfg.positive ? colors.success : colors.textSecondary;
 
+  // Composite accessibility label for screen readers
+  const a11yParts: string[] = [
+    `${statusCfg.label}. ${isBuy ? 'Buy' : 'Sell'} ${orderType === 'limit' ? 'limit' : 'protected instant'} order`,
+    `${units} units`,
+  ];
+  if (filledUnits != null) a11yParts.push(`${filledUnits} filled`);
+  if (remainingUnits != null) a11yParts.push(`${remainingUnits} remaining`);
+  if (avgFillPriceLabel) a11yParts.push(`average fill ${avgFillPriceLabel}`);
+  if (worstPriceLabel) a11yParts.push(`worst price ${worstPriceLabel}`);
+  a11yParts.push(`gross ${grossLabel}`, `fee ${feeLabel}`, `${isBuy ? 'total cost' : 'net proceeds'} ${totalLabel}`);
+  a11yParts.push(`settlement ${settlementLabel}`);
+  if (maxReservedLabel) a11yParts.push(`max reserved ${maxReservedLabel}`);
+  if (postTradeUnits != null) a11yParts.push(`after: ${postTradeUnits} units${postTradeOwnershipPct != null ? `, ${postTradeOwnershipPct.toFixed(2)}% of outstanding` : ''}`);
+  if (rightsVersion) a11yParts.push(`rights ${rightsVersion}`);
+
   return (
-    <View style={styles.wrap}>
+    <View style={styles.wrap} accessibilityRole="summary" accessibilityLabel={a11yParts.join('. ')}>
       {/* Status header */}
       <View style={styles.statusHeader}>
         <View style={[styles.statusIconWrap, { backgroundColor: statusColor + '22' }]}>
@@ -94,7 +141,7 @@ export function CoOwnTradeReceipt({
               </Text>
             </View>
             <Text style={[styles.orderType, { color: colors.textSecondary }]} numberOfLines={1}>
-              {orderType === 'limit' ? 'Limit order' : 'Market order'}
+              {orderType === 'limit' ? 'Limit order' : 'Protected instant'}
             </Text>
           </View>
         </View>
@@ -103,31 +150,46 @@ export function CoOwnTradeReceipt({
       {/* Receipt details */}
       <View style={[styles.receiptCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={[styles.receiptRow, { borderColor: colors.border }]}>
+          <Text style={[styles.receiptLabel, { color: colors.textMuted }]} numberOfLines={1}>Side</Text>
+          <Text style={[styles.receiptValue, { color: colors.textPrimary }]} numberOfLines={1}>
+            {isBuy ? 'BUY' : 'SELL'}
+          </Text>
+        </View>
+        <View style={[styles.receiptRow, { borderColor: colors.border }]}>
+          <Text style={[styles.receiptLabel, { color: colors.textMuted }]} numberOfLines={1}>Order type</Text>
+          <Text style={[styles.receiptValue, { color: colors.textPrimary }]} numberOfLines={1}>
+            {orderType === 'limit' ? 'Limit' : 'Protected instant'}
+            {limitPriceLabel ? ` (${limitPriceLabel})` : ''}
+          </Text>
+        </View>
+        <View style={[styles.receiptRow, { borderColor: colors.border }]}>
           <Text style={[styles.receiptLabel, { color: colors.textMuted }]} numberOfLines={1}>Units</Text>
-          <Text style={[styles.receiptValue, { color: colors.textPrimary }]} numberOfLines={1}>{units}</Text>
+          <CoOwnNumericText value={units} unit="units" size="price" align="right" />
         </View>
         {filledUnits != null ? (
           <View style={[styles.receiptRow, { borderColor: colors.border }]}>
             <Text style={[styles.receiptLabel, { color: colors.textMuted }]} numberOfLines={1}>Filled</Text>
-            <Text style={[styles.receiptValue, { color: colors.textPrimary }]} numberOfLines={1}>{filledUnits}</Text>
+            <CoOwnNumericText value={filledUnits} unit="units" size="price" align="right" />
           </View>
         ) : null}
         {remainingUnits != null ? (
           <View style={[styles.receiptRow, { borderColor: colors.border }]}>
             <Text style={[styles.receiptLabel, { color: colors.textMuted }]} numberOfLines={1}>Remaining</Text>
-            <Text style={[styles.receiptValue, { color: colors.textPrimary }]} numberOfLines={1}>{remainingUnits}</Text>
+            <CoOwnNumericText value={remainingUnits} unit="units" size="price" align="right" />
           </View>
         ) : null}
-        <View style={[styles.receiptRow, { borderColor: colors.border }]}>
-          <Text style={[styles.receiptLabel, { color: colors.textMuted }]} numberOfLines={1}>Unit price</Text>
-          <Text style={[styles.receiptValue, { color: colors.textPrimary }]} numberOfLines={1}>{unitPriceLabel}</Text>
-        </View>
-        {orderType === 'limit' && limitPriceLabel ? (
+        {avgFillPriceLabel && (
           <View style={[styles.receiptRow, { borderColor: colors.border }]}>
-            <Text style={[styles.receiptLabel, { color: colors.textMuted }]} numberOfLines={1}>Limit price</Text>
-            <Text style={[styles.receiptValue, { color: colors.textPrimary }]} numberOfLines={1}>{limitPriceLabel}</Text>
+            <Text style={[styles.receiptLabel, { color: colors.textMuted }]} numberOfLines={1}>Avg fill est.</Text>
+            <Text style={[styles.receiptValue, { color: colors.textPrimary }]} numberOfLines={1}>{avgFillPriceLabel}</Text>
           </View>
-        ) : null}
+        )}
+        {worstPriceLabel && (
+          <View style={[styles.receiptRow, { borderColor: colors.border }]}>
+            <Text style={[styles.receiptLabel, { color: colors.textMuted }]} numberOfLines={1}>Worst price</Text>
+            <Text style={[styles.receiptValue, { color: colors.textPrimary }]} numberOfLines={1}>{worstPriceLabel}</Text>
+          </View>
+        )}
         <View style={[styles.receiptRow, { borderColor: colors.border }]}>
           <Text style={[styles.receiptLabel, { color: colors.textMuted }]} numberOfLines={1}>Gross</Text>
           <Text style={[styles.receiptValue, { color: colors.textPrimary }]} numberOfLines={1}>{grossLabel}</Text>
@@ -155,7 +217,67 @@ export function CoOwnTradeReceipt({
           </View>
           <Text style={[styles.totalValue, { color: colors.textPrimary }]} numberOfLines={1}>{totalLabel}</Text>
         </View>
+
+        {/* Max reserved — prominent (full obligation from computeReservation) */}
+        {maxReservedLabel && (
+          <View style={[styles.maxReservedRow, { backgroundColor: colors.brand + '12', borderColor: colors.brand + '40' }]}>
+            <Ionicons name="lock-closed" size={14} color={colors.brand} />
+            <Text style={[styles.maxReservedLabel, { color: colors.textMuted }]} numberOfLines={1}>
+              {isBuy ? 'MAX 1ZE RESERVED' : 'UNITS RESERVED'}
+            </Text>
+            <Text style={[styles.maxReservedValue, { color: colors.textPrimary }]} numberOfLines={1}>
+              {maxReservedLabel}
+            </Text>
+          </View>
+        )}
       </View>
+
+      {/* Plain language — what you will own */}
+      {postTradeUnits != null && (
+        <View style={[styles.plainLanguageCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[styles.plainLanguageHeader, { color: colors.textMuted }]}>Plain language</Text>
+          <Text style={[styles.plainLanguageText, { color: colors.textSecondary }]}>
+            You will {isBuy ? 'own' : 'hold'} {postTradeUnits} units
+            {postTradeOwnershipPct != null && ` (${postTradeOwnershipPct.toFixed(2)}% of outstanding)`}
+            {postTradeOutstanding != null && ` of ${postTradeOutstanding.toLocaleString('en-GB')}`}
+            {vehicleName ? `, settled in 1ZE. This is a beneficial interest in ${vehicleName}, not title to the underlying asset.` : '.'}
+          </Text>
+        </View>
+      )}
+
+      {/* Local-fiat indication */}
+      {localFiatLabel && (
+        <View style={styles.localFiatRow}>
+          <Ionicons name="cash-outline" size={13} color={colors.textMuted} />
+          <Text style={[styles.localFiatText, { color: colors.textSecondary }]} numberOfLines={1}>
+            {localFiatLabel}
+            {localFiatSource ? ` · ${localFiatSource}` : ''}
+          </Text>
+        </View>
+      )}
+
+      {/* Market & liquidity warning */}
+      {marketWarning && (
+        <View style={[styles.warningCard, { backgroundColor: colors.warning + '12', borderColor: colors.warning + '40' }]}>
+          <View style={styles.warningRow}>
+            <Ionicons name="warning-outline" size={14} color={colors.warning} />
+            <Text style={[styles.warningTitle, { color: colors.warning }]}>Market & liquidity</Text>
+          </View>
+          <Text style={[styles.warningText, { color: colors.textSecondary }]}>
+            {marketWarning}
+          </Text>
+        </View>
+      )}
+
+      {/* Disclosure */}
+      {rightsVersion && (
+        <View style={styles.disclosureRow}>
+          <Ionicons name="document-text-outline" size={13} color={colors.textMuted} />
+          <Text style={[styles.disclosureText, { color: colors.textMuted }]} numberOfLines={1}>
+            {rightsVersion} · accepted
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -191,7 +313,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.md,
     borderRadius: Radius.lg,
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
   },
   imageWrap: {
@@ -238,7 +360,7 @@ const styles = StyleSheet.create({
   },
   receiptCard: {
     borderRadius: Radius.lg,
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
     gap: 0,
   },
@@ -261,6 +383,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
     flexShrink: 0,
     textAlign: 'right',
+    fontVariant: ['tabular-nums'],
   },
   totalRow: {
     flexDirection: 'row',
@@ -290,5 +413,101 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.bold,
     letterSpacing: -0.5,
     flexShrink: 0,
+    fontVariant: ['tabular-nums'],
+  },
+  // ── Phase 2.5: max reserved row ──
+  maxReservedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    marginTop: Space.sm,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  maxReservedLabel: {
+    flex: 1,
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.metaElevated.letterSpacing,
+    textTransform: 'uppercase',
+  },
+  maxReservedValue: {
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontFamily: Typography.family.bold,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    fontVariant: ['tabular-nums'],
+  },
+  // ── Phase 2.5: plain language card ──
+  plainLanguageCard: {
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Space.md,
+    gap: Space.xs,
+  },
+  plainLanguageHeader: {
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.metaElevated.letterSpacing,
+    textTransform: 'uppercase',
+  },
+  plainLanguageText: {
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight + 2,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.body.letterSpacing,
+  },
+  // ── Phase 2.5: local-fiat row ──
+  localFiatRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  localFiatText: {
+    flex: 1,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.caption.letterSpacing,
+  },
+  // ── Phase 2.5: market warning card ──
+  warningCard: {
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    padding: Space.md,
+    gap: Space.xs,
+  },
+  warningRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  warningTitle: {
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
+  },
+  warningText: {
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight + 2,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.body.letterSpacing,
+  },
+  // ── Phase 2.5: disclosure row ──
+  disclosureRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  disclosureText: {
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.caption.letterSpacing,
   },
 });

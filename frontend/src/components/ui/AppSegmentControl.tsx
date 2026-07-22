@@ -1,9 +1,8 @@
 import React from 'react';
 import { StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
-import { Colors } from '../../constants/colors';
-// Typography using direct font names
 import { AnimatedPressable } from '../AnimatedPressable';
-import { Typography } from '../../theme/designTokens';
+import { Radius, Space, Type, Typography } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
 
 export interface AppSegmentOption<T extends string> {
   value: T;
@@ -35,8 +34,17 @@ export function AppSegmentControl<T extends string>({
   optionTextActiveStyle,
   fullWidth = false,
 }: AppSegmentControlProps<T>) {
+  const { colors } = useAppTheme();
+
   return (
-    <View style={[styles.row, style]}>
+    <View
+      style={[
+        styles.row,
+        { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
+        style,
+      ]}
+      accessibilityRole="tablist"
+    >
       {options.map((option) => {
         const isActive = option.value === value;
 
@@ -46,8 +54,12 @@ export function AppSegmentControl<T extends string>({
             style={[
               styles.option,
               fullWidth && styles.optionFull,
+              { backgroundColor: 'transparent', borderColor: 'transparent' },
               optionStyle,
-              isActive && styles.optionActive,
+              isActive && {
+                backgroundColor: colors.surface,
+                borderColor: colors.textMuted,
+              },
               isActive && optionActiveStyle,
             ]}
             onPress={() => {
@@ -56,7 +68,8 @@ export function AppSegmentControl<T extends string>({
               }
             }}
             activeOpacity={0.9}
-            accessibilityRole="button"
+            hapticFeedback={isActive ? 'none' : 'selection'}
+            accessibilityRole="tab"
             accessibilityState={{ selected: isActive }}
             accessibilityLabel={option.accessibilityLabel ?? option.label}
           >
@@ -64,10 +77,12 @@ export function AppSegmentControl<T extends string>({
             <Text
               style={[
                 styles.optionText,
+                { color: colors.textSecondary },
                 optionTextStyle,
-                isActive && styles.optionTextActive,
+                isActive && { color: colors.textPrimary },
                 isActive && optionTextActiveStyle,
               ]}
+              maxFontSizeMultiplier={1.3}
             >
               {option.label}
             </Text>
@@ -81,34 +96,28 @@ export function AppSegmentControl<T extends string>({
 const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 2,
+    padding: 3,
+    borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   option: {
-    minHeight: 34,
-    borderRadius: 999,
-    borderWidth: 0.5,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surfaceAlt,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    minHeight: 44,
+    borderRadius: Radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.xs,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
-    gap: 6,
+    gap: Space.xs,
   },
   optionFull: {
     flex: 1,
   },
-  optionActive: {
-    borderColor: Colors.brand,
-    backgroundColor: Colors.surfaceAlt,
-  },
   optionText: {
-    color: Colors.textSecondary,
-    fontSize: 11,
-    fontFamily: Typography.family.bold,
-  },
-  optionTextActive: {
-    color: Colors.brand,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.semibold,
   },
 });

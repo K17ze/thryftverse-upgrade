@@ -12,7 +12,7 @@ import {
   Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -58,6 +58,7 @@ function isVideoUrl(url: string): boolean {
 export default function PosterViewerScreen() {
   const navigation = useNavigation<NavT>();
   const route = useRoute<RouteT>();
+  const insets = useSafeAreaInsets();
   const { show } = useToast();
   const currentUser = useStore((state) => state.currentUser);
 
@@ -435,28 +436,29 @@ export default function PosterViewerScreen() {
         )}
 
         {/* Caption — skipped when rendering canonical composition */}
-        {!compositionDoc && activeFrame.caption && activeFrame.mediaType !== 'text' && (
-          <View style={styles.captionWrap}>
-            <LinearGradient
-              colors={['transparent', 'rgba(0,0,0,0.5)']}
-              style={styles.bottomGradient}
-              pointerEvents="none"
-            />
-            <Text style={styles.captionText}>{activeFrame.caption}</Text>
-          </View>
-        )}
+        <View style={[styles.viewerFooter, { bottom: insets.bottom }]} pointerEvents="box-none">
+          {!compositionDoc && activeFrame.caption && activeFrame.mediaType !== 'text' && (
+            <View style={styles.captionWrap}>
+              <LinearGradient
+                colors={['transparent', 'rgba(0,0,0,0.5)']}
+                style={styles.bottomGradient}
+                pointerEvents="none"
+              />
+              <Text style={styles.captionText}>{activeFrame.caption}</Text>
+            </View>
+          )}
 
-        {/* Reaction / Reply bar */}
-        <PosterReactionReplyBar
-          allowReactions={activeStory.allowReactions}
-          allowReplies={activeStory.allowReplies}
-          viewerReaction={activeFrame.viewerReaction}
-          onReaction={handleReaction}
-          onRemoveReaction={handleRemoveReaction}
-          onReply={handleReply}
-          isOwner={isOwner}
-          onShowActivity={() => navigation.navigate('PosterStoryActivity', { storyId: activeStory.id })}
-        />
+          <PosterReactionReplyBar
+            allowReactions={activeStory.allowReactions}
+            allowReplies={activeStory.allowReplies}
+            viewerReaction={activeFrame.viewerReaction}
+            onReaction={handleReaction}
+            onRemoveReaction={handleRemoveReaction}
+            onReply={handleReply}
+            isOwner={isOwner}
+            onShowActivity={() => navigation.navigate('PosterStoryActivity', { storyId: activeStory.id })}
+          />
+        </View>
       </SafeAreaView>
     </View>
   );
@@ -537,8 +539,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    minHeight: 38,
-    borderRadius: 19,
+    minHeight: 44,
+    borderRadius: 22,
     paddingHorizontal: 10,
     backgroundColor: 'rgba(0,0,0,0.32)',
     gap: 8,
@@ -575,17 +577,17 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   topIconBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.35)',
   },
   closeBtnTop: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.35)',
@@ -604,8 +606,13 @@ const styles = StyleSheet.create({
   tapRight: {
     flex: 1,
   },
+  viewerFooter: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    zIndex: 20,
+  },
   captionWrap: {
-    marginTop: 'auto',
     paddingBottom: 8,
     position: 'relative',
   },

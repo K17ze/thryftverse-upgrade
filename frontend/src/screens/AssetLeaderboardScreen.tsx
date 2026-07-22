@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, StatusBar, ScrollView, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -15,12 +16,15 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { listCoOwnAssets } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
 import { useToast } from '../context/ToastContext';
-import { haptics } from '../utils/haptics';
 import {
   CoOwnMarketHeader,
   CoOwnLeaderboardSkeleton,
   CoOwnStateCanvas,
+  CoOwnOfflineBanner,
+  CoOwnReconciliationBanner,
 } from '../components/coown';
+import { useConnectivity } from '../hooks/useConnectivity';
+import { formatCoOwnIze } from '../utils/currency';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -34,6 +38,7 @@ interface LeaderboardAsset {
   holders: number;
   isOpen: boolean;
   createdAt: string;
+  updatedAt: string;
 }
 
 export default function AssetLeaderboardScreen() {
@@ -42,14 +47,18 @@ export default function AssetLeaderboardScreen() {
   const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
   const reducedMotionEnabled = useReducedMotion();
+  const { isOffline } = useConnectivity();
 
   const [assets, setAssets] = React.useState<LeaderboardAsset[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [isError, setIsError] = React.useState(false);
   const [refreshing, setRefreshing] = React.useState(false);
 
-  const loadLeaderboard = React.useCallback(() => {
+  const loadLeaderboard = React.useCallback((mode: 'initial' | 'refresh' = 'initial') => {
     let cancelled = false;
-    setIsLoading(true);
+    if (mode === 'refresh') setRefreshing(true);
+    else setIsLoading(true);
+    setIsError(false);
 
     listCoOwnAssets({ limit: 120 })
       .then((items) => {
@@ -64,15 +73,20 @@ export default function AssetLeaderboardScreen() {
           holders: item.holders,
           isOpen: item.isOpen,
           createdAt: item.createdAt,
+          updatedAt: item.updatedAt,
         })));
       })
       .catch((err) => {
         if (cancelled) return;
         const parsed = parseApiError(err, 'Unable to load leaderboard');
         show(parsed.message, 'error');
+        setIsError(true);
       })
       .finally(() => {
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) {
+          setIsLoading(false);
+          setRefreshing(false);
+        }
       });
 
     return () => { cancelled = true; };
@@ -84,9 +98,7 @@ export default function AssetLeaderboardScreen() {
   }, [loadLeaderboard]);
 
   const handleRefresh = React.useCallback(() => {
-    setRefreshing(true);
-    loadLeaderboard();
-    setTimeout(() => setRefreshing(false), 800);
+    loadLeaderboard('refresh');
   }, [loadLeaderboard]);
 
   const handleBack = React.useCallback(() => {
@@ -96,81 +108,124 @@ export default function AssetLeaderboardScreen() {
 
   // ── Rankings (no speculative price-move metrics) ──
   // Top by allocation: most allocated = most popular by real ownership
+  const mostAvailable = React.useMemo(
+    () => [...assets]
+      .filter((asset) => asset.isOpen && asset.availableUnits > 0)
+      .sort((a, b) => b.availableUnits - a.availableUnits)
+      .slice(0, 5),
+    [assets]
+  );
+
   const topAllocated = React.useMemo(
     () => [...assets]
-      .map((a) => ({
-        ...a,
-        allocatedPct: a.totalUnits > 0 ? (a.totalUnits - a.availableUnits) / a.totalUnits : 0,
+      .map((asset) => ({
+        ...asset,
+        allocatedPct: asset.totalUnits > 0
+          ? (asset.totalUnits - asset.availableUnits) / asset.totalUnits
+          : 0,
       }))
       .sort((a, b) => b.allocatedPct - a.allocatedPct)
       .slice(0, 5),
     [assets]
   );
 
-  // Top by market value: totalUnits * unitPrice
-  const topMarketValue = React.useMemo(
+  const newestListings = React.useMemo(
     () => [...assets]
-      .map((a) => ({ ...a, marketValue: a.totalUnits * a.unitPriceGBP }))
-      .sort((a, b) => b.marketValue - a.marketValue)
+      .sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))
       .slice(0, 5),
     [assets]
   );
 
-  // Top by holders: most co-owners
-  const topHolders = React.useMemo(
-    () => [...assets].sort((a, b) => b.holders - a.holders).slice(0, 5),
-    [assets]
+  const format1ze = React.useCallback(
+    (value1ze: number) => formatCoOwnIze(value1ze),
+    []
   );
 
   const renderList = (
     title: string,
     icon: React.ComponentProps<typeof Ionicons>['name'],
-    data: Array<LeaderboardAsset & { allocatedPct?: number; marketValue?: number }>,
-    metric: (asset: any) => string,
+    data: Array<LeaderboardAsset & { allocatedPct?: number }>,
+    metric: (asset: LeaderboardAsset & { allocatedPct?: number }) => { primary: string; secondary: string },
     sectionIndex: number
-  ) => (
+  ) => data.length > 0 ? (
     <Reanimated.View
       entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(sectionIndex * 60)}
     >
-      <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <View style={[styles.section, sectionIndex > 0 && styles.sectionSeparated, sectionIndex > 0 && { borderTopColor: colors.border }]}>
         <View style={styles.sectionHeader}>
-          <Ionicons name={icon} size={16} color={colors.brand} />
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{title}</Text>
+          <View style={[styles.sectionIcon, { backgroundColor: colors.surfaceAlt }]}>
+            <Ionicons name={icon} size={15} color={colors.textSecondary} />
+          </View>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.25}>{title}</Text>
         </View>
 
-        {data.map((asset, idx) => (
-          <AnimatedPressable
-            key={`${title}_${asset.id}`}
-            style={[styles.row, { borderColor: colors.border }]}
-            onPress={() => { haptics.tap(); navigation.navigate('AssetDetail', { assetId: asset.id }); }}
-            scaleValue={0.985}
-            hapticFeedback="light"
-            accessibilityRole="button"
-            accessibilityLabel={`Rank ${idx + 1}, ${asset.title}, ${metric(asset)}`}
-          >
-            <Text style={[styles.rank, { color: colors.textMuted }]}>{idx + 1}</Text>
-            <CachedImage uri={asset.image} style={styles.thumb} containerStyle={styles.thumbContainer} contentFit="cover" />
-            <View style={styles.rowBody}>
-              <Text style={[styles.rowTitle, { color: colors.textPrimary }]} numberOfLines={1}>{asset.title}</Text>
-              <Text style={[styles.rowSub, { color: colors.textSecondary }]}>{formatFromFiat(asset.unitPriceGBP, 'GBP')}</Text>
-            </View>
-            <Text style={[styles.metric, { color: colors.textPrimary }]}>{metric(asset)}</Text>
-          </AnimatedPressable>
-        ))}
+        {data.map((asset, idx) => {
+          const metricValue = metric(asset);
+          return (
+            <AnimatedPressable
+              key={`${title}_${asset.id}`}
+              style={[styles.row, { borderColor: colors.border }, idx === data.length - 1 && styles.lastRow]}
+              onPress={() => navigation.navigate('AssetDetail', { assetId: asset.id })}
+              scaleValue={0.985}
+              hapticFeedback="light"
+              accessibilityRole="button"
+              accessibilityLabel={`${title}, rank ${idx + 1}, ${asset.title}, ${metricValue.primary}, ${metricValue.secondary}`}
+            >
+              <Text style={[styles.rank, { color: colors.textMuted }]} maxFontSizeMultiplier={1.2}>{idx + 1}</Text>
+              <CachedImage
+                uri={asset.image}
+                style={styles.thumb}
+                containerStyle={styles.thumbContainer}
+                contentFit="cover"
+                emptyLabel={asset.title}
+                emptyIcon="diamond-outline"
+              />
+              <View style={styles.rowBody}>
+                <Text style={[styles.rowTitle, { color: colors.textPrimary }]} numberOfLines={1} maxFontSizeMultiplier={1.25}>{asset.title}</Text>
+                <View style={styles.priceRow}>
+                  <Text style={[styles.rowPrice, { color: colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>{format1ze(asset.unitPriceGBP)}</Text>
+                  <Text style={[styles.rowSub, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>{formatFromFiat(asset.unitPriceGBP, 'GBP', { displayMode: 'fiat' })}</Text>
+                </View>
+              </View>
+              <View style={styles.metricGroup}>
+                <Text style={[styles.metric, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} maxFontSizeMultiplier={1.2}>{metricValue.primary}</Text>
+                <Text style={[styles.metricLabel, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>{metricValue.secondary}</Text>
+              </View>
+            </AnimatedPressable>
+          );
+        })}
       </View>
     </Reanimated.View>
-  );
+  ) : null;
 
   if (isLoading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
         <StatusBar style={isDark ? 'light' : 'dark'} />
         <CoOwnMarketHeader
-          title="Leaderboards"
-          subtitle="Top Co-Own items"
+          title="Market overview"
+          subtitle="Issued supply and recency"
           onBack={handleBack}
         />
         <CoOwnLeaderboardSkeleton />
+      </SafeAreaView>
+    );
+  }
+
+  if (isError && assets.length === 0) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
+        <CoOwnMarketHeader
+          title="Market overview"
+          subtitle="Issued supply and recency"
+          onBack={handleBack}
+        />
+        <CoOwnStateCanvas
+          variant="error"
+          actionLabel="Try again"
+          onAction={() => loadLeaderboard()}
+        />
       </SafeAreaView>
     );
   }
@@ -180,14 +235,14 @@ export default function AssetLeaderboardScreen() {
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
         <StatusBar style={isDark ? 'light' : 'dark'} />
         <CoOwnMarketHeader
-          title="Leaderboards"
-          subtitle="Top Co-Own items"
+          title="Market overview"
+          subtitle="Issued supply and recency"
           onBack={handleBack}
         />
         <CoOwnStateCanvas
           variant="empty"
-          title="No items to rank"
-          subtitle="Leaderboards will appear here once Co-Own items are issued."
+          title="No market overview yet"
+          subtitle="Supply and issue rankings appear after real instruments are issued."
           actionLabel="Browse items"
           onAction={() => navigation.navigate('CoOwnHub')}
         />
@@ -200,10 +255,13 @@ export default function AssetLeaderboardScreen() {
       <StatusBar style={isDark ? 'light' : 'dark'} />
 
       <CoOwnMarketHeader
-        title="Leaderboards"
-        subtitle="Top Co-Own items"
+        title="Market overview"
+        subtitle="Issued supply and recency"
         onBack={handleBack}
       />
+
+      <CoOwnOfflineBanner isOffline={isOffline} />
+      <CoOwnReconciliationBanner isActive={false} />
 
       <ScrollView
         contentContainerStyle={styles.content}
@@ -220,21 +278,26 @@ export default function AssetLeaderboardScreen() {
           'Most allocated',
           'pie-chart-outline',
           topAllocated,
-          (asset) => `${Math.round((asset.allocatedPct ?? 0) * 100)}% owned`,
+          (asset) => ({ primary: `${Math.round((asset.allocatedPct ?? 0) * 100)}%`, secondary: 'units allocated' }),
           0
         )}
         {renderList(
-          'Highest value',
-          'cash-outline',
-          topMarketValue,
-          (asset) => formatFromFiat(asset.marketValue ?? 0, 'GBP', { displayMode: 'fiat' }),
+          'Available supply',
+          'layers-outline',
+          mostAvailable,
+          (asset) => ({ primary: `${asset.availableUnits}/${asset.totalUnits}`, secondary: 'units available' }),
           1
         )}
         {renderList(
-          'Most co-owners',
-          'people-outline',
-          topHolders,
-          (asset) => `${asset.holders} holders`,
+          'New issues',
+          'time-outline',
+          newestListings,
+          (asset) => ({
+            primary: asset.createdAt
+              ? new Date(asset.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+              : '—',
+            secondary: 'issue date',
+          }),
           2
         )}
         <View style={{ height: Space.xxl }} />
@@ -249,13 +312,13 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.md,
+    paddingTop: Space.xs,
   },
-  sectionCard: {
-    borderRadius: Radius.lg,
-    borderWidth: 0.5,
-    padding: Space.md,
-    marginBottom: Space.lg,
+  section: {
+    paddingVertical: Space.lg,
+  },
+  sectionSeparated: {
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -263,22 +326,35 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     marginBottom: Space.sm,
   },
+  sectionIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   sectionTitle: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: -0.3,
   },
   row: {
+    minHeight: 72,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.md,
-    paddingVertical: Space.sm,
+    gap: Space.sm,
+    paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
+  lastRow: {
+    borderBottomWidth: 0,
+  },
   rank: {
-    width: 24,
-    fontSize: Type.bodyEmphasis.size,
-    fontFamily: Typography.family.bold,
+    width: 20,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.semibold,
+    fontVariant: ['tabular-nums'],
     textAlign: 'center',
   },
   thumbContainer: {
@@ -286,11 +362,12 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   thumb: {
-    width: 44,
-    height: 44,
+    width: 52,
+    height: 52,
   },
   rowBody: {
     flex: 1,
+    minWidth: 0,
     gap: 2,
   },
   rowTitle: {
@@ -298,13 +375,45 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
     letterSpacing: -0.2,
   },
-  rowSub: {
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: Space.xs,
+    minWidth: 0,
+  },
+  rowPrice: {
+    flexShrink: 1,
     fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.semibold,
+    fontVariant: ['tabular-nums'],
+  },
+  rowSub: {
+    flexShrink: 1,
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.regular,
+    fontVariant: ['tabular-nums'],
+  },
+  metricGroup: {
+    maxWidth: 112,
+    minWidth: 76,
+    alignItems: 'flex-end',
+    gap: 1,
   },
   metric: {
     fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.2,
+    fontVariant: ['tabular-nums'],
+    textAlign: 'right',
+    maxWidth: '100%',
+  },
+  metricLabel: {
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    fontFamily: Typography.family.medium,
+    textAlign: 'right',
   },
 });

@@ -50,12 +50,12 @@ describe('UI-21 device UX audit and consistency restoration', () => {
     expect(posterIdx).toBeLessThan(exploreIdx);
   });
 
-  // ── 5. Poster loading skeleton occupies the same top feed position ──
-  it('renderPosters shows SkeletonLoader while postersLoading is true', () => {
+  // ── 5. Optional posters do not occupy the primary feed when empty ──
+  it('Home hides optional posters while loading or empty and does not duplicate creation', () => {
     const src = read(resolve(SCREENS, 'HomeScreen.tsx'));
-    expect(src).toContain('if (postersLoading)');
-    expect(src).toContain('poster_skeleton_');
-    expect(src).toContain('SkeletonLoader width={120} height={152}');
+    expect(src).toContain('if (postersLoading || realPosters.length === 0) return null');
+    expect(src).not.toContain('Create a new poster');
+    expect(src).not.toContain('No posters yet');
   });
 
   // ── 6. Async poster loading cannot insert it in the middle of the feed ──
@@ -64,9 +64,7 @@ describe('UI-21 device UX audit and consistency restoration', () => {
     // renderPosters() JSX position is fixed; it does not conditionally move
     const scrollViewContent = src.substring(src.indexOf('contentContainerStyle'));
     const posterPos = scrollViewContent.indexOf('{renderPosters()}');
-    const editorialPos = scrollViewContent.indexOf('EditorialDiscoveryHero');
     const explorePos = scrollViewContent.indexOf('DiscoverySectionHeader');
-    expect(posterPos).toBeLessThan(editorialPos);
     expect(posterPos).toBeLessThan(explorePos);
   });
 
@@ -159,11 +157,11 @@ describe('UI-21 device UX audit and consistency restoration', () => {
     }
   });
 
-  // ── 14. EditorialDiscoveryHero does not render when all URIs are empty ──
-  it('HomeScreen editorial hero is conditional on real imagery', () => {
+  // ── 14. Home opens into personalised inventory, not a brand-authored takeover ──
+  it('HomeScreen does not place an editorial hero above its primary feed', () => {
     const src = read(resolve(SCREENS, 'HomeScreen.tsx'));
-    expect(src).toContain('heroItems.some((h) => h.uri.trim().length > 0)');
-    expect(src).toContain('heroItems.filter((h) => h.uri.trim().length > 0)');
+    expect(src).not.toContain('EditorialDiscoveryHero');
+    expect(src).not.toContain('content/editorial-hero');
   });
 
   // ── 15. MyProfile floating header includes Settings access ──

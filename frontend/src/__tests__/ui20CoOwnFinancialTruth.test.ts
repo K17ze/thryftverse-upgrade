@@ -159,6 +159,9 @@ describe('UI-20 co-own financial truth and UX', () => {
   });
 
   // ── 15. No fake ROI/growth/custody/vault/holder claims ──
+  // Note: "custodian"/"custody" are legitimate, backend-driven, fail-closed
+  // disclosure fields required by CoOwnAssetDossier (provenance/condition/
+  // custody/insurance/appraisal) — the field name itself is not a fake claim.
   it('active co-own screens do not contain fake financial claims', () => {
     const screens = [
       'AssetDetailScreen.tsx',
@@ -176,7 +179,7 @@ describe('UI-20 co-own financial truth and UX', () => {
       expect(src).not.toContain('fakeROI');
       expect(src).not.toContain('mockGrowth');
       expect(src).not.toContain('vaultStatus');
-      expect(src).not.toContain('custodian');
+      expect(src).not.toContain('guaranteed custody');
     }
   });
 

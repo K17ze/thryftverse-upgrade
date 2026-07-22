@@ -37,6 +37,8 @@ import BundleBagScreen from '../screens/BundleBagScreen';
 import CoOwnOrderHistoryScreen from '../screens/SyndicateOrderHistoryScreen';
 import AssetLeaderboardScreen from '../screens/AssetLeaderboardScreen';
 import BuyoutScreen from '../screens/BuyoutScreen';
+import CorporateActionDetailScreen from '../screens/CorporateActionDetailScreen';
+import DistributionHistoryScreen from '../screens/DistributionHistoryScreen';
 import CoOwnOnboardingScreen from '../screens/SyndicateOnboardingScreen';
 import ChatScreen from '../screens/ChatScreen';
 import CreateGroupChatScreen from '../screens/CreateGroupChatScreen';
@@ -52,7 +54,6 @@ import EditGroupScreen from '../screens/EditGroupScreen';
 import UserProfileScreen from '../screens/UserProfileScreen';
 
 // Profile Subs
-import BalanceScreen from '../screens/BalanceScreen';
 import WalletScreen from '../screens/WalletScreen';
 import MyOrdersScreen from '../screens/MyOrdersScreen';
 import PersonalisationScreen from '../screens/PersonalisationScreen';
@@ -251,6 +252,8 @@ export default function AppNavigator() {
       <Stack.Screen name="CoOwnOrderHistory" component={CoOwnOrderHistoryScreen} />
       <Stack.Screen name="AssetLeaderboard" component={AssetLeaderboardScreen} />
       <Stack.Screen name="Buyout" component={BuyoutScreen} />
+      <Stack.Screen name="CorporateActionDetail" component={CorporateActionDetailScreen} />
+      <Stack.Screen name="DistributionHistory" component={DistributionHistoryScreen} />
       <Stack.Screen name="CoOwnOnboarding" component={CoOwnOnboardingScreen} options={modalScreenOptions} />
       <Stack.Screen name="Chat" component={ChatScreen} />
       <Stack.Screen name="CreateGroupChat" component={CreateGroupChatScreen} options={modalScreenOptions} />
@@ -264,7 +267,6 @@ export default function AppNavigator() {
       <Stack.Screen name="BotBuilder" component={BotBuilderScreen} options={modalScreenOptions} />
       <Stack.Screen name="EditGroup" component={EditGroupScreen} />
       <Stack.Screen name="UserProfile" component={UserProfileScreen} />
-      <Stack.Screen name="Balance" component={BalanceScreen} />
       <Stack.Screen name="Wallet" component={WalletScreen} />
       <Stack.Screen name="MyOrders" component={MyOrdersScreen} />
       <Stack.Screen name="Personalisation" component={PersonalisationScreen} />

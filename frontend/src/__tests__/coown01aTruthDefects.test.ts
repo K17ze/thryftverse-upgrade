@@ -247,7 +247,9 @@ describe('COOWN-01A: buyout truth', () => {
     expect(source).not.toContain('1.08');
     expect(source).not.toContain('expiresInHours: 24');
     expect(source).not.toContain('Initiate Buyout');
-    expect(source).toContain('not available');
+    // Asset-level exit is operator-initiated per rights — the screen says so honestly.
+    expect(source).toContain('Asset-level exit');
+    expect(source).toContain('initiated by the vehicle operator');
   });
 
   it('BuyoutScreen does not navigate away as success when sharesNeeded <= 0', () => {

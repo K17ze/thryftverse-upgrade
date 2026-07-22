@@ -43,8 +43,14 @@ export function CoOwnTrustPanel({
 
   if (items.length === 0) return null;
 
+  const a11yLabel = `Trust and protection. ${items.map((i) => `${i.label}: ${i.value}`).join('. ')}`;
+
   return (
-    <View style={[styles.root, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+    <View
+      style={[styles.root, { backgroundColor: colors.surface, borderColor: colors.border }]}
+      accessibilityRole="summary"
+      accessibilityLabel={a11yLabel}
+    >
       <Text style={[styles.title, { color: colors.textPrimary }]}>Trust & protection</Text>
       <View style={styles.itemsList}>
         {items.map((item, i) => (
@@ -68,7 +74,7 @@ export function CoOwnTrustPanel({
 const styles = StyleSheet.create({
   root: {
     borderRadius: Radius.lg,
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
     gap: Space.sm,
   },

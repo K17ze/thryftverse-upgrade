@@ -1,23 +1,29 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Svg, { Path, Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
+import Svg, { Path, Defs, LinearGradient, Stop, Rect, Circle } from 'react-native-svg';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
-import { useFormattedPrice } from '../../hooks/useFormattedPrice';
-import { listCoOwnAssetOrders, MarketCoOwnOrder } from '../../services/marketApi';
+import { listCoOwnExecutions, MarketCoOwnExecution } from '../../services/marketApi';
 import { haptics } from '../../utils/haptics';
+import { formatCoOwnIze } from '../../utils/currency';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
 type Period = '1D' | '1W' | '1M' | 'ALL';
+type ChartMode = 'line' | 'candle';
 
 export interface CoOwnPriceChartProps {
   assetId: string;
   unitPriceGbp: number;
   marketMovePct24h: number;
   volume24hGbp: number;
+  // Phase 2: last-age + 24h change timestamp
+  lastAgeSeconds?: number | null;
+  change24hTimestamp?: string;
+  // Phase 2: candle chart delegate
+  candleChart?: React.ReactNode;
 }
 
 interface PricePoint {
@@ -36,39 +42,17 @@ const PERIOD_MS: Record<Period, number> = {
 
 const PERIOD_LABELS: Period[] = ['1D', '1W', '1M', 'ALL'];
 
-/** Build a price series from filled orders within the period window. */
-function buildPriceSeries(orders: MarketCoOwnOrder[], period: Period, currentPrice: number): PricePoint[] {
+/** Build a price series only from authoritative settled executions. */
+function buildPriceSeries(executions: MarketCoOwnExecution[], period: Period): PricePoint[] {
   const now = Date.now();
   const cutoff = now - PERIOD_MS[period];
-  const filled = orders
-    .filter((o) => o.status === 'filled')
-    .filter((o) => new Date(o.createdAt).getTime() >= cutoff)
-    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-
-  if (filled.length === 0) {
-    // No trades in window — return a flat line at the current price
-    return [
-      { timestamp: now - PERIOD_MS[period === 'ALL' ? '1W' : period], price: currentPrice },
-      { timestamp: now, price: currentPrice },
-    ];
-  }
-
-  const points: PricePoint[] = filled.map((o) => ({
-    timestamp: new Date(o.createdAt).getTime(),
-    price: o.unitPriceGbp,
-  }));
-
-  // Anchor the start to the period cutoff with the first known price
-  if (points[0].timestamp > cutoff + 60_000) {
-    points.unshift({ timestamp: Math.max(cutoff, points[0].timestamp - 3600_000), price: points[0].price });
-  }
-
-  // Anchor the end to now with the current price
-  if (points[points.length - 1].timestamp < now - 60_000) {
-    points.push({ timestamp: now, price: currentPrice });
-  }
-
-  return points;
+  return executions
+    .filter((execution) => new Date(execution.executedAt).getTime() >= cutoff)
+    .sort((a, b) => new Date(a.executedAt).getTime() - new Date(b.executedAt).getTime())
+    .map((execution) => ({
+      timestamp: new Date(execution.executedAt).getTime(),
+      price: execution.unitPriceGbp,
+    }));
 }
 
 /** Build an SVG path string for the sparkline. */
@@ -115,6 +99,17 @@ function buildAreaPath(points: PricePoint[], width: number, height: number, padd
 
 // ── Component ────────────────────────────────────────────────────────────────
 
+/** Format last-trade age in seconds to a human-readable string. */
+function formatLastAge(ageSeconds: number): string {
+  if (ageSeconds < 60) return 'just now';
+  const mins = Math.floor(ageSeconds / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
 const CHART_WIDTH = 320;
 const CHART_HEIGHT = 120;
 const CHART_PADDING = 8;
@@ -124,11 +119,15 @@ export function CoOwnPriceChart({
   unitPriceGbp,
   marketMovePct24h,
   volume24hGbp,
+  lastAgeSeconds,
+  change24hTimestamp,
+  candleChart,
 }: CoOwnPriceChartProps) {
   const { colors } = useAppTheme();
-  const { formatFromFiat } = useFormattedPrice();
   const [period, setPeriod] = useState<Period>('1W');
-  const [orders, setOrders] = useState<MarketCoOwnOrder[]>([]);
+  const [chartMode, setChartMode] = useState<ChartMode>('line');
+  const [showVolume, setShowVolume] = useState(false);
+  const [executions, setExecutions] = useState<MarketCoOwnExecution[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
 
@@ -136,10 +135,10 @@ export function CoOwnPriceChart({
     let cancelled = false;
     setIsLoading(true);
     setHasError(false);
-    listCoOwnAssetOrders(assetId, { limit: 100 })
+    listCoOwnExecutions(assetId, { limit: 200 })
       .then((fetched) => {
         if (cancelled) return;
-        setOrders(fetched);
+        setExecutions(fetched.items);
       })
       .catch(() => {
         if (cancelled) return;
@@ -152,13 +151,23 @@ export function CoOwnPriceChart({
   }, [assetId]);
 
   const priceSeries = useMemo(
-    () => buildPriceSeries(orders, period, unitPriceGbp),
-    [orders, period, unitPriceGbp],
+    () => buildPriceSeries(executions, period),
+    [executions, period],
   );
 
   const handlePeriodChange = useCallback((p: Period) => {
     setPeriod(p);
     haptics.tap();
+  }, []);
+
+  const handleModeToggle = useCallback(() => {
+    setChartMode((m) => m === 'line' ? 'candle' : 'line');
+    haptics.tap();
+  }, []);
+
+  const handleVolumeToggle = useCallback(() => {
+    setShowVolume((v) => !v);
+    haptics.selection();
   }, []);
 
   const isPositive = marketMovePct24h >= 0;
@@ -175,22 +184,52 @@ export function CoOwnPriceChart({
     [priceSeries],
   );
 
-  const tradeCount = priceSeries.length - 2; // Subtract the two anchor points
+  const tradeCount = priceSeries.length;
 
   const periodHigh = priceSeries.length > 0 ? Math.max(...priceSeries.map((p) => p.price)) : unitPriceGbp;
   const periodLow = priceSeries.length > 0 ? Math.min(...priceSeries.map((p) => p.price)) : unitPriceGbp;
 
+  // Phase 2: last-age badge
+  const lastAgeLabel = lastAgeSeconds != null ? formatLastAge(lastAgeSeconds) : null;
+  const isStaleLast = lastAgeSeconds != null && lastAgeSeconds > 24 * 60 * 60;
+
+  // Phase 2: textual summary for screen readers
+  const textualSummary = useMemo(() => {
+    const direction = marketMovePct24h >= 0 ? 'up' : 'down';
+    const agePart = lastAgeLabel ? `, last trade ${lastAgeLabel}` : '';
+    const timestampPart = change24hTimestamp ? `, as of ${change24hTimestamp}` : '';
+    return `1ZE last ${unitPriceGbp.toFixed(2)}, ${direction} ${Math.abs(marketMovePct24h).toFixed(1)}% over 24h${agePart}${timestampPart}, ${Math.max(0, tradeCount)} trades in range.`;
+  }, [unitPriceGbp, marketMovePct24h, lastAgeLabel, change24hTimestamp, tradeCount]);
+
   return (
     <View style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      {/* Header: current price + 24h change */}
+      {/* Phase 2: textual summary for screen readers */}
+      <Text
+        style={styles.a11ySummary}
+        accessibilityLabel={textualSummary}
+        accessibilityRole="text"
+      >
+        {textualSummary}
+      </Text>
+
+      {/* Header: current price + 24h change + last-age badge */}
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
           <Ionicons name="analytics-outline" size={16} color={colors.textMuted} />
           <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Price</Text>
+          {/* Phase 2: last-age badge */}
+          {lastAgeLabel && (
+            <View style={[styles.lastAgeBadge, { backgroundColor: (isStaleLast ? colors.warning : colors.textMuted) + '22' }]}>
+              <Ionicons name="time-outline" size={10} color={isStaleLast ? colors.warning : colors.textMuted} />
+              <Text style={[styles.lastAgeText, { color: isStaleLast ? colors.warning : colors.textMuted }]}>
+                {lastAgeLabel}
+              </Text>
+            </View>
+          )}
         </View>
         <View style={styles.headerRight}>
           <Text style={[styles.currentPrice, { color: colors.textPrimary }]}>
-            {formatFromFiat(unitPriceGbp, 'GBP')}
+            {formatCoOwnIze(unitPriceGbp)}
           </Text>
           <View style={[styles.changeBadge, { backgroundColor: `${changeColor}15` }]}>
             <Ionicons
@@ -205,43 +244,95 @@ export function CoOwnPriceChart({
         </View>
       </View>
 
-      {/* Period selector */}
-      <View style={styles.periodRow}>
-        {PERIOD_LABELS.map((p) => {
-          const isActive = period === p;
-          return (
-            <AnimatedPressable
-              key={p}
-              style={[
-                styles.periodChip,
-                { borderColor: colors.border },
-                isActive && { backgroundColor: `${colors.brand}12`, borderColor: colors.brand },
-              ]}
-              onPress={() => handlePeriodChange(p)}
-              activeOpacity={0.8}
-              scaleValue={0.97}
-              accessibilityRole="button"
-              accessibilityLabel={`Price chart period: ${p}`}
-              accessibilityState={{ selected: isActive }}
-            >
-              <Text
+      {/* Phase 2: 24h change timestamp */}
+      {change24hTimestamp && (
+        <Text style={[styles.changeTimestamp, { color: colors.textMuted }]} numberOfLines={1}>
+          as of {change24hTimestamp}
+        </Text>
+      )}
+
+      {/* Controls row: period selector + mode toggle + volume toggle */}
+      <View style={styles.controlsRow}>
+        <View style={styles.periodRow}>
+          {PERIOD_LABELS.map((p) => {
+            const isActive = period === p;
+            return (
+              <AnimatedPressable
+                key={p}
                 style={[
-                  styles.periodChipText,
-                  { color: colors.textSecondary },
-                  isActive && { color: colors.brand },
+                  styles.periodChip,
+                  { borderColor: colors.border },
+                  isActive && { backgroundColor: `${colors.brand}12`, borderColor: colors.brand },
                 ]}
+                onPress={() => handlePeriodChange(p)}
+                activeOpacity={0.8}
+                scaleValue={0.97}
+                accessibilityRole="button"
+                accessibilityLabel={`Price chart period: ${p}`}
+                accessibilityState={{ selected: isActive }}
               >
-                {p}
-              </Text>
+                <Text
+                  style={[
+                    styles.periodChipText,
+                    { color: colors.textSecondary },
+                    isActive && { color: colors.brand },
+                  ]}
+                >
+                  {p}
+                </Text>
+              </AnimatedPressable>
+            );
+          })}
+        </View>
+        <View style={styles.toggleRow}>
+          {/* Phase 2: volume toggle */}
+          <AnimatedPressable
+            style={[
+              styles.toggleBtn,
+              { borderColor: colors.border },
+              showVolume && { backgroundColor: `${colors.brand}12`, borderColor: colors.brand },
+            ]}
+            onPress={handleVolumeToggle}
+            activeOpacity={0.8}
+            scaleValue={0.95}
+            accessibilityRole="button"
+            accessibilityLabel={showVolume ? 'Hide volume bars' : 'Show volume bars'}
+            accessibilityState={{ selected: showVolume }}
+          >
+            <Ionicons name="stats-chart-outline" size={13} color={showVolume ? colors.brand : colors.textMuted} />
+          </AnimatedPressable>
+          {/* Phase 2: line/candle toggle */}
+          {candleChart && (
+            <AnimatedPressable
+              style={[
+                styles.toggleBtn,
+                { borderColor: colors.border },
+                chartMode === 'candle' && { backgroundColor: `${colors.brand}12`, borderColor: colors.brand },
+              ]}
+              onPress={handleModeToggle}
+              activeOpacity={0.8}
+              scaleValue={0.95}
+              accessibilityRole="button"
+              accessibilityLabel={chartMode === 'candle' ? 'Switch to line chart' : 'Switch to candle chart'}
+              accessibilityState={{ selected: chartMode === 'candle' }}
+            >
+              <Ionicons
+                name={chartMode === 'candle' ? 'analytics-outline' : 'analytics'}
+                size={13}
+                color={chartMode === 'candle' ? colors.brand : colors.textMuted}
+              />
             </AnimatedPressable>
-          );
-        })}
+          )}
+        </View>
       </View>
 
       {/* Chart area */}
-      {isLoading ? (
+      {chartMode === 'candle' && candleChart ? (
+        candleChart
+      ) : isLoading ? (
         <View style={styles.chartLoading}>
-          <ActivityIndicator size="small" color={colors.textMuted} />
+          <View style={[styles.skeletonLine, { backgroundColor: colors.surfaceAlt, width: '60%' }]} />
+          <View style={[styles.skeletonArea, { backgroundColor: colors.surfaceAlt }]} />
         </View>
       ) : hasError ? (
         <View style={styles.chartEmpty}>
@@ -249,15 +340,20 @@ export function CoOwnPriceChart({
           <Text style={[styles.chartEmptyText, { color: colors.textMuted }]}>
             Unable to load price data
           </Text>
+          <Text style={[styles.chartEmptySubtext, { color: colors.textSecondary }]}>
+            Tap a period to retry, or check your connection.
+          </Text>
         </View>
-      ) : priceSeries.length < 3 && tradeCount <= 0 ? (
+      ) : priceSeries.length < 2 ? (
         <View style={styles.chartEmpty}>
           <Ionicons name="bar-chart-outline" size={24} color={colors.textMuted} />
           <Text style={[styles.chartEmptyText, { color: colors.textMuted }]}>
-            No trades in this period yet
+            {tradeCount === 0 ? 'No executions in this period' : 'One execution in this period'}
           </Text>
-          <Text style={[styles.chartEmptySubtext, { color: colors.textMuted }]}>
-            Price reflects the current listing price
+          <Text style={[styles.chartEmptySubtext, { color: colors.textSecondary }]}>
+            {tradeCount === 0
+              ? 'A chart appears only after real settled trades. The listing price is not fabricated as history.'
+              : 'One settled execution is shown in market activity; a trend needs at least two executions.'}
           </Text>
         </View>
       ) : (
@@ -282,7 +378,29 @@ export function CoOwnPriceChart({
                 strokeLinecap="round"
               />
             ) : null}
+            {/* Phase 2: sparse-trade marks — discrete dots at each trade point */}
+            {priceSeries.map((point, i) => {
+              const timestamps = priceSeries.map((p) => p.timestamp);
+              const prices = priceSeries.map((p) => p.price);
+              const minT = Math.min(...timestamps);
+              const maxT = Math.max(...timestamps);
+              const minP = Math.min(...prices);
+              const maxP = Math.max(...prices);
+              const tRange = maxT - minT || 1;
+              const pRange = maxP - minP || 1;
+              const chartW = CHART_WIDTH - CHART_PADDING * 2;
+              const chartH = CHART_HEIGHT - CHART_PADDING * 2;
+              const px = CHART_PADDING + ((point.timestamp - minT) / tRange) * chartW;
+              const py = CHART_PADDING + chartH - ((point.price - minP) / pRange) * chartH;
+              return <Circle key={`mark-${i}`} cx={px} cy={py} r={2} fill={sparklineColor} />;
+            })}
           </Svg>
+          {/* Phase 2: sparse-trade note */}
+          {tradeCount > 0 && tradeCount <= 5 && (
+            <Text style={[styles.sparseNote, { color: colors.textMuted }]} numberOfLines={1}>
+              {tradeCount} {tradeCount === 1 ? 'trade' : 'trades'} — sparse observations rendered as discrete marks
+            </Text>
+          )}
         </View>
       )}
 
@@ -291,21 +409,21 @@ export function CoOwnPriceChart({
         <View style={styles.footerItem}>
           <Text style={[styles.footerLabel, { color: colors.textMuted }]}>High</Text>
           <Text style={[styles.footerValue, { color: colors.textPrimary }]}>
-            {formatFromFiat(periodHigh, 'GBP')}
+            {formatCoOwnIze(periodHigh)}
           </Text>
         </View>
         <View style={[styles.footerDivider, { backgroundColor: colors.border }]} />
         <View style={styles.footerItem}>
           <Text style={[styles.footerLabel, { color: colors.textMuted }]}>Low</Text>
           <Text style={[styles.footerValue, { color: colors.textPrimary }]}>
-            {formatFromFiat(periodLow, 'GBP')}
+            {formatCoOwnIze(periodLow)}
           </Text>
         </View>
         <View style={[styles.footerDivider, { backgroundColor: colors.border }]} />
         <View style={styles.footerItem}>
           <Text style={[styles.footerLabel, { color: colors.textMuted }]}>24h volume</Text>
           <Text style={[styles.footerValue, { color: colors.textPrimary }]}>
-            {formatFromFiat(volume24hGbp, 'GBP')}
+            {formatCoOwnIze(volume24hGbp)}
           </Text>
         </View>
         <View style={[styles.footerDivider, { backgroundColor: colors.border }]} />
@@ -353,6 +471,7 @@ const styles = StyleSheet.create({
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.3,
+    fontVariant: ['tabular-nums'],
   },
   changeBadge: {
     flexDirection: 'row',
@@ -365,18 +484,21 @@ const styles = StyleSheet.create({
   changeText: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
+    fontVariant: ['tabular-nums'],
   },
   periodRow: {
     flexDirection: 'row',
     gap: 6,
   },
   periodChip: {
-    paddingVertical: 5,
-    paddingHorizontal: Space.sm,
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.md,
     borderRadius: Radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
     minWidth: 44,
+    minHeight: 44,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   periodChipText: {
     fontSize: Type.meta.size,
@@ -395,6 +517,16 @@ const styles = StyleSheet.create({
     height: CHART_HEIGHT,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: Space.sm,
+  },
+  skeletonLine: {
+    height: 12,
+    borderRadius: Radius.sm,
+  },
+  skeletonArea: {
+    width: '90%',
+    height: CHART_HEIGHT - 40,
+    borderRadius: Radius.md,
   },
   chartEmpty: {
     height: CHART_HEIGHT,
@@ -433,5 +565,62 @@ const styles = StyleSheet.create({
   footerValue: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
+    fontVariant: ['tabular-nums'],
+  },
+  // ── Phase 2: a11y summary (visually hidden) ──
+  a11ySummary: {
+    position: 'absolute',
+    width: 1,
+    height: 1,
+    overflow: 'hidden',
+    opacity: 0,
+  },
+  // ── Phase 2: last-age badge ──
+  lastAgeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: Radius.sm,
+    marginLeft: 4,
+  },
+  lastAgeText: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.medium,
+    letterSpacing: 0.1,
+  },
+  // ── Phase 2: change timestamp ──
+  changeTimestamp: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.regular,
+    letterSpacing: 0.1,
+  },
+  // ── Phase 2: controls row ──
+  controlsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: Space.sm,
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  toggleBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // ── Phase 2: sparse-trade note ──
+  sparseNote: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.regular,
+    letterSpacing: 0.1,
+    textAlign: 'center',
+    marginTop: Space.xs,
   },
 });

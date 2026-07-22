@@ -202,6 +202,8 @@ export async function executePublication(
         listingId,
         imageUrl: url,
         sortOrder: i,
+        mediaWidth: m.width,
+        mediaHeight: m.height,
       });
       ctx.attachedAssetIds.push(m.id);
     }

@@ -352,7 +352,7 @@ interface StoreState {
   coOwnRuntime: Record<string, CoOwnRuntimeState>;
   coOwnCompliance: CoOwnComplianceProfile;
   updateCoOwnCompliance: (updates: Partial<CoOwnComplianceProfile>) => void;
-  checkCoOwnEligibility: (settlementMode?: 'GBP' | 'TVUSD' | 'HYBRID') => CoOwnEligibilityResult;
+  checkCoOwnEligibility: (settlementMode?: 'GBP' | 'TVUSD' | 'HYBRID' | 'ONEZE') => CoOwnEligibilityResult;
   buyCoOwnUnits: (asset: CoOwnAsset, buyerId: string, units: number) => TradeActionResult;
   sellCoOwnUnits: (asset: CoOwnAsset, sellerId: string, units: number) => TradeActionResult;
   marketLedger: MarketLedgerEntry[];
@@ -860,7 +860,7 @@ export const useStore = create<StoreState>()(
         ...updates,
       },
     })),
-  checkCoOwnEligibility: (_settlementMode = 'HYBRID') => {
+  checkCoOwnEligibility: (_settlementMode = 'ONEZE') => {
     return { ok: true };
   },
   buyCoOwnUnits: (asset, buyerId, units) => {
@@ -1783,7 +1783,23 @@ export const useStore = create<StoreState>()(
     {
       name: 'thryftverse-store',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 1,
+      version: 2,
+      migrate: (persistedState, version) => {
+        const state = persistedState as Partial<StoreState>;
+        if (version < 2 && ENABLE_RUNTIME_MOCKS && state.conversations) {
+          return {
+            ...state,
+            conversations: state.conversations.map((conversation) => {
+              if (conversation.participantProfiles?.length) return conversation;
+              const canonicalMock = MOCK_CONVERSATIONS.find((item) => item.id === conversation.id);
+              return canonicalMock?.participantProfiles?.length
+                ? { ...conversation, participantProfiles: canonicalMock.participantProfiles }
+                : conversation;
+            }),
+          };
+        }
+        return state;
+      },
       partialize: (state) => ({
         // Only persist user-critical data, not transient UI state
         wishlist: state.wishlist,

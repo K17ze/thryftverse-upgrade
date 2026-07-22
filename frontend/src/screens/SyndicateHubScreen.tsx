@@ -1,39 +1,49 @@
 import React from 'react';
-import { View, Text, StyleSheet, useWindowDimensions, RefreshControl } from 'react-native';
+import {
+  FlatList,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
-import { listCoOwnAssets, fetchCoOwnHoldings } from '../services/marketApi';
+import { fetchCoOwnHoldings, listCoOwnAssets } from '../services/marketApi';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useToast } from '../context/ToastContext';
 import { useBackendData } from '../context/BackendDataContext';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Radius, Space, Type, Typography } from '../theme/designTokens';
 import { haptics } from '../utils/haptics';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { HorizontalRail } from '../components/HorizontalRail';
 import {
-  CoOwnMarketHeader,
-  type CoOwnMarketHeaderAction,
-  CoOwnFeaturedAsset,
-  CoOwnAssetTile,
+  CoOwnCompactPositionCard,
   CoOwnEducationCard,
   CoOwnHubSkeleton,
+  CoOwnInstrumentCard,
+  CoOwnMarketHeader,
+  CoOwnMarketHighlightsCarousel,
+  CoOwnOfflineBanner,
+  CoOwnReconciliationBanner,
   CoOwnStateCanvas,
+  COOWN_POSITION_CARD_WIDTH,
   type CoOwnAssetStatus,
+  type CoOwnMarketHeaderAction,
+  type CoOwnMarketHighlight,
 } from '../components/coown';
+import { useConnectivity } from '../hooks/useConnectivity';
+import { formatCoOwnIze } from '../utils/currency';
 
 type NavT = StackNavigationProp<RootStackParamList>;
-
 type SortOption = 'newest' | 'available' | 'allocation';
+type HubSegment = 'active' | 'new_issues' | 'watchlist';
 
 interface HubAsset {
   id: string;
@@ -41,11 +51,12 @@ interface HubAsset {
   issuerId: string;
   title: string;
   image: string;
+  category: string;
   totalUnits: number;
   availableUnits: number;
   unitPriceGBP: number;
   unitPriceStable: number;
-  settlementMode: 'GBP' | 'TVUSD' | 'HYBRID';
+  settlementMode: 'GBP' | 'TVUSD' | 'HYBRID' | 'ONEZE';
   issuerJurisdiction?: string;
   holders: number;
   yourUnits: number;
@@ -55,66 +66,118 @@ interface HubAsset {
   createdAt: string;
 }
 
+type HubRow =
+  | { kind: 'highlights'; key: 'highlights' }
+  | { kind: 'tabs'; key: 'tabs' }
+  | { kind: 'positions'; key: 'positions' }
+  | { kind: 'instrumentsHeader'; key: 'instruments-header' }
+  | { kind: 'instrumentRow'; key: string; assets: HubAsset[] }
+  | { kind: 'instrumentsEmpty'; key: 'instruments-empty' }
+  | { kind: 'remaining'; key: 'remaining' };
+
+const SEGMENTS: HubSegment[] = ['active', 'new_issues', 'watchlist'];
+const SORT_OPTIONS: SortOption[] = ['newest', 'available', 'allocation'];
+const POSITION_CARD_WIDTH = COOWN_POSITION_CARD_WIDTH;
+const POSITION_CARD_GAP = 12;
+const POSITION_SNAP_INTERVAL = POSITION_CARD_WIDTH + POSITION_CARD_GAP;
+const SEGMENT_LABELS: Record<HubSegment, string> = {
+  active: 'Active',
+  new_issues: 'New issues',
+  watchlist: 'Watchlist',
+};
 const SORT_LABELS: Record<SortOption, string> = {
   newest: 'Newest',
-  available: 'Most available',
-  allocation: 'Most allocated',
+  available: 'Availability',
+  allocation: 'Allocation',
 };
+const SECTION_TITLES: Record<HubSegment, string> = {
+  active: 'Open markets',
+  new_issues: 'New issues',
+  watchlist: 'Watchlist',
+};
+
+function normalizeInitialSegment(value: 'active' | 'auctions' | 'new_issues' | 'watchlist' | undefined): HubSegment {
+  return value === 'new_issues' || value === 'watchlist' ? value : 'active';
+}
+
+function getFocalPoint(category: string): { x: number; y: number } {
+  const normalized = category.toLowerCase();
+  if (normalized.includes('vehicle') || normalized.includes('car')) return { x: 0.5, y: 0.58 };
+  if (normalized.includes('bag') || normalized.includes('shoe')) return { x: 0.5, y: 0.56 };
+  if (normalized.includes('watch') || normalized.includes('jewel') || normalized.includes('art')) return { x: 0.5, y: 0.5 };
+  return { x: 0.5, y: 0.46 };
+}
+
+function getStatus(asset: HubAsset): CoOwnAssetStatus {
+  if (!asset.isOpen) return 'paused';
+  return asset.availableUnits > 0 ? 'open' : 'closed';
+}
+
+function getStatusLabel(asset: HubAsset): string {
+  const status = getStatus(asset);
+  return status === 'open' ? 'Available' : status === 'paused' ? 'Paused' : 'Fully allocated';
+}
 
 export default function CoOwnHubScreen() {
   const navigation = useNavigation<NavT>();
+  const route = useRoute<RouteProp<RootStackParamList, 'CoOwnHub'>>();
   const currentUser = useStore((state) => state.currentUser);
+  const coOwnWatchlist = useStore((state) => state.coOwnWatchlist);
+  const toggleCoOwnWatch = useStore((state) => state.toggleCoOwnWatch);
   const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
-  const reducedMotion = useReducedMotion();
   const { colors, isDark } = useAppTheme();
   const { width: screenWidth } = useWindowDimensions();
   const { listings } = useBackendData();
+  const { isOffline } = useConnectivity();
   const actingUserId = currentUser?.id;
 
   const [query, setQuery] = React.useState('');
+  const [isSearchExpanded, setIsSearchExpanded] = React.useState(false);
+  const [isSortExpanded, setIsSortExpanded] = React.useState(false);
   const [sortBy, setSortBy] = React.useState<SortOption>('newest');
+  const [activeSegment, setActiveSegment] = React.useState<HubSegment>(normalizeInitialSegment(route.params?.initialSegment));
   const [remoteAssets, setRemoteAssets] = React.useState<HubAsset[]>([]);
   const [holdings, setHoldings] = React.useState<Map<string, { units: number; avgEntry: number; realized: number }>>(new Map());
   const [isSyncing, setIsSyncing] = React.useState(true);
   const [isError, setIsError] = React.useState(false);
+  const [holdingsError, setHoldingsError] = React.useState(false);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
 
   const loadData = React.useCallback(() => {
-    if (!actingUserId) { setIsSyncing(false); return; }
+    if (!actingUserId) {
+      setIsSyncing(false);
+      return;
+    }
     let cancelled = false;
     setIsSyncing(true);
     setIsError(false);
+    setHoldingsError(false);
 
     Promise.all([
       listCoOwnAssets({ limit: 120 }),
-      fetchCoOwnHoldings(actingUserId).catch(() => []),
+      fetchCoOwnHoldings(actingUserId)
+        .then((items) => ({ items, failed: false }))
+        .catch(() => ({ items: [], failed: true })),
     ])
-      .then(([items, holdingItems]) => {
+      .then(([items, holdingResult]) => {
         if (cancelled) return;
         const mapped: HubAsset[] = items.map((item) => {
-          // Image fallback hierarchy:
-          // 1. asset.imageUrl (direct)
-          // 2. linked listing cover image (listing.images[0])
-          // 3. empty string → CoOwnAssetTile shows fallback graphic
-          let resolvedImage = item.imageUrl ?? '';
-          if (!resolvedImage && item.listingId) {
-            const linkedListing = listings.find((l) => l.id === item.listingId);
-            if (linkedListing?.images?.length) {
-              resolvedImage = linkedListing.images[0];
-            }
-          }
+          const linkedListing = item.listingId
+            ? listings.find((listing) => listing.id === item.listingId)
+            : undefined;
           return {
             id: item.id,
             listingId: item.listingId,
             issuerId: item.issuerId,
             title: item.title,
-            image: resolvedImage,
+            image: item.imageUrl || linkedListing?.images?.[0] || '',
+            category: linkedListing?.category || linkedListing?.subcategory || 'Luxury asset',
             totalUnits: item.totalUnits,
             availableUnits: item.availableUnits,
             unitPriceGBP: item.unitPriceGbp,
             unitPriceStable: item.unitPriceStable,
-            settlementMode: item.settlementMode as 'GBP' | 'TVUSD' | 'HYBRID',
+            settlementMode: item.settlementMode as HubAsset['settlementMode'],
             issuerJurisdiction: item.issuerJurisdiction ?? undefined,
             holders: item.holders,
             yourUnits: 0,
@@ -123,11 +186,16 @@ export default function CoOwnHubScreen() {
           };
         });
         const holdingsMap = new Map<string, { units: number; avgEntry: number; realized: number }>();
-        for (const h of holdingItems) {
-          holdingsMap.set(h.assetId, { units: h.unitsOwned, avgEntry: h.avgEntryPriceGbp, realized: h.realizedPnlGbp });
+        for (const holding of holdingResult.items) {
+          holdingsMap.set(holding.assetId, {
+            units: holding.unitsOwned,
+            avgEntry: holding.avgEntryPriceGbp,
+            realized: holding.realizedPnlGbp,
+          });
         }
         setRemoteAssets(mapped);
         setHoldings(holdingsMap);
+        setHoldingsError(holdingResult.failed);
       })
       .catch(() => {
         if (cancelled) return;
@@ -135,84 +203,56 @@ export default function CoOwnHubScreen() {
         setIsError(true);
       })
       .finally(() => {
-        if (!cancelled) setIsSyncing(false);
+        if (!cancelled) {
+          setIsSyncing(false);
+          setIsRefreshing(false);
+        }
       });
 
     return () => { cancelled = true; };
-  }, [actingUserId, show, listings]);
+  }, [actingUserId, listings, show]);
 
   React.useEffect(() => {
     const cleanup = loadData();
     return cleanup;
   }, [loadData]);
 
+  React.useEffect(() => {
+    if (route.params?.initialSegment) {
+      setActiveSegment(normalizeInitialSegment(route.params.initialSegment));
+    }
+  }, [route.params?.initialSegment]);
+
   const handleBack = React.useCallback(() => {
-    if (navigation.canGoBack()) { navigation.goBack(); return; }
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
     navigation.navigate('MainTabs');
   }, [navigation]);
 
   const handleRefresh = React.useCallback(() => {
     setIsRefreshing(true);
     loadData();
-    setTimeout(() => setIsRefreshing(false), 800);
   }, [loadData]);
 
   const marketAssets = React.useMemo(
     () => remoteAssets.map((asset) => {
       const holding = holdings.get(asset.id);
-      if (!holding) return asset;
-      return {
-        ...asset,
-        yourUnits: holding.units,
-        avgEntryPriceGBP: holding.avgEntry,
-        realizedProfitGBP: holding.realized,
-      };
+      return holding
+        ? {
+            ...asset,
+            yourUnits: holding.units,
+            avgEntryPriceGBP: holding.avgEntry,
+            realizedProfitGBP: holding.realized,
+          }
+        : asset;
     }),
-    [remoteAssets, holdings]
+    [holdings, remoteAssets]
   );
 
-  const filteredAssets = React.useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    const filtered = marketAssets.filter((asset) => {
-      if (!normalized) return true;
-      return (
-        asset.title.toLowerCase().includes(normalized) ||
-        (asset.issuerJurisdiction ?? '').toLowerCase().includes(normalized)
-      );
-    });
-    const sorted = [...filtered];
-    if (sortBy === 'allocation') {
-      sorted.sort((a, b) => {
-        const aAlloc = a.totalUnits > 0 ? (a.totalUnits - a.availableUnits) / a.totalUnits : 0;
-        const bAlloc = b.totalUnits > 0 ? (b.totalUnits - b.availableUnits) / b.totalUnits : 0;
-        return bAlloc - aAlloc;
-      });
-    } else if (sortBy === 'available') {
-      sorted.sort((a, b) => b.availableUnits - a.availableUnits);
-    } else {
-      sorted.sort((a, b) => b.createdAt?.localeCompare(a.createdAt ?? '') ?? 0);
-    }
-    return sorted;
-  }, [marketAssets, query, sortBy]);
-
-  const featuredAsset = React.useMemo(() => {
-    if (filteredAssets.length === 0) return null;
-    const open = filteredAssets.filter((a) => a.isOpen && a.availableUnits > 0);
-    if (open.length === 0) return filteredAssets[0];
-    return open.reduce((best, current) => {
-      const bestAllocated = best.totalUnits - best.availableUnits;
-      const currentAllocated = current.totalUnits - current.availableUnits;
-      return currentAllocated > bestAllocated ? current : best;
-    });
-  }, [filteredAssets]);
-
-  const discoveryAssets = React.useMemo(() => {
-    if (!featuredAsset) return [];
-    return filteredAssets.filter((a) => a.id !== featuredAsset.id);
-  }, [filteredAssets, featuredAsset]);
-
   const yourPositions = React.useMemo(
-    () => marketAssets.filter((a) => a.yourUnits > 0),
+    () => marketAssets.filter((asset) => asset.yourUnits > 0),
     [marketAssets]
   );
 
@@ -228,111 +268,515 @@ export default function CoOwnHubScreen() {
       label: 'Activity',
       onPress: () => navigation.navigate('CoOwnOrderHistory'),
     },
-    {
-      icon: 'receipt-outline',
-      label: 'Market ledger',
-      onPress: () => navigation.navigate('MarketLedger'),
-    },
-    {
-      icon: 'add',
-      label: 'Issue a Co-Own',
-      variant: 'primary',
-      onPress: () => navigation.navigate('CreateCoOwn'),
-    },
   ], [navigation, yourPositions.length]);
 
-  // ── Horizontal rail data: newest, most available, most allocated ──
-  const newestRail = React.useMemo(() => {
-    const open = marketAssets.filter((a) => a.isOpen && a.availableUnits > 0);
-    return [...open]
-      .sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))
-      .slice(0, 10);
-  }, [marketAssets]);
+  const segmentCounts = React.useMemo<Record<HubSegment, number>>(() => {
+    const now = Date.now();
+    return {
+      active: marketAssets.filter((asset) => asset.isOpen && asset.availableUnits > 0).length,
+      new_issues: marketAssets.filter((asset) => {
+        const createdAt = new Date(asset.createdAt).getTime();
+        return Number.isFinite(createdAt) && now - createdAt <= 7 * 24 * 60 * 60 * 1000;
+      }).length,
+      watchlist: marketAssets.filter((asset) => coOwnWatchlist.includes(asset.id)).length,
+    };
+  }, [coOwnWatchlist, marketAssets]);
 
-  const mostAvailableRail = React.useMemo(() => {
-    const open = marketAssets.filter((a) => a.isOpen && a.availableUnits > 0);
-    return [...open]
-      .sort((a, b) => b.availableUnits - a.availableUnits)
-      .slice(0, 10);
-  }, [marketAssets]);
+  const filteredAssets = React.useMemo(() => {
+    const now = Date.now();
+    const normalized = query.trim().toLowerCase();
+    const segmentFiltered = marketAssets.filter((asset) => {
+      if (activeSegment === 'active') return asset.isOpen && asset.availableUnits > 0;
+      if (activeSegment === 'watchlist') return coOwnWatchlist.includes(asset.id);
+      const createdAt = new Date(asset.createdAt).getTime();
+      return Number.isFinite(createdAt) && now - createdAt <= 7 * 24 * 60 * 60 * 1000;
+    });
+    const searched = normalized
+      ? segmentFiltered.filter((asset) =>
+          asset.title.toLowerCase().includes(normalized) ||
+          asset.category.toLowerCase().includes(normalized) ||
+          (asset.issuerJurisdiction ?? '').toLowerCase().includes(normalized)
+        )
+      : segmentFiltered;
+    return [...searched].sort((a, b) => {
+      if (sortBy === 'available') return b.availableUnits - a.availableUnits;
+      if (sortBy === 'allocation') {
+        const aAllocation = a.totalUnits > 0 ? (a.totalUnits - a.availableUnits) / a.totalUnits : 0;
+        const bAllocation = b.totalUnits > 0 ? (b.totalUnits - b.availableUnits) / b.totalUnits : 0;
+        return bAllocation - aAllocation;
+      }
+      return (b.createdAt ?? '').localeCompare(a.createdAt ?? '');
+    });
+  }, [activeSegment, coOwnWatchlist, marketAssets, query, sortBy]);
 
-  const mostAllocatedRail = React.useMemo(() => {
-    const open = marketAssets.filter((a) => a.isOpen && a.totalUnits > 0);
-    return [...open]
+  const format1ze = React.useCallback(
+    (value1ze: number) => formatCoOwnIze(value1ze),
+    []
+  );
+
+  const formatLocal = React.useCallback((valueGbp: number) => (
+    formatFromFiat(valueGbp, 'GBP', { displayMode: 'fiat', fiatFractionDigits: 2 })
+  ), [formatFromFiat]);
+
+  const highlightAssets = React.useMemo(() => {
+    const open = marketAssets.filter((asset) => asset.isOpen && asset.availableUnits > 0);
+    const source = open.length > 0 ? open : marketAssets;
+    return [...source]
       .sort((a, b) => {
-        const aPct = (a.totalUnits - a.availableUnits) / a.totalUnits;
-        const bPct = (b.totalUnits - b.availableUnits) / b.totalUnits;
-        return bPct - aPct;
+        const aAllocation = a.totalUnits > 0 ? (a.totalUnits - a.availableUnits) / a.totalUnits : 0;
+        const bAllocation = b.totalUnits > 0 ? (b.totalUnits - b.availableUnits) / b.totalUnits : 0;
+        return bAllocation - aAllocation || (b.createdAt ?? '').localeCompare(a.createdAt ?? '');
       })
-      .slice(0, 10);
+      .slice(0, 12);
   }, [marketAssets]);
 
-  const isSearching = query.trim().length > 0;
+  const highlights = React.useMemo<CoOwnMarketHighlight[]>(() => highlightAssets.map((asset) => {
+    const allocatedPct = asset.totalUnits > 0
+      ? ((asset.totalUnits - asset.availableUnits) / asset.totalUnits) * 100
+      : 0;
+    return {
+      id: asset.id,
+      imageUri: asset.image,
+      title: asset.title,
+      categoryLabel: asset.category,
+      unitPriceLabel: format1ze(asset.unitPriceGBP),
+      localReferenceLabel: formatLocal(asset.unitPriceGBP),
+      availabilityLabel: `${asset.availableUnits} of ${asset.totalUnits} units available`,
+      allocatedPct,
+      statusLabel: getStatusLabel(asset),
+      status: getStatus(asset),
+      focalPoint: getFocalPoint(asset.category),
+    };
+  }), [format1ze, formatLocal, highlightAssets]);
 
-  const gridColumns = screenWidth < 360 ? 1 : 2;
+  const totalPositionValue = React.useMemo(
+    () => yourPositions.reduce((sum, asset) => sum + asset.yourUnits * asset.unitPriceGBP, 0),
+    [yourPositions]
+  );
 
-  // Real market context — no fabricated volume/growth figures
-  const marketContext = React.useMemo(() => {
-    const openItems = marketAssets.filter((a) => a.isOpen && a.availableUnits > 0).length;
-    const totalAvailableUnits = marketAssets.reduce((sum, a) => sum + Math.max(0, a.availableUnits), 0);
-    return { openItems, totalAvailableUnits };
-  }, [marketAssets]);
+  const columns = screenWidth >= 768 ? 3 : screenWidth < 350 ? 1 : 2;
+  const instrumentRows = React.useMemo(() => {
+    const rows: HubAsset[][] = [];
+    for (let index = 0; index < filteredAssets.length; index += columns) {
+      rows.push(filteredAssets.slice(index, index + columns));
+    }
+    return rows;
+  }, [columns, filteredAssets]);
 
-  const formatStatus = (asset: HubAsset): CoOwnAssetStatus => {
-    if (!asset.isOpen) return 'paused';
-    return asset.availableUnits > 0 ? 'open' : 'closed';
-  };
+  const hubRows = React.useMemo<HubRow[]>(() => {
+    const rows: HubRow[] = [
+      { kind: 'highlights', key: 'highlights' },
+      { kind: 'tabs', key: 'tabs' },
+      { kind: 'positions', key: 'positions' },
+      { kind: 'instrumentsHeader', key: 'instruments-header' },
+    ];
+    if (instrumentRows.length === 0) {
+      rows.push({ kind: 'instrumentsEmpty', key: 'instruments-empty' });
+    } else {
+      instrumentRows.forEach((assets, index) => {
+        rows.push({ kind: 'instrumentRow', key: `instruments-${index}-${assets.map((asset) => asset.id).join('-')}`, assets });
+      });
+    }
+    rows.push({ kind: 'remaining', key: 'remaining' });
+    return rows;
+  }, [instrumentRows]);
 
-  // ── Loading state ──
+  const handleHighlightPress = React.useCallback((item: CoOwnMarketHighlight) => {
+    navigation.navigate('AssetDetail', { assetId: item.id });
+  }, [navigation]);
+
+  const renderPosition = React.useCallback(({ item }: { item: HubAsset }) => {
+    const valueGbp = item.yourUnits * item.unitPriceGBP;
+    const costBasisGbp = item.yourUnits * Math.max(0, item.avgEntryPriceGBP ?? 0);
+    const gainLossGbp = valueGbp - costBasisGbp;
+    const gainLossPct = costBasisGbp > 0 ? (gainLossGbp / costBasisGbp) * 100 : null;
+    const ownershipPct = item.totalUnits > 0 ? (item.yourUnits / item.totalUnits) * 100 : 0;
+    const portfolioWeightPct = totalPositionValue > 0 ? (valueGbp / totalPositionValue) * 100 : 0;
+    const sign = gainLossGbp > 0 ? '+' : gainLossGbp < 0 ? '−' : '';
+    return (
+      <CoOwnCompactPositionCard
+        imageUri={item.image}
+        title={item.title}
+        categoryLabel={item.category}
+        unitPriceLabel={format1ze(item.unitPriceGBP)}
+        localReferenceLabel={formatLocal(item.unitPriceGBP)}
+        unitsOwned={item.yourUnits}
+        ownershipPct={ownershipPct}
+        positionValueLabel={format1ze(valueGbp)}
+        gainLossLabel={costBasisGbp > 0 ? `${sign}${format1ze(Math.abs(gainLossGbp))}` : undefined}
+        gainLossPct={gainLossPct}
+        portfolioWeightPct={portfolioWeightPct}
+        focalPoint={getFocalPoint(item.category)}
+        onPress={() => navigation.navigate('AssetDetail', { assetId: item.id })}
+      />
+    );
+  }, [format1ze, formatLocal, navigation, totalPositionValue]);
+
+  const renderTabs = React.useCallback(() => (
+    <View style={[styles.tabsSurface, { backgroundColor: colors.background, borderBottomColor: colors.border }]}> 
+      <View style={styles.tabsRow} accessibilityRole="tablist">
+        {SEGMENTS.map((segment) => {
+          const isActive = activeSegment === segment;
+          return (
+            <AnimatedPressable
+              key={segment}
+              onPress={() => {
+                haptics.selection();
+                setActiveSegment(segment);
+              }}
+              style={styles.tab}
+              scaleValue={0.98}
+              activeOpacity={0.72}
+              accessibilityRole="tab"
+              accessibilityLabel={`${SEGMENT_LABELS[segment]} tab, ${segmentCounts[segment]} items`}
+              accessibilityState={{ selected: isActive }}
+            >
+              <Text
+                style={[
+                  styles.tabText,
+                  {
+                    color: isActive ? colors.textPrimary : colors.textSecondary,
+                    fontFamily: isActive ? Typography.family.semibold : Typography.family.regular,
+                  },
+                ]}
+                maxFontSizeMultiplier={1.35}
+              >
+                {SEGMENT_LABELS[segment]}
+              </Text>
+              {isActive ? <View style={[styles.tabIndicator, { backgroundColor: colors.textPrimary }]} /> : null}
+            </AnimatedPressable>
+          );
+        })}
+      </View>
+    </View>
+  ), [activeSegment, colors, segmentCounts]);
+
+  const renderRow = React.useCallback(({ item }: { item: HubRow }) => {
+    if (item.kind === 'highlights') {
+      return (
+        <View style={styles.highlightsSection}>
+          <View style={styles.highlightsHeading}>
+            <Text style={[styles.sectionEyebrow, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>MARKET HIGHLIGHTS</Text>
+            <Text style={[styles.highlightsHint, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>{highlights.length > 1 ? 'Swipe to explore' : 'Featured market'}</Text>
+          </View>
+          <CoOwnMarketHighlightsCarousel items={highlights} onPressItem={handleHighlightPress} />
+        </View>
+      );
+    }
+
+    if (item.kind === 'tabs') return renderTabs();
+
+    if (item.kind === 'positions') {
+      return (
+        <View style={styles.majorSection}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionHeadingGroup}>
+              <Text style={[styles.sectionEyebrow, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>YOUR PORTFOLIO</Text>
+              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.2}>Positions</Text>
+            </View>
+            <AnimatedPressable
+              onPress={() => navigation.navigate('Portfolio')}
+              style={styles.sectionAction}
+              scaleValue={0.97}
+              activeOpacity={0.72}
+              accessibilityRole="button"
+              accessibilityLabel={`See all ${yourPositions.length} positions`}
+            >
+              <Text style={[styles.sectionActionText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.25}>All {yourPositions.length}</Text>
+              <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+            </AnimatedPressable>
+          </View>
+          {holdingsError ? (
+            <View style={[styles.inlineState, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
+              <View style={styles.inlineStateBody}>
+                <Text style={[styles.inlineStateTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.25}>Positions unavailable</Text>
+                <Text style={[styles.inlineStateText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>Your markets are still available. Retry to load portfolio holdings.</Text>
+              </View>
+              <AnimatedPressable
+                onPress={loadData}
+                style={[styles.inlineRetry, { borderColor: colors.border }]}
+                accessibilityRole="button"
+                accessibilityLabel="Retry loading positions"
+              >
+                <Text style={[styles.inlineRetryText, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.2}>Retry</Text>
+              </AnimatedPressable>
+            </View>
+          ) : yourPositions.length > 0 ? (
+            <FlatList
+              data={yourPositions}
+              renderItem={renderPosition}
+              keyExtractor={(position) => position.id}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.positionsContent}
+              ItemSeparatorComponent={() => <View style={styles.positionSeparator} />}
+              snapToInterval={POSITION_SNAP_INTERVAL}
+              snapToAlignment="start"
+              decelerationRate="fast"
+              disableIntervalMomentum
+              removeClippedSubviews
+              accessibilityLabel="Your positions"
+            />
+          ) : (
+            <View style={[styles.inlineState, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
+              <View style={styles.inlineStateIcon}>
+                <Ionicons name="pie-chart-outline" size={18} color={colors.textMuted} />
+              </View>
+              <View style={styles.inlineStateBody}>
+                <Text style={[styles.inlineStateTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.25}>No positions yet</Text>
+                <Text style={[styles.inlineStateText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>Open an active instrument to review its market and ownership terms.</Text>
+              </View>
+            </View>
+          )}
+        </View>
+      );
+    }
+
+    if (item.kind === 'instrumentsHeader') {
+      return (
+        <View style={styles.instrumentsHeader} accessibilityLabel="Market search and sorting">
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionHeadingGroup}>
+              <Text style={[styles.sectionEyebrow, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>MARKETPLACE</Text>
+              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.2}>{SECTION_TITLES[activeSegment]}</Text>
+            </View>
+            <Text style={[styles.resultCount, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>{filteredAssets.length} {filteredAssets.length === 1 ? 'market' : 'markets'}</Text>
+          </View>
+          <View style={styles.marketControls}>
+            {isSearchExpanded ? (
+              <View style={styles.searchField}>
+                <AppInput
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder="Search markets"
+                  prefix={<Ionicons name="search-outline" size={16} color={colors.textMuted} />}
+                  suffix={
+                    <AnimatedPressable
+                      onPress={() => {
+                        setQuery('');
+                        setIsSearchExpanded(false);
+                        haptics.tap();
+                      }}
+                      style={styles.inputAction}
+                      accessibilityRole="button"
+                      accessibilityLabel="Close market search"
+                    >
+                      <Ionicons name="close" size={17} color={colors.textSecondary} />
+                    </AnimatedPressable>
+                  }
+                  autoFocus
+                  accessibilityLabel="Search open markets"
+                />
+              </View>
+            ) : (
+              <AnimatedPressable
+                onPress={() => {
+                  haptics.tap();
+                  setIsSearchExpanded(true);
+                  setIsSortExpanded(false);
+                }}
+                style={[styles.controlButton, styles.searchControl, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                accessibilityRole="button"
+                accessibilityLabel="Search open markets"
+              >
+                <Ionicons name="search-outline" size={17} color={colors.textSecondary} />
+                <Text style={[styles.controlText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.25}>Search</Text>
+              </AnimatedPressable>
+            )}
+            <AnimatedPressable
+              onPress={() => {
+                haptics.tap();
+                setIsSortExpanded((current) => !current);
+              }}
+              style={[styles.controlButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
+              accessibilityRole="button"
+              accessibilityLabel={`Sort instruments, currently ${SORT_LABELS[sortBy]}`}
+              accessibilityState={{ expanded: isSortExpanded }}
+            >
+              <Ionicons name="swap-vertical-outline" size={17} color={colors.textSecondary} />
+              <Text style={[styles.controlText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.25}>{SORT_LABELS[sortBy]}</Text>
+            </AnimatedPressable>
+          </View>
+          {isSortExpanded ? (
+            <View style={styles.sortOptions}>
+              {SORT_OPTIONS.map((option) => {
+                const selected = sortBy === option;
+                return (
+                  <AnimatedPressable
+                    key={option}
+                    onPress={() => {
+                      setSortBy(option);
+                      setIsSortExpanded(false);
+                      haptics.selection();
+                    }}
+                    style={[
+                      styles.sortOption,
+                      {
+                        backgroundColor: selected ? colors.textPrimary : colors.surfaceAlt,
+                        borderColor: selected ? colors.textPrimary : colors.border,
+                      },
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Sort by ${SORT_LABELS[option]}`}
+                    accessibilityState={{ selected }}
+                  >
+                    <Text style={[styles.sortOptionText, { color: selected ? colors.background : colors.textSecondary }]} maxFontSizeMultiplier={1.25}>
+                      {SORT_LABELS[option]}
+                    </Text>
+                  </AnimatedPressable>
+                );
+              })}
+            </View>
+          ) : null}
+        </View>
+      );
+    }
+
+    if (item.kind === 'instrumentRow') {
+      return (
+        <View style={styles.instrumentRow}>
+          {item.assets.map((asset) => (
+            <CoOwnInstrumentCard
+              key={asset.id}
+              imageUri={asset.image}
+              title={asset.title}
+              categoryLabel={asset.category}
+              unitPriceLabel={format1ze(asset.unitPriceGBP)}
+              localReferenceLabel={formatLocal(asset.unitPriceGBP)}
+              availabilityLabel={`${asset.availableUnits} of ${asset.totalUnits} units`}
+              statusLabel={getStatusLabel(asset)}
+              status={getStatus(asset)}
+              isWatched={coOwnWatchlist.includes(asset.id)}
+              focalPoint={getFocalPoint(asset.category)}
+              onPress={() => navigation.navigate('AssetDetail', { assetId: asset.id })}
+              onToggleWatch={() => toggleCoOwnWatch(asset.id)}
+            />
+          ))}
+          {item.assets.length < columns
+            ? Array.from({ length: columns - item.assets.length }).map((_, index) => <View key={`spacer-${index}`} style={styles.instrumentSpacer} />)
+            : null}
+        </View>
+      );
+    }
+
+    if (item.kind === 'instrumentsEmpty') {
+      const title = activeSegment === 'watchlist'
+        ? 'Your watchlist is empty'
+        : query.trim()
+          ? 'No matching markets'
+          : 'No markets available';
+      const subtitle = activeSegment === 'watchlist'
+        ? 'Use the bookmark control on an instrument to keep it here.'
+        : query.trim()
+          ? 'Try a broader search or change the market tab.'
+          : 'Check another market tab or refresh for the latest listings.';
+      return (
+        <View style={styles.instrumentsEmptyWrap}>
+          <CoOwnStateCanvas
+            variant="empty"
+            title={title}
+            subtitle={subtitle}
+            emptyGraphicVariant="search"
+          />
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.remainingContent}>
+        <AnimatedPressable
+          onPress={() => {
+            haptics.tap();
+            navigation.navigate('CreateCoOwn');
+          }}
+          style={[styles.creatorLink, { borderColor: colors.border }]}
+          accessibilityRole="button"
+          accessibilityLabel="Issue a new Co-Own item"
+        >
+          <View style={[styles.creatorIcon, { backgroundColor: colors.surfaceAlt }]}> 
+            <Ionicons name="add-outline" size={20} color={colors.textSecondary} />
+          </View>
+          <View style={styles.creatorBody}>
+            <Text style={[styles.creatorTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.25}>Issue a Co-Own</Text>
+            <Text style={[styles.creatorText, { color: colors.textSecondary }]} numberOfLines={2} maxFontSizeMultiplier={1.3}>List an eligible luxury asset for shared ownership.</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </AnimatedPressable>
+        <CoOwnEducationCard
+          onLearnMore={() => navigation.navigate('CoOwnOnboarding')}
+          learnMoreLabel="Read full guide"
+        />
+        <AnimatedPressable
+          onPress={() => {
+            haptics.tap();
+            navigation.navigate('MarketLedger');
+          }}
+          style={styles.ledgerLink}
+          accessibilityRole="button"
+          accessibilityLabel="View market ledger"
+        >
+          <Ionicons name="receipt-outline" size={17} color={colors.textSecondary} />
+          <Text style={[styles.ledgerLinkText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.25}>Market ledger</Text>
+          <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+        </AnimatedPressable>
+      </View>
+    );
+  }, [
+    activeSegment,
+    coOwnWatchlist,
+    colors,
+    columns,
+    filteredAssets.length,
+    format1ze,
+    formatLocal,
+    handleHighlightPress,
+    highlights,
+    holdingsError,
+    isSearchExpanded,
+    isSortExpanded,
+    loadData,
+    navigation,
+    query,
+    renderPosition,
+    renderTabs,
+    sortBy,
+    toggleCoOwnWatch,
+    yourPositions,
+  ]);
+
   if (isSyncing && remoteAssets.length === 0) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
         <StatusBar style={isDark ? 'light' : 'dark'} />
-        <CoOwnMarketHeader
-          title="Co-Own"
-          onBack={handleBack}
-          actions={headerActions}
-        />
+        <CoOwnMarketHeader title="Co-Own" onBack={handleBack} actions={headerActions} />
         <CoOwnHubSkeleton />
       </SafeAreaView>
     );
   }
 
-  // ── Error state ──
   if (isError && remoteAssets.length === 0) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
         <StatusBar style={isDark ? 'light' : 'dark'} />
-        <CoOwnMarketHeader
-          title="Co-Own"
-          onBack={handleBack}
-          actions={headerActions}
-        />
-        <CoOwnStateCanvas
-          variant="error"
-          actionLabel="Try again"
-          onAction={loadData}
-        />
+        <CoOwnMarketHeader title="Co-Own" onBack={handleBack} actions={headerActions} />
+        <CoOwnStateCanvas variant="error" actionLabel="Try again" onAction={loadData} />
       </SafeAreaView>
     );
   }
 
-  // ── Empty state ──
   if (remoteAssets.length === 0) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
         <StatusBar style={isDark ? 'light' : 'dark'} />
-        <CoOwnMarketHeader
-          title="Co-Own"
-          onBack={handleBack}
-          actions={headerActions}
-        />
+        <CoOwnMarketHeader title="Co-Own" onBack={handleBack} actions={headerActions} />
         <CoOwnStateCanvas
           variant="empty"
           title="No items yet"
           subtitle="When issuers list items for shared ownership, you will find them here."
           actionLabel="Issue a Co-Own"
-          onAction={() => { haptics.tap(); navigation.navigate('CreateCoOwn'); }}
+          onAction={() => {
+            navigation.navigate('CreateCoOwn');
+          }}
           secondaryActionLabel="Learn how it works"
           onSecondaryAction={() => navigation.navigate('CoOwnOnboarding')}
         />
@@ -343,20 +787,16 @@ export default function CoOwnHubScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
-
-      <CoOwnMarketHeader
-        title="Co-Own"
-        onBack={handleBack}
-        actions={headerActions}
-      />
-
-      <FlashList
-        key={`hub-grid-${gridColumns}`}
-        data={isSearching ? filteredAssets : []}
-        keyExtractor={(item) => item.id}
-        numColumns={gridColumns}
-        contentContainerStyle={styles.listContent}
+      <CoOwnMarketHeader title="Co-Own" onBack={handleBack} actions={headerActions} />
+      <CoOwnOfflineBanner isOffline={isOffline} />
+      <CoOwnReconciliationBanner isActive={false} />
+      <FlatList
+        data={hubRows}
+        renderItem={renderRow}
+        keyExtractor={(item) => item.key}
+        stickyHeaderIndices={[2]}
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
@@ -364,297 +804,10 @@ export default function CoOwnHubScreen() {
             tintColor={colors.textSecondary}
           />
         }
-        ListHeaderComponent={
-          <View>
-            {/* Search */}
-            <View style={styles.searchWrap}>
-              <AppInput
-                value={query}
-                onChangeText={setQuery}
-                placeholder="Search items, brands, categories..."
-                prefix={<Ionicons name="search-outline" size={16} color={colors.textMuted} />}
-                accessibilityLabel="Search Co-Own marketplace"
-              />
-            </View>
-
-
-            {/* Market context — quiet, real data only */}
-            {!isSearching && marketContext.openItems > 0 && (
-              <Text style={[styles.marketContext, { color: colors.textMuted }]} numberOfLines={1}>
-                {marketContext.openItems} {marketContext.openItems === 1 ? 'item' : 'items'} open · {marketContext.totalAvailableUnits} units available
-                {yourPositions.length > 0 ? ` · ${yourPositions.length} ${yourPositions.length === 1 ? 'position' : 'positions'} held` : ''}
-              </Text>
-            )}
-
-            {/* Sort control — only in search mode */}
-            {isSearching && (
-              <View style={styles.sortRow}>
-                {(['newest', 'available', 'allocation'] as SortOption[]).map((opt) => (
-                  <AnimatedPressable
-                    key={opt}
-                    onPress={() => { setSortBy(opt); haptics.selection(); }}
-                    style={[
-                      styles.sortChip,
-                      {
-                        backgroundColor: sortBy === opt ? colors.brand : colors.surfaceAlt,
-                        borderColor: sortBy === opt ? colors.brand : colors.border,
-                      },
-                    ]}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Sort by ${SORT_LABELS[opt]}`}
-                    accessibilityState={{ selected: sortBy === opt }}
-                  >
-                    <Text style={[
-                      styles.sortChipText,
-                      { color: sortBy === opt ? colors.background : colors.textSecondary },
-                    ]} numberOfLines={1}>
-                      {SORT_LABELS[opt]}
-                    </Text>
-                  </AnimatedPressable>
-                ))}
-              </View>
-            )}
-
-            {/* Featured asset — media-first, product desire */}
-            {!isSearching && featuredAsset && (
-              <View style={styles.featuredWrap}>
-                <CoOwnFeaturedAsset
-                  imageUri={featuredAsset.image}
-                  title={featuredAsset.title}
-                  categoryEyebrow="Featured Co-Own"
-                  unitPriceLabel={formatFromFiat(featuredAsset.unitPriceGBP, 'GBP')}
-                  availableUnits={featuredAsset.availableUnits}
-                  totalUnits={featuredAsset.totalUnits}
-                  status={formatStatus(featuredAsset)}
-                  onPress={() => navigation.navigate('AssetDetail', { assetId: featuredAsset.id })}
-                  onAction={() => navigation.navigate('AssetDetail', { assetId: featuredAsset.id })}
-                  actionLabel="View item"
-                />
-              </View>
-            )}
-
-            {/* Your positions preview */}
-            {!isSearching && yourPositions.length > 0 && (
-              <View style={styles.sectionWrap}>
-                <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} numberOfLines={1}>Your positions</Text>
-                  <AnimatedPressable
-                    onPress={() => { haptics.tap(); navigation.navigate('Portfolio'); }}
-                    accessibilityRole="button"
-                    accessibilityLabel="View all positions"
-                  >
-                    <Text style={[styles.sectionLink, { color: colors.textSecondary }]} numberOfLines={1}>All {yourPositions.length}</Text>
-                  </AnimatedPressable>
-                </View>
-                <HorizontalRail
-                  contentContainerStyle={styles.positionsRow}
-                  accessibilityLabel="Your positions"
-                >
-                  {yourPositions.slice(0, 6).map((asset) => (
-                    <View key={asset.id} style={styles.positionTileWrap}>
-                      <CoOwnAssetTile
-                        imageUri={asset.image}
-                        title={asset.title}
-                        unitPriceLabel={formatFromFiat(asset.unitPriceGBP, 'GBP')}
-                        availableUnits={asset.availableUnits}
-                        totalUnits={asset.totalUnits}
-                        status={formatStatus(asset)}
-                        onPress={() => navigation.navigate('AssetDetail', { assetId: asset.id })}
-                      />
-                    </View>
-                  ))}
-                </HorizontalRail>
-              </View>
-            )}
-
-            {/* ── Horizontal rails: Newest, Most available, Most allocated ── */}
-            {!isSearching && newestRail.length > 0 && (
-              <View style={styles.sectionWrap}>
-                <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} numberOfLines={1}>Newest</Text>
-                </View>
-                <HorizontalRail
-                  contentContainerStyle={styles.railContent}
-                  accessibilityLabel="Newest Co-Own items"
-                >
-                  {newestRail.map((asset) => (
-                    <View key={asset.id} style={styles.railTileWrap}>
-                      <CoOwnAssetTile
-                        imageUri={asset.image}
-                        title={asset.title}
-                        unitPriceLabel={formatFromFiat(asset.unitPriceGBP, 'GBP')}
-                        availableUnits={asset.availableUnits}
-                        totalUnits={asset.totalUnits}
-                        status={formatStatus(asset)}
-                        onPress={() => navigation.navigate('AssetDetail', { assetId: asset.id })}
-                      />
-                    </View>
-                  ))}
-                </HorizontalRail>
-              </View>
-            )}
-
-            {!isSearching && mostAvailableRail.length > 0 && (
-              <View style={styles.sectionWrap}>
-                <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} numberOfLines={1}>Most available</Text>
-                </View>
-                <HorizontalRail
-                  contentContainerStyle={styles.railContent}
-                  accessibilityLabel="Most available Co-Own items"
-                >
-                  {mostAvailableRail.map((asset) => (
-                    <View key={asset.id} style={styles.railTileWrap}>
-                      <CoOwnAssetTile
-                        imageUri={asset.image}
-                        title={asset.title}
-                        unitPriceLabel={formatFromFiat(asset.unitPriceGBP, 'GBP')}
-                        availableUnits={asset.availableUnits}
-                        totalUnits={asset.totalUnits}
-                        status={formatStatus(asset)}
-                        onPress={() => navigation.navigate('AssetDetail', { assetId: asset.id })}
-                      />
-                    </View>
-                  ))}
-                </HorizontalRail>
-              </View>
-            )}
-
-            {!isSearching && mostAllocatedRail.length > 0 && (
-              <View style={styles.sectionWrap}>
-                <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} numberOfLines={1}>Nearly allocated</Text>
-                </View>
-                <HorizontalRail
-                  contentContainerStyle={styles.railContent}
-                  accessibilityLabel="Nearly allocated Co-Own items"
-                >
-                  {mostAllocatedRail.map((asset) => (
-                    <View key={asset.id} style={styles.railTileWrap}>
-                      <CoOwnAssetTile
-                        imageUri={asset.image}
-                        title={asset.title}
-                        unitPriceLabel={formatFromFiat(asset.unitPriceGBP, 'GBP')}
-                        availableUnits={asset.availableUnits}
-                        totalUnits={asset.totalUnits}
-                        status={formatStatus(asset)}
-                        onPress={() => navigation.navigate('AssetDetail', { assetId: asset.id })}
-                      />
-                    </View>
-                  ))}
-                </HorizontalRail>
-              </View>
-            )}
-
-            {/* Search results header */}
-            {isSearching && (
-              <View style={styles.sectionWrap}>
-                <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} numberOfLines={1}>Results</Text>
-                  <Text style={[styles.sectionCount, { color: colors.textMuted }]} numberOfLines={1}>{filteredAssets.length} items</Text>
-                </View>
-              </View>
-            )}
-
-            {/* All items header — Discover mode */}
-            {!isSearching && discoveryAssets.length > 0 && (
-              <View style={styles.sectionWrap}>
-                <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} numberOfLines={1}>All items</Text>
-                  <Text style={[styles.sectionCount, { color: colors.textMuted }]} numberOfLines={1}>{discoveryAssets.length}</Text>
-                </View>
-              </View>
-            )}
-
-            {/* All items grid — Discover mode */}
-            {!isSearching && discoveryAssets.length > 0 && (
-              <View style={styles.discoveryGrid}>
-                {discoveryAssets.map((item, index) => (
-                  <View key={item.id} style={styles.discoveryTileWrap}>
-                    <CoOwnAssetTile
-                      imageUri={item.image}
-                      title={item.title}
-                      unitPriceLabel={formatFromFiat(item.unitPriceGBP, 'GBP')}
-                      availableUnits={item.availableUnits}
-                      totalUnits={item.totalUnits}
-                      status={formatStatus(item)}
-                      onPress={() => navigation.navigate('AssetDetail', { assetId: item.id })}
-                      index={index}
-                    />
-                  </View>
-                ))}
-              </View>
-            )}
-          </View>
-        }
-        renderItem={({ item, index }) => (
-          <View style={styles.tileWrap}>
-            <CoOwnAssetTile
-              imageUri={item.image}
-              title={item.title}
-              unitPriceLabel={formatFromFiat(item.unitPriceGBP, 'GBP')}
-              availableUnits={item.availableUnits}
-              totalUnits={item.totalUnits}
-              status={formatStatus(item)}
-              onPress={() => navigation.navigate('AssetDetail', { assetId: item.id })}
-              index={index}
-            />
-          </View>
-        )}
-        ListEmptyComponent={
-          <CoOwnStateCanvas
-            variant="empty"
-            title={isSearching ? 'No results' : 'No items available'}
-            subtitle={isSearching ? 'Try a different search term.' : 'Check back soon for new Co-Own items.'}
-            emptyGraphicVariant="search"
-          />
-        }
-        ListFooterComponent={
-          !isSearching ? (
-            <View style={styles.footerWrap}>
-              {/* Creator action — intentional, not a random admin button */}
-              <AnimatedPressable
-                onPress={() => { haptics.tap(); navigation.navigate('CreateCoOwn'); }}
-                style={[styles.creatorCard, { borderColor: colors.brand + '40' }]}
-                accessibilityRole="button"
-                accessibilityLabel="Issue a new Co-Own item"
-                scaleValue={0.98}
-              >
-                <View style={[styles.creatorIcon, { backgroundColor: colors.brand + '18' }]}>
-                  <Ionicons name="add-circle-outline" size={22} color={colors.brand} />
-                </View>
-                <View style={styles.creatorBody}>
-                  <Text style={[styles.creatorTitle, { color: colors.textPrimary }]} numberOfLines={1}>Issue a new Co-Own</Text>
-                  <Text style={[styles.creatorSub, { color: colors.textSecondary }]} numberOfLines={2}>
-                    List an item for shared ownership and invite co-owners
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-              </AnimatedPressable>
-
-              {/* How Co-Own works */}
-              <CoOwnEducationCard
-                onLearnMore={() => navigation.navigate('CoOwnOnboarding')}
-                learnMoreLabel="Read full guide"
-              />
-
-              {/* Ledger link */}
-              <AnimatedPressable
-                onPress={() => { haptics.tap(); navigation.navigate('MarketLedger'); }}
-                style={[styles.ledgerLink, { borderColor: colors.border }]}
-                accessibilityRole="button"
-                accessibilityLabel="View market ledger"
-              >
-                <Ionicons name="receipt-outline" size={18} color={colors.textSecondary} />
-                <Text style={[styles.ledgerLinkText, { color: colors.textSecondary }]} numberOfLines={1}>View market ledger</Text>
-                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-              </AnimatedPressable>
-
-              <View style={{ height: Space.xxl }} />
-            </View>
-          ) : null
-        }
-        estimatedItemSize={(gridColumns === 1 ? 480 : 300) as any}
+        keyboardShouldPersistTaps="handled"
+        removeClippedSubviews
+        initialNumToRender={8}
+        windowSize={7}
       />
     </SafeAreaView>
   );
@@ -665,101 +818,242 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   listContent: {
+    paddingBottom: Space.xxl,
+  },
+  highlightsSection: {
+    paddingTop: Space.xs,
+    paddingBottom: Space.sm,
+  },
+  highlightsHeading: {
+    minHeight: 28,
     paddingHorizontal: Space.md,
-  },
-  searchWrap: {
-    marginBottom: Space.md,
-  },
-  sortRow: {
     flexDirection: 'row',
-    gap: Space.xs,
-    marginBottom: Space.lg,
-  },
-  marketContext: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    marginBottom: Space.md,
-  },
-  sortChip: {
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-  },
-  sortChipText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-  },
-  featuredWrap: {
-    marginBottom: Space.lg,
-  },
-  sectionWrap: {
-    marginBottom: Space.lg,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Space.md,
+    justifyContent: 'space-between',
   },
-  sectionTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: -0.3,
-  },
-  sectionLink: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-  },
-  sectionCount: {
-    fontSize: Type.caption.size,
+  highlightsHint: {
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.regular,
   },
-  positionsRow: {
-    gap: Space.md,
-    paddingRight: Space.md,
+  tabsSurface: {
+    minHeight: 50,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    justifyContent: 'flex-end',
   },
-  positionTileWrap: {
-    width: 180,
-    flex: 0,
+  tabsRow: {
+    minHeight: 49,
+    paddingHorizontal: Space.sm,
+    flexDirection: 'row',
+    alignItems: 'stretch',
   },
-  railContent: {
-    gap: Space.md,
-    paddingRight: Space.md,
-  },
-  railTileWrap: {
-    width: 160,
-    flex: 0,
-  },
-  tileWrap: {
+  tab: {
+    minWidth: 0,
+    minHeight: 49,
     flex: 1,
     paddingHorizontal: Space.xs,
-    marginBottom: Space.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
   },
-  discoveryGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: Space.md,
-    gap: Space.sm,
+  tabText: {
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    letterSpacing: -0.1,
+    textAlign: 'center',
   },
-  discoveryTileWrap: {
-    width: '48%',
-    flex: 0,
-    marginBottom: Space.md,
+  tabIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    width: 24,
+    height: 2,
+    borderRadius: 1,
   },
-  footerWrap: {
+  majorSection: {
     paddingTop: Space.lg,
+    paddingBottom: Space.xl,
   },
-  creatorCard: {
+  sectionHeader: {
+    paddingHorizontal: Space.md,
+    marginBottom: Space.md,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: Space.md,
+  },
+  sectionHeadingGroup: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  sectionEyebrow: {
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  sectionTitle: {
+    fontSize: Type.title.size,
+    lineHeight: Type.title.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: -0.45,
+  },
+  sectionAction: {
+    minHeight: 44,
+    paddingLeft: Space.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 2,
+  },
+  sectionActionText: {
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.semibold,
+  },
+  positionsContent: {
+    paddingHorizontal: Space.md,
+  },
+  positionSeparator: {
+    width: POSITION_CARD_GAP,
+  },
+  inlineState: {
+    minHeight: 92,
+    marginHorizontal: Space.md,
+    padding: Space.md,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    paddingVertical: Space.md,
+  },
+  inlineStateIcon: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inlineStateBody: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  inlineStateTitle: {
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontFamily: Typography.family.semibold,
+  },
+  inlineStateText: {
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.regular,
+  },
+  inlineRetry: {
+    minWidth: 64,
+    minHeight: 44,
+    borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inlineRetryText: {
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.semibold,
+  },
+  instrumentsHeader: {
+    paddingTop: Space.xs,
+    paddingBottom: Space.md,
+  },
+  resultCount: {
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.medium,
+    fontVariant: ['tabular-nums'],
+    paddingBottom: 4,
+  },
+  marketControls: {
     paddingHorizontal: Space.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+  },
+  searchField: {
+    flex: 1,
+    minWidth: 0,
+  },
+  inputAction: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  controlButton: {
+    minHeight: 44,
+    paddingHorizontal: 12,
+    borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  searchControl: {
+    flex: 1,
+    justifyContent: 'flex-start',
+  },
+  controlText: {
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.medium,
+  },
+  sortOptions: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
+    flexDirection: 'row',
+    gap: Space.sm,
+  },
+  sortOption: {
+    minHeight: 44,
+    paddingHorizontal: 12,
+    borderRadius: Radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sortOptionText: {
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.semibold,
+  },
+  instrumentRow: {
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.lg,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.sm,
+  },
+  instrumentSpacer: {
+    flex: 1,
+  },
+  instrumentsEmptyWrap: {
+    minHeight: 260,
+    paddingHorizontal: Space.md,
+  },
+  remainingContent: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
+    gap: Space.lg,
+  },
+  creatorLink: {
+    minHeight: 76,
+    padding: Space.md,
     borderRadius: Radius.lg,
-    borderWidth: 1,
-    marginBottom: Space.lg,
-    minHeight: 64,
+    borderWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
   },
   creatorIcon: {
     width: 44,
@@ -776,27 +1070,24 @@ const styles = StyleSheet.create({
   },
   creatorTitle: {
     fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: -0.2,
   },
-  creatorSub: {
+  creatorText: {
     fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
-    lineHeight: 18,
   },
   ledgerLink: {
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    paddingVertical: Space.md,
-    paddingHorizontal: Space.md,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    marginTop: Space.lg,
   },
   ledgerLinkText: {
     flex: 1,
     fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.medium,
   },
 });

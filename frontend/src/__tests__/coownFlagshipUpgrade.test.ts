@@ -62,7 +62,10 @@ describe('COOWN-FLAGSHIP: Co-Own department flagship upgrade', () => {
 
     it('BuyoutScreen shows unavailable state', () => {
       const src = readSrc('screens/BuyoutScreen.tsx');
-      expect(src).toContain('not available');
+      // Asset-level exit is operator-initiated per rights, not a self-service
+      // buyout flow the backend doesn't support — the screen says so honestly.
+      expect(src).toContain('Asset-level exit');
+      expect(src).toContain('initiated by the vehicle operator');
     });
   });
 
@@ -112,6 +115,29 @@ describe('COOWN-FLAGSHIP: Co-Own department flagship upgrade', () => {
     it('SyndicateHubScreen has education module', () => {
       const src = readSrc('screens/SyndicateHubScreen.tsx');
       expect(src).toContain('CoOwnEducationCard');
+    });
+
+    it('SyndicateHubScreen uses a looping market highlights carousel', () => {
+      const src = readSrc('screens/SyndicateHubScreen.tsx');
+      const carousel = readSrc('components/coown/CoOwnMarketHighlightsCarousel.tsx');
+      expect(src).toContain('CoOwnMarketHighlightsCarousel');
+      expect(carousel).toContain('snapToInterval');
+      expect(carousel).toContain('scrollToIndex');
+      expect(carousel).toContain('onMomentumScrollEnd');
+    });
+
+    it('SyndicateHubScreen restores compact positions inline', () => {
+      const src = readSrc('screens/SyndicateHubScreen.tsx');
+      expect(src).toContain('CoOwnCompactPositionCard');
+      expect(src).toContain('YOUR PORTFOLIO');
+      expect(src).toContain("navigation.navigate('Portfolio')");
+    });
+
+    it('SyndicateHubScreen keeps market tabs sticky and listing controls inline', () => {
+      const src = readSrc('screens/SyndicateHubScreen.tsx');
+      expect(src).toContain('stickyHeaderIndices');
+      expect(src).toContain('Market search and sorting');
+      expect(src).not.toContain('CoOwnFeaturedAsset');
     });
   });
 
@@ -216,7 +242,8 @@ describe('COOWN-FLAGSHIP: Co-Own department flagship upgrade', () => {
     it('AssetLeaderboardScreen uses CoOwnMarketHeader', () => {
       const src = readSrc('screens/AssetLeaderboardScreen.tsx');
       expect(src).toContain('CoOwnMarketHeader');
-      expect(src).toContain('Leaderboards');
+      expect(src).toContain('Market overview');
+      expect(src).not.toContain('Most co-owners');
     });
 
     it('AssetLeaderboardScreen uses CoOwnLeaderboardSkeleton', () => {

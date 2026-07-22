@@ -6,7 +6,16 @@ import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { FlagshipEmptyGraphic } from '../flagship';
 
-export type CoOwnStateVariant = 'loading' | 'empty' | 'error' | 'offline' | 'unavailable';
+export type CoOwnStateVariant =
+  | 'loading'
+  | 'empty'
+  | 'error'
+  | 'offline'
+  | 'unavailable'
+  | 'stale'
+  | 'halted'
+  | 'restricted'
+  | 'thin';
 
 export interface CoOwnStateCanvasProps {
   variant: CoOwnStateVariant;
@@ -18,6 +27,12 @@ export interface CoOwnStateCanvasProps {
   onSecondaryAction?: () => void;
   emptyGraphicVariant?: 'bag' | 'box' | 'search' | 'chat' | 'image';
   icon?: React.ComponentProps<typeof Ionicons>['name'];
+  /** For stale: the timestamp of the last reliable data. */
+  staleTimestamp?: string;
+  /** For halted: the reason for the halt. */
+  haltReason?: string;
+  /** For restricted: the reason for the restriction. */
+  restrictedReason?: string;
   children?: React.ReactNode;
 }
 
@@ -27,6 +42,10 @@ const DEFAULTS: Record<CoOwnStateVariant, { title: string; subtitle: string; ico
   error: { title: 'Could not load', subtitle: 'Tap below to try again.', icon: 'alert-circle-outline', graphic: 'box' },
   offline: { title: 'You are offline', subtitle: 'Check your connection and try again.', icon: 'cloud-offline-outline', graphic: 'search' },
   unavailable: { title: 'Not available', subtitle: 'This feature is not available right now.', icon: 'lock-closed-outline', graphic: 'image' },
+  stale: { title: 'Data stale', subtitle: 'Showing the last reliable data. Reconnecting…', icon: 'time-outline', graphic: 'search' },
+  halted: { title: 'Trading halted', subtitle: 'Trading is temporarily suspended.', icon: 'pause-circle-outline', graphic: 'box' },
+  restricted: { title: 'Not eligible in your region', subtitle: 'This instrument is not available for trading in your jurisdiction.', icon: 'lock-closed-outline', graphic: 'image' },
+  thin: { title: 'Thin market', subtitle: 'No active orders on one side. Use limit orders or request a quote.', icon: 'water-outline', graphic: 'search' },
 };
 
 export function CoOwnStateCanvas({
@@ -39,15 +58,32 @@ export function CoOwnStateCanvas({
   onSecondaryAction,
   emptyGraphicVariant,
   icon,
+  staleTimestamp,
+  haltReason,
+  restrictedReason,
   children,
 }: CoOwnStateCanvasProps) {
   const { colors } = useAppTheme();
   const defaults = DEFAULTS[variant];
 
+  // Build context-aware subtitle for exchange states
+  let resolvedSubtitle = subtitle ?? defaults.subtitle;
+  if (!subtitle) {
+    if (variant === 'stale' && staleTimestamp) {
+      resolvedSubtitle = `Last reliable data: ${staleTimestamp}. Reconnecting…`;
+    } else if (variant === 'halted' && haltReason) {
+      resolvedSubtitle = `Trading halted: ${haltReason}`;
+    } else if (variant === 'restricted' && restrictedReason) {
+      resolvedSubtitle = restrictedReason;
+    }
+  }
+
   if (variant === 'loading') {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.brand} />
+        <View style={styles.skeletonGraphic} />
+        <View style={styles.skeletonTitle} />
+        <View style={styles.skeletonSubtitle} />
         <Text style={[styles.loadingText, { color: colors.textMuted }]}>
           {title ?? defaults.title}
         </Text>
@@ -66,14 +102,14 @@ export function CoOwnStateCanvas({
         {title ?? defaults.title}
       </Text>
       <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-        {subtitle ?? defaults.subtitle}
+        {resolvedSubtitle}
       </Text>
       {children}
       <View style={styles.actionRow}>
         {actionLabel && onAction && (
           <AnimatedPressable
             onPress={onAction}
-            scaleValue={0.96}
+            scaleValue={0.97}
             hapticFeedback="light"
             style={[styles.primaryBtn, { backgroundColor: colors.brand }]}
             accessibilityRole="button"
@@ -85,7 +121,7 @@ export function CoOwnStateCanvas({
         {secondaryActionLabel && onSecondaryAction && (
           <AnimatedPressable
             onPress={onSecondaryAction}
-            scaleValue={0.96}
+            scaleValue={0.97}
             hapticFeedback="light"
             style={[styles.secondaryBtn, { borderColor: colors.border }]}
             accessibilityRole="button"
@@ -111,6 +147,27 @@ const styles = StyleSheet.create({
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     letterSpacing: Type.body.letterSpacing,
+  },
+  // Skeleton placeholders (match final layout geometry)
+  skeletonGraphic: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(128,128,128,0.12)',
+  },
+  skeletonTitle: {
+    width: 140,
+    height: 18,
+    borderRadius: 4,
+    marginTop: Space.md,
+    backgroundColor: 'rgba(128,128,128,0.12)',
+  },
+  skeletonSubtitle: {
+    width: 200,
+    height: 14,
+    borderRadius: 4,
+    marginTop: Space.xs,
+    backgroundColor: 'rgba(128,128,128,0.10)',
   },
   title: {
     fontSize: Type.subtitle.size,

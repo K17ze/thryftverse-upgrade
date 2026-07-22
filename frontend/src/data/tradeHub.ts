@@ -34,7 +34,7 @@ export interface CoOwnAsset {
   availableUnits: number;
   unitPriceGBP: number;
   unitPriceStable: number;
-  settlementMode: 'GBP' | 'TVUSD' | 'HYBRID';
+  settlementMode: 'GBP' | 'TVUSD' | 'HYBRID' | 'ONEZE';
   issuerJurisdiction?: string;
   marketMovePct24h: number;
   holders: number;

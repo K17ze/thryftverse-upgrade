@@ -9,7 +9,42 @@ import { AppStatusPill } from '../ui/AppStatusPill';
 import { Meta, BodyEmphasis, Body } from '../ui/Text';
 
 export type OrderSide = 'buy' | 'sell';
-export type OrderStatus = 'open' | 'partially_filled' | 'filled' | 'cancelled' | 'rejected';
+// Use the canonical OrderStatus from coOwnModels (12-state machine per spec 10 §2.1-2.2)
+export type OrderStatus = import('../../data/coOwnModels').OrderStatus;
+
+const STATUS_LABELS: Record<string, string> = {
+  draft: 'Draft',
+  submitted: 'Submitted',
+  accepted: 'Accepted',
+  open: 'Open',
+  partial: 'Partial',
+  filled: 'Filled',
+  cancel_pending: 'Cancelling',
+  cancelled: 'Cancelled',
+  replace_pending: 'Replacing',
+  halted_open: 'Halted',
+  expired: 'Expired',
+  rejected: 'Rejected',
+  // Legacy compat — map old status to display label
+  partially_filled: 'Partial',
+};
+
+function statusLabel(status: string): string {
+  return STATUS_LABELS[status] ?? status;
+}
+
+function formatOrderTimestamp(value: string): string {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return value;
+
+  const now = new Date();
+  const sameYear = date.getFullYear() === now.getFullYear();
+  const dayLabel = date.toLocaleDateString(undefined, sameYear
+    ? { day: 'numeric', month: 'short' }
+    : { day: 'numeric', month: 'short', year: '2-digit' });
+  const timeLabel = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  return `${dayLabel} · ${timeLabel}`;
+}
 
 interface OrderHistoryRowProps {
   id: string;
@@ -17,12 +52,15 @@ interface OrderHistoryRowProps {
   type: 'market' | 'limit';
   assetTitle: string;
   quantity: number;
+  filledQuantity?: number;
   pricePerShare: string;
   totalAmount: string;
   fee?: string;
   status: OrderStatus;
   timestamp: string;
   onPress?: () => void;
+  onCancel?: () => void;
+  isCancelling?: boolean;
   issuerHandle?: string;
   issuerAvatar?: string;
   canMessageIssuer?: boolean;
@@ -38,15 +76,23 @@ function resolveSideColor(side: OrderSide): string {
   return side === 'buy' ? Colors.brand : Colors.textSecondary;
 }
 
-function resolveStatusTone(status: OrderStatus) {
+function resolveStatusTone(status: string) {
   switch (status) {
     case 'filled':
       return 'positive' as const;
     case 'open':
+    case 'accepted':
+    case 'submitted':
       return 'warning' as const;
     case 'partially_filled':
+    case 'replace_pending':
       return 'accent' as const;
+    case 'cancel_pending':
+    case 'halted_open':
+      return 'warning' as const;
     case 'cancelled':
+    case 'expired':
+    case 'draft':
       return 'neutral' as const;
     case 'rejected':
       return 'negative' as const;
@@ -60,11 +106,14 @@ export function OrderHistoryRow({
   type,
   assetTitle,
   quantity,
+  filledQuantity,
   pricePerShare,
   totalAmount,
   status,
   timestamp,
   onPress,
+  onCancel,
+  isCancelling = false,
   issuerHandle,
   issuerAvatar,
   canMessageIssuer = false,
@@ -99,20 +148,35 @@ export function OrderHistoryRow({
           <BodyEmphasis style={styles.title} numberOfLines={1}>
             {assetTitle}
           </BodyEmphasis>
-          <AppStatusPill tone={resolveStatusTone(status)} label={status} size="sm" />
+          <AppStatusPill tone={resolveStatusTone(status)} label={statusLabel(status)} size="sm" />
         </View>
 
         <View style={styles.metaRow}>
           <Meta style={styles.metaLabel} numberOfLines={1}>
-            {side.toUpperCase()}  {type}  {quantity} units
+            {side.toUpperCase()}  {type}  {status === 'partial' && filledQuantity != null
+              ? `${filledQuantity} of ${quantity} filled`
+              : `${quantity} units`}
           </Meta>
-          <Meta style={styles.timestamp} numberOfLines={1}>{timestamp}</Meta>
+          <Meta style={styles.timestamp} numberOfLines={1}>{formatOrderTimestamp(timestamp)}</Meta>
         </View>
 
         <View style={styles.priceRow}>
           <Body style={styles.price} numberOfLines={1}>{pricePerShare} / share</Body>
           <BodyEmphasis style={styles.total} numberOfLines={1}>{totalAmount}</BodyEmphasis>
         </View>
+
+        {onCancel ? (
+          <AnimatedPressable
+            onPress={onCancel}
+            style={styles.cancelAction}
+            scaleValue={0.97}
+            accessibilityRole="button"
+            accessibilityLabel={`Cancel ${side} order for ${assetTitle}`}
+          >
+            <Ionicons name="close-circle-outline" size={15} color={Colors.textSecondary} />
+            <Meta style={styles.cancelText}>{isCancelling ? 'Cancelling…' : 'Cancel remaining'}</Meta>
+          </AnimatedPressable>
+        ) : null}
 
         {issuerHandle && onPressIssuer && (
           <View style={styles.issuerRow}>
@@ -201,8 +265,8 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   timestamp: {
-    textTransform: 'lowercase',
     flexShrink: 0,
+    fontVariant: ['tabular-nums'],
   },
   priceRow: {
     flexDirection: 'row',
@@ -218,6 +282,18 @@ const styles = StyleSheet.create({
   total: {
     fontVariant: ['tabular-nums'],
     flexShrink: 0,
+  },
+  cancelAction: {
+    alignSelf: 'flex-start',
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: Space.xs,
+    paddingRight: Space.sm,
+  },
+  cancelText: {
+    color: Colors.textSecondary,
   },
   issuerRow: {
     flexDirection: 'row',

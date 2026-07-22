@@ -13,11 +13,11 @@ function fileExists(rel: string) {
 }
 
 describe('VISUAL-13A Discovery Visual Upgrade', () => {
-  it('1. HomeScreen uses new editorial/visual discovery components', () => {
+  it('1. HomeScreen uses focused visual discovery components', () => {
     const home = readFile('screens/HomeScreen.tsx');
-    expect(home).toContain('EditorialDiscoveryHero');
     expect(home).toContain('DiscoverySectionHeader');
-    expect(home).toContain('heroItems');
+    expect(home).toContain('ExploreGridItem');
+    expect(home).not.toContain('EditorialDiscoveryHero');
   });
 
   it('2. BrowseScreen uses PinterestMasonryGrid', () => {
@@ -170,8 +170,6 @@ describe('VISUAL-13A Discovery Visual Upgrade', () => {
   });
 
   it('13. No dead unused visual components', () => {
-    // EditorialDiscoveryHero used in HomeScreen
-    expect(readFile('screens/HomeScreen.tsx')).toContain('EditorialDiscoveryHero');
     // PinterestMasonryGrid used in BrowseScreen and CategoryDetailScreen
     expect(readFile('screens/BrowseScreen.tsx')).toContain('PinterestMasonryGrid');
     expect(readFile('screens/CategoryDetailScreen.tsx')).toContain('PinterestMasonryGrid');

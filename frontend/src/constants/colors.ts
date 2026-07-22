@@ -114,3 +114,65 @@ export function refreshThemeFromRuntime(): ThemeMode {
   Colors = ActiveTheme === 'light' ? LIGHT_COLORS : DARK_COLORS;
   return ActiveTheme;
 }
+
+// ============================================================================
+// EXCHANGE SEMANTIC COLOURS — Co-Own market microstructure
+// Dark luxury shades only — no light, bright, or saturated hues.
+// These are standalone exports, not part of ThemeColors interface.
+// States are distinguishable by shape + label + dot, not colour alone.
+// ============================================================================
+
+export type CoOwnMarketMode = 'continuous' | 'call_auction' | 'rfq' | 'halted' | 'closed';
+
+export const MARKET_COLORS = {
+  // Continuous trading — deep navy. Calm, authoritative, "live but quiet".
+  continuous: {
+    dot: '#1B2845',
+    ink: 'transparent',
+    shape: 'circle' as const,
+  },
+  // Call auction — taupe. Warm but muted, distinct from warning cream.
+  auction: {
+    dot: '#6B5D4F',
+    ink: '#6B5D4F22',
+    shape: 'diamond' as const,
+  },
+  // Halted — cherry red. Dark, serious, not alarm red.
+  halted: {
+    dot: '#6B1A1A',
+    ink: '#6B1A1A22',
+    shape: 'circle' as const,
+  },
+  // Closed / outside session — neutral muted (matches textMuted).
+  closed: {
+    dot: '#666666',
+    ink: 'transparent',
+    shape: 'circle' as const,
+  },
+  // RFQ — deep plum. Distinct from navy continuous, still dark and luxury.
+  rfq: {
+    dot: '#3D2B3D',
+    ink: '#3D2B3D22',
+    shape: 'diamond' as const,
+  },
+} as const;
+
+// Direction semantics — derived from existing success/danger hue family.
+// Dark forest green and dark cherry red, lifted ~1 stop for tick contrast.
+// Always paired with ▲ / ▼ / − glyph and sign — never colour alone.
+export const DIRECTION_COLORS = {
+  up: '#1A6B3A',
+  upFill: '#1A6B3A18',
+  down: '#8B2020',
+  downFill: '#8B202018',
+  flat: '#A3A3A3',
+} as const;
+
+// Depth-bar semantics — same direction hues at lower alpha.
+// Read as structure, not decoration.
+export const DEPTH_COLORS = {
+  bidBar: '#1A6B3A18',
+  askBar: '#8B202018',
+  bidBarEdge: '#1A6B3A30',
+  askBarEdge: '#8B202030',
+} as const;

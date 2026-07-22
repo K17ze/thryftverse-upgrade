@@ -1,8 +1,8 @@
 ---
-version: "1.4"
+version: "1.5"
 name: "ThryftVerse Neutral Flagship Native Design System"
-benchmark-date: "2026-07-11"
-description: "A machine-readable and human-readable design contract for a media-first native social-commerce marketplace. It is calibrated against current Pinterest, Instagram, Depop, Vinted, Vestiaire and Whatnot product patterns while remaining faithful to the ThryftVerse React Native codebase. v1.4 keeps the current neutral palette canonical and raises quality through geometry, media integrity, typography, interaction, state clarity, accessibility and performance. Optional luxury accents remain contextual rather than decorative."
+benchmark-date: "2026-07-22"
+description: "A machine-readable and human-readable design contract for a media-first native social-commerce marketplace. It is calibrated against current Pinterest, Instagram, Depop, Vinted, Vestiaire and Whatnot product patterns while remaining faithful to the ThryftVerse React Native codebase. v1.5 adds enforceable visual-chrome, shape, stroke, icon and density budgets so accessible controls no longer become oversized visible UI. The neutral palette remains canonical; quality comes from geometry, media integrity, hierarchy, interaction, state clarity, accessibility and performance."
 
 implementation-status:
   current-runtime-theme: "VERIFIED — frontend/src/theme/ThemeContext.tsx currently exposes the neutral base palette and does not yet expose the proposed premium/luxury tokens below."
@@ -111,6 +111,7 @@ rounded:
   md: "8px"
   lg: "12px"
   xl: "16px"
+  xxl: "24px — navigation docks and genuinely dominant panels only"
   full: "999px"
 
 spacing:
@@ -141,6 +142,22 @@ dock-geometry:
   dual-action-height: "132px"
   stacked-action-height: "180px"
 
+visual-geometry:
+  minimum-hit-target: "44px"
+  standard-visible-icon: "20-24px"
+  metadata-icon: "14-18px"
+  compact-contained-control: "32px visible chrome inside 44px hit target"
+  standard-contained-control: "36px visible chrome inside 44px hit target"
+  separator-stroke: "platform hairline"
+  field-stroke: "1px"
+  focus-stroke: "2px"
+  viewport-surface-budget: "At most one dominant non-media panel above the fold"
+  viewport-radius-budget: "At most two non-avatar radius sizes, excluding a modal"
+  utility-density: "4-6 useful list rows in a standard phone viewport"
+  discovery-density: "At least two meaningful media objects or a visible continuation above the fold"
+  first-viewport-type-budget: "No more than three type sizes and one eyebrow in normal use"
+  default-icon-containment: "transparent; persistent fill only for selection, primary action, status, input grouping or media contrast"
+
 components:
   button-primary:
     backgroundColor: "{colors.current-runtime.brand}"
@@ -161,7 +178,7 @@ components:
     rounded: "{rounded.xl}"
     height: "52px"
   settings-row:
-    backgroundColor: "{colors.current-runtime.row}"
+    backgroundColor: "transparent inside one optional grouped surface"
     textColor: "{colors.current-runtime.text-primary}"
     typography: "{typography.body-strong}"
     height: "56-64px"
@@ -1055,6 +1072,42 @@ Results may group:
 - Keep stroke/fill state grammar stable.
 - Do not place icons inside decorative circles unless the circle communicates touchability, status or media contrast.
 - Chevrons remain quieter than row values and never collide with them.
+
+### Visible chrome is not the hit target
+
+The 44pt accessibility target is an interaction boundary, not a visible-shape token. This distinction is mandatory:
+
+- Back, Close, search, overflow, camera, notifications and chevrons: 44pt target with a 20–24pt glyph; transparent by default.
+- Contained utility control: 44pt target with a 32–36pt visible background only when containment communicates selection, priority or media contrast.
+- Inline metadata: 14–18pt glyph with enough row height to preserve the target on the parent action.
+- Persistent 44pt filled circles/squares are reserved for genuinely primary floating actions, not routine header actions.
+- Press feedback may temporarily reveal `colors.rowPressed`; the resting state can remain visually uncontained.
+
+### Shape, stroke and surface budget
+
+A screen fails visual fidelity when rounded grey geometry becomes its main visual story.
+
+- Normal utility/list canvas: flat rows, spacing and hairline separation. One group surface may bind a related set of rows.
+- Media canvas: the image is the surface. Avoid an additional card shell unless it carries distinct status or interaction.
+- Dominant panel: one above-fold panel is allowed for a real dashboard, trust state or primary workflow—not as decoration.
+- Use at most two non-avatar radius sizes per viewport. Sheets/modals may introduce one additional radius.
+- Hairline separates; 1pt outlines fields or explicit groups; 2pt indicates focus/selection only.
+- Avoid simultaneous fill + border + shadow on routine cards. Choose the minimum treatment that makes hierarchy legible.
+
+### First-viewport comparative measurements
+
+Every flagship visual pass should compare the native render and its supplied reference at a similar width. Record locally:
+
+- Y-position of first useful content;
+- useful object count above the fold;
+- visible rounded-container count;
+- largest non-media visual control;
+- icon optical size and stroke consistency;
+- media-to-chrome area ratio;
+- sticky navigation/dock occlusion;
+- loading-to-final geometry movement.
+
+Apply two rejection tests. At 25% thumbnail scale, the primary object and reading order must remain clear. Under a squint/blur test, content and media must dominate while chrome recedes. If rounded rectangles, empty grey placeholders or header controls dominate either test, the screen is not flagship.
 
 ## ThryftVerse Differentiation Gate
 
