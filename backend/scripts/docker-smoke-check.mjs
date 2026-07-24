@@ -559,6 +559,7 @@ async function main() {
     body: JSON.stringify({
       fileName: 'smoke.txt',
       contentType: 'text/plain',
+      sizeBytes: Buffer.byteLength('thryftverse smoke check'),
       folder: 'smoke',
     }),
   });

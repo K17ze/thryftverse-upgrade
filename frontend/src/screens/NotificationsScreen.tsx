@@ -20,6 +20,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import { EmptyState } from '../components/EmptyState';
+import { SkeletonLoader } from '../components/SkeletonLoader';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { AvatarRing } from '../components/chat/AvatarRing';
@@ -522,15 +523,21 @@ export default function NotificationsScreen() {
         title="Notifications"
         onBack={() => navigation.goBack()}
         rightAction={
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <View style={styles.headerActions}>
             <AnimatedPressable
+              style={styles.headerAction}
               onPress={() => navigation.navigate('PushNotifications')}
               accessibilityLabel="Manage notification preferences"
               accessibilityRole="button"
             >
               <Ionicons name="settings-outline" size={20} color={Colors.textSecondary} />
             </AnimatedPressable>
-            <AnimatedPressable onPress={handleMarkAllAsRead} accessibilityLabel={hasUnread ? 'Mark all notifications as read' : 'All caught up'}>
+            <AnimatedPressable
+              style={styles.headerAction}
+              onPress={handleMarkAllAsRead}
+              accessibilityRole="button"
+              accessibilityLabel={hasUnread ? 'Mark all notifications as read' : 'All caught up'}
+            >
               <Ionicons name="checkmark-done-outline" size={22} color={hasUnread ? Colors.textPrimary : Colors.textMuted} />
             </AnimatedPressable>
           </View>
@@ -732,13 +739,14 @@ export default function NotificationsScreen() {
                           conversationId: listingId ? `${actorUserId}_${listingId}` : `profile_${actorUserId}`,
                           focusQuery: actorHandle,
                           partnerUserId: actorUserId,
+                          itemId: listingId,
                         })}
                       activeOpacity={0.85}
                       accessibilityRole="button"
                       accessibilityLabel={`Message @${actorHandle}`}
                       accessibilityHint="Opens chat with this user"
                     >
-                      <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
+                      <Ionicons name="chatbubble-outline" size={18} color={Colors.textPrimary} />
                     </AnimatedPressable>
                   </View>
                 ) : null}
@@ -749,19 +757,31 @@ export default function NotificationsScreen() {
         }}
         ListEmptyComponent={
           isLoading ? (
-            <View style={styles.loadingState}>
-              <ActivityIndicator color={Colors.brand} size="small" />
-              <Text style={styles.loadingText}>Syncing notifications...</Text>
+            <View style={styles.notificationSkeletonList} accessibilityLabel="Loading notifications">
+              {[0, 1, 2, 3, 4].map((index) => (
+                <View key={index} style={styles.notificationSkeletonRow}>
+                  <SkeletonLoader width={52} height={52} borderRadius={10} />
+                  <View style={styles.notificationSkeletonCopy}>
+                    <SkeletonLoader width={index % 2 === 0 ? '58%' : '44%'} height={13} borderRadius={6} />
+                    <SkeletonLoader width={index % 2 === 0 ? '88%' : '76%'} height={11} borderRadius={5} style={{ marginTop: 8 }} />
+                    <SkeletonLoader width="30%" height={9} borderRadius={4} style={{ marginTop: 8 }} />
+                  </View>
+                </View>
+              ))}
             </View>
           ) : hasShownSyncErrorRef.current && notifications.length === 0 ? (
             <EmptyState
+              density="compact"
               icon="cloud-offline-outline"
               title="Couldn't load notifications"
               subtitle="Pull down to refresh and try again."
               iconColor={Colors.textMuted}
+              ctaLabel="Retry"
+              onCtaPress={() => void syncNotifications()}
             />
           ) : activeFilter !== 'all' && notifications.length > 0 ? (
             <EmptyState
+              density="compact"
               icon="notifications-outline"
               title={`No ${FILTER_TABS.find((t) => t.key === activeFilter)?.label.toLowerCase() ?? 'notifications'} yet`}
               subtitle="Switch to 'All' to see everything."
@@ -769,6 +789,7 @@ export default function NotificationsScreen() {
             />
           ) : (
             <EmptyState
+              density="compact"
               icon="notifications-outline"
               title="No notifications yet"
               subtitle="We'll notify you about new items, price drops, and order updates."
@@ -790,6 +811,17 @@ export default function NotificationsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
+
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerAction: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   filterTabsRow: {
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -909,12 +941,11 @@ const styles = StyleSheet.create({
 
   sectionTitle: {
     fontSize: 13,
-    fontFamily: Typography.family.bold,
+    fontFamily: Typography.family.semibold,
     color: Colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
-    marginTop: 24,
-    marginBottom: 14,
+    letterSpacing: 0.1,
+    marginTop: 20,
+    marginBottom: 8,
     marginLeft: 4,
   },
 
@@ -1015,12 +1046,9 @@ const styles = StyleSheet.create({
     color: Colors.background,
   },
   notifActionRow: {
-    marginTop: 4,
+    marginTop: 0,
     marginHorizontal: 16,
-    marginBottom: 14,
-    paddingTop: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: PANEL_BORDER,
+    marginBottom: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -1028,15 +1056,11 @@ const styles = StyleSheet.create({
   },
   notifActorChip: {
     flex: 1,
-    minHeight: 28,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_ALT,
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 8,
+    paddingHorizontal: 0,
   },
   notifActorAvatarWrap: {
     width: 18,
@@ -1064,14 +1088,26 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
   },
   notifMessageBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    backgroundColor: PANEL_ALT,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+
+  notificationSkeletonList: {
+    paddingTop: Space.sm,
+  },
+  notificationSkeletonRow: {
+    minHeight: 84,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm + 2,
+    paddingVertical: Space.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+  },
+  notificationSkeletonCopy: {
+    flex: 1,
   },
 
   loadingState: {

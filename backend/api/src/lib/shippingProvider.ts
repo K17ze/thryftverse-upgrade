@@ -1154,7 +1154,21 @@ function fallbackShipment(input: ShipmentRequest): ShipmentResult {
 
 export async function createShipment(input: ShipmentRequest): Promise<ShipmentResult> {
   const live = await attemptLiveShipment(input);
-  return live ?? fallbackShipment(input);
+  if (live) {
+    return live;
+  }
+
+  if (config.nodeEnv === 'production') {
+    const error = new Error('Shipping provider is temporarily unavailable') as Error & {
+      code: string;
+      statusCode: number;
+    };
+    error.code = 'SHIPPING_PROVIDER_UNAVAILABLE';
+    error.statusCode = 503;
+    throw error;
+  }
+
+  return fallbackShipment(input);
 }
 
 function headerValue(headers: Record<string, unknown>, key: string): string | null {

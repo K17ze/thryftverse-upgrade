@@ -1,84 +1,95 @@
 import React, { useMemo, useState } from 'react';
-import { deployBotToConversationOnApi, undeployBotFromConversationOnApi } from '../services/chatApi';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
+  ActivityIndicator,
   Alert,
+  ScrollView,
+  StyleSheet,
+  View,
 } from 'react-native';
-import { StackScreenProps } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
-import { RootStackParamList } from '../navigation/types';
-import { useStore } from '../store/useStore';
-import { useToast } from '../context/ToastContext';
-import { useAppTheme } from '../theme/ThemeContext';
-import { Colors } from '../constants/colors';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
-import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { StackScreenProps } from '@react-navigation/stack';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { AgentIcon } from '../components/agents/AgentIcon';
+import { FlagshipHeader, FlagshipScreen } from '../components/flagship';
+import { BodyEmphasis, Caption, Meta } from '../components/ui/Text';
+import { Colors } from '../constants/colors';
+import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
-import { Caption, BodyEmphasis, Meta } from '../components/ui/Text';
+import { RootStackParamList } from '../navigation/types';
+import {
+  deployBotToConversationOnApi,
+  undeployBotFromConversationOnApi,
+} from '../services/chatApi';
+import { useStore } from '../store/useStore';
+import { Space, Type } from '../theme/designTokens';
 
 type Props = StackScreenProps<RootStackParamList, 'GroupBotManagement'>;
 
+type AgentRowModel = {
+  id: string;
+  name: string;
+  category: string;
+  status: string;
+  description: string;
+  commandHint: string;
+  type?: 'system' | 'custom';
+};
+
 export default function GroupBotManagementScreen({ navigation, route }: Props) {
   const { conversationId } = route.params;
-  const { isDark } = useAppTheme();
   const { show } = useToast();
   const haptic = useHaptic();
-
   const conversations = useStore((state) => state.conversations);
   const bots = useStore((state) => state.availableChatBots);
   const customBots = useStore((state) => state.customBots);
   const deployBotToConversation = useStore((state) => state.deployBotToConversation);
   const undeployBotFromConversation = useStore((state) => state.undeployBotFromConversation);
-
-  const conversation = useMemo(
-    () => conversations.find((c) => c.id === conversationId),
-    [conversations, conversationId]
-  );
-
-  const deployedBotIds = conversation?.botIds ?? [];
-  const allBots = useMemo(() => [...bots, ...customBots], [bots, customBots]);
-
-  const deployedBots = useMemo(
-    () => allBots.filter((b) => deployedBotIds.includes(b.id)),
-    [allBots, deployedBotIds]
-  );
-
-  const availableToDeploy = useMemo(
-    () => allBots.filter((b) => !deployedBotIds.includes(b.id) && !b.isDraft && !b.isDisabled && b.status !== 'backend-required'),
-    [allBots, deployedBotIds]
-  );
-
   const [pendingBotId, setPendingBotId] = useState<string | null>(null);
 
+  const conversation = useMemo(
+    () => conversations.find((item) => item.id === conversationId),
+    [conversations, conversationId]
+  );
+  const deployedBotIds = conversation?.botIds ?? [];
+  const allBots = useMemo(() => [...bots, ...customBots], [bots, customBots]);
+  const deployedBots = useMemo(
+    () => allBots.filter((bot) => deployedBotIds.includes(bot.id)),
+    [allBots, deployedBotIds]
+  );
+  const availableToDeploy = useMemo(
+    () =>
+      allBots.filter(
+        (bot) =>
+          !deployedBotIds.includes(bot.id) &&
+          !bot.isDraft &&
+          !bot.isDisabled &&
+          bot.status !== 'backend-required' &&
+          bot.runtimeReady !== false
+      ),
+    [allBots, deployedBotIds]
+  );
+
   const handleRemove = (botId: string, botName: string) => {
-    Alert.alert(
-      'Remove bot?',
-      `${botName} will stop responding in this group.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            haptic.medium();
-            setPendingBotId(botId);
-            try {
-              await undeployBotFromConversationOnApi(conversationId, botId);
-              undeployBotFromConversation(conversationId, botId);
-              show(`${botName} removed`, 'info');
-            } catch {
-              show('Failed to remove bot. Please try again.', 'error');
-            } finally {
-              setPendingBotId(null);
-            }
-          },
+    Alert.alert('Remove agent?', `${botName} will stop responding in this chat.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: async () => {
+          haptic.medium();
+          setPendingBotId(botId);
+          try {
+            await undeployBotFromConversationOnApi(conversationId, botId);
+            undeployBotFromConversation(conversationId, botId);
+            show(`${botName} removed`, 'info');
+          } catch {
+            show('Failed to remove agent. Please try again.', 'error');
+          } finally {
+            setPendingBotId(null);
+          }
         },
-      ]
-    );
+      },
+    ]);
   };
 
   const handleDeploy = async (botId: string) => {
@@ -87,19 +98,31 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
     try {
       await deployBotToConversationOnApi(conversationId, botId);
       deployBotToConversation(conversationId, botId);
-      show('Bot deployed', 'success');
+      show('Agent connected', 'success');
     } catch {
-      show('Failed to deploy bot. Please try again.', 'error');
+      show('Failed to connect agent. Please try again.', 'error');
     } finally {
       setPendingBotId(null);
     }
   };
 
+  const renderAgent = (bot: AgentRowModel, deployed: boolean) => (
+    <AgentRow
+      key={bot.id}
+      bot={bot}
+      deployed={deployed}
+      pending={pendingBotId === bot.id}
+      onRemove={() => handleRemove(bot.id, bot.name)}
+      onDeploy={() => handleDeploy(bot.id)}
+      onView={() => navigation.navigate('BotDetail', { botId: bot.id, conversationId })}
+    />
+  );
+
   return (
     <FlagshipScreen
       header={
         <FlagshipHeader
-          title="Bots"
+          title="Chat agents"
           onBack={() => navigation.goBack()}
           rightAction={
             <AnimatedPressable
@@ -108,10 +131,10 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
               scaleValue={0.92}
               hapticFeedback="light"
               accessibilityRole="button"
-              accessibilityLabel="My bots"
+              accessibilityLabel="My agents"
             >
-              <View style={styles.headerActionBtn}>
-                <Ionicons name="hardware-chip-outline" size={20} color={Colors.textPrimary} />
+              <View style={styles.headerAction}>
+                <Ionicons name="person-outline" size={21} color={Colors.textPrimary} />
               </View>
             </AnimatedPressable>
           }
@@ -119,56 +142,28 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
       }
       scrollEnabled={false}
     >
-
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-        {/* Deployed bots */}
         {deployedBots.length > 0 && (
-          <View style={styles.section}>
-            <Meta color={Colors.textMuted} style={styles.sectionLabel}>
-              ACTIVE IN THIS GROUP
-            </Meta>
-            <View style={styles.card}>
-              {deployedBots.map((bot, index) => (
-                <View key={bot.id}>
-                  <BotRow
-                    bot={bot}
-                    deployed
-                    onRemove={() => handleRemove(bot.id, bot.name)}
-                    onView={() => navigation.navigate('BotDetail', { botId: bot.id, conversationId })}
-                  />
-                  {index < deployedBots.length - 1 && <View style={styles.divider} />}
-                </View>
-              ))}
-            </View>
-          </View>
+          <AgentSection
+            title="CONNECTED TO THIS CHAT"
+            agents={deployedBots}
+            renderAgent={(bot) => renderAgent(bot, true)}
+          />
         )}
 
-        {/* Available bots */}
         {availableToDeploy.length > 0 && (
-          <View style={styles.section}>
-            <Meta color={Colors.textMuted} style={styles.sectionLabel}>
-              AVAILABLE TO DEPLOY
-            </Meta>
-            <View style={styles.card}>
-              {availableToDeploy.map((bot, index) => (
-                <View key={bot.id}>
-                  <BotRow
-                    bot={bot}
-                    onDeploy={() => handleDeploy(bot.id)}
-                    onView={() => navigation.navigate('BotDetail', { botId: bot.id, conversationId })}
-                  />
-                  {index < availableToDeploy.length - 1 && <View style={styles.divider} />}
-                </View>
-              ))}
-            </View>
-          </View>
+          <AgentSection
+            title="AVAILABLE TO CONNECT"
+            agents={availableToDeploy}
+            renderAgent={(bot) => renderAgent(bot, false)}
+          />
         )}
 
         {deployedBots.length === 0 && availableToDeploy.length === 0 && (
           <View style={styles.empty}>
-            <Ionicons name="hardware-chip-outline" size={40} color={Colors.textMuted} />
+            <Ionicons name="chatbubble-ellipses-outline" size={30} color={Colors.textMuted} />
             <Caption color={Colors.textMuted} style={styles.emptyText}>
-              No bots available for this group.
+              No agents are ready to connect.
             </Caption>
           </View>
         )}
@@ -177,104 +172,113 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
   );
 }
 
-function BotRow({
+function AgentSection({
+  title,
+  agents,
+  renderAgent,
+}: {
+  title: string;
+  agents: AgentRowModel[];
+  renderAgent: (bot: AgentRowModel) => React.ReactNode;
+}) {
+  return (
+    <View style={styles.section}>
+      <Meta color={Colors.textMuted} style={styles.sectionLabel}>
+        {title}
+      </Meta>
+      <View>
+        {agents.map((bot, index) => (
+          <View key={bot.id}>
+            {renderAgent(bot)}
+            {index < agents.length - 1 && <View style={styles.divider} />}
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function AgentRow({
   bot,
   deployed,
+  pending,
   onRemove,
   onDeploy,
   onView,
 }: {
-  bot: { id: string; name: string; category: string; status: string; description: string; commandHint: string; type?: 'system' | 'custom' };
-  deployed?: boolean;
-  onRemove?: () => void;
-  onDeploy?: () => void;
-  onView?: () => void;
+  bot: AgentRowModel;
+  deployed: boolean;
+  pending: boolean;
+  onRemove: () => void;
+  onDeploy: () => void;
+  onView: () => void;
 }) {
   const statusLabel =
     bot.status === 'available'
-      ? 'Available'
+      ? 'Ready'
       : bot.status === 'local-only'
-      ? 'Local-only'
-      : 'Backend required';
-
-  const statusColor =
-    bot.status === 'available'
-      ? Colors.brand
-      : bot.status === 'local-only'
-      ? Colors.textSecondary
-      : Colors.textMuted;
+        ? 'Limited runtime'
+        : 'Setup required';
 
   return (
     <AnimatedPressable
       onPress={onView}
       activeOpacity={0.7}
-      scaleValue={0.98}
+      scaleValue={0.985}
       hapticFeedback="light"
       accessibilityRole="button"
       accessibilityLabel={`View ${bot.name}`}
     >
-      <View style={styles.botRow}>
-        <View style={styles.botIconWrap}>
-          <Ionicons
-            name={
-              bot.category === 'moderation'
-                ? 'shield-checkmark-outline'
-                : bot.category === 'commerce'
-                ? 'trending-up-outline'
-                : bot.category === 'safety'
-                ? 'warning-outline'
-                : 'flash-outline'
-            }
-            size={20}
+      <View style={styles.agentRow}>
+        <View style={styles.agentIcon}>
+          <AgentIcon
+            category={bot.category}
+            name={bot.name}
+            size={21}
             color={Colors.textPrimary}
           />
         </View>
 
-        <View style={styles.botText}>
-          <View style={styles.botNameRow}>
-            <BodyEmphasis numberOfLines={1}>{bot.name}</BodyEmphasis>
-            <View style={styles.badgeRow}>
-              <View style={[styles.typeBadge, { backgroundColor: bot.type === 'custom' ? Colors.brand + '18' : Colors.surfaceAlt }]}>
-                <Text style={[styles.typeBadgeText, { color: bot.type === 'custom' ? Colors.brand : Colors.textSecondary }]}>
-                  {bot.type === 'custom' ? 'Custom' : 'System'}
-                </Text>
-              </View>
-              <View style={[styles.statusPill, { backgroundColor: statusColor + '18' }]}>
-                <Text style={[styles.statusPillText, { color: statusColor }]}>{statusLabel}</Text>
-              </View>
-            </View>
-          </View>
+        <View style={styles.agentText}>
+          <BodyEmphasis numberOfLines={1}>{bot.name}</BodyEmphasis>
           <Caption color={Colors.textMuted} numberOfLines={1}>
             {bot.description}
           </Caption>
-          {deployed && (
-            <Caption color={Colors.brand} style={styles.commandHint}>
-              {bot.commandHint}
+          <View style={styles.detailLine}>
+            <Caption
+              color={deployed ? Colors.textPrimary : Colors.textMuted}
+              style={styles.detailText}
+              numberOfLines={1}
+            >
+              {deployed ? bot.commandHint : bot.type === 'custom' ? 'Your agent' : 'ThryftVerse agent'}
             </Caption>
-          )}
+            <View style={styles.metaDot} />
+            <Caption color={Colors.textMuted} style={styles.statusText} numberOfLines={1}>
+              {statusLabel}
+            </Caption>
+          </View>
         </View>
 
-        {deployed ? (
-          <AnimatedPressable
-            onPress={onRemove}
-            activeOpacity={0.7}
-            scaleValue={0.92}
-            hapticFeedback="medium"
-            accessibilityRole="button"
-            accessibilityLabel={`Remove ${bot.name}`}
-          >
-            <Ionicons name="remove-circle" size={24} color={Colors.danger} />
-          </AnimatedPressable>
+        {pending ? (
+          <View style={styles.rowAction}>
+            <ActivityIndicator size="small" color={Colors.textMuted} />
+          </View>
         ) : (
           <AnimatedPressable
-            onPress={onDeploy}
+            onPress={deployed ? onRemove : onDeploy}
             activeOpacity={0.7}
             scaleValue={0.92}
-            hapticFeedback="light"
+            hapticFeedback={deployed ? 'medium' : 'light'}
             accessibilityRole="button"
-            accessibilityLabel={`Deploy ${bot.name}`}
+            accessibilityLabel={`${deployed ? 'Remove' : 'Connect'} ${bot.name}`}
           >
-            <Ionicons name="add-circle" size={24} color={Colors.brand} />
+            <View style={styles.rowAction}>
+              <Ionicons
+                name={deployed ? 'remove' : 'add'}
+                size={deployed ? 20 : 21}
+                color={deployed ? Colors.danger : Colors.textPrimary}
+              />
+            </View>
           </AnimatedPressable>
         )}
       </View>
@@ -283,10 +287,6 @@ function BotRow({
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
   content: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.xxl,
@@ -298,57 +298,55 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: Type.meta.size,
     letterSpacing: Type.meta.letterSpacing,
-    marginLeft: Space.xs,
   },
-  card: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    overflow: 'hidden',
-  },
-  botRow: {
+  agentRow: {
+    minHeight: 82,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Space.md,
-    paddingVertical: 14,
-    gap: Space.sm,
+    paddingVertical: 12,
+    gap: 12,
   },
-  botIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
+  agentIcon: {
+    width: 32,
+    height: 44,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  botText: {
+  agentText: {
     flex: 1,
     justifyContent: 'center',
     gap: 2,
   },
-  botNameRow: {
+  detailLine: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
-  statusPill: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: Radius.sm,
-  },
-  statusPillText: {
-    fontSize: 10,
-    fontFamily: Typography.family.bold,
-  },
-  commandHint: {
-    fontSize: 11,
+    gap: 6,
     marginTop: 2,
+  },
+  detailText: {
+    fontSize: 11,
+    flexShrink: 1,
+  },
+  metaDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: Colors.textMuted,
+  },
+  statusText: {
+    fontSize: 11,
+    flexShrink: 0,
+  },
+  rowAction: {
+    width: 44,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   divider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: Colors.border,
-    marginLeft: Space.md + 40 + Space.sm,
+    marginLeft: 44,
   },
   empty: {
     alignItems: 'center',
@@ -358,26 +356,10 @@ const styles = StyleSheet.create({
   emptyText: {
     textAlign: 'center',
   },
-  headerActionBtn: {
+  headerAction: {
     width: 44,
     height: 44,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-  },
-  typeBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: Radius.sm,
-  },
-  typeBadgeText: {
-    fontSize: 10,
-    fontFamily: Typography.family.bold,
   },
 });

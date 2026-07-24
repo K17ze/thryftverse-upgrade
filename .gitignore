@@ -38,6 +38,12 @@ backend/.env
 # backend build output
 backend/api/dist/
 
+# Python runtime/test artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+
 # typescript
 *.tsbuildinfo
 

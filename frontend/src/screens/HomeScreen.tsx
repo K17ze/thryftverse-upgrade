@@ -70,10 +70,12 @@ import { CreatorCanvas } from '../creator/CreatorCanvas';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
-const HEADER_EXPANDED = 64;
-const HEADER_COLLAPSED = 56;
+const HEADER_EXPANDED = 58;
+const HEADER_COLLAPSED = 52;
 const GRID_GAP = Space.sm; // 8pt — design contract discovery gutter
-const MISSING_MEDIA_HEIGHT_RATIO = 1;
+// Missing media is not photography and should not dominate discovery like it is.
+// Keep the fallback compact while real assets continue to use their API geometry.
+const MISSING_MEDIA_HEIGHT_RATIO = 0.78;
 const POSTER_CARD_WIDTH = 76;
 const POSTER_CARD_HEIGHT = 135;
 const LISTING_CARD_CHROME_HEIGHT = 110;
@@ -656,7 +658,6 @@ export default function HomeScreen() {
         <View style={styles.postersSection}>
           <View style={styles.posterSectionHeading}>
             <Text style={styles.posterSectionTitle}>Posters</Text>
-            <Text style={styles.posterSectionSubtitle}>Fresh edits from the community</Text>
           </View>
           <HorizontalRail contentContainerStyle={styles.postersScroll}>
             {Array.from({ length: 4 }).map((_, index) => (
@@ -678,7 +679,6 @@ export default function HomeScreen() {
       <View style={styles.postersSection}>
         <View style={styles.posterSectionHeading}>
           <Text style={styles.posterSectionTitle}>Posters</Text>
-          <Text style={styles.posterSectionSubtitle}>Fresh edits from the community</Text>
         </View>
 
         <HorizontalRail
@@ -692,8 +692,6 @@ export default function HomeScreen() {
             });
             const unwatchedCount = realPosters.filter((s) => !s.seenByViewer).length;
             return sortedPosters.map((story, idx) => {
-            const firstFrame = story.frames[0];
-            const caption = firstFrame?.caption ?? '';
             const isUnwatched = !story.seenByViewer;
             // Show unwatched badge on the first unwatched story
             const showUnwatchedBadge = isUnwatched && idx === 0 && unwatchedCount > 1;
@@ -711,11 +709,16 @@ export default function HomeScreen() {
                 <PosterStoryArtwork story={story} />
                 <View style={styles.posterShade} />
 
-                {!story.compositionDocument && firstFrame?.mediaType !== 'text' && caption ? (
-                  <View style={styles.posterBottomOverlay}>
-                    <Text style={styles.posterCaption} numberOfLines={2}>{caption}</Text>
-                  </View>
-                ) : null}
+                <View style={styles.posterCreatorOverlay}>
+                  <Text style={styles.posterCreatorName} numberOfLines={1}>
+                    @{story.creator.username ?? story.creatorId}
+                  </Text>
+                  <View
+                    style={isUnwatched ? styles.posterFreshDot : styles.posterSeenDot}
+                    accessible
+                    accessibilityLabel={isUnwatched ? 'New poster' : 'Seen poster'}
+                  />
+                </View>
 
                 {story.totalFrameCount > 1 && (
                   <View style={styles.frameCountBadge}>
@@ -729,17 +732,6 @@ export default function HomeScreen() {
                     <Text style={styles.unwatchedBadgeText}>{unwatchedCount} new</Text>
                   </View>
                 )}
-              </View>
-
-              <View style={styles.posterCardMetaRow}>
-                <Text style={styles.posterUserName} numberOfLines={1}>
-                  @{story.creator.username ?? story.creatorId}
-                </Text>
-                <View
-                  style={isUnwatched ? styles.posterFreshDot : styles.posterSeenDot}
-                  accessible
-                  accessibilityLabel={isUnwatched ? 'New poster' : 'Seen poster'}
-                />
               </View>
             </AnimatedPressable>
             );
@@ -827,6 +819,7 @@ export default function HomeScreen() {
       conversationId: `${sellerId}_${listingId}`,
       focusQuery: '',
       partnerUserId: sellerId,
+      itemId: listingId,
     });
   }, [navigation, haptic]);
 
@@ -968,6 +961,7 @@ export default function HomeScreen() {
           feedMode === 'following' ? (
             <Reanimated.View entering={FadeInDown.duration(300)} style={{ flex: 1 }}>
               <EmptyState
+                density="compact"
                 icon={followingFeed.hasFollowing ? 'pricetag-outline' : 'people-outline'}
                 title={followingFeed.hasFollowing ? 'No new drops from sellers you follow' : 'Follow sellers to see their drops here'}
                 subtitle={followingFeed.hasFollowing
@@ -986,6 +980,7 @@ export default function HomeScreen() {
             // a blank masonry. Distinct from the sync-error banner above.
             <Reanimated.View entering={FadeInDown.duration(300)} style={{ flex: 1 }}>
               <EmptyState
+                density="compact"
                 icon="sparkles-outline"
                 title="No drops live yet"
                 subtitle="The community hasn't listed anything live yet. Pull to refresh or explore curated categories."
@@ -1142,12 +1137,11 @@ const styles = StyleSheet.create({
     paddingRight: 10,
   },
   brandTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontFamily: Typography.family.bold,
-    letterSpacing: 0.8,
+    letterSpacing: -0.35,
     color: Colors.textPrimary,
-    lineHeight: 30,
-    textTransform: 'uppercase',
+    lineHeight: 26,
   },
   brandSubtitle: {
     marginTop: 2,
@@ -1494,12 +1488,12 @@ const styles = StyleSheet.create({
   },
 
   postersSection: {
-    marginTop: Space.xs,
-    paddingBottom: Space.sm + 2,
+    marginTop: 2,
+    paddingBottom: Space.sm,
   },
   posterSectionHeading: {
     paddingHorizontal: Space.md,
-    marginBottom: Space.xs + 2,
+    marginBottom: Space.xs,
   },
   posterSectionTitle: {
     color: Colors.textPrimary,
@@ -1507,13 +1501,6 @@ const styles = StyleSheet.create({
     lineHeight: Type.subtitle.lineHeight,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.3,
-  },
-  posterSectionSubtitle: {
-    marginTop: 2,
-    color: Colors.textMuted,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
   },
   postersScroll: {
     paddingHorizontal: Space.md,
@@ -1533,7 +1520,6 @@ const styles = StyleSheet.create({
     height: POSTER_CARD_HEIGHT,
     borderRadius: Radius.lg,
     overflow: 'hidden',
-    marginBottom: Space.xs,
     position: 'relative',
     backgroundColor: Colors.surfaceAlt,
   },
@@ -1582,7 +1568,7 @@ const styles = StyleSheet.create({
   },
   posterShade: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.08)',
+    backgroundColor: 'rgba(0,0,0,0.05)',
   },
   posterAvatarOverlay: {
     position: 'absolute',
@@ -1675,6 +1661,26 @@ const styles = StyleSheet.create({
     lineHeight: 12,
     fontFamily: Typography.family.medium,
   },
+  posterCreatorOverlay: {
+    position: 'absolute',
+    left: 5,
+    right: 5,
+    bottom: 5,
+    minHeight: 22,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 6,
+    borderRadius: Radius.sm,
+    backgroundColor: 'rgba(0,0,0,0.58)',
+  },
+  posterCreatorName: {
+    flex: 1,
+    color: Colors.textInverse,
+    fontSize: 9,
+    lineHeight: 12,
+    fontFamily: Typography.family.semibold,
+  },
   frameCountBadge: {
     position: 'absolute',
     top: 6,
@@ -1705,18 +1711,6 @@ const styles = StyleSheet.create({
     color: Colors.textInverse,
     fontSize: 9,
     fontFamily: Typography.family.bold,
-  },
-  posterCardMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Space.xs,
-  },
-  posterUserName: {
-    flex: 1,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
   },
   posterFreshDot: {
     width: 7,

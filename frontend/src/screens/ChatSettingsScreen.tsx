@@ -24,15 +24,14 @@ export default function ChatSettingsScreen({ navigation }: Props) {
   const setOffersInChat = useStore((s) => s.setOffersInChatEnabled);
   const orderUpdatesInChat = useStore((s) => s.orderUpdatesInChatEnabled);
   const setOrderUpdatesInChat = useStore((s) => s.setOrderUpdatesInChatEnabled);
-  const enabledBotIds = useStore((s) => s.enabledBotIds);
-  const bots = useStore((s) => s.availableChatBots);
+  const customAgents = useStore((s) => s.customBots);
   const messageRequests = useStore((s) => s.messageRequests);
 
   const [showAllowSheet, setShowAllowSheet] = useState(false);
 
   const mutedCount = mutedIds.length;
   const archivedCount = archivedIds.length;
-  const enabledBots = bots.filter((b) => enabledBotIds.includes(b.id));
+  const publishedAgentCount = customAgents.filter((agent) => !agent.isDraft && !agent.isDisabled).length;
 
   const allowOptions = ['Everyone', 'People I follow', 'No one'];
   const allowLabel: Record<string, string> = {
@@ -48,7 +47,7 @@ export default function ChatSettingsScreen({ navigation }: Props) {
   };
 
   return (
-    <FlagshipScreen header={<FlagshipHeader title="Chat privacy" onBack={() => navigation.goBack()} />}>
+    <FlagshipScreen header={<FlagshipHeader title="Chat settings" onBack={() => navigation.goBack()} />}>
       <SettingsSection title="Who can reach you" noCard>
         <SettingsRow
           title="Who can message me"
@@ -81,6 +80,21 @@ export default function ChatSettingsScreen({ navigation }: Props) {
           title="Archived conversations"
           subtitle={archivedCount > 0 ? `${archivedCount} archived` : 'None archived'}
           onPress={() => navigation.navigate('ArchivedConversations')}
+          isLast
+        />
+      </SettingsSection>
+
+      <SettingsSection title="Agents & automation" noCard>
+        <SettingsRow
+          title="Your agents"
+          subtitle={publishedAgentCount > 0 ? `${publishedAgentCount} published` : 'Create and tune a private AI agent'}
+          onPress={() => navigation.navigate('CustomBots')}
+          isFirst
+        />
+        <SettingsRow
+          title="Agent library"
+          subtitle="Explore specialists for group conversations"
+          onPress={() => navigation.navigate('BotDirectory')}
           isLast
         />
       </SettingsSection>
@@ -129,32 +143,6 @@ export default function ChatSettingsScreen({ navigation }: Props) {
           subtitle="Save time with reusable message templates"
           onPress={() => navigation.navigate('ManageQuickReplies', { role: 'buyer' })}
           isFirst
-          isLast
-        />
-      </SettingsSection>
-
-      <SettingsSection title="Bots & automation" noCard>
-        <SettingsRow
-          title="Bot directory"
-          subtitle="Browse and manage marketplace bots"
-          onPress={() => navigation.navigate('BotDirectory')}
-          isFirst
-        />
-        <SettingsRow
-          title="Enabled bots"
-          subtitle={enabledBots.length > 0 ? `${enabledBots.length} active` : 'None active'}
-          onPress={() => {
-            if (enabledBots.length === 0) {
-              show('No bots enabled. Visit Bot Directory to enable one.', 'info');
-              return;
-            }
-            navigation.navigate('BotDirectory');
-          }}
-        />
-        <SettingsRow
-          title="Bot permissions"
-          subtitle="Review what data each bot can access"
-          onPress={() => navigation.navigate('BotDirectory')}
           isLast
         />
       </SettingsSection>

@@ -76,8 +76,8 @@ export default function SearchScreen() {
               conversationId: `${item.sellerId}_${item.id}`,
               focusQuery: '',
               partnerUserId: item.sellerId,
+              itemId: item.id,
             })}
-            showSaveButton
             enableEntranceAnimation
           />
         );
@@ -179,6 +179,7 @@ export default function SearchScreen() {
           {listings.length === 0 && !isSyncing && !lastError ? (
             <Reanimated.View entering={FadeInDown.duration(400)}>
               <EmptyState
+                density="compact"
                 icon="compass-outline"
                 title="Nothing to explore yet"
                 subtitle="New items are uploaded every day. Check back soon or browse categories."
@@ -263,8 +264,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: Colors.surfaceAlt,
-    borderRadius: Radius.lg,
+    backgroundColor: Colors.background,
+    borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
     paddingHorizontal: 14,
   },
   searchPlaceholder: {
@@ -278,8 +281,10 @@ const styles = StyleSheet.create({
   visualSearchButton: {
     width: 46,
     height: 46,
-    borderRadius: 23,
-    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.md,
+    backgroundColor: 'transparent',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },

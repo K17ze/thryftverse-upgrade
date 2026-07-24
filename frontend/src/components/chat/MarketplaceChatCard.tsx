@@ -290,9 +290,9 @@ function StatusBadge({ tone, label, icon }: { tone: 'positive' | 'negative' | 'n
 
 const styles = StyleSheet.create({
   offerBlock: {
-    width: '86%',
-    maxWidth: 340,
-    minWidth: 270,
+    width: '88%',
+    maxWidth: 352,
+    minWidth: 0,
     gap: Space.xs,
     backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.lg,
@@ -385,8 +385,12 @@ const styles = StyleSheet.create({
   },
   offerActions: {
     flexDirection: 'row',
-    gap: Space.xs,
-    marginTop: Space.xs,
+    alignItems: 'center',
+    gap: 2,
+    marginTop: Space.xs + 2,
+    paddingTop: Space.xs,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
   },
   offerPass: {
     flex: 1,
@@ -396,7 +400,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: Space.xs,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
+    backgroundColor: 'transparent',
   },
   offerPassText: {
     fontSize: Type.caption.size,
@@ -409,11 +413,9 @@ const styles = StyleSheet.create({
     minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 2,
+    paddingHorizontal: Space.xs,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    backgroundColor: 'transparent',
   },
   offerCounterText: {
     fontSize: Type.caption.size,
@@ -421,13 +423,13 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
   },
   offerAccept: {
-    flex: 1,
+    flex: 1.25,
     minWidth: 0,
     minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Space.xs,
-    borderRadius: Radius.md,
+    borderRadius: Radius.sm,
     backgroundColor: Colors.textPrimary,
   },
   offerAcceptText: {

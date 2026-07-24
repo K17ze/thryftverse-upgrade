@@ -1,85 +1,59 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AnimatedPressable } from '../components/AnimatedPressable';
-import {
-  StatusBar,
-  StyleSheet,
-  Text,
-  View,
-  ScrollView,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { AgentIcon } from '../components/agents/AgentIcon';
+import { AnimatedPressable } from '../components/AnimatedPressable';
+import { EmptyState } from '../components/EmptyState';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
-import { useToast } from '../context/ToastContext';
-import { EmptyState } from '../components/EmptyState';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
-import { AppButton } from '../components/ui/AppButton';
-import { ChatCard } from '../components/chat/ChatCard';
-import { Space, Radius, Type } from '../theme/designTokens';
-import { Meta, Caption, BodyEmphasis } from '../components/ui/Text';
+import { Space, Type, Typography } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
-import { useHaptic } from '../hooks/useHaptic';
-import { Typography } from '../theme/designTokens';
 
 type Props = StackScreenProps<RootStackParamList, 'BotDirectory'>;
+type AgentCategory =
+  | 'all'
+  | 'assistant'
+  | 'safety'
+  | 'commerce'
+  | 'moderation'
+  | 'automation'
+  | 'styling';
 
-type BotCategory = 'all' | 'assistant' | 'safety' | 'commerce' | 'moderation' | 'automation' | 'styling';
-
-const CATEGORY_OPTIONS: Array<{ value: BotCategory; label: string }> = [
+const CATEGORIES: Array<{ value: AgentCategory; label: string }> = [
   { value: 'all', label: 'All' },
-  { value: 'assistant', label: 'Assistants' },
-  { value: 'safety', label: 'Safety' },
+  { value: 'assistant', label: 'Assist' },
+  { value: 'styling', label: 'Style' },
   { value: 'commerce', label: 'Commerce' },
-  { value: 'moderation', label: 'Moderation' },
-  { value: 'automation', label: 'Automation' },
-  { value: 'styling', label: 'Styling' },
+  { value: 'safety', label: 'Safety' },
+  { value: 'moderation', label: 'Moderate' },
+  { value: 'automation', label: 'Workflow' },
 ];
-
-const STATUS_LABEL: Record<string, string> = {
-  available: 'Available',
-  'local-only': 'Local-only',
-  'backend-required': 'Backend required',
-};
-
-const STATUS_COLOR: Record<string, string> = {
-  available: Colors.brand,
-  'local-only': Colors.textSecondary,
-  'backend-required': Colors.textMuted,
-};
 
 export default function BotDirectoryScreen({ navigation }: Props) {
   const { isDark } = useAppTheme();
-  const { show } = useToast();
-  const haptic = useHaptic();
-  const [selectedCategory, setSelectedCategory] = useState<BotCategory>('all');
-
-  const bots = useStore((state) => state.availableChatBots);
-  const enabledBotIds = useStore((state) => state.enabledBotIds);
+  const [selectedCategory, setSelectedCategory] = useState<AgentCategory>('all');
+  const systemAgents = useStore((state) => state.availableChatBots);
+  const customAgents = useStore((state) => state.customBots);
   const loadBotsFromApi = useStore((state) => state.loadBotsFromApi);
 
   useEffect(() => {
     void loadBotsFromApi();
   }, [loadBotsFromApi]);
-  const toggleEnabledBot = useStore((state) => state.toggleEnabledBot);
-  const isBotEnabled = useStore((state) => state.isBotEnabled);
 
-  const filteredBots = useMemo(() => {
-    if (selectedCategory === 'all') return bots;
-    return bots.filter((b) => b.category === selectedCategory);
-  }, [bots, selectedCategory]);
-
-  const handleToggle = (botId: string) => {
-    haptic.medium();
-    toggleEnabledBot(botId);
-    const nowEnabled = !isBotEnabled(botId);
-    show(
-      nowEnabled ? 'Bot enabled in your account' : 'Bot disabled',
-      nowEnabled ? 'success' : 'info'
-    );
-  };
+  const publishedCount = customAgents.filter(
+    (agent) => !agent.isDraft && !agent.isDisabled
+  ).length;
+  const filteredAgents = useMemo(
+    () =>
+      selectedCategory === 'all'
+        ? systemAgents
+        : systemAgents.filter((agent) => agent.category === selectedCategory),
+    [selectedCategory, systemAgents]
+  );
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -87,326 +61,285 @@ export default function BotDirectoryScreen({ navigation }: Props) {
         barStyle={isDark ? 'light-content' : 'dark-content'}
         backgroundColor={Colors.background}
       />
-
       <ScreenHeader
-        title="Bot Directory"
-        subtitle="Marketplace bots & assistants"
+        title="Agents"
+        subtitle="Specialists for your group conversations"
         onBack={() => navigation.goBack()}
         rightAction={
           <AnimatedPressable
-            onPress={() => navigation.navigate('CustomBots')}
-            activeOpacity={0.7}
+            onPress={() => navigation.navigate('BotBuilder', {})}
+            style={styles.headerAction}
             scaleValue={0.92}
             hapticFeedback="light"
             accessibilityRole="button"
-            accessibilityLabel="My bots"
+            accessibilityLabel="Create an AI agent"
           >
-            <View style={styles.headerActionBtn}>
-              <Ionicons name="person-outline" size={20} color={Colors.textPrimary} />
-            </View>
+            <Ionicons name="add" size={23} color={Colors.textPrimary} />
           </AnimatedPressable>
         }
       />
 
-      {/* What are bots explanation */}
-      <View style={styles.infoBanner}>
-        <Ionicons name="information-circle-outline" size={18} color={Colors.textMuted} />
-        <Caption color={Colors.textMuted} style={styles.infoText}>
-          Bots are automated assistants that can help moderate, sell, or style in your group chats.
-          {' '}{STATUS_LABEL['local-only']} bots work on this device.
-          {' '}{STATUS_LABEL['backend-required']} bots need a server connection.
-        </Caption>
-      </View>
-
-      {/* Category filter */}
       <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.categoryStrip}
-        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.content}
+        stickyHeaderIndices={[2]}
       >
-        {CATEGORY_OPTIONS.map((cat) => {
-          const active = selectedCategory === cat.value;
-          return (
-            <AnimatedPressable
-              key={cat.value}
-              onPress={() => setSelectedCategory(cat.value)}
-              activeOpacity={0.8}
-              scaleValue={0.96}
-              hapticFeedback="light"
-            >
-              <View
-                style={[
-                  styles.categoryPill,
-                  active && styles.categoryPillActive,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.categoryText,
-                    active && styles.categoryTextActive,
-                  ]}
-                >
-                  {cat.label}
-                </Text>
-              </View>
-            </AnimatedPressable>
-          );
-        })}
-      </ScrollView>
-
-      {filteredBots.length === 0 ? (
-        <EmptyState
-          icon="hardware-chip-outline"
-          title="No bots in this category"
-          subtitle="Try another filter or check back later."
-        />
-      ) : (
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.listContent}
-          keyboardShouldPersistTaps="handled"
+        <AnimatedPressable
+          onPress={() => navigation.navigate('CustomBots')}
+          style={styles.yourAgents}
+          scaleValue={0.985}
+          hapticFeedback="light"
+          accessibilityRole="button"
+          accessibilityLabel="Open your agents"
         >
-          {filteredBots.map((bot, index) => {
-            const enabled = isBotEnabled(bot.id);
-            return (
-              <View key={bot.id}>
-                <ChatCard variant="surface" style={styles.botCard}>
-                  <View style={styles.botHeadRow}>
-                    <View style={styles.botIconWrap}>
-                      <Ionicons
-                        name={
-                          bot.category === 'moderation'
-                            ? 'shield-checkmark-outline'
-                            : bot.category === 'commerce'
-                              ? 'trending-up-outline'
-                              : bot.category === 'safety'
-                                ? 'warning-outline'
-                                : bot.category === 'styling'
-                                  ? 'color-wand-outline'
-                                  : 'flash-outline'
-                        }
-                        size={20}
-                        color={Colors.textPrimary}
-                      />
-                    </View>
+          <View style={styles.leadingIcon}>
+            <Ionicons name="person-outline" size={21} color={Colors.textPrimary} />
+          </View>
+          <View style={styles.yourAgentsCopy}>
+            <Text style={styles.yourAgentsTitle}>Your agents</Text>
+            <Text style={styles.yourAgentsDetail} numberOfLines={2}>
+              {publishedCount > 0
+                ? `${publishedCount} published · create, tune, and review access`
+                : 'Create a private agent with its own instructions and voice'}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={19} color={Colors.textMuted} />
+        </AnimatedPressable>
 
-                    <View style={styles.botTextWrap}>
-                      <BodyEmphasis>{bot.name}</BodyEmphasis>
-                      <View style={styles.metaRow}>
-                        <View style={[styles.typeBadge, { backgroundColor: Colors.surfaceAlt }]}>
-                          <Text style={[styles.typeBadgeText, { color: Colors.textSecondary }]}>System</Text>
-                        </View>
-                        <Caption
-                          color={STATUS_COLOR[bot.status] ?? Colors.textMuted}
-                          style={styles.statusLabel}
-                        >
-                          {STATUS_LABEL[bot.status] ?? bot.status}
-                        </Caption>
-                        <Caption color={Colors.textMuted}>
-                          {bot.category.toUpperCase()}
-                        </Caption>
-                      </View>
-                    </View>
+        <View style={styles.sectionIntro}>
+          <Text style={styles.sectionTitle}>ThryftVerse agents</Text>
+          <Text style={styles.sectionDetail}>Built-in help for common chat workflows.</Text>
+        </View>
 
-                    <AppButton
-                      style={[styles.enableBtn, enabled && styles.enableBtnActive]}
-                      variant={enabled ? 'primary' : 'secondary'}
-                      size="sm"
-                      title={enabled ? 'On' : 'Off'}
-                      onPress={() => handleToggle(bot.id)}
-                      accessibilityLabel={enabled ? 'Disable bot' : 'Enable bot'}
+        <View style={styles.filterBackground}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filters}
+          >
+            {CATEGORIES.map((category) => {
+              const selected = selectedCategory === category.value;
+              return (
+                <AnimatedPressable
+                  key={category.value}
+                  onPress={() => setSelectedCategory(category.value)}
+                  style={[styles.filter, selected && styles.filterSelected]}
+                  scaleValue={0.98}
+                  hapticFeedback="selection"
+                  accessibilityRole="tab"
+                  accessibilityLabel={category.label}
+                  accessibilityState={{ selected }}
+                >
+                  <Text style={[styles.filterText, selected && styles.filterTextSelected]}>
+                    {category.label}
+                  </Text>
+                </AnimatedPressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {filteredAgents.length === 0 ? (
+          <EmptyState
+            icon="chatbubble-ellipses-outline"
+            title="No agents here yet"
+            subtitle="Choose another specialty."
+          />
+        ) : (
+          <View style={styles.list}>
+            {filteredAgents.map((agent, index) => (
+              <View key={agent.id}>
+                <AnimatedPressable
+                  onPress={() => navigation.navigate('BotDetail', { botId: agent.id })}
+                  style={styles.agentRow}
+                  scaleValue={0.99}
+                  hapticFeedback="light"
+                  accessibilityRole="button"
+                  accessibilityLabel={`View ${agent.name}`}
+                >
+                  <View style={styles.leadingIcon}>
+                    <AgentIcon
+                      category={agent.category}
+                      name={agent.name}
+                      size={21}
+                      color={Colors.textPrimary}
                     />
                   </View>
-
-                  <Caption color={Colors.textSecondary} style={styles.botDescription}>
-                    {bot.description}
-                  </Caption>
-
-                  {bot.permissions.length > 0 && (
-                    <View style={styles.permissionsRow}>
-                      {bot.permissions.slice(0, 2).map((perm) => (
-                        <View key={perm} style={styles.permissionPill}>
-                          <Caption color={Colors.textSecondary} style={styles.permissionPillText}>
-                            {perm}
-                          </Caption>
-                        </View>
-                      ))}
-                      {bot.permissions.length > 2 && (
-                        <Caption color={Colors.textMuted} style={styles.permissionPillText}>
-                          +{bot.permissions.length - 2}
-                        </Caption>
-                      )}
+                  <View style={styles.agentCopy}>
+                    <Text style={styles.agentName} numberOfLines={1}>
+                      {agent.name}
+                    </Text>
+                    <Text style={styles.agentDescription} numberOfLines={2}>
+                      {agent.description}
+                    </Text>
+                    <View style={styles.agentMeta}>
+                      <Text style={styles.categoryText}>{agent.category}</Text>
+                      <Text style={styles.metaDot}>·</Text>
+                      <Text style={styles.agentMetaText} numberOfLines={1}>
+                        {agent.commandHint}
+                      </Text>
+                      <Text style={styles.metaDot}>·</Text>
+                      <Text style={styles.statusText}>
+                        {agent.status === 'available' ? 'Ready' : 'Setup required'}
+                      </Text>
                     </View>
-                  )}
-
-                  <View style={styles.cardActions}>
-                    <AnimatedPressable
-                      onPress={() => navigation.navigate('BotDetail', { botId: bot.id })}
-                      activeOpacity={0.8}
-                      scaleValue={0.98}
-                      hapticFeedback="light"
-                      accessibilityRole="button"
-                      accessibilityLabel={`View ${bot.name} details`}
-                    >
-                      <View style={styles.viewDetailBtn}>
-                        <Caption color={Colors.brand} style={styles.viewDetailText}>View details</Caption>
-                        <Ionicons name="chevron-forward" size={14} color={Colors.brand} />
-                      </View>
-                    </AnimatedPressable>
-
-                    <Caption color={Colors.textMuted} style={styles.toggleHint}>
-                      {enabled ? 'Enabled in account' : 'Disabled in account'}
-                    </Caption>
                   </View>
-                </ChatCard>
+                  <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+                </AnimatedPressable>
+                {index < filteredAgents.length - 1 ? <View style={styles.divider} /> : null}
               </View>
-            );
-          })}
-          <View style={{ height: Space.xl }} />
-        </ScrollView>
-      )}
+            ))}
+          </View>
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  infoBanner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Space.sm,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    backgroundColor: Colors.surfaceAlt,
-    marginHorizontal: Space.md,
-    marginBottom: Space.sm,
-    borderRadius: Radius.lg,
-  },
-  infoText: {
+  container: {
     flex: 1,
-    lineHeight: 18,
+    backgroundColor: Colors.background,
   },
-  categoryStrip: {
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    gap: Space.sm,
+  content: {
+    paddingBottom: Space.xxl,
   },
-  categoryPill: {
-    paddingVertical: Space.sm - 2,
-    paddingHorizontal: Space.md,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
-  },
-  categoryPillActive: {
-    backgroundColor: Colors.brand,
-  },
-  categoryText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
-  },
-  categoryTextActive: {
-    color: Colors.textInverse,
-    fontFamily: Typography.family.semibold,
-  },
-  listContent: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    gap: Space.sm + 2,
-  },
-  botCard: {
-    padding: Space.md,
-  },
-  botHeadRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm + 2,
-  },
-  botIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.surfaceAlt,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  botTextWrap: { flex: 1 },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    marginTop: 2,
-  },
-  statusLabel: {
-    fontFamily: Typography.family.semibold,
-  },
-  enableBtn: {
-    minWidth: 56,
-    height: 32,
-    borderRadius: Radius.full,
-    paddingHorizontal: Space.sm + 4,
-  },
-  enableBtnActive: {
-    borderColor: Colors.brand,
-    backgroundColor: Colors.brand,
-  },
-  botDescription: {
-    marginTop: Space.sm + 4,
-    lineHeight: 19,
-  },
-  permissionsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Space.xs,
-    marginTop: Space.sm,
-  },
-  permissionPill: {
-    backgroundColor: Colors.surfaceAlt,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: Radius.sm,
-  },
-  permissionPillText: {
-    fontSize: 11,
-  },
-  cardActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: Space.sm,
-    paddingTop: Space.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
-  },
-  viewDetailBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-  },
-  viewDetailText: {
-    fontFamily: Typography.family.medium,
-  },
-  toggleHint: {
-    fontSize: 11,
-  },
-  headerActionBtn: {
+  headerAction: {
     width: 44,
     height: 44,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  typeBadge: {
+  yourAgents: {
+    minHeight: 82,
+    marginHorizontal: Space.md,
+    marginTop: Space.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+  },
+  leadingIcon: {
+    width: 32,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  yourAgentsCopy: {
+    flex: 1,
+    gap: 3,
+  },
+  yourAgentsTitle: {
+    color: Colors.textPrimary,
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.subtitle.size,
+  },
+  yourAgentsDetail: {
+    color: Colors.textMuted,
+    fontFamily: Typography.family.regular,
+    fontSize: Type.caption.size,
+    lineHeight: 17,
+  },
+  sectionIntro: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.xl,
+    paddingBottom: Space.sm,
+  },
+  sectionTitle: {
+    color: Colors.textPrimary,
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.subtitle.size,
+  },
+  sectionDetail: {
+    marginTop: 2,
+    color: Colors.textMuted,
+    fontFamily: Typography.family.regular,
+    fontSize: Type.caption.size,
+  },
+  filterBackground: {
+    backgroundColor: Colors.background,
+  },
+  filters: {
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.sm,
+    gap: 9,
+  },
+  filter: {
+    minHeight: 38,
+    justifyContent: 'center',
     paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: Radius.sm,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
   },
-  typeBadgeText: {
-    fontSize: 10,
-    fontFamily: Typography.family.bold,
+  filterSelected: {
+    borderBottomColor: Colors.textPrimary,
+  },
+  filterText: {
+    color: Colors.textMuted,
+    fontFamily: Typography.family.medium,
+    fontSize: Type.captionElevated.size,
+  },
+  filterTextSelected: {
+    color: Colors.textPrimary,
+    fontFamily: Typography.family.semibold,
+  },
+  list: {
+    paddingHorizontal: Space.md,
+  },
+  agentRow: {
+    minHeight: 104,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+  },
+  agentCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  agentName: {
+    color: Colors.textPrimary,
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.bodyEmphasis.size,
+  },
+  agentDescription: {
+    color: Colors.textSecondary,
+    fontFamily: Typography.family.regular,
+    fontSize: Type.captionElevated.size,
+    lineHeight: 18,
+  },
+  agentMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    overflow: 'hidden',
+  },
+  categoryText: {
+    color: Colors.textMuted,
+    fontFamily: Typography.family.medium,
+    fontSize: Type.caption.size,
+    textTransform: 'capitalize',
+  },
+  agentMetaText: {
+    flexShrink: 1,
+    color: Colors.textMuted,
+    fontFamily: Typography.family.medium,
+    fontSize: Type.caption.size,
+  },
+  statusText: {
+    flexShrink: 0,
+    color: Colors.textMuted,
+    fontFamily: Typography.family.medium,
+    fontSize: Type.caption.size,
+  },
+  metaDot: {
+    color: Colors.textMuted,
+    fontSize: Type.caption.size,
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.border,
+    marginLeft: 44,
   },
 });

@@ -65,6 +65,17 @@ export interface PayoutRequestPayload {
   updatedAt: string;
 }
 
+export interface StripeConnectStatusPayload {
+  hasConnectAccount: boolean;
+  stripeAccountId?: string;
+  status?: string;
+  chargesEnabled?: boolean;
+  payoutsEnabled?: boolean;
+  onboardingUrl?: string | null;
+  requirementsCurrentlyDue?: string[];
+  payoutPolicySupported?: boolean;
+}
+
 export interface IzeQuotePayload {
   direction: 'mint' | 'burn';
   fiatCurrency: string;
@@ -350,6 +361,31 @@ export async function listPayoutAccounts(userId: string) {
   );
 
   return payload.items;
+}
+
+export async function createStripeConnectAccount(userId: string) {
+  return fetchJson<{
+    ok: true;
+    stripeAccountId: string;
+    status: string;
+  }>(`/users/${encodeURIComponent(userId)}/stripe-connect/account`, {
+    method: 'POST',
+  });
+}
+
+export async function createStripeConnectOnboardingLink(userId: string) {
+  return fetchJson<{
+    ok: true;
+    onboardingUrl: string;
+  }>(`/users/${encodeURIComponent(userId)}/stripe-connect/onboarding-link`, {
+    method: 'POST',
+  });
+}
+
+export async function getStripeConnectStatus(userId: string) {
+  return fetchJson<{ ok: true } & StripeConnectStatusPayload>(
+    `/users/${encodeURIComponent(userId)}/stripe-connect/status`
+  );
 }
 
 export async function createPayoutAccount(

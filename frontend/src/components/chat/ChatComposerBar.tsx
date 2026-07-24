@@ -154,7 +154,10 @@ export function ChatComposerBar({
             <Pressable
               key={i}
               onPress={qr.onPress}
-              style={styles.quickReplyChip}
+              style={({ pressed }) => [
+                styles.quickReplyChip,
+                pressed && styles.quickReplyChipPressed,
+              ]}
               accessibilityRole="button"
               accessibilityLabel={`Quick reply: ${qr.label}`}
             >
@@ -342,22 +345,27 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
   quickReplyStrip: {
-    maxHeight: 40,
+    maxHeight: 52,
   },
   quickReplyContent: {
     flexDirection: 'row',
     gap: Space.xs,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.xs,
+    paddingVertical: 4,
   },
   quickReplyChip: {
     maxWidth: 210,
+    minHeight: 44,
+    justifyContent: 'center',
     paddingHorizontal: Space.sm + 2,
-    paddingVertical: 6,
-    borderRadius: Radius.lg,
-    backgroundColor: Colors.surfaceAlt,
+    paddingVertical: 8,
+    borderRadius: Radius.md,
+    backgroundColor: 'transparent',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
+  },
+  quickReplyChipPressed: {
+    backgroundColor: Colors.surfaceAlt,
   },
   quickReplyText: {
     fontSize: Type.caption.size,

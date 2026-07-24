@@ -319,7 +319,7 @@ describe('UI-22B settings reconstruction architecture guardrails', () => {
 
   it('BlockedUsersScreen uses FlagshipScreen and FlagshipHeader', () => {
     const src = readSrc('screens/BlockedUsersScreen.tsx');
-    expect(src).toContain("import { FlagshipEmptyGraphic, FlagshipScreen, FlagshipHeader } from '../components/flagship'");
+    expect(src).toContain("import { FlagshipScreen, FlagshipHeader } from '../components/flagship'");
     expect(src).toContain('<FlagshipScreen');
   });
 

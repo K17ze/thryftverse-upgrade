@@ -6,29 +6,32 @@ export interface PresignResponse {
   key: string;
   url: string;
   publicUrl: string;
+  contentType: string;
+  sizeBytes: number;
+  maxSizeBytes: number;
+  expiresInSeconds: number;
 }
 
 export async function presignUpload(
   fileName: string,
   contentType: string,
-  folder = 'uploads'
+  folder = 'uploads',
+  sizeBytes: number
 ): Promise<PresignResponse> {
   return fetchJson<PresignResponse>('/uploads/presign', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fileName, contentType, folder }),
+    body: JSON.stringify({ fileName, contentType, folder, sizeBytes }),
   });
 }
 
 export async function uploadToPresignedUrl(
   presignedUrl: string,
   fileUri: string,
-  contentType: string
+  contentType: string,
+  preparedBlob?: Blob
 ): Promise<void> {
-  // In React Native, we need to read the file as blob/arraybuffer and PUT it
-  // For Expo, we'll use fetch with the file URI
-  const response = await fetch(fileUri);
-  const blob = await response.blob();
+  const blob = preparedBlob ?? await fetch(fileUri).then((response) => response.blob());
 
   const uploadResponse = await fetch(presignedUrl, {
     method: 'PUT',
@@ -75,7 +78,8 @@ export async function uploadMedia(
     contentType = source.mimeType;
   }
 
-  const presign = await presignUpload(fileName, contentType, folder);
-  await uploadToPresignedUrl(presign.url, fileUri, contentType);
+  const blob = await fetch(fileUri).then((response) => response.blob());
+  const presign = await presignUpload(fileName, contentType, folder, blob.size);
+  await uploadToPresignedUrl(presign.url, fileUri, contentType, blob);
   return presign.publicUrl;
 }

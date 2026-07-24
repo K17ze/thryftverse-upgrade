@@ -1,15 +1,15 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Typography, Space } from '../../theme/designTokens';
-import { CachedImage } from '../CachedImage';
-import { AnimatedPressable } from '../AnimatedPressable';
 import type { SellerTrustSummary, VerificationTier } from '../../platform/product';
 import { VERIFICATION_TIERS } from '../../platform/product';
+import { Colors } from '../../constants/colors';
+import { Space, Typography } from '../../theme/designTokens';
+import { AnimatedPressable } from '../AnimatedPressable';
+import { CachedImage } from '../CachedImage';
 import { ProfileTrustSignals } from './ProfileTrustSignals';
 
-const AVATAR_SIZE = 96;
+const AVATAR_SIZE = 84;
 
 interface MyProfileIdentityHeroProps {
   avatarUri: string | null;
@@ -18,15 +18,12 @@ interface MyProfileIdentityHeroProps {
   bio?: string;
   location?: string;
   memberSince?: string;
-  /** Seller trust summary from /sellers/:id — provides verified badge, response time, dispatch time. */
+  listingCount?: number;
+  lookCount?: number;
   sellerTrust?: SellerTrustSummary | null;
-  /** Email-verified flag from the user profile (fallback for verified badge). */
   emailVerified?: boolean;
-  /** Rating average from public profile stats. */
   ratingAverage?: number | null;
-  /** Review count from public profile stats. */
   reviewCount?: number;
-  /** Sold listing count from public profile stats. */
   soldCount?: number;
   onEditAvatar: () => void;
   onEditProfile: () => void;
@@ -40,6 +37,8 @@ export function MyProfileIdentityHero({
   bio,
   location,
   memberSince,
+  listingCount = 0,
+  lookCount = 0,
   sellerTrust,
   emailVerified,
   ratingAverage,
@@ -49,97 +48,124 @@ export function MyProfileIdentityHero({
   onEditProfile,
   onShare,
 }: MyProfileIdentityHeroProps) {
-  const contextParts: string[] = [];
-  if (location) contextParts.push(location);
-  if (memberSince) contextParts.push(`Member since ${memberSince}`);
-
-  const isVerified = sellerTrust?.verified === true || emailVerified === true;
-  const verificationTier: VerificationTier | null = sellerTrust?.verificationTier ?? (isVerified ? 'email' : null);
+  const context = [
+    location,
+    memberSince ? `Member since ${memberSince}` : undefined,
+  ].filter(Boolean);
+  const verified =
+    sellerTrust?.verified === true || emailVerified === true;
+  const verificationTier: VerificationTier | null =
+    sellerTrust?.verificationTier ?? (verified ? 'email' : null);
+  const completedSales = sellerTrust?.completedSales ?? soldCount ?? 0;
 
   return (
     <View style={styles.container}>
-      {/* Avatar — overlaps cover edge */}
-      <View style={styles.avatarSection}>
+      <View style={styles.identityTop}>
         <View style={styles.avatarWrap}>
           {avatarUri ? (
             <CachedImage
               uri={avatarUri}
               style={styles.avatar}
-              containerStyle={{ width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_SIZE / 2 }}
+              containerStyle={styles.avatar}
               contentFit="cover"
             />
           ) : (
             <View style={[styles.avatar, styles.avatarFallback]}>
-              <Ionicons name="person" size={36} color={Colors.textMuted} />
+              <Ionicons name="person-outline" size={34} color={Colors.textMuted} />
             </View>
           )}
           <Pressable
-            style={styles.editAvatarBtn}
+            style={styles.editAvatar}
             onPress={onEditAvatar}
             hitSlop={8}
-            accessibilityLabel="Edit avatar"
+            accessibilityLabel="Edit profile photo"
             accessibilityRole="button"
           >
-            <Ionicons name="camera" size={13} color="#fff" />
+            <Ionicons name="camera-outline" size={14} color={Colors.textInverse} />
           </Pressable>
+        </View>
+
+        <View style={styles.stats}>
+          <ProfileStat value={listingCount} label="Listings" />
+          <ProfileStat value={lookCount} label="Looks" />
+          <ProfileStat value={completedSales} label="Sold" />
         </View>
       </View>
 
-      {/* Identity */}
       <View style={styles.displayNameRow}>
-        <Text style={styles.displayName} numberOfLines={1}>{displayName}</Text>
+        <Text style={styles.displayName} numberOfLines={1}>
+          {displayName}
+        </Text>
         {verificationTier ? (
           <Ionicons
-            name={VERIFICATION_TIERS[verificationTier].icon as keyof typeof Ionicons.glyphMap}
-            size={18}
-            color={VERIFICATION_TIERS[verificationTier].color === 'brand' ? Colors.brand : Colors.success}
-            style={styles.verifiedBadge}
+            name={
+              VERIFICATION_TIERS[verificationTier]
+                .icon as keyof typeof Ionicons.glyphMap
+            }
+            size={17}
+            color={
+              VERIFICATION_TIERS[verificationTier].color === 'brand'
+                ? Colors.brand
+                : Colors.success
+            }
             accessibilityLabel={VERIFICATION_TIERS[verificationTier].label}
           />
         ) : null}
       </View>
-      <Text style={styles.username} numberOfLines={1}>@{username}</Text>
+      <Text style={styles.username} numberOfLines={1}>
+        @{username}
+      </Text>
 
-      {bio ? (
-        <Text style={styles.bio}>{bio}</Text>
+      {bio ? <Text style={styles.bio}>{bio}</Text> : null}
+      {context.length > 0 ? (
+        <Text style={styles.context} numberOfLines={1}>
+          {context.join(' · ')}
+        </Text>
       ) : null}
 
-      {contextParts.length > 0 ? (
-        <Text style={styles.contextLine} numberOfLines={1}>{contextParts.join(' · ')}</Text>
-      ) : null}
-
-      {/* Trust signal chips — verified, rating, response time, dispatch time, sales */}
       <ProfileTrustSignals
         sellerTrust={sellerTrust}
         emailVerified={emailVerified}
         ratingAverage={ratingAverage}
         reviewCount={reviewCount}
         soldCount={soldCount}
-        align="center"
+        align="left"
       />
 
-      {/* Action row */}
-      <View style={styles.actionRow}>
+      <View style={styles.actions}>
         <AnimatedPressable
-          style={styles.editBtn}
+          style={[styles.action, styles.editAction]}
           onPress={onEditProfile}
-          activeOpacity={0.85}
+          activeOpacity={0.78}
+          scaleValue={0.985}
+          hapticFeedback="light"
           accessibilityLabel="Edit profile"
           accessibilityRole="button"
         >
-          <Text style={styles.editBtnText}>Edit profile</Text>
+          <Text style={styles.editActionText}>Edit profile</Text>
         </AnimatedPressable>
         <AnimatedPressable
-          style={styles.shareBtn}
+          style={[styles.action, styles.shareAction]}
           onPress={onShare}
-          activeOpacity={0.85}
+          activeOpacity={0.78}
+          scaleValue={0.985}
+          hapticFeedback="light"
           accessibilityLabel="Share profile"
           accessibilityRole="button"
         >
-          <Ionicons name="share-outline" size={16} color={Colors.textPrimary} />
-          <Text style={styles.shareBtnText}>Share</Text>
+          <Ionicons name="share-outline" size={17} color={Colors.textPrimary} />
+          <Text style={styles.shareActionText}>Share profile</Text>
         </AnimatedPressable>
       </View>
+    </View>
+  );
+}
+
+function ProfileStat({ value, label }: { value: number; label: string }) {
+  return (
+    <View style={styles.stat}>
+      <Text style={styles.statValue}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
     </View>
   );
 }
@@ -147,12 +173,13 @@ export function MyProfileIdentityHero({
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.md,
-    alignItems: 'center',
+    paddingTop: 4,
+    paddingBottom: 12,
   },
-  avatarSection: {
-    marginBottom: Space.sm,
+  identityTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 11,
   },
   avatarWrap: {
     position: 'relative',
@@ -165,95 +192,107 @@ const styles = StyleSheet.create({
     borderColor: Colors.background,
   },
   avatarFallback: {
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: Colors.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
-  editAvatarBtn: {
+  editAvatar: {
     position: 'absolute',
-    right: 0,
-    bottom: 0,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: Colors.brand,
+    right: -1,
+    bottom: -1,
+    width: 29,
+    height: 29,
+    borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: Colors.textPrimary,
     borderWidth: 2,
     borderColor: Colors.background,
+  },
+  stats: {
+    flex: 1,
+    flexDirection: 'row',
+    alignSelf: 'flex-end',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    paddingLeft: Space.md,
+    transform: [{ translateY: 10 }],
+  },
+  stat: {
+    minWidth: 58,
+    alignItems: 'center',
+    gap: 1,
+  },
+  statValue: {
+    color: Colors.textPrimary,
+    fontFamily: Typography.family.semibold,
+    fontSize: 17,
+    lineHeight: 21,
+  },
+  statLabel: {
+    color: Colors.textSecondary,
+    fontFamily: Typography.family.regular,
+    fontSize: 12,
   },
   displayNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.xs,
+    gap: 5,
   },
   displayName: {
-    fontSize: 22,
-    fontFamily: Typography.family.bold,
+    flexShrink: 1,
     color: Colors.textPrimary,
-    letterSpacing: -0.4,
-    textAlign: 'center',
-    marginBottom: 2,
-  },
-  verifiedBadge: {
-    flexShrink: 0,
-    marginTop: 2,
+    fontFamily: Typography.family.bold,
+    fontSize: 19,
+    letterSpacing: -0.35,
   },
   username: {
-    fontSize: 14,
+    color: Colors.textMuted,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
-    marginBottom: Space.sm,
+    fontSize: 13,
+    marginTop: 1,
   },
   bio: {
-    fontSize: 14,
-    fontFamily: Typography.family.regular,
     color: Colors.textPrimary,
-    lineHeight: 20,
-    textAlign: 'center',
-    marginBottom: Space.sm,
-    paddingHorizontal: Space.sm,
-  },
-  contextLine: {
-    fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-    marginBottom: Space.md,
-  },
-  actionRow: {
-    flexDirection: 'row',
-    gap: 10,
-    width: '100%',
-  },
-  editBtn: {
-    flex: 1,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.brand,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  editBtnText: {
     fontSize: 14,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textInverse,
+    lineHeight: 19,
+    marginTop: 8,
   },
-  shareBtn: {
+  context: {
+    color: Colors.textMuted,
+    fontFamily: Typography.family.regular,
+    fontSize: 12,
+    marginTop: 5,
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 13,
+  },
+  action: {
+    flex: 1,
+    minHeight: 42,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    height: 44,
-    paddingHorizontal: 18,
-    borderRadius: 22,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    backgroundColor: Colors.background,
+    borderRadius: 10,
   },
-  shareBtnText: {
-    fontSize: 14,
+  editAction: {
+    backgroundColor: Colors.textPrimary,
+  },
+  editActionText: {
+    color: Colors.textInverse,
     fontFamily: Typography.family.semibold,
+    fontSize: 14,
+  },
+  shareAction: {
+    backgroundColor: Colors.surfaceAlt,
+  },
+  shareActionText: {
     color: Colors.textPrimary,
+    fontFamily: Typography.family.semibold,
+    fontSize: 14,
   },
 });

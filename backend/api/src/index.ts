@@ -10,13 +10,24 @@ import Razorpay from 'razorpay';
 import Stripe from 'stripe';
 import { z } from 'zod';
 import { config } from './config.js';
+import {
+  normalizeVersionedUrl,
+  normalizedRoutePath,
+  type ApiVersion,
+} from './lib/apiVersioning.js';
 import { hashGroupCreatePayload as chatGroupHashPayload } from './lib/chatGroupIdempotency.js';
 
 // Shared Stripe instance for Connect operations
 const stripe = config.stripeSecretKey
   ? new Stripe(config.stripeSecretKey, { apiVersion: '2024-06-20' })
   : null;
-import { db, closeDb, readDb, replicaConfigured } from './db/pool.js';
+import {
+  db,
+  closeDb,
+  databasePoolSnapshot,
+  readDb,
+  replicaConfigured,
+} from './db/pool.js';
 import { redis, closeRedis } from './lib/redis.js';
 import type { AuthRole, AuthenticatedUser } from './lib/auth.js';
 import {
@@ -75,16 +86,23 @@ import {
 } from './lib/queues.js';
 import {
   closeRealtimeConnections,
-  parseRealtimeTopics,
   publishRealtimeEvent,
-  registerSseClient,
-  registerWsClient,
+  startRealtimeBridge,
 } from './lib/realtime.js';
 import { executeBotCommand } from './botRuntime/index.js';
-import { assertS3BucketConnectivity, createUploadUrl, putJsonObject } from './lib/s3.js';
+import { normalizeAgentConfig, validatePublishedAgent } from './botRuntime/agentConfig.js';
+import {
+  agentRuntimeReadinessReason,
+  isAgentRuntimeReady,
+} from './botRuntime/openaiAgent.js';
+import {
+  assertS3BucketConnectivity,
+  putJsonObject,
+} from './lib/s3.js';
 import {
   metricsContentType,
   observeHttpRequest,
+  observeDatabasePool,
   recordAuctionSettlement,
   recordPaymentTransition,
   recordPushDelivery,
@@ -145,8 +163,24 @@ import {
   collectOperationalAlerts,
   type OpsAlert,
 } from './lib/alerting.js';
+import {
+  cancelKycProviderSession,
+  createKycProviderSession,
+  isKycProviderReady,
+  verifyKycProviderWebhook,
+} from './lib/kycProvider.js';
+import { registerCollectionRoutes } from './routes/collections.js';
+import { registerCreatorDocumentRoutes } from './routes/creatorDocuments.js';
+import { registerNotificationRoutes } from './routes/notifications.js';
+import { registerRealtimeRoutes } from './routes/realtime.js';
+import { registerSupportReviewRoutes } from './routes/supportReviews.js';
+import { registerUploadRoutes } from './routes/uploads.js';
+import { createStripeConnectPayoutTransfer } from './lib/stripePayouts.js';
 
-const app = Fastify({ logger: true });
+const app = Fastify({
+  logger: true,
+  rewriteUrl: (request) => normalizeVersionedUrl(request.url ?? '/').url,
+});
 
 if (config.sentryDsn) {
   Sentry.init({
@@ -161,7 +195,7 @@ void app.register(websocket);
 void app.register(fastifyRawBody, {
   field: 'rawBody',
   global: false,
-  routes: ['/webhooks/*', '/shipping/webhooks/*'],
+  routes: ['/webhooks/*', '/shipping/webhooks/*', '/compliance/kyc/webhooks/*'],
   encoding: 'utf8',
   runFirst: true,
 });
@@ -736,7 +770,7 @@ declare module 'fastify' {
   interface FastifyRequest {
     authUser?: AuthenticatedUser;
     rawBody?: string | Buffer;
-    apiVersion?: 'legacy' | 'v1';
+    apiVersion?: ApiVersion;
     metricsStartNs?: bigint;
   }
 }
@@ -753,28 +787,11 @@ const BODY_ACTOR_KEYS = [
 ] as const;
 
 function getRoutePath(url: string) {
-  return url.split('?')[0] || '/';
+  return normalizedRoutePath(url);
 }
 
 function isSecurityMaintenanceRoute(method: string, path: string) {
   return method === 'POST' && /^\/security\/keys\/[^/]+\/rotate$/.test(path);
-}
-
-function stripV1Prefix(url: string): { url: string; apiVersion: 'legacy' | 'v1' } {
-  const path = getRoutePath(url);
-  if (path === '/v1' || path.startsWith('/v1/')) {
-    const suffix = url.slice(path.length);
-    const normalizedPath = path === '/v1' ? '/' : path.slice(3);
-    return {
-      url: `${normalizedPath}${suffix}`,
-      apiVersion: 'v1',
-    };
-  }
-
-  return {
-    url,
-    apiVersion: 'legacy',
-  };
 }
 
 function isPublicRoute(method: string, path: string) {
@@ -807,6 +824,7 @@ function isPublicRoute(method: string, path: string) {
     'POST /auth/password-reset/request',
     'POST /auth/password-reset/confirm',
     'POST /compliance/kyc/webhook',
+    'POST /compliance/kyc/webhooks/stripe',
   ]);
 
   if (fixedPublicRoutes.has(signature)) {
@@ -1005,6 +1023,14 @@ function statusCodeForApiError(code: string): number {
     return 503;
   }
 
+  if (code === 'PAYMENT_PROVIDER_UNAVAILABLE' || code === 'SHIPPING_PROVIDER_UNAVAILABLE') {
+    return 503;
+  }
+
+  if (code === 'PAYOUT_PROVIDER_UNAVAILABLE') {
+    return 503;
+  }
+
   if (code === 'UNAUTHORIZED') {
     return 401;
   }
@@ -1055,13 +1081,9 @@ function statusCodeForApiError(code: string): number {
 app.addHook('onRequest', async (request) => {
   request.metricsStartNs = process.hrtime.bigint();
 
-  const rawUrl = request.raw.url ?? request.url;
-  const normalized = stripV1Prefix(rawUrl);
+  const rawUrl = request.originalUrl ?? request.raw.url ?? request.url;
+  const normalized = normalizeVersionedUrl(rawUrl);
   request.apiVersion = normalized.apiVersion;
-
-  if (normalized.url !== rawUrl) {
-    request.raw.url = normalized.url;
-  }
 });
 
 app.addHook('onSend', async (request, reply, payload) => {
@@ -1069,7 +1091,7 @@ app.addHook('onSend', async (request, reply, payload) => {
   reply.header('x-request-id', request.id);
 
   if (request.apiVersion === 'legacy') {
-    reply.header('x-api-deprecation', 'Legacy unversioned endpoint; prefer /v1/*');
+    reply.header('x-api-deprecation', 'Legacy unversioned endpoint; prefer /api/v1/*');
   }
 
   return payload;
@@ -1166,12 +1188,17 @@ app.setErrorHandler((error, request, reply) => {
     typeof (error as { statusCode?: unknown }).statusCode === 'number'
       ? (error as { statusCode: number }).statusCode
       : 500;
+  const errorCode =
+    typeof (error as { code?: unknown }).code === 'string'
+      ? (error as { code: string }).code
+      : undefined;
 
   reply.code(statusCode >= 400 ? statusCode : 500);
   const errorMessage = error instanceof Error ? error.message : 'Request failed';
   reply.send({
     ok: false,
     error: statusCode >= 500 ? 'Internal server error' : errorMessage,
+    ...(errorCode ? { code: errorCode } : {}),
   });
 });
 
@@ -5663,8 +5690,17 @@ async function createGatewayPaymentIntent(input: {
       notes: toStripeMetadata(baseMetadata),
     });
 
+    const providerIntentRef = (order as { id?: unknown }).id;
+    if (typeof providerIntentRef !== 'string' || providerIntentRef.length === 0) {
+      throw createApiError(
+        'PAYMENT_PROVIDER_UNAVAILABLE',
+        'Razorpay did not return a payment order reference',
+        { gatewayId: input.gatewayId }
+      );
+    }
+
     return {
-      providerIntentRef: String((order as { id?: unknown }).id ?? createRuntimeId('rzp')),
+      providerIntentRef,
       clientSecret: null,
       initialStatus: 'requires_confirmation',
       providerStatus: String((order as { status?: unknown }).status ?? 'created'),
@@ -5725,7 +5761,14 @@ async function createGatewayPaymentIntent(input: {
       }),
     });
 
-    const payload = response.ok ? ((await response.json()) as Record<string, unknown>) : {};
+    if (!response.ok) {
+      throw createApiError(
+        'PAYMENT_PROVIDER_UNAVAILABLE',
+        'Flutterwave payment initialization failed',
+        { gatewayId: input.gatewayId, providerStatusCode: response.status }
+      );
+    }
+    const payload = (await response.json()) as Record<string, unknown>;
     const data = (payload.data ?? {}) as Record<string, unknown>;
     const checkoutUrl = typeof data.link === 'string' ? data.link : null;
 
@@ -5733,7 +5776,7 @@ async function createGatewayPaymentIntent(input: {
       providerIntentRef: txRef,
       clientSecret: null,
       initialStatus: 'requires_confirmation',
-      providerStatus: response.ok ? 'created' : 'fallback_created',
+      providerStatus: 'created',
       nextActionUrl: checkoutUrl,
       scaExpiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
     };
@@ -5759,8 +5802,22 @@ async function createGatewayPaymentIntent(input: {
       }),
     });
 
-    const payload = response.ok ? ((await response.json()) as Record<string, unknown>) : {};
-    const chargeId = typeof payload.id === 'string' ? payload.id : createRuntimeId('tap_charge');
+    if (!response.ok) {
+      throw createApiError(
+        'PAYMENT_PROVIDER_UNAVAILABLE',
+        'Tap payment initialization failed',
+        { gatewayId: input.gatewayId, providerStatusCode: response.status }
+      );
+    }
+    const payload = (await response.json()) as Record<string, unknown>;
+    if (typeof payload.id !== 'string' || payload.id.length === 0) {
+      throw createApiError(
+        'PAYMENT_PROVIDER_UNAVAILABLE',
+        'Tap did not return a charge reference',
+        { gatewayId: input.gatewayId }
+      );
+    }
+    const chargeId = payload.id;
     const transaction = (payload.transaction ?? {}) as Record<string, unknown>;
     const checkoutUrl = typeof transaction.url === 'string' ? transaction.url : null;
 
@@ -5768,21 +5825,28 @@ async function createGatewayPaymentIntent(input: {
       providerIntentRef: chargeId,
       clientSecret: null,
       initialStatus: 'requires_confirmation',
-      providerStatus: response.ok ? String(payload.status ?? 'initiated') : 'fallback_created',
+      providerStatus: String(payload.status ?? 'initiated'),
       nextActionUrl: checkoutUrl,
       scaExpiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
     };
   }
 
-  const fallbackRef = createRuntimeId(`intent_${input.gatewayId}`);
-  return {
-    providerIntentRef: fallbackRef,
-    clientSecret: createRuntimeId('secret'),
-    initialStatus: 'requires_confirmation',
-    providerStatus: 'mock_created',
-    nextActionUrl: null,
-    scaExpiresAt: null,
-  };
+  if (config.nodeEnv !== 'production' && config.apiEnableMockWebhooks) {
+    return {
+      providerIntentRef: createRuntimeId(`intent_${input.gatewayId}`),
+      clientSecret: createRuntimeId('secret'),
+      initialStatus: 'requires_confirmation',
+      providerStatus: 'mock_created',
+      nextActionUrl: null,
+      scaExpiresAt: null,
+    };
+  }
+
+  throw createApiError(
+    'PAYMENT_PROVIDER_UNAVAILABLE',
+    'The selected payment provider is not configured',
+    { gatewayId: input.gatewayId }
+  );
 }
 
 async function settlePaymentIntent(
@@ -6723,7 +6787,6 @@ async function settlePayoutRequest(
     transitionSource,
     inputProviderPayoutRef: input.providerPayoutRef,
     existingProviderPayoutRef: payoutRequest.provider_payout_ref,
-    fallbackProviderPayoutRef: createRuntimeId('mock_payout'),
   });
 
   if (!providerPayoutRefResolution.isValid) {
@@ -7817,6 +7880,7 @@ async function fetchOnezeFxProviderRates(
   const response = await fetch(url.toString(), {
     method: 'GET',
     headers,
+    signal: AbortSignal.timeout(10_000),
   });
 
   if (!response.ok) {
@@ -9145,16 +9209,20 @@ async function dispatchOpsAlert(alert: OpsAlert): Promise<void> {
     await Promise.all(
       config.alertingWebhookUrls.map(async (webhookUrl) => {
         try {
-          await fetch(webhookUrl, {
+          const response = await fetch(webhookUrl, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
             },
+            signal: AbortSignal.timeout(10_000),
             body: toJsonString({
               text: `[${alert.severity.toUpperCase()}] ${alert.message}`,
               alert,
             }),
           });
+          if (!response.ok) {
+            throw new Error(`Alert webhook returned HTTP ${response.status}`);
+          }
         } catch (error) {
           app.log.error({ err: error, webhookUrl, code: alert.code }, 'Failed sending ops alert webhook');
         }
@@ -9588,6 +9656,10 @@ app.get('/metrics', async (request, reply) => {
     return securityAdminError;
   }
 
+  observeDatabasePool({ pool: 'primary', ...databasePoolSnapshot(db) });
+  if (replicaConfigured) {
+    observeDatabasePool({ pool: 'replica', ...databasePoolSnapshot(readDb) });
+  }
   reply.header('Content-Type', metricsContentType());
   return renderMetrics();
 });
@@ -9909,7 +9981,7 @@ app.get('/health/deep', async (request, reply) => {
       ml: string;
       s3: string;
     };
-    details?: Record<string, string>;
+    details?: Record<string, unknown>;
   } = {
     ok: true,
     checks: {
@@ -9939,6 +10011,10 @@ app.get('/health/deep', async (request, reply) => {
   } else {
     result.checks.replica = 'not_configured';
   }
+  result.details!.databasePools = {
+    primary: databasePoolSnapshot(db),
+    replica: replicaConfigured ? databasePoolSnapshot(readDb) : null,
+  };
 
   try {
     const redisPing = await redis.ping();
@@ -9963,9 +10039,9 @@ app.get('/health/deep', async (request, reply) => {
   }
 
   try {
-    const mlResponse = await fetch(`${config.mlServiceUrl}/health`);
-    if (!mlResponse.ok) {
-      throw new Error(`ML service responded ${mlResponse.status}`);
+    const decisionResponse = await fetch(`${config.decisionServiceUrl}/health`);
+    if (!decisionResponse.ok) {
+      throw new Error(`Decision service responded ${decisionResponse.status}`);
     }
     result.checks.ml = 'ok';
   } catch (error) {
@@ -12891,22 +12967,39 @@ app.post('/compliance/kyc/sessions', async (request, reply) => {
     userId: z.string().min(2),
     vendor: z.string().trim().min(2).max(60).default(config.kycDefaultVendor),
     kycLevel: kycLevelSchema.default('basic'),
-    requiredChecks: z.array(z.enum(['document', 'liveness', 'sanctions'])).min(1).max(6).default([
+    requiredChecks: z.array(z.enum(['document', 'liveness', 'sanctions'])).min(1).max(3).default([
       'document',
       'liveness',
-      'sanctions',
     ]),
     metadata: z.record(z.unknown()).optional(),
   });
 
   const payload = bodySchema.parse(request.body ?? {});
 
-  if (config.nodeEnv === 'production' && /^(mock|sandbox)[_\-]/i.test(payload.vendor)) {
+  if (payload.vendor !== 'stripe_identity') {
+    reply.code(400);
+    return {
+      ok: false,
+      error: 'Unsupported KYC provider',
+      code: 'KYC_PROVIDER_UNSUPPORTED',
+    };
+  }
+
+  if (payload.requiredChecks.includes('sanctions')) {
+    reply.code(400);
+    return {
+      ok: false,
+      error: 'Sanctions screening must be initiated through the AML screening flow',
+      code: 'KYC_CHECK_UNSUPPORTED',
+    };
+  }
+
+  if (!isKycProviderReady()) {
     reply.code(503);
     return {
       ok: false,
-      error: 'KYC vendor is not configured for production',
-      code: 'KYC_VENDOR_NOT_CONFIGURED',
+      error: 'KYC provider is unavailable',
+      code: 'KYC_PROVIDER_NOT_CONFIGURED',
     };
   }
 
@@ -12915,13 +13008,29 @@ app.post('/compliance/kyc/sessions', async (request, reply) => {
   const caseId = createComplianceId('kyc_case');
   const userAgent = resolveRequestUserAgent(request);
   const ipAddress = resolveRequestIpAddress(request);
+  let providerSession: Awaited<ReturnType<typeof createKycProviderSession>>;
+  try {
+    providerSession = await createKycProviderSession({
+      caseId,
+      userId: payload.userId,
+      requireLiveness: payload.requiredChecks.includes('liveness'),
+    });
+  } catch (error) {
+    request.log.error({ err: error, userId: payload.userId }, 'Failed creating KYC provider session');
+    reply.code(503);
+    return {
+      ok: false,
+      error: 'KYC provider is temporarily unavailable',
+      code: 'KYC_PROVIDER_UNAVAILABLE',
+    };
+  }
+  const kycVendorRef = providerSession.providerSessionId;
 
   const client = await db.connect();
   try {
     await client.query('BEGIN');
 
     const current = await getOrCreateComplianceProfile(client, payload.userId);
-    const kycVendorRef = `${payload.vendor}:${caseId}`;
 
     await client.query(
       `
@@ -13022,6 +13131,14 @@ app.post('/compliance/kyc/sessions', async (request, reply) => {
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');
+    try {
+      await cancelKycProviderSession(providerSession.providerSessionId);
+    } catch (cancellationError) {
+      request.log.error(
+        { err: cancellationError, providerSessionId: providerSession.providerSessionId },
+        'Failed cancelling orphaned KYC provider session'
+      );
+    }
     throw error;
   } finally {
     client.release();
@@ -13039,7 +13156,6 @@ app.post('/compliance/kyc/sessions', async (request, reply) => {
   });
 
   reply.code(201);
-  const verificationBaseUrl = config.kycVerificationBaseUrl.replace(/\/$/, '');
   return {
     ok: true,
     kycSession: {
@@ -13049,8 +13165,196 @@ app.post('/compliance/kyc/sessions', async (request, reply) => {
       status: 'pending',
       kycLevel: payload.kycLevel,
       requiredChecks: payload.requiredChecks,
-      verificationUrl: `${verificationBaseUrl}/${encodeURIComponent(caseId)}`,
+      verificationUrl: providerSession.verificationUrl,
+      providerSessionId: providerSession.providerSessionId,
     },
+  };
+});
+
+app.post('/compliance/kyc/webhooks/stripe', async (request, reply) => {
+  const rawBody =
+    typeof request.rawBody === 'string'
+      ? request.rawBody
+      : request.rawBody
+        ? request.rawBody.toString('utf8')
+        : toJsonString(request.body ?? {});
+
+  let event: ReturnType<typeof verifyKycProviderWebhook>;
+  try {
+    event = verifyKycProviderWebhook(rawBody, request.headers['stripe-signature']);
+  } catch (error) {
+    request.log.warn({ err: error }, 'Rejected KYC provider webhook');
+    reply.code(400);
+    return {
+      ok: false,
+      error: 'Invalid KYC webhook signature or payload',
+      code: 'KYC_WEBHOOK_INVALID',
+    };
+  }
+
+  if (!event) {
+    return {
+      ok: true,
+      ignored: true,
+    };
+  }
+
+  const caseStatus =
+    event.decision === 'verified'
+      ? 'verified'
+      : event.decision === 'cancelled'
+        ? 'cancelled'
+        : 'pending';
+  const profileKycStatus =
+    event.decision === 'verified'
+      ? 'verified'
+      : event.decision === 'cancelled'
+        ? 'rejected'
+        : 'pending';
+  const documentStatus =
+    event.decision === 'verified'
+      ? 'approved'
+      : event.decision === 'requires_input'
+        ? 'rejected'
+        : 'submitted';
+  const livenessStatus =
+    event.decision === 'verified'
+      ? 'passed'
+      : event.decision === 'requires_input'
+        ? 'failed'
+        : 'pending';
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    const webhookEvent = await client.query<{ id: number }>(
+      `
+        INSERT INTO kyc_verification_events (
+          user_id,
+          case_id,
+          event_type,
+          status,
+          vendor,
+          vendor_ref,
+          provider_event_id,
+          payload
+        )
+        VALUES ($1, $2, 'webhook_received', $3, 'stripe_identity', $4, $5, $6::jsonb)
+        ON CONFLICT DO NOTHING
+        RETURNING id
+      `,
+      [
+        event.userId,
+        event.caseId,
+        event.decision,
+        event.providerSessionId,
+        event.providerEventId,
+        toJsonString({
+          eventType: event.rawType,
+          lastErrorCode: event.lastErrorCode,
+          lastErrorReason: event.lastErrorReason,
+        }),
+      ]
+    );
+
+    if (!webhookEvent.rowCount) {
+      await client.query('COMMIT');
+      return {
+        ok: true,
+        duplicate: true,
+      };
+    }
+
+    const updatedCase = await client.query<{ id: string }>(
+      `
+        UPDATE kyc_cases
+        SET
+          status = $4,
+          document_status = $5,
+          liveness_status = $6,
+          decision_reason = $7,
+          payload = payload || $8::jsonb,
+          completed_at = CASE WHEN $4 IN ('verified', 'cancelled') THEN NOW() ELSE NULL END,
+          updated_at = NOW()
+        WHERE id = $1
+          AND user_id = $2
+          AND vendor = 'stripe_identity'
+          AND vendor_case_ref = $3
+        RETURNING id
+      `,
+      [
+        event.caseId,
+        event.userId,
+        event.providerSessionId,
+        caseStatus,
+        documentStatus,
+        livenessStatus,
+        event.lastErrorReason,
+        toJsonString({
+          latestProviderEventId: event.providerEventId,
+          latestProviderEventType: event.rawType,
+        }),
+      ]
+    );
+
+    if (!updatedCase.rowCount) {
+      throw createApiError('KYC_CASE_NOT_FOUND', 'KYC case not found for signed provider event');
+    }
+
+    await client.query(
+      `
+        UPDATE user_compliance_profiles
+        SET
+          kyc_status = $2,
+          kyc_vendor = 'stripe_identity',
+          kyc_vendor_ref = $3,
+          document_status = $4,
+          liveness_status = $5,
+          trading_enabled = (
+            $2 = 'verified'
+            AND sanctions_status = 'clear'
+            AND pep_status = 'clear'
+          ),
+          metadata = metadata || $6::jsonb,
+          updated_at = NOW()
+        WHERE user_id = $1
+      `,
+      [
+        event.userId,
+        profileKycStatus,
+        event.providerSessionId,
+        documentStatus,
+        livenessStatus,
+        toJsonString({
+          latestKycProviderEventId: event.providerEventId,
+          latestKycProviderEventAt: new Date().toISOString(),
+        }),
+      ]
+    );
+
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  await appendComplianceAuditSafe(request, {
+    eventType: 'kyc.provider-webhook.processed',
+    subjectUserId: event.userId,
+    payload: {
+      caseId: event.caseId,
+      providerSessionId: event.providerSessionId,
+      decision: event.decision,
+    },
+  });
+
+  return {
+    ok: true,
+    duplicate: false,
+    decision: event.decision,
   };
 });
 
@@ -13932,6 +14236,22 @@ app.post('/compliance/consents/documents', async (request, reply) => {
   const payload = bodySchema.parse(request.body ?? {});
   const documentId = payload.id ?? createComplianceId('doc');
 
+  if (config.nodeEnv === 'production') {
+    if (
+      !payload.contentUrl
+      || !/^https:\/\//i.test(payload.contentUrl)
+      || !payload.contentHash
+      || !/^sha256:[a-f0-9]{64}$/i.test(payload.contentHash)
+    ) {
+      reply.code(400);
+      return {
+        ok: false,
+        error: 'Production legal documents require a public HTTPS URL and a full SHA-256 content hash',
+        code: 'LEGAL_DOCUMENT_EVIDENCE_REQUIRED',
+      };
+    }
+  }
+
   await db.query(
     `
       INSERT INTO legal_documents (
@@ -14000,12 +14320,22 @@ app.post('/compliance/consents/accept', async (request, reply) => {
   const payload = bodySchema.parse(request.body ?? {});
   await ensureUserExists(payload.userId);
 
-  const documentExists = await db.query('SELECT id FROM legal_documents WHERE id = $1 LIMIT 1', [payload.documentId]);
+  const documentExists = await db.query(
+    `SELECT id
+     FROM legal_documents
+     WHERE id = $1
+       AND is_active = TRUE
+       AND content_url IS NOT NULL
+       AND content_hash ~* '^sha256:[a-f0-9]{64}$'
+       AND content_hash NOT ILIKE '%placeholder%'
+     LIMIT 1`,
+    [payload.documentId]
+  );
   if (!documentExists.rowCount) {
     reply.code(404);
     return {
       ok: false,
-      error: 'Legal document not found',
+      error: 'Active verified legal document not found',
     };
   }
 
@@ -15137,7 +15467,7 @@ app.post('/visual-search', async (request, reply) => {
     runtimeAvailable: true,
     // Truthful flag: results are filter-based, not ML image-similarity.
     visualMatching: false,
-    note: 'Showing similar items by category, brand & description. AI image matching is coming soon.',
+    note: 'Results are matched by category, brand, and description.',
     items: result.rows.map((row) => ({
       id: row.id,
       sellerId: row.seller_id,
@@ -17098,469 +17428,14 @@ app.get('/secure-profiles/:userId', async (request, reply) => {
   };
 });
 
-app.get('/realtime/ws', { websocket: true }, (connection, request) => {
-  const querySchema = z.object({
-    topics: z.string().optional(),
-  });
+registerRealtimeRoutes({ app, db });
 
-  const parsed = querySchema.safeParse(request.query ?? {});
-  const authUserId = request.authUser?.userId;
-
-  if (!authUserId) {
-    connection.socket.close(4401, 'unauthorized');
-    return;
-  }
-
-  const queryTopics = parsed.success ? parseRealtimeTopics(parsed.data.topics) : [];
-  const topics = new Set<string>([
-    `notifications.user:${authUserId}`,
-    ...queryTopics,
-  ]);
-
-  registerWsClient({
-    socket: connection.socket,
-    topics: Array.from(topics.values()),
-    userId: authUserId,
-  });
-});
-
-app.get('/realtime/stream', async (request, reply) => {
-  const querySchema = z.object({
-    topics: z.string().optional(),
-  });
-
-  const parsed = querySchema.safeParse(request.query ?? {});
-  const authUserId = request.authUser?.userId;
-
-  if (!authUserId) {
-    reply.code(401);
-    return {
-      ok: false,
-      error: 'Unauthorized',
-    };
-  }
-
-  const queryTopics = parsed.success ? parseRealtimeTopics(parsed.data.topics) : [];
-  const topics = new Set<string>([
-    `notifications.user:${authUserId}`,
-    ...queryTopics,
-  ]);
-
-  registerSseClient({
-    reply,
-    topics: Array.from(topics.values()),
-    userId: authUserId,
-  });
-});
-
-app.post('/notifications/devices/register', async (request, reply) => {
-  const authUserId = (request as any).authUser?.userId;
-  if (!authUserId) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
-  }
-
-  const bodySchema = z.object({
-    token: z.string().min(16).max(4096),
-    provider: z.enum(['expo']).default('expo'),
-    platform: z.enum(['ios', 'android', 'web']),
-    appVersion: z.string().max(120).optional(),
-    metadata: z.record(z.unknown()).optional(),
-  });
-
-  const payload = bodySchema.parse(request.body ?? {});
-
-  const result = await db.query<{
-    id: number;
-    user_id: string;
-    provider: string;
-    platform: string;
-    token: string;
-    is_active: boolean;
-    app_version: string | null;
-    created_at: string;
-    last_seen_at: string;
-  }>(
-    `
-      INSERT INTO notification_devices (
-        user_id,
-        provider,
-        platform,
-        token,
-        is_active,
-        app_version,
-        metadata,
-        last_seen_at
-      )
-      VALUES ($1, $2, $3, $4, TRUE, $5, $6::jsonb, NOW())
-      ON CONFLICT (token)
-      DO UPDATE
-        SET
-          user_id = EXCLUDED.user_id,
-          provider = EXCLUDED.provider,
-          platform = EXCLUDED.platform,
-          is_active = TRUE,
-          app_version = EXCLUDED.app_version,
-          metadata = notification_devices.metadata || EXCLUDED.metadata,
-          last_seen_at = NOW()
-      RETURNING id, user_id, provider, platform, token, is_active, app_version, created_at, last_seen_at
-    `,
-    [
-      authUserId,
-      payload.provider,
-      payload.platform,
-      payload.token,
-      payload.appVersion ?? null,
-      toJsonString(payload.metadata ?? {}),
-    ]
-  );
-
-  reply.code(201);
-  return {
-    ok: true,
-    device: {
-      id: result.rows[0].id,
-      userId: result.rows[0].user_id,
-      provider: result.rows[0].provider,
-      platform: result.rows[0].platform,
-      token: result.rows[0].token,
-      isActive: result.rows[0].is_active,
-      appVersion: result.rows[0].app_version,
-      createdAt: result.rows[0].created_at,
-      lastSeenAt: result.rows[0].last_seen_at,
-    },
-  };
-});
-
-app.get('/notifications/devices', async (request, reply) => {
-  const authUserId = (request as any).authUser?.userId;
-  if (!authUserId) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
-  }
-
-  const result = await db.query<{
-    id: number;
-    provider: string;
-    platform: string;
-    token: string;
-    is_active: boolean;
-    app_version: string | null;
-    created_at: string;
-    last_seen_at: string;
-  }>(
-    `SELECT id, provider, platform, token, is_active, app_version, created_at, last_seen_at
-     FROM notification_devices WHERE user_id = $1 ORDER BY last_seen_at DESC`,
-    [authUserId]
-  );
-
-  return {
-    ok: true,
-    devices: result.rows.map((row) => ({
-      id: row.id,
-      provider: row.provider,
-      platform: row.platform,
-      token: row.token,
-      isActive: row.is_active,
-      appVersion: row.app_version,
-      createdAt: row.created_at,
-      lastSeenAt: row.last_seen_at,
-    })),
-  };
-});
-
-app.delete('/notifications/devices/:token', async (request, reply) => {
-  const paramsSchema = z.object({ token: z.string().min(16).max(4096) });
-  const { token } = paramsSchema.parse(request.params);
-
-  const userId = request.authUser?.userId;
-  if (!userId) {
-    reply.code(401);
-    return {
-      ok: false,
-      error: 'Unauthorized',
-    };
-  }
-
-  const deleted = await db.query(
-    `
-      UPDATE notification_devices
-      SET is_active = FALSE, last_seen_at = NOW()
-      WHERE user_id = $1
-        AND token = $2
-      RETURNING id
-    `,
-    [userId, token]
-  );
-
-  if (!deleted.rowCount) {
-    reply.code(404);
-    return {
-      ok: false,
-      error: 'Notification device token not found',
-    };
-  }
-
-  return {
-    ok: true,
-  };
-});
-
-app.get('/notifications/events', async (request, reply) => {
-  const authUserId = (request as any).authUser?.userId;
-  if (!authUserId) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
-  }
-
-  const querySchema = z.object({
-    limit: z.coerce.number().int().min(1).max(120).default(30),
-    cursor: z.string().optional(),
-  });
-
-  const { limit, cursor } = querySchema.parse(request.query);
-
-  let cursorCondition = '';
-  const params: (string | number)[] = [authUserId, limit];
-  if (cursor) {
-    const decoded = Buffer.from(cursor, 'base64').toString('utf-8');
-    const [cursorTs, cursorId] = decoded.split('|');
-    if (!cursorTs || !cursorId) {
-      reply.code(400);
-      return { ok: false, error: 'Invalid cursor format', code: 'INVALID_NOTIFICATION_CURSOR' };
-    }
-    cursorCondition = `AND (created_at, id) < ($3::timestamptz, $4)`;
-    params.push(cursorTs, cursorId);
-  }
-
-  const result = await db.query<{
-    id: string;
-    user_id: string;
-    channel: string;
-    title: string;
-    body: string;
-    payload: Record<string, unknown>;
-    status: 'queued' | 'sent' | 'failed';
-    provider_message_id: string | null;
-    provider_error: string | null;
-    created_at: string;
-    sent_at: string | null;
-    event_type: string;
-    actor_user_id: string | null;
-    read_at: string | null;
-    image_url: string | null;
-    route: Record<string, unknown> | null;
-    actor_username: string | null;
-    actor_display_name: string | null;
-    actor_avatar: string | null;
-  }>(
-    `
-      SELECT
-        ne.id,
-        ne.user_id,
-        ne.channel,
-        ne.title,
-        ne.body,
-        ne.payload,
-        ne.status,
-        ne.provider_message_id,
-        ne.provider_error,
-        ne.created_at::text,
-        ne.sent_at::text,
-        ne.event_type,
-        ne.actor_user_id,
-        ne.read_at::text,
-        ne.image_url,
-        ne.route,
-        u.username AS actor_username,
-        u.display_name AS actor_display_name,
-        u.avatar AS actor_avatar
-      FROM notification_events ne
-      LEFT JOIN users u ON u.id = ne.actor_user_id
-      WHERE ne.user_id = $1
-      ${cursorCondition}
-      ORDER BY ne.created_at DESC, ne.id DESC
-      LIMIT $2
-    `,
-    params
-  );
-
-  const items = result.rows.map((row) => ({
-    id: row.id,
-    userId: row.user_id,
-    channel: row.channel,
-    title: row.title,
-    body: row.body,
-    payload: row.payload,
-    status: row.status,
-    providerMessageId: row.provider_message_id,
-    providerError: row.provider_error,
-    createdAt: row.created_at,
-    sentAt: row.sent_at,
-    eventType: row.event_type,
-    actorUserId: row.actor_user_id,
-    actorUsername: row.actor_username,
-    actorDisplayName: row.actor_display_name,
-    actorAvatar: row.actor_avatar,
-    readAt: row.read_at,
-    imageUrl: row.image_url,
-    route: row.route,
-  }));
-
-  let nextCursor: string | null = null;
-  if (items.length === limit && items.length > 0) {
-    const last = items[items.length - 1];
-    nextCursor = Buffer.from(`${last.createdAt}|${last.id}`).toString('base64');
-  }
-
-  return {
-    ok: true,
-    items,
-    nextCursor,
-  };
-});
-
-app.get('/notifications/unread-count', async (request, reply) => {
-  const authUserId = (request as any).authUser?.userId;
-  if (!authUserId) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
-  }
-
-  const result = await db.query<{ count: string }>(
-    `SELECT COUNT(*)::text AS count FROM notification_events WHERE user_id = $1 AND read_at IS NULL`,
-    [authUserId]
-  );
-
-  return {
-    ok: true,
-    unreadCount: parseInt(result.rows[0].count, 10) || 0,
-  };
-});
-
-app.post('/notifications/events/:eventId/read', async (request, reply) => {
-  const authUserId = (request as any).authUser?.userId;
-  if (!authUserId) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
-  }
-
-  const paramsSchema = z.object({ eventId: z.string().min(4).max(128) });
-  const { eventId } = paramsSchema.parse(request.params);
-
-  const updated = await db.query(
-    `UPDATE notification_events SET read_at = NOW() WHERE id = $1 AND user_id = $2 AND read_at IS NULL RETURNING id`,
-    [eventId, authUserId]
-  );
-
-  if (!updated.rowCount) {
-    reply.code(404);
-    return { ok: false, error: 'Notification not found or already read', code: 'NOTIFICATION_NOT_FOUND' };
-  }
-
-  return { ok: true };
-});
-
-app.post('/notifications/read-all', async (request, reply) => {
-  const authUserId = (request as any).authUser?.userId;
-  if (!authUserId) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
-  }
-
-  await db.query(
-    `UPDATE notification_events SET read_at = NOW() WHERE user_id = $1 AND read_at IS NULL`,
-    [authUserId]
-  );
-
-  return { ok: true };
-});
-
-app.get('/notifications/preferences', async (request, reply) => {
-  const authUserId = (request as any).authUser?.userId;
-  if (!authUserId) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
-  }
-
-  const result = await db.query<{ category: string; enabled: boolean }>(
-    `SELECT category, enabled FROM notification_preferences WHERE user_id = $1 ORDER BY category`,
-    [authUserId]
-  );
-
-  const preferences: Record<string, boolean> = {};
-  for (const cat of NOTIFICATION_PUSH_CATEGORIES) {
-    const row = result.rows.find((r) => r.category === cat);
-    preferences[cat] = row ? row.enabled : true;
-  }
-
-  return { ok: true, preferences };
-});
-
-app.put('/notifications/preferences', async (request, reply) => {
-  const authUserId = (request as any).authUser?.userId;
-  if (!authUserId) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
-  }
-
-  const bodySchema = z.object({
-    preferences: z.record(z.boolean()),
-  });
-
-  const payload = bodySchema.parse(request.body ?? {});
-
-  for (const [category, enabled] of Object.entries(payload.preferences)) {
-    if (!NOTIFICATION_PUSH_CATEGORIES.includes(category as NotificationPushCategory)) {
-      reply.code(400);
-      return { ok: false, error: `Invalid category: ${category}`, code: 'INVALID_PREFERENCE_CATEGORY' };
-    }
-
-    await db.query(
-      `
-        INSERT INTO notification_preferences (user_id, category, enabled, updated_at)
-        VALUES ($1, $2, $3, NOW())
-        ON CONFLICT (user_id, category)
-        DO UPDATE SET enabled = $3, updated_at = NOW()
-      `,
-      [authUserId, category, enabled]
-    );
-  }
-
-  return { ok: true };
-});
-
-app.post('/notifications/push/test', async (request, reply) => {
-  const authUserId = (request as any).authUser?.userId;
-  if (!authUserId) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
-  }
-
-  const bodySchema = z.object({
-    title: z.string().min(2).max(160),
-    body: z.string().min(2).max(500),
-    payload: z.record(z.unknown()).optional(),
-  });
-
-  const payload = bodySchema.parse(request.body ?? {});
-
-  const eventId = await queueUserNotification({
-    userId: authUserId,
-    title: payload.title,
-    body: payload.body,
-    payload: payload.payload,
-    metadata: {
-      source: 'manual_test',
-    },
-  });
-
-  reply.code(202);
-  return {
-    ok: true,
-    eventId,
-    status: 'queued',
-  };
+registerNotificationRoutes({
+  app,
+  db,
+  notificationPushCategories: NOTIFICATION_PUSH_CATEGORIES,
+  queueUserNotification,
+  toJsonString,
 });
 
 app.post('/secure-messages', async (request, reply) => {
@@ -18888,6 +18763,38 @@ app.post('/chat/groups/join', async (request, reply) => {
   };
 });
 
+const agentConfigSchema = z.object({
+  instructions: z.string().trim().max(8_000),
+  model: z.enum(['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna']),
+  triggerMode: z.enum(['mention', 'command', 'always']),
+  responseLength: z.enum(['concise', 'balanced', 'detailed']),
+  tone: z.enum(['focused', 'warm', 'expert']),
+  reasoningEffort: z.enum(['low', 'medium', 'high']),
+  historyLimit: z.number().int().min(0).max(40),
+  starterPrompts: z.array(z.string().trim().min(1).max(160)).max(4),
+});
+
+function botRuntimeReadiness(runtimeMode: string): {
+  runtimeReady: boolean;
+  runtimeReadinessReason: string | null;
+} {
+  if (runtimeMode !== 'ai') {
+    return { runtimeReady: true, runtimeReadinessReason: null };
+  }
+  return {
+    runtimeReady: isAgentRuntimeReady(),
+    runtimeReadinessReason: agentRuntimeReadinessReason(),
+  };
+}
+
+function publicAgentConfig(value: unknown) {
+  const agentConfig = normalizeAgentConfig(value);
+  return {
+    ...agentConfig,
+    instructions: '',
+  };
+}
+
 app.get('/chat/bots', async (request) => {
   const authUserId = request.authUser?.userId;
   const result = await db.query<{
@@ -18905,6 +18812,7 @@ app.get('/chat/bots', async (request) => {
     permissions: unknown;
     icon: string | null;
     owner_id: string | null;
+    agent_config: unknown;
   }>(
     `
       SELECT
@@ -18921,7 +18829,8 @@ app.get('/chat/bots', async (request) => {
         is_active,
         permissions,
         icon,
-        owner_id
+        owner_id,
+        agent_config
       FROM chat_bots
       WHERE (type = 'system' AND is_active = TRUE)
          OR (type = 'custom' AND owner_id = $1 AND status != 'disabled' AND is_draft = FALSE)
@@ -18947,6 +18856,8 @@ app.get('/chat/bots', async (request) => {
       permissions: row.permissions,
       icon: row.icon,
       ownerId: row.owner_id,
+      agentConfig: row.runtime_mode === 'ai' ? publicAgentConfig(row.agent_config) : null,
+      ...botRuntimeReadiness(row.runtime_mode),
     })),
   };
 });
@@ -18976,6 +18887,7 @@ app.get('/chat/conversations/:conversationId/bots', async (request) => {
     owner_id: string | null;
     installed_at: string;
     install_status: string;
+    agent_config: unknown;
   }>(
     `
       SELECT
@@ -18993,7 +18905,8 @@ app.get('/chat/conversations/:conversationId/bots', async (request) => {
         b.icon,
         b.owner_id,
         cbi.installed_at::text,
-        cbi.status AS install_status
+        cbi.status AS install_status,
+        b.agent_config
       FROM chat_bot_installs cbi
       INNER JOIN chat_bots b
         ON b.id = cbi.bot_id
@@ -19023,6 +18936,8 @@ app.get('/chat/conversations/:conversationId/bots', async (request) => {
       ownerId: row.owner_id,
       installedAt: row.installed_at,
       installStatus: row.install_status,
+      agentConfig: row.runtime_mode === 'ai' ? publicAgentConfig(row.agent_config) : null,
+      ...botRuntimeReadiness(row.runtime_mode),
     })),
   };
 });
@@ -19046,9 +18961,11 @@ app.post('/chat/conversations/:conversationId/bots/:botId/deploy', async (reques
     runtime_mode: string;
     is_draft: boolean;
     permissions: unknown;
+    owner_id: string | null;
+    agent_config: unknown;
   }>(
     `
-      SELECT id, name, command_hint, type, status, runtime_mode, is_draft, permissions
+      SELECT id, name, command_hint, type, status, runtime_mode, is_draft, permissions, owner_id, agent_config
       FROM chat_bots
       WHERE id = $1
         AND is_active = TRUE
@@ -19065,6 +18982,10 @@ app.post('/chat/conversations/:conversationId/bots/:botId/deploy', async (reques
 
   const bot = botResult.rows[0];
 
+  if (bot.type === 'custom' && bot.owner_id !== actorUserId) {
+    throw createApiError('FORBIDDEN_USER_CONTEXT', 'Only the agent owner can connect this private agent.');
+  }
+
   if (bot.is_draft) {
     throw createApiError('CHAT_BOT_DEPLOY_BLOCKED', 'Draft bots cannot be deployed. Publish the bot first.');
   }
@@ -19073,9 +18994,11 @@ app.post('/chat/conversations/:conversationId/bots/:botId/deploy', async (reques
     throw createApiError('CHAT_BOT_DEPLOY_BLOCKED', 'This bot requires a backend runtime that is not currently connected.');
   }
 
-  if (bot.runtime_mode === 'ai' || bot.runtime_mode === 'backend') {
-    // Honest limitation: backend/ai runtime not available yet
-    // We still allow deployment as metadata, but warn
+  if (bot.runtime_mode === 'ai' && !isAgentRuntimeReady()) {
+    throw createApiError(
+      'CHAT_BOT_DEPLOY_BLOCKED',
+      agentRuntimeReadinessReason() ?? 'The AI provider is unavailable.'
+    );
   }
 
   const client = await db.connect();
@@ -19088,27 +19011,43 @@ app.post('/chat/conversations/:conversationId/bots/:botId/deploy', async (reques
 
     const installResult = await client.query<{ bot_id: string }>(
       `
-        INSERT INTO chat_bot_installs (conversation_id, bot_id, installed_by, permissions_snapshot)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO chat_bot_installs (
+          conversation_id,
+          bot_id,
+          installed_by,
+          permissions_snapshot,
+          configuration_snapshot
+        )
+        VALUES ($1, $2, $3, $4, $5)
         ON CONFLICT (conversation_id, bot_id) DO UPDATE
-        SET status = 'active', updated_at = NOW()
+        SET
+          status = 'active',
+          permissions_snapshot = EXCLUDED.permissions_snapshot,
+          configuration_snapshot = EXCLUDED.configuration_snapshot,
+          updated_at = NOW()
         RETURNING bot_id
       `,
-      [conversationId, botId, actorUserId, toJsonString(bot.permissions ?? [])]
+      [
+        conversationId,
+        botId,
+        actorUserId,
+        toJsonString(bot.permissions ?? []),
+        toJsonString(bot.runtime_mode === 'ai' ? normalizeAgentConfig(bot.agent_config) : {}),
+      ]
     );
 
     installed = Boolean(installResult.rowCount);
     if (installed) {
       updateMessage = await appendSystemChatMessage(client, {
         conversationId,
-        text: `${bot.name} deployed. Try ${bot.command_hint}`,
+          text: `${bot.name} connected. Try ${bot.command_hint} or mention the agent by name.`,
         metadata: {
           event: 'group_bot_deployed',
           actorUserId,
           botId,
           botType: bot.type,
           runtimeMode: bot.runtime_mode,
-          runtimeAvailable: false,
+          runtimeAvailable: bot.runtime_mode !== 'ai' || isAgentRuntimeReady(),
         },
       });
 
@@ -19132,7 +19071,10 @@ app.post('/chat/conversations/:conversationId/bots/:botId/deploy', async (reques
           conversationId,
           actorUserId,
           'deployed',
-          toJsonString({ runtimeMode: bot.runtime_mode, runtimeAvailable: false }),
+          toJsonString({
+            runtimeMode: bot.runtime_mode,
+            runtimeAvailable: bot.runtime_mode !== 'ai' || isAgentRuntimeReady(),
+          }),
         ]
       );
     }
@@ -19156,7 +19098,7 @@ app.post('/chat/conversations/:conversationId/bots/:botId/deploy', async (reques
         actorUserId,
         messageId: updateMessage.id,
         runtimeMode: bot.runtime_mode,
-        runtimeAvailable: false,
+        runtimeAvailable: bot.runtime_mode !== 'ai' || isAgentRuntimeReady(),
       },
     });
   }
@@ -19168,7 +19110,7 @@ app.post('/chat/conversations/:conversationId/bots/:botId/deploy', async (reques
     installed,
     botIds,
     runtimeMode: bot.runtime_mode,
-    runtimeAvailable: false,
+    runtimeAvailable: bot.runtime_mode !== 'ai' || isAgentRuntimeReady(),
   };
 });
 
@@ -19335,7 +19277,7 @@ app.post('/chat/conversations/:conversationId/bots/:botId/command', async (reque
   reply.code(200);
   return {
     ok: true,
-    runtimeAvailable: true,
+    runtimeAvailable: bot.runtime_mode !== 'ai' || isAgentRuntimeReady(),
     executed: execution.messageId !== null,
     messageId: execution.messageId,
     botId,
@@ -19360,11 +19302,12 @@ app.get('/bots/system', async () => {
     is_draft: boolean;
     permissions: unknown;
     icon: string | null;
+    agent_config: unknown;
   }>(
     `
       SELECT
         id, slug, name, description, command_hint, category,
-        type, status, runtime_mode, is_draft, permissions, icon
+        type, status, runtime_mode, is_draft, permissions, icon, agent_config
       FROM chat_bots
       WHERE type = 'system' AND is_active = TRUE
       ORDER BY name ASC
@@ -19386,6 +19329,8 @@ app.get('/bots/system', async () => {
       isDraft: row.is_draft,
       permissions: row.permissions,
       icon: row.icon,
+      agentConfig: row.runtime_mode === 'ai' ? normalizeAgentConfig(row.agent_config) : null,
+      ...botRuntimeReadiness(row.runtime_mode),
     })),
   };
 });
@@ -19409,13 +19354,14 @@ app.get('/bots', async (request) => {
     is_draft: boolean;
     permissions: unknown;
     icon: string | null;
+    agent_config: unknown;
     created_at: string;
     updated_at: string;
   }>(
     `
       SELECT
         id, slug, name, description, command_hint, category,
-        type, status, runtime_mode, is_draft, permissions, icon,
+        type, status, runtime_mode, is_draft, permissions, icon, agent_config,
         created_at, updated_at
       FROM chat_bots
       WHERE type = 'custom' AND owner_id = $1
@@ -19439,6 +19385,8 @@ app.get('/bots', async (request) => {
       isDraft: row.is_draft,
       permissions: row.permissions,
       icon: row.icon,
+      agentConfig: row.runtime_mode === 'ai' ? normalizeAgentConfig(row.agent_config) : null,
+      ...botRuntimeReadiness(row.runtime_mode),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     })),
@@ -19467,13 +19415,14 @@ app.get('/bots/:botId', async (request) => {
     permissions: unknown;
     icon: string | null;
     owner_id: string | null;
+    agent_config: unknown;
     created_at: string;
     updated_at: string;
   }>(
     `
       SELECT
         id, slug, name, description, command_hint, category,
-        type, status, runtime_mode, is_draft, permissions, icon, owner_id,
+        type, status, runtime_mode, is_draft, permissions, icon, owner_id, agent_config,
         created_at, updated_at
       FROM chat_bots
       WHERE id = $1
@@ -19508,6 +19457,8 @@ app.get('/bots/:botId', async (request) => {
       permissions: bot.permissions,
       icon: bot.icon,
       ownerId: bot.owner_id,
+      agentConfig: bot.runtime_mode === 'ai' ? normalizeAgentConfig(bot.agent_config) : null,
+      ...botRuntimeReadiness(bot.runtime_mode),
       createdAt: bot.created_at,
       updatedAt: bot.updated_at,
     },
@@ -19525,23 +19476,31 @@ app.post('/bots', async (request, reply) => {
     slug: z.string().trim().min(2).max(40).optional(),
     description: z.string().trim().min(2).max(500),
     commandHint: z.string().trim().min(1).max(120),
-    category: z.enum(['moderation', 'commerce', 'automation', 'safety', 'assistant']),
+    category: z.enum(['moderation', 'commerce', 'automation', 'safety', 'assistant', 'styling']),
     permissions: z.array(z.string()).default([]),
     icon: z.string().trim().max(120).optional(),
     isDraft: z.boolean().default(false),
+    agentConfig: agentConfigSchema.optional(),
   });
 
   const payload = bodySchema.parse(request.body);
   const botId = createRuntimeId('bot');
   const slug = payload.slug ?? botId;
+  const normalizedAgentConfig = normalizeAgentConfig(payload.agentConfig);
+  const validationError = payload.isDraft
+    ? null
+    : validatePublishedAgent(normalizedAgentConfig, payload.permissions);
+  if (validationError) {
+    throw createApiError('CHAT_BOT_INVALID', validationError);
+  }
 
   await db.query(
     `
       INSERT INTO chat_bots (
         id, slug, name, description, command_hint, category,
-        type, status, runtime_mode, is_draft, permissions, icon, owner_id
+        type, status, runtime_mode, is_draft, permissions, icon, owner_id, agent_config
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
     `,
     [
       botId,
@@ -19551,12 +19510,13 @@ app.post('/bots', async (request, reply) => {
       payload.commandHint,
       payload.category,
       'custom',
-      'local-only',
-      'config-only',
+      'available',
+      'ai',
       payload.isDraft,
       toJsonString(payload.permissions),
       payload.icon ?? null,
       userId,
+      toJsonString(normalizedAgentConfig),
     ]
   );
 
@@ -19581,9 +19541,11 @@ app.post('/bots', async (request, reply) => {
     slug,
     name: payload.name,
     type: 'custom',
-    status: 'local-only',
-    runtimeMode: 'config-only',
+    status: 'available',
+    runtimeMode: 'ai',
     isDraft: payload.isDraft,
+    agentConfig: normalizedAgentConfig,
+    ...botRuntimeReadiness('ai'),
   };
 });
 
@@ -19597,20 +19559,27 @@ app.patch('/bots/:botId', async (request) => {
     name: z.string().trim().min(2).max(80).optional(),
     description: z.string().trim().min(2).max(500).optional(),
     commandHint: z.string().trim().min(1).max(120).optional(),
-    category: z.enum(['moderation', 'commerce', 'automation', 'safety', 'assistant']).optional(),
+    category: z.enum(['moderation', 'commerce', 'automation', 'safety', 'assistant', 'styling']).optional(),
     permissions: z.array(z.string()).optional(),
     icon: z.string().trim().max(120).optional(),
     isDraft: z.boolean().optional(),
     status: z.enum(['available', 'local-only', 'backend-required', 'disabled']).optional(),
     runtimeMode: z.enum(['local', 'config-only', 'backend', 'ai']).optional(),
+    agentConfig: agentConfigSchema.optional(),
   });
 
   const { botId } = paramsSchema.parse(request.params);
   const payload = bodySchema.parse(request.body);
   const userId = request.authUser.userId;
 
-  const existing = await db.query<{ owner_id: string; type: 'system' | 'custom' }>(
-    `SELECT owner_id, type FROM chat_bots WHERE id = $1 LIMIT 1`,
+  const existing = await db.query<{
+    owner_id: string;
+    type: 'system' | 'custom';
+    agent_config: unknown;
+    permissions: unknown;
+    is_draft: boolean;
+  }>(
+    `SELECT owner_id, type, agent_config, permissions, is_draft FROM chat_bots WHERE id = $1 LIMIT 1`,
     [botId]
   );
 
@@ -19621,6 +19590,17 @@ app.patch('/bots/:botId', async (request) => {
   const bot = existing.rows[0];
   if (bot.type !== 'custom' || bot.owner_id !== userId) {
     throw createApiError('FORBIDDEN_USER_CONTEXT', 'Only the bot owner can update this bot');
+  }
+
+  const nextConfig = normalizeAgentConfig(payload.agentConfig ?? bot.agent_config);
+  const nextPermissions = payload.permissions
+    ?? (Array.isArray(bot.permissions) ? bot.permissions.filter((item): item is string => typeof item === 'string') : []);
+  const nextIsDraft = payload.isDraft ?? bot.is_draft;
+  const validationError = nextIsDraft
+    ? null
+    : validatePublishedAgent(nextConfig, nextPermissions);
+  if (validationError) {
+    throw createApiError('CHAT_BOT_INVALID', validationError);
   }
 
   const updates: string[] = [];
@@ -19662,6 +19642,18 @@ app.patch('/bots/:botId', async (request) => {
   if (payload.runtimeMode !== undefined) {
     updates.push(`runtime_mode = $${paramIndex++}`);
     values.push(payload.runtimeMode);
+  }
+  if (payload.agentConfig !== undefined) {
+    updates.push(`agent_config = $${paramIndex++}`);
+    values.push(toJsonString(nextConfig));
+    if (payload.runtimeMode === undefined) {
+      updates.push(`runtime_mode = $${paramIndex++}`);
+      values.push('ai');
+    }
+    if (payload.status === undefined) {
+      updates.push(`status = $${paramIndex++}`);
+      values.push('available');
+    }
   }
 
   if (updates.length === 0) {
@@ -23911,20 +23903,7 @@ app.get('/wallet/1ze/attestations', async (request, reply) => {
   };
 });
 
-app.post('/uploads/presign', async (request) => {
-  const bodySchema = z.object({
-    fileName: z.string().min(1),
-    contentType: z.string().min(3),
-    folder: z.string().optional(),
-  });
-
-  const payload = bodySchema.parse(request.body);
-  const safeName = payload.fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
-  const folder = payload.folder?.replace(/[^a-zA-Z0-9/_-]/g, '') ?? 'listings';
-  const key = `${folder}/${Date.now()}_${safeName}`;
-
-  return createUploadUrl(key, payload.contentType);
-});
+registerUploadRoutes({ app, createApiError, resolveAuthenticatedUserId });
 
 app.post('/interactions', async (request, reply) => {
   const bodySchema = z.object({
@@ -24059,7 +24038,7 @@ app.get('/recommendations/:userId', async (request, reply) => {
     [userId]
   );
 
-  const mlResponse = await fetch(`${config.mlServiceUrl}/recommendations`, {
+  const decisionResponse = await fetch(`${config.decisionServiceUrl}/recommendations`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: toJsonString({
@@ -24081,12 +24060,12 @@ app.get('/recommendations/:userId', async (request, reply) => {
     }),
   });
 
-  if (!mlResponse.ok) {
+  if (!decisionResponse.ok) {
     const fallback = listingsResult.rows.slice(0, 24).map((row, index) => ({
       score: Number((1 - index * 0.02).toFixed(6)),
       model: 'fallback_recent',
       policy: 'exploit',
-      reason: 'ml_unavailable',
+      reason: 'decision_service_unavailable',
       listing: row,
     }));
 
@@ -24097,15 +24076,15 @@ app.get('/recommendations/:userId', async (request, reply) => {
     };
   }
 
-  const mlPayload = recommendationPayloadSchema.parse(await mlResponse.json());
+  const decisionPayload = recommendationPayloadSchema.parse(await decisionResponse.json());
 
-  const listingIds = mlPayload.recommendations.map((item) => item.listing_id);
+  const listingIds = decisionPayload.recommendations.map((item) => item.listing_id);
   if (listingIds.length === 0) {
-    return { source: 'ml', items: [] };
+    return { source: 'decision_service', items: [] };
   }
 
   const listingById = new Map(listingsResult.rows.map((row) => [row.id, row]));
-  const merged = mlPayload.recommendations
+  const merged = decisionPayload.recommendations
     .map((item) => ({
       score: item.score,
       model: item.model,
@@ -24117,7 +24096,7 @@ app.get('/recommendations/:userId', async (request, reply) => {
 
   await redis.set(cacheKey, toJsonString(merged), 'EX', 60);
 
-  return { source: 'ml', items: merged };
+  return { source: 'decision_service', items: merged };
 });
 
 app.get('/users/:userId/addresses', async (request) => {
@@ -24592,9 +24571,11 @@ app.get('/payments/gateways', async (request) => {
       },
     ];
 
-    const filteredFallbackItems = allowedGatewayIds === null
-      ? fallbackItems
-      : fallbackItems.filter((item) => allowedGatewayIds?.includes(item.id));
+    const filteredFallbackItems = fallbackItems.filter(
+      (item) =>
+        isGatewayConfigured(item.id)
+        && (allowedGatewayIds === null || allowedGatewayIds.includes(item.id))
+    );
 
     return {
       ok: true,
@@ -24620,12 +24601,14 @@ app.get('/payments/gateways', async (request) => {
 
   return {
     ok: true,
-    items: result.rows.map((row) => ({
-      id: row.id,
-      displayName: row.display_name,
-      type: row.gateway_type,
-      isActive: row.is_active,
-    })),
+    items: result.rows
+      .filter((row) => isGatewayConfigured(row.id))
+      .map((row) => ({
+        id: row.id,
+        displayName: row.display_name,
+        type: row.gateway_type,
+        isActive: row.is_active,
+      })),
   };
 });
 
@@ -24840,7 +24823,66 @@ app.post('/users/:userId/payout-accounts', async (request, reply) => {
     };
   }
 
-  const providerAccountRef = payload.providerAccountRef ?? createRuntimeId(`mock_payout_account_${userId}`);
+  if (!isGatewayConfigured(resolvedGatewayId)) {
+    throw createApiError(
+      'PAYOUT_PROVIDER_UNAVAILABLE',
+      'The selected payout provider is not configured',
+      { gatewayId: resolvedGatewayId }
+    );
+  }
+
+  let providerAccountRef = payload.providerAccountRef?.trim() ?? null;
+  let providerVerifiedStatus: 'pending' | 'active' = 'pending';
+
+  if (resolvedGatewayId === 'stripe_americas') {
+    if (!stripe) {
+      throw createApiError(
+        'PAYOUT_PROVIDER_UNAVAILABLE',
+        'Stripe Connect is not configured'
+      );
+    }
+
+    const connectAccount = await db.query<{ stripe_account_id: string }>(
+      `SELECT stripe_account_id
+       FROM stripe_connect_accounts
+       WHERE user_id = $1
+       LIMIT 1`,
+      [userId]
+    );
+    const connectedAccountId = connectAccount.rows[0]?.stripe_account_id;
+    if (!connectedAccountId) {
+      throw createApiError(
+        'PAYOUT_ONBOARDING_REQUIRED',
+        'Complete Stripe payout onboarding before creating a payout account'
+      );
+    }
+    if (providerAccountRef && providerAccountRef !== connectedAccountId) {
+      throw createApiError(
+        'PAYOUT_ACCOUNT_MISMATCH',
+        'Payout account does not match the connected Stripe account'
+      );
+    }
+
+    const providerAccount = await stripe.accounts.retrieve(connectedAccountId);
+    if (
+      providerAccount.metadata?.userId
+      && providerAccount.metadata.userId !== userId
+    ) {
+      throw createApiError(
+        'PAYOUT_ACCOUNT_MISMATCH',
+        'Connected payout account ownership could not be verified'
+      );
+    }
+
+    providerAccountRef = connectedAccountId;
+    providerVerifiedStatus = providerAccount.payouts_enabled ? 'active' : 'pending';
+  } else if (!providerAccountRef) {
+    throw createApiError(
+      'PAYOUT_PROVIDER_ACCOUNT_REQUIRED',
+      'A verified provider payout account reference is required',
+      { gatewayId: resolvedGatewayId }
+    );
+  }
 
   const result = await db.query<{
     id: number;
@@ -24865,6 +24907,14 @@ app.post('/users/:userId/payout-accounts', async (request, reply) => {
         metadata
       )
       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
+      ON CONFLICT (gateway_id, provider_account_ref)
+      DO UPDATE SET
+        country_code = EXCLUDED.country_code,
+        currency = EXCLUDED.currency,
+        status = EXCLUDED.status,
+        metadata = payout_accounts.metadata || EXCLUDED.metadata,
+        updated_at = NOW()
+      WHERE payout_accounts.user_id = EXCLUDED.user_id
       RETURNING
         id,
         user_id,
@@ -24883,14 +24933,23 @@ app.post('/users/:userId/payout-accounts', async (request, reply) => {
       providerAccountRef,
       resolvedCountryCode,
       resolvedCurrency,
-      payload.status,
+      providerVerifiedStatus,
       toJsonString({
         ...(payload.metadata ?? {}),
         countryCluster: capabilities.countryCluster,
         capabilityPolicyVersion: capabilities.policyVersion,
+        providerVerifiedAt:
+          providerVerifiedStatus === 'active' ? new Date().toISOString() : null,
       }),
     ]
   );
+
+  if (!result.rowCount) {
+    throw createApiError(
+      'PAYOUT_ACCOUNT_MISMATCH',
+      'Payout account is already linked to another user'
+    );
+  }
 
   reply.code(201);
   return {
@@ -25102,6 +25161,53 @@ app.get('/users/:userId/stripe-connect/status', async (request, reply) => {
       );
     }
 
+    const complianceProfile = await getOrCreateComplianceProfile(db, userId);
+    const capabilities = resolveCountryCapabilities({
+      countryCode: complianceProfile.countryCode,
+      residencyCountryCode: complianceProfile.residencyCountryCode,
+    });
+    const stripePayoutAllowed =
+      isPayoutGatewayAllowed(capabilities, 'stripe_americas')
+      && isPayoutCurrencyAllowed(capabilities, 'GBP');
+
+    if (stripePayoutAllowed) {
+      await db.query(
+        `INSERT INTO payout_accounts (
+           user_id,
+           gateway_id,
+           provider_account_ref,
+           country_code,
+           currency,
+           status,
+           metadata
+         )
+         VALUES ($1, 'stripe_americas', $2, $3, 'GBP', $4, $5::jsonb)
+         ON CONFLICT (gateway_id, provider_account_ref)
+         DO UPDATE SET
+           country_code = EXCLUDED.country_code,
+           currency = EXCLUDED.currency,
+           status = EXCLUDED.status,
+           metadata = payout_accounts.metadata || EXCLUDED.metadata,
+           updated_at = NOW()
+         WHERE payout_accounts.user_id = EXCLUDED.user_id`,
+        [
+          userId,
+          row.stripe_account_id,
+          stripeAccount.country?.toUpperCase()
+            ?? capabilities.effectiveCountryCode,
+          stripeAccount.payouts_enabled ? 'active' : 'pending',
+          toJsonString({
+            source: 'stripe_connect_status_sync',
+            chargesEnabled: stripeAccount.charges_enabled,
+            payoutsEnabled: stripeAccount.payouts_enabled,
+            providerVerifiedAt: stripeAccount.payouts_enabled
+              ? new Date().toISOString()
+              : null,
+          }),
+        ]
+      );
+    }
+
     return {
       ok: true,
       hasConnectAccount: true,
@@ -25111,6 +25217,7 @@ app.get('/users/:userId/stripe-connect/status', async (request, reply) => {
       payoutsEnabled: stripeAccount.payouts_enabled,
       onboardingUrl: row.onboarding_url,
       requirementsCurrentlyDue: stripeAccount.requirements?.currently_due ?? [],
+      payoutPolicySupported: stripePayoutAllowed,
     };
   } catch (error) {
     app.log.error({ err: error, userId }, 'Failed to retrieve Stripe account status');
@@ -25927,8 +26034,33 @@ app.post('/admin/payouts/:requestId/review', async (request, reply) => {
     };
   }
 
-  const lookup = await db.query<{ id: string; user_id: string }>(
-    'SELECT id, user_id FROM payout_requests WHERE id = $1 LIMIT 1',
+  const lookup = await db.query<{
+    id: string;
+    user_id: string;
+    amount_gbp: number | string;
+    amount_currency: string;
+    status: PayoutRequestStatus;
+    provider_payout_ref: string | null;
+    metadata: Record<string, unknown>;
+    gateway_id: string;
+    provider_account_ref: string;
+    payout_account_status: 'pending' | 'active' | 'disabled';
+  }>(
+    `SELECT
+       pr.id,
+       pr.user_id,
+       pr.amount_gbp,
+       pr.amount_currency,
+       pr.status,
+       pr.provider_payout_ref,
+       pr.metadata,
+       pa.gateway_id,
+       pa.provider_account_ref,
+       pa.status AS payout_account_status
+     FROM payout_requests pr
+     JOIN payout_accounts pa ON pa.id = pr.payout_account_id
+     WHERE pr.id = $1
+     LIMIT 1`,
     [requestId]
   );
 
@@ -26006,13 +26138,8 @@ app.post('/admin/payouts/:requestId/review', async (request, reply) => {
     await client.query('ROLLBACK');
 
     const apiError = getApiError(error);
-    if (
-      apiError?.code === 'PAYOUT_INVALID_TRANSITION'
-      || apiError?.code === 'PAYOUT_PENDING_INSUFFICIENT'
-      || apiError?.code === 'PAYOUT_REVIEW_REQUIRED'
-      || apiError?.code === 'PAYOUTS_PAUSED'
-    ) {
-      reply.code(409);
+    if (apiError) {
+      reply.code(statusCodeForApiError(apiError.code));
       return {
         ok: false,
         error: apiError.message,
@@ -26057,8 +26184,33 @@ app.post('/admin/payouts/:requestId/approve', async (request, reply) => {
     };
   }
 
-  const lookup = await db.query<{ id: string; user_id: string }>(
-    'SELECT id, user_id FROM payout_requests WHERE id = $1 LIMIT 1',
+  const lookup = await db.query<{
+    id: string;
+    user_id: string;
+    amount_gbp: number | string;
+    amount_currency: string;
+    status: PayoutRequestStatus;
+    provider_payout_ref: string | null;
+    metadata: Record<string, unknown>;
+    gateway_id: string;
+    provider_account_ref: string;
+    payout_account_status: 'pending' | 'active' | 'disabled';
+  }>(
+    `SELECT
+       pr.id,
+       pr.user_id,
+       pr.amount_gbp,
+       pr.amount_currency,
+       pr.status,
+       pr.provider_payout_ref,
+       pr.metadata,
+       pa.gateway_id,
+       pa.provider_account_ref,
+       pa.status AS payout_account_status
+     FROM payout_requests pr
+     JOIN payout_accounts pa ON pa.id = pr.payout_account_id
+     WHERE pr.id = $1
+     LIMIT 1`,
     [requestId]
   );
 
@@ -26084,17 +26236,200 @@ app.post('/admin/payouts/:requestId/approve', async (request, reply) => {
     };
   }
 
+  const payoutRow = lookup.rows[0];
+  let providerPayoutRef =
+    payload.providerPayoutRef?.trim()
+    ?? payoutRow.provider_payout_ref
+    ?? null;
+  let providerExecutionMetadata: Record<string, unknown> = {};
+
+  if (payoutRow.status === 'paid' && !providerPayoutRef) {
+    reply.code(409);
+    return {
+      ok: false,
+      error: 'This legacy paid payout is missing a provider reference and requires reconciliation review',
+      code: 'PAYOUT_PROVIDER_REF_REQUIRED',
+    };
+  }
+
+  if (!providerPayoutRef && payoutRow.status !== 'paid') {
+    if (
+      payoutRow.gateway_id !== 'stripe_americas'
+      || payoutRow.payout_account_status !== 'active'
+      || !stripe
+    ) {
+      reply.code(503);
+      return {
+        ok: false,
+        error: 'No live payout provider is available for this payout account',
+        code: 'PAYOUT_PROVIDER_UNAVAILABLE',
+      };
+    }
+
+    if (payoutRow.amount_currency.toUpperCase() !== 'GBP') {
+      reply.code(503);
+      return {
+        ok: false,
+        error: 'Automatic provider payout currently supports verified GBP payout accounts only',
+        code: 'PAYOUT_CURRENCY_UNSUPPORTED',
+      };
+    }
+
+    const connectAccount = await db.query<{
+      stripe_account_id: string;
+      payouts_enabled: boolean;
+    }>(
+      `SELECT stripe_account_id, payouts_enabled
+       FROM stripe_connect_accounts
+       WHERE user_id = $1
+         AND stripe_account_id = $2
+       LIMIT 1`,
+      [payoutRow.user_id, payoutRow.provider_account_ref]
+    );
+
+    if (!connectAccount.rowCount || !connectAccount.rows[0].payouts_enabled) {
+      reply.code(409);
+      return {
+        ok: false,
+        error: 'Stripe payout onboarding is incomplete for this account',
+        code: 'PAYOUT_ONBOARDING_REQUIRED',
+      };
+    }
+
+    let livePayoutsEnabled = false;
+    try {
+      const liveConnectAccount = await stripe.accounts.retrieve(
+        payoutRow.provider_account_ref
+      );
+      livePayoutsEnabled = liveConnectAccount.payouts_enabled;
+    } catch (error) {
+      request.log.error(
+        { err: error, requestId, userId: payoutRow.user_id },
+        'Unable to verify Stripe Connect payout account'
+      );
+      reply.code(502);
+      return {
+        ok: false,
+        error: 'The payout provider could not verify this connected account',
+        code: 'PAYOUT_PROVIDER_UNCONFIRMED',
+      };
+    }
+
+    if (!livePayoutsEnabled) {
+      await db.query(
+        `UPDATE payout_accounts
+         SET status = 'pending', updated_at = NOW()
+         WHERE gateway_id = 'stripe_americas'
+           AND provider_account_ref = $1`,
+        [payoutRow.provider_account_ref]
+      );
+      reply.code(409);
+      return {
+        ok: false,
+        error: 'Stripe has paused payouts for this connected account',
+        code: 'PAYOUT_ONBOARDING_REQUIRED',
+      };
+    }
+
+    const payoutMetadata = asObject(payoutRow.metadata);
+    const approvalMetadata = asObject(payload.metadata);
+    const payoutBreakdown = computePayoutSettlementBreakdown({
+      amountGbp: Number(payoutRow.amount_gbp),
+      networkFeeGbp: Number(
+        approvalMetadata.networkFeeGbp
+        ?? payoutMetadata.networkFeeGbp
+        ?? 0
+      ),
+      spreadGbp: Number(
+        approvalMetadata.spreadGbp
+        ?? payoutMetadata.spreadGbp
+        ?? 0
+      ),
+    });
+
+    if (!payoutBreakdown.isValid || payoutBreakdown.netPayoutGbp <= 0) {
+      reply.code(400);
+      return {
+        ok: false,
+        error: 'Payout deductions leave no transferable provider amount',
+        code: 'PAYOUT_INVALID_DEDUCTIONS',
+      };
+    }
+
+    const processingClient = await db.connect();
+    try {
+      await processingClient.query('BEGIN');
+      await settlePayoutRequest(processingClient, {
+        userId: payoutRow.user_id,
+        requestId,
+        targetStatus: 'processing',
+        metadata: {
+          ...(payload.metadata ?? {}),
+          providerExecution: {
+            provider: 'stripe_connect',
+            destinationAccountId: payoutRow.provider_account_ref,
+            initiatedAt: new Date().toISOString(),
+          },
+        },
+        source: 'admin_review',
+      });
+      await processingClient.query('COMMIT');
+    } catch (error) {
+      await processingClient.query('ROLLBACK');
+      throw error;
+    } finally {
+      processingClient.release();
+    }
+
+    try {
+      const providerTransfer = await createStripeConnectPayoutTransfer(stripe, {
+        requestId,
+        userId: payoutRow.user_id,
+        destinationAccountId: payoutRow.provider_account_ref,
+        netAmountGbp: payoutBreakdown.netPayoutGbp,
+      });
+      providerPayoutRef = providerTransfer.providerPayoutRef;
+      providerExecutionMetadata = {
+        provider: 'stripe_connect',
+        providerPayoutRef,
+        destinationAccountId: providerTransfer.destinationAccountId,
+        amountMinor: providerTransfer.amountMinor,
+        currency: providerTransfer.currency,
+        confirmedAt: new Date().toISOString(),
+      };
+    } catch (error) {
+      request.log.error(
+        { err: error, requestId, userId: payoutRow.user_id },
+        'Stripe Connect payout transfer was not confirmed'
+      );
+      reply.code(502);
+      return {
+        ok: false,
+        error: 'The payout provider did not confirm the transfer. The request remains processing and can be retried safely.',
+        code: 'PAYOUT_PROVIDER_UNCONFIRMED',
+      };
+    }
+  }
+
   const client = await db.connect();
   try {
     await client.query('BEGIN');
 
     const settled = await settlePayoutRequest(client, {
-      userId: lookup.rows[0].user_id,
+      userId: payoutRow.user_id,
       requestId,
       targetStatus: 'paid',
-      providerPayoutRef: payload.providerPayoutRef,
+      providerPayoutRef: providerPayoutRef ?? undefined,
       metadata: {
         ...(payload.metadata ?? {}),
+        providerExecution:
+          Object.keys(providerExecutionMetadata).length > 0
+            ? providerExecutionMetadata
+            : {
+                provider: 'manual_external_confirmation',
+                providerPayoutRef,
+                confirmedAt: new Date().toISOString(),
+              },
         review: {
           action: 'approve',
           note: payload.note ?? null,
@@ -26118,7 +26453,7 @@ app.post('/admin/payouts/:requestId/approve', async (request, reply) => {
           {
             err: notificationError,
             requestId,
-            userId: lookup.rows[0].user_id,
+            userId: payoutRow.user_id,
           },
           'Failed to queue payout notification after admin payout approval'
         );
@@ -26134,13 +26469,8 @@ app.post('/admin/payouts/:requestId/approve', async (request, reply) => {
     await client.query('ROLLBACK');
 
     const apiError = getApiError(error);
-    if (
-      apiError?.code === 'PAYOUT_INVALID_TRANSITION'
-      || apiError?.code === 'PAYOUT_PENDING_INSUFFICIENT'
-      || apiError?.code === 'PAYOUT_REVIEW_REQUIRED'
-      || apiError?.code === 'PAYOUTS_PAUSED'
-    ) {
-      reply.code(409);
+    if (apiError) {
+      reply.code(statusCodeForApiError(apiError.code));
       return {
         ok: false,
         error: apiError.message,
@@ -26872,6 +27202,10 @@ app.post('/payments/intents', async (request, reply) => {
     };
   } catch (error) {
     await client.query('ROLLBACK');
+    const apiError = getApiError(error);
+    if (apiError) {
+      throw apiError;
+    }
     request.log.error({ err: error }, 'Failed to create payment intent');
     reply.code(500);
     return {
@@ -27441,6 +27775,7 @@ app.get('/payments/disputes', async (request, reply) => {
   };
 });
 
+if (config.nodeEnv !== 'production') {
 app.post('/payments/webhooks/mock', async (request, reply) => {
   if (config.nodeEnv === 'production') {
     reply.code(404);
@@ -27768,6 +28103,7 @@ app.post('/payouts/webhooks/mock', async (request, reply) => {
     client.release();
   }
 });
+}
 
 app.post('/webhooks/:provider', async (request, reply) => {
   const paramsSchema = z.object({ provider: z.string().min(3).max(40) });
@@ -33550,7 +33886,6 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
       return idempotentResponse;
     }
   }
-
   const tradingHaltState = await getOnezeMintBurnHaltState();
   if (tradingHaltState.halted) {
     reply.code(423);
@@ -35145,6 +35480,8 @@ let isShuttingDown = false;
 
 const start = async () => {
   try {
+    await startRealtimeBridge(redis);
+
     startBackgroundWorkers({
       handlePushJob: processPushQueueJob,
       handleAuctionSweepJob: async ({ reason }) => {
@@ -35190,688 +35527,9 @@ const start = async () => {
 
 // ── Support tickets ────────────────────────────────────────────────
 
-app.post('/support/tickets', async (request, reply) => {
-  const bodySchema = z.object({
-    orderId: z.string().min(4).max(64),
-    topicId: z.string().min(1).max(64),
-    topicLabel: z.string().min(1).max(120),
-    details: z.string().min(1).max(2000),
-    evidenceMediaUrls: z.array(z.string().url()).max(5).optional(),
-  });
+registerSupportReviewRoutes({ app, db, createApiError, queueUserNotification });
 
-  const payload = bodySchema.parse(request.body);
-  const userId = (request as any).authUser?.userId as string | undefined;
-
-  if (!userId) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
-  }
-
-  const orderResult = await db.query<{ id: string }>(
-    'SELECT id FROM orders WHERE id = $1 AND (buyer_id = $2 OR seller_id = $2) LIMIT 1',
-    [payload.orderId, userId]
-  );
-
-  if (!orderResult.rowCount) {
-    reply.code(403);
-    return { ok: false, error: 'Order not found or not accessible', code: 'ORDER_ACCESS_DENIED' };
-  }
-
-  const existingOpen = await db.query<{ id: string }>(
-    `SELECT id FROM support_tickets WHERE user_id = $1 AND order_id = $2 AND status = 'open' LIMIT 1`,
-    [userId, payload.orderId]
-  );
-
-  if (existingOpen.rowCount) {
-    reply.code(409);
-    return { ok: false, error: 'You already have an open request for this order. Please close it before creating a new one.', code: 'RESOLUTION_ALREADY_OPEN' };
-  }
-
-  const ticketId = `ticket_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  const evidenceUrls = payload.evidenceMediaUrls ?? [];
-
-  await db.query(
-    `
-      INSERT INTO support_tickets (id, user_id, order_id, topic_id, topic_label, details, status, evidence_media_urls, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, 'open', $7, NOW(), NOW())
-    `,
-    [ticketId, userId, payload.orderId, payload.topicId, payload.topicLabel, payload.details, evidenceUrls]
-  );
-
-  const orderParties = await db.query<{ buyer_id: string; seller_id: string }>(
-    'SELECT buyer_id, seller_id FROM orders WHERE id = $1 LIMIT 1',
-    [payload.orderId]
-  );
-  if (orderParties.rows[0]) {
-    const otherPartyId = orderParties.rows[0].buyer_id === userId
-      ? orderParties.rows[0].seller_id
-      : orderParties.rows[0].buyer_id;
-    try {
-      await queueUserNotification({
-        userId: otherPartyId,
-        title: 'Support request opened',
-        body: `A support request was opened for order: ${payload.topicLabel}`,
-        eventType: 'resolution_opened',
-        actorUserId: userId,
-        payload: { ticketId, orderId: payload.orderId, topicLabel: payload.topicLabel },
-        route: { screen: 'SupportTicketDetail', params: { ticketId } },
-        idempotencyKey: `resolution_opened_${ticketId}`,
-        metadata: { source: 'support_ticket' },
-      });
-    } catch (notifErr) {
-      app.log.error({ err: notifErr, ticketId }, 'Failed to queue resolution_opened notification');
-    }
-  }
-
-  reply.code(201);
-  return {
-    ok: true,
-    ticket: {
-      id: ticketId,
-      orderId: payload.orderId,
-      topicId: payload.topicId,
-      topicLabel: payload.topicLabel,
-      details: payload.details,
-      status: 'open',
-      evidenceMediaUrls: evidenceUrls,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-  };
-});
-
-app.get('/support/tickets', async (request) => {
-  const userId = (request as any).authUser?.userId as string | undefined;
-  if (!userId) {
-    throw createApiError('UNAUTHORIZED', 'Unauthorized');
-  }
-
-  const result = await db.query<{
-    id: string;
-    order_id: string;
-    topic_id: string;
-    topic_label: string;
-    details: string;
-    status: string;
-    evidence_media_urls: string[] | null;
-    created_at: string;
-    updated_at: string;
-  }>(
-    `
-      SELECT id, order_id, topic_id, topic_label, details, status, evidence_media_urls, created_at, updated_at
-      FROM support_tickets
-      WHERE user_id = $1
-      ORDER BY created_at DESC
-    `,
-    [userId]
-  );
-
-  return {
-    ok: true,
-    tickets: result.rows.map((row) => ({
-      id: row.id,
-      orderId: row.order_id,
-      topicId: row.topic_id,
-      topicLabel: row.topic_label,
-      details: row.details,
-      status: row.status,
-      evidenceMediaUrls: row.evidence_media_urls ?? [],
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    })),
-  };
-});
-
-app.get('/support/tickets/order/:orderId', async (request) => {
-  const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
-  const { orderId } = paramsSchema.parse(request.params);
-  const userId = (request as any).authUser?.userId as string | undefined;
-  if (!userId) {
-    throw createApiError('UNAUTHORIZED', 'Unauthorized');
-  }
-
-  const result = await db.query<{
-    id: string;
-    order_id: string;
-    topic_id: string;
-    topic_label: string;
-    details: string;
-    status: string;
-    evidence_media_urls: string[] | null;
-    created_at: string;
-    updated_at: string;
-  }>(
-    `
-      SELECT id, order_id, topic_id, topic_label, details, status, evidence_media_urls, created_at, updated_at
-      FROM support_tickets
-      WHERE user_id = $1 AND order_id = $2
-      ORDER BY created_at DESC
-    `,
-    [userId, orderId]
-  );
-
-  return {
-    ok: true,
-    tickets: result.rows.map((row) => ({
-      id: row.id,
-      orderId: row.order_id,
-      topicId: row.topic_id,
-      topicLabel: row.topic_label,
-      details: row.details,
-      status: row.status,
-      evidenceMediaUrls: row.evidence_media_urls ?? [],
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    })),
-  };
-});
-
-app.patch('/support/tickets/:ticketId/status', async (request, reply) => {
-  const paramsSchema = z.object({ ticketId: z.string().min(4).max(120) });
-  const bodySchema = z.object({
-    status: z.enum(['open', 'resolved', 'closed']),
-  });
-
-  const { ticketId } = paramsSchema.parse(request.params);
-  const body = bodySchema.parse(request.body);
-  const userId = (request as any).authUser?.userId as string | undefined;
-
-  if (!userId) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const result = await db.query(
-    `
-      UPDATE support_tickets
-      SET status = $1, updated_at = NOW()
-      WHERE id = $2 AND user_id = $3
-      RETURNING id
-    `,
-    [body.status, ticketId, userId]
-  );
-
-  if (!result.rowCount) {
-    reply.code(404);
-    return { ok: false, error: 'Ticket not found' };
-  }
-
-  const ticketInfo = await db.query<{ user_id: string; order_id: string }>(
-    'SELECT user_id, order_id FROM support_tickets WHERE id = $1 LIMIT 1',
-    [ticketId]
-  );
-  if (ticketInfo.rows[0] && ticketInfo.rows[0].user_id !== userId) {
-    try {
-      await queueUserNotification({
-        userId: ticketInfo.rows[0].user_id,
-        title: 'Support request updated',
-        body: `Your support request status changed to: ${body.status}`,
-        eventType: 'resolution_status_changed',
-        actorUserId: userId,
-        payload: { ticketId, orderId: ticketInfo.rows[0].order_id, status: body.status },
-        route: { screen: 'SupportTicketDetail', params: { ticketId } },
-        idempotencyKey: `resolution_status_${ticketId}_${body.status}`,
-        metadata: { source: 'support_ticket' },
-      });
-    } catch (notifErr) {
-      app.log.error({ err: notifErr, ticketId }, 'Failed to queue resolution_status_changed notification');
-    }
-  }
-
-  return { ok: true, ticketId, status: body.status };
-});
-
-// ── Order reviews ────────────────────────────────────────────────────
-
-app.get('/orders/:orderId/review', async (request, reply) => {
-  const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
-  const { orderId } = paramsSchema.parse(request.params);
-  const userId = (request as any).authUser?.userId as string | undefined;
-
-  if (!userId) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
-  }
-
-  const orderResult = await db.query<{ buyer_id: string; seller_id: string }>(
-    'SELECT buyer_id, seller_id FROM orders WHERE id = $1 LIMIT 1',
-    [orderId]
-  );
-
-  if (!orderResult.rowCount) {
-    reply.code(404);
-    return { ok: false, error: 'Order not found', code: 'ORDER_NOT_FOUND' };
-  }
-
-  const order = orderResult.rows[0];
-  if (order.buyer_id !== userId && order.seller_id !== userId) {
-    reply.code(403);
-    return { ok: false, error: 'Order not accessible', code: 'ORDER_ACCESS_DENIED' };
-  }
-
-  const reviewResult = await db.query<{
-    id: string;
-    rating: number;
-    comment: string | null;
-    created_at: string;
-    updated_at: string;
-  }>(
-    `SELECT id, rating, comment, created_at, updated_at FROM order_reviews WHERE order_id = $1 LIMIT 1`,
-    [orderId]
-  );
-
-  if (!reviewResult.rowCount) {
-    return { ok: true, review: null };
-  }
-
-  const row = reviewResult.rows[0];
-  return {
-    ok: true,
-    review: {
-      id: row.id,
-      orderId,
-      rating: row.rating,
-      comment: row.comment,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    },
-  };
-});
-
-app.post('/orders/:orderId/review', async (request, reply) => {
-  const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
-  const bodySchema = z.object({
-    rating: z.number().int().min(1).max(5),
-    comment: z.string().min(1).max(2000).optional(),
-  });
-
-  const { orderId } = paramsSchema.parse(request.params);
-  const body = bodySchema.parse(request.body);
-  const userId = (request as any).authUser?.userId as string | undefined;
-
-  if (!userId) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
-  }
-
-  const orderResult = await db.query<{ buyer_id: string; seller_id: string; status: string }>(
-    'SELECT buyer_id, seller_id, status FROM orders WHERE id = $1 LIMIT 1',
-    [orderId]
-  );
-
-  if (!orderResult.rowCount) {
-    reply.code(404);
-    return { ok: false, error: 'Order not found', code: 'ORDER_NOT_FOUND' };
-  }
-
-  const order = orderResult.rows[0];
-
-  if (order.buyer_id !== userId) {
-    reply.code(403);
-    return { ok: false, error: 'Only the buyer can review this order', code: 'ORDER_ACCESS_DENIED' };
-  }
-
-  if (order.status !== 'delivered' && order.status !== 'completed') {
-    reply.code(409);
-    return { ok: false, error: 'Reviews are only allowed after delivery', code: 'ORDER_ACTION_NOT_ALLOWED' };
-  }
-
-  const existingReview = await db.query<{ id: string }>(
-    'SELECT id FROM order_reviews WHERE order_id = $1 LIMIT 1',
-    [orderId]
-  );
-
-  if (existingReview.rowCount) {
-    reply.code(409);
-    return { ok: false, error: 'A review already exists for this order', code: 'REVIEW_ALREADY_EXISTS' };
-  }
-
-  const reviewId = `review_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-  await db.query(
-    `INSERT INTO order_reviews (id, order_id, reviewer_id, seller_id, rating, comment, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())`,
-    [reviewId, orderId, userId, order.seller_id, body.rating, body.comment ?? null]
-  );
-
-  try {
-    await queueUserNotification({
-      userId: order.seller_id,
-      title: 'New review received',
-      body: body.comment
-        ? `You received a ${body.rating}-star review: "${body.comment.slice(0, 80)}"`
-        : `You received a ${body.rating}-star review`,
-      eventType: 'review_received',
-      actorUserId: userId,
-      payload: { reviewId, orderId, rating: body.rating },
-      route: { screen: 'OrderDetail', params: { orderId } },
-      idempotencyKey: `review_received_${orderId}`,
-      metadata: { source: 'order_review' },
-    });
-  } catch (notifErr) {
-    app.log.error({ err: notifErr, reviewId }, 'Failed to queue review_received notification');
-  }
-
-  reply.code(201);
-  return {
-    ok: true,
-    review: {
-      id: reviewId,
-      orderId,
-      rating: body.rating,
-      comment: body.comment ?? null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-  };
-});
-
-// ── Collections ──────────────────────────────────────────────────────
-
-app.post('/collections', async (request, reply) => {
-  const bodySchema = z.object({
-    name: z.string().trim().min(1).max(80),
-    description: z.string().trim().max(500).optional(),
-    isPrivate: z.boolean().default(false),
-  });
-
-  const payload = bodySchema.parse(request.body);
-  const userId = (request as any).authUser?.userId as string | undefined;
-
-  if (!userId) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const collectionId = `collection_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-  await db.query(
-    `
-      INSERT INTO collections (id, user_id, name, description, is_private, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
-    `,
-    [collectionId, userId, payload.name, payload.description ?? null, payload.isPrivate]
-  );
-
-  reply.code(201);
-  return {
-    ok: true,
-    collection: {
-      id: collectionId,
-      name: payload.name,
-      description: payload.description ?? null,
-      isPrivate: payload.isPrivate,
-      itemIds: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-  };
-});
-
-app.get('/collections', async (request) => {
-  const userId = (request as any).authUser?.userId as string | undefined;
-  if (!userId) {
-    throw createApiError('UNAUTHORIZED', 'Unauthorized');
-  }
-
-  const result = await db.query<{
-    id: string;
-    name: string;
-    description: string | null;
-    is_private: boolean;
-    created_at: string;
-    updated_at: string;
-  }>(
-    `
-      SELECT id, name, description, is_private, created_at, updated_at
-      FROM collections
-      WHERE user_id = $1
-      ORDER BY created_at DESC
-    `,
-    [userId]
-  );
-
-  const collectionIds = result.rows.map((r) => r.id);
-
-  let itemsResult: { rows: { collection_id: string; listing_id: string }[] } = { rows: [] };
-  if (collectionIds.length > 0) {
-    itemsResult = await db.query<{
-      collection_id: string;
-      listing_id: string;
-    }>(
-      `
-        SELECT collection_id, listing_id
-        FROM collection_items
-        WHERE collection_id = ANY($1)
-      `,
-      [collectionIds]
-    );
-  }
-
-  const itemsByCollection: Record<string, string[]> = {};
-  for (const row of itemsResult.rows) {
-    if (!itemsByCollection[row.collection_id]) {
-      itemsByCollection[row.collection_id] = [];
-    }
-    itemsByCollection[row.collection_id].push(row.listing_id);
-  }
-
-  return {
-    ok: true,
-    collections: result.rows.map((row) => ({
-      id: row.id,
-      name: row.name,
-      description: row.description,
-      isPrivate: row.is_private,
-      itemIds: itemsByCollection[row.id] ?? [],
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    })),
-  };
-});
-
-app.get('/collections/:collectionId', async (request, reply) => {
-  const paramsSchema = z.object({ collectionId: z.string().min(4).max(120) });
-  const { collectionId } = paramsSchema.parse(request.params);
-  const userId = (request as any).authUser?.userId as string | undefined;
-
-  if (!userId) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const result = await db.query<{
-    id: string;
-    name: string;
-    description: string | null;
-    is_private: boolean;
-    created_at: string;
-    updated_at: string;
-  }>(
-    `
-      SELECT id, name, description, is_private, created_at, updated_at
-      FROM collections
-      WHERE id = $1 AND user_id = $2
-      LIMIT 1
-    `,
-    [collectionId, userId]
-  );
-
-  if (!result.rowCount) {
-    reply.code(404);
-    return { ok: false, error: 'Collection not found' };
-  }
-
-  const row = result.rows[0];
-
-  const itemsResult = await db.query<{ listing_id: string }>(
-    'SELECT listing_id FROM collection_items WHERE collection_id = $1',
-    [collectionId]
-  );
-
-  return {
-    ok: true,
-    collection: {
-      id: row.id,
-      name: row.name,
-      description: row.description,
-      isPrivate: row.is_private,
-      itemIds: itemsResult.rows.map((r) => r.listing_id),
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    },
-  };
-});
-
-app.post('/collections/:collectionId/items', async (request, reply) => {
-  const paramsSchema = z.object({ collectionId: z.string().min(4).max(120) });
-  const bodySchema = z.object({ listingId: z.string().min(2).max(120) });
-
-  const { collectionId } = paramsSchema.parse(request.params);
-  const body = bodySchema.parse(request.body);
-  const userId = (request as any).authUser?.userId as string | undefined;
-
-  if (!userId) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const ownership = await db.query(
-    'SELECT id FROM collections WHERE id = $1 AND user_id = $2 LIMIT 1',
-    [collectionId, userId]
-  );
-
-  if (!ownership.rowCount) {
-    reply.code(403);
-    return { ok: false, error: 'Collection not found or not owned' };
-  }
-
-  await db.query(
-    `
-      INSERT INTO collection_items (collection_id, listing_id, added_at)
-      VALUES ($1, $2, NOW())
-      ON CONFLICT (collection_id, listing_id) DO NOTHING
-    `,
-    [collectionId, body.listingId]
-  );
-
-  return { ok: true };
-});
-
-app.delete('/collections/:collectionId/items/:listingId', async (request, reply) => {
-  const paramsSchema = z.object({
-    collectionId: z.string().min(4).max(120),
-    listingId: z.string().min(2).max(120),
-  });
-
-  const { collectionId, listingId } = paramsSchema.parse(request.params);
-  const userId = (request as any).authUser?.userId as string | undefined;
-
-  if (!userId) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const ownership = await db.query(
-    'SELECT id FROM collections WHERE id = $1 AND user_id = $2 LIMIT 1',
-    [collectionId, userId]
-  );
-
-  if (!ownership.rowCount) {
-    reply.code(403);
-    return { ok: false, error: 'Collection not found or not owned' };
-  }
-
-  await db.query(
-    'DELETE FROM collection_items WHERE collection_id = $1 AND listing_id = $2',
-    [collectionId, listingId]
-  );
-
-  return { ok: true };
-});
-
-// PATCH /collections/:collectionId — update name, description, privacy
-app.patch('/collections/:collectionId', async (request, reply) => {
-  const paramsSchema = z.object({ collectionId: z.string().min(4).max(120) });
-  const bodySchema = z.object({
-    name: z.string().trim().min(1).max(80).optional(),
-    description: z.string().trim().max(500).optional().nullable(),
-    isPrivate: z.boolean().optional(),
-  });
-
-  const { collectionId } = paramsSchema.parse(request.params);
-  const body = bodySchema.parse(request.body);
-  const userId = (request as any).authUser?.userId as string | undefined;
-
-  if (!userId) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const ownership = await db.query(
-    'SELECT id FROM collections WHERE id = $1 AND user_id = $2 LIMIT 1',
-    [collectionId, userId]
-  );
-
-  if (!ownership.rowCount) {
-    reply.code(403);
-    return { ok: false, error: 'Collection not found or not owned' };
-  }
-
-  const updates = [];
-  const values = [];
-  let idx = 1;
-
-  if (body.name !== undefined) { updates.push(`name = $${idx++}`); values.push(body.name); }
-  if (body.description !== undefined) { updates.push(`description = $${idx++}`); values.push(body.description); }
-  if (body.isPrivate !== undefined) { updates.push(`is_private = $${idx++}`); values.push(body.isPrivate); }
-
-  if (updates.length === 0) {
-    reply.code(400);
-    return { ok: false, error: 'No fields to update' };
-  }
-
-  updates.push(`updated_at = NOW()`);
-  values.push(collectionId);
-  values.push(userId);
-
-  await db.query(
-    `UPDATE collections SET ${updates.join(', ')} WHERE id = $${idx++} AND user_id = $${idx++}`,
-    values
-  );
-
-  return { ok: true, collectionId };
-});
-
-// DELETE /collections/:collectionId — delete collection and its items
-app.delete('/collections/:collectionId', async (request, reply) => {
-  const paramsSchema = z.object({ collectionId: z.string().min(4).max(120) });
-
-  const { collectionId } = paramsSchema.parse(request.params);
-  const userId = (request as any).authUser?.userId as string | undefined;
-
-  if (!userId) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const ownership = await db.query(
-    'SELECT id FROM collections WHERE id = $1 AND user_id = $2 LIMIT 1',
-    [collectionId, userId]
-  );
-
-  if (!ownership.rowCount) {
-    reply.code(403);
-    return { ok: false, error: 'Collection not found or not owned' };
-  }
-
-  await db.query('DELETE FROM collection_items WHERE collection_id = $1', [collectionId]);
-  await db.query('DELETE FROM collections WHERE id = $1 AND user_id = $2', [collectionId, userId]);
-
-  return { ok: true, collectionId };
-});
-
-// ── Poster Stories Access Helpers ───────────────────────────────────
+registerCollectionRoutes({ app, db, createApiError });
 
 type PosterStoryAccessRow = {
   id: string;
@@ -37199,239 +36857,17 @@ app.delete('/poster-highlights/:highlightId/frames/:frameId', async (request, re
 
 // ── Creator document routes (server-side draft persistence) ───────────────────
 
-const creatorDocumentBodySchema = z.object({
-  id: z.string().min(2).max(120),
-  type: z.enum(['look', 'poster']),
-  version: z.number().int().min(1).max(10),
-  canvas: z.object({
-    aspectRatio: z.number().min(0.3).max(3),
-    background: z.object({
-      type: z.enum(['color', 'gradient', 'image']),
-      value: z.string().max(500),
-    }),
-  }),
-  pages: z.array(
-    z.object({
-      id: z.string().min(1).max(120),
-      layers: z.array(z.record(z.unknown())),
-      durationMs: z.number().int().min(500).max(60000).optional(),
-    })
-  ).min(1).max(10),
-  metadata: z.object({
-    title: z.string().max(120).default(''),
-    caption: z.string().max(500).default(''),
-    visibility: z.enum(['public', 'private']).default('public'),
-    allowReplies: z.boolean().default(true),
-    allowReactions: z.boolean().default(true),
-    expiresInHours: z.number().int().min(1).max(168).optional(),
-    accessibilityDescription: z.string().max(300).optional(),
-    allowRemix: z.boolean().default(false),
-    sourceDocumentId: z.string().max(120).optional(),
-    sourceCreatorId: z.string().max(120).optional(),
-  }),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-});
+registerCreatorDocumentRoutes({ app, db, resolveAuthenticatedUserId });
 
 // POST /creator/documents — create or replace a draft document
-app.post('/creator/documents', async (request, reply) => {
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const payload = creatorDocumentBodySchema.parse(request.body);
-
-  const client = await db.connect();
-  try {
-    await client.query('BEGIN');
-
-    // Check if document already exists and belongs to this user
-    const existing = await client.query<{ creator_id: string }>(
-      `SELECT creator_id FROM creator_documents WHERE id = $1 LIMIT 1`,
-      [payload.id]
-    );
-
-    if (existing.rowCount && existing.rows[0].creator_id !== actorUserId) {
-      await client.query('ROLLBACK');
-      reply.code(403);
-      return { ok: false, error: 'Document belongs to another user' };
-    }
-
-    // Idempotent upsert
-    await client.query(
-      `INSERT INTO creator_documents (id, creator_id, type, version, document_json, updated_at)
-       VALUES ($1, $2, $3, $4, $5, NOW())
-       ON CONFLICT (id) DO UPDATE
-       SET type = EXCLUDED.type,
-           version = EXCLUDED.version,
-           document_json = EXCLUDED.document_json,
-           updated_at = NOW()
-       WHERE creator_documents.creator_id = $2`,
-      [payload.id, actorUserId, payload.type, payload.version, JSON.stringify(payload)]
-    );
-
-    await client.query('COMMIT');
-    return { ok: true, documentId: payload.id };
-  } catch (error) {
-    await client.query('ROLLBACK');
-    app.log.error({ err: error }, 'Failed to save creator document');
-    reply.code(500);
-    return { ok: false, error: 'Failed to save document' };
-  } finally {
-    client.release();
-  }
-});
 
 // GET /creator/documents — list current user's draft documents
-app.get('/creator/documents', async (request, reply) => {
-  const actorUserId = resolveAuthenticatedUserId(request);
-
-  const result = await db.query<{
-    id: string;
-    type: string;
-    document_json: string;
-    updated_at: string;
-  }>(
-    `SELECT id, type, document_json, updated_at
-     FROM creator_documents
-     WHERE creator_id = $1
-     ORDER BY updated_at DESC
-     LIMIT 100`,
-    [actorUserId]
-  );
-
-  const documents = result.rows.map((row) => ({
-    ...JSON.parse(row.document_json),
-    serverUpdatedAt: row.updated_at,
-  }));
-
-  return { ok: true, documents };
-});
 
 // GET /creator/documents/:documentId — get a single draft document
-app.get('/creator/documents/:documentId', async (request, reply) => {
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const paramsSchema = z.object({ documentId: z.string().min(2).max(120) });
-  const { documentId } = paramsSchema.parse(request.params);
-
-  const result = await db.query<{
-    id: string;
-    creator_id: string;
-    document_json: string;
-    updated_at: string;
-  }>(
-    `SELECT id, creator_id, document_json, updated_at
-     FROM creator_documents
-     WHERE id = $1 LIMIT 1`,
-    [documentId]
-  );
-
-  if (!result.rowCount) {
-    reply.code(404);
-    return { ok: false, error: 'Document not found' };
-  }
-
-  if (result.rows[0].creator_id !== actorUserId) {
-    reply.code(403);
-    return { ok: false, error: 'Access denied' };
-  }
-
-  return {
-    ok: true,
-    document: {
-      ...JSON.parse(result.rows[0].document_json),
-      serverUpdatedAt: result.rows[0].updated_at,
-    },
-  };
-});
 
 // DELETE /creator/documents/:documentId — delete a draft document
-app.delete('/creator/documents/:documentId', async (request, reply) => {
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const paramsSchema = z.object({ documentId: z.string().min(2).max(120) });
-  const { documentId } = paramsSchema.parse(request.params);
-
-  const result = await db.query<{ creator_id: string }>(
-    `SELECT creator_id FROM creator_documents WHERE id = $1 LIMIT 1`,
-    [documentId]
-  );
-
-  if (!result.rowCount) {
-    reply.code(404);
-    return { ok: false, error: 'Document not found' };
-  }
-
-  if (result.rows[0].creator_id !== actorUserId) {
-    reply.code(403);
-    return { ok: false, error: 'Access denied' };
-  }
-
-  await db.query(`DELETE FROM creator_documents WHERE id = $1`, [documentId]);
-  return { ok: true };
-});
 
 // POST /creator/documents/:documentId/remix — create a remix of a document
-app.post('/creator/documents/:documentId/remix', async (request, reply) => {
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const paramsSchema = z.object({ documentId: z.string().min(2).max(120) });
-  const { documentId } = paramsSchema.parse(request.params);
-  const bodySchema = z.object({
-    newDocumentId: z.string().min(2).max(120),
-  });
-  const { newDocumentId } = bodySchema.parse(request.body);
-
-  const result = await db.query<{
-    creator_id: string;
-    document_json: string;
-  }>(
-    `SELECT creator_id, document_json FROM creator_documents WHERE id = $1 LIMIT 1`,
-    [documentId]
-  );
-
-  if (!result.rowCount) {
-    reply.code(404);
-    return { ok: false, error: 'Source document not found' };
-  }
-
-  const sourceDoc = JSON.parse(result.rows[0].document_json);
-
-  // Check if remix is allowed
-  if (!sourceDoc.metadata?.allowRemix) {
-    reply.code(403);
-    return { ok: false, error: 'Remix not allowed for this document' };
-  }
-
-  // Create remixed document
-  const remixedDoc = {
-    ...sourceDoc,
-    id: newDocumentId,
-    metadata: {
-      ...sourceDoc.metadata,
-      sourceDocumentId: documentId,
-      sourceCreatorId: result.rows[0].creator_id,
-      allowRemix: false,
-      title: `Remix of ${sourceDoc.metadata?.title || 'Untitled'}`,
-    },
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-
-  const client = await db.connect();
-  try {
-    await client.query('BEGIN');
-    await client.query(
-      `INSERT INTO creator_documents (id, creator_id, type, version, document_json, updated_at)
-       VALUES ($1, $2, $3, $4, $5, NOW())`,
-      [newDocumentId, actorUserId, remixedDoc.type, remixedDoc.version, JSON.stringify(remixedDoc)]
-    );
-    await client.query('COMMIT');
-    return { ok: true, document: remixedDoc };
-  } catch (error) {
-    await client.query('ROLLBACK');
-    app.log.error({ err: error }, 'Failed to create remix');
-    reply.code(500);
-    return { ok: false, error: 'Failed to create remix' };
-  } finally {
-    client.release();
-  }
-});
 
 const shutdown = async () => {
   if (isShuttingDown) {

@@ -73,7 +73,6 @@ export type RootStackParamList = {
     };
   };
   CreateGroupChat: undefined;
-  GroupBotDirectory: { conversationId: string };
   GroupChatInfo: { conversationId: string };
   GroupMembers: { conversationId: string };
   GroupBotManagement: { conversationId: string };
@@ -147,7 +146,7 @@ export type RootStackParamList = {
   ChangePassword: undefined;
   TwoFactorSetup: undefined;
   WriteReview: { orderId: string };
-  Report: { type: 'item' | 'user' };
+  Report: { type: 'item' | 'user'; targetId?: string };
   MyBids: undefined;
   MyListings: { type?: 'coown' | 'auction' | 'standard' } | undefined;
   SavedSearches: undefined;

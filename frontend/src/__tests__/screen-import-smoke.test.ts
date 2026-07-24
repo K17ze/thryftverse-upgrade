@@ -250,8 +250,9 @@ describe('VisualSearchScreen static smoke', () => {
     expect(src).not.toContain('ActiveTheme');
   });
 
-  it('shows honest rolling-out note (not a dead-end apology)', () => {
-    expect(src).toContain('AI image matching is coming soon');
+  it('describes the filter-based matching that actually runs', () => {
+    expect(src).toContain('Showing matches from your category, brand, and description filters.');
+    expect(src).not.toContain('coming soon');
     expect(src).not.toContain('not connected yet');
   });
 

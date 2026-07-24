@@ -3,7 +3,6 @@ import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import * as Network from 'expo-network';
-import { useOfflineQueue } from './offlineQueue';
 
 const AUTH_SESSION_STORAGE_KEY = 'thryftverse.auth.session.v1';
 
@@ -79,8 +78,22 @@ function normalizeBaseUrl(url: string) {
   return url.replace(/\/$/, '');
 }
 
-function normalizeConfiguredBaseUrlForPlatform(url: string) {
+function withCanonicalApiVersion(url: string) {
   const normalized = normalizeBaseUrl(url);
+  if (/\/api\/v1$/i.test(normalized)) {
+    return normalized;
+  }
+  if (/\/v1$/i.test(normalized)) {
+    return normalized.replace(/\/v1$/i, '/api/v1');
+  }
+  if (/\/api$/i.test(normalized)) {
+    return `${normalized}/v1`;
+  }
+  return `${normalized}/api/v1`;
+}
+
+function normalizeConfiguredBaseUrlForPlatform(url: string) {
+  const normalized = withCanonicalApiVersion(url);
 
   // A development .env commonly uses localhost so iOS/web can reach the host
   // service. Android emulators resolve localhost to the emulator itself; use
@@ -129,15 +142,15 @@ export function getApiBaseUrl() {
 
   const developmentHost = getExpoDevelopmentHost();
   if (developmentHost) {
-    return `http://${developmentHost}:4000`;
+    return `http://${developmentHost}:4000/api/v1`;
   }
 
   if (Platform.OS === 'android') {
     // Android emulator localhost bridge.
-    return 'http://10.0.2.2:4000';
+    return 'http://10.0.2.2:4000/api/v1';
   }
 
-  return 'http://localhost:4000';
+  return 'http://localhost:4000/api/v1';
 }
 
 export class ApiRequestError extends Error {
@@ -423,16 +436,11 @@ export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T>
   if (isWriteMethod) {
     const networkState = await Network.getNetworkStateAsync();
     if (networkState.isInternetReachable === false) {
-      // 🚨 Offline Silent Queue Path
-      console.log(`[OfflineQueue] Intercepting ${init.method} to ${url}`);
-      useOfflineQueue.getState().pushToQueue(url, init || {});
-
-      // Return a gracefully mocked success payload so the app continues optimistically.
-      return {
-        ok: true,
-        id: `offline-${Date.now()}`,
-        status: 'queued'
-      } as unknown as T;
+      throw new ApiRequestError(
+        'You are offline. This action was not submitted; reconnect and try again.',
+        undefined,
+        { code: 'OFFLINE_WRITE_NOT_SUBMITTED' }
+      );
     }
   }
 
@@ -459,15 +467,15 @@ export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T>
 
     response = await execute();
   } catch (error) {
+    if (error instanceof ApiRequestError) {
+      throw error;
+    }
     if (isWriteMethod) {
-       // Network dropped exactly during the flight of the execution. Queue it.
-       console.log(`[OfflineQueue] Request failed mid-flight. Queueing ${url}`);
-       useOfflineQueue.getState().pushToQueue(url, init || {});
-       return {
-          ok: true,
-          id: `offline-${Date.now()}`,
-          status: 'queued'
-        } as unknown as T;
+      throw new ApiRequestError(
+        'The connection dropped before the server result was confirmed. Refresh before retrying this action.',
+        undefined,
+        { code: 'WRITE_RESULT_UNKNOWN' }
+      );
     }
     throw new ApiRequestError(`Network request failed for ${url}: ${(error as Error).message}`);
   }

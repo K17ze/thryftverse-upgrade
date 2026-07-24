@@ -115,7 +115,10 @@ services:
       KYC_DEFAULT_VENDOR: ${KYC_DEFAULT_VENDOR:-sandbox_kyc_vendor}
       KYC_VERIFICATION_BASE_URL: ${KYC_VERIFICATION_BASE_URL:-https://verify.thryftverse.local/session}
       S3_ENDPOINT: http://minio:9000
-      S3_PUBLIC_ENDPOINT: http://localhost:9000
+      # Android emulators reach host services through 10.0.2.2. Override these
+      # values for a physical device or a different local runtime.
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-http://10.0.2.2:9000}
+      S3_CDN_BASE_URL: ${S3_CDN_BASE_URL:-http://10.0.2.2:9000}
       S3_REGION: ${S3_REGION:-us-east-1}
       S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
       S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}

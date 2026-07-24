@@ -227,6 +227,7 @@ export default function ChatScreen({ navigation, route }: Props) {
   const conversations = useStore((state) => state.conversations);
 
   const bots = useStore((state) => state.availableChatBots);
+  const customBots = useStore((state) => state.customBots);
 
   const appendConversationMessage = useStore(
     (state) => state.appendConversationMessage,
@@ -264,12 +265,12 @@ export default function ChatScreen({ navigation, route }: Props) {
   const botLookup = useMemo(() => {
     const map = new Map<string, string>();
 
-    for (const bot of bots) {
+    for (const bot of [...bots, ...customBots]) {
       map.set(bot.id, bot.name);
     }
 
     return map;
-  }, [bots]);
+  }, [bots, customBots]);
 
   const userLookup = useMemo(() => {
     const map = new Map<string, string>();
@@ -602,6 +603,30 @@ export default function ChatScreen({ navigation, route }: Props) {
   }, [resolvedPartnerId]);
 
   const deployedBotIds = conversation?.botIds ?? [];
+  const connectedAgents = useMemo(
+    () =>
+      customBots.filter(
+        (bot) => deployedBotIds.includes(bot.id) && bot.runtimeMode === "ai",
+      ),
+    [customBots, deployedBotIds],
+  );
+  const agentQuickReplies = useMemo(
+    () =>
+      connectedAgents.slice(0, 3).map((agent) => {
+        const starter = agent.agentConfig?.starterPrompts[0] ?? "";
+        const invocation =
+          agent.agentConfig?.triggerMode === "always"
+            ? starter
+            : agent.agentConfig?.triggerMode === "command"
+              ? `${agent.commandHint}${starter ? ` ${starter}` : ""}`
+              : `@${agent.slug}${starter ? ` ${starter}` : ""}`;
+        return {
+          label: starter || `Ask ${agent.name}`,
+          onPress: () => setInput(invocation),
+        };
+      }),
+    [connectedAgents],
+  );
 
   const partnerSummary = resolvedPartnerId
     ? conversation?.participantProfiles?.find((participant) => participant.id === resolvedPartnerId)
@@ -1547,6 +1572,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                 onReport={() => {
                   navigation.navigate("Report", {
                     type: "user",
+                    targetId: msg.senderId,
                   });
                 }}
                 isMe={isMe}
@@ -1673,29 +1699,25 @@ export default function ChatScreen({ navigation, route }: Props) {
             })}
             availability={linkedListing.isSold ? "Sold" : "Available"}
             primaryActionLabel={
-              linkedListing.sellerId === currentUser?.id
-                ? "View item"
-                : "View item"
-            }
-            primaryActionIcon="eye-outline"
-            onPrimaryAction={() =>
-              navigation.navigate("ItemDetail", { itemId: linkedListing.id })
-            }
-            secondaryActionLabel={
               linkedListing.isSold
-                ? undefined
+                ? "View item"
                 : linkedListing.sellerId === currentUser?.id
                   ? "Manage"
                   : "Buy now"
             }
-            secondaryActionIcon={
-              linkedListing.sellerId === currentUser?.id
-                ? "settings-outline"
-                : "flash-outline"
-            }
-            onSecondaryAction={
+            primaryActionIcon={
               linkedListing.isSold
-                ? undefined
+                ? "eye-outline"
+                : linkedListing.sellerId === currentUser?.id
+                  ? "settings-outline"
+                  : "bag-handle-outline"
+            }
+            onPrimaryAction={
+              linkedListing.isSold
+                ? () =>
+                    navigation.navigate("ItemDetail", {
+                      itemId: linkedListing.id,
+                    })
                 : linkedListing.sellerId === currentUser?.id
                   ? () =>
                       navigation.navigate("ManageListing", {
@@ -1705,6 +1727,18 @@ export default function ChatScreen({ navigation, route }: Props) {
                       navigation.navigate("Checkout", {
                         itemId: linkedListing.id,
                       })
+            }
+            secondaryActionLabel={
+              linkedListing.isSold ? undefined : "View item"
+            }
+            secondaryActionIcon="eye-outline"
+            onSecondaryAction={
+              linkedListing.isSold
+                ? undefined
+                : () =>
+                    navigation.navigate("ItemDetail", {
+                      itemId: linkedListing.id,
+                    })
             }
             onTitlePress={() =>
               navigation.navigate("ItemDetail", { itemId: linkedListing.id })
@@ -1794,7 +1828,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             <View style={styles.emptyGlyph}>
               <Ionicons
                 name="chatbubbles-outline"
-                size={40}
+                size={26}
                 color={Colors.textMuted}
               />
             </View>
@@ -1802,10 +1836,6 @@ export default function ChatScreen({ navigation, route }: Props) {
             <Text style={styles.emptyBody}>
               Send a message, photo, or make an offer to get started.
             </Text>
-            <View style={styles.emptyCtaRow}>
-              <Ionicons name="arrow-down" size={16} color={Colors.textMuted} />
-              <Caption color={Colors.textMuted}>Type below</Caption>
-            </View>
           </View>
         )}
 
@@ -1880,7 +1910,9 @@ export default function ChatScreen({ navigation, route }: Props) {
             placeholder="Message..."
             isSending={composerSending}
             quickReplies={
-              linkedListing
+              agentQuickReplies.length > 0
+                ? agentQuickReplies
+                : linkedListing
                 ? linkedListing.sellerId === currentUser?.id
                   ? [
                       ...(sellerQuickReplies.length > 0
@@ -2045,17 +2077,17 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    gap: Space.sm,
+    gap: Space.xs + 2,
     paddingHorizontal: Space.xl,
-    paddingBottom: Space.xxl,
+    paddingBottom: Space.xl,
   },
 
   emptyGlyph: {
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: Space.md,
-    width: 80,
-    height: 80,
+    marginBottom: Space.sm,
+    width: 56,
+    height: 56,
     borderRadius: Radius.full,
     backgroundColor: Colors.surfaceAlt,
   },
@@ -2075,13 +2107,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: Type.caption.lineHeight,
     marginTop: Space.xs,
-  },
-
-  emptyCtaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Space.xs,
-    marginTop: Space.md,
   },
 
   messageList: {

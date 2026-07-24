@@ -636,6 +636,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
       conversationId: `${sellerId}_${listingId}`,
       focusQuery: sellerId,
       partnerUserId: sellerId,
+      itemId: listingId,
     });
   };
 

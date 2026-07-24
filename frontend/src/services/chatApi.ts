@@ -1,4 +1,4 @@
-import type { ChatBot, Conversation, Message } from '../data/mockData';
+import type { ChatAgentConfig, ChatBot, Conversation, Message } from '../data/mockData';
 import { fetchJson } from '../lib/apiClient';
 
 type ApiConversationType = 'dm' | 'group';
@@ -50,6 +50,9 @@ interface ApiBotPayload {
   ownerId?: string | null;
   installedAt?: string;
   installStatus?: string;
+  agentConfig?: ChatAgentConfig | null;
+  runtimeReady?: boolean;
+  runtimeReadinessReason?: string | null;
 }
 
 interface ApiGroupInvitePayload {
@@ -277,6 +280,9 @@ export async function fetchChatBotsFromApi(): Promise<ChatBot[]> {
     permissions: item.permissions ?? ['read_messages', 'send_messages'],
     icon: item.icon ?? undefined,
     ownerId: item.ownerId ?? undefined,
+    agentConfig: item.agentConfig ?? undefined,
+    runtimeReady: item.runtimeReady ?? item.runtimeMode !== 'ai',
+    runtimeReadinessReason: item.runtimeReadinessReason ?? undefined,
   }));
 }
 
@@ -300,6 +306,9 @@ export async function fetchConversationBotsFromApi(conversationId: string): Prom
     permissions: item.permissions ?? ['read_messages', 'send_messages'],
     icon: item.icon ?? undefined,
     ownerId: item.ownerId ?? undefined,
+    agentConfig: item.agentConfig ?? undefined,
+    runtimeReady: item.runtimeReady ?? item.runtimeMode !== 'ai',
+    runtimeReadinessReason: item.runtimeReadinessReason ?? undefined,
   }));
 }
 

@@ -874,6 +874,7 @@ export default function CheckoutScreen() {
       conversationId: `checkout_${sellerId}_${item.id}`,
       focusQuery: item.title,
       partnerUserId: sellerId,
+      itemId: item.id,
     });
   }, [item, navigation]);
 

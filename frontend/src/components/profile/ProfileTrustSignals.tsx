@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { Typography, Space } from '../../theme/designTokens';
 import type { SellerTrustSummary, VerificationTier } from '../../platform/product';
 import { VERIFICATION_TIERS, deriveSellerBadges, SELLER_BADGES } from '../../platform/product';
 
@@ -141,10 +141,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    backgroundColor: Colors.surfaceAlt,
-    borderRadius: Radius.sm,
   },
   chipText: {
     fontSize: 11,

@@ -48,13 +48,13 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   titleFlat: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.bold,
-    marginBottom: Space.sm,
+    fontSize: Type.captionElevated.size,
+    fontFamily: Typography.family.semibold,
+    marginBottom: Space.xs,
     marginTop: Space.lg,
     paddingHorizontal: Space.md,
-    letterSpacing: Type.subtitle.letterSpacing,
-    lineHeight: Type.subtitle.lineHeight,
+    letterSpacing: 0.2,
+    lineHeight: Type.captionElevated.lineHeight,
   },
   description: {
     fontSize: Type.caption.size,
@@ -71,6 +71,6 @@ const styles = StyleSheet.create({
     elevation: 0,
   },
   noCard: {
-    marginHorizontal: Space.md,
+    marginHorizontal: 0,
   },
 });

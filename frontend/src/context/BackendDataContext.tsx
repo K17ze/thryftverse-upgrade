@@ -2,7 +2,7 @@ import React from 'react';
 import { Listing, MOCK_LISTINGS, MOCK_USERS } from '../data/mockData';
 import { getApiBaseUrl } from '../lib/apiClient';
 import { fetchListingsFromApi } from '../services/listingsApi';
-import { ENABLE_RUNTIME_MOCKS } from '../constants/runtimeFlags';
+import { ENABLE_RUNTIME_MOCKS, SHOW_BACKEND_DIAGNOSTICS } from '../constants/runtimeFlags';
 import { recordListingsSync } from '../lib/backendDiagnostics';
 import { BackendDiagnosticsOverlay } from '../dev/BackendDiagnosticsOverlay';
 
@@ -123,7 +123,7 @@ export function BackendDataProvider({ children }: { children: React.ReactNode })
   return (
     <BackendDataContext.Provider value={value}>
       {children}
-      {__DEV__ ? <BackendDiagnosticsOverlay /> : null}
+      {SHOW_BACKEND_DIAGNOSTICS ? <BackendDiagnosticsOverlay /> : null}
     </BackendDataContext.Provider>
   );
 }

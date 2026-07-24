@@ -412,16 +412,18 @@ describe('SETTINGS-01 — Settings information architecture, ownership and subpa
   describe('BlockedUsersScreen — truthful display', () => {
     const blockedSrc = readSrc('screens/BlockedUsersScreen.tsx');
 
-    it('does not show generic "Blocked account" placeholder', () => {
-      expect(blockedSrc).not.toContain('Blocked account');
+    it('does not show a generic identity placeholder', () => {
+      expect(blockedSrc).not.toContain("'Blocked account'");
     });
 
     it('does not show "Profile information unavailable"', () => {
       expect(blockedSrc).not.toContain('Profile information unavailable');
     });
 
-    it('shows the user ID truthfully', () => {
-      expect(blockedSrc).toContain('ID:');
+    it('resolves public profile identity without exposing raw IDs', () => {
+      expect(blockedSrc).toContain('fetchPublicProfile');
+      expect(blockedSrc).toContain('profile?.displayName');
+      expect(blockedSrc).not.toContain('ID:');
     });
   });
 });

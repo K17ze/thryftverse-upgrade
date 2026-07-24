@@ -26,12 +26,15 @@ interface Props {
   suggestedActions?: SuggestedAction[];
   iconColor?: string;
   graphic?: React.ReactNode;
+  /** Compact states preserve first-viewport context inside feeds and tabs. */
+  density?: 'default' | 'compact';
 }
-export function EmptyState({ icon, title, subtitle, hint, ctaLabel, onCtaPress, secondaryCtaLabel, onSecondaryCtaPress, suggestedActions, iconColor = Colors.brand, graphic }: Props) {
+export function EmptyState({ icon, title, subtitle, hint, ctaLabel, onCtaPress, secondaryCtaLabel, onSecondaryCtaPress, suggestedActions, iconColor = Colors.brand, graphic, density = 'default' }: Props) {
   const enter = FadeIn.duration(300);
+  const compact = density === 'compact';
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, compact && styles.containerCompact]}>
       {graphic ? (
         <Reanimated.View entering={enter}>
           {graphic}
@@ -39,15 +42,15 @@ export function EmptyState({ icon, title, subtitle, hint, ctaLabel, onCtaPress, 
       ) : (
         <Reanimated.View
           entering={enter}
-          style={styles.iconRing}
+          style={[styles.iconRing, compact && styles.iconRingCompact]}
         >
-          <Ionicons name={icon ?? 'cube-outline'} size={38} color={iconColor} />
+          <Ionicons name={icon ?? 'cube-outline'} size={compact ? 24 : 38} color={iconColor} />
         </Reanimated.View>
       )}
 
       <Reanimated.Text
         entering={enter}
-        style={styles.title}
+        style={[styles.title, compact && styles.titleCompact]}
       >
         {title}
       </Reanimated.Text>
@@ -55,7 +58,7 @@ export function EmptyState({ icon, title, subtitle, hint, ctaLabel, onCtaPress, 
       {subtitle && (
         <Reanimated.Text
           entering={enter}
-          style={styles.subtitle}
+          style={[styles.subtitle, compact && styles.subtitleCompact]}
         >
           {subtitle}
         </Reanimated.Text>
@@ -70,7 +73,7 @@ export function EmptyState({ icon, title, subtitle, hint, ctaLabel, onCtaPress, 
 
       {ctaLabel && onCtaPress && (
         <Reanimated.View entering={enter}>
-          <AnimatedPressable style={styles.cta} onPress={onCtaPress} activeOpacity={0.8} hapticFeedback="selection">
+          <AnimatedPressable style={[styles.cta, compact && styles.ctaCompact]} onPress={onCtaPress} activeOpacity={0.8} hapticFeedback="selection">
             <Text style={styles.ctaText}>{ctaLabel}</Text>
           </AnimatedPressable>
         </Reanimated.View>
@@ -115,6 +118,13 @@ const styles = StyleSheet.create({
     paddingVertical: 60,
     gap: 10,
   },
+  containerCompact: {
+    flex: 0,
+    minHeight: 228,
+    paddingHorizontal: 24,
+    paddingVertical: 28,
+    gap: 6,
+  },
   iconRing: {
     width: 96,
     height: 96,
@@ -126,12 +136,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 16,
   },
+  iconRingCompact: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    marginBottom: 8,
+  },
   title: {
     fontSize: 20,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.2,
     color: Colors.textPrimary,
     textAlign: 'center',
+  },
+  titleCompact: {
+    fontSize: 17,
+    lineHeight: 22,
   },
   subtitle: {
     fontSize: 14,
@@ -141,6 +161,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 21,
     maxWidth: 260,
+  },
+  subtitleCompact: {
+    fontSize: 13,
+    lineHeight: 19,
+    maxWidth: 310,
   },
   hintWrap: {
     flexDirection: 'row',
@@ -162,6 +187,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     paddingVertical: 14,
     borderRadius: 24,
+  },
+  ctaCompact: {
+    minHeight: 44,
+    marginTop: 12,
+    paddingVertical: 11,
+    borderRadius: 14,
   },
   ctaText: {
     fontSize: 15,

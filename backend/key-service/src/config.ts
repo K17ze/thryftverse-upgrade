@@ -49,6 +49,11 @@ const masterKeyB64 = required(
   'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY='
 );
 
+const developmentMasterKeyB64 = 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=';
+if (nodeEnv === 'production' && masterKeyB64 === developmentMasterKeyB64) {
+  throw new Error('KEY_SERVICE_MASTER_KEY_B64 cannot use the development key in production');
+}
+
 const masterKey = Buffer.from(masterKeyB64, 'base64');
 if (masterKey.length !== 32) {
   throw new Error('KEY_SERVICE_MASTER_KEY_B64 must decode to exactly 32 bytes');
@@ -59,14 +64,31 @@ if (allowedKeys.length === 0) {
   throw new Error('KEY_SERVICE_ALLOWED_KEYS must include at least one key name');
 }
 
+const clientToken = requiredSecret('KEY_SERVICE_CLIENT_TOKEN', 'local-key-client-token');
+const adminToken = requiredSecret('KEY_SERVICE_ADMIN_TOKEN', 'local-key-admin-token');
+
+if (nodeEnv === 'production') {
+  if (clientToken.length < 32 || adminToken.length < 32) {
+    throw new Error('KEY_SERVICE client and admin tokens must contain at least 32 characters in production');
+  }
+  if (clientToken === adminToken) {
+    throw new Error('KEY_SERVICE client and admin tokens must be different');
+  }
+}
+
+const port = Number(process.env.PORT ?? '4100');
+if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+  throw new Error('PORT must be an integer between 1 and 65535');
+}
+
 export const config = {
   nodeEnv,
-  port: Number(process.env.PORT ?? '4100'),
+  port,
   defaultKeyVersion: parsePositiveInt(process.env.KEY_SERVICE_DEFAULT_KEY_VERSION, 1),
   allowedKeys,
   region: process.env.KEY_SERVICE_REGION ?? 'local-edge',
   country: process.env.KEY_SERVICE_COUNTRY ?? 'dev-local',
-  clientToken: requiredSecret('KEY_SERVICE_CLIENT_TOKEN', 'local-key-client-token'),
-  adminToken: requiredSecret('KEY_SERVICE_ADMIN_TOKEN', 'local-key-admin-token'),
+  clientToken,
+  adminToken,
   masterKey,
 };

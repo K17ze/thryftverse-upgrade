@@ -3,7 +3,6 @@ export interface PayoutProviderReferenceInput {
   transitionSource: string;
   inputProviderPayoutRef?: string | null;
   existingProviderPayoutRef?: string | null;
-  fallbackProviderPayoutRef?: string | null;
 }
 
 export interface PayoutProviderReferenceResolution {
@@ -37,25 +36,9 @@ export function resolvePayoutProviderReference(
   const inputProviderPayoutRef = normalizeProviderRef(input.inputProviderPayoutRef);
   const mergedProviderPayoutRef = inputProviderPayoutRef ?? existingProviderPayoutRef;
 
-  const requiresProviderReference =
-    input.transitionSource === 'provider_webhook'
-    || input.transitionSource === 'mock_webhook'
-    || input.transitionSource === 'admin_review';
-
-  if (requiresProviderReference) {
-    return {
-      providerPayoutRef: mergedProviderPayoutRef,
-      requiresProviderReference,
-      isValid: mergedProviderPayoutRef !== null,
-    };
-  }
-
   return {
-    providerPayoutRef:
-      mergedProviderPayoutRef
-      ?? normalizeProviderRef(input.fallbackProviderPayoutRef)
-      ?? null,
-    requiresProviderReference,
-    isValid: true,
+    providerPayoutRef: mergedProviderPayoutRef,
+    requiresProviderReference: true,
+    isValid: mergedProviderPayoutRef !== null,
   };
 }

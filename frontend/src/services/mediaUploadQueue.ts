@@ -322,7 +322,14 @@ export class MediaUploadQueue {
 
     try {
       const { asset } = item;
-      const presign = await presignUpload(asset.fileName, asset.mimeType, 'listings');
+      const blob = await fetch(asset.uri).then((response) => response.blob());
+      const sizeBytes = asset.fileSize ?? blob.size;
+      const presign = await presignUpload(
+        asset.fileName,
+        asset.mimeType,
+        'listings',
+        sizeBytes
+      );
 
       // If cancellation was requested while presigning, transition to cancelled and abort
       if ((item as any)._cancelRequested) {
@@ -337,7 +344,7 @@ export class MediaUploadQueue {
       item.state = 'uploading';
       this.emit();
 
-      await uploadToPresignedUrl(presign.url, asset.uri, asset.mimeType);
+      await uploadToPresignedUrl(presign.url, asset.uri, asset.mimeType, blob);
 
       // If cancellation was requested while uploading, transition to cancelled and ignore result
       if ((item as any)._cancelRequested) {

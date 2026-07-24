@@ -139,10 +139,9 @@ const styles = StyleSheet.create({
   collapseBtn: {
     width: 44,
     height: 44,
-    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: 'transparent',
   },
   thumb: {
     width: 48,

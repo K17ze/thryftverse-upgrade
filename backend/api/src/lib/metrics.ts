@@ -1,4 +1,4 @@
-import { Counter, Histogram, Registry, collectDefaultMetrics } from 'prom-client';
+import { Counter, Gauge, Histogram, Registry, collectDefaultMetrics } from 'prom-client';
 
 const registry = new Registry();
 
@@ -47,6 +47,13 @@ const backgroundJobsTotal = new Counter({
   name: 'thryftverse_background_jobs_total',
   help: 'Background job executions by queue/job/result',
   labelNames: ['queue', 'job', 'result'] as const,
+  registers: [registry],
+});
+
+const databasePoolConnections = new Gauge({
+  name: 'thryftverse_database_pool_connections',
+  help: 'Postgres pool connections grouped by pool and state',
+  labelNames: ['pool', 'state'] as const,
   registers: [registry],
 });
 
@@ -125,6 +132,17 @@ export function recordBackgroundJob(input: {
     },
     1
   );
+}
+
+export function observeDatabasePool(input: {
+  pool: 'primary' | 'replica';
+  total: number;
+  idle: number;
+  waiting: number;
+}): void {
+  databasePoolConnections.set({ pool: input.pool, state: 'total' }, input.total);
+  databasePoolConnections.set({ pool: input.pool, state: 'idle' }, input.idle);
+  databasePoolConnections.set({ pool: input.pool, state: 'waiting' }, input.waiting);
 }
 
 export async function renderMetrics(): Promise<string> {

@@ -42,7 +42,6 @@ import DistributionHistoryScreen from '../screens/DistributionHistoryScreen';
 import CoOwnOnboardingScreen from '../screens/SyndicateOnboardingScreen';
 import ChatScreen from '../screens/ChatScreen';
 import CreateGroupChatScreen from '../screens/CreateGroupChatScreen';
-import GroupBotDirectoryScreen from '../screens/GroupBotDirectoryScreen';
 import GroupChatInfoScreen from '../screens/GroupChatInfoScreen';
 import GroupMembersScreen from '../screens/GroupMembersScreen';
 import GroupBotManagementScreen from '../screens/GroupBotManagementScreen';
@@ -257,7 +256,6 @@ export default function AppNavigator() {
       <Stack.Screen name="CoOwnOnboarding" component={CoOwnOnboardingScreen} options={modalScreenOptions} />
       <Stack.Screen name="Chat" component={ChatScreen} />
       <Stack.Screen name="CreateGroupChat" component={CreateGroupChatScreen} options={modalScreenOptions} />
-      <Stack.Screen name="GroupBotDirectory" component={GroupBotDirectoryScreen} options={modalScreenOptions} />
       <Stack.Screen name="GroupChatInfo" component={GroupChatInfoScreen} />
       <Stack.Screen name="GroupMembers" component={GroupMembersScreen} />
       <Stack.Screen name="GroupBotManagement" component={GroupBotManagementScreen} />

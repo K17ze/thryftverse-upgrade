@@ -5,6 +5,7 @@ import { MediaUploadAsset, convertPickerAsset, validateMediaAssets } from '../ut
 import { uploadMedia } from '../services/mediaUpload';
 import { updateMyProfile } from '../services/profileApi';
 import { persistProfileMediaUri } from '../utils/profileMediaAsset';
+import { parseApiError } from '../lib/apiClient';
 import {
   setStoredUserAvatar,
   setStoredUserAvatarForUser,
@@ -116,7 +117,13 @@ export function useProfileMediaUpload(
       });
       pendingAssetRef.current[type] = undefined;
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Upload failed';
+      const parsed = parseApiError(err, 'Profile media could not be uploaded');
+      const message =
+        parsed.status === 401
+          ? 'Sign in again to upload profile media'
+          : parsed.isNetworkError
+            ? 'Upload service is unreachable'
+            : parsed.message;
       updateState({ status: 'failed', error: message });
     }
   }, [updateAvatarState, updateCoverState, onAvatarConfirmed, onCoverConfirmed, userId]);
@@ -128,7 +135,7 @@ export function useProfileMediaUpload(
 
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images, // cover video not genuinely supported end-to-end
+        mediaTypes: ['images'], // cover video is not genuinely supported end-to-end
         allowsEditing: true,
         aspect: isAvatar ? [1, 1] : [3, 1],
         quality: 0.9,

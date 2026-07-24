@@ -377,10 +377,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   actionChrome: {
-    width: Control.chrome,
-    height: Control.chrome,
+    width: Control.chromeCompact,
+    height: Control.chromeCompact,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.48)',
+    backgroundColor: 'rgba(0,0,0,0.56)',
     alignItems: 'center',
     justifyContent: 'center',
   },
