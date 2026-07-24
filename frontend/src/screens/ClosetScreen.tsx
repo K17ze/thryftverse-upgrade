@@ -57,6 +57,7 @@ export default function ClosetScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [showPriceDropsOnly, setShowPriceDropsOnly] = useState(false);
   const [activeBrand, setActiveBrand] = useState<string | null>(null);
+  const [collectionsSyncError, setCollectionsSyncError] = useState(false);
   const scrollY = useSharedValue(0);
 
   const wishlistIds = useStore((state) => state.wishlist);
@@ -67,14 +68,23 @@ export default function ClosetScreen() {
   const { listings, refreshListings, isSyncing, lastError } = useBackendData();
 
   React.useEffect(() => {
-    void loadCollectionsFromApi();
+    let mounted = true;
+    void loadCollectionsFromApi()
+      .then(() => { if (mounted) setCollectionsSyncError(false); })
+      .catch(() => { if (mounted) setCollectionsSyncError(true); });
+    return () => { mounted = false; };
   }, [loadCollectionsFromApi]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await refreshListings();
-    await loadCollectionsFromApi();
-    setTimeout(() => setRefreshing(false), 350);
+    try {
+      await Promise.all([refreshListings(), loadCollectionsFromApi()]);
+      setCollectionsSyncError(false);
+    } catch {
+      setCollectionsSyncError(true);
+    } finally {
+      setTimeout(() => setRefreshing(false), 350);
+    }
   };
 
   const handleGoBack = useCallback(() => {
@@ -528,12 +538,12 @@ export default function ClosetScreen() {
         </View>
 
         {/* Error banner */}
-        {lastError && (
+        {(lastError || collectionsSyncError) && (
           <View style={{ paddingHorizontal: Space.md, marginBottom: Space.sm }}>
             <SyncRetryBanner
-              message="Saved items are unavailable. Showing cached results."
-              onRetry={() => void refreshListings()}
-              isRetrying={isSyncing}
+              message={collectionsSyncError ? 'Collections are temporarily unavailable. Your saved items are still here.' : 'Saved items are unavailable. Showing cached results.'}
+              onRetry={() => void handleRefresh()}
+              isRetrying={isSyncing || refreshing}
               telemetryContext="closet_sync"
             />
           </View>

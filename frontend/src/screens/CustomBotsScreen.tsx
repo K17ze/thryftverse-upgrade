@@ -18,6 +18,7 @@ import { Colors } from '../constants/colors';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { AgentIcon } from '../components/agents/AgentIcon';
 import { useHaptic } from '../hooks/useHaptic';
 import { Caption, BodyEmphasis, Meta } from '../components/ui/Text';
 
@@ -31,8 +32,6 @@ export default function CustomBotsScreen({ navigation }: Props) {
   const customBots = useStore((state) => state.customBots);
   const deleteCustomBot = useStore((state) => state.deleteCustomBot);
   const loadBotsFromApi = useStore((state) => state.loadBotsFromApi);
-  const isBotEnabled = useStore((state) => state.isBotEnabled);
-  const toggleEnabledBot = useStore((state) => state.toggleEnabledBot);
   const conversations = useStore((state) => state.conversations);
 
   const [isLoading, setIsLoading] = useState(false);
@@ -80,21 +79,11 @@ export default function CustomBotsScreen({ navigation }: Props) {
     );
   };
 
-  const handleToggle = (botId: string, botName: string) => {
-    haptic.light();
-    toggleEnabledBot(botId);
-    const nowEnabled = !isBotEnabled(botId);
-    show(
-      nowEnabled ? `${botName} enabled in account` : `${botName} disabled`,
-      nowEnabled ? 'success' : 'info'
-    );
-  };
-
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <ScreenHeader
-        title="My Bots"
+        title="My agents"
         onBack={() => navigation.goBack()}
         rightAction={
           <AnimatedPressable
@@ -113,24 +102,14 @@ export default function CustomBotsScreen({ navigation }: Props) {
       />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-        {/* Info banner */}
-        <View style={styles.infoBanner}>
-          <Ionicons name="information-circle-outline" size={18} color={Colors.textMuted} />
-          <Caption color={Colors.textMuted} style={styles.infoText}>
-            Custom bots are saved locally. They cannot execute AI logic until a backend bot runtime is connected.
-          </Caption>
-        </View>
-
         {/* Active bots */}
         {active.length > 0 && (
-          <Section title="ACTIVE">
+          <Section title="PUBLISHED">
             {active.map((bot) => (
               <BotRow
                 key={bot.id}
                 bot={bot}
                 deploymentCount={getDeploymentCount(bot.id)}
-                enabled={isBotEnabled(bot.id)}
-                onToggle={() => handleToggle(bot.id, bot.name)}
                 onEdit={() => navigation.navigate('BotBuilder', { botId: bot.id })}
                 onDelete={() => handleDelete(bot)}
                 onView={() => navigation.navigate('BotDetail', { botId: bot.id })}
@@ -147,8 +126,6 @@ export default function CustomBotsScreen({ navigation }: Props) {
                 key={bot.id}
                 bot={bot}
                 deploymentCount={0}
-                enabled={false}
-                onToggle={() => {}}
                 onEdit={() => navigation.navigate('BotBuilder', { botId: bot.id })}
                 onDelete={() => handleDelete(bot)}
                 onView={() => navigation.navigate('BotDetail', { botId: bot.id })}
@@ -165,8 +142,6 @@ export default function CustomBotsScreen({ navigation }: Props) {
                 key={bot.id}
                 bot={bot}
                 deploymentCount={getDeploymentCount(bot.id)}
-                enabled={false}
-                onToggle={() => handleToggle(bot.id, bot.name)}
                 onEdit={() => navigation.navigate('BotBuilder', { botId: bot.id })}
                 onDelete={() => handleDelete(bot)}
                 onView={() => navigation.navigate('BotDetail', { botId: bot.id })}
@@ -177,9 +152,12 @@ export default function CustomBotsScreen({ navigation }: Props) {
 
         {customBots.length === 0 && (
           <View style={styles.empty}>
-            <Ionicons name="hardware-chip-outline" size={40} color={Colors.textMuted} />
-            <Caption color={Colors.textMuted} style={styles.emptyText}>
-              You have not created any custom bots yet.
+            <View style={styles.emptyMark}>
+              <Ionicons name="chatbubble-ellipses-outline" size={25} color={Colors.textPrimary} />
+            </View>
+            <Text style={styles.emptyTitle}>Create an agent that works your way</Text>
+            <Caption color={Colors.textSecondary} style={styles.emptyText}>
+              Give it a specialty, clear boundaries, and the context it needs. You decide when it joins a chat.
             </Caption>
             <AnimatedPressable
               onPress={() => navigation.navigate('BotBuilder', {})}
@@ -188,8 +166,11 @@ export default function CustomBotsScreen({ navigation }: Props) {
               hapticFeedback="light"
               style={styles.createEmptyBtn}
             >
-              <Text style={styles.createEmptyBtnText}>Create your first bot</Text>
+              <Text style={styles.createEmptyBtnText}>Create your first agent</Text>
             </AnimatedPressable>
+            <Caption color={Colors.textMuted} style={styles.emptyNote}>
+              Agents stay private to your account until you connect them.
+            </Caption>
           </View>
         )}
       </ScrollView>
@@ -211,16 +192,12 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function BotRow({
   bot,
   deploymentCount,
-  enabled,
-  onToggle,
   onEdit,
   onDelete,
   onView,
 }: {
-  bot: { id: string; name: string; description: string; category: string; isDraft?: boolean };
+  bot: { id: string; name: string; description: string; category: string; isDraft?: boolean; runtimeReady?: boolean; agentConfig?: { model: string } };
   deploymentCount: number;
-  enabled: boolean;
-  onToggle: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onView: () => void;
@@ -235,18 +212,11 @@ function BotRow({
       accessibilityLabel={`View ${bot.name}`}
     >
       <View style={styles.row}>
-        <View style={[styles.iconWrap, { backgroundColor: Colors.surfaceAlt }]}>
-          <Ionicons
-            name={
-              bot.category === 'moderation'
-                ? 'shield-checkmark-outline'
-                : bot.category === 'commerce'
-                ? 'trending-up-outline'
-                : bot.category === 'safety'
-                ? 'warning-outline'
-                : 'flash-outline'
-            }
-            size={20}
+        <View style={styles.iconWrap}>
+          <AgentIcon
+            category={bot.category}
+            name={bot.name}
+            size={21}
             color={Colors.textPrimary}
           />
         </View>
@@ -254,27 +224,17 @@ function BotRow({
         <View style={styles.botText}>
           <BodyEmphasis numberOfLines={1}>{bot.name}</BodyEmphasis>
           <Caption color={Colors.textMuted} numberOfLines={1}>
-            {bot.isDraft ? 'Draft' : `${deploymentCount} group${deploymentCount !== 1 ? 's' : ''}`}
+            {bot.isDraft
+              ? 'Draft'
+              : bot.runtimeReady === false
+                ? 'Provider setup needed'
+                : `${deploymentCount} chat${deploymentCount !== 1 ? 's' : ''} · ${bot.agentConfig?.model ?? 'AI'}`}
           </Caption>
         </View>
 
         <View style={styles.rowActions}>
           <AnimatedPressable
-            onPress={onToggle}
-            activeOpacity={0.7}
-            scaleValue={0.92}
-            hapticFeedback="light"
-            accessibilityRole="switch"
-            accessibilityLabel={enabled ? 'Disable bot' : 'Enable bot'}
-          >
-            <Ionicons
-              name={enabled ? 'toggle' : 'toggle-outline'}
-              size={26}
-              color={enabled ? Colors.brand : Colors.textMuted}
-            />
-          </AnimatedPressable>
-
-          <AnimatedPressable
+            style={styles.rowAction}
             onPress={onEdit}
             activeOpacity={0.7}
             scaleValue={0.92}
@@ -286,6 +246,7 @@ function BotRow({
           </AnimatedPressable>
 
           <AnimatedPressable
+            style={styles.rowAction}
             onPress={onDelete}
             activeOpacity={0.7}
             scaleValue={0.92}
@@ -314,22 +275,8 @@ const styles = StyleSheet.create({
   createBtn: {
     width: 44,
     height: 44,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  infoBanner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Space.sm,
-    padding: Space.md,
-    backgroundColor: Colors.surfaceAlt,
-    borderRadius: Radius.lg,
-  },
-  infoText: {
-    flex: 1,
-    lineHeight: 18,
   },
   section: {
     gap: Space.sm,
@@ -340,24 +287,18 @@ const styles = StyleSheet.create({
     marginLeft: Space.xs,
   },
   card: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    overflow: 'hidden',
+    backgroundColor: Colors.background,
     gap: 1,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Space.md,
     paddingVertical: 14,
     gap: Space.sm,
   },
   iconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.full,
+    width: 32,
+    height: 44,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -369,15 +310,39 @@ const styles = StyleSheet.create({
   rowActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
+  },
+  rowAction: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   empty: {
     alignItems: 'center',
-    paddingVertical: Space.xxl,
-    gap: Space.md,
+    paddingHorizontal: Space.lg,
+    paddingTop: 72,
+    gap: 12,
+  },
+  emptyMark: {
+    width: 48,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Space.sm,
+  },
+  emptyTitle: {
+    maxWidth: 300,
+    textAlign: 'center',
+    color: Colors.textPrimary,
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
+    fontFamily: Typography.family.semibold,
   },
   emptyText: {
     textAlign: 'center',
+    maxWidth: 310,
+    fontSize: Type.captionElevated.size,
+    lineHeight: 19,
   },
   createEmptyBtn: {
     backgroundColor: Colors.brand,
@@ -389,5 +354,10 @@ const styles = StyleSheet.create({
     color: Colors.textInverse,
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
+  },
+  emptyNote: {
+    marginTop: Space.xs,
+    textAlign: 'center',
+    lineHeight: 17,
   },
 });

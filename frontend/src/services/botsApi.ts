@@ -1,5 +1,5 @@
 import { fetchJson } from '../lib/apiClient';
-import type { ChatBot } from '../data/mockData';
+import type { ChatAgentConfig, ChatBot } from '../data/mockData';
 
 interface ApiBotPayload {
   id: string;
@@ -17,6 +17,9 @@ interface ApiBotPayload {
   ownerId?: string | null;
   createdAt?: string;
   updatedAt?: string;
+  agentConfig?: ChatAgentConfig | null;
+  runtimeReady?: boolean;
+  runtimeReadinessReason?: string | null;
 }
 
 function mapApiBotToChatBot(item: ApiBotPayload): ChatBot {
@@ -34,6 +37,9 @@ function mapApiBotToChatBot(item: ApiBotPayload): ChatBot {
     permissions: item.permissions,
     icon: item.icon ?? undefined,
     ownerId: item.ownerId ?? undefined,
+    agentConfig: item.agentConfig ?? undefined,
+    runtimeReady: item.runtimeReady ?? item.runtimeMode !== 'ai',
+    runtimeReadinessReason: item.runtimeReadinessReason ?? undefined,
   };
 }
 
@@ -73,6 +79,7 @@ export async function createCustomBotOnApi(input: {
   permissions?: string[];
   icon?: string;
   isDraft?: boolean;
+  agentConfig?: ChatAgentConfig;
 }): Promise<{ id: string; slug: string; name: string; type: string; status: string; runtimeMode: string; isDraft: boolean }> {
   const payload = await fetchJson<{
     ok: true;
@@ -104,6 +111,7 @@ export async function updateCustomBotOnApi(
     isDraft: boolean;
     status: string;
     runtimeMode: string;
+    agentConfig: ChatAgentConfig;
   }>
 ): Promise<void> {
   await fetchJson<{ ok: true }>(`/bots/${encodeURIComponent(botId)}`, {

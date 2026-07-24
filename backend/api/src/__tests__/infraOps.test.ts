@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   metricsContentType,
+  observeDatabasePool,
   observeHttpRequest,
   recordPaymentTransition,
   recordPushDelivery,
@@ -42,6 +43,12 @@ test('metrics renderer exposes infra counters and content type', async () => {
     to: 'succeeded',
     gateway: 'stripe_americas',
   });
+  observeDatabasePool({
+    pool: 'primary',
+    total: 8,
+    idle: 5,
+    waiting: 1,
+  });
 
   const payload = await renderMetrics();
   const contentType = metricsContentType();
@@ -49,5 +56,6 @@ test('metrics renderer exposes infra counters and content type', async () => {
   assert.match(payload, /thryftverse_http_requests_total/);
   assert.match(payload, /thryftverse_push_deliveries_total/);
   assert.match(payload, /thryftverse_payment_transitions_total/);
+  assert.match(payload, /thryftverse_database_pool_connections/);
   assert.match(contentType, /text\/plain/);
 });

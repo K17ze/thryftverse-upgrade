@@ -15,6 +15,8 @@ import type { PoolClient } from 'pg';
 import { publishRealtimeEvent } from '../lib/realtime.js';
 import type { BotRuntimeContext, BotInstallInfo, BotHandlerResult } from './types.js';
 import { resolveBotHandler } from './handlers.js';
+import { normalizeAgentConfig } from './agentConfig.js';
+import { executeOpenAiAgent } from './openaiAgent.js';
 
 interface DbQueryable {
   query: PoolClient['query'];
@@ -37,6 +39,7 @@ export async function listActiveBotInstalls(
     permissions_snapshot: unknown;
     runtime_mode: string;
     bot_status: string;
+    agent_config: unknown;
   }>(
     `
       SELECT
@@ -48,7 +51,8 @@ export async function listActiveBotInstalls(
         b.command_hint,
         i.permissions_snapshot,
         b.runtime_mode,
-        b.status AS bot_status
+        b.status AS bot_status,
+        b.agent_config
       FROM chat_bot_installs i
       JOIN chat_bots b ON b.id = i.bot_id
       WHERE i.conversation_id = $1
@@ -68,6 +72,7 @@ export async function listActiveBotInstalls(
     permissionsSnapshot: Array.isArray(row.permissions_snapshot) ? row.permissions_snapshot : [],
     runtimeMode: row.runtime_mode,
     status: row.bot_status,
+    agentConfig: row.runtime_mode === 'ai' ? normalizeAgentConfig(row.agent_config) : null,
   }));
 }
 
@@ -96,6 +101,156 @@ export function matchBotCommand(
   const args = parts.filter((p) => p.length > 0);
 
   return { command: hint, args };
+}
+
+export function matchAgentInvocation(
+  messageText: string,
+  install: Pick<BotInstallInfo, 'botName' | 'botSlug' | 'commandHint' | 'agentConfig'>
+): { command: string; args: string[] } | null {
+  const agentConfig = install.agentConfig;
+  if (!agentConfig) return matchBotCommand(messageText, install.commandHint);
+  if (agentConfig.triggerMode === 'always') {
+    return { command: 'message', args: [] };
+  }
+  if (agentConfig.triggerMode === 'command') {
+    return matchBotCommand(messageText, install.commandHint);
+  }
+
+  const trimmed = messageText.trim();
+  const aliases = [
+    `@${install.botSlug.toLowerCase()}`,
+    `@${install.botName.toLowerCase().replace(/\s+/g, '')}`,
+  ];
+  const lower = trimmed.toLowerCase();
+  const alias = aliases.find((candidate) =>
+    lower === candidate || lower.startsWith(`${candidate} `)
+  );
+  if (!alias) return null;
+  const prompt = trimmed.slice(alias.length).trim();
+  return { command: alias, args: prompt ? prompt.split(/\s+/) : [] };
+}
+
+async function loadConversationHistory(
+  client: DbQueryable,
+  conversationId: string,
+  limit: number,
+  triggeringText: string
+): Promise<BotRuntimeContext['conversationHistory']> {
+  if (limit <= 0) return [];
+  const result = await client.query<{
+    sender_type: 'user' | 'bot' | 'system';
+    body: string;
+  }>(
+    `
+      SELECT sender_type, body
+      FROM chat_messages
+      WHERE conversation_id = $1
+        AND sender_type IN ('user', 'bot')
+        AND body IS NOT NULL
+      ORDER BY created_at DESC
+      LIMIT $2
+    `,
+    [conversationId, Math.min(40, limit + 1)]
+  );
+  const history = result.rows
+    .reverse()
+    .map((row) => ({
+      role: row.sender_type === 'bot' ? 'assistant' as const : 'user' as const,
+      text: row.body,
+    }));
+  const last = history.at(-1);
+  if (last?.role === 'user' && last.text.trim() === triggeringText.trim()) {
+    history.pop();
+  }
+  return history.slice(-limit);
+}
+
+async function loadRuntimeData(
+  client: DbQueryable,
+  input: {
+    conversationId: string;
+    category: string;
+    args: string[];
+  }
+): Promise<BotRuntimeContext['runtimeData']> {
+  const runtimeData: BotRuntimeContext['runtimeData'] = {
+    listings: [],
+    recentMessagesAnalyzed: 0,
+    messagesRequiringReview: 0,
+  };
+
+  if (input.category === 'commerce' || input.category === 'styling') {
+    const query = input.args[0]?.toLowerCase() === 'search'
+      ? input.args.slice(1).join(' ').trim()
+      : '';
+    const searchPattern = query ? `%${query}%` : null;
+    const listings = await client.query<{
+      id: string;
+      title: string;
+      price_gbp: string | number;
+      brand: string | null;
+    }>(
+      `
+        SELECT
+          l.id,
+          l.title,
+          l.price_gbp,
+          l.brand
+        FROM listings l
+        LEFT JOIN interactions i
+          ON i.listing_id = l.id
+          AND i.created_at >= NOW() - INTERVAL '7 days'
+        WHERE l.status = 'active'
+          AND (
+            $1::text IS NULL
+            OR l.title ILIKE $1
+            OR COALESCE(l.description, '') ILIKE $1
+            OR COALESCE(l.brand, '') ILIKE $1
+            OR COALESCE(l.category, '') ILIKE $1
+          )
+        GROUP BY l.id, l.title, l.price_gbp, l.brand, l.created_at
+        ORDER BY
+          COALESCE(SUM(
+            CASE i.action
+              WHEN 'purchase' THEN 4
+              WHEN 'wishlist' THEN 2
+              ELSE 1
+            END
+          ), 0) DESC,
+          l.created_at DESC
+        LIMIT 4
+      `,
+      [searchPattern]
+    );
+
+    runtimeData.listings = listings.rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      priceGbp: Number(row.price_gbp),
+      brand: row.brand,
+    }));
+  }
+
+  if (input.category === 'safety') {
+    const recentMessages = await client.query<{ body: string }>(
+      `
+        SELECT body
+        FROM chat_messages
+        WHERE conversation_id = $1
+          AND sender_type = 'user'
+        ORDER BY created_at DESC
+        LIMIT 40
+      `,
+      [input.conversationId]
+    );
+    const reviewPattern = /\b(?:scam|fraud|pay\s+outside|bank\s+transfer|gift\s+card|crypto\s+only)\b/i;
+    runtimeData.recentMessagesAnalyzed = recentMessages.rows.length;
+    runtimeData.messagesRequiringReview = recentMessages.rows.filter((row) =>
+      reviewPattern.test(row.body)
+    ).length;
+  }
+
+  return runtimeData;
 }
 
 function createRuntimeId(prefix: string): string {
@@ -203,7 +358,7 @@ export async function executeBotCommand(
     if (input.command !== undefined) {
       match = { command: input.command, args: input.args ?? [] };
     } else {
-      match = matchBotCommand(input.messageText, install.commandHint);
+      match = matchAgentInvocation(input.messageText, install);
     }
 
     if (!match) continue;
@@ -214,8 +369,25 @@ export async function executeBotCommand(
       install.permissionsSnapshot.length === 0 ||
       install.permissionsSnapshot.includes('reply_in_chat');
 
-    const handler = resolveBotHandler(install.botCategory);
+    const handler = install.runtimeMode === 'ai'
+      ? executeOpenAiAgent
+      : resolveBotHandler(install.botCategory);
     if (!handler) continue;
+
+    const conversationHistory =
+      install.agentConfig && install.permissionsSnapshot.includes('read_messages')
+        ? await loadConversationHistory(
+          client,
+          input.conversationId,
+          install.agentConfig.historyLimit,
+          input.messageText
+        )
+        : [];
+    const runtimeData = await loadRuntimeData(client, {
+      conversationId: input.conversationId,
+      category: install.botCategory,
+      args: match.args,
+    });
 
     const ctx: BotRuntimeContext = {
       botId: install.botId,
@@ -232,14 +404,34 @@ export async function executeBotCommand(
       permissionsSnapshot: install.permissionsSnapshot,
       command: match.command,
       args: match.args,
-      messageText: input.messageText,
+      messageText:
+        install.runtimeMode === 'ai' && match.args.length > 0
+          ? match.args.join(' ')
+          : input.messageText,
+      agentConfig: install.agentConfig,
+      conversationHistory,
+      runtimeData,
     };
 
     let result: BotHandlerResult;
     try {
       result = await handler(ctx);
-    } catch {
-      result = { text: `${install.botName} encountered an error.`, shouldReply: true };
+    } catch (error) {
+      await logBotAuditEvent(client, {
+        botId: install.botId,
+        conversationId: input.conversationId,
+        actorUserId: input.actorUserId,
+        eventType: 'execution_failed',
+        metadata: {
+          runtimeMode: install.runtimeMode,
+          reason: error instanceof Error ? error.message.slice(0, 240) : 'unknown',
+        },
+      });
+      result = {
+        text: `${install.botName} could not respond right now. Please try again.`,
+        shouldReply: true,
+        metadata: { agentError: true },
+      };
     }
 
     if (!result.shouldReply || !canReply) {
@@ -282,6 +474,17 @@ export async function executeBotCommand(
         runtimeMode: install.runtimeMode,
         messageId: botMessage.id,
         executed: true,
+      },
+    });
+
+    await logBotAuditEvent(client, {
+      botId: install.botId,
+      conversationId: input.conversationId,
+      actorUserId: input.actorUserId,
+      eventType: 'execution_succeeded',
+      metadata: {
+        runtimeMode: install.runtimeMode,
+        messageId: botMessage.id,
       },
     });
 

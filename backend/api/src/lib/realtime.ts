@@ -1,4 +1,6 @@
+import { randomUUID } from 'node:crypto';
 import type { FastifyReply } from 'fastify';
+import type { Redis } from 'ioredis';
 
 export interface RealtimeEnvelope {
   id: string;
@@ -26,11 +28,21 @@ interface WsLike {
   on: (event: 'close' | 'message', listener: (payload: unknown) => void) => void;
 }
 
+interface RealtimeBusMessage {
+  sourceInstanceId: string;
+  event: RealtimeEnvelope;
+  userId?: string;
+}
+
+const REALTIME_CHANNEL = 'thryftverse:realtime:v1';
+const instanceId = randomUUID();
 const clients = new Map<string, RealtimeClient>();
 let heartbeatTimer: NodeJS.Timeout | null = null;
+let realtimePublisher: Redis | null = null;
+let realtimeSubscriber: Redis | null = null;
 
 function runtimeId(prefix: string): string {
-  return `${prefix}_${Date.now()}_${Math.floor(Math.random() * 1_000_000)}`;
+  return `${prefix}_${randomUUID()}`;
 }
 
 function normalizeTopic(topic: string): string {
@@ -60,6 +72,78 @@ function clientCanReceive(client: RealtimeClient, topic: string, userId?: string
   }
 
   return false;
+}
+
+function deliverLocalEvent(event: RealtimeEnvelope, userId?: string): number {
+  let delivered = 0;
+  for (const client of clients.values()) {
+    if (!clientCanReceive(client, event.topic, userId)) {
+      continue;
+    }
+
+    try {
+      client.send(event);
+      delivered += 1;
+    } catch {
+      client.close();
+    }
+  }
+
+  return delivered;
+}
+
+function decodeBusMessage(raw: string): RealtimeBusMessage | null {
+  try {
+    const decoded = JSON.parse(raw) as Partial<RealtimeBusMessage>;
+    if (
+      !decoded
+      || typeof decoded.sourceInstanceId !== 'string'
+      || !decoded.event
+      || typeof decoded.event.id !== 'string'
+      || typeof decoded.event.topic !== 'string'
+      || typeof decoded.event.type !== 'string'
+      || !decoded.event.payload
+      || typeof decoded.event.payload !== 'object'
+      || Array.isArray(decoded.event.payload)
+      || typeof decoded.event.timestamp !== 'string'
+      || (decoded.userId !== undefined && typeof decoded.userId !== 'string')
+    ) {
+      return null;
+    }
+
+    return decoded as RealtimeBusMessage;
+  } catch {
+    return null;
+  }
+}
+
+export async function startRealtimeBridge(publisher: Redis): Promise<void> {
+  if (realtimeSubscriber) {
+    return;
+  }
+
+  realtimePublisher = publisher;
+  const subscriber = publisher.duplicate();
+
+  subscriber.on('message', (channel, raw) => {
+    if (channel !== REALTIME_CHANNEL) {
+      return;
+    }
+
+    const message = decodeBusMessage(raw);
+    if (!message || message.sourceInstanceId === instanceId) {
+      return;
+    }
+
+    deliverLocalEvent(message.event, message.userId);
+  });
+
+  subscriber.on('error', (error) => {
+    console.error('[realtime] Redis subscriber error', error);
+  });
+
+  await subscriber.subscribe(REALTIME_CHANNEL);
+  realtimeSubscriber = subscriber;
 }
 
 function removeClient(clientId: string): void {
@@ -113,6 +197,7 @@ export function registerWsClient(input: {
   socket: WsLike;
   topics: string[];
   userId?: string;
+  authorizeTopic?: (topic: string, userId?: string) => boolean | Promise<boolean>;
 }): string {
   const clientId = runtimeId('rt_ws');
   const topicSet = new Set(input.topics.length > 0 ? input.topics.map(normalizeTopic) : ['*']);
@@ -143,7 +228,7 @@ export function registerWsClient(input: {
     removeClient(clientId);
   });
 
-  input.socket.on('message', (raw: unknown) => {
+  input.socket.on('message', async (raw: unknown) => {
     try {
       const messageBody =
         typeof raw === 'string'
@@ -161,16 +246,27 @@ export function registerWsClient(input: {
       const action = typeof decoded.action === 'string' ? decoded.action : '';
       const topicInput = decoded.topics ?? decoded.topic;
       const nextTopics = parseRealtimeTopics(topicInput);
+      const acceptedTopics: string[] = [];
+      const rejectedTopics: string[] = [];
 
       if (action === 'subscribe') {
         for (const topic of nextTopics) {
-          client.topics.add(topic);
+          const authorized = input.authorizeTopic
+            ? await input.authorizeTopic(topic, input.userId)
+            : false;
+          if (authorized) {
+            client.topics.add(topic);
+            acceptedTopics.push(topic);
+          } else {
+            rejectedTopics.push(topic);
+          }
         }
       }
 
       if (action === 'unsubscribe') {
         for (const topic of nextTopics) {
           client.topics.delete(topic);
+          acceptedTopics.push(topic);
         }
       }
 
@@ -179,6 +275,8 @@ export function registerWsClient(input: {
           createEnvelope('system', 'subscription_ack', {
             action,
             topics: Array.from(client.topics.values()),
+            acceptedTopics,
+            rejectedTopics,
           })
         );
       }
@@ -259,25 +357,24 @@ export function publishRealtimeEvent(input: {
 }): number {
   const topic = normalizeTopic(input.topic);
   const event = createEnvelope(topic, input.type, input.payload);
+  const delivered = deliverLocalEvent(event, input.userId);
 
-  let delivered = 0;
-  for (const client of clients.values()) {
-    if (!clientCanReceive(client, topic, input.userId)) {
-      continue;
-    }
+  if (realtimePublisher) {
+    const message: RealtimeBusMessage = {
+      sourceInstanceId: instanceId,
+      event,
+      userId: input.userId,
+    };
 
-    try {
-      client.send(event);
-      delivered += 1;
-    } catch {
-      client.close();
-    }
+    void realtimePublisher.publish(REALTIME_CHANNEL, JSON.stringify(message)).catch((error) => {
+      console.error('[realtime] Redis publish failed', error);
+    });
   }
 
   return delivered;
 }
 
-export function closeRealtimeConnections(): void {
+export async function closeRealtimeConnections(): Promise<void> {
   if (heartbeatTimer) {
     clearInterval(heartbeatTimer);
     heartbeatTimer = null;
@@ -292,4 +389,16 @@ export function closeRealtimeConnections(): void {
   }
 
   clients.clear();
+
+  const subscriber = realtimeSubscriber;
+  realtimeSubscriber = null;
+  realtimePublisher = null;
+
+  if (subscriber) {
+    try {
+      await subscriber.unsubscribe(REALTIME_CHANNEL);
+    } finally {
+      await subscriber.quit();
+    }
+  }
 }

@@ -1576,6 +1576,7 @@ export const useStore = create<StoreState>()(
       permissions: bot.permissions,
       icon: bot.icon,
       isDraft: bot.isDraft,
+      agentConfig: bot.agentConfig,
     });
 
     const newBot: ChatBot = {
@@ -1606,6 +1607,7 @@ export const useStore = create<StoreState>()(
       isDraft: updates.isDraft,
       status: updates.status,
       runtimeMode: updates.runtimeMode,
+      agentConfig: updates.agentConfig,
     });
 
     set((state) => ({

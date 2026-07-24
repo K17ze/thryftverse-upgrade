@@ -1,23 +1,18 @@
 import React, { useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Alert,
-} from 'react-native';
-import { StackScreenProps } from '@react-navigation/stack';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { StackScreenProps } from '@react-navigation/stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { AnimatedPressable } from '../components/AnimatedPressable';
+import { ChatInfoRow, ChatInfoSection } from '../components/chat/ChatInfoSection';
+import { FlagshipHeader, FlagshipScreen } from '../components/flagship';
+import { Caption } from '../components/ui/Text';
+import { Colors } from '../constants/colors';
+import { useToast } from '../context/ToastContext';
+import { useHaptic } from '../hooks/useHaptic';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
-import { useToast } from '../context/ToastContext';
-import { Colors } from '../constants/colors';
-import { Space, Radius, Type, TypeStyles } from '../theme/designTokens';
-import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
-import { AnimatedPressable } from '../components/AnimatedPressable';
-import { useHaptic } from '../hooks/useHaptic';
-import { Caption, BodyEmphasis, Meta } from '../components/ui/Text';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Radius, Space, Type, TypeStyles } from '../theme/designTokens';
 
 type Props = StackScreenProps<RootStackParamList, 'GroupChatInfo'>;
 
@@ -26,26 +21,26 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
   const { show } = useToast();
   const haptic = useHaptic();
   const insets = useSafeAreaInsets();
-
   const conversations = useStore((state) => state.conversations);
-  const currentUser = useStore((state) => state.currentUser);
   const archiveConversation = useStore((state) => state.archiveConversation);
   const deleteConversation = useStore((state) => state.deleteConversation);
   const mutedIds = useStore((state) => state.mutedConversationIds);
   const toggleMuted = useStore((state) => state.toggleMutedConversation);
 
   const conversation = useMemo(
-    () => conversations.find((c) => c.id === conversationId),
+    () => conversations.find((item) => item.id === conversationId),
     [conversations, conversationId]
   );
-
   const memberCount = conversation?.participantIds?.length ?? 0;
-  const deployedBotCount = conversation?.botIds?.length ?? 0;
+  const connectedAgentCount = conversation?.botIds?.length ?? 0;
   const isMuted = mutedIds.includes(conversationId);
 
   if (!conversation || conversation.type !== 'group') {
     return (
-      <FlagshipScreen header={<FlagshipHeader title="Group Info" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
+      <FlagshipScreen
+        header={<FlagshipHeader title="Group details" onBack={() => navigation.goBack()} />}
+        scrollEnabled={false}
+      >
         <View style={styles.center}>
           <Caption color={Colors.textMuted}>Group not found</Caption>
         </View>
@@ -53,10 +48,19 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
     );
   }
 
-  const handleLeave = () => {
+  const initials = (conversation.title || 'Group')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+  const description = (conversation as typeof conversation & { description?: string }).description;
+
+  const leaveGroup = () => {
     Alert.alert(
       'Leave group?',
-      'This removes the group from your inbox on this device. Other members will still see the group. You can rejoin if you receive a new invite.',
+      'This removes the group from your inbox on this device. Other members keep their copy.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -73,7 +77,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
     );
   };
 
-  const handleDelete = () => {
+  const deleteForMe = () => {
     Alert.alert(
       'Delete for me?',
       'This removes the conversation from your inbox on this device.',
@@ -93,377 +97,221 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
     );
   };
 
-  const handleArchive = () => {
+  const archive = () => {
     haptic.medium();
     archiveConversation(conversationId);
     show('Conversation archived', 'success');
     navigation.navigate('MainTabs', { screen: 'Inbox' });
   };
 
-  const handleToggleMute = () => {
+  const toggleMute = () => {
     haptic.light();
     toggleMuted(conversationId);
     show(isMuted ? 'Conversation unmuted' : 'Conversation muted', 'success');
   };
 
-  const initials = (conversation.title ?? 'Group')
-    .split(' ')
-    .map((w) => w[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase();
-
-  const description = (conversation as any)?.description;
-  const isOwner = (conversation as any)?.creatorId === currentUser?.id;
-
   return (
-    <FlagshipScreen header={<FlagshipHeader title="Group Info" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, Space.xxl) + Space.lg }]}>
-        {/* Group Identity */}
-        <View style={styles.identityCardV2}>
-          <View style={styles.groupAvatarWrap}>
-            <View style={[styles.groupAvatar, { backgroundColor: Colors.surfaceAlt }]}>
-              <Text style={styles.groupAvatarText}>{initials}</Text>
-            </View>
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title="Group details"
+          onBack={() => navigation.goBack()}
+          rightAction={
+            <AnimatedPressable
+              onPress={() => navigation.navigate('EditGroup', { conversationId })}
+              style={styles.headerAction}
+              activeOpacity={0.68}
+              scaleValue={0.94}
+              hapticFeedback="light"
+              accessibilityRole="button"
+              accessibilityLabel="Edit group"
+            >
+              <Ionicons name="create-outline" size={21} color={Colors.textPrimary} />
+            </AnimatedPressable>
+          }
+        />
+      }
+      scrollEnabled={false}
+    >
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: Math.max(insets.bottom, Space.xl) + Space.lg },
+        ]}
+      >
+        <View style={styles.identity}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{initials}</Text>
           </View>
-          <BodyEmphasis style={styles.groupNameV2} numberOfLines={1}>
-            {conversation.title ?? 'Group chat'}
-          </BodyEmphasis>
+          <Text style={styles.groupName} numberOfLines={1}>
+            {conversation.title || 'Group chat'}
+          </Text>
           {description ? (
-            <Caption color={Colors.textMuted} style={styles.groupDescV2}>{description}</Caption>
+            <Text style={styles.description} numberOfLines={2}>
+              {description}
+            </Text>
           ) : null}
-          <Caption color={Colors.textMuted}>{memberCount} members</Caption>
-          {deployedBotCount > 0 && (
-            <View style={styles.botBadgeV2}>
-              <Ionicons name="hardware-chip-outline" size={12} color={Colors.brand} />
-              <Caption color={Colors.brand} style={styles.botBadgeText}>
-                {deployedBotCount} bot{deployedBotCount > 1 ? 's' : ''} active
-              </Caption>
-            </View>
-          )}
+          <Text style={styles.identityMeta}>
+            {memberCount} member{memberCount === 1 ? '' : 's'}
+            {connectedAgentCount > 0
+              ? `  ·  ${connectedAgentCount} agent${connectedAgentCount === 1 ? '' : 's'} connected`
+              : ''}
+          </Text>
         </View>
 
-        {/* Edit group */}
-        <Section title="Settings">
-          <RowItem
-            icon="create-outline"
-            label="Edit group"
-            subtitle="Name, description, photo"
-            onPress={() => navigation.navigate('EditGroup', { conversationId })}
-            showChevron
-          />
-        </Section>
-
-        {/* Members */}
-        <Section title="Members">
-          <RowItem
+        <View style={styles.quickActions}>
+          <QuickAction
             icon="people-outline"
-            label={`${memberCount} member${memberCount !== 1 ? 's' : ''}`}
-            subtitle="View, add, or remove members"
+            label="Members"
             onPress={() => navigation.navigate('GroupMembers', { conversationId })}
-            showChevron
           />
-        </Section>
-
-        {/* Shared content */}
-        <Section title="Shared">
-          <RowItem
+          <QuickAction
             icon="images-outline"
-            label="Shared media"
-            subtitle="Photos and videos shared in this chat"
+            label="Media"
             onPress={() => navigation.navigate('SharedConversationMedia', { conversationId })}
-            showChevron
           />
-          <RowItem
-            icon="document-outline"
-            label="Files"
-            subtitle="Backend support required"
-            onPress={() => show('File sharing requires backend support.', 'info')}
-            showChevron
-          />
-        </Section>
-
-        {/* Bots */}
-        <Section title="Bots & Automation">
-          <RowItem
-            icon="hardware-chip-outline"
-            label="Manage bots"
-            subtitle={deployedBotCount > 0 ? `${deployedBotCount} active` : 'Deploy automation bots'}
+          <QuickAction
+            icon="chatbox-ellipses-outline"
+            label="Agents"
             onPress={() => navigation.navigate('GroupBotManagement', { conversationId })}
-            showChevron
           />
-          <RowItem
-            icon="chatbubbles-outline"
+        </View>
+
+        <ChatInfoSection title="Conversation">
+          <ChatInfoRow
+            icon="chatbubble-ellipses-outline"
             label="Quick replies"
             subtitle="Reusable message templates"
             onPress={() => navigation.navigate('ManageQuickReplies', { role: 'seller' })}
             showChevron
           />
-        </Section>
-
-        {/* Group Actions */}
-        <Section title="Actions">
-          <RowItem
-            icon={isMuted ? 'volume-mute-outline' : 'volume-high-outline'}
+          <ChatInfoRow
+            icon={isMuted ? 'volume-mute-outline' : 'notifications-outline'}
             label={isMuted ? 'Unmute notifications' : 'Mute notifications'}
-            onPress={handleToggleMute}
+            onPress={toggleMute}
           />
-          <RowItem
-            icon="archive-outline"
-            label="Archive chat"
-            onPress={handleArchive}
-          />
-        </Section>
+        </ChatInfoSection>
 
-        {/* Danger zone */}
-        <Section title="Danger zone" danger>
-          <RowItem
-            icon="log-out-outline"
-            label="Leave group"
-            onPress={handleLeave}
-            danger
+        <ChatInfoSection title="Chat history">
+          <ChatInfoRow
+            icon="archive-outline"
+            label="Archive conversation"
+            subtitle="Move this chat out of your active inbox"
+            onPress={archive}
           />
-          <RowItem
-            icon="trash-outline"
-            label="Delete chat"
-            onPress={handleDelete}
-            danger
-          />
-        </Section>
+        </ChatInfoSection>
+
+        <ChatInfoSection title="Membership" danger>
+          <ChatInfoRow icon="log-out-outline" label="Leave group" onPress={leaveGroup} danger />
+          <ChatInfoRow icon="trash-outline" label="Delete for me" onPress={deleteForMe} danger />
+        </ChatInfoSection>
       </ScrollView>
     </FlagshipScreen>
   );
 }
 
-function Section({ title, children, danger }: { title: string; children: React.ReactNode; danger?: boolean }) {
-  const childArray = React.Children.toArray(children);
-  const lastIndex = childArray.length - 1;
-  const childrenWithIsLast = childArray.map((child, index) => {
-    if (React.isValidElement(child)) {
-      return React.cloneElement(child, { isLast: index === lastIndex } as any);
-    }
-    return child;
-  });
-  return (
-    <View style={styles.section}>
-      <Meta color={danger ? Colors.danger : Colors.textMuted} style={styles.sectionLabel}>
-        {title.toUpperCase()}
-      </Meta>
-      <View style={[styles.sectionCard, danger && styles.sectionCardDanger]}>{childrenWithIsLast}</View>
-    </View>
-  );
-}
-
-function RowItem({
+function QuickAction({
   icon,
   label,
-  subtitle,
   onPress,
-  showChevron,
-  danger,
-  isLast,
 }: {
-  icon: string;
+  icon: keyof typeof Ionicons.glyphMap;
   label: string;
-  subtitle?: string;
-  onPress?: () => void;
-  showChevron?: boolean;
-  danger?: boolean;
-  isLast?: boolean;
+  onPress: () => void;
 }) {
-  const content = (
-    <View style={[styles.row, !isLast && styles.rowBorder]}>
-      <Ionicons
-        name={icon as any}
-        size={20}
-        color={danger ? Colors.danger : Colors.textSecondary}
-      />
-      <View style={styles.rowTextBody}>
-        <Text
-          style={[
-            styles.rowLabel,
-            { color: danger ? Colors.danger : Colors.textPrimary },
-          ]}
-        >
-          {label}
-        </Text>
-        {subtitle ? (
-          <Text style={styles.rowSubtitle} numberOfLines={1}>{subtitle}</Text>
-        ) : null}
-      </View>
-      {showChevron && (
-        <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-      )}
-    </View>
+  return (
+    <AnimatedPressable
+      style={styles.quickAction}
+      onPress={onPress}
+      activeOpacity={0.68}
+      scaleValue={0.96}
+      hapticFeedback="light"
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      <Ionicons name={icon} size={21} color={Colors.textPrimary} />
+      <Text style={styles.quickActionLabel}>{label}</Text>
+    </AnimatedPressable>
   );
-
-  if (onPress) {
-    return (
-      <AnimatedPressable
-        onPress={onPress}
-        activeOpacity={0.7}
-        scaleValue={0.98}
-        hapticFeedback="light"
-        accessibilityRole="button"
-        accessibilityLabel={label}
-      >
-        {content}
-      </AnimatedPressable>
-    );
-  }
-
-  return content;
 }
 
 const styles = StyleSheet.create({
   content: {
     paddingHorizontal: Space.md,
-    paddingBottom: Space.xxl,
     gap: Space.lg,
   },
   center: {
     flex: 1,
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
   },
-  identityCard: {
+  headerAction: {
+    width: 44,
+    height: 44,
     alignItems: 'center',
-    paddingVertical: Space.xl,
-    gap: Space.sm,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    borderRadius: Radius.xl,
-    marginHorizontal: Space.xs,
-  },
-  avatarRing: {
-    width: 88,
-    height: 88,
-    borderRadius: Radius.full,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    padding: 2,
     justifyContent: 'center',
+  },
+  identity: {
     alignItems: 'center',
+    paddingTop: Space.sm,
+    paddingBottom: Space.xs,
   },
   avatar: {
     width: 76,
     height: 76,
     borderRadius: Radius.full,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surfaceAlt,
+    marginBottom: Space.sm,
   },
   avatarText: {
-    fontSize: 28,
-    fontFamily: TypeStyles.title.fontFamily,
     color: Colors.textPrimary,
+    fontFamily: TypeStyles.title.fontFamily,
+    fontSize: 25,
+    letterSpacing: -0.5,
   },
   groupName: {
+    maxWidth: '88%',
+    color: Colors.textPrimary,
+    fontFamily: TypeStyles.title.fontFamily,
     fontSize: Type.title.size,
-    fontFamily: TypeStyles.title.fontFamily,
-    color: Colors.textPrimary,
-    marginTop: Space.sm,
+    lineHeight: Type.title.lineHeight,
+    letterSpacing: Type.title.letterSpacing,
   },
-  groupDesc: {
-    textAlign: 'center',
-    paddingHorizontal: Space.lg,
-    marginTop: 2,
-  },
-  botBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 2,
-  },
-  botBadgeText: {
-    fontSize: Type.caption.size,
-  },
-  identityCardV2: {
-    alignItems: 'center',
-    paddingVertical: Space.xl + 8,
-    gap: Space.sm,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    borderRadius: Radius.xl,
-    marginHorizontal: Space.xs,
-  },
-  groupAvatarWrap: {
-    width: 96,
-    height: 96,
-    borderRadius: Radius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-    marginBottom: Space.xs,
-  },
-  groupAvatar: {
-    width: 96,
-    height: 96,
-    borderRadius: Radius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  groupAvatarText: {
-    fontSize: 32,
-    fontFamily: TypeStyles.title.fontFamily,
-    color: Colors.textPrimary,
-  },
-  groupNameV2: {
-    fontSize: Type.title.size,
-    fontFamily: TypeStyles.title.fontFamily,
-    color: Colors.textPrimary,
-    marginTop: Space.sm,
-  },
-  groupDescV2: {
-    textAlign: 'center',
-    paddingHorizontal: Space.lg,
-    marginTop: 2,
-  },
-  botBadgeV2: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 2,
-  },
-  section: {
-    gap: Space.sm,
-  },
-  sectionLabel: {
-    fontSize: Type.meta.size,
-    letterSpacing: Type.meta.letterSpacing,
-    marginLeft: Space.xs,
-  },
-  sectionCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    overflow: 'hidden',
-  },
-  sectionCardDanger: {
-    borderColor: `${Colors.danger}30`,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Space.md,
-    paddingVertical: 14,
-    gap: Space.sm,
-  },
-  rowBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
-  },
-  rowTextBody: {
-    flex: 1,
-    gap: 2,
-  },
-  rowLabel: {
-    fontSize: Type.body.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-  },
-  rowSubtitle: {
-    fontSize: Type.caption.size,
+  description: {
+    maxWidth: '84%',
+    color: Colors.textSecondary,
     fontFamily: TypeStyles.body.fontFamily,
+    fontSize: Type.captionElevated.size,
+    lineHeight: 19,
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  identityMeta: {
     color: Colors.textMuted,
+    fontFamily: TypeStyles.body.fontFamily,
+    fontSize: Type.caption.size,
+    marginTop: 5,
+  },
+  quickActions: {
+    minHeight: 72,
+    flexDirection: 'row',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+  },
+  quickAction: {
+    flex: 1,
+    minHeight: 72,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+  },
+  quickActionLabel: {
+    color: Colors.textSecondary,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    fontSize: Type.caption.size,
   },
 });

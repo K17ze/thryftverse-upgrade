@@ -256,7 +256,7 @@ export default function SettingsScreen({ navigation }: Props) {
               onPress={() => setSearchVisible(true)}
               scaleValue={0.92}
               hapticFeedback="light"
-              style={[styles.searchBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
+              style={styles.searchBtn}
               accessibilityRole="button"
               accessibilityLabel="Search settings"
             >
@@ -313,7 +313,7 @@ export default function SettingsScreen({ navigation }: Props) {
       </AnimatedPressable>
 
       {/* ── ACCOUNT SECTION (card) — no profile/private details rows (top card is the entrypoint) ── */}
-      <SettingsSection title="Account">
+      <SettingsSection title="Account" noCard>
         <SettingsRow
           icon="shield-checkmark-outline"
           iconColor={currentUser?.emailVerified ? Colors.success : Colors.textMuted}
@@ -337,7 +337,7 @@ export default function SettingsScreen({ navigation }: Props) {
       </SettingsSection>
 
       {/* ── BUYING & SELLING (card) ── */}
-      <SettingsSection title="Buying & selling">
+      <SettingsSection title="Buying & selling" noCard>
         <SettingsRow
           icon="location-outline"
           title="Saved addresses"
@@ -376,7 +376,7 @@ export default function SettingsScreen({ navigation }: Props) {
       </SettingsSection>
 
       {/* ── PRIVACY & NOTIFICATIONS (card) ── */}
-      <SettingsSection title="Privacy & notifications">
+      <SettingsSection title="Privacy & notifications" noCard>
         <SettingsRow
           icon="eye-outline"
           title="Privacy & safety"
@@ -412,7 +412,7 @@ export default function SettingsScreen({ navigation }: Props) {
       </SettingsSection>
 
       {/* ── PREFERENCES (card) ── */}
-      <SettingsSection title="Preferences">
+      <SettingsSection title="Preferences" noCard>
         <SettingsRow
           icon="swap-horizontal-outline"
           title="Currency display"
@@ -448,7 +448,7 @@ export default function SettingsScreen({ navigation }: Props) {
       </SettingsSection>
 
       {/* ── ACCOUNT CONTROL (card, sober) ── */}
-      <SettingsSection title="Account control">
+      <SettingsSection title="Account control" noCard>
         <SettingsRow
           icon="shield-outline"
           title="Account control"
@@ -460,7 +460,7 @@ export default function SettingsScreen({ navigation }: Props) {
       </SettingsSection>
 
       {/* ── HELP & ABOUT (card) ── */}
-      <SettingsSection title="Help & about">
+      <SettingsSection title="Help & about" noCard>
         <SettingsRow
           icon="help-circle-outline"
           title="Help Centre"
@@ -532,8 +532,6 @@ const styles = StyleSheet.create({
   searchBtn: {
     width: 44,
     height: 44,
-    borderRadius: Radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
   },

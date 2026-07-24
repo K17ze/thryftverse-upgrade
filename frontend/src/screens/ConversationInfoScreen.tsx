@@ -1,24 +1,19 @@
 import React, { useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Alert,
-} from 'react-native';
-import { StackScreenProps } from '@react-navigation/stack';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { StackScreenProps } from '@react-navigation/stack';
+import { AnimatedPressable } from '../components/AnimatedPressable';
+import { CachedImage } from '../components/CachedImage';
+import { ChatInfoRow, ChatInfoSection } from '../components/chat/ChatInfoSection';
+import { FlagshipHeader, FlagshipScreen } from '../components/flagship';
+import { Caption } from '../components/ui/Text';
+import { Colors } from '../constants/colors';
+import { useBackendData } from '../context/BackendDataContext';
+import { useToast } from '../context/ToastContext';
+import { useHaptic } from '../hooks/useHaptic';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
-import { useToast } from '../context/ToastContext';
-import { Colors } from '../constants/colors';
-import { Space, Radius, Type, TypeStyles } from '../theme/designTokens';
-import { AnimatedPressable } from '../components/AnimatedPressable';
-import { useHaptic } from '../hooks/useHaptic';
-import { CachedImage } from '../components/CachedImage';
-import { Caption, BodyEmphasis, Meta } from '../components/ui/Text';
-import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
-import { useBackendData } from '../context/BackendDataContext';
+import { Radius, Space, Type, TypeStyles } from '../theme/designTokens';
 
 type Props = StackScreenProps<RootStackParamList, 'ConversationInfo'>;
 
@@ -26,7 +21,7 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
   const { conversationId } = route.params;
   const { show } = useToast();
   const haptic = useHaptic();
-
+  const { listings } = useBackendData();
   const conversations = useStore((state) => state.conversations);
   const deleteConversation = useStore((state) => state.deleteConversation);
   const archiveConversation = useStore((state) => state.archiveConversation);
@@ -35,23 +30,21 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
   const blockedUsers = useStore((state) => state.blockedUsers);
   const toggleBlockedUser = useStore((state) => state.toggleBlockedUser);
   const profileMediaOverrides = useStore((state) => state.profileMediaOverrides);
-  const participantNameLookup = useStore((state) => (state as any).participantNameLookup as Map<string, string> | undefined);
-  const { listings } = useBackendData();
+  const participantNameLookup = useStore(
+    (state) => (state as typeof state & { participantNameLookup?: Map<string, string> }).participantNameLookup
+  );
 
   const conversation = useMemo(
-    () => conversations.find((c) => c.id === conversationId),
+    () => conversations.find((item) => item.id === conversationId),
     [conversations, conversationId]
   );
 
-  const isMuted = mutedIds.includes(conversationId);
-  const counterpartyId = conversation?.participantIds?.find(
-    (id) => id !== 'me'
-  );
-  const isBlocked = counterpartyId ? blockedUsers.includes(counterpartyId) : false;
-
   if (!conversation) {
     return (
-      <FlagshipScreen header={<FlagshipHeader title="Conversation" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
+      <FlagshipScreen
+        header={<FlagshipHeader title="Chat details" onBack={() => navigation.goBack()} />}
+        scrollEnabled={false}
+      >
         <View style={styles.center}>
           <Caption color={Colors.textMuted}>Conversation not found</Caption>
         </View>
@@ -59,7 +52,50 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
     );
   }
 
-  const handleDelete = () => {
+  const counterpartyId = conversation.participantIds?.find((id) => id !== 'me');
+  const isMuted = mutedIds.includes(conversationId);
+  const isBlocked = counterpartyId ? blockedUsers.includes(counterpartyId) : false;
+  const displayName =
+    (counterpartyId ? participantNameLookup?.get(counterpartyId) : undefined) ||
+    conversation.title ||
+    'Thryft user';
+  const avatarUrl =
+    conversation.avatar ||
+    (counterpartyId ? profileMediaOverrides[counterpartyId]?.avatar || null : null);
+  const handle = counterpartyId ? `@${counterpartyId.slice(0, 12)}` : 'Direct message';
+  const mediaCount = conversation.messages?.filter((message) => message.mediaUri).length ?? 0;
+  const linkCount =
+    conversation.messages?.filter((message) => message.text && /https?:\/\//.test(message.text)).length ?? 0;
+  const offerCount = conversation.messages?.filter((message) => message.type === 'offer').length ?? 0;
+  const linkedListing = conversation.itemId
+    ? listings.find((listing) => listing.id === conversation.itemId)
+    : undefined;
+
+  const viewProfile = () => {
+    if (counterpartyId) navigation.navigate('UserProfile', { userId: counterpartyId });
+  };
+
+  const toggleMute = () => {
+    haptic.light();
+    toggleMuted(conversationId);
+    show(isMuted ? 'Conversation unmuted' : 'Conversation muted', 'success');
+  };
+
+  const archive = () => {
+    haptic.medium();
+    archiveConversation(conversationId);
+    show('Conversation archived', 'success');
+    navigation.navigate('MainTabs', { screen: 'Inbox' });
+  };
+
+  const toggleBlock = () => {
+    if (!counterpartyId) return;
+    haptic.heavy();
+    toggleBlockedUser(counterpartyId);
+    show(isBlocked ? 'User unblocked' : 'User blocked', isBlocked ? 'success' : 'info');
+  };
+
+  const deleteForMe = () => {
     Alert.alert(
       'Delete for me?',
       'This removes the conversation from your inbox on this device. The other participant keeps their copy.',
@@ -79,250 +115,131 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
     );
   };
 
-  const handleArchive = () => {
-    haptic.medium();
-    archiveConversation(conversationId);
-    show('Conversation archived', 'success');
-    navigation.navigate('MainTabs', { screen: 'Inbox' });
-  };
-
-  const handleToggleMute = () => {
-    haptic.light();
-    toggleMuted(conversationId);
-    show(isMuted ? 'Conversation unmuted' : 'Conversation muted', 'success');
-  };
-
-  const handleToggleBlock = () => {
-    if (!counterpartyId) return;
-    haptic.heavy();
-    toggleBlockedUser(counterpartyId);
-    show(isBlocked ? 'User unblocked' : 'User blocked', isBlocked ? 'success' : 'info');
-  };
-
-  const handleViewProfile = () => {
-    if (counterpartyId) {
-      navigation.navigate('UserProfile', { userId: counterpartyId });
-    }
-  };
-
-  const displayName =
-    (counterpartyId ? participantNameLookup?.get(counterpartyId) : undefined) ??
-    conversation.title ??
-    'Thryft user';
-  const avatarUrl =
-    conversation.avatar ??
-    (counterpartyId ? profileMediaOverrides[counterpartyId]?.avatar ?? null : null);
-  const handle = counterpartyId ? `@${counterpartyId.slice(0, 12)}` : 'Direct message';
-
   return (
-    <FlagshipScreen header={<FlagshipHeader title="Chat details" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
+    <FlagshipScreen
+      header={<FlagshipHeader title="Chat details" onBack={() => navigation.goBack()} />}
+      scrollEnabled={false}
+    >
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-        {/* Partner Identity */}
-        <View>
-          <AnimatedPressable
-            style={styles.identityCardV2}
-            onPress={handleViewProfile}
-            disabled={!counterpartyId}
-            activeOpacity={0.85}
-            scaleValue={0.98}
-            hapticFeedback="light"
-            accessibilityRole="button"
-            accessibilityLabel={`View ${displayName}'s profile`}
-          >
-            <View style={styles.identityAvatarWrap}>
-              {avatarUrl ? (
-                <CachedImage uri={avatarUrl} style={styles.identityAvatarImage} contentFit="cover" />
-              ) : (
-                <View style={[styles.identityAvatarFallback, { backgroundColor: Colors.surfaceAlt }]}>
-                  <Text style={styles.identityAvatarText}>{displayName.charAt(0).toUpperCase()}</Text>
-                </View>
-              )}
-            </View>
-            <BodyEmphasis style={styles.identityName} numberOfLines={1}>{displayName}</BodyEmphasis>
-            <Caption color={Colors.textMuted}>{handle}</Caption>
-          </AnimatedPressable>
+        <AnimatedPressable
+          style={styles.identity}
+          onPress={viewProfile}
+          disabled={!counterpartyId}
+          activeOpacity={0.7}
+          scaleValue={0.985}
+          hapticFeedback="light"
+          accessibilityRole="button"
+          accessibilityLabel={`View ${displayName}'s profile`}
+        >
+          <View style={styles.avatar}>
+            {avatarUrl ? (
+              <CachedImage
+                uri={avatarUrl}
+                style={styles.avatarImage}
+                containerStyle={styles.avatarImage}
+                contentFit="cover"
+              />
+            ) : (
+              <Text style={styles.avatarText}>{displayName.charAt(0).toUpperCase()}</Text>
+            )}
+          </View>
+          <Text style={styles.displayName} numberOfLines={1}>
+            {displayName}
+          </Text>
+          <Text style={styles.handle} numberOfLines={1}>
+            {handle}
+          </Text>
+        </AnimatedPressable>
+
+        <View style={styles.quickActions}>
+          <QuickAction icon="person-outline" label="Profile" onPress={viewProfile} />
+          <QuickAction
+            icon="images-outline"
+            label="Media"
+            onPress={() => navigation.navigate('SharedConversationMedia', { conversationId })}
+          />
+          <QuickAction
+            icon={isMuted ? 'volume-mute-outline' : 'notifications-outline'}
+            label={isMuted ? 'Unmute' : 'Mute'}
+            onPress={toggleMute}
+          />
         </View>
 
-        {/* Profile */}
-        <View>
-          <Section title="Profile">
-            <RowItem
-              icon="person-outline"
-              label="View profile"
-              onPress={handleViewProfile}
+        <ChatInfoSection title="Shared in this chat">
+          <ChatInfoRow
+            icon="images-outline"
+            label="Photos and videos"
+            detail={mediaCount > 0 ? String(mediaCount) : undefined}
+            onPress={() => navigation.navigate('SharedConversationMedia', { conversationId })}
+            showChevron
+          />
+          {linkCount > 0 ? (
+            <ChatInfoRow icon="link-outline" label="Links shared" detail={String(linkCount)} />
+          ) : null}
+          {offerCount > 0 ? (
+            <ChatInfoRow icon="pricetag-outline" label="Offers exchanged" detail={String(offerCount)} />
+          ) : null}
+        </ChatInfoSection>
+
+        {conversation.itemId ? (
+          <ChatInfoSection title="Marketplace">
+            <ChatInfoRow
+              icon="bag-handle-outline"
+              label={linkedListing?.title || 'Linked listing'}
+              subtitle="Open the product linked to this conversation"
+              detail={linkedListing ? `£${linkedListing.price.toFixed(2)}` : undefined}
+              onPress={() => navigation.navigate('ItemDetail', { itemId: conversation.itemId! })}
               showChevron
             />
-          </Section>
-        </View>
+          </ChatInfoSection>
+        ) : null}
 
-        {/* Media & shared */}
-        <View>
-          <Section title="Shared">
-            <RowItem
-              icon="images-outline"
-              label="Photos & videos"
-              onPress={() => navigation.navigate('SharedConversationMedia', { conversationId })}
-              showChevron
-              detail={(() => {
-                const count = conversation.messages?.filter((m) => m.mediaUri).length ?? 0;
-                return count > 0 ? `${count}` : undefined;
-              })()}
-            />
-            {(() => {
-              const linkCount = conversation.messages?.filter((m) => m.text && /https?:\/\//.test(m.text)).length ?? 0;
-              return linkCount > 0 ? (
-                <RowItem
-                  icon="link-outline"
-                  label="Links"
-                  detail={`${linkCount}`}
-                />
-              ) : null;
-            })()}
-            {(() => {
-              const offerCount = conversation.messages?.filter((m) => m.type === 'offer').length ?? 0;
-              return offerCount > 0 ? (
-                <RowItem
-                  icon="cash-outline"
-                  label="Offers"
-                  detail={`${offerCount}`}
-                />
-              ) : null;
-            })()}
-          </Section>
-        </View>
+        <ChatInfoSection title="Conversation">
+          <ChatInfoRow
+            icon="archive-outline"
+            label="Archive conversation"
+            subtitle="Move this chat out of your active inbox"
+            onPress={archive}
+          />
+        </ChatInfoSection>
 
-        {/* Marketplace context */}
-        {conversation.itemId && (() => {
-          const listing = listings.find((l) => l.id === conversation.itemId);
-          return (
-            <View>
-              <Section title="Listing">
-                <RowItem
-                  icon="pricetag-outline"
-                  label={listing?.title ?? 'View linked listing'}
-                  detail={listing ? `£${listing.price.toFixed(2)}` : undefined}
-                  onPress={() => navigation.navigate('ItemDetail', { itemId: conversation.itemId! })}
-                  showChevron
-                />
-              </Section>
-            </View>
-          );
-        })()}
-
-        {/* Actions */}
-        <View>
-          <Section title="Actions">
-            <RowItem
-              icon={isMuted ? 'volume-mute-outline' : 'volume-high-outline'}
-              label={isMuted ? 'Unmute' : 'Mute'}
-              onPress={handleToggleMute}
-            />
-            <RowItem
-              icon="archive-outline"
-              label="Archive"
-              onPress={handleArchive}
-            />
-          </Section>
-        </View>
-
-        {/* Danger zone */}
-        <View>
-          <Section title="Danger" danger>
-            <RowItem
-              icon={isBlocked ? 'person-add-outline' : 'person-remove-outline'}
-              label={isBlocked ? 'Unblock user' : 'Block user'}
-              onPress={handleToggleBlock}
-              danger={!isBlocked}
-            />
-            <RowItem
-              icon="trash-outline"
-              label="Delete for me"
-              onPress={handleDelete}
-              danger
-            />
-          </Section>
-        </View>
+        <ChatInfoSection title="Privacy and safety" danger>
+          <ChatInfoRow
+            icon={isBlocked ? 'person-add-outline' : 'person-remove-outline'}
+            label={isBlocked ? 'Unblock user' : 'Block user'}
+            onPress={toggleBlock}
+            danger={!isBlocked}
+          />
+          <ChatInfoRow icon="trash-outline" label="Delete for me" onPress={deleteForMe} danger />
+        </ChatInfoSection>
       </ScrollView>
     </FlagshipScreen>
   );
 }
 
-function Section({ title, children, danger }: { title: string; children: React.ReactNode; danger?: boolean }) {
-  const childArray = React.Children.toArray(children);
-  const lastIndex = childArray.length - 1;
-  const childrenWithIsLast = childArray.map((child, index) => {
-    if (React.isValidElement(child)) {
-      return React.cloneElement(child, { isLast: index === lastIndex } as any);
-    }
-    return child;
-  });
-  return (
-    <View style={styles.section}>
-      <Meta color={danger ? Colors.danger : Colors.textMuted} style={styles.sectionLabel}>
-        {title.toUpperCase()}
-      </Meta>
-      <View style={[styles.sectionCard, danger && styles.sectionCardDanger]}>{childrenWithIsLast}</View>
-    </View>
-  );
-}
-
-function RowItem({
+function QuickAction({
   icon,
   label,
   onPress,
-  showChevron,
-  danger,
-  isLast,
-  detail,
 }: {
-  icon: string;
+  icon: keyof typeof Ionicons.glyphMap;
   label: string;
-  onPress?: () => void;
-  showChevron?: boolean;
-  danger?: boolean;
-  isLast?: boolean;
-  detail?: string;
+  onPress: () => void;
 }) {
-  const content = (
-    <View style={[styles.row, !isLast && styles.rowBorder]}>
-      <Ionicons
-        name={icon as any}
-        size={20}
-        color={danger ? Colors.danger : Colors.textSecondary}
-      />
-      <Text
-        style={[
-          styles.rowLabel,
-          { color: danger ? Colors.danger : Colors.textPrimary },
-        ]}
-      >
-        {label}
-      </Text>
-      {detail && (
-        <Caption color={Colors.textMuted}>{detail}</Caption>
-      )}
-      {showChevron && (
-        <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-      )}
-    </View>
+  return (
+    <AnimatedPressable
+      style={styles.quickAction}
+      onPress={onPress}
+      activeOpacity={0.68}
+      scaleValue={0.96}
+      hapticFeedback="light"
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      <Ionicons name={icon} size={21} color={Colors.textPrimary} />
+      <Text style={styles.quickActionLabel}>{label}</Text>
+    </AnimatedPressable>
   );
-
-  if (onPress) {
-    return (
-      <AnimatedPressable
-        onPress={onPress}
-        activeOpacity={0.7}
-        scaleValue={0.98}
-        hapticFeedback="light"
-        accessibilityRole="button"
-        accessibilityLabel={label}
-      >
-        {content}
-      </AnimatedPressable>
-    );
-  }
-
-  return content;
 }
 
 const styles = StyleSheet.create({
@@ -333,124 +250,65 @@ const styles = StyleSheet.create({
   },
   center: {
     flex: 1,
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
   },
-  identityCard: {
+  identity: {
     alignItems: 'center',
-    paddingVertical: Space.lg,
-    gap: Space.sm,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    borderRadius: Radius.xl,
-    marginHorizontal: Space.xs,
-  },
-  avatarRing: {
-    width: 88,
-    height: 88,
-    borderRadius: Radius.full,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    padding: 2,
-    justifyContent: 'center',
-    alignItems: 'center',
+    paddingTop: Space.sm,
+    paddingBottom: Space.xs,
   },
   avatar: {
     width: 76,
     height: 76,
     borderRadius: Radius.full,
-    justifyContent: 'center',
+    overflow: 'hidden',
     alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surfaceAlt,
+    marginBottom: Space.sm,
   },
   avatarImage: {
     width: 76,
     height: 76,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
   },
   avatarText: {
-    fontSize: 28,
-    fontFamily: TypeStyles.title.fontFamily,
     color: Colors.textPrimary,
-    textTransform: 'uppercase',
-  },
-  name: {
-    fontSize: Type.subtitle.size,
-    letterSpacing: Type.subtitle.letterSpacing,
-    lineHeight: Type.subtitle.lineHeight,
-  },
-  identityCardV2: {
-    alignItems: 'center',
-    paddingVertical: Space.lg + 8,
-    gap: Space.sm,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    borderRadius: Radius.xl,
-    marginHorizontal: Space.xs,
-  },
-  identityAvatarWrap: {
-    width: 96,
-    height: 96,
-    borderRadius: Radius.full,
-    overflow: 'hidden',
-    marginBottom: Space.xs,
-  },
-  identityAvatarImage: {
-    width: 96,
-    height: 96,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
-  },
-  identityAvatarFallback: {
-    width: 96,
-    height: 96,
-    borderRadius: Radius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  identityAvatarText: {
-    fontSize: 32,
     fontFamily: TypeStyles.title.fontFamily,
+    fontSize: 27,
+  },
+  displayName: {
+    maxWidth: '88%',
     color: Colors.textPrimary,
-    textTransform: 'uppercase',
+    fontFamily: TypeStyles.title.fontFamily,
+    fontSize: Type.title.size,
+    lineHeight: Type.title.lineHeight,
+    letterSpacing: Type.title.letterSpacing,
   },
-  identityName: {
-    fontSize: Type.subtitle.size,
-    letterSpacing: Type.subtitle.letterSpacing,
-    lineHeight: Type.subtitle.lineHeight,
+  handle: {
+    color: Colors.textMuted,
+    fontFamily: TypeStyles.body.fontFamily,
+    fontSize: Type.captionElevated.size,
+    marginTop: 3,
   },
-  section: {
-    gap: Space.sm,
-  },
-  sectionLabel: {
-    marginLeft: Space.sm,
-    letterSpacing: 1.2,
-  },
-  sectionCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.xl,
-    overflow: 'hidden',
-  },
-  sectionCardDanger: {
-    borderColor: `${Colors.danger}30`,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  row: {
+  quickActions: {
+    minHeight: 72,
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: Space.md,
-    gap: Space.sm + 4,
-  },
-  rowBorder: {
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderColor: Colors.border,
   },
-  rowLabel: {
+  quickAction: {
     flex: 1,
-    fontSize: Type.body.size,
+    minHeight: 72,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+  },
+  quickActionLabel: {
+    color: Colors.textSecondary,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    letterSpacing: Type.body.letterSpacing,
-    lineHeight: Type.body.lineHeight,
+    fontSize: Type.caption.size,
   },
 });

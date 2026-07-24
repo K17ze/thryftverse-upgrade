@@ -1,6 +1,9 @@
 import 'dotenv/config';
+import { assertProductionReadiness } from './lib/productionReadiness.js';
 
 const nodeEnv = process.env.NODE_ENV ?? 'development';
+
+assertProductionReadiness(process.env);
 
 function required(name: string, fallback?: string): string {
   const value = process.env[name] ?? fallback;
@@ -30,6 +33,28 @@ function asNumber(value: string | undefined, fallback: number): number {
   return parsed;
 }
 
+function asIntegerInRange(
+  name: string,
+  value: string | undefined,
+  fallback: number,
+  minimum: number,
+  maximum: number
+): number {
+  const parsed = value === undefined ? fallback : Number(value);
+  if (!Number.isInteger(parsed) || parsed < minimum || parsed > maximum) {
+    throw new Error(`${name} must be an integer between ${minimum} and ${maximum}`);
+  }
+  return parsed;
+}
+
+function asRateLimitWindow(value: string | undefined): string {
+  const resolved = value?.trim() || '1 minute';
+  if (!/^\d+\s*(?:ms|millisecond|milliseconds|s|second|seconds|m|minute|minutes|h|hour|hours)$/i.test(resolved)) {
+    throw new Error('API_RATE_LIMIT_WINDOW must be a positive duration such as "1 minute" or "30 seconds"');
+  }
+  return resolved;
+}
+
 function asCsvList(value: string | undefined): string[] {
   if (!value) {
     return [];
@@ -56,7 +81,7 @@ function requiredSecret(name: string, developmentFallback: string): string {
 
 export const config = {
   nodeEnv,
-  port: Number(process.env.PORT ?? '4000'),
+  port: asIntegerInRange('PORT', process.env.PORT, 4000, 1, 65_535),
   /**
    * Public HTTPS base URL of the API itself, used to build absolute callback
    * links (Stripe Connect onboarding/return URLs, magic-link emails, etc.).
@@ -65,6 +90,35 @@ export const config = {
   appUrl: process.env.APP_URL?.trim() || `http://localhost:${Number(process.env.PORT ?? '4000')}`,
   databaseUrl: required('DATABASE_URL'),
   databaseReplicaUrl: process.env.DATABASE_REPLICA_URL?.trim() || undefined,
+  databasePoolMax: asIntegerInRange('DATABASE_POOL_MAX', process.env.DATABASE_POOL_MAX, 20, 1, 200),
+  databasePoolIdleTimeoutMs: asIntegerInRange(
+    'DATABASE_POOL_IDLE_TIMEOUT_MS',
+    process.env.DATABASE_POOL_IDLE_TIMEOUT_MS,
+    30_000,
+    1_000,
+    600_000
+  ),
+  databasePoolConnectionTimeoutMs: asIntegerInRange(
+    'DATABASE_POOL_CONNECTION_TIMEOUT_MS',
+    process.env.DATABASE_POOL_CONNECTION_TIMEOUT_MS,
+    10_000,
+    500,
+    120_000
+  ),
+  databaseStatementTimeoutMs: asIntegerInRange(
+    'DATABASE_STATEMENT_TIMEOUT_MS',
+    process.env.DATABASE_STATEMENT_TIMEOUT_MS,
+    30_000,
+    1_000,
+    300_000
+  ),
+  databaseQueryTimeoutMs: asIntegerInRange(
+    'DATABASE_QUERY_TIMEOUT_MS',
+    process.env.DATABASE_QUERY_TIMEOUT_MS,
+    35_000,
+    1_000,
+    360_000
+  ),
   redisUrl: required('REDIS_URL', 'redis://localhost:6379'),
   keyServiceUrl: required('KEY_SERVICE_URL', 'http://localhost:4100'),
   keyServiceClientToken: requiredSecret('KEY_SERVICE_CLIENT_TOKEN', 'local-key-client-token'),
@@ -76,7 +130,57 @@ export const config = {
   s3SecretKey: required('S3_SECRET_KEY', 'minioadmin'),
   s3Bucket: required('S3_BUCKET', 'thryftverse-media'),
   s3ForcePathStyle: asBoolean(process.env.S3_FORCE_PATH_STYLE, true),
-  mlServiceUrl: required('ML_SERVICE_URL', 'http://localhost:8000'),
+  s3CdnBaseUrl:
+    process.env.S3_CDN_BASE_URL?.trim()
+    || process.env.S3_PUBLIC_ENDPOINT?.trim()
+    || 'http://localhost:9000',
+  s3AllowedContentTypes: asCsvList(process.env.S3_ALLOWED_CONTENT_TYPES).length > 0
+    ? asCsvList(process.env.S3_ALLOWED_CONTENT_TYPES).map((entry) => entry.toLowerCase())
+    : [
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+        'image/gif',
+        'image/heic',
+        'image/heif',
+        'video/mp4',
+        'video/quicktime',
+        'video/x-m4v',
+        'application/pdf',
+        ...(nodeEnv === 'production' ? [] : ['text/plain']),
+      ],
+  s3MaxImageUploadBytes: asIntegerInRange(
+    'S3_MAX_IMAGE_UPLOAD_BYTES',
+    process.env.S3_MAX_IMAGE_UPLOAD_BYTES,
+    20 * 1024 * 1024,
+    1_024,
+    100 * 1024 * 1024
+  ),
+  s3MaxVideoUploadBytes: asIntegerInRange(
+    'S3_MAX_VIDEO_UPLOAD_BYTES',
+    process.env.S3_MAX_VIDEO_UPLOAD_BYTES,
+    100 * 1024 * 1024,
+    1_024,
+    500 * 1024 * 1024
+  ),
+  s3MaxDocumentUploadBytes: asIntegerInRange(
+    'S3_MAX_DOCUMENT_UPLOAD_BYTES',
+    process.env.S3_MAX_DOCUMENT_UPLOAD_BYTES,
+    10 * 1024 * 1024,
+    1_024,
+    50 * 1024 * 1024
+  ),
+  s3PresignTtlSeconds: asIntegerInRange(
+    'S3_PRESIGN_TTL_SECONDS',
+    process.env.S3_PRESIGN_TTL_SECONDS,
+    10 * 60,
+    60,
+    60 * 60
+  ),
+  decisionServiceUrl:
+    process.env.DECISION_SERVICE_URL?.trim()
+    || process.env.ML_SERVICE_URL?.trim()
+    || 'http://localhost:8000',
   authAccessTokenSecret: requiredSecret('AUTH_ACCESS_TOKEN_SECRET', 'dev-only-access-secret-change-me'),
   authRefreshTokenSecret: requiredSecret('AUTH_REFRESH_TOKEN_SECRET', 'dev-only-refresh-secret-change-me'),
   authAccessTokenTtlSeconds: asNumber(process.env.AUTH_ACCESS_TOKEN_TTL_SECONDS, 15 * 60),
@@ -94,15 +198,29 @@ export const config = {
   authExposeDevelopmentArtifacts: asBoolean(process.env.AUTH_EXPOSE_DEVELOPMENT_ARTIFACTS, false),
   authEmailFrom: process.env.AUTH_EMAIL_FROM?.trim() || null,
   resendApiKey: process.env.RESEND_API_KEY?.trim() || null,
+  openAiApiKey: process.env.OPENAI_API_KEY?.trim() || null,
+  openAiBaseUrl: process.env.OPENAI_BASE_URL?.trim() || 'https://api.openai.com/v1',
+  openAiAgentDefaultModel: process.env.OPENAI_AGENT_DEFAULT_MODEL?.trim() || 'gpt-5.6-terra',
+  openAiAgentMaxOutputTokens: asNumber(process.env.OPENAI_AGENT_MAX_OUTPUT_TOKENS, 900),
+  openAiAgentTimeoutMs: asNumber(process.env.OPENAI_AGENT_TIMEOUT_MS, 30_000),
   apiSecurityAdminToken: requiredSecret('API_SECURITY_ADMIN_TOKEN', 'local-security-admin-token'),
   apiEnableMockWebhooks: asBoolean(process.env.API_ENABLE_MOCK_WEBHOOKS, false),
-  apiRateLimitMax: asNumber(process.env.API_RATE_LIMIT_MAX, 140),
-  apiRateLimitWindow: process.env.API_RATE_LIMIT_WINDOW ?? '1 minute',
-  kycDefaultVendor: required('KYC_DEFAULT_VENDOR', nodeEnv !== 'production' ? 'sandbox_kyc_vendor' : undefined),
-  kycVerificationBaseUrl: required(
-    'KYC_VERIFICATION_BASE_URL',
-    nodeEnv !== 'production' ? 'https://verify.thryftverse.local/session' : undefined
+  apiRateLimitMax: asIntegerInRange(
+    'API_RATE_LIMIT_MAX',
+    process.env.API_RATE_LIMIT_MAX,
+    140,
+    1,
+    100_000
   ),
+  apiRateLimitWindow: asRateLimitWindow(process.env.API_RATE_LIMIT_WINDOW),
+  kycDefaultVendor: required('KYC_DEFAULT_VENDOR', 'stripe_identity'),
+  kycVerificationBaseUrl:
+    process.env.KYC_VERIFICATION_BASE_URL?.trim()
+    || 'https://verify.thryftverse.local/session',
+  kycReturnUrl:
+    process.env.KYC_RETURN_URL?.trim()
+    || (nodeEnv !== 'production' ? 'thryftverse://compliance/kyc-complete' : null),
+  kycWebhookSecret: process.env.KYC_WEBHOOK_SECRET?.trim() || null,
   paymentWebhookToleranceSeconds: asNumber(process.env.PAYMENT_WEBHOOK_TOLERANCE_SECONDS, 300),
   googleOAuthClientIds: asCsvList(process.env.GOOGLE_OAUTH_CLIENT_IDS),
   appleOAuthAudience: process.env.APPLE_OAUTH_AUDIENCE?.trim() || null,

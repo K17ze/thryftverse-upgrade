@@ -195,7 +195,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
     setVisualMatching(apiResult.visualMatching);
     setResultNote(
       usedFallback && !apiResult.visualMatching
-        ? 'Showing similar items by category, brand & description. AI image matching is coming soon.'
+        ? 'Showing matches from your category, brand, and description filters.'
         : apiResult.note
     );
     setStatus(items.length > 0 ? 'populated' : 'empty');

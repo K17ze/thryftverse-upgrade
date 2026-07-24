@@ -12,6 +12,7 @@ import { View,
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as WebBrowser from 'expo-web-browser';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useCurrencyContext } from '../context/CurrencyContext';
@@ -22,6 +23,9 @@ import { parseApiError } from '../lib/apiClient';
 import {
   createPayoutAccount,
   createPayoutRequest,
+  createStripeConnectAccount,
+  createStripeConnectOnboardingLink,
+  getStripeConnectStatus,
   getIzeFxQuote,
   listPayoutAccounts,
   getWalletSnapshot,
@@ -48,13 +52,13 @@ export default function WithdrawScreen() {
   const [availableBalance, setAvailableBalance] = useState(0);
   const [isHydratingBalance, setIsHydratingBalance] = useState(true);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
+  const [isConnectingPayout, setIsConnectingPayout] = useState(false);
   const [payoutAccount, setPayoutAccount] = useState<PayoutAccountPayload | null>(null);
   const [countryCapabilities, setCountryCapabilities] = useState<UserCountryCapabilities | null>(null);
   const { formatFromFiat } = useFormattedPrice();
   const { currencyCode, goldRates } = useCurrencyContext();
   const { show } = useToast();
   const currentUser = useStore((state) => state.currentUser);
-  const savedPaymentMethod = useStore((state) => state.savedPaymentMethod);
   const currencySymbol = CURRENCIES[currencyCode].symbol;
 
   useEffect(() => {
@@ -156,7 +160,12 @@ export default function WithdrawScreen() {
   const numericAmountDisplay = Number(amount) || 0;
   const numericAmount = Number(convertDisplayToGbpAmount(numericAmountDisplay, currencyCode, goldRates).toFixed(2));
   const exceedsBalance = numericAmount > availableBalance;
-  const canWithdraw = numericAmount > 0 && !exceedsBalance && !isWithdrawing;
+  const canWithdraw =
+    numericAmount > 0
+    && !exceedsBalance
+    && !isWithdrawing
+    && !isConnectingPayout
+    && payoutAccount?.status === 'active';
   const allowBankAccounts = isPaymentMethodAllowed(countryCapabilities, 'bank_account');
 
   const policyScopeLabel = useMemo(
@@ -170,17 +179,13 @@ export default function WithdrawScreen() {
   );
 
   const bankCopy = useMemo(() => {
-    if (savedPaymentMethod?.type === 'bank_account') {
-      return {
-        name: savedPaymentMethod.label,
-        details: savedPaymentMethod.details ?? 'bank account',
-      };
-    }
-
     if (payoutAccount) {
       const payoutLocation = payoutAccount.countryCode ? ` · ${payoutAccount.countryCode}` : '';
       return {
-        name: 'Connected payout profile',
+        name:
+          payoutAccount.status === 'active'
+            ? 'Connected payout profile'
+            : 'Payout verification pending',
         details: `${payoutAccount.gatewayId} · ${payoutAccount.currency}${payoutLocation}`,
       };
     }
@@ -193,10 +198,10 @@ export default function WithdrawScreen() {
     }
 
     return {
-      name: 'No bank account linked',
-      details: 'Add a bank account to enable withdrawals',
+      name: 'Connect a payout profile',
+      details: 'Verify your identity and bank details with Stripe',
     };
-  }, [allowBankAccounts, savedPaymentMethod, payoutAccount]);
+  }, [allowBankAccounts, payoutAccount]);
 
   const ensureCapabilities = async (): Promise<UserCountryCapabilities | null> => {
     if (!currentUser?.id) {
@@ -214,6 +219,67 @@ export default function WithdrawScreen() {
     } catch {
       return null;
     }
+  };
+
+  const connectOrSyncPayoutAccount = async (
+    resolvedCapabilities: UserCountryCapabilities | null
+  ): Promise<PayoutAccountPayload> => {
+    if (!currentUser?.id) {
+      throw new Error('Please sign in to connect a payout profile.');
+    }
+
+    const gatewayPriority = resolvedCapabilities?.payouts.gatewayPriority ?? ['stripe_americas'];
+    if (!gatewayPriority.includes('stripe_americas')) {
+      throw new Error('A verified payout provider is not available for your country policy right now.');
+    }
+
+    let connectStatus = await getStripeConnectStatus(currentUser.id);
+    if (!connectStatus.hasConnectAccount) {
+      await createStripeConnectAccount(currentUser.id);
+      connectStatus = await getStripeConnectStatus(currentUser.id);
+    }
+
+    if (!connectStatus.payoutsEnabled) {
+      const { onboardingUrl } = await createStripeConnectOnboardingLink(currentUser.id);
+      await WebBrowser.openBrowserAsync(onboardingUrl);
+      connectStatus = await getStripeConnectStatus(currentUser.id);
+    }
+
+    if (!connectStatus.payoutsEnabled) {
+      throw new Error(
+        'Payout setup is not complete yet. Finish the required Stripe steps, then refresh your payout profile.'
+      );
+    }
+
+    const accounts = await listPayoutAccounts(currentUser.id);
+    let activeAccount =
+      accounts.find(
+        (account) =>
+          account.gatewayId === 'stripe_americas'
+          && account.status === 'active'
+      ) ?? null;
+
+    if (!activeAccount) {
+      activeAccount = await createPayoutAccount(currentUser.id, {
+        gatewayId: 'stripe_americas',
+        currency: 'GBP',
+        countryCode:
+          resolvedCapabilities?.effectiveCountryCode
+          ?? resolvedCapabilities?.countryCode
+          ?? 'GB',
+        metadata: {
+          source: 'withdraw_screen_stripe_connect_sync',
+          capabilityPolicyVersion: resolvedCapabilities?.policyVersion ?? null,
+        },
+      });
+    }
+
+    if (activeAccount.status !== 'active') {
+      throw new Error('Stripe has not enabled payouts for this profile yet.');
+    }
+
+    setPayoutAccount(activeAccount);
+    return activeAccount;
   };
 
   const ensurePayoutAccount = async (): Promise<{
@@ -235,7 +301,7 @@ export default function WithdrawScreen() {
 
     const existingAccounts = await listPayoutAccounts(currentUser.id);
     const activeAccount =
-      existingAccounts.find((account) => account.status === 'active') ?? existingAccounts[0] ?? null;
+      existingAccounts.find((account) => account.status === 'active') ?? null;
 
     if (activeAccount) {
       setPayoutAccount(activeAccount);
@@ -245,38 +311,29 @@ export default function WithdrawScreen() {
       };
     }
 
-    if (resolvedCapabilities && resolvedCapabilities.payouts.gatewayPriority.length === 0) {
-      throw new Error('No payout gateway is available for your country policy right now.');
-    }
-
-    const preferredGateway = resolvedCapabilities?.payouts.gatewayPriority[0] ?? 'stripe_americas';
-    const defaultPayoutCurrency =
-      resolvedCapabilities?.payouts.defaultCurrency
-      ?? resolvedCapabilities?.currency.defaultCurrency
-      ?? 'GBP';
-    const defaultPayoutCountry =
-      resolvedCapabilities?.effectiveCountryCode
-      ?? resolvedCapabilities?.countryCode
-      ?? 'GB';
-
-    const createdAccount = await createPayoutAccount(currentUser.id, {
-      gatewayId: preferredGateway,
-      currency: defaultPayoutCurrency,
-      countryCode: defaultPayoutCountry,
-      metadata: {
-        source: 'withdraw_screen_auto_create',
-        linkedPaymentMethodLabel: savedPaymentMethod?.label ?? null,
-        linkedPaymentMethodDetails: savedPaymentMethod?.details ?? null,
-        countryCluster: resolvedCapabilities?.countryCluster ?? null,
-        capabilityPolicyVersion: resolvedCapabilities?.policyVersion ?? null,
-      },
-    });
-
-    setPayoutAccount(createdAccount);
+    const createdAccount = await connectOrSyncPayoutAccount(resolvedCapabilities);
     return {
       account: createdAccount,
       capabilities: resolvedCapabilities,
     };
+  };
+
+  const handleConnectPayout = async () => {
+    if (!currentUser?.id || isConnectingPayout) {
+      return;
+    }
+
+    setIsConnectingPayout(true);
+    try {
+      const capabilities = await ensureCapabilities();
+      await connectOrSyncPayoutAccount(capabilities);
+      show('Your verified payout profile is ready.', 'success');
+    } catch (error) {
+      const parsed = parseApiError(error, 'Unable to connect your payout profile right now.');
+      show(parsed.message, 'error');
+    } finally {
+      setIsConnectingPayout(false);
+    }
   };
 
   const handleWithdraw = async () => {
@@ -423,18 +480,15 @@ export default function WithdrawScreen() {
             <AnimatedPressable
               style={styles.bankCard}
               activeOpacity={0.8}
-              onPress={() => {
-              if (!allowBankAccounts) {
-                show('Bank account setup is unavailable in your country policy.', 'error');
-                navigation.navigate('Payments');
-                return;
-              }
-
-              navigation.navigate('AddBankAccount');
-            }}
+              onPress={handleConnectPayout}
+              disabled={!allowBankAccounts || isConnectingPayout}
             accessibilityRole="button"
-            accessibilityLabel="Transfer destination"
-            accessibilityHint="Opens bank account options for withdrawals"
+            accessibilityLabel={
+              payoutAccount?.status === 'active'
+                ? 'Refresh verified payout profile'
+                : 'Connect verified payout profile'
+            }
+            accessibilityHint="Opens secure Stripe payout onboarding when verification is required"
           >
             <View style={styles.bankLeft}>
               <View style={styles.bankIcon}>
@@ -451,13 +505,28 @@ export default function WithdrawScreen() {
           {allowBankAccounts ? (
             <AnimatedPressable
               style={styles.addBankBtn}
-              onPress={() => navigation.navigate('AddBankAccount')}
+              onPress={handleConnectPayout}
+              disabled={isConnectingPayout}
               accessibilityRole="button"
-              accessibilityLabel="Add a new bank account"
-              accessibilityHint="Opens the bank account setup form"
+              accessibilityLabel={
+                payoutAccount?.status === 'active'
+                  ? 'Refresh payout profile'
+                  : 'Connect payout profile'
+              }
+              accessibilityHint="Checks Stripe payout verification and opens any required onboarding steps"
             >
-              <Ionicons name="add" size={18} color={Colors.brand} />
-              <Text style={styles.addBankText}>Add a new bank account</Text>
+              <Ionicons
+                name={payoutAccount?.status === 'active' ? 'refresh' : 'open-outline'}
+                size={18}
+                color={Colors.brand}
+              />
+              <Text style={styles.addBankText}>
+                {isConnectingPayout
+                  ? 'Checking payout profile…'
+                  : payoutAccount?.status === 'active'
+                    ? 'Refresh payout profile'
+                    : 'Connect with Stripe'}
+              </Text>
             </AnimatedPressable>
           ) : (
             <Text style={styles.railHintText}>Bank account setup is currently disabled for this region policy.</Text>

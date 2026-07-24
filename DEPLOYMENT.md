@@ -339,7 +339,12 @@ Railway supports Docker deployments from a GitHub monorepo. You will create **3 
    - Railway internal hostname will be: `key-service.railway.internal`
 4. Go to **Variables** tab → add key-service variables from [Section 10](#10-environment-variables-reference).
 
-#### 9.4 Create the `ml-service` service
+#### 9.4 Create the `ml-service` decision-baseline service
+
+This service contains deterministic recommendation and pricing baselines. It is
+not a trained image-classification, forecasting, or reinforcement-learning
+system; `/classify-image` intentionally returns `501` until a trained provider
+is installed.
 
 1. Click **New Service** → **GitHub Repo** → select `thryftverse`.
 2. Under **Settings** → **Source**:
@@ -478,6 +483,7 @@ ONEZE_RESERVE_RATIO_MAX=0.60
 ONEZE_FX_SYNC_ENABLED=true
 ONEZE_FX_SYNC_INTERVAL_MS=86400000
 ONEZE_FX_PROVIDER_URL=https://api.exchangerate.host/latest
+ONEZE_FX_PROVIDER_API_KEY=<live-provider-key>
 ONEZE_FX_PROVIDER_BASE_CURRENCY=INR
 ONEZE_AUTO_ADJUST_ENABLED=true
 ONEZE_AUTO_ADJUST_INTERVAL_MS=3600000
@@ -613,6 +619,10 @@ EXPO_PUBLIC_API_BASE_URL=https://thryftverse-api.railway.app   # your Railway ap
 EXPO_PUBLIC_ENABLE_RUNTIME_MOCKS=false
 ```
 
+Set the API base to the host only. The mobile client appends the canonical
+`/api/v1` prefix. The backend temporarily accepts `/v1/*` and unversioned
+routes for compatibility, but unversioned responses are marked deprecated.
+
 ### 13.5 Get the Google Service Account JSON
 
 1. Go to Google Play Console → **Setup** → **API access**.
@@ -706,9 +716,9 @@ And rebuild the mobile app with EAS.
 
 Work through this checklist in order after all services are deployed:
 
-- [ ] `GET /health/deep` returns all checks as `ok`
-- [ ] `POST /auth/signup` creates a user and sends a welcome email (check inbox)
-- [ ] `POST /auth/login` returns access + refresh tokens
+- [ ] `GET /api/v1/health/deep` returns all checks as `ok`
+- [ ] `POST /api/v1/auth/signup` creates a user and sends a welcome email (check inbox)
+- [ ] `POST /api/v1/auth/login` returns access + refresh tokens
 - [ ] `POST /uploads/presign` returns a presigned R2 URL; upload a test file and verify it's publicly accessible via `S3_PUBLIC_ENDPOINT`
 - [ ] `GET /recommendations/:userId` returns results (ML service is reachable)
 - [ ] `GET /realtime/ws` WebSocket connection establishes

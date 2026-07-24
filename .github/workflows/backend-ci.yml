@@ -1,0 +1,155 @@
+name: Backend CI
+
+on:
+  pull_request:
+    paths:
+      - "backend/**"
+      - "frontend/src/lib/apiClient.ts"
+      - "frontend/src/services/**"
+      - "frontend/package.json"
+      - "frontend/package-lock.json"
+      - ".github/workflows/backend-ci.yml"
+      - "docker-compose*.yml"
+      - "package.json"
+  push:
+    branches:
+      - main
+      - "creator/**"
+      - "codex/**"
+    paths:
+      - "backend/**"
+      - "frontend/src/lib/apiClient.ts"
+      - "frontend/src/services/**"
+      - "frontend/package.json"
+      - "frontend/package-lock.json"
+      - ".github/workflows/backend-ci.yml"
+      - "docker-compose*.yml"
+      - "package.json"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: API build, unit, migration, integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: thryftverse
+          POSTGRES_PASSWORD: integration-password
+          POSTGRES_DB: thryftverse_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U thryftverse -d thryftverse_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://thryftverse:integration-password@localhost:5432/thryftverse_test
+      TEST_DATABASE_URL: postgresql://thryftverse:integration-password@localhost:5432/thryftverse_test
+      REDIS_URL: redis://localhost:6379
+      KEY_SERVICE_URL: http://localhost:4100
+      KEY_SERVICE_CLIENT_TOKEN: ci-key-client-token
+      KEY_SERVICE_ADMIN_TOKEN: ci-key-admin-token
+      S3_ENDPOINT: http://localhost:9000
+      S3_PUBLIC_ENDPOINT: http://localhost:9000
+      S3_ACCESS_KEY: ci-access
+      S3_SECRET_KEY: ci-secret
+      S3_BUCKET: thryftverse-ci
+      AUTH_ACCESS_TOKEN_SECRET: ci-access-secret
+      AUTH_REFRESH_TOKEN_SECRET: ci-refresh-secret
+      API_SECURITY_ADMIN_TOKEN: ci-security-token
+      ONEZE_ATTESTATION_SIGNING_SECRET: ci-attestation-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/api/package-lock.json
+      - name: Install API dependencies
+        run: npm ci
+        working-directory: backend/api
+      - name: TypeScript build
+        run: npm run build
+        working-directory: backend/api
+      - name: Runtime dependency audit
+        run: npm audit --omit=dev --audit-level=high
+        working-directory: backend/api
+      - name: Unit tests
+        run: npm test
+        working-directory: backend/api
+      - name: Apply all migrations
+        run: npm run migrate
+        working-directory: backend/api
+      - name: Verify migration rerun is clean
+        run: npm run migrate
+        working-directory: backend/api
+      - name: Persistence integration tests
+        run: npm run test:integration
+        working-directory: backend/api
+        env:
+          RUN_INTEGRATION_TESTS: "true"
+
+  key-service:
+    name: Key service build and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/key-service/package-lock.json
+      - run: npm ci
+        working-directory: backend/key-service
+      - run: npm run build
+        working-directory: backend/key-service
+      - run: npm audit --omit=dev --audit-level=high
+        working-directory: backend/key-service
+      - run: npm test
+        working-directory: backend/key-service
+
+  mobile-contract:
+    name: Mobile API contract typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npm run typecheck
+        working-directory: frontend
+
+  decision-baseline:
+    name: Decision baseline tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/ml-service/requirements.txt
+      - run: pip install -r requirements.txt
+        working-directory: backend/ml-service
+      - run: python -m compileall app tests
+        working-directory: backend/ml-service
+      - run: python -m unittest discover -s tests -v
+        working-directory: backend/ml-service

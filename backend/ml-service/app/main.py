@@ -7,10 +7,17 @@ import re
 from typing import Literal
 
 import numpy as np
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-app = FastAPI(title="thryftverse-ml-service", version="0.1.0")
+app = FastAPI(
+    title="thryftverse-decision-baseline-service",
+    version="1.0.0",
+    description=(
+        "Deterministic ranking and pricing baselines. "
+        "This service does not claim trained ML capabilities."
+    ),
+)
 
 
 TOKEN_PATTERN = re.compile(r"[a-z0-9]+")
@@ -77,7 +84,7 @@ class RecommendationRequest(BaseModel):
 class RecommendationItem(BaseModel):
     listing_id: str
     score: float
-    model: Literal["two_stage_ranker", "contextual_bandit_explore"]
+    model: Literal["heuristic_two_stage_ranker", "novelty_exploration"]
     policy: Literal["exploit", "explore"]
     reason: str
 
@@ -98,10 +105,12 @@ class PricingActionRequest(BaseModel):
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
+def health() -> dict[str, object]:
     return {
         "ok": "true",
-        "service": "thryftverse-ml-service",
+        "service": "thryftverse-decision-baseline-service",
+        "capability_level": "heuristic_baseline",
+        "trained_models": False,
         "ts": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -245,7 +254,7 @@ def recommendations(payload: RecommendationRequest) -> dict[str, list[Recommenda
             RecommendationItem(
                 listing_id=candidate.listing_id,
                 score=float(round(min(max(normalized, 0.01), 0.99), 6)),
-                model="two_stage_ranker",
+                model="heuristic_two_stage_ranker",
                 policy="exploit",
                 reason=reason,
             )
@@ -261,7 +270,7 @@ def recommendations(payload: RecommendationRequest) -> dict[str, list[Recommenda
             RecommendationItem(
                 listing_id=candidate.listing_id,
                 score=float(round(explore_score, 6)),
-                model="contextual_bandit_explore",
+                model="novelty_exploration",
                 policy="explore",
                 reason=reason,
             )
@@ -282,19 +291,15 @@ def recommendations(payload: RecommendationRequest) -> dict[str, list[Recommenda
 
 @app.post("/classify-image")
 def classify_image(payload: ClassificationRequest) -> dict[str, object]:
-    # Heuristic placeholder for local development until vision model is connected.
-    tags = ["streetwear", "outerwear"] if "jacket" in payload.image_url.lower() else ["fashion", "marketplace"]
-    confidence = 0.78 if "jacket" in payload.image_url.lower() else 0.65
-    return {
-        "label": tags[0],
-        "tags": tags,
-        "confidence": confidence,
-    }
+    del payload
+    raise HTTPException(
+        status_code=501,
+        detail="Image classification is not available in the decision baseline service.",
+    )
 
 
 @app.post("/forecast-price")
 def forecast_price(payload: PriceForecastRequest) -> dict[str, object]:
-    # Lightweight moving-trend forecast baseline. Replace with LSTM trainer output later.
     series = np.array(payload.series, dtype=np.float64)
     recent = series[-5:]
     trend = float(np.mean(np.diff(recent))) if recent.size >= 2 else 0.0
@@ -306,7 +311,9 @@ def forecast_price(payload: PriceForecastRequest) -> dict[str, object]:
         forecast.append(round(last, 6))
 
     return {
-        "model": "baseline_trend",
+        "model": "moving_trend_baseline",
+        "trained_model": False,
+        "methodology": "mean first difference over the latest five observations",
         "horizon_steps": payload.horizon_steps,
         "forecast": forecast,
     }
@@ -314,7 +321,6 @@ def forecast_price(payload: PriceForecastRequest) -> dict[str, object]:
 
 @app.post("/pricing-action")
 def pricing_action(payload: PricingActionRequest) -> dict[str, object]:
-    # Simple rule-policy baseline. Replace with RL policy endpoint when ready.
     if payload.inventory > 20 and payload.demand_index < 0.6:
         action = "decrease_price"
         next_price = payload.current_price * 0.97
@@ -326,7 +332,8 @@ def pricing_action(payload: PricingActionRequest) -> dict[str, object]:
         next_price = payload.current_price
 
     return {
-        "policy": "baseline_rule_policy",
+        "policy": "deterministic_inventory_policy",
+        "trained_model": False,
         "action": action,
         "suggested_price": round(next_price, 4),
     }

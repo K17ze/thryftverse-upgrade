@@ -161,7 +161,7 @@ export default function TabNavigator() {
           component={SearchScreen}
           options={{
             tabBarIcon: ({ color, focused }) => (
-              <TabIcon name={focused ? 'compass' : 'compass-outline'} color={color} focused={focused} />
+              <TabIcon name={focused ? 'search' : 'search-outline'} color={color} focused={focused} />
             ),
             tabBarAccessibilityLabel: 'Explore',
           }}
@@ -195,7 +195,7 @@ export default function TabNavigator() {
           options={{
             tabBarIcon: ({ color, focused }) => (
               <TabIcon
-                name={focused ? 'chatbubbles' : 'chatbubbles-outline'}
+                name={focused ? 'paper-plane' : 'paper-plane-outline'}
                 color={color}
                 focused={focused}
                 badgeCount={inboxBadgeCount > 0 ? inboxBadgeCount : undefined}

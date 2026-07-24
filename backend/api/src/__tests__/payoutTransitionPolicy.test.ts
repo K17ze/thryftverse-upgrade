@@ -9,7 +9,6 @@ test('resolvePayoutProviderReference requires provider reference for provider we
     transitionSource: 'provider_webhook',
     inputProviderPayoutRef: '  ',
     existingProviderPayoutRef: null,
-    fallbackProviderPayoutRef: 'mock_payout_1',
   });
 
   assert.equal(resolution.requiresProviderReference, true);
@@ -30,18 +29,17 @@ test('resolvePayoutProviderReference accepts provider reference for external pai
   assert.equal(resolution.isValid, true);
 });
 
-test('resolvePayoutProviderReference uses fallback for manual paid transitions', () => {
+test('resolvePayoutProviderReference rejects fabricated fallback references for manual paid transitions', () => {
   const resolution = resolvePayoutProviderReference({
     targetStatus: 'paid',
     transitionSource: 'manual_status',
     inputProviderPayoutRef: null,
     existingProviderPayoutRef: null,
-    fallbackProviderPayoutRef: 'mock_payout_abc',
   });
 
-  assert.equal(resolution.requiresProviderReference, false);
-  assert.equal(resolution.providerPayoutRef, 'mock_payout_abc');
-  assert.equal(resolution.isValid, true);
+  assert.equal(resolution.requiresProviderReference, true);
+  assert.equal(resolution.providerPayoutRef, null);
+  assert.equal(resolution.isValid, false);
 });
 
 test('resolvePayoutProviderReference keeps existing reference for non-paid transitions', () => {

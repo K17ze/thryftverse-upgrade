@@ -18,6 +18,9 @@ export interface BotRuntimeContext {
   command: string;
   args: string[];
   messageText: string;
+  agentConfig: AgentConfig | null;
+  conversationHistory: AgentConversationTurn[];
+  runtimeData: BotRuntimeData;
 }
 
 export interface BotHandlerResult {
@@ -27,6 +30,41 @@ export interface BotHandlerResult {
 }
 
 export type BotCategoryHandler = (ctx: BotRuntimeContext) => BotHandlerResult | Promise<BotHandlerResult>;
+
+export type AgentModel = 'gpt-5.6-sol' | 'gpt-5.6-terra' | 'gpt-5.6-luna';
+export type AgentTriggerMode = 'mention' | 'command' | 'always';
+export type AgentResponseLength = 'concise' | 'balanced' | 'detailed';
+export type AgentTone = 'focused' | 'warm' | 'expert';
+export type AgentReasoningEffort = 'low' | 'medium' | 'high';
+
+export interface AgentConfig {
+  instructions: string;
+  model: AgentModel;
+  triggerMode: AgentTriggerMode;
+  responseLength: AgentResponseLength;
+  tone: AgentTone;
+  reasoningEffort: AgentReasoningEffort;
+  historyLimit: number;
+  starterPrompts: string[];
+}
+
+export interface AgentConversationTurn {
+  role: 'user' | 'assistant';
+  text: string;
+}
+
+export interface BotRuntimeListing {
+  id: string;
+  title: string;
+  priceGbp: number;
+  brand: string | null;
+}
+
+export interface BotRuntimeData {
+  listings: BotRuntimeListing[];
+  recentMessagesAnalyzed: number;
+  messagesRequiringReview: number;
+}
 
 export interface BotInstallInfo {
   botId: string;
@@ -38,4 +76,5 @@ export interface BotInstallInfo {
   permissionsSnapshot: string[];
   runtimeMode: string;
   status: string;
+  agentConfig: AgentConfig | null;
 }

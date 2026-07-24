@@ -1,164 +1,240 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
-  AnimatedPressable } from '../components/AnimatedPressable';
-import { View,
-  Text,
-  StyleSheet,
   ScrollView,
   StatusBar,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ActiveTheme, Colors } from '../constants/colors';
-import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { MOCK_CATEGORIES } from '../data/mockData';
-import { mockFind } from '../utils/mockGate';
-import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import Reanimated, { FadeIn } from 'react-native-reanimated';
+import { ActiveTheme, Colors } from '../constants/colors';
+import { CATEGORIES } from '../constants/categories';
 import { useBackendData } from '../context/BackendDataContext';
-import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGrid';
+import { AnimatedPressable } from '../components/AnimatedPressable';
 import { EmptyState } from '../components/EmptyState';
-import { DiscoverySectionHeader } from '../components/discover/DiscoverySectionHeader';
-import { Typography, Space, Radius } from '../theme/designTokens';
+import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGrid';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { SkeletonLoader } from '../components/SkeletonLoader';
+import { Space, Typography } from '../theme/designTokens';
+
+const normalize = (value?: string) =>
+  (value ?? '').trim().toLocaleLowerCase().replace(/[^a-z0-9]+/g, '-');
 
 export default function CategoryDetailScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const { formatFromFiat } = useFormattedPrice();
-  const { listings } = useBackendData();
-  const { categoryId } = route.params || {};
+  const { listings, isSyncing, lastError, refreshListings } = useBackendData();
+  const categoryId = route.params?.categoryId as string | undefined;
 
-  const category = mockFind(MOCK_CATEGORIES, (c: any) => c.id === categoryId) || MOCK_CATEGORIES[0];
-  const gridData = listings.filter(
-    (l: any) => l.category.toLowerCase() === category.name.toLowerCase() || categoryId === 'cat1'
-  );
+  const category = useMemo(() => {
+    const target = normalize(categoryId);
+    return CATEGORIES.find(
+      (candidate) =>
+        normalize(candidate.id) === target || normalize(candidate.name) === target
+    );
+  }, [categoryId]);
+
+  const gridData = useMemo(() => {
+    if (!category) return [];
+    const categoryTokens = new Set([
+      normalize(category.id),
+      normalize(category.name),
+      ...category.subcategories.flatMap((subcategory) => [
+        normalize(subcategory.id),
+        normalize(subcategory.name),
+      ]),
+    ]);
+
+    return listings.filter((listing) => {
+      const categoryToken = normalize(listing.category);
+      const subcategoryToken = normalize(listing.subcategory);
+      return categoryTokens.has(categoryToken) || categoryTokens.has(subcategoryToken);
+    });
+  }, [category, listings]);
+
+  if (!category) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <StatusBar
+          barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'}
+          backgroundColor={Colors.background}
+        />
+        <ScreenHeader title="Category" onBack={() => navigation.goBack()} />
+        <EmptyState
+          icon="grid-outline"
+          title="Category unavailable"
+          subtitle="This category may have moved. Browse the current marketplace categories instead."
+          ctaLabel="Browse marketplace"
+          onCtaPress={() =>
+            navigation.replace('Browse', { categoryId: 'all', title: 'Browse' })
+          }
+        />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+      <StatusBar
+        barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'}
+        backgroundColor={Colors.background}
+      />
+      <ScreenHeader title={category.name} onBack={() => navigation.goBack()} />
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Editorial header with back button and category name */}
-        <Reanimated.View entering={FadeInDown.duration(350).delay(50)} style={styles.header}>
-          <AnimatedPressable
-            style={styles.backBtn}
-            onPress={() => navigation.goBack()}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-            accessibilityHint="Returns to the previous screen"
-          >
-            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-          </AnimatedPressable>
-          <Text style={styles.hugeTitle}>{category.name}</Text>
-          <Text style={styles.headerSubtitle}>{gridData.length} listings available</Text>
-        </Reanimated.View>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.content}
+      >
+        <View style={styles.summary}>
+          <Text style={styles.count}>
+            {gridData.length} {gridData.length === 1 ? 'listing' : 'listings'}
+          </Text>
+          <Text style={styles.summaryText}>
+            Browse the latest {category.name.toLocaleLowerCase()} pieces from the community.
+          </Text>
+        </View>
 
-        {/* Refined subcategory chips */}
-        {category.subItems && category.subItems.length > 0 && (
-          <Reanimated.View entering={FadeInDown.duration(350).delay(120)}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsScroll}>
-              {category.subItems.map((sub: any, idx: number) => (
-                <AnimatedPressable
-                  key={idx}
-                  style={styles.chip}
-                  onPress={() => navigation.navigate('Browse', { categoryId: category.id, subcategoryId: sub.id, title: sub.name })}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Open ${sub.name} subcategory`}
-                  accessibilityHint="Shows listings for this subcategory"
-                >
-                  <Text style={styles.chipText}>{sub.name}</Text>
-                </AnimatedPressable>
-              ))}
-            </ScrollView>
-          </Reanimated.View>
-        )}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryRail}
+        >
+          {category.subcategories.map((subcategory) => (
+            <AnimatedPressable
+              key={subcategory.id}
+              style={styles.categoryAction}
+              onPress={() =>
+                navigation.navigate('Browse', {
+                  categoryId: category.id,
+                  subcategoryId: subcategory.id,
+                  title: subcategory.name,
+                })
+              }
+              activeOpacity={0.65}
+              scaleValue={0.98}
+              accessibilityRole="button"
+              accessibilityLabel={`Browse ${subcategory.name}`}
+            >
+              <Text style={styles.categoryActionText}>{subcategory.name}</Text>
+            </AnimatedPressable>
+          ))}
+        </ScrollView>
 
-        {/* Section header for the grid */}
-        <Reanimated.View entering={FadeInDown.duration(350).delay(180)}>
-          <DiscoverySectionHeader
-            kicker="CURATED"
-            title="Featured Listings"
-            style={{ marginTop: Space.lg }}
-          />
-        </Reanimated.View>
-
-        {/* Pinterest-style masonry grid */}
-        {gridData.length > 0 ? (
-          <Reanimated.View entering={FadeInDown.duration(350).delay(220)} style={{ marginTop: Space.sm }}>
+        {isSyncing && gridData.length === 0 ? (
+          <View style={styles.loadingGrid} accessibilityLabel="Loading category listings">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <View key={index} style={styles.loadingColumn}>
+                <SkeletonLoader width="100%" height={index % 2 === 0 ? 220 : 180} borderRadius={14} />
+                <SkeletonLoader width="78%" height={14} borderRadius={6} style={styles.skeletonLine} />
+                <SkeletonLoader width="46%" height={12} borderRadius={6} style={styles.skeletonMeta} />
+              </View>
+            ))}
+          </View>
+        ) : gridData.length > 0 ? (
+          <Reanimated.View entering={FadeIn.duration(220)} style={styles.grid}>
             <PinterestMasonryGrid
               items={gridData}
-              onPressItem={(item: any) => navigation.push('ItemDetail', { itemId: item.id })}
+              onPressItem={(item) =>
+                navigation.push('ItemDetail', { itemId: item.id })
+              }
               numColumns={2}
               showSaveButton
               enableEntranceAnimation
             />
           </Reanimated.View>
         ) : (
-          <Reanimated.View entering={FadeInDown.duration(350).delay(220)} style={{ marginTop: Space.xl }}>
+          <View style={styles.emptyWrap}>
             <EmptyState
-              icon="shirt-outline"
-              title="No listings yet"
-              subtitle={`We’re curating the best ${category.name.toLowerCase()} pieces. Check back soon or explore related categories.`}
-              ctaLabel="Browse All"
-              onCtaPress={() => navigation.navigate('Browse', { categoryId: category.id, title: category.name })}
-              iconColor={Colors.brand}
+              icon={lastError ? 'cloud-offline-outline' : 'shirt-outline'}
+              title={lastError ? 'Couldn’t load listings' : 'No listings yet'}
+              subtitle={
+                lastError
+                  ? 'Check your connection and try loading this category again.'
+                  : `New ${category.name.toLocaleLowerCase()} listings will appear here as sellers publish them.`
+              }
+              ctaLabel={lastError ? 'Try again' : 'Browse all'}
+              onCtaPress={
+                lastError
+                  ? refreshListings
+                  : () =>
+                      navigation.navigate('Browse', {
+                        categoryId: 'all',
+                        title: 'Browse',
+                      })
+              }
             />
-          </Reanimated.View>
+          </View>
         )}
-
-        <View style={{ height: 40 }} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  header: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.lg,
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
   },
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
-    alignItems: 'center',
+  content: {
+    paddingBottom: Space.xl,
+  },
+  summary: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.xs,
+    paddingBottom: Space.md,
+    gap: 4,
+  },
+  count: {
+    color: Colors.textPrimary,
+    fontFamily: Typography.family.semibold,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  summaryText: {
+    color: Colors.textSecondary,
+    fontFamily: Typography.family.regular,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  categoryRail: {
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.lg,
+    gap: Space.lg,
+  },
+  categoryAction: {
+    minHeight: 44,
     justifyContent: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  categoryActionText: {
+    color: Colors.textPrimary,
+    fontFamily: Typography.family.semibold,
+    fontSize: 14,
+  },
+  grid: {
+    paddingTop: Space.xs,
+  },
+  loadingGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Space.sm,
+    paddingHorizontal: Space.md,
+  },
+  loadingColumn: {
+    width: '48%',
     marginBottom: Space.md,
   },
-  hugeTitle: {
-    fontSize: 34,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    letterSpacing: -0.5,
-    lineHeight: 42,
+  skeletonLine: {
+    marginTop: Space.sm,
   },
-  headerSubtitle: {
-    fontSize: 14,
-    fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
-    marginTop: Space.xs,
-    letterSpacing: 0.2,
+  skeletonMeta: {
+    marginTop: 6,
   },
-  content: { paddingBottom: 40 },
-  chipsScroll: {
-    paddingHorizontal: Space.md,
-    gap: 8,
-    paddingBottom: Space.md,
-  },
-  chip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  chipText: {
-    color: Colors.textPrimary,
-    fontSize: 13,
-    fontFamily: Typography.family.semibold,
+  emptyWrap: {
+    minHeight: 360,
+    justifyContent: 'center',
   },
 });

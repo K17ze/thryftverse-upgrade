@@ -54,7 +54,7 @@ export function SettingsRow({
           <View style={styles.iconWrap}>
             <Ionicons
               name={icon as any}
-              size={22}
+              size={20}
               color={iconColor ?? (danger ? colors.danger : colors.textPrimary)}
             />
           </View>
@@ -99,13 +99,13 @@ const styles = StyleSheet.create({
   root: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: 12,
     paddingHorizontal: Space.md,
-    minHeight: 54,
+    minHeight: 56,
     gap: Space.sm + 2,
   },
   iconWrap: {
-    width: 26,
+    width: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },

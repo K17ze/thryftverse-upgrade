@@ -134,6 +134,17 @@ export interface Message {
 
 export type ConversationType = 'dm' | 'group';
 
+export interface ChatAgentConfig {
+  instructions: string;
+  model: 'gpt-5.6-sol' | 'gpt-5.6-terra' | 'gpt-5.6-luna';
+  triggerMode: 'mention' | 'command' | 'always';
+  responseLength: 'concise' | 'balanced' | 'detailed';
+  tone: 'focused' | 'warm' | 'expert';
+  reasoningEffort: 'low' | 'medium' | 'high';
+  historyLimit: number;
+  starterPrompts: string[];
+}
+
 export interface ChatBot {
   id: string;
   slug: string;
@@ -157,6 +168,11 @@ export interface ChatBot {
   runtimeMode?: string;
   /** Avatar/icon emoji or ionicon name for custom bots */
   icon?: string;
+  /** Server-owned AI behavior contract. Present for AI agents. */
+  agentConfig?: ChatAgentConfig;
+  /** True only when this environment can execute the selected runtime. */
+  runtimeReady?: boolean;
+  runtimeReadinessReason?: string;
 }
 
 export interface Conversation {

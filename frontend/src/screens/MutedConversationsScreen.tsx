@@ -6,10 +6,9 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { Colors } from '../constants/colors';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
-import { AnimatedPressable } from '../components/AnimatedPressable';
-import { FlagshipScreen, FlagshipHeader, FlagshipEmptyGraphic } from '../components/flagship';
-import type { Conversation } from '../data/mockData';
+import { Space, Type, Typography } from '../theme/designTokens';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { ConversationManagementRow } from '../components/chat/ConversationManagementRow';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -23,14 +22,6 @@ export default function MutedConversationsScreen() {
   const mutedConversations = useMemo(() => {
     return conversations.filter((c) => mutedIds.includes(c.id));
   }, [conversations, mutedIds]);
-
-  const getDisplayTitle = (convo: Conversation): string => {
-    if (convo.type === 'group') return convo.title ?? 'Group chat';
-    const counterpartyId = convo.participantIds?.find(
-      (id) => id !== 'me' && id !== currentUser?.id
-    );
-    return counterpartyId ? 'Thryft user' : 'Thryft user';
-  };
 
   const handleUnmute = (id: string) => {
     toggleMuted(id);
@@ -47,48 +38,28 @@ export default function MutedConversationsScreen() {
       }
     >
       {mutedConversations.length === 0 ? (
-        <View style={{ alignItems: 'center', paddingVertical: Space.xl * 2 }}>
-          <FlagshipEmptyGraphic variant="box" size={120} />
-          <Text style={{ fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginTop: Space.lg }}>
+        <View style={styles.empty}>
+          <Ionicons name="notifications-off-outline" size={25} color={Colors.textMuted} />
+          <Text style={styles.emptyTitle}>
             No muted conversations
           </Text>
-          <Text style={{ fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: Colors.textSecondary, textAlign: 'center', marginTop: Space.xs, paddingHorizontal: Space.lg }}>
-            Muted conversations will appear here. You can unmute them at any time.
+          <Text style={styles.emptyBody}>
+            Chats you mute will appear here with their notification state.
           </Text>
         </View>
       ) : (
         <View style={styles.list}>
           {mutedConversations.map((convo, index) => (
-            <View key={convo.id}>
-              <View style={styles.row}>
-                <View style={[styles.avatarFallback, { backgroundColor: Colors.surfaceAlt }]}>
-                  <Ionicons name="person-outline" size={16} color={Colors.textMuted} />
-                </View>
-                <View style={styles.rowText}>
-                  <Text style={styles.rowTitle} numberOfLines={1}>
-                    {getDisplayTitle(convo)}
-                  </Text>
-                  <Text style={styles.rowPreview} numberOfLines={1}>
-                    {convo.lastMessage}
-                  </Text>
-                </View>
-                <AnimatedPressable
-                  onPress={() => handleUnmute(convo.id)}
-                  scaleValue={0.92}
-                  hapticFeedback="light"
-                  accessibilityLabel={`Unmute ${getDisplayTitle(convo)}`}
-                  accessibilityRole="button"
-                >
-                  <View style={styles.unmuteBtn}>
-                    <Ionicons name="volume-high-outline" size={14} color={Colors.brand} />
-                    <Text style={styles.unmuteText}>Unmute</Text>
-                  </View>
-                </AnimatedPressable>
-              </View>
-              {index < mutedConversations.length - 1 && (
-                <View style={styles.listDivider} />
-              )}
-            </View>
+            <ConversationManagementRow
+              key={convo.id}
+              conversation={convo}
+              currentUserId={currentUser?.id}
+              onOpen={() => navigation.navigate('Chat', { conversationId: convo.id })}
+              actionIcon="notifications-outline"
+              actionLabel="Unmute"
+              onAction={() => handleUnmute(convo.id)}
+              isLast={index === mutedConversations.length - 1}
+            />
           ))}
         </View>
       )}
@@ -98,57 +69,28 @@ export default function MutedConversationsScreen() {
 
 const styles = StyleSheet.create({
   list: {
-    marginHorizontal: Space.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
   },
-  row: {
-    flexDirection: 'row',
+  empty: {
     alignItems: 'center',
-    paddingVertical: Space.sm + 2,
-    paddingHorizontal: Space.md,
-    minHeight: 56,
-    gap: Space.sm + 4,
+    paddingHorizontal: Space.xl,
+    paddingTop: 72,
   },
-  avatarFallback: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  rowText: {
-    flex: 1,
-  },
-  rowTitle: {
+  emptyTitle: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
+    marginTop: Space.md,
   },
-  rowPreview: {
+  emptyBody: {
+    maxWidth: 300,
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: Colors.textMuted,
-    marginTop: 2,
-    letterSpacing: Type.caption.letterSpacing,
-  },
-  unmuteBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: Space.sm + 4,
-    paddingVertical: Space.xs + 2,
-    borderRadius: Radius.md,
-    backgroundColor: `${Colors.brand}15`,
-  },
-  unmuteText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: Colors.brand,
-    letterSpacing: Type.caption.letterSpacing,
-  },
-  listDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
-    marginLeft: 40 + Space.sm + 4 + Space.md,
+    textAlign: 'center',
+    lineHeight: 18,
+    marginTop: Space.xs,
   },
 });

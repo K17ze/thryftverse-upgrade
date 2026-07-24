@@ -91,11 +91,13 @@ export function FlagshipProfileMedia({
             accessibilityLabel="Change profile cover"
             accessibilityRole="button"
           >
-            {isUploadingCover ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Ionicons name="camera" size={18} color="#fff" />
-            )}
+            <View style={styles.editCoverVisible}>
+              {isUploadingCover ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Ionicons name="image-outline" size={17} color="#fff" />
+              )}
+            </View>
           </AnimatedPressable>
         )}
 
@@ -207,7 +209,13 @@ const styles = StyleSheet.create({
     bottom: 14,
     width: 44,
     height: 44,
-    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editCoverVisible: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.55)',

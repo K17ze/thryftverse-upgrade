@@ -8,6 +8,7 @@ import {
   Dimensions,
   Share,
   Pressable,
+  ActivityIndicator,
 } from 'react-native';
 import { EmptyState } from '../components/EmptyState';
 import Reanimated, {
@@ -50,7 +51,7 @@ type NavT = StackNavigationProp<RootStackParamList>;
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-const COVER_HEIGHT = 180;
+const COVER_HEIGHT = 152;
 
 export default function MyProfileScreen() {
   const navigation = useNavigation<NavT>();
@@ -252,11 +253,28 @@ export default function MyProfileScreen() {
   });
 
   const coverStyle = useAnimatedStyle(() => {
-    const overscroll = Math.min(scrollY.value, 0);
-    const translateY = interpolate(overscroll, [-100, 0], [-50, 0], Extrapolation.CLAMP);
-    const scale = interpolate(overscroll, [-100, 0], [1.25, 1], Extrapolation.CLAMP);
+    const translateY = interpolate(
+      scrollY.value,
+      [-100, 0, COVER_HEIGHT],
+      [-50, 0, -COVER_HEIGHT],
+      Extrapolation.CLAMP
+    );
+    const scale = interpolate(scrollY.value, [-100, 0], [1.25, 1], Extrapolation.CLAMP);
     return { transform: [{ translateY }, { scale }] };
   });
+
+  const coverActionStyle = useAnimatedStyle(() => ({
+    transform: [
+      {
+        translateY: interpolate(
+          scrollY.value,
+          [0, COVER_HEIGHT],
+          [0, -COVER_HEIGHT],
+          Extrapolation.CLAMP
+        ),
+      },
+    ],
+  }));
 
   const topUtilityStyle = useAnimatedStyle(() => {
     const opacity = interpolate(scrollY.value, [0, 80], [1, 0], Extrapolation.CLAMP);
@@ -268,8 +286,13 @@ export default function MyProfileScreen() {
   });
 
   const headerOpacityStyle = useAnimatedStyle(() => {
-    const opacity = interpolate(scrollY.value, [COVER_HEIGHT - 60, COVER_HEIGHT - 10], [0, 1], Extrapolation.CLAMP);
-    return { opacity, backgroundColor: Colors.background };
+    const opacity = interpolate(
+      scrollY.value,
+      [32, 72],
+      [0, 1],
+      Extrapolation.CLAMP
+    );
+    return { opacity };
   });
 
   const handleShare = async () => {
@@ -284,13 +307,13 @@ export default function MyProfileScreen() {
   const utilityItems = React.useMemo(
     () => [
       {
-        icon: 'receipt-outline' as const,
+        icon: 'bag-handle-outline' as const,
         label: 'Orders',
         onPress: () => { haptic.light(); navigation.navigate('MyOrders'); },
         accessibilityLabel: 'View your orders',
       },
       {
-        icon: 'shirt-outline' as const,
+        icon: 'bookmark-outline' as const,
         label: 'Closet',
         value: `${savedCount + wishlistCount} items`,
         onPress: () => { haptic.light(); navigation.navigate('Closet'); },
@@ -303,13 +326,13 @@ export default function MyProfileScreen() {
         accessibilityLabel: 'View your wallet',
       },
       {
-        icon: 'hammer-outline' as const,
+        icon: 'timer-outline' as const,
         label: 'Auctions',
         onPress: () => { haptic.light(); navigation.navigate('AuctionHome'); },
         accessibilityLabel: 'Browse auctions',
       },
       {
-        icon: 'pie-chart-outline' as const,
+        icon: 'layers-outline' as const,
         label: 'Co-own',
         value: coOwnHoldings.length > 0 ? `${coOwnHoldings.length} assets` : undefined,
         onPress: () => { haptic.light(); navigation.navigate('CoOwnHub'); },
@@ -336,20 +359,16 @@ export default function MyProfileScreen() {
           coverUri={displayCover}
           coverVideoUri={isVideoUri(displayCover) ? displayCover : undefined}
           isSelf
-          onEditCover={pickCover}
           coverOnly
           coverHeight={COVER_HEIGHT}
           isUploadingCover={coverState.status === 'uploading'}
           isUploadingAvatar={avatarState.status === 'uploading'}
-          coverError={coverState.status === 'failed' ? coverState.error : null}
-          onRetryCover={retryCover}
-          onRevertCover={revertCover}
           style={{ width: '100%' }}
         />
       </Reanimated.View>
 
       {/* ── 2. FLOATING PERSONALISATION AND SETTINGS ── */}
-      <View pointerEvents="box-none" style={styles.coverActionLayer}>
+      <Reanimated.View pointerEvents="box-none" style={[styles.coverActionLayer, coverActionStyle]}>
         <Reanimated.View style={[styles.topUtilityRow, { top: Math.max(insets.top + 6, 14) }, topUtilityStyle]}>
           <AnimatedPressable
             style={styles.topUtilityIconBtn}
@@ -359,7 +378,9 @@ export default function MyProfileScreen() {
             accessibilityRole="button"
             accessibilityHint="Opens your style and experience preferences"
           >
-            <Ionicons name="apps-outline" size={18} color={Colors.textInverse} />
+            <View style={styles.topUtilityVisible}>
+              <Ionicons name="options-outline" size={19} color={Colors.textInverse} />
+            </View>
           </AnimatedPressable>
 
           <AnimatedPressable
@@ -370,10 +391,67 @@ export default function MyProfileScreen() {
             accessibilityRole="button"
             accessibilityHint="Opens account and app settings"
           >
-            <Ionicons name="settings-outline" size={18} color={Colors.textInverse} />
+            <View style={styles.topUtilityVisible}>
+              <Ionicons name="settings-outline" size={19} color={Colors.textInverse} />
+            </View>
           </AnimatedPressable>
         </Reanimated.View>
-      </View>
+
+        {coverState.status === 'failed' ? (
+          <View style={styles.coverFailure}>
+            <View style={styles.coverFailureCopy}>
+              <Ionicons name="alert-circle-outline" size={17} color={Colors.textInverse} />
+              <Text style={styles.coverFailureText} numberOfLines={1}>
+                {coverState.error || 'Cover upload failed'}
+              </Text>
+            </View>
+            <AnimatedPressable
+              style={styles.coverFailureAction}
+              onPress={retryCover}
+              activeOpacity={0.75}
+              scaleValue={0.98}
+              accessibilityRole="button"
+              accessibilityLabel="Retry cover upload"
+            >
+              <Text style={styles.coverFailureActionText}>Retry</Text>
+            </AnimatedPressable>
+            <AnimatedPressable
+              style={styles.coverFailureAction}
+              onPress={revertCover}
+              activeOpacity={0.75}
+              scaleValue={0.98}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel cover change"
+            >
+              <Text style={styles.coverFailureActionText}>Cancel</Text>
+            </AnimatedPressable>
+          </View>
+        ) : (
+          <AnimatedPressable
+            style={styles.coverEditTarget}
+            onPress={pickCover}
+            activeOpacity={0.8}
+            scaleValue={0.97}
+            hapticFeedback="light"
+            disabled={coverState.status === 'uploading'}
+            accessibilityRole="button"
+            accessibilityLabel={
+              coverState.status === 'uploading'
+                ? 'Uploading profile cover'
+                : 'Change profile cover'
+            }
+            accessibilityState={{ disabled: coverState.status === 'uploading', busy: coverState.status === 'uploading' }}
+          >
+            <View style={styles.coverEditVisible}>
+              {coverState.status === 'uploading' ? (
+                <ActivityIndicator size="small" color={Colors.textInverse} />
+              ) : (
+                <Ionicons name="image-outline" size={17} color={Colors.textInverse} />
+              )}
+            </View>
+          </AnimatedPressable>
+        )}
+      </Reanimated.View>
 
       {/* ── COLLAPSED SCROLL HEADER ── */}
       <Reanimated.View style={[styles.floatingHeader, { paddingTop: insets.top }, headerOpacityStyle]} pointerEvents="none">
@@ -398,6 +476,8 @@ export default function MyProfileScreen() {
             bio={user.bio}
             location={user.location}
             memberSince={memberSince}
+            listingCount={allOwnedListings.length}
+            lookCount={myLooks.length}
             sellerTrust={sellerTrust}
             emailVerified={user.emailVerified}
             onEditAvatar={pickAvatar}
@@ -447,11 +527,11 @@ export default function MyProfileScreen() {
           <View style={{ backgroundColor: Colors.background, paddingBottom: 100, paddingTop: Space.md }}>
             {allOwnedListings.length === 0 ? (
               <View style={styles.listingsEmpty}>
-                <View style={styles.listingsEmptyIcon}>
-                  <Ionicons name="add" size={28} color={Colors.brand} />
-                </View>
+                <Ionicons name="bag-add-outline" size={27} color={Colors.textSecondary} />
                 <Text style={styles.listingsEmptyTitle}>List your first item</Text>
-                <Text style={styles.listingsEmptySubtitle}>Start selling</Text>
+                <Text style={styles.listingsEmptyBody}>
+                  Photograph an item and publish it when you are ready.
+                </Text>
                 <AnimatedPressable
                   style={styles.listingsEmptyCta}
                   onPress={() => navigation.navigate('MainTabs')}
@@ -528,6 +608,7 @@ export default function MyProfileScreen() {
               </View>
             ) : myLooks.length === 0 ? (
               <EmptyState
+                density="compact"
                 icon="sparkles-outline"
                 title="No Looks yet"
                 subtitle="Create your first Look to showcase your style."
@@ -733,10 +814,76 @@ const styles = StyleSheet.create({
   topUtilityIconBtn: {
     width: 44,
     height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.4)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  topUtilityVisible: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(0,0,0,0.42)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  coverEditTarget: {
+    position: 'absolute',
+    right: 14,
+    bottom: 8,
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  coverEditVisible: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.24)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  coverFailure: {
+    position: 'absolute',
+    left: 14,
+    right: 14,
+    bottom: 8,
+    minHeight: 44,
+    paddingLeft: 12,
+    paddingRight: 5,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.72)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  coverFailureCopy: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  coverFailureText: {
+    flexShrink: 1,
+    color: Colors.textInverse,
+    fontFamily: Typography.family.semibold,
+    fontSize: 12,
+  },
+  coverFailureAction: {
+    minWidth: 52,
+    minHeight: 34,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  coverFailureActionText: {
+    color: Colors.textInverse,
+    fontFamily: Typography.family.semibold,
+    fontSize: 12,
   },
 
   // Collapsed header
@@ -745,10 +892,12 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    zIndex: 10,
+    zIndex: 50,
+    elevation: 4,
     flexDirection: 'row',
     alignItems: 'center',
     paddingBottom: 16,
+    backgroundColor: Colors.background,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.border,
   },
@@ -834,31 +983,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     gap: Space.sm,
   },
-  listingsEmptyIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: Colors.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
   listingsEmptyTitle: {
     fontSize: 15,
     fontFamily: Typography.family.semibold,
     color: Colors.textPrimary,
   },
-  listingsEmptySubtitle: {
-    fontSize: 13,
-    fontFamily: Typography.family.regular,
+  listingsEmptyBody: {
+    maxWidth: 280,
     color: Colors.textMuted,
+    fontFamily: Typography.family.regular,
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: 'center',
   },
   listingsEmptyCta: {
-    marginTop: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    marginTop: 6,
+    minHeight: 42,
+    paddingHorizontal: 18,
+    justifyContent: 'center',
     backgroundColor: Colors.brand,
-    borderRadius: 20,
+    borderRadius: 10,
   },
   listingsEmptyCtaText: {
     fontSize: 14,

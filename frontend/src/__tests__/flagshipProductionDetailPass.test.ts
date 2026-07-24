@@ -50,10 +50,10 @@ describe("neutral flagship production detail pass", () => {
     );
   });
 
-  it("does not simulate a visual-search scan when the service is unavailable", () => {
+  it("labels filter-based visual-search results without simulating image matching", () => {
     const visualSearch = readSource("screens/VisualSearchScreen.tsx");
-    // Honest rolling-out note instead of a fake scan/analysis simulation.
-    expect(visualSearch).toContain("AI image matching is coming soon");
+    expect(visualSearch).toContain("Showing matches from your category, brand, and description filters.");
+    expect(visualSearch).not.toContain("coming soon");
     expect(visualSearch).not.toContain("setInterval");
     expect(visualSearch).not.toContain("Analysing image");
     // The endpoint is called via the listingsApi client, not directly via fetchJson in the screen.

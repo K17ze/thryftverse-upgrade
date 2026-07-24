@@ -224,9 +224,11 @@ describe('UI-11C auth + profile + settings flagship account experience', () => {
     expect(src).toContain('SettingsSection');
   });
 
-  // 14. BlockedUsersScreen uses FlagshipEmptyGraphic
-  it('BlockedUsersScreen uses FlagshipEmptyGraphic', () => {
+  // 14. BlockedUsersScreen keeps the empty state compact and screen-reader clear
+  it('BlockedUsersScreen uses a compact truthful empty state', () => {
     const src = readSrc('screens/BlockedUsersScreen.tsx');
-    expect(src).toContain('FlagshipEmptyGraphic');
+    expect(src).toContain('No blocked accounts');
+    expect(src).toContain('shield-checkmark-outline');
+    expect(src).not.toContain('size={160}');
   });
 });

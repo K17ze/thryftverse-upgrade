@@ -41,6 +41,7 @@ function checkEnv() {
 
   const required = [
     'NODE_ENV',
+    'APP_URL',
     'EXPO_PUBLIC_API_BASE_URL',
     'POSTGRES_USER',
     'POSTGRES_PASSWORD',
@@ -50,6 +51,7 @@ function checkEnv() {
     'S3_BUCKET',
     'S3_REGION',
     'S3_PUBLIC_ENDPOINT',
+    'S3_CDN_BASE_URL',
     'KEY_SERVICE_MASTER_KEY_B64',
     'KEY_SERVICE_CLIENT_TOKEN',
     'KEY_SERVICE_ADMIN_TOKEN',
@@ -61,9 +63,13 @@ function checkEnv() {
     'GOOGLE_OAUTH_CLIENT_IDS',
     'APPLE_OAUTH_AUDIENCE',
     'KYC_DEFAULT_VENDOR',
-    'KYC_VERIFICATION_BASE_URL',
+    'KYC_RETURN_URL',
+    'KYC_WEBHOOK_SECRET',
+    'ALERTING_WEBHOOK_URLS',
     'SENTRY_DSN',
     'ONEZE_ATTESTATION_SIGNING_SECRET',
+    'ONEZE_FX_PROVIDER_URL',
+    'ONEZE_FX_PROVIDER_API_KEY',
   ];
 
   for (const key of required) {
@@ -86,6 +92,8 @@ function checkEnv() {
     AUTH_ACCESS_TOKEN_SECRET: 'dev-only-access-secret-change-me',
     AUTH_REFRESH_TOKEN_SECRET: 'dev-only-refresh-secret-change-me',
     ONEZE_ATTESTATION_SIGNING_SECRET: 'dev-only-oneze-attestation-signing-secret',
+    ONEZE_FX_PROVIDER_API_KEY: 'replace_with_live_fx_provider_key',
+    KEY_SERVICE_MASTER_KEY_B64: 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=',
   };
 
   for (const [key, banned] of Object.entries(disallowedDefaults)) {
@@ -102,6 +110,15 @@ function checkEnv() {
     errors.push('EXPO_PUBLIC_ENABLE_RUNTIME_MOCKS must be false in production.');
   }
 
+  if ((process.env.ONEZE_FX_SYNC_ENABLED ?? '').trim().toLowerCase() !== 'true') {
+    errors.push('ONEZE_FX_SYNC_ENABLED must be true in production.');
+  }
+
+  const fxProviderUrl = (process.env.ONEZE_FX_PROVIDER_URL ?? '').trim();
+  if (fxProviderUrl && !fxProviderUrl.startsWith('https://')) {
+    errors.push('ONEZE_FX_PROVIDER_URL must use https:// in production.');
+  }
+
   const publicApiBase = (process.env.EXPO_PUBLIC_API_BASE_URL ?? '').trim();
   if (publicApiBase && !publicApiBase.startsWith('https://')) {
     errors.push('EXPO_PUBLIC_API_BASE_URL must use https:// in production.');
@@ -113,8 +130,8 @@ function checkEnv() {
   }
 
   const kycVendor = (process.env.KYC_DEFAULT_VENDOR ?? '').toLowerCase();
-  if (kycVendor.includes('sandbox')) {
-    errors.push('KYC_DEFAULT_VENDOR cannot be a sandbox vendor in production.');
+  if (kycVendor !== 'stripe_identity') {
+    errors.push('KYC_DEFAULT_VENDOR must be stripe_identity until another signed provider adapter is installed.');
   }
 
   const hasStripe = !isMissing(process.env.STRIPE_SECRET_KEY) && !isMissing(process.env.STRIPE_WEBHOOK_SECRET);

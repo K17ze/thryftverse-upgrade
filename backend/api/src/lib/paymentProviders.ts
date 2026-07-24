@@ -650,7 +650,7 @@ function verifyHmacSignature(
 }
 
 function verifyStripeSignature(headers: Record<string, unknown>, rawBody: string): Stripe.Event | null {
-  if (!config.stripeWebhookSecret) {
+  if (!config.stripeWebhookSecret || !config.stripeSecretKey) {
     return null;
   }
 
@@ -659,7 +659,7 @@ function verifyStripeSignature(headers: Record<string, unknown>, rawBody: string
     return null;
   }
 
-  const stripe = new Stripe(config.stripeSecretKey ?? 'sk_test_placeholder', {
+  const stripe = new Stripe(config.stripeSecretKey, {
     apiVersion: '2024-06-20',
   });
 

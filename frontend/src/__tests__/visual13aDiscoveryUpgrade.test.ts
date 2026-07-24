@@ -67,8 +67,9 @@ describe('VISUAL-13A Discovery Visual Upgrade', () => {
     // Save-search with alerts (truthful)
     expect(visual).toContain('Save search');
     expect(visual).toContain('Search saved with alerts enabled');
-    // Honest integrated note (not a dead-end apology card)
-    expect(visual).toContain('AI image matching is coming soon');
+    // Honest integrated note describes the matching that actually runs.
+    expect(visual).toContain('Showing matches from your category, brand, and description filters.');
+    expect(visual).not.toContain('coming soon');
     // State coverage: loading skeleton, empty recovery, error retry
     expect(visual).toContain('PremiumSkeletonTile');
     expect(visual).toContain('No items match your photo filters');
@@ -91,7 +92,9 @@ describe('VISUAL-13A Discovery Visual Upgrade', () => {
   it('6. CategoryDetailScreen uses PinterestMasonryGrid', () => {
     const detail = readFile('screens/CategoryDetailScreen.tsx');
     expect(detail).toContain('PinterestMasonryGrid');
-    expect(detail).toContain('DiscoverySectionHeader');
+    expect(detail).toContain('ScreenHeader');
+    expect(detail).toContain('CATEGORIES');
+    expect(detail).not.toContain('MOCK_CATEGORIES');
   });
 
   it('7. ProductCardV2 uses a restrained flagship media radius without elevation', () => {

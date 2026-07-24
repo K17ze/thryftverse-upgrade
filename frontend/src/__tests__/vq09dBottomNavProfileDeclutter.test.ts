@@ -196,10 +196,10 @@ describe('VQ-09D: Bottom-bar visual system', () => {
   it('Tab icons use outline inactive / filled active pattern', () => {
     expect(tabNavSrc).toContain('home-outline');
     expect(tabNavSrc).toContain("'home'");
-    expect(tabNavSrc).toContain('compass-outline');
-    expect(tabNavSrc).toContain("'compass'");
-    expect(tabNavSrc).toContain('chatbubbles-outline');
-    expect(tabNavSrc).toContain("'chatbubbles'");
+    expect(tabNavSrc).toContain('search-outline');
+    expect(tabNavSrc).toContain("'search'");
+    expect(tabNavSrc).toContain('paper-plane-outline');
+    expect(tabNavSrc).toContain("'paper-plane'");
   });
 });
 

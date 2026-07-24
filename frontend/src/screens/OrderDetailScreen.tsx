@@ -981,6 +981,7 @@ export default function OrderDetailScreen() {
           conversationId: `${counterparty.id}_${backendOrder?.listingId}`,
           focusQuery: counterparty.username,
           partnerUserId: counterparty.id,
+          itemId: backendOrder?.listingId,
         }),
       });
     }
@@ -1235,6 +1236,7 @@ export default function OrderDetailScreen() {
                       conversationId: `${counterparty.id}_${backendOrder.listingId}`,
                       focusQuery: counterparty.username,
                       partnerUserId: counterparty.id,
+                      itemId: backendOrder.listingId,
                     });
                   }}
                   accessibilityRole="button"

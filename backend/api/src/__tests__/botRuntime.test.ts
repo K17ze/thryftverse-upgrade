@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { matchBotCommand } from '../botRuntime/index.js';
+import { matchAgentInvocation, matchBotCommand } from '../botRuntime/index.js';
+import { DEFAULT_AGENT_CONFIG } from '../botRuntime/agentConfig.js';
 import { resolveBotHandler } from '../botRuntime/handlers.js';
 import {
   assistantHandler,
@@ -30,6 +31,13 @@ function makeCtx(overrides: Partial<BotRuntimeContext> = {}): BotRuntimeContext 
     command: '/test',
     args: [],
     messageText: '/test',
+    agentConfig: null,
+    conversationHistory: [],
+    runtimeData: {
+      listings: [],
+      recentMessagesAnalyzed: 0,
+      messagesRequiringReview: 0,
+    },
     ...overrides,
   };
 }
@@ -74,6 +82,38 @@ test('matchBotCommand is case-insensitive on match but preserves args', () => {
   assert.deepEqual(m!.args, ['Help']);
 });
 
+test('matchAgentInvocation matches a configured agent mention', () => {
+  const match = matchAgentInvocation('@test-bot compare these options', {
+    botName: 'Test Bot',
+    botSlug: 'test-bot',
+    commandHint: '/test',
+    agentConfig: { ...DEFAULT_AGENT_CONFIG, triggerMode: 'mention' },
+  });
+  assert.ok(match);
+  assert.equal(match!.command, '@test-bot');
+  assert.deepEqual(match!.args, ['compare', 'these', 'options']);
+});
+
+test('matchAgentInvocation keeps mention agents quiet without a mention', () => {
+  const match = matchAgentInvocation('compare these options', {
+    botName: 'Test Bot',
+    botSlug: 'test-bot',
+    commandHint: '/test',
+    agentConfig: { ...DEFAULT_AGENT_CONFIG, triggerMode: 'mention' },
+  });
+  assert.equal(match, null);
+});
+
+test('matchAgentInvocation allows explicit every-message participation', () => {
+  const match = matchAgentInvocation('compare these options', {
+    botName: 'Test Bot',
+    botSlug: 'test-bot',
+    commandHint: '/test',
+    agentConfig: { ...DEFAULT_AGENT_CONFIG, triggerMode: 'always' },
+  });
+  assert.deepEqual(match, { command: 'message', args: [] });
+});
+
 // ── resolveBotHandler ───────────────────────────────────────────────
 
 test('resolveBotHandler returns handler for known categories', () => {
@@ -101,13 +141,13 @@ test('assistantHandler returns help for empty args', () => {
 test('assistantHandler returns status for status arg', () => {
   const result = assistantHandler(makeCtx({ args: ['status'] }));
   assert.equal(result.shouldReply, true);
-  assert.match(result.text, /online/);
+  assert.match(result.text, /connected/);
 });
 
 test('assistantHandler returns generic response for unknown arg', () => {
   const result = assistantHandler(makeCtx({ args: ['unknown'] }));
   assert.equal(result.shouldReply, true);
-  assert.match(result.text, /here to help/);
+  assert.match(result.text, /not recognised/);
 });
 
 // ── moderationHandler ───────────────────────────────────────────────
@@ -127,9 +167,18 @@ test('moderationHandler returns group rules', () => {
 // ── commerceHandler ─────────────────────────────────────────────────
 
 test('commerceHandler returns search response', () => {
-  const result = commerceHandler(makeCtx({ botCategory: 'commerce', args: ['search', 'jacket'] }));
+  const result = commerceHandler(makeCtx({
+    botCategory: 'commerce',
+    args: ['search', 'jacket'],
+    runtimeData: {
+      listings: [{ id: 'listing_1', title: 'Workwear jacket', priceGbp: 48, brand: 'Carhartt' }],
+      recentMessagesAnalyzed: 0,
+      messagesRequiringReview: 0,
+    },
+  }));
   assert.equal(result.shouldReply, true);
-  assert.match(result.text, /Searching for "jacket"/);
+  assert.match(result.text, /Matches for “jacket”/);
+  assert.match(result.text, /Workwear jacket/);
 });
 
 test('commerceHandler returns unknown command for invalid arg', () => {
@@ -141,9 +190,18 @@ test('commerceHandler returns unknown command for invalid arg', () => {
 // ── safetyHandler ───────────────────────────────────────────────────
 
 test('safetyHandler returns check response', () => {
-  const result = safetyHandler(makeCtx({ botCategory: 'safety', args: ['check'] }));
+  const result = safetyHandler(makeCtx({
+    botCategory: 'safety',
+    args: ['check'],
+    runtimeData: {
+      listings: [],
+      recentMessagesAnalyzed: 12,
+      messagesRequiringReview: 1,
+    },
+  }));
   assert.equal(result.shouldReply, true);
-  assert.match(result.text, /Safety scan complete/);
+  assert.match(result.text, /Reviewed 12 recent messages/);
+  assert.match(result.text, /checked by a moderator/);
 });
 
 // ── automationHandler ───────────────────────────────────────────────
@@ -151,27 +209,35 @@ test('safetyHandler returns check response', () => {
 test('automationHandler returns status response', () => {
   const result = automationHandler(makeCtx({ botCategory: 'automation', args: ['status'] }));
   assert.equal(result.shouldReply, true);
-  assert.match(result.text, /online/);
+  assert.match(result.text, /Connected/);
 });
 
 // ── stylingHandler ──────────────────────────────────────────────────
 
 test('stylingHandler returns outfit response', () => {
-  const result = stylingHandler(makeCtx({ botCategory: 'styling', args: ['outfit'] }));
+  const result = stylingHandler(makeCtx({
+    botCategory: 'styling',
+    args: ['outfit'],
+    runtimeData: {
+      listings: [{ id: 'listing_1', title: 'Pleated trousers', priceGbp: 32, brand: null }],
+      recentMessagesAnalyzed: 0,
+      messagesRequiringReview: 0,
+    },
+  }));
   assert.equal(result.shouldReply, true);
-  assert.match(result.text, /Outfit suggestion/);
+  assert.match(result.text, /marketplace outfit/);
+  assert.match(result.text, /Pleated trousers/);
 });
 
 test('stylingHandler returns palette response', () => {
   const result = stylingHandler(makeCtx({ botCategory: 'styling', args: ['palette'] }));
   assert.equal(result.shouldReply, true);
-  assert.match(result.text, /Colour palette/);
+  assert.match(result.text, /require colour data/);
 });
 
 // ── customBotHandler ──────────────────────────────────────────────────
 
-test('customBotHandler echoes message text', () => {
+test('customBotHandler never publishes its placeholder response', () => {
   const result = customBotHandler(makeCtx({ botCategory: 'custom', botType: 'custom', messageText: '/mybot hello' }));
-  assert.equal(result.shouldReply, true);
-  assert.match(result.text, /custom bot response placeholder/);
+  assert.equal(result.shouldReply, false);
 });
