@@ -193,6 +193,11 @@ export interface CommerceMediaStageProps {
   onZoomStart?: () => void;
   showSaveControl?: boolean;
   showFavControl?: boolean;
+  /** When false, the built-in Back/Share/Save/Fav control cluster is
+   * suppressed. The screen overlays CommerceDetailMediaRail to enforce
+   * the max-3-visible-controls rule with overflow. Defaults to true for
+   * backward compatibility. */
+  showDefaultControls?: boolean;
   heightFraction?: number;
   bigHeartOpacity?: SharedValue<number>;
   bigHeartScale?: SharedValue<number>;
@@ -217,6 +222,7 @@ export function CommerceMediaStage({
   onZoomStart,
   showSaveControl = true,
   showFavControl = true,
+  showDefaultControls = true,
   heightFraction = 0.62,
   bigHeartOpacity,
   bigHeartScale,
@@ -316,54 +322,56 @@ export function CommerceMediaStage({
         </View>
       )}
 
-      <View style={[styles.floatingHeader, { paddingTop: Math.max(topInset, Space.sm) }]}>
-        <AnimatedPressable
-          style={styles.controlBtn}
-          onPress={onBack}
-          {...PressPresets.iconButton}
-          accessibilityLabel="Go back"
-        >
-          <Ionicons name="arrow-back" size={24} color="#fff" />
-        </AnimatedPressable>
-
-        <View style={styles.headerRight}>
+      {showDefaultControls && (
+        <View style={[styles.floatingHeader, { paddingTop: Math.max(topInset, Space.sm) }]}>
           <AnimatedPressable
             style={styles.controlBtn}
-            onPress={onShare}
+            onPress={onBack}
             {...PressPresets.iconButton}
-            accessibilityLabel="Share"
+            accessibilityLabel="Go back"
           >
-            <Ionicons name="share-outline" size={24} color="#fff" />
+            <Ionicons name="arrow-back" size={24} color="#fff" />
           </AnimatedPressable>
 
-          {showSaveControl && onSave && (
+          <View style={styles.headerRight}>
             <AnimatedPressable
               style={styles.controlBtn}
-              onPress={onSave}
+              onPress={onShare}
               {...PressPresets.iconButton}
-              accessibilityLabel={isSaved ? 'Saved to collection' : 'Save to collection'}
+              accessibilityLabel="Share"
             >
-              <Ionicons
-                name={isSaved ? 'bookmark' : 'bookmark-outline'}
-                size={24}
-                color={isSaved ? Colors.brand : '#fff'}
-              />
+              <Ionicons name="share-outline" size={24} color="#fff" />
             </AnimatedPressable>
-          )}
 
-          {showFavControl && onToggleFav && (
-            <View style={styles.controlBtn}>
-              <AnimatedHeart
-                isActive={isFav}
-                onToggle={onToggleFav}
-                size={24}
-                activeColor={Colors.danger}
-                inactiveColor="#fff"
-              />
-            </View>
-          )}
+            {showSaveControl && onSave && (
+              <AnimatedPressable
+                style={styles.controlBtn}
+                onPress={onSave}
+                {...PressPresets.iconButton}
+                accessibilityLabel={isSaved ? 'Saved to collection' : 'Save to collection'}
+              >
+                <Ionicons
+                  name={isSaved ? 'bookmark' : 'bookmark-outline'}
+                  size={24}
+                  color={isSaved ? Colors.brand : '#fff'}
+                />
+              </AnimatedPressable>
+            )}
+
+            {showFavControl && onToggleFav && (
+              <View style={styles.controlBtn}>
+                <AnimatedHeart
+                  isActive={isFav}
+                  onToggle={onToggleFav}
+                  size={24}
+                  activeColor={Colors.danger}
+                  inactiveColor="#fff"
+                />
+              </View>
+            )}
+          </View>
         </View>
-      </View>
+      )}
 
       {overlayTopContent && (
         <View style={styles.overlayTopZone}>
