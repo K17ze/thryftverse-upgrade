@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, useWindowDimensions, Modal } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,8 +18,6 @@ import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { AppButton } from '../components/ui/AppButton';
-import { AnimatedPressable } from '../components/AnimatedPressable';
 import { Space, Radius, Type, Typography, DockConstants } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { fetchCoOwnAssetById, fetchCoOwnOrderBook, fetchCoOwnHoldings } from '../services/marketApi';
@@ -31,6 +29,18 @@ import {
   CommerceMediaStage,
   CategoryEvidence,
 } from '../components/commerce';
+import {
+  CommerceDetailHeader,
+  CommerceDetailIdentity,
+  CommerceDetailTransactionSurface,
+  CommerceDetailMetricRow,
+  CommerceDetailDisclosureRow,
+  CommerceDetailSection,
+  CommerceDetailSellerRow,
+  CommerceDetailUnavailableInline,
+  CommerceDetailStateDock,
+  CommerceDetailMediaRail,
+} from '../components/commerce/detail';
 import { ProductFamilyBadge, RecommendationRail, FullscreenMediaViewer } from '../components/product';
 import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
 import { ShareSheet } from '../components/ShareSheet';
@@ -46,28 +56,24 @@ import {
 import type { RecommendationLook } from '../platform/product';
 import {
   CoOwnOwnershipPanel,
-  CoOwnIssuerCard,
   CoOwnTrustPanel,
   CoOwnRiskDisclosure,
-  CoOwnStickyActionDock,
   CoOwnAssetDetailSkeleton,
   CoOwnStateCanvas,
   CoOwnPriceChart,
-  CoOwnWatchButton,
   CoOwnFirstTradeGuide,
-  CoOwnMarketStatusStrip,
-  CoOwnValueStrip,
   CoOwnAssetDossier,
   CoOwnRightsSheet,
   CoOwnOrderBook,
   CoOwnCandleChart,
   CoOwnOfflineBanner,
   CoOwnReconciliationBanner,
+  CoOwnSupplySheet,
+  CoOwnOverflowSheet,
   CANONICAL_RIGHTS_LABELS,
   type CoOwnRightsRow,
   type CoOwnBookLevel,
   type CoOwnCandleRange,
-  type CoOwnCandle,
 } from '../components/coown';
 import { useConnectivity } from '../hooks/useConnectivity';
 
@@ -104,7 +110,6 @@ export default function AssetDetailScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const isCompact = screenWidth < 390;
   const isVeryCompact = screenWidth < 340;
-  // Phase 6: tablet two-column layout
   const isTablet = screenWidth >= 768;
   const currentUser = useStore((state) => state.currentUser);
   const upsertConversation = useStore((state) => state.upsertConversation);
@@ -126,10 +131,10 @@ export default function AssetDetailScreen() {
   const [guideVisible, setGuideVisible] = React.useState(false);
   const [pendingTradeSide, setPendingTradeSide] = React.useState<'buy' | 'sell' | null>(null);
   const [rightsSheetVisible, setRightsSheetVisible] = React.useState(false);
-  // Phase 2: candle chart state
+  const [overflowVisible, setOverflowVisible] = React.useState(false);
+  const [supplySheetVisible, setSupplySheetVisible] = React.useState(false);
   const [candleRange, setCandleRange] = React.useState<CoOwnCandleRange>('1W');
   const [showVolume, setShowVolume] = React.useState(false);
-  // Market-data staleness tracking (spec 07 §1.4)
   const [dataLoadedAt, setDataLoadedAt] = React.useState<number | null>(null);
 
   const coOwnCompliance = useStore((s) => s.coOwnCompliance);
@@ -180,8 +185,6 @@ export default function AssetDetailScreen() {
   // ── Hooks must run before conditional returns (Rules of Hooks) ──
 
   // Market-data staleness computation (spec 07 §1.4)
-  // Uses asset.updatedAt as the data source timestamp; falls back to
-  // the load time when updatedAt is absent. Stale threshold: 24h.
   const STALENESS_THRESHOLD_SECONDS = 24 * 60 * 60;
   const { dataStale, dataStaleAgeLabel } = React.useMemo(() => {
     if (!asset || !dataLoadedAt) return { dataStale: false, dataStaleAgeLabel: undefined };
@@ -214,12 +217,6 @@ export default function AssetDetailScreen() {
   );
 
   const { data: issuerTrust } = useSellerTrust(asset?.issuerId);
-
-  const headerStyle = useAnimatedStyle(() => {
-    const threshold = 200;
-    const opacity = interpolate(scrollY.value, [threshold - 60, threshold], [0, 1], Extrapolation.CLAMP);
-    return { opacity };
-  });
 
   if (isLoading) {
     return (
@@ -276,20 +273,12 @@ export default function AssetDetailScreen() {
 
   const familyStateAccent = !asset.isOpen ? 'Closed' : availableUnits <= 0 ? 'Unavailable' : 'Open';
 
-  // 1ZE is the canonical settlement unit. GBP/TVUSD are secondary references.
-  const settlementLabel = '1ZE';
-
   // Compute scroll bottom padding from dock geometry + safe area.
-  // Compact mode stacks price above actions (taller dock); very compact also
-  // stacks the holder Sell / Buy more actions vertically.
   const isDualActionDock = isHolder && asset.isOpen && availableUnits > 0;
-  const isTradeDock = asset.isOpen && (availableUnits > 0 || isHolder) && !isIssuer;
-  const dockHeight = isTradeDock && isCompact
-    ? (isVeryCompact && isDualActionDock ? DockConstants.stackedActionHeight + 32 : DockConstants.stackedActionHeight)
-    : isDualActionDock
-      ? DockConstants.dualActionHeight
-      : DockConstants.singleActionHeight;
-  const scrollBottomPadding = Math.max(insets.bottom, Space.md) + dockHeight;
+  const dockHeight = isDualActionDock
+    ? DockConstants.dualActionHeight
+    : DockConstants.singleActionHeight;
+  const scrollBottomPadding = Math.max(insets.bottom, Space.md) + dockHeight + Space.md;
 
   const handleTradePress = (side: 'buy' | 'sell') => {
     if (!coOwnCompliance.educationCompleted) {
@@ -300,7 +289,7 @@ export default function AssetDetailScreen() {
     navigation.navigate('Trade', { assetId: asset.id, side });
   };
 
-  // Order book level tap → pre-fill the trade ticket with the selected price (spec 04 §A3)
+  // Order book level tap → pre-fill the trade ticket with the selected price
   const handleSelectOrderBookLevel = (bookSide: 'bid' | 'ask', price: number) => {
     haptics.tap();
     const tradeSide: 'buy' | 'sell' = bookSide === 'ask' ? 'buy' : 'sell';
@@ -324,36 +313,30 @@ export default function AssetDetailScreen() {
     setPendingTradeSide(null);
   };
 
+  // Rights rows — fail closed to "To be confirmed" when backend doesn't expose.
+  const rightsRows = CANONICAL_RIGHTS_LABELS.map((label) => {
+    const row = (asset.rightsRows as CoOwnRightsRow[] | undefined)?.find((r) => r.label === label);
+    return row ?? { label, answer: 'To be confirmed', isTbc: true };
+  });
+  const hasIncompleteRights = rightsRows.some((r) => r.isTbc);
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
 
-      {/* Collapsed header — appears on scroll */}
-      <Reanimated.View style={[styles.collapsedHeader, { paddingTop: Math.max(insets.top, Space.sm), backgroundColor: colors.background }, headerStyle]}>
-        <View style={styles.collapsedRow}>
-          <AnimatedPressable
-            style={[styles.collapsedBackBtn, { backgroundColor: colors.surfaceAlt }]}
-            onPress={() => navigation.goBack()}
-            accessibilityLabel="Go back"
-            accessibilityRole="button"
-            scaleValue={0.92}
-            hapticFeedback="light"
-          >
-            <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
-          </AnimatedPressable>
-          <Text style={[styles.collapsedTitle, { color: colors.textPrimary }]} numberOfLines={1}>{asset.title}</Text>
-          <AnimatedPressable
-            style={[styles.collapsedBackBtn, { backgroundColor: colors.surfaceAlt }]}
-            onPress={() => navigation.navigate('CoOwnOrderHistory')}
-            accessibilityLabel="View order history"
-            accessibilityRole="button"
-            scaleValue={0.92}
-            hapticFeedback="light"
-          >
-            <Ionicons name="time-outline" size={20} color={colors.textPrimary} />
-          </AnimatedPressable>
-        </View>
-      </Reanimated.View>
+      {/* ── Collapsed scrolling header ──
+          Quiet glyph hit targets, no large rounded-square containers.
+          Spec 02 shape system: separate hit area from visible shape. */}
+      <CommerceDetailHeader
+        scrollY={scrollY}
+        title={asset.title}
+        onBack={() => navigation.goBack()}
+        rightAction={{
+          icon: 'time-outline',
+          label: 'View order history',
+          onPress: () => navigation.navigate('CoOwnOrderHistory'),
+        }}
+      />
 
       <CoOwnOfflineBanner isOffline={isOffline} />
       <CoOwnReconciliationBanner isActive={false} />
@@ -364,7 +347,11 @@ export default function AssetDetailScreen() {
         scrollEventThrottle={16}
         contentContainerStyle={{ paddingBottom: scrollBottomPadding }}
       >
-        {/* Hero — large media stage */}
+        {/* ── Zone A — Media stage ──
+            CommerceMediaStage handles paging/zoom/fullscreen only.
+            CommerceDetailMediaRail overlays the max-3-visible-controls
+            (Back, Share, Saved) + overflow (Fav, Watch, Report).
+            Spec 02 §A: "Maximum visible utility controls over media: three." */}
         <CommerceMediaStage
           images={images}
           objectId={asset.id}
@@ -376,8 +363,7 @@ export default function AssetDetailScreen() {
           onToggleFav={social.toggleLike}
           isFav={social.isLiked}
           isSaved={social.isSavedToCollection}
-          showSaveControl
-          showFavControl
+          showDefaultControls={false}
           heightFraction={isCompact ? 0.52 : 0.65}
           onOpenFullscreen={handleOpenFullscreen}
           overlayTopContent={
@@ -386,264 +372,282 @@ export default function AssetDetailScreen() {
             </View>
           }
         />
-
-        {/* Product identity block — flat editorial section */}
-        <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(80)}
-          style={styles.identityStage}
-        >
-          <View style={styles.identityHeaderRow}>
-            <View style={styles.identityHeaderLeft}>
-              <Text style={[styles.eyebrow, { color: colors.textMuted }]}>CO-OWN · LISTING</Text>
-              <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={2}>{asset.title}</Text>
-            </View>
-            <CoOwnWatchButton assetId={asset.id} assetTitle={asset.title} />
-          </View>
-          {asset.description ? (
-            <Text style={[styles.description, { color: colors.textSecondary }]} numberOfLines={4}>{asset.description}</Text>
-          ) : null}
-        </Reanimated.View>
-
-        {/* Value strip — three-column Market/Fundamental/Cash.
-            Replaces the single-price display. Fails closed ("—") for
-            facts the backend does not yet expose. Never zero, never fabricated. */}
-        <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(100)}
-          style={styles.sectionWrap}
-        >
-          <CoOwnValueStrip
-            last={{ price: asset.unitPriceGbp, ageSeconds: dataStaleAgeLabel ? 86400 : null }}
-            bid={bestBid ? { price: bestBid.unitPriceGbp ?? 0, size: bestBid.units ?? 0 } : undefined}
-            ask={bestAsk ? { price: bestAsk.unitPriceGbp ?? 0, size: bestAsk.units ?? 0 } : undefined}
-            spread={bestBid && bestAsk ? Math.abs((bestAsk.unitPriceGbp ?? 0) - (bestBid.unitPriceGbp ?? 0)) : undefined}
-            nav={asset.appraisalValue && totalUnits > 0 ? {
-              pricePerUnit: asset.appraisalValue / totalUnits,
-              valuedAt: asset.appraisalValuedAt ?? '—',
-              method: asset.appraisalMethod ?? '—',
-              valuer: asset.appraisalValuer,
-            } : undefined}
-            premiumPct={asset.appraisalValue && totalUnits > 0
-              ? ((asset.unitPriceGbp - (asset.appraisalValue / totalUnits)) / (asset.appraisalValue / totalUnits)) * 100
-              : null}
-            nextDistribution={null}
-            nextReporting={asset.appraisalNextScheduled ?? null}
-          />
-        </Reanimated.View>
-
-        {/* Market-status strip — sticky-on-scroll, single source of truth
-            for market microstructure state. Fails closed to "Closed" when
-            the backend does not expose market mode. */}
-        <CoOwnMarketStatusStrip
-          mode={asset.isOpen ? 'continuous' : 'closed'}
-          sessionLabel={asset.isOpen ? 'Open' : 'Closed'}
-          disclosureVersion={asset.rightsVersion ?? undefined}
-          onOpenRights={() => setRightsSheetVisible(true)}
-          dataStale={dataStale}
-          dataStaleAgeLabel={dataStaleAgeLabel}
+        <CommerceDetailMediaRail
+          onBack={() => navigation.goBack()}
+          topInset={insets.top}
+          rightActions={[
+            {
+              icon: 'share-outline',
+              label: 'Share',
+              onPress: social.openShare,
+            },
+            {
+              icon: social.isSavedToCollection ? 'bookmark' : 'bookmark-outline',
+              activeIcon: 'bookmark',
+              label: social.isSavedToCollection ? 'Saved to collection' : 'Save to collection',
+              onPress: social.openCollectionPicker,
+              isActive: social.isSavedToCollection,
+            },
+            {
+              icon: social.isLiked ? 'heart' : 'heart-outline',
+              activeIcon: 'heart',
+              label: social.isLiked ? 'Favourited' : 'Favourite',
+              onPress: social.toggleLike,
+              isActive: social.isLiked,
+            },
+          ]}
+          onOverflow={() => setOverflowVisible(true)}
         />
 
-        {/* Issuer card — trustworthy identity */}
-        <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(120)}
-          style={styles.sectionWrap}
-        >
-          <CoOwnIssuerCard
-            username={issuerUsername}
-            avatarUri={issuerTrust?.avatar ?? null}
+        {/* ── Zone B — Identity seam ──
+            One compact identity composition: eyebrow + title + primary
+            value + secondary truth line. No second large issuer card.
+            Spec 02 §B + spec 03 §2. */}
+        <CommerceDetailIdentity
+          eyebrow="Co-Own"
+          title={asset.title}
+          primaryValue={formatCoOwnIze(asset.unitPriceGbp)}
+          secondaryLine={dataStale && dataStaleAgeLabel ? `Last update ${dataStaleAgeLabel}` : undefined}
+          interestSignal={asset.holders ? `${asset.holders} holders` : undefined}
+          familyChip={
+            <ProductFamilyBadge family="co_own" stateAccent={familyStateAccent} compact />
+          }
+        />
+
+        {/* Slim issuer confidence row — replaces the large CoOwnIssuerCard.
+            Spec 03 §2: "Do not render a second large issuer card when the
+            slim row is present." */}
+        <View style={styles.identityExtension}>
+          <CommerceDetailSellerRow
+            roleLabel="Issuer"
+            name={issuerUsername}
             verified={issuerTrust?.verified}
-            rating={issuerTrust?.rating ?? null}
-            reviewCount={issuerTrust?.reviewCount ?? null}
-            location={issuerTrust?.location ?? null}
-            memberSince={issuerTrust?.memberSince ?? null}
+            ratingLine={
+              issuerTrust?.rating != null
+                ? `${issuerTrust.rating.toFixed(1)}${issuerTrust?.reviewCount != null ? ` · ${issuerTrust.reviewCount} reviews` : ''}`
+                : undefined
+            }
+            locationLine={issuerTrust?.location ?? undefined}
             onPress={() => navigation.navigate('UserProfile', { userId: asset.issuerId })}
-            onMessage={canMessageIssuer ? async () => {
-              if (!currentUser?.id) {
-                show('Sign in to message the issuer.', 'error');
-                return;
-              }
-              if (isResolvingConversation) return;
-              setIsResolvingConversation(true);
-              try {
-                const conversation = await resolveCoOwnConversation(
-                  currentUser.id,
-                  asset.issuerId,
-                  issuerUsername,
-                  asset.listingId,
-                );
-                upsertConversation(conversation);
-                navigation.navigate('Chat', {
-                  conversationId: conversation.id,
-                  focusQuery: issuerUsername,
-                  partnerUserId: asset.issuerId,
-                });
-              } catch {
-                show('Unable to open conversation. Please try again.', 'error');
-              } finally {
-                setIsResolvingConversation(false);
-              }
-            } : undefined}
-            canMessage={canMessageIssuer}
+            primaryAction={
+              canMessageIssuer
+                ? {
+                    label: 'Message',
+                    onPress: async () => {
+                      if (!currentUser?.id) {
+                        show('Sign in to message the issuer.', 'error');
+                        return;
+                      }
+                      if (isResolvingConversation) return;
+                      setIsResolvingConversation(true);
+                      try {
+                        const conversation = await resolveCoOwnConversation(
+                          currentUser.id,
+                          asset.issuerId,
+                          issuerUsername,
+                          asset.listingId,
+                        );
+                        upsertConversation(conversation);
+                        navigation.navigate('Chat', {
+                          conversationId: conversation.id,
+                          focusQuery: issuerUsername,
+                          partnerUserId: asset.issuerId,
+                        });
+                      } catch {
+                        show('Unable to open conversation. Please try again.', 'error');
+                      } finally {
+                        setIsResolvingConversation(false);
+                      }
+                    },
+                  }
+                : undefined
+            }
           />
-        </Reanimated.View>
+        </View>
 
-        {/* Ownership panel — clear, visual, understandable */}
-        <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(160)}
-          style={styles.sectionWrap}
-        >
-          <CoOwnOwnershipPanel
-            unitPriceLabel={formatCoOwnIze(asset.unitPriceGbp)}
-            totalUnits={totalUnits}
-            availableUnits={availableUnits}
-            allocatedPct={allocatedPct}
-            viewerUnits={yourUnits}
-            viewerPct={viewerPct}
-            settlementMode={asset.settlementMode}
-            feePct={feePct}
-            holderCount={asset.holders}
-            status={asset.isOpen ? (availableUnits > 0 ? 'open' : 'closed') : 'paused'}
-            supply={{
-              // Per spec 10 §3.2 supply equation:
-              //   authorised >= issued = investorSettled + sponsorLocked + treasury
-              //   publicFloat = investorSettled - transferRestricted - locked
-              // Backend exposes totalUnits (issued) and availableUnits (treasury/unsold).
-              // authorised = totalUnits (backend doesn't distinguish authorised vs issued yet)
-              // issued = totalUnits (all units are issued)
-              // treasury = availableUnits (issued but held by vehicle for sale)
-              // investorSettled = totalUnits - availableUnits (sold to investors)
-              // publicFloat = totalUnits - availableUnits (investor-held, freely tradable)
-              // sponsorLocked = 0 (not exposed by backend — fail closed)
-              authorised: totalUnits,
-              issued: totalUnits,
-              publicFloat: totalUnits - availableUnits,
-              sponsorLocked: 0,
-              treasury: availableUnits,
-            }}
-            rightsVersion={asset.rightsVersion ?? undefined}
-          />
-        </Reanimated.View>
-
-        {/* Phase 6: Tablet two-column layout for price chart + order book.
-            On phone: stacked vertically. On tablet (≥768px): side-by-side. */}
-        {isTablet ? (
-          <View style={styles.tabletTwoCol}>
-            <Reanimated.View
-              entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(170)}
-              style={[styles.sectionWrap, styles.tabletCol]}
-            >
-              <CoOwnPriceChart
-                assetId={asset.id}
-                unitPriceGbp={asset.unitPriceGbp}
-                marketMovePct24h={asset.marketMovePct24h ?? 0}
-                volume24hGbp={asset.volume24hGbp ?? 0}
-                lastAgeSeconds={undefined}
-                change24hTimestamp={undefined}
-                candleChart={
-                  <CoOwnCandleChart
-                    candles={[]}
-                    range={candleRange}
-                    onRangeChange={setCandleRange}
-                    showVolume={showVolume}
-                    lastPrice={asset.unitPriceGbp}
-                    lastAgeSeconds={undefined}
-                  />
-                }
-              />
-            </Reanimated.View>
-            <Reanimated.View
-              entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(180)}
-              style={[styles.sectionWrap, styles.tabletCol]}
-            >
-              <CoOwnOrderBook
-                bids={orderBook.bids as CoOwnBookLevel[]}
-                asks={orderBook.asks as CoOwnBookLevel[]}
-                visibleLevels={10}
-                lastPrice={asset.unitPriceGbp}
-                lastAgeSeconds={undefined}
-                mode={asset.isOpen ? 'continuous' : 'closed'}
-                onSelectLevel={handleSelectOrderBookLevel}
-              />
-            </Reanimated.View>
-          </View>
-        ) : (
-          <>
-            {/* Price chart — sparkline with period selector + candle toggle */}
-            <Reanimated.View
-              entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(170)}
-              style={styles.sectionWrap}
-            >
-              <CoOwnPriceChart
-                assetId={asset.id}
-                unitPriceGbp={asset.unitPriceGbp}
-                marketMovePct24h={asset.marketMovePct24h ?? 0}
-                volume24hGbp={asset.volume24hGbp ?? 0}
-                lastAgeSeconds={undefined}
-                change24hTimestamp={undefined}
-                candleChart={
-                  <CoOwnCandleChart
-                    candles={[]}
-                    range={candleRange}
-                    onRangeChange={setCandleRange}
-                    showVolume={showVolume}
-                    lastPrice={asset.unitPriceGbp}
-                    lastAgeSeconds={undefined}
-                  />
-                }
-              />
-            </Reanimated.View>
-
-            {/* Order book — executable top-of-book + depth.
-                Progressive disclosure: collapsed by default, expands on tap.
-                The CoOwnValueStrip above shows best bid/ask summary; this
-                provides the full depth chart on demand. */}
-            <Reanimated.View
-              entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(180)}
-              style={styles.sectionWrap}
-            >
-              <Pressable
-                style={[styles.collapsibleHeader, { borderColor: colors.border }]}
-                onPress={() => setOrderBookExpanded((prev) => !prev)}
-                accessibilityRole="button"
-                accessibilityLabel={orderBookExpanded ? 'Collapse live market' : 'Expand live market'}
-                accessibilityState={{ expanded: orderBookExpanded }}
-              >
-                <View style={styles.collapsibleHeaderLeft}>
-                  <View style={styles.collapsibleHeadingGroup}>
-                    <Text style={[styles.collapsibleEyebrow, { color: colors.textMuted }]} numberOfLines={1}>
-                      ORDER BOOK
-                    </Text>
-                    <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Live market</Text>
-                  </View>
-                  <Text style={[styles.collapsibleSubtext, { color: colors.textMuted }]} numberOfLines={1}>
-                    {orderBook.bids.length + orderBook.asks.length} offers
-                  </Text>
-                </View>
-                <Ionicons
-                  name={orderBookExpanded ? 'chevron-up-outline' : 'chevron-down-outline'}
-                  size={18}
-                  color={colors.textSecondary}
-                />
-              </Pressable>
-              {orderBookExpanded && (
-                <CoOwnOrderBook
-                  bids={orderBook.bids as CoOwnBookLevel[]}
-                  asks={orderBook.asks as CoOwnBookLevel[]}
-                  visibleLevels={5}
-                  lastPrice={asset.unitPriceGbp}
-                  lastAgeSeconds={undefined}
-                  mode={asset.isOpen ? 'continuous' : 'closed'}
-                  onSelectLevel={handleSelectOrderBookLevel}
-                />
+        {/* ── Zone C — Family transaction module ──
+            The one strongly contained module near the top: last trade +
+            top-of-book + market mode. Replaces the three-column
+            CoOwnValueStrip + CoOwnMarketStatusStrip.
+            Spec 02 §C + spec 03 §3. */}
+        <CommerceDetailTransactionSurface
+          primaryLabel="Last trade"
+          primaryValue={formatCoOwnIze(asset.unitPriceGbp)}
+          secondaryLabel="Top of book"
+          secondaryValue={
+            bestBid || bestAsk
+              ? `${bestBid ? `${formatCoOwnIze(bestBid.unitPriceGbp ?? 0)} × ${bestBid.units ?? 0}` : '—'} / ${bestAsk ? `${formatCoOwnIze(bestAsk.unitPriceGbp ?? 0)} × ${bestAsk.units ?? 0}` : '—'}`
+              : 'No orders'
+          }
+          statusRow={
+            <View style={styles.marketStatusRow}>
+              <Text style={[styles.marketStatusText, { color: asset.isOpen ? colors.success : colors.textSecondary }]}>
+                {asset.isOpen ? 'Continuous · Open' : 'Closed'}
+              </Text>
+              {dataStale && dataStaleAgeLabel && (
+                <Text style={[styles.marketStatusStale, { color: colors.warning }]}>
+                  {' · '}Stale {dataStaleAgeLabel}
+                </Text>
               )}
-            </Reanimated.View>
-          </>
+              {asset.rightsVersion && (
+                <Pressable
+                  onPress={() => setRightsSheetVisible(true)}
+                  hitSlop={8}
+                  accessibilityLabel={`Rights version ${formatRightsVersion(asset.rightsVersion)}`}
+                >
+                  <Text style={[styles.marketStatusRights, { color: colors.textSecondary }]}>
+                    {' · '}{formatRightsVersion(asset.rightsVersion)}
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+          }
+        >
+          {/* Compact secondary rows — NAV / distribution / report.
+              Spec 03 §3: "Do not give unavailable secondary values equal
+              visual weight to the live market." Muted copy, not em dash. */}
+          <View style={styles.secondaryMetrics}>
+            <CommerceDetailMetricRow
+              label="NAV / unit"
+              value={
+                asset.appraisalValue && totalUnits > 0
+                  ? formatFromFiat(asset.appraisalValue / totalUnits, 'GBP')
+                  : 'Not available'
+              }
+              muted={!asset.appraisalValue}
+            />
+            <CommerceDetailMetricRow
+              label="Next distribution"
+              value="Not scheduled"
+              muted
+            />
+            <CommerceDetailMetricRow
+              label="Next report"
+              value={asset.appraisalNextScheduled ?? 'Not scheduled'}
+              muted={!asset.appraisalNextScheduled}
+            />
+          </View>
+        </CommerceDetailTransactionSurface>
+
+        {/* ── Zone D — Viewer context ──
+            Compact personalised surface — only when the viewer owns units.
+            Spec 03 §4: "Use a compact personalised surface." Appears before
+            generic supply. */}
+        {isHolder && (
+          <CommerceDetailTransactionSurface elevated>
+            <View style={styles.viewerPositionHeader}>
+              <Text style={[styles.viewerPositionLabel, { color: colors.textSecondary }]}>
+                Your position
+              </Text>
+              <Text style={[styles.viewerPositionValue, { color: colors.textPrimary }]}>
+                {yourUnits} units · {viewerPct.toFixed(1)}%
+              </Text>
+            </View>
+            <CommerceDetailMetricRow
+              label="Current value"
+              value={formatCoOwnIze(asset.unitPriceGbp * yourUnits)}
+            />
+            <CommerceDetailMetricRow
+              label="Settlement"
+              value={
+                asset.settlementMode === 'ONEZE' ? '1ZE'
+                : asset.settlementMode === 'TVUSD' ? 'TVUSD'
+                : asset.settlementMode === 'GBP' ? 'GBP'
+                : 'GBP + TVUSD'
+              }
+            />
+          </CommerceDetailTransactionSurface>
         )}
 
-        {/* Category evidence — editorial details when available */}
-        <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(180)}
-          style={styles.sectionWrap}
-        >
+        {/* ── Zone E — Availability and supply ──
+            Default view: units available + allocated bar + holder count.
+            Full ledger moved to "View supply structure" disclosure.
+            Spec 03 §5: "Do not keep the full five-row accounting ledger
+            expanded by default." */}
+        <CommerceDetailSection label="Availability" divider>
+          <View style={styles.supplySummary}>
+            <Text style={[styles.supplyUnits, { color: colors.textPrimary }]}>
+              {availableUnits} units available
+            </Text>
+            <Text style={[styles.supplyAllocated, { color: colors.textSecondary }]}>
+              {allocatedPct}% allocated
+            </Text>
+          </View>
+          <View style={[styles.allocationBar, { backgroundColor: colors.surfaceAlt }]}>
+            <View
+              style={[
+                styles.allocationFill,
+                { backgroundColor: colors.brand, width: `${Math.min(100, allocatedPct)}%` },
+              ]}
+            />
+          </View>
+          {asset.holders != null && (
+            <Text style={[styles.supplyHolders, { color: colors.textMuted }]}>
+              {asset.holders} holders
+            </Text>
+          )}
+          <CommerceDetailDisclosureRow
+            label="View supply structure"
+            summary="Authorised · issued · float · treasury"
+            onPress={() => setSupplySheetVisible(true)}
+            leadingIcon="layers-outline"
+          />
+        </CommerceDetailSection>
+
+        {/* ── Price history ──
+            Spec 03 §6: empty state shows compact inline "No settled trade
+            history yet"; error state shows "Price history unavailable" +
+            Retry. Do not show +0.0%. Do not reserve a large blank chart. */}
+        <CommerceDetailSection label="Price history" divider>
+          <CoOwnPriceChart
+            assetId={asset.id}
+            unitPriceGbp={asset.unitPriceGbp}
+            marketMovePct24h={asset.marketMovePct24h ?? 0}
+            volume24hGbp={asset.volume24hGbp ?? 0}
+            lastAgeSeconds={undefined}
+            change24hTimestamp={undefined}
+            candleChart={
+              <CoOwnCandleChart
+                candles={[]}
+                range={candleRange}
+                onRangeChange={setCandleRange}
+                showVolume={showVolume}
+                lastPrice={asset.unitPriceGbp}
+                lastAgeSeconds={undefined}
+              />
+            }
+          />
+        </CommerceDetailSection>
+
+        {/* ── Order book ──
+            Collapsed by default on phone. Summary is in the transaction
+            surface above. Spec 03 §7: "Keep collapsed by default." */}
+        <CommerceDetailSection label="Live market" divider>
+          <CommerceDetailDisclosureRow
+            label="Order book"
+            summary={`${orderBook.bids.length + orderBook.asks.length} offers`}
+            onPress={() => setOrderBookExpanded((prev) => !prev)}
+            leadingIcon="bar-chart-outline"
+          />
+          {orderBookExpanded && (
+            <CoOwnOrderBook
+              bids={orderBook.bids as CoOwnBookLevel[]}
+              asks={orderBook.asks as CoOwnBookLevel[]}
+              visibleLevels={5}
+              lastPrice={asset.unitPriceGbp}
+              lastAgeSeconds={undefined}
+              mode={asset.isOpen ? 'continuous' : 'closed'}
+              onSelectLevel={handleSelectOrderBookLevel}
+            />
+          )}
+        </CommerceDetailSection>
+
+        {/* ── Asset evidence ──
+            Combined category evidence + trust panel + dossier into one
+            "Asset dossier" section. Spec 03 §8: "Combine category evidence,
+            authenticity, condition, storage, insurance and appraisal into
+            one Asset dossier section." */}
+        <CommerceDetailSection label="Asset dossier" divider>
           {(() => {
             const evidenceGroups = resolveEvidenceGroups({
               category: asset.category,
@@ -654,29 +658,15 @@ export default function AssetDetailScreen() {
               <CategoryEvidence groups={evidenceGroups} />
             ) : null;
           })()}
-        </Reanimated.View>
 
-        {/* Trust panel — authenticity, protection, storage */}
-        <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(200)}
-          style={styles.sectionWrap}
-        >
           <CoOwnTrustPanel
             authenticityStatus={asset.authenticityStatus ?? null}
             buyerProtection={asset.buyerProtection ?? false}
             storageInfo={asset.storageInfo ?? null}
             possessionInfo={asset.possessionInfo ?? null}
           />
-        </Reanimated.View>
 
-        {/* Asset dossier — provenance/condition/storage/insurance/appraisal.
-            Renders only when the backend exposes dossier data. Fails closed
-            (not rendered) when absent — never fabricated. */}
-        {(asset.provenance || asset.conditionGrade || asset.custodyLocation || asset.appraisalValue) && (
-          <Reanimated.View
-            entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(220)}
-            style={styles.sectionWrap}
-          >
+          {(asset.provenance || asset.conditionGrade || asset.custodyLocation || asset.appraisalValue) && (
             <CoOwnAssetDossier
               provenance={asset.provenance}
               condition={asset.conditionGrade ? {
@@ -701,71 +691,18 @@ export default function AssetDetailScreen() {
                 nextScheduled: asset.appraisalNextScheduled,
               } : undefined}
             />
-          </Reanimated.View>
-        )}
+          )}
 
-        {/* Rights & risks entry — opens the 13-row rights sheet modal.
-            Each row must have an answer or "To be confirmed" (prelaunch only). */}
-        <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(240)}
-          style={styles.sectionWrap}
-        >
-          <Pressable
-            style={[styles.rightsEntry, { borderColor: colors.border }]}
-            onPress={() => setRightsSheetVisible(true)}
-            accessibilityRole="button"
-            accessibilityLabel="View rights and risks"
-          >
-            <View style={styles.rightsEntryLeft}>
-              <Ionicons name="document-text-outline" size={16} color={colors.textSecondary} />
-              <Text style={[styles.rightsEntryText, { color: colors.textPrimary }]}>
-                Rights & risks
-              </Text>
-            </View>
-            {asset.rightsVersion && (
-              <View style={[styles.rightsVersionChip, { backgroundColor: colors.surfaceAlt }]}>
-                <Text style={[styles.rightsVersionText, { color: colors.textMuted }]} numberOfLines={1}>
-                  {formatRightsVersion(asset.rightsVersion)}
-                </Text>
-              </View>
-            )}
-            <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
-          </Pressable>
-        </Reanimated.View>
-
-        {/* Valuation provenance — spec 10 §8.1: every displayed valuation exposes
-            method, valuer, date, range. Fails closed with "—" when backend
-            doesn't expose. Never presents appraisal as executable market price.
-            Collapsible: the CoOwnValueStrip above provides the summary; this
-            section provides the full provenance deep-dive on demand. */}
-        <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(230)}
-          style={styles.sectionWrap}
-        >
-          <Pressable
-            style={[styles.collapsibleHeader, { borderColor: colors.border }]}
+          {/* Valuation provenance — collapsible deep-dive.
+              Spec 10 §8.1: every displayed valuation exposes method,
+              valuer, date, range. Fails closed with "—" when backend
+              doesn't expose. */}
+          <CommerceDetailDisclosureRow
+            label="Valuation provenance"
+            summary={asset.appraisalMethod ?? 'No appraisal'}
             onPress={() => setValuationExpanded((prev) => !prev)}
-            accessibilityRole="button"
-            accessibilityLabel={valuationExpanded ? 'Collapse valuation details' : 'Expand valuation details'}
-            accessibilityState={{ expanded: valuationExpanded }}
-          >
-            <View style={styles.collapsibleHeaderLeft}>
-              <View style={styles.collapsibleHeadingGroup}>
-                <Text style={[styles.collapsibleEyebrow, { color: colors.textMuted }]} numberOfLines={1}>
-                  APPRAISAL
-                </Text>
-                <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Valuation</Text>
-              </View>
-              <Text style={[styles.collapsibleSubtext, { color: colors.textMuted }]} numberOfLines={1}>
-                {asset.appraisalMethod ? asset.appraisalMethod : 'No appraisal'}
-              </Text>
-            </View>
-            <Ionicons
-              name={valuationExpanded ? 'chevron-up-outline' : 'chevron-down-outline'}
-              size={18}
-              color={colors.textSecondary}
-            />
-          </Pressable>
+            leadingIcon="analytics-outline"
+          />
           {valuationExpanded && (
             <View style={[styles.valuationCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <View style={styles.valuationGrid}>
@@ -814,8 +751,8 @@ export default function AssetDetailScreen() {
                   </Text>
                 </View>
                 {asset.appraisalValue && totalUnits > 0 && (
-                  <View style={styles.valuationRow}>
-                    <Text style={[styles.valuationLabel, { color: colors.textMuted }]}>Premium/Discount</Text>
+                  <View style={[styles.valuationRow, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: Space.xs, marginTop: Space.xs }]}>
+                    <Text style={[styles.valuationLabel, { color: colors.textMuted }]}>vs NAV</Text>
                     <Text style={[
                       styles.valuationValue,
                       { color: asset.unitPriceGbp > (asset.appraisalValue / totalUnits) ? colors.success : colors.danger },
@@ -834,38 +771,61 @@ export default function AssetDetailScreen() {
               </Text>
             </View>
           )}
-        </Reanimated.View>
+        </CommerceDetailSection>
 
-        {/* Risk disclosure — honest limitations */}
-        <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(240)}
-          style={styles.sectionWrap}
-        >
+        {/* ── Rights and risk ──
+            Default summary: completion state + one critical plain-language
+            statement + "Review N terms". Full sheet keeps all canonical rows.
+            Spec 03 §9. */}
+        <CommerceDetailSection label="Rights & risks" divider>
+          <View style={styles.rightsSummary}>
+            <Text style={[styles.rightsCriticalStatement, { color: colors.textPrimary }]}>
+              You own units in the asset, not the physical item.
+            </Text>
+          </View>
+          <CommerceDetailDisclosureRow
+            label="Review rights"
+            count={CANONICAL_RIGHTS_LABELS.length}
+            summary={asset.rightsVersion ? formatRightsVersion(asset.rightsVersion) : undefined}
+            onPress={() => setRightsSheetVisible(true)}
+            leadingIcon="document-text-outline"
+          />
+          {/* Risk disclosure — collapsed by default.
+              Spec 03 §9: "Risk disclosure should be collapsed by default." */}
           <CoOwnRiskDisclosure
             onReportIssue={() => navigation.navigate('CoOwnIssue', { assetId: asset.id })}
           />
-        </Reanimated.View>
+        </CommerceDetailSection>
 
-        {/* Buyout link — only for holders, non-issuers */}
+        {/* ── Exit language ──
+            Spec 03 §10: "Do not show Buyout options when the only available
+            route is not full-asset buyout." Use the real capability. */}
         {isHolder && !isIssuer && (
-          <Reanimated.View
-            entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(300)}
-            style={styles.sectionWrap}
-          >
-            <Pressable
-              style={[styles.buyoutLink, { borderColor: colors.border }]}
+          <CommerceDetailSection label="Exit options" divider>
+            <CommerceDetailDisclosureRow
+              label="Sell units"
+              summary="Secondary market"
+              onPress={() => handleTradePress('sell')}
+              leadingIcon="arrow-down-circle-outline"
+            />
+            <CommerceDetailDisclosureRow
+              label="Transfer restrictions"
+              summary="Units are transferable on the secondary market"
+              onPress={() => setRightsSheetVisible(true)}
+              leadingIcon="lock-closed-outline"
+            />
+            <CommerceDetailDisclosureRow
+              label="Buyout"
+              summary="Full-asset buyout unavailable"
               onPress={() => navigation.navigate('Buyout', { assetId: asset.id })}
-              accessibilityRole="button"
-              accessibilityLabel="Open buyout options for your units"
-            >
-              <Ionicons name="swap-horizontal-outline" size={15} color={colors.textSecondary} />
-              <Text style={[styles.buyoutLinkText, { color: colors.textSecondary }]}>Buyout options</Text>
-              <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
-            </Pressable>
-          </Reanimated.View>
+              leadingIcon="swap-horizontal-outline"
+            />
+          </CommerceDetailSection>
         )}
 
-        {/* Seen in Looks */}
+        {/* ── Zone F — Discovery ──
+            Discovery begins only after the core product decision is
+            understandable. Spec 02 §F. */}
         {seenInLooksSection && seenInLooksSection.items.length > 0 && (
           <View style={styles.recommendationSection}>
             <RecommendationRail
@@ -882,7 +842,6 @@ export default function AssetDetailScreen() {
           </View>
         )}
 
-        {/* Personalised recommendation rails */}
         {recsLoading && railSections.length === 0 ? null : (
           railSections.map((section) => (
             <View key={section.key} style={styles.recommendationSection}>
@@ -902,122 +861,92 @@ export default function AssetDetailScreen() {
         )}
       </Reanimated.ScrollView>
 
-      {/* Compact risk reminder — placed before the sticky dock so users
-          see it before tapping Buy/Sell. The full disclosure is in the
-          scrollable content above; this is a reminder, not a replacement.
-          Design.md §G: "Risk/trust disclosures placed before irreversible
-          actions." */}
-      {!isIssuer && (
-        <View style={[styles.riskReminder, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Ionicons name="information-circle-outline" size={12} color={colors.textMuted} />
-          <Text style={[styles.riskReminderText, { color: colors.textMuted }]} numberOfLines={1}>
-            Co-Own units are not guaranteed to rise in value. Liquidity depends on buyer demand.
-          </Text>
-        </View>
-      )}
+      {/* ── Zone G — Sticky action dock ──
+          Spec 03 §11: four state variants — tradable non-holder, tradable
+          holder, rights incomplete, paused/closed. Blocked state includes
+          a valid next step. No large passive warning card. */}
+      {(() => {
+        if (hasIncompleteRights && !isIssuer && asset.isOpen) {
+          // Rights incomplete — open the rights sheet, not a passive warning.
+          return (
+            <CommerceDetailStateDock
+              stateBadge={
+                <Text style={[styles.dockStateBadge, { color: colors.warning }]}>
+                  Trading unavailable
+                </Text>
+              }
+              subtitle="Complete rights disclosure"
+              primaryAction={{
+                label: 'Review rights',
+                onPress: () => setRightsSheetVisible(true),
+              }}
+            />
+          );
+        }
 
-      {/* Sticky action dock — viewer-specific CTAs.
-          Rights incomplete check: blocks trading for live instruments with TBC rows. */}
-      <CoOwnStickyActionDock>
-        {(() => {
-          const rightsRows = CANONICAL_RIGHTS_LABELS.map((label) => {
-            const row = (asset.rightsRows as CoOwnRightsRow[] | undefined)?.find((r) => r.label === label);
-            return row ?? { label, answer: 'To be confirmed', isTbc: true };
-          });
-          const hasIncompleteRights = rightsRows.some((r) => r.isTbc);
+        if (isIssuer) {
+          return (
+            <CommerceDetailStateDock
+              stateBadge={
+                <Text style={[styles.dockStateBadge, { color: colors.textPrimary }]}>
+                  Issuer view
+                </Text>
+              }
+              subtitle={`${availableUnits} units in treasury`}
+            />
+          );
+        }
 
-          if (hasIncompleteRights && !isIssuer && asset.isOpen) {
-            return (
-              <View style={[styles.issuerDock, { backgroundColor: colors.warning + '12', borderColor: colors.warning + '40' }]}>
-                <View style={[styles.issuerDockIcon, { backgroundColor: colors.warning + '22' }]}>
-                  <Ionicons name="document-text-outline" size={16} color={colors.warning} />
-                </View>
-                <View style={styles.issuerDockBody}>
-                  <Text style={[styles.issuerDockTitle, { color: colors.textPrimary }]} numberOfLines={1}>Rights incomplete</Text>
-                  <Text style={[styles.issuerDockText, { color: colors.textMuted }]} numberOfLines={1}>
-                    Not yet tradable
-                  </Text>
-                </View>
-              </View>
-            );
-          }
-          return isIssuer ? (
-          <View style={[styles.issuerDock, { backgroundColor: colors.brand + '14', borderColor: colors.brand + '40' }]}>
-            <View style={[styles.issuerDockIcon, { backgroundColor: colors.brand + '22' }]}>
-              <Ionicons name="storefront-outline" size={16} color={colors.brand} />
-            </View>
-            <View style={styles.issuerDockBody}>
-              <Text style={[styles.issuerDockTitle, { color: colors.textPrimary }]} numberOfLines={1}>Issuer view</Text>
-              <Text style={[styles.issuerDockText, { color: colors.textSecondary }]} numberOfLines={1}>
-                {availableUnits} units in treasury
-              </Text>
-            </View>
-          </View>
-        ) : !asset.isOpen ? (
-          <View style={[styles.issuerDock, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
-            <View style={[styles.issuerDockIcon, { backgroundColor: colors.surface }]}>
-              <Ionicons name="pause-circle-outline" size={16} color={colors.textSecondary} />
-            </View>
-            <View style={styles.issuerDockBody}>
-              <Text style={[styles.issuerDockTitle, { color: colors.textPrimary }]} numberOfLines={1}>Trading paused</Text>
-              <Text style={[styles.issuerDockText, { color: colors.textMuted }]} numberOfLines={1}>
-                Temporarily unavailable
-              </Text>
-            </View>
-          </View>
-        ) : availableUnits === 0 && !isHolder ? (
-          <View style={[styles.issuerDock, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
-            <View style={[styles.issuerDockIcon, { backgroundColor: colors.surface }]}>
-              <Ionicons name="lock-closed-outline" size={16} color={colors.textSecondary} />
-            </View>
-            <View style={styles.issuerDockBody}>
-              <Text style={[styles.issuerDockTitle, { color: colors.textPrimary }]} numberOfLines={1}>Fully allocated</Text>
-              <Text style={[styles.issuerDockText, { color: colors.textMuted }]} numberOfLines={1}>
-                Check the secondary market
-              </Text>
-            </View>
-          </View>
-        ) : (
-          <View style={[styles.dockRow, isCompact && styles.dockRowCompact]}>
-            <View style={[styles.dockPriceSection, isCompact && styles.dockPriceSectionCompact]}>
-              <Text style={[styles.dockPriceLabel, { color: colors.textMuted }]} numberOfLines={1}>Unit price</Text>
-              <Text style={[styles.dockPriceValue, { color: colors.textPrimary }]} numberOfLines={1}>{formatCoOwnIze(asset.unitPriceGbp)}</Text>
-            </View>
-            <View style={[styles.dockActions, isCompact && styles.dockActionsCompact, isVeryCompact && isHolder && styles.dockActionsStacked]}>
-              {isHolder && (
-                <AnimatedPressable
-                  style={[
-                    styles.dockSecondaryBtn,
-                    { borderColor: colors.border },
-                    isVeryCompact && styles.dockSecondaryBtnStacked,
-                  ]}
-                  onPress={() => handleTradePress('sell')}
-                  accessibilityLabel="Sell your units"
-                  accessibilityRole="button"
-                  scaleValue={0.97}
-                  hapticFeedback="medium"
-                >
-                  <Text style={[styles.dockSecondaryText, { color: colors.textPrimary }]} numberOfLines={1}>Sell</Text>
-                </AnimatedPressable>
-              )}
-              <AppButton
-                title={isHolder ? 'Buy more' : 'Buy units'}
-                variant="primary"
-                size="md"
-                onPress={() => handleTradePress('buy')}
-                accessibilityLabel={isHolder ? 'Buy more units' : 'Buy units in this Co-Own'}
-                style={[
-                  styles.dockPrimaryBtn,
-                  isCompact && styles.dockPrimaryBtnCompact,
-                  isVeryCompact && isHolder && styles.dockPrimaryBtnStacked,
-                ]}
-                hapticFeedback="medium"
-              />
-            </View>
-          </View>
+        if (!asset.isOpen) {
+          return (
+            <CommerceDetailStateDock
+              stateBadge={
+                <Text style={[styles.dockStateBadge, { color: colors.textSecondary }]}>
+                  Trading paused
+                </Text>
+              }
+              subtitle="Temporarily unavailable"
+              primaryAction={{
+                label: 'View orders',
+                onPress: () => navigation.navigate('CoOwnOrderHistory'),
+              }}
+            />
+          );
+        }
+
+        if (availableUnits === 0 && !isHolder) {
+          return (
+            <CommerceDetailStateDock
+              stateBadge={
+                <Text style={[styles.dockStateBadge, { color: colors.textSecondary }]}>
+                  Fully allocated
+                </Text>
+              }
+              subtitle="Check the secondary market"
+            />
+          );
+        }
+
+        // Tradable states — non-holder gets Buy; holder gets Sell + Buy more.
+        return (
+          <CommerceDetailStateDock
+            value={formatCoOwnIze(asset.unitPriceGbp)}
+            valueLabel="Unit price"
+            primaryAction={{
+              label: 'Buy units',
+              onPress: () => handleTradePress('buy'),
+            }}
+            secondaryAction={
+              isHolder
+                ? {
+                    label: 'Sell',
+                    onPress: () => handleTradePress('sell'),
+                  }
+                : undefined
+            }
+          />
         );
-        })()}
-      </CoOwnStickyActionDock>
+      })()}
 
       {/* Save to collection + share */}
       <SaveToCollectionModal
@@ -1055,10 +984,47 @@ export default function AssetDetailScreen() {
         visible={rightsSheetVisible}
         onClose={() => setRightsSheetVisible(false)}
         disclosureVersion={asset.rightsVersion ?? 'Rights v1'}
-        rights={CANONICAL_RIGHTS_LABELS.map((label) => {
-          const row = (asset.rightsRows as CoOwnRightsRow[] | undefined)?.find((r) => r.label === label);
-          return row ?? { label, answer: 'To be confirmed', isTbc: true };
-        })}
+        rights={rightsRows}
+      />
+
+      {/* Supply structure sheet — full authorised/issued/float/locked/
+          treasury ledger. Opens from the "View supply structure" disclosure. */}
+      <CoOwnSupplySheet
+        visible={supplySheetVisible}
+        onClose={() => setSupplySheetVisible(false)}
+        unitPriceLabel={formatCoOwnIze(asset.unitPriceGbp)}
+        totalUnits={totalUnits}
+        availableUnits={availableUnits}
+        allocatedPct={allocatedPct}
+        viewerUnits={yourUnits}
+        viewerPct={viewerPct}
+        settlementMode={asset.settlementMode}
+        feePct={feePct}
+        holderCount={asset.holders}
+        status={asset.isOpen ? (availableUnits > 0 ? 'open' : 'closed') : 'paused'}
+        supply={{
+          authorised: totalUnits,
+          issued: totalUnits,
+          publicFloat: totalUnits - availableUnits,
+          sponsorLocked: 0,
+          treasury: availableUnits,
+        }}
+        rightsVersion={asset.rightsVersion ?? undefined}
+      />
+
+      {/* Overflow sheet — lower-frequency hero actions (Fav, Watch, Report). */}
+      <CoOwnOverflowSheet
+        visible={overflowVisible}
+        onClose={() => setOverflowVisible(false)}
+        onToggleFav={social.toggleLike}
+        isFav={social.isLiked}
+        onWatch={() => {
+          setOverflowVisible(false);
+        }}
+        onReport={() => {
+          setOverflowVisible(false);
+          navigation.navigate('CoOwnIssue', { assetId: asset.id });
+        }}
       />
     </View>
   );
@@ -1068,271 +1034,103 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  collapsedHeader: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 20,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  collapsedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
-  },
-  collapsedBackBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  collapsedTitle: {
-    flex: 1,
-    fontSize: Type.bodyEmphasis.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: -0.2,
-    textAlign: 'center',
-    marginHorizontal: Space.sm,
-  },
-  identityStage: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.xl,
-    gap: Space.xs,
-  },
-  identityHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: Space.sm,
-  },
-  identityHeaderLeft: {
-    flex: 1,
-    gap: 6,
-  },
-  eyebrow: {
-    fontSize: Type.metaElevated.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 1.0,
-    textTransform: 'uppercase',
-  },
-  title: {
-    fontSize: Type.display.size,
-    fontFamily: Typography.family.bold,
-    lineHeight: 36,
-    letterSpacing: -0.5,
-  },
-  description: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: 22,
-    marginTop: Space.xs,
-  },
-  sectionWrap: {
-    paddingHorizontal: Space.md,
-    marginTop: Space.xl,
-  },
-  // Phase 6: tablet two-column layout
-  tabletTwoCol: {
-    flexDirection: 'row',
-    gap: Space.md,
-    paddingHorizontal: Space.md,
-    marginTop: Space.xl,
-  },
-  tabletCol: {
-    flex: 1,
-    paddingHorizontal: 0,
-    marginTop: 0,
-  },
-  // Risk reminder before sticky dock
-  riskReminder: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.xs + 2,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  riskReminderText: {
-    flex: 1,
-    fontSize: 11,
-    fontFamily: Typography.family.regular,
-    letterSpacing: 0.1,
-  },
-  sectionTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: -0.3,
-  },
-  collapsibleHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: Space.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  collapsibleHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    flex: 1,
-    minWidth: 0,
-    flexShrink: 1,
-  },
-  collapsibleHeadingGroup: {
-    gap: 2,
-  },
-  collapsibleEyebrow: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 1.0,
-    textTransform: 'uppercase',
-  },
-  collapsibleSubtext: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-  },
-  buyoutLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingVertical: Space.md,
-    paddingHorizontal: Space.md,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-  },
-  buyoutLinkText: {
-    flex: 1,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-  },
-  recommendationSection: {
-    marginTop: Space.lg,
-  },
   familyBadgeOverlay: {
     alignSelf: 'flex-start',
   },
-  issuerDock: {
+  identityExtension: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
+  },
+  // ── Market status row (inside transaction surface) ──
+  marketStatusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-    paddingVertical: Space.sm + 2,
-    paddingHorizontal: Space.md,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
+    flexWrap: 'wrap',
+    gap: 0,
   },
-  issuerDockIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  issuerDockBody: {
-    flex: 1,
-    minWidth: 0,
-    gap: 1,
-  },
-  issuerDockTitle: {
-    fontSize: Type.bodyEmphasis.size,
+  marketStatusText: {
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: -0.1,
+    letterSpacing: 0,
   },
-  issuerDockText: {
+  marketStatusStale: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
   },
-  dockRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Space.md,
+  marketStatusRights: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
   },
-  dockRowCompact: {
-    flexDirection: 'column',
-    alignItems: 'stretch',
-    gap: Space.sm,
+  secondaryMetrics: {
+    marginTop: Space.sm,
+    gap: 0,
   },
-  dockPriceSection: {
-    flex: 1,
-    flexShrink: 1,
-    gap: 2,
-  },
-  dockPriceSectionCompact: {
-    flex: 0,
+  // ── Viewer position ──
+  viewerPositionHeader: {
     flexDirection: 'row',
     alignItems: 'baseline',
     justifyContent: 'space-between',
     gap: Space.sm,
+    marginBottom: Space.xs,
   },
-  dockPriceLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    letterSpacing: 0.2,
-    textTransform: 'uppercase',
-  },
-  dockPriceValue: {
-    fontSize: Type.priceList.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: -0.3,
-  },
-  dockActions: {
-    flexDirection: 'row',
-    gap: Space.sm,
-    alignItems: 'center',
-    flexShrink: 1,
-  },
-  dockActionsCompact: {
-    flex: 0,
-    flexShrink: 0,
-  },
-  dockActionsStacked: {
-    flexDirection: 'column-reverse',
-    alignItems: 'stretch',
-  },
-  dockSecondaryBtn: {
-    minHeight: 44,
-    paddingVertical: Space.sm + 4,
-    paddingHorizontal: Space.lg,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-  },
-  dockSecondaryBtnStacked: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dockSecondaryText: {
-    fontSize: Type.body.size,
+  viewerPositionLabel: {
+    fontSize: Type.metaElevated.size,
     fontFamily: Typography.family.semibold,
+    letterSpacing: Type.metaElevated.letterSpacing,
   },
-  dockPrimaryBtn: {
-    minWidth: 140,
-    flexShrink: 1,
+  viewerPositionValue: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: 0,
+    fontVariant: ['tabular-nums'],
   },
-  dockPrimaryBtnCompact: {
-    minWidth: 0,
-    flex: 1,
+  // ── Supply summary ──
+  supplySummary: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: Space.sm,
+    marginBottom: Space.sm,
   },
-  dockPrimaryBtnStacked: {
-    flex: 0,
-    width: '100%',
+  supplyUnits: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: 0,
   },
-  // ── Valuation provenance (spec 10 §8.1) ──
+  supplyAllocated: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
+    fontVariant: ['tabular-nums'],
+  },
+  allocationBar: {
+    height: 4,
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  allocationFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  supplyHolders: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    marginTop: Space.xs,
+  },
+  // ── Rights summary ──
+  rightsSummary: {
+    paddingVertical: Space.sm,
+  },
+  rightsCriticalStatement: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.medium,
+    lineHeight: Type.body.lineHeight + 2,
+  },
+  // ── Valuation provenance card ──
   valuationCard: {
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
-  },
-  valuationTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: -0.3,
-    marginBottom: Space.sm,
+    marginTop: Space.sm,
   },
   valuationGrid: {
     gap: Space.xs,
@@ -1362,38 +1160,14 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
     fontStyle: 'italic',
   },
-  // ── Rights & risks entry ──
-  rightsEntry: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Space.sm,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.md,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  rightsEntryLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    flex: 1,
-  },
-  rightsEntryText: {
+  // ── Dock state badge ──
+  dockStateBadge: {
     fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: 0,
   },
-  rightsVersionChip: {
-    paddingHorizontal: Space.sm,
-    paddingVertical: 3,
-    borderRadius: Radius.full,
-  },
-  rightsVersionText: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.meta.letterSpacing,
+  // ── Discovery ──
+  recommendationSection: {
+    marginTop: Space.lg,
   },
 });
