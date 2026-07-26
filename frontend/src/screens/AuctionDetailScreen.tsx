@@ -7,29 +7,23 @@ import {
   Pressable,
   Text,
   useWindowDimensions,
-  LayoutAnimation,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import { StatusBar } from 'expo-status-bar';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import Reanimated, { FadeIn } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Reanimated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
 import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useCurrencyContext } from '../context/CurrencyContext';
 import { parseApiError } from '../lib/apiClient';
-import { AppButton } from '../components/ui/AppButton';
-import { AnimatedPressable } from '../components/AnimatedPressable';
-import { CachedImage } from '../components/CachedImage';
-import { EmptyState } from '../components/EmptyState';
-import { SkeletonLoader } from '../components/SkeletonLoader';
-import { Meta, Body, BodyEmphasis, Headline } from '../components/ui/Text';
+import { Meta, BodyEmphasis, Headline } from '../components/ui/Text';
 import { toIze, formatIzeAmount } from '../utils/currency';
-import { Space, Radius, Typography } from '../theme/designTokens';
-import { useReducedMotion } from '../hooks/useReducedMotion';
+import { Space, Radius, Typography, Type, DockConstants } from '../theme/designTokens';
 import {
   getAuctionDetail,
   placeAuctionBid,
@@ -50,7 +44,18 @@ import { FullscreenMediaViewer } from '../components/product/FullscreenMediaView
 import { SellerTrustCard, ProductFamilyBadge, RecommendationRail } from '../components/product';
 import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
 import { ShareSheet } from '../components/ShareSheet';
-import { CommerceStickyDock, CommerceStateCanvas, CommerceRelatedRail, CategoryEvidence } from '../components/commerce';
+import { CommerceStickyDock, CommerceStateCanvas, CommerceRelatedRail, CategoryEvidence, CommerceMediaStage } from '../components/commerce';
+import {
+  CommerceDetailHeader,
+  CommerceDetailIdentity,
+  CommerceDetailTransactionSurface,
+  CommerceDetailMetricRow,
+  CommerceDetailDisclosureRow,
+  CommerceDetailSection,
+  CommerceDetailSellerRow,
+  CommerceDetailStateDock,
+  CommerceDetailMediaRail,
+} from '../components/commerce/detail';
 import { resolveEvidenceGroups } from '../platform/commerce/categoryEvidence';
 import {
   useBucketedServerClock,
@@ -84,7 +89,6 @@ import {
 } from '../utils/auctionDetailLogic';
 import {
   AuctionStateBadge,
-  AuctionStickyBidDock,
   AuctionCountdown,
   ReserveStatusBadge,
 } from '../components/auction';
@@ -99,8 +103,13 @@ export default function AuctionDetailScreen() {
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
   const { currencyCode, goldRates, displayMode } = useCurrencyContext();
-  const reducedMotionEnabled = useReducedMotion();
   const insets = useSafeAreaInsets();
+  const { colors, isDark } = useAppTheme();
+
+  const scrollY = useSharedValue(0);
+  const scrollHandler = useAnimatedScrollHandler((event) => {
+    scrollY.value = event.contentOffset.y;
+  });
 
   const [auction, setAuction] = React.useState<AuctionDetailType | null>(null);
   const [bidActivity, setBidActivity] = React.useState<AuctionBidActivity[]>([]);
@@ -118,13 +127,14 @@ export default function AuctionDetailScreen() {
   const [bidHistorySheetVisible, setBidHistorySheetVisible] = React.useState(false);
   const [rulesSheetVisible, setRulesSheetVisible] = React.useState(false);
   const [mediaViewerVisible, setMediaViewerVisible] = React.useState(false);
+  const [overflowVisible, setOverflowVisible] = React.useState(false);
   const [relatedAuctions, setRelatedAuctions] = React.useState<MarketAuction[]>([]);
   const [relatedLoading, setRelatedLoading] = React.useState(false);
 
   const currentUser = useStore((state) => state.currentUser);
 
-  const { height: screenHeight } = useWindowDimensions();
-  const HERO_HEIGHT = Math.min(screenHeight * 0.48, 440);
+  const { width: screenWidth } = useWindowDimensions();
+  const isCompact = screenWidth < 390;
 
   const serverNowRef = React.useRef<string | null>(null);
   const { secondClock, minuteClock, resync, needsResync, resyncFailed, markResyncFailed, clearResyncFailed } =
@@ -441,6 +451,14 @@ export default function AuctionDetailScreen() {
   const familyStateAccent = isLive ? 'Live' : isUpcoming ? 'Upcoming' : isCancelled ? 'Cancelled'
     : isSettled ? 'Settled' : isEnded ? 'Ended' : null;
 
+  // Compute scroll bottom padding from dock geometry + safe area so the
+  // sticky dock never covers the last content row.
+  const hasDualDock = showBidControls && buyNowAvailable && stateAction?.secondary.type === 'buyNow' && !isBuyNowLoading;
+  const dockHeight = hasDualDock
+    ? DockConstants.dualActionHeight
+    : DockConstants.singleActionHeight;
+  const scrollBottomPadding = Math.max(insets.bottom, Space.md) + dockHeight + Space.md;
+
   if (loading) {
     return (
       <View style={styles.container}>
@@ -463,287 +481,234 @@ export default function AuctionDetailScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <ScrollView
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+
+      {/* ── Collapsed scrolling header ──
+          Quiet glyph hit targets, no large rounded-square containers.
+          Spec 02 shape system: separate hit area from visible shape. */}
+      <CommerceDetailHeader
+        scrollY={scrollY}
+        title={auction.title}
+        onBack={() => navigation.goBack()}
+        rightAction={{
+          icon: 'ellipsis-horizontal',
+          label: 'More actions',
+          onPress: () => setOverflowVisible(true),
+        }}
+      />
+
+      <Reanimated.ScrollView
         showsVerticalScrollIndicator={false}
+        onScroll={scrollHandler}
+        scrollEventThrottle={16}
         accessible
         accessibilityLabel={accessibilityLabel}
+        contentContainerStyle={{ paddingBottom: scrollBottomPadding }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor={Colors.brand}
-            colors={[Colors.brand]}
-            progressBackgroundColor={Colors.surfaceAlt}
+            tintColor={colors.brand}
+            colors={[colors.brand]}
+            progressBackgroundColor={colors.surfaceAlt}
           />
         }
       >
-        {/* ── 1. Media Hero — near-full-screen with gradient legibility layer ── */}
-        <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}
-        >
-          <View style={[styles.heroWrap, { height: HERO_HEIGHT }]}>
-            {auction.imageUrl ? (
-              <Pressable
-                onPress={() => setMediaViewerVisible(true)}
-                accessibilityRole="button"
-                accessibilityLabel="Open full-screen image viewer"
-              >
-                <CachedImage
-                  uri={auction.imageUrl}
-                  style={styles.heroImage}
-                  containerStyle={styles.heroImageContainer}
-                  contentFit="cover"
-                />
-              </Pressable>
-            ) : (
-              <View style={styles.heroPlaceholder}>
-                <Ionicons name="image-outline" size={48} color={Colors.textMuted} />
-              </View>
-            )}
-
-            {/* Gradient legibility layer — top-only for floating controls */}
-            <LinearGradient
-              colors={['rgba(0,0,0,0.35)', 'transparent', 'transparent', 'rgba(0,0,0,0.25)']}
-              locations={[0, 0.25, 0.7, 1]}
-              style={styles.heroGradient}
-            />
-
-            {/* Lifecycle indicator — single clean badge */}
-            <View style={styles.heroTopRow}>
+        {/* ── Zone A — Media stage ──
+            CommerceMediaStage handles paging/zoom/fullscreen only.
+            CommerceDetailMediaRail overlays the max-3-visible-controls
+            (Back, Share, Watch) + overflow (Save, Like). Spec 02 §A:
+            "Maximum visible utility controls over media: three." Spec 04
+            §1: "Watch is the auction participation state. Save-to-
+            collection may remain in overflow." */}
+        <CommerceMediaStage
+          images={auction.imageUrl ? [auction.imageUrl] : []}
+          objectId={auction.id}
+          topInset={insets.top}
+          scrollY={scrollY}
+          onBack={() => navigation.goBack()}
+          onShare={social.openShare}
+          onSave={social.openCollectionPicker}
+          onToggleFav={social.toggleLike}
+          isFav={social.isLiked}
+          isSaved={social.isSavedToCollection}
+          showDefaultControls={false}
+          heightFraction={isCompact ? 0.5 : 0.56}
+          onOpenFullscreen={() => setMediaViewerVisible(true)}
+          overlayTopContent={
+            <View style={styles.stateBadgeOverlay}>
               <AuctionStateBadge
                 state={isLive ? 'live' : isUpcoming ? 'upcoming' : isCancelled ? 'cancelled' : isSettled ? 'settled' : 'ended'}
               />
             </View>
-
-            {/* Floating controls — back (left), share + save + like + watch (right) */}
-            <AnimatedPressable
-              style={[styles.backBtnFloating, { top: insets.top + Space.xs }]}
-              onPress={() => navigation.goBack()}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-              accessibilityLabel="Go back"
-              hitSlop={4}
-            >
-              <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
-            </AnimatedPressable>
-
-            <View style={[styles.floatingControlsRight, { top: insets.top + Space.xs }]}>
-              <AnimatedPressable
-                style={styles.floatingControlBtn}
-                onPress={social.openShare}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel="Share auction"
-                hitSlop={4}
-              >
-                <Ionicons name="share-outline" size={20} color="#FFFFFF" />
-              </AnimatedPressable>
-
-              <AnimatedPressable
-                style={styles.floatingControlBtn}
-                onPress={social.openCollectionPicker}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel={social.isSavedToCollection ? 'Saved to collection' : 'Save to collection'}
-                hitSlop={4}
-              >
-                <Ionicons
-                  name={social.isSavedToCollection ? 'bookmark' : 'bookmark-outline'}
-                  size={20}
-                  color={social.isSavedToCollection ? Colors.brand : '#FFFFFF'}
-                />
-              </AnimatedPressable>
-
-              <AnimatedPressable
-                style={styles.floatingControlBtn}
-                onPress={social.toggleLike}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel={social.isLiked ? 'Remove from wishlist' : 'Add to wishlist'}
-                hitSlop={4}
-              >
-                <Ionicons
-                  name={social.isLiked ? 'heart' : 'heart-outline'}
-                  size={20}
-                  color={social.isLiked ? Colors.danger : '#FFFFFF'}
-                />
-              </AnimatedPressable>
-
-              {/* Auction watch — separate from like/save. Eye icon = participation tracking. */}
-              <AnimatedPressable
-                style={[styles.floatingControlBtn, auction.isWatched && styles.watchBtnFloatingActive]}
-                onPress={handleToggleWatch}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel={auction.isWatched ? 'Remove from watchlist' : 'Add to watchlist'}
-                accessibilityHint={watchToggling ? 'Updating' : undefined}
-                hitSlop={4}
-              >
-                <Ionicons
-                  name={auction.isWatched ? 'eye' : 'eye-outline'}
-                  size={20}
-                  color={auction.isWatched ? Colors.brand : '#FFFFFF'}
-                />
-              </AnimatedPressable>
-            </View>
-
-            {/* Unified family badge */}
-            <View style={[styles.familyBadgeWrap, { top: insets.top + Space.xs + 48 }]}>
-              <ProductFamilyBadge family="auction" stateAccent={familyStateAccent} compact />
-            </View>
-
-            {/* Media count hint when multiple media exists (kept minimal) */}
-          </View>
-        </Reanimated.View>
+          }
+        />
+        <CommerceDetailMediaRail
+          onBack={() => navigation.goBack()}
+          topInset={insets.top}
+          rightActions={[
+            {
+              icon: 'share-outline',
+              label: 'Share auction',
+              onPress: social.openShare,
+            },
+            {
+              icon: auction.isWatched ? 'eye' : 'eye-outline',
+              activeIcon: 'eye',
+              label: auction.isWatched ? 'Remove from watchlist' : 'Add to watchlist',
+              onPress: handleToggleWatch,
+              isActive: auction.isWatched,
+            },
+          ]}
+          onOverflow={() => setOverflowVisible(true)}
+        />
 
         {resyncFailed && !error && (
-          <View style={styles.resyncBanner}>
-            <Ionicons name="sync-circle-outline" size={14} color={Colors.textMuted} />
-            <Meta style={styles.resyncText}>Clock sync failed — pull to refresh</Meta>
+          <View style={[styles.resyncBanner, { borderColor: colors.borderSubtle }]}>
+            <Ionicons name="sync-circle-outline" size={14} color={colors.textMuted} />
+            <Meta style={[styles.resyncText, { color: colors.textMuted }]}>
+              Clock sync failed — pull to refresh
+            </Meta>
           </View>
         )}
 
-        {/* ── B. Item identity — one primary location, editorial negative space ── */}
-        <View style={styles.itemIdentitySection}>
-          {auction.brand && <Text style={styles.itemIdentityEyebrow} numberOfLines={1}>{auction.brand}</Text>}
-          <Headline style={styles.itemIdentityTitle} numberOfLines={2}>{auction.title}</Headline>
-          {auction.conditionLabel && (
-            <Text style={styles.itemIdentityCondition}>{auction.conditionLabel}</Text>
-          )}
+        {/* ── Zone B — Identity seam ──
+            One compact identity composition: eyebrow + title + primary
+            value + secondary truth line. No second large title elsewhere.
+            Spec 02 §B + spec 04 §2. */}
+        <CommerceDetailIdentity
+          eyebrow={auction.brand ?? undefined}
+          title={auction.title}
+          primaryValue={priceText}
+          secondaryLine={auction.conditionLabel ?? undefined}
+          familyChip={
+            <ProductFamilyBadge family="auction" stateAccent={familyStateAccent} compact />
+          }
+        />
+
+        {/* Slim seller confidence row — replaces the large seller module
+            near the identity. The canonical SellerTrustCard remains lower
+            in the page. Spec 02 §B: "seller/issuer may appear as a compact
+            inline confidence row when enough data exists." */}
+        <View style={styles.identityExtension}>
+          <CommerceDetailSellerRow
+            name={auction.seller.displayName ?? auction.seller.username}
+            verified={sellerTrustData?.verified}
+            ratingLine={
+              sellerTrustData?.rating != null
+                ? `${sellerTrustData.rating.toFixed(1)}${sellerTrustData?.reviewCount != null ? ` · ${sellerTrustData.reviewCount} reviews` : ''}`
+                : undefined
+            }
+            onPress={() => navigation.navigate('UserProfile', { userId: auction.seller.id })}
+            primaryAction={
+              !isSeller
+                ? {
+                    label: 'Message',
+                    onPress: () =>
+                      navigation.navigate('NewMessage', {
+                        preselectedUserId: auction.seller.id,
+                        preselectedDisplayName: auction.seller.username,
+                      }),
+                  }
+                : undefined
+            }
+            secondaryAction={
+              !isSeller
+                ? {
+                    label: 'Follow',
+                    onPress: () => sellerFollowMutation.mutate(),
+                  }
+                : undefined
+            }
+          />
         </View>
 
-        {/* ── C. Auction transaction module — one strong surface ── */}
-        <View style={styles.transactionModule}>
-          {/* State line */}
-          {viewerContext && !isTerminal && (
-            <Text
-              style={[
-                styles.transactionStateLine,
-                viewerContext.treatment === 'warning' && { color: Colors.danger },
-                viewerContext.treatment === 'calm' && { color: Colors.success },
-                viewerContext.treatment === 'seller' && { color: Colors.brand },
-              ]}
-              numberOfLines={1}
-            >
-              {viewerContext.title}
-              {viewerContext.subtitle ? `  ·  ${viewerContext.subtitle}` : ''}
-            </Text>
-          )}
-
-          {/* Price — dominant hierarchy with label above */}
-          <View style={styles.transactionPriceRow}>
-            <View style={styles.transactionPricePrimary}>
-              <Text style={styles.transactionPriceLabel}>{priceLabel}</Text>
-              {(() => {
-                const izeAmount = toIze(priceAmount, 'GBP', goldRates);
-                const izeText = formatIzeAmount(izeAmount, 2);
-                const localText = formatFromFiat(priceAmount, 'GBP');
-                if (displayMode === 'fiat') {
-                  return (
-                    <>
-                      <Text style={styles.transactionPriceValue} numberOfLines={1}>{localText}</Text>
-                      <Text style={styles.transactionPriceSecondary} numberOfLines={1}>{izeText}</Text>
-                    </>
-                  );
-                }
-                return (
-                  <>
-                    <Text style={styles.transactionPriceValue} numberOfLines={1}>{izeText}</Text>
-                    {displayMode !== 'ize' && (
-                      <Text style={styles.transactionPriceSecondary} numberOfLines={1}>≈ {localText}</Text>
-                    )}
-                  </>
-                );
-              })()}
-            </View>
-            <View style={styles.transactionPriceMeta}>
-              <Text style={styles.transactionBidCount}>
-                {auction.bidCount} {auction.bidCount === 1 ? 'bid' : 'bids'}
+        {/* ── Zone C — Auction transaction surface ──
+            One strong contained module: current bid + bid count + reserve
+            + countdown + viewer state. Replaces the stacked
+            transactionModule + outbid/leading/watching blocks. Spec 02 §C
+            + spec 04 §3/§4: "Integrate viewer state into the transaction
+            surface rather than adding another full-width block." */}
+        <CommerceDetailTransactionSurface
+          primaryLabel={priceLabel}
+          primaryValue={priceText}
+          secondaryLabel={auction.bidCount > 0 ? 'Bids' : undefined}
+          secondaryValue={`${auction.bidCount} ${auction.bidCount === 1 ? 'bid' : 'bids'}`}
+          viewerState={
+            viewerContext && !isTerminal ? (
+              <Text
+                style={[
+                  styles.viewerStateLine,
+                  viewerContext.treatment === 'warning' && { color: colors.danger },
+                  viewerContext.treatment === 'calm' && { color: colors.success },
+                  viewerContext.treatment === 'seller' && { color: colors.brand },
+                  viewerContext.treatment === 'restrained' && { color: colors.textSecondary },
+                ]}
+                numberOfLines={1}
+              >
+                {viewerContext.title}
+                {viewerContext.subtitle ? `  ·  ${viewerContext.subtitle}` : ''}
               </Text>
+            ) : undefined
+          }
+          statusRow={
+            <View style={styles.transactionStatusRow}>
+              {reserveStatus !== 'none' && !isTerminal && (
+                <View style={styles.transactionReserveRow}>
+                  <ReserveStatusBadge status={reserveStatus} showExplanation />
+                  {reserveStatus === 'not-met' && isLive && (
+                    <Text style={[styles.transactionReserveHint, { color: colors.textSecondary }]} numberOfLines={1}>
+                      Bidding continues until reserve is met
+                    </Text>
+                  )}
+                </View>
+              )}
+              <AuctionCountdown
+                text={countdown.text}
+                urgent={countdown.isFinalMinutes}
+                stage={countdown.stage}
+                progress={isLive ? countdownProgress : undefined}
+                showProgress={isLive}
+              />
             </View>
-          </View>
-
-          {/* Minimum to lead (outbid) — actionable emphasis */}
+          }
+        >
+          {/* Minimum to lead (outbid) — actionable emphasis inside the
+              surface. The dock carries the "Bid again" action. */}
           {isLive && viewerState === 'outbid' && auction.minimumNextBidGbp > 0 && (
             <View style={styles.transactionMinRow}>
-              <Text style={styles.transactionMinLabel}>Minimum to lead</Text>
-              <Text style={styles.transactionMinValue}>
+              <Text style={[styles.transactionMinLabel, { color: colors.textSecondary }]}>
+                Minimum to lead
+              </Text>
+              <Text style={[styles.transactionMinValue, { color: colors.textPrimary }]}>
                 {formatIzeAmount(toIze(auction.minimumNextBidGbp, 'GBP', goldRates), 2)}
               </Text>
             </View>
           )}
+        </CommerceDetailTransactionSurface>
 
-          {/* Reserve price status — only when reserve is set and auction is live or upcoming */}
-          {reserveStatus !== 'none' && !isTerminal && (
-            <View style={styles.transactionReserveRow}>
-              <ReserveStatusBadge status={reserveStatus} showExplanation />
-              {reserveStatus === 'not-met' && isLive && (
-                <Text style={styles.transactionReserveHint} numberOfLines={1}>
-                  Bidding continues until reserve is met
-                </Text>
-              )}
-            </View>
-          )}
-
-          {/* Countdown — tabular-nums, urgency color, progress bar */}
-          <View style={styles.transactionCountdownRow}>
-            <AuctionCountdown
-              text={countdown.text}
-              urgent={countdown.isFinalMinutes}
-              stage={countdown.stage}
-              progress={isLive ? countdownProgress : undefined}
-              showProgress={isLive}
-            />
-          </View>
-        </View>
-
-        {/* ── D. Viewer-state action — compact, single next action ── */}
-        {!isTerminal && viewerState === 'outbid' && isLive && (
-          <View style={styles.outbidActionBlock}>
-            <AppButton
-              style={styles.outbidAction}
-              onPress={handleOpenBidSheet}
-              variant="primary"
-              size="md"
-              align="center"
-              title="Bid again"
-              accessibilityLabel="Place a new bid to regain the lead"
-            />
-          </View>
-        )}
-        {!isTerminal && viewerState === 'leading' && isLive && (
-          <View style={styles.leadingBlock}>
-            <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
-            <View style={styles.leadingTextWrap}>
-              <Text style={styles.leadingTitle}>You're leading</Text>
-              <Text style={styles.leadingSubtitle}>Current value: {formatFromFiat(auction.currentBidGbp, 'GBP')}</Text>
-            </View>
-          </View>
-        )}
-        {!isTerminal && viewerState === 'watching' && isLive && (
-          <View style={styles.watchingBlock}>
-            <Ionicons name="eye-outline" size={16} color={Colors.textSecondary} />
-            <Text style={styles.watchingText}>You're watching this auction</Text>
-          </View>
-        )}
-
-        {/* ── Terminal result — one compact module, no duplicate title/brand ── */}
+        {/* ── Terminal result — one compact module, no duplicate title/brand ──
+            Spec 04 §7: "Terminal: one result state, one next valid
+            action." The result state lives here; the dock carries the
+            next valid action. */}
         {isTerminal && !isCancelled && (
-          <View style={styles.terminalResultModule}>
+          <View style={[styles.terminalResultModule, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
             {viewerState === 'won' && (
               <>
-                <Text style={styles.terminalResultTitleWon}>You won</Text>
-                <Text style={styles.terminalResultValue}>
+                <Text style={[styles.terminalResultTitleWon, { color: colors.success }]}>You won</Text>
+                <Text style={[styles.terminalResultValue, { color: colors.textPrimary }]}>
                   {formatIzeAmount(toIze(auction.currentBidGbp || auction.buyNowPriceGbp || 0, 'GBP', goldRates), 2)}
                 </Text>
-                <Text style={styles.terminalResultNote}>Next step required — view result for fulfilment details.</Text>
+                <Text style={[styles.terminalResultNote, { color: colors.textSecondary }]}>
+                  Next step required — view result for fulfilment details.
+                </Text>
               </>
             )}
             {viewerState === 'lost' && (
               <>
-                <Text style={styles.terminalResultTitleLost}>Auction closed</Text>
-                <Text style={styles.terminalResultValue}>
+                <Text style={[styles.terminalResultTitleLost, { color: colors.textPrimary }]}>Auction closed</Text>
+                <Text style={[styles.terminalResultValue, { color: colors.textPrimary }]}>
                   {formatIzeAmount(toIze(auction.currentBidGbp, 'GBP', goldRates), 2)}
                 </Text>
                 <Pressable
@@ -752,28 +717,30 @@ export default function AuctionDetailScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Discover similar auctions"
                 >
-                  <Ionicons name="search-outline" size={14} color={Colors.brand} />
-                  <Text style={styles.discoverLinkInlineText}>Discover similar</Text>
-                  <Ionicons name="chevron-forward" size={12} color={Colors.brand} />
+                  <Ionicons name="search-outline" size={14} color={colors.brand} />
+                  <Text style={[styles.discoverLinkInlineText, { color: colors.brand }]}>Discover similar</Text>
+                  <Ionicons name="chevron-forward" size={12} color={colors.brand} />
                 </Pressable>
               </>
             )}
             {viewerState === 'seller' && auction.bidCount > 0 && (
               <>
-                <Text style={styles.terminalResultTitleSold}>Sold</Text>
-                <Text style={styles.terminalResultValue}>
+                <Text style={[styles.terminalResultTitleSold, { color: colors.success }]}>Sold</Text>
+                <Text style={[styles.terminalResultValue, { color: colors.textPrimary }]}>
                   {formatIzeAmount(toIze(auction.currentBidGbp || auction.buyNowPriceGbp || 0, 'GBP', goldRates), 2)}
                 </Text>
-                <Text style={styles.terminalResultNote}>Fulfilment not yet available for this result.</Text>
+                <Text style={[styles.terminalResultNote, { color: colors.textSecondary }]}>
+                  Fulfilment not yet available for this result.
+                </Text>
               </>
             )}
             {viewerState === 'seller' && auction.bidCount === 0 && (
-              <Text style={styles.terminalResultTitleLost}>Ended without bids</Text>
+              <Text style={[styles.terminalResultTitleLost, { color: colors.textPrimary }]}>Ended without bids</Text>
             )}
             {viewerState === 'not_participating' && (
               <>
-                <Text style={styles.terminalResultTitleLost}>Auction closed</Text>
-                <Text style={styles.terminalResultValue}>
+                <Text style={[styles.terminalResultTitleLost, { color: colors.textPrimary }]}>Auction closed</Text>
+                <Text style={[styles.terminalResultValue, { color: colors.textPrimary }]}>
                   {formatIzeAmount(toIze(auction.currentBidGbp, 'GBP', goldRates), 2)}
                 </Text>
               </>
@@ -783,22 +750,26 @@ export default function AuctionDetailScreen() {
 
         {/* ── Cancelled terminal module ── */}
         {isCancelled && (
-          <View style={styles.terminalResultModule}>
-            <Text style={styles.terminalResultTitleLost}>Auction cancelled</Text>
-            <Text style={styles.terminalResultNote}>
+          <View style={[styles.terminalResultModule, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
+            <Text style={[styles.terminalResultTitleLost, { color: colors.textPrimary }]}>Auction cancelled</Text>
+            <Text style={[styles.terminalResultNote, { color: colors.textSecondary }]}>
               Cancelled by the seller or platform. No bids were charged.
             </Text>
           </View>
         )}
 
-        {/* ── E. Item evidence/details — description + category evidence ── */}
+        {/* ── Zone E — Evidence and confidence ──
+            Flat sections + disclosure rows. No separate rounded card for
+            every subsection. Spec 02 §E + spec 04 §6: "Auction rules
+            should be a disclosure row, not another large generic card." */}
         {auction.description && (
-          <View style={styles.itemDetailsSection}>
-            <Text style={styles.itemDetailsDescription}>{auction.description}</Text>
+          <View style={styles.descriptionBlock}>
+            <Text style={[styles.descriptionText, { color: colors.textPrimary }]}>
+              {auction.description}
+            </Text>
           </View>
         )}
 
-        {/* ── Category evidence — editorial product details ── */}
         {(() => {
           const evidenceGroups = resolveEvidenceGroups({
             category: auction.category,
@@ -811,24 +782,22 @@ export default function AuctionDetailScreen() {
           ) : null;
         })()}
 
-        {/* ── 7. Seller confidence — one canonical module (SellerTrustCard below) ── */}
-
-        {/* ── Bid history — tap to open sheet ── */}
-        <View style={styles.section}>
-          <Pressable
-            style={styles.expandableHeader}
+        {/* Bid history — compact disclosure + preview. Spec 04 §5. */}
+        <CommerceDetailSection label="Bid history" divider>
+          <CommerceDetailDisclosureRow
+            label="Bid history"
+            count={auction.bidCount > 0 ? auction.bidCount : undefined}
+            summary={
+              auction.bidCount > 0 && bidActivity.length > 0
+                ? `${formatFromFiat(auction.currentBidGbp, 'GBP')} · ${auction.bidCount} ${auction.bidCount === 1 ? 'bid' : 'bids'}`
+                : auction.bidCount > 0
+                  ? `${auction.bidCount} ${auction.bidCount === 1 ? 'bid' : 'bids'}`
+                  : 'No bids yet'
+            }
             onPress={() => setBidHistorySheetVisible(true)}
-            accessibilityRole="button"
+            leadingIcon="list-outline"
             accessibilityLabel="View bid history"
-          >
-            <BodyEmphasis style={styles.sectionTitle}>Bid history</BodyEmphasis>
-            <View style={styles.expandableHeaderRight}>
-              {auction.bidCount > 0 && (
-                <Meta style={styles.bidCountTotal}>{auction.bidCount} total</Meta>
-              )}
-              <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
-            </View>
-          </Pressable>
+          />
           {auction.bidCount > 0 && bidActivity.length > 0 && (
             <View style={styles.bidPreviewList}>
               {bidActivity.slice(0, 3).map((bid, index) => {
@@ -836,23 +805,23 @@ export default function AuctionDetailScreen() {
                 return (
                   <View
                     key={bid.id}
-                    style={[styles.bidPreviewRow, row.isTopBid && styles.bidPreviewRowTop]}
+                    style={[styles.bidPreviewRow, { borderColor: colors.borderSubtle }, row.isTopBid && styles.bidPreviewRowTop]}
                   >
                     <View style={styles.bidPreviewLeft}>
-                      <Text style={styles.bidPreviewRank}>{index + 1}</Text>
-                      <Text style={styles.bidPreviewBidder} numberOfLines={1}>
+                      <Text style={[styles.bidPreviewRank, { color: colors.textMuted }]}>{index + 1}</Text>
+                      <Text style={[styles.bidPreviewBidder, { color: colors.textPrimary }]} numberOfLines={1}>
                         {row.bidderLabel}
                       </Text>
                       {row.isTopBid && (
-                        <View style={styles.bidPreviewTopBadge}>
-                          <Text style={styles.bidPreviewTopBadgeText}>LEADING</Text>
+                        <View style={[styles.bidPreviewTopBadge, { backgroundColor: colors.surfaceAlt }]}>
+                          <Text style={[styles.bidPreviewTopBadgeText, { color: colors.success }]}>LEADING</Text>
                         </View>
                       )}
                     </View>
                     <View style={styles.bidPreviewRight}>
-                      <Text style={styles.bidPreviewAmount}>{row.amountText}</Text>
+                      <Text style={[styles.bidPreviewAmount, { color: colors.textPrimary }]}>{row.amountText}</Text>
                       {row.relativeTime && (
-                        <Text style={styles.bidPreviewTime}>{row.relativeTime}</Text>
+                        <Text style={[styles.bidPreviewTime, { color: colors.textMuted }]}>{row.relativeTime}</Text>
                       )}
                     </View>
                   </View>
@@ -865,36 +834,29 @@ export default function AuctionDetailScreen() {
                   accessibilityRole="button"
                   accessibilityLabel={`View all ${auction.bidCount} bids`}
                 >
-                  <Text style={styles.bidPreviewMoreText}>
+                  <Text style={[styles.bidPreviewMoreText, { color: colors.brand }]}>
                     View all {auction.bidCount} bids
                   </Text>
-                  <Ionicons name="chevron-forward" size={14} color={Colors.brand} />
+                  <Ionicons name="chevron-forward" size={14} color={colors.brand} />
                 </Pressable>
               )}
             </View>
           )}
-          {auction.bidCount > 0 && bidActivity.length === 0 && (
-            <View style={styles.bidSummaryRow}>
-              <Text style={styles.bidSummaryLabel}>Highest bid</Text>
-              <Text style={styles.bidSummaryValue}>{formatFromFiat(auction.currentBidGbp, 'GBP')}</Text>
-            </View>
-          )}
-        </View>
+        </CommerceDetailSection>
 
-        {/* ── How bidding works — tap to open sheet ── */}
-        <View style={styles.section}>
-          <Pressable
-            style={styles.expandableHeader}
+        {/* Auction rules — disclosure row, not a large card. Spec 04 §6. */}
+        <CommerceDetailSection label="Auction rules" divider>
+          <CommerceDetailDisclosureRow
+            label="How bidding works"
             onPress={() => setRulesSheetVisible(true)}
-            accessibilityRole="button"
+            leadingIcon="information-circle-outline"
             accessibilityLabel="View bidding rules"
-          >
-            <BodyEmphasis style={styles.sectionTitle}>How bidding works</BodyEmphasis>
-            <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
-          </Pressable>
-        </View>
+          />
+        </CommerceDetailSection>
 
-        {/* ── Related auction discovery ── */}
+        {/* ── Zone F — Discovery ──
+            Discovery begins only after the core product decision is
+            understandable. Spec 02 §F. */}
         {relatedAuctions.length > 0 && (
           <CommerceRelatedRail
             label="More from this category"
@@ -927,7 +889,9 @@ export default function AuctionDetailScreen() {
           />
         )}
 
-        {/* ── PRODUCT-01: Premium seller trust card with follow ── */}
+        {/* Canonical seller confidence module — full SellerTrustCard.
+            The slim row near identity gives the quick signal; this gives
+            the full follow/message/profile surface. */}
         {(() => {
           const seller = sellerTrustData ?? {
             id: auction.seller.id,
@@ -950,7 +914,6 @@ export default function AuctionDetailScreen() {
           );
         })()}
 
-        {/* ── PRODUCT-01: Seen in Looks ── */}
         {seenInLooksSection && seenInLooksSection.items.length > 0 && (
           <View style={styles.recommendationSection}>
             <RecommendationRail
@@ -967,7 +930,6 @@ export default function AuctionDetailScreen() {
           </View>
         )}
 
-        {/* ── PRODUCT-01: Personalised recommendation rails via underlying listingId ── */}
         {recsLoading && railSections.length === 0 ? null : (
           railSections.map((section) => (
             <View key={section.key} style={styles.recommendationSection}>
@@ -985,72 +947,157 @@ export default function AuctionDetailScreen() {
             </View>
           ))
         )}
+      </Reanimated.ScrollView>
 
-        <View style={{ height: 100 + insets.bottom }} />
-      </ScrollView>
-
-      {/* ── Sticky bottom action dock ── */}
-      {showBidControls && stateAction && stateAction.primary.type !== 'none' && (
-        <AuctionStickyBidDock
-          primaryLabel={stateAction.primary.label}
-          onPrimary={() => {
-            if (stateAction.primary.type === 'placeBid' || stateAction.primary.type === 'increaseBid' || stateAction.primary.type === 'bidAgain') {
-              handleOpenBidSheet();
-            } else if (stateAction.primary.type === 'watchAuction') {
-              void handleToggleWatch();
-            } else if (stateAction.primary.type === 'viewSimilar') {
-              navigation.navigate('MainTabs', { screen: 'Explore' });
-            }
-          }}
-          primaryLoading={isSubmittingBid || watchToggling}
-          disabled={isSubmittingBid || watchToggling}
-          secondaryLabel={buyNowAvailable && stateAction.secondary.type === 'buyNow' && !isBuyNowLoading
-            ? `Buy Now · ${formatFromFiat(auction.buyNowPriceGbp!, 'GBP')}`
-            : isBuyNowLoading ? 'Processing…' : undefined}
-          onSecondary={buyNowAvailable && stateAction.secondary.type === 'buyNow' ? openBuyNowSheet : undefined}
-          contextLine={isLive && auction.minimumNextBidGbp > 0
-            ? `Min bid · ${formatFromFiat(auction.minimumNextBidGbp, 'GBP')}`
-            : undefined}
-        />
-      )}
-
-      {isSeller && !isTerminal && stateAction && stateAction.primary.type !== 'none' && (
-        <AuctionStickyBidDock
-          variant="seller"
-          primaryLabel=""
-          onPrimary={() => {}}
-          terminalMessage={isUpcoming ? 'Your auction is scheduled' : `${auction.bidCount} ${auction.bidCount === 1 ? 'bid' : 'bids'} so far`}
-        />
-      )}
-
-      {isTerminal && (
-        <AuctionStickyBidDock
-          variant="terminal"
-          primaryLabel=""
-          onPrimary={() => {}}
-          terminalMessage={
-            isCancelled ? 'Auction cancelled'
+      {/* ── Zone G — Sticky action dock ──
+          Shared shell dock. Spec 04 §7: live → current/min next bid +
+          Place bid (+ optional Buy now); outbid → Minimum to lead + Bid
+          again; leading → calm; terminal → one result state + one next
+          valid action. Blocked state includes a valid next step. */}
+      {(() => {
+        // Terminal — one result state, one next valid action.
+        if (isTerminal) {
+          const terminalMessage = isCancelled ? 'Auction cancelled'
             : viewerState === 'won' ? 'You won this auction'
             : viewerState === 'lost' ? 'Auction ended — you did not win'
             : isSeller && auction.bidCount > 0 ? `Sold — ${auction.bidCount} ${auction.bidCount === 1 ? 'bid' : 'bids'}`
             : isSeller ? 'Ended without bids'
-            : 'Auction ended'
-          }
-          terminalIcon={
-            isCancelled ? 'close-circle-outline'
-            : viewerState === 'won' ? 'trophy-outline'
-            : viewerState === 'lost' ? 'close-circle-outline'
-            : isSeller && auction.bidCount > 0 ? 'checkmark-circle-outline'
-            : isSeller ? 'close-circle-outline'
-            : 'checkmark-done-outline'
-          }
-          terminalAccent={
-            viewerState === 'won' ? Colors.success
-            : isSeller && auction.bidCount > 0 ? Colors.brand
-            : Colors.textMuted
-          }
-        />
-      )}
+            : 'Auction ended';
+          const terminalColor = viewerState === 'won' ? colors.success
+            : isSeller && auction.bidCount > 0 ? colors.brand
+            : colors.textSecondary;
+          return (
+            <CommerceDetailStateDock
+              stateBadge={
+                <Text style={[styles.dockStateBadge, { color: terminalColor }]}>
+                  {terminalMessage}
+                </Text>
+              }
+              primaryAction={
+                viewerState === 'lost' || (isSeller && auction.bidCount === 0)
+                  ? {
+                      label: 'Discover similar',
+                      onPress: () => navigation.navigate('AuctionHome'),
+                      accessibilityLabel: 'Discover similar auctions',
+                    }
+                  : undefined
+              }
+            />
+          );
+        }
+
+        // Seller view — calm state, no primary action.
+        if (isSeller) {
+          return (
+            <CommerceDetailStateDock
+              stateBadge={
+                <Text style={[styles.dockStateBadge, { color: colors.textPrimary }]}>
+                  Seller view
+                </Text>
+              }
+              subtitle={
+                isUpcoming
+                  ? 'Your auction is scheduled'
+                  : `${auction.bidCount} ${auction.bidCount === 1 ? 'bid' : 'bids'} so far`
+              }
+            />
+          );
+        }
+
+        // Live bidder — current/min next bid + Place bid (+ optional Buy now).
+        if (showBidControls && stateAction && stateAction.primary.type !== 'none') {
+          const dockValue = isLive && auction.minimumNextBidGbp > 0
+            ? formatFromFiat(auction.minimumNextBidGbp, 'GBP')
+            : priceText;
+          const dockValueLabel = isLive && auction.minimumNextBidGbp > 0
+            ? 'Min next bid'
+            : priceLabel;
+          const primaryType = stateAction.primary.type;
+          return (
+            <CommerceDetailStateDock
+              value={dockValue}
+              valueLabel={dockValueLabel}
+              primaryAction={{
+                label: stateAction.primary.label,
+                onPress: () => {
+                  if (primaryType === 'placeBid' || primaryType === 'increaseBid' || primaryType === 'bidAgain') {
+                    handleOpenBidSheet();
+                  } else if (primaryType === 'watchAuction') {
+                    void handleToggleWatch();
+                  } else if (primaryType === 'viewSimilar') {
+                    navigation.navigate('MainTabs', { screen: 'Explore' });
+                  }
+                },
+                loading: isSubmittingBid || watchToggling,
+                disabled: isSubmittingBid || watchToggling,
+                accessibilityLabel: stateAction.primary.label,
+              }}
+              secondaryAction={
+                buyNowAvailable && stateAction.secondary.type === 'buyNow'
+                  ? {
+                      label: isBuyNowLoading ? 'Processing…' : `Buy Now · ${formatFromFiat(auction.buyNowPriceGbp!, 'GBP')}`,
+                      onPress: openBuyNowSheet,
+                      disabled: isBuyNowLoading,
+                      loading: isBuyNowLoading,
+                      accessibilityLabel: `Buy now for ${formatFromFiat(auction.buyNowPriceGbp ?? 0, 'GBP')}`,
+                    }
+                  : undefined
+              }
+            />
+          );
+        }
+
+        return null;
+      })()}
+
+      {/* ── Overflow sheet — Save to collection + wishlist (lower-frequency
+          actions kept off the hero per spec 04 §1). ── */}
+      <BottomSheet
+        visible={overflowVisible}
+        onDismiss={() => setOverflowVisible(false)}
+        snapPoint={0.4}
+      >
+        <View style={styles.sheetHeader}>
+          <Headline style={styles.sheetTitle}>More actions</Headline>
+        </View>
+        <Pressable
+          style={[styles.overflowRow, { borderColor: colors.borderSubtle }]}
+          onPress={() => {
+            setOverflowVisible(false);
+            social.openCollectionPicker();
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={social.isSavedToCollection ? 'Saved to collection' : 'Save to collection'}
+        >
+          <Ionicons
+            name={social.isSavedToCollection ? 'bookmark' : 'bookmark-outline'}
+            size={20}
+            color={social.isSavedToCollection ? colors.brand : colors.textPrimary}
+          />
+          <Text style={[styles.overflowRowText, { color: colors.textPrimary }]}>
+            {social.isSavedToCollection ? 'Saved to collection' : 'Save to collection'}
+          </Text>
+        </Pressable>
+        <Pressable
+          style={[styles.overflowRow, { borderColor: colors.borderSubtle }]}
+          onPress={() => {
+            setOverflowVisible(false);
+            social.toggleLike();
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={social.isLiked ? 'Remove from wishlist' : 'Add to wishlist'}
+        >
+          <Ionicons
+            name={social.isLiked ? 'heart' : 'heart-outline'}
+            size={20}
+            color={social.isLiked ? colors.danger : colors.textPrimary}
+          />
+          <Text style={[styles.overflowRowText, { color: colors.textPrimary }]}>
+            {social.isLiked ? 'Remove from wishlist' : 'Add to wishlist'}
+          </Text>
+        </Pressable>
+        <View style={{ height: Space.md }} />
+      </BottomSheet>
 
       {/* ── Bid transaction sheet ── */}
       {auction && (
@@ -2203,7 +2250,9 @@ const styles = StyleSheet.create({
   },
   descriptionText: {
     color: Colors.textSecondary,
-    lineHeight: 22,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight + 2,
+    fontFamily: Typography.family.regular,
   },
   itemInfoList: {
     gap: Space.sm,
@@ -2454,5 +2503,47 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     fontFamily: Typography.family.regular,
+  },
+  // ── Shared-shell reconstruction styles ──
+  stateBadgeOverlay: {
+    position: 'absolute',
+    top: Space.sm,
+    left: Space.sm,
+    flexDirection: 'row',
+    gap: 6,
+  },
+  identityExtension: {
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.xs,
+  },
+  viewerStateLine: {
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontFamily: Typography.family.semibold,
+  },
+  transactionStatusRow: {
+    gap: Space.xs,
+  },
+  descriptionBlock: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.md,
+    paddingBottom: Space.sm,
+  },
+  dockStateBadge: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: 0,
+  },
+  overflowRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+    paddingVertical: Space.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    minHeight: 48,
+  },
+  overflowRowText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.medium,
   },
 });

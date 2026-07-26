@@ -1036,12 +1036,16 @@ describe('PASS 4.1: Refresh and lifecycle parity', () => {
 
 describe('PASS 4.1: Loading and state continuity', () => {
   it('has initial skeleton', () => {
-    expect(screenSrc).toContain('SkeletonLoader');
+    // Loading state is rendered via the shared CommerceStateCanvas
+    // primitive (state="loading") on the canonical screen.
+    expect(screenSrc).toContain('CommerceStateCanvas');
     expect(screenSrc).toContain('loading');
   });
 
   it('has detail failure retry', () => {
-    expect(screenSrc).toContain('EmptyState');
+    // Error state is rendered via the shared CommerceStateCanvas
+    // primitive (state="error") with a "Go Back" retry affordance.
+    expect(screenSrc).toContain('CommerceStateCanvas');
     expect(screenSrc).toContain('Go Back');
   });
 
