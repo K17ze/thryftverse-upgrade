@@ -66,6 +66,8 @@ export type RootStackParamList = {
     itemId?: string;
     /** Offer metadata to attach when navigating from MakeOfferScreen */
     offerPayload?: {
+      /** Server-authoritative offer id from POST /listings/:id/offers */
+      offerId?: string;
       price: number;
       originalPrice: number;
       expiresAt: string;

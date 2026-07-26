@@ -1,0 +1,35 @@
+appId: ${APP_ID}
+---
+tags:
+  - flagship
+  - co-own
+---
+- launchApp:
+    clearState: true
+    permissions:
+      all: allow
+
+# Co-Own is reached via the tab bar or a deep link. Tap the Co-Own tab.
+- tapOn:
+    text: "Co-Own"
+    optional: true
+
+- extendedWaitUntil:
+    visible:
+      id: "co-own-screen"
+      optional: true
+    timeout: 15000
+
+- waitForAnimationToEnd:
+    timeout: 3000
+
+- takeScreenshot: co_own_first_viewport
+
+- scroll:
+    direction: DOWN
+    distance: 400
+
+- waitForAnimationToEnd:
+    timeout: 3000
+
+- takeScreenshot: co_own_scrolled

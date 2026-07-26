@@ -41,6 +41,9 @@ import {
   fetchConversationMessagesFromApi,
   sendConversationMessageOnApi,
   deleteConversationMessageOnApi,
+  fetchComposerStateFromApi,
+  upsertComposerStateOnApi,
+  clearComposerStateOnApi,
 } from "../services/chatApi";
 import { fetchPublicProfile, PublicProfileUser } from "../services/profileApi";
 
@@ -97,6 +100,11 @@ import {
 } from "../utils/messageGrouping";
 
 import { detectChatSafetyWarning, detectComposerSafetyWarning, containsOffPlatformPaymentPattern } from "../utils/chatSafetyWarnings";
+import {
+  resolveComposerStack,
+  isSlotVisible,
+  type ComposerStackSlotState,
+} from "../utils/chatComposerStack";
 
 import {
   isTrustedSystemMessage,
@@ -564,6 +572,79 @@ export default function ChatScreen({ navigation, route }: Props) {
     if (conversationId) setConversationDraft(conversationId, input);
   }, [input, conversationId, setConversationDraft]);
 
+  // P0-7: Cross-device composer state hydration. On conversation open, fetch
+  // the persisted composer state from the backend and restore draft text,
+  // reply context and pending attachments so a draft started on another
+  // device continues here. Only restore when the local draft is empty — we
+  // never overwrite in-progress local input.
+  const hydratedComposerRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!conversationId) return;
+    hydratedComposerRef.current = null;
+    let cancelled = false;
+    (async () => {
+      try {
+        const state = await fetchComposerStateFromApi(conversationId);
+        if (cancelled || !hydratedComposerRef.current) return;
+        hydratedComposerRef.current = conversationId;
+        if (state.draftText && !input) {
+          setInput(state.draftText);
+        }
+        if (state.replyToMessageId) {
+          const replied = messages.find((m) => m.id === state.replyToMessageId);
+          if (replied) setReplyTo(replied);
+        }
+      } catch {
+        // Hydration is best-effort — a failed fetch must not block the
+        // composer. The local draft store still works offline.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId]);
+
+  // P0-7: Debounced cross-device composer state persistence. Push the
+  // current draft + reply context to the backend so it restores on other
+  // devices. Debounced to 1.5s so we do not PUT on every keystroke.
+  const composerPersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!conversationId) return;
+    if (composerPersistTimerRef.current) {
+      clearTimeout(composerPersistTimerRef.current);
+    }
+    composerPersistTimerRef.current = setTimeout(() => {
+      // Best-effort — never block UI on persistence failures.
+      upsertComposerStateOnApi(conversationId, {
+        draftText: input,
+        replyToMessageId: replyTo?.id ?? null,
+      }).catch(() => undefined);
+    }, 1500);
+    return () => {
+      if (composerPersistTimerRef.current) {
+        clearTimeout(composerPersistTimerRef.current);
+      }
+    };
+  }, [input, replyTo, conversationId]);
+
+  // P0-7: On unmount, flush the latest composer state synchronously-ish so
+  // backgrounding the app does not lose the draft.
+  useEffect(() => {
+    return () => {
+      if (composerPersistTimerRef.current) {
+        clearTimeout(composerPersistTimerRef.current);
+      }
+      if (conversationId && input) {
+        upsertComposerStateOnApi(conversationId, {
+          draftText: input,
+          replyToMessageId: replyTo?.id ?? null,
+        }).catch(() => undefined);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const resolvedPartnerId = useMemo(() => {
     if (isGroup) return null;
 
@@ -787,6 +868,11 @@ export default function ChatScreen({ navigation, route }: Props) {
     setInput("");
 
     setReplyTo(null);
+
+    // P0-7: Clear the persisted cross-device composer state now that the
+    // draft has been sent. Best-effort — a failed clear does not block the
+    // send path; the next open will re-fetch and find an empty draft.
+    clearComposerStateOnApi(conversationId).catch(() => undefined);
   };
 
   const handleAcceptOffer = (msgId: string) => {
@@ -1846,60 +1932,78 @@ export default function ChatScreen({ navigation, route }: Props) {
             { paddingBottom: Math.max(insets.bottom, Space.sm) + 8 },
           ]}
         >
-          {replyTo ? (
-            <ReplyQuote
-              senderName={replyTo.senderLabel ?? "Thryft user"}
-              text={replyTo.text ?? ""}
-              onClose={() => setReplyTo(null)}
-            />
-          ) : null}
+          {/* P0-8: Composer-stack height enforcement. Multiple contextual
+              banners can stack above the input bar (reply, reactions,
+              offline, undo). On small devices the stack can push the input
+              off-screen. The resolver keeps only the highest-priority slots
+              that fit the budget so the input bar always remains usable. */}
+          {(() => {
+            const stackSlots: ComposerStackSlotState[] = [
+              { slot: 'replyQuote', visible: !!replyTo, estimatedHeight: 56 },
+              { slot: 'undoBanner', visible: recentlyDeleted.length > 0, estimatedHeight: 44 },
+              { slot: 'offlineBanner', visible: isOffline, estimatedHeight: 36 },
+              { slot: 'reactionPicker', visible: !!reactingToMessage, estimatedHeight: 48 },
+            ];
+            const resolution = resolveComposerStack(stackSlots);
+            return (
+              <>
+                {isSlotVisible(resolution, 'replyQuote') && replyTo ? (
+                  <ReplyQuote
+                    senderName={replyTo.senderLabel ?? "Thryft user"}
+                    text={replyTo.text ?? ""}
+                    onClose={() => setReplyTo(null)}
+                  />
+                ) : null}
 
-          {reactingToMessage ? (
-            <EmojiReactionsBar
-              reactions={reactingToMessage.reactions ?? []}
-              onReact={(emoji) => {
-                if (reactingToMessage && conversationId) {
-                  addMessageReaction(
-                    conversationId,
-                    reactingToMessage.id,
-                    emoji,
-                  );
-                }
-                setReactingToMessage(null);
-              }}
-            />
-          ) : null}
+                {isSlotVisible(resolution, 'reactionPicker') && reactingToMessage ? (
+                  <EmojiReactionsBar
+                    reactions={reactingToMessage.reactions ?? []}
+                    onReact={(emoji) => {
+                      if (reactingToMessage && conversationId) {
+                        addMessageReaction(
+                          conversationId,
+                          reactingToMessage.id,
+                          emoji,
+                        );
+                      }
+                      setReactingToMessage(null);
+                    }}
+                  />
+                ) : null}
 
-          {isOffline && (
-            <View style={styles.offlineBanner}>
-              <Ionicons
-                name="cloud-offline-outline"
-                size={16}
-                color={Colors.textSecondary}
-              />
-              <Text style={styles.offlineBannerText}>
-                You are offline. Messages will be sent when you reconnect.
-              </Text>
-            </View>
-          )}
+                {isSlotVisible(resolution, 'offlineBanner') && isOffline && (
+                  <View style={styles.offlineBanner}>
+                    <Ionicons
+                      name="cloud-offline-outline"
+                      size={16}
+                      color={Colors.textSecondary}
+                    />
+                    <Text style={styles.offlineBannerText}>
+                      You are offline. Messages will be sent when you reconnect.
+                    </Text>
+                  </View>
+                )}
 
-          {recentlyDeleted.length > 0 && (
-            <View style={styles.undoBanner}>
-              <Text style={styles.undoBannerText}>
-                {recentlyDeleted.length} message
-                {recentlyDeleted.length === 1 ? "" : "s"} deleted
-              </Text>
-              <AnimatedPressable
-                onPress={handleUndoDelete}
-                activeOpacity={0.7}
-                scaleValue={0.95}
-                hapticFeedback="light"
-                accessibilityLabel="Undo message deletion"
-              >
-                <Text style={styles.undoBannerAction}>Undo</Text>
-              </AnimatedPressable>
-            </View>
-          )}
+                {isSlotVisible(resolution, 'undoBanner') && recentlyDeleted.length > 0 && (
+                  <View style={styles.undoBanner}>
+                    <Text style={styles.undoBannerText}>
+                      {recentlyDeleted.length} message
+                      {recentlyDeleted.length === 1 ? "" : "s"} deleted
+                    </Text>
+                    <AnimatedPressable
+                      onPress={handleUndoDelete}
+                      activeOpacity={0.7}
+                      scaleValue={0.95}
+                      hapticFeedback="light"
+                      accessibilityLabel="Undo message deletion"
+                    >
+                      <Text style={styles.undoBannerAction}>Undo</Text>
+                    </AnimatedPressable>
+                  </View>
+                )}
+              </>
+            );
+          })()}
 
           <ChatComposerBar
             value={input}

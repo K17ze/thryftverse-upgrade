@@ -175,6 +175,11 @@ import { registerNotificationRoutes } from './routes/notifications.js';
 import { registerRealtimeRoutes } from './routes/realtime.js';
 import { registerSupportReviewRoutes } from './routes/supportReviews.js';
 import { registerUploadRoutes } from './routes/uploads.js';
+import { registerPriceAlertRoutes } from './routes/priceAlerts.js';
+import { registerListingOfferRoutes } from './routes/listingOffers.js';
+import { registerChatComposerStateRoutes } from './routes/chatComposerState.js';
+import { registerAiTruthRoutes } from './routes/aiTruth.js';
+import { validateAiDeployReadiness } from './lib/aiTruth.js';
 import { createStripeConnectPayoutTransfer } from './lib/stripePayouts.js';
 
 const app = Fastify({
@@ -17583,6 +17588,155 @@ app.get('/secure-messages/:conversationId', async (request) => {
   };
 });
 
+app.post('/chat/dm', async (request, reply) => {
+  const bodySchema = z.object({
+    recipientUserId: z.string().trim().min(2).max(120),
+    itemId: z.string().trim().min(2).max(120).optional(),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const payload = bodySchema.parse(request.body ?? {});
+
+  if (payload.recipientUserId === actorUserId) {
+    reply.code(400);
+    return { ok: false, error: 'Cannot create a DM with yourself' };
+  }
+
+  await ensureUserExists(payload.recipientUserId);
+
+  if (payload.itemId) {
+    const listingResult = await db.query<{ id: string }>(
+      `SELECT id FROM listings WHERE id = $1 LIMIT 1`,
+      [payload.itemId]
+    );
+    if (!listingResult.rowCount) {
+      throw createApiError('LISTING_NOT_FOUND', 'Listing not found for DM context', {
+        itemId: payload.itemId,
+      });
+    }
+  }
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    const existingResult = await client.query<{ id: string }>(
+      `
+        SELECT c.id
+        FROM chat_conversations c
+        WHERE c.type = 'dm'
+          AND c.item_id IS NOT DISTINCT FROM $1
+          AND EXISTS (
+            SELECT 1 FROM chat_members cm1
+            WHERE cm1.conversation_id = c.id AND cm1.user_id = $2
+          )
+          AND EXISTS (
+            SELECT 1 FROM chat_members cm2
+            WHERE cm2.conversation_id = c.id AND cm2.user_id = $3
+          )
+        LIMIT 1
+      `,
+      [payload.itemId ?? null, actorUserId, payload.recipientUserId]
+    );
+
+    if (existingResult.rowCount) {
+      await client.query('COMMIT');
+      const conversationId = existingResult.rows[0].id;
+      reply.code(200);
+      return {
+        ok: true,
+        conversation: {
+          id: conversationId,
+          type: 'dm' as const,
+          title: null,
+          itemId: payload.itemId ?? null,
+          ownerId: actorUserId,
+          participantIds: [actorUserId, payload.recipientUserId],
+        },
+      };
+    }
+
+    const conversationId = createRuntimeId('chatdm');
+
+    await client.query(
+      `
+        INSERT INTO chat_conversations (id, type, title, owner_id, item_id, metadata)
+        VALUES ($1, 'dm', NULL, $2, $3, $4::jsonb)
+      `,
+      [
+        conversationId,
+        actorUserId,
+        payload.itemId ?? null,
+        toJsonString({ createdVia: 'chat_dm_api' }),
+      ]
+    );
+
+    await client.query(
+      `INSERT INTO chat_members (conversation_id, user_id, role) VALUES ($1, $2, 'owner')`,
+      [conversationId, actorUserId]
+    );
+    await client.query(
+      `INSERT INTO chat_members (conversation_id, user_id, role) VALUES ($1, $2, 'member')`,
+      [conversationId, payload.recipientUserId]
+    );
+
+    await client.query(
+      `UPDATE chat_conversations SET updated_at = NOW() WHERE id = $1`,
+      [conversationId]
+    );
+
+    await client.query('COMMIT');
+
+    publishRealtimeEvent({
+      topic: `chat.conversation:${conversationId}`,
+      type: 'chat.dm.created',
+      payload: {
+        conversationId,
+        ownerId: actorUserId,
+        participantIds: [actorUserId, payload.recipientUserId],
+      },
+    });
+
+    try {
+      await queueUserNotification({
+        userId: payload.recipientUserId,
+        title: 'New conversation',
+        body: 'Someone started a conversation with you.',
+        payload: {
+          conversationId,
+          event: 'chat_dm_created',
+        },
+        metadata: {
+          source: 'chat.dm.create',
+        },
+      });
+    } catch (error) {
+      request.log.error(
+        { err: error, conversationId, recipientUserId: payload.recipientUserId },
+        'Failed to queue DM notification'
+      );
+    }
+
+    reply.code(201);
+    return {
+      ok: true,
+      conversation: {
+        id: conversationId,
+        type: 'dm' as const,
+        title: null,
+        itemId: payload.itemId ?? null,
+        ownerId: actorUserId,
+        participantIds: [actorUserId, payload.recipientUserId],
+      },
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+});
+
 app.post('/chat/groups', async (request, reply) => {
   const bodySchema = z.object({
     title: z.string().trim().min(2).max(80),
@@ -23903,7 +24057,7 @@ app.get('/wallet/1ze/attestations', async (request, reply) => {
   };
 });
 
-registerUploadRoutes({ app, createApiError, resolveAuthenticatedUserId });
+registerUploadRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
 
 app.post('/interactions', async (request, reply) => {
   const bodySchema = z.object({
@@ -35515,6 +35669,32 @@ const start = async () => {
     startOnezeFxSyncScheduler();
     startOnezeAutoAdjustScheduler();
 
+    // P0-9: AI/ML deploy-time validation. Log blocking errors and warnings
+    // before serving traffic so ops can see whether the deployment may
+    // honestly claim AI capability. Does not block startup — heuristic
+    // baselines are valid.
+    try {
+      const readiness = await validateAiDeployReadiness();
+      if (readiness.blockingErrors.length > 0) {
+        app.log.error(
+          { blockingErrors: readiness.blockingErrors },
+          'AI deploy readiness: blocking errors — AI capability claim is false',
+        );
+      }
+      if (readiness.warnings.length > 0) {
+        app.log.warn(
+          { warnings: readiness.warnings },
+          'AI deploy readiness: warnings',
+        );
+      }
+      app.log.info(
+        { capabilityLevel: readiness.health.capabilityLevel },
+        'AI deploy readiness: capability level resolved',
+      );
+    } catch (error) {
+      app.log.warn({ err: error }, 'AI deploy readiness check failed');
+    }
+
     await app.listen({ port: config.port, host: '0.0.0.0' });
     app.log.info(`API running on :${config.port}`);
   } catch (error) {
@@ -36859,6 +37039,14 @@ app.delete('/poster-highlights/:highlightId/frames/:frameId', async (request, re
 
 registerCreatorDocumentRoutes({ app, db, resolveAuthenticatedUserId });
 
+registerPriceAlertRoutes({ app, db, resolveAuthenticatedUserId });
+
+registerListingOfferRoutes({ app, db, resolveAuthenticatedUserId });
+
+registerChatComposerStateRoutes({ app, db, resolveAuthenticatedUserId });
+
+registerAiTruthRoutes({ app });
+
 // POST /creator/documents — create or replace a draft document
 
 // GET /creator/documents — list current user's draft documents
@@ -36866,6 +37054,10 @@ registerCreatorDocumentRoutes({ app, db, resolveAuthenticatedUserId });
 // GET /creator/documents/:documentId — get a single draft document
 
 // DELETE /creator/documents/:documentId — delete a draft document
+
+// POST /creator/documents/:documentId/publish — publish a document with validation
+
+// GET /creator/documents/:documentId/revisions — list published revisions
 
 // POST /creator/documents/:documentId/remix — create a remix of a document
 

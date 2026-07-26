@@ -109,7 +109,8 @@ export default function CreateLookScreen() {
       setIsPublishing(true);
       haptic.medium();
       try {
-        const mediaUrl = await uploadMedia(imageUri, 'looks');
+        const uploaded = await uploadMedia(imageUri, 'looks');
+        const mediaUrl = uploaded.publicUrl;
         const lookId = `look_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
         const internalTitle =
           caption

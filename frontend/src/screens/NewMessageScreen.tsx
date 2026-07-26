@@ -8,6 +8,7 @@ import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useBackendData } from '../context/BackendDataContext';
 import { searchUsers, UserSearchResult } from '../services/profileApi';
+import { createDmConversationOnApi } from '../services/chatApi';
 import { Colors } from '../constants/colors';
 import { Space, Radius, Type, TypeStyles, Typography } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -144,21 +145,31 @@ export default function NewMessageScreen({ navigation, route }: Props) {
       return;
     }
     if (preselectedDisplayName) {
-      show(`You don't have a conversation with ${preselectedDisplayName} yet. Message them from one of their listings to start one.`, 'info');
+      createDmConversationOnApi({ recipientUserId: preselectedUserId })
+        .then((conversation) => {
+          navigation.navigate('Chat', { conversationId: conversation.id, partnerUserId: preselectedUserId });
+        })
+        .catch(() => {
+          show(`Could not start a conversation with ${preselectedDisplayName}. Please try again.`, 'error');
+        });
     }
   }, [preselectedUserId, preselectedDisplayName, recentContacts, navigation, show]);
 
-  const handlePress = (contact: ContactItem) => {
+  const handlePress = async (contact: ContactItem) => {
     haptic.light();
     if (contact.conversationId) {
       navigation.navigate('Chat', { conversationId: contact.conversationId });
       return;
     }
-    // No backend DM creation endpoint exists — be honest.
-    show(
-      'Starting new chats requires backend support. Message from a listing for now.',
-      'info',
-    );
+    try {
+      const conversation = await createDmConversationOnApi({
+        recipientUserId: contact.userId,
+        itemId: contact.listingId,
+      });
+      navigation.navigate('Chat', { conversationId: conversation.id, partnerUserId: contact.userId });
+    } catch {
+      show('Could not start conversation. Please try again.', 'error');
+    }
   };
 
   const renderItem = ({ item }: { item: ContactItem }) => (

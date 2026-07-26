@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   StatusBar,
-  ScrollView,
   Dimensions,
   RefreshControl,
   Modal,
@@ -15,6 +14,7 @@ import {
   AppState,
   useWindowDimensions,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import Reanimated, {
   useSharedValue,
   useAnimatedScrollHandler,
@@ -85,6 +85,15 @@ const PANEL_BG = Colors.surfaceAlt;
 
 // Skeleton variation communicates loading without inventing media geometry.
 const SKELETON_HEIGHT_RATIOS = [1.25, 1.08, 1.32, 1.16] as const;
+
+// P0-3: FlashList virtualizes the home feed so memory does not grow with feed
+// length. FlashList v2 measures items automatically, so per-item heights do
+// not need to be declared. `onEndReached` is a native FlashList prop (no `as
+// any` cast onto ScrollView). The animated wrapper lets Reanimated's scroll
+// handler drive the floating header collapse/expand.
+const AnimatedFlashList = Reanimated.createAnimatedComponent(FlashList) as unknown as React.ComponentClass<
+  React.ComponentProps<typeof FlashList<ExploreTile>> & { ref?: React.Ref<any> }
+>;
 
 interface MediaPreviewProps {
   uri: string;
@@ -527,7 +536,8 @@ export default function HomeScreen() {
       return new Set();
     });
 
-    scrollRef.current?.scrollTo({ y: 0, animated: true });
+    // FlashList exposes scrollToOffset rather than ScrollView's scrollTo.
+    scrollRef.current?.scrollToOffset?.({ offset: 0, animated: true });
   }, [scrollRef]);
 
   const handleRefresh = async () => {
@@ -633,20 +643,6 @@ export default function HomeScreen() {
   const showFollowingLoading = feedMode === 'following' && followingFeed.isLoading && !followingFeed.isRefreshing;
   const showFollowingRefreshing = feedMode === 'following' && followingFeed.isRefreshing;
   const feedGridData = (showFeedLoadingSkeleton || showFollowingLoading) ? [] : activeFeedData;
-
-  const masonryColumns = React.useMemo(() => {
-    const columns: [Array<{ tile: ExploreTile; originalIndex: number }>, Array<{ tile: ExploreTile; originalIndex: number }>] = [[], []];
-    const columnHeights = [0, 0];
-
-    activeFeedData.forEach((tile, originalIndex) => {
-      const tileHeight = Math.round(gridTileWidth * tile.aspectRatio) + LISTING_CARD_CHROME_HEIGHT;
-      const targetIndex = columnHeights[0] <= columnHeights[1] ? 0 : 1;
-      columns[targetIndex].push({ tile, originalIndex });
-      columnHeights[targetIndex] += tileHeight + GRID_GAP;
-    });
-
-    return columns;
-  }, [activeFeedData, gridTileWidth]);
 
   const closePeek = React.useCallback(() => {
     setPeekItem(null);
@@ -880,13 +876,146 @@ export default function HomeScreen() {
         </View>
       </Reanimated.View>
 
-      <Reanimated.ScrollView
+      <AnimatedFlashList
         ref={scrollRef}
+        data={feedGridData}
+        numColumns={2}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.feedContent, { paddingTop: headerExpandedHeight + Space.sm }]}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
-        {...({ onEndReached: () => { if (hasMore && !isLoadingMore) void loadMoreListings(); }, onEndReachedThreshold: 0.5 } as any)}
+        onEndReached={() => {
+          if (hasMore && !isLoadingMore) void loadMoreListings();
+        }}
+        onEndReachedThreshold={0.5}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => {
+          const listing = activeListings.find((l) => l.id === item.routeId);
+          return (
+            <View style={styles.flashListItem}>
+              <ExploreGridItem
+                item={item}
+                tileWidth={gridTileWidth}
+                formatPrice={formatFromFiat}
+                onPress={handleTilePress}
+                onLongPress={handleTileLongPress}
+                onPressSellerProfile={handleSellerProfilePress}
+                onPressSellerMessage={handleSellerMessagePress}
+                sellerUsername={listing?.seller?.username}
+                sellerAvatar={listing?.seller?.avatar}
+              />
+            </View>
+          );
+        }}
+        overrideItemLayout={(layout) => {
+          layout.span = 1;
+        }}
+        ListHeaderComponent={
+          <View>
+            {renderPosters()}
+
+            {renderNewListingsBanner()}
+
+            {lastError ? (
+              <SyncRetryBanner
+                message="Sync is unavailable. Showing cached items."
+                onRetry={() => void handleRefresh()}
+                isRetrying={isSyncing || refreshing}
+                telemetryContext="home_feed_sync"
+                containerStyle={styles.feedStatusBanner}
+              />
+            ) : null}
+
+            <DiscoverySectionHeader
+              kicker={feedMode === 'following' ? 'Latest from people you follow' : undefined}
+              title="Explore"
+              actionLabel="See all"
+              onAction={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
+              style={styles.feedDiscoveryHeader}
+            />
+
+            <View style={styles.feedTabBar} accessibilityRole="tablist">
+              {(['foryou', 'following'] as const).map((option) => {
+                const isSelected = feedMode === option;
+                const label = option === 'foryou' ? 'For you' : 'Following';
+                return (
+                  <AnimatedPressable
+                    key={option}
+                    style={styles.feedTab}
+                    onPress={() => {
+                      if (!isSelected) {
+                        haptic.selection();
+                        setFeedMode(option);
+                      }
+                    }}
+                    activeOpacity={0.68}
+                    scaleValue={0.98}
+                    accessibilityRole="tab"
+                    accessibilityLabel={option === 'foryou'
+                      ? 'For you feed'
+                      : `Following feed${followingFeed.listings.length > 0 ? `, ${followingFeed.listings.length} listings` : ''}`}
+                    accessibilityState={{ selected: isSelected }}
+                  >
+                    <Text style={[styles.feedTabLabel, isSelected && styles.feedTabLabelActive]} numberOfLines={1}>
+                      {label}
+                    </Text>
+                    {option === 'following' && followingFeed.listings.length > 0 ? (
+                      <Text style={[styles.feedTabCount, isSelected && styles.feedTabCountActive]}>
+                        {followingFeed.listings.length}
+                      </Text>
+                    ) : null}
+                    {isSelected ? <View style={styles.feedTabIndicator} /> : null}
+                  </AnimatedPressable>
+                );
+              })}
+            </View>
+
+            {showFeedLoadingSkeleton || showFollowingLoading ? (
+              renderExploreLoadingState()
+            ) : feedGridData.length === 0 ? (
+              feedMode === 'following' ? (
+                <Reanimated.View entering={FadeInDown.duration(300)} style={{ flex: 1 }}>
+                  <EmptyState
+                    density="compact"
+                    icon={followingFeed.hasFollowing ? 'pricetag-outline' : 'people-outline'}
+                    title={followingFeed.hasFollowing ? 'No new drops from sellers you follow' : 'Follow sellers to see their drops here'}
+                    subtitle={followingFeed.hasFollowing
+                      ? 'When sellers you follow list new items, they\u2019ll appear here in chronological order. Pull to refresh.'
+                      : 'Build your following feed by tapping follow on seller profiles. Their latest listings will show up here.'
+                    }
+                    ctaLabel={followingFeed.hasFollowing ? 'Refresh' : 'Discover sellers'}
+                    onCtaPress={followingFeed.hasFollowing ? () => void handleRefresh() : () => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
+                    secondaryCtaLabel={followingFeed.hasFollowing ? 'Explore all' : undefined}
+                    onSecondaryCtaPress={followingFeed.hasFollowing ? () => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' }) : undefined}
+                  />
+                </Reanimated.View>
+              ) : (
+                // Premium empty state — backend returned zero items and we are not
+                // loading. Preserves the flagship layout instead of collapsing to
+                // a blank masonry. Distinct from the sync-error banner above.
+                <Reanimated.View entering={FadeInDown.duration(300)} style={{ flex: 1 }}>
+                  <EmptyState
+                    density="compact"
+                    icon="sparkles-outline"
+                    title="No drops live yet"
+                    subtitle="The community hasn't listed anything live yet. Pull to refresh or explore curated categories."
+                    ctaLabel="Browse all"
+                    onCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
+                    secondaryCtaLabel="Refresh"
+                    onSecondaryCtaPress={() => void handleRefresh()}
+                  />
+                </Reanimated.View>
+              )
+            ) : null}
+          </View>
+        }
+        ListFooterComponent={
+          isLoadingMore ? (
+            <View style={{ paddingVertical: Space.md, alignItems: 'center' }}>
+              <Text style={{ color: Colors.textMuted, fontSize: 13 }}>Loading more...</Text>
+            </View>
+          ) : null
+        }
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -896,152 +1025,7 @@ export default function HomeScreen() {
             progressBackgroundColor="transparent"
           />
         }
-      >
-        {renderPosters()}
-
-        {renderNewListingsBanner()}
-
-        {lastError ? (
-          <SyncRetryBanner
-            message="Sync is unavailable. Showing cached items."
-            onRetry={() => void handleRefresh()}
-            isRetrying={isSyncing || refreshing}
-            telemetryContext="home_feed_sync"
-            containerStyle={styles.feedStatusBanner}
-          />
-        ) : null}
-
-        <DiscoverySectionHeader
-          kicker={feedMode === 'following' ? 'Latest from people you follow' : undefined}
-          title="Explore"
-          actionLabel="See all"
-          onAction={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
-          style={styles.feedDiscoveryHeader}
-        />
-
-        <View style={styles.feedTabBar} accessibilityRole="tablist">
-          {(['foryou', 'following'] as const).map((option) => {
-            const isSelected = feedMode === option;
-            const label = option === 'foryou' ? 'For you' : 'Following';
-            return (
-              <AnimatedPressable
-                key={option}
-                style={styles.feedTab}
-                onPress={() => {
-                  if (!isSelected) {
-                    haptic.selection();
-                    setFeedMode(option);
-                  }
-                }}
-                activeOpacity={0.68}
-                scaleValue={0.98}
-                accessibilityRole="tab"
-                accessibilityLabel={option === 'foryou'
-                  ? 'For you feed'
-                  : `Following feed${followingFeed.listings.length > 0 ? `, ${followingFeed.listings.length} listings` : ''}`}
-                accessibilityState={{ selected: isSelected }}
-              >
-                <Text style={[styles.feedTabLabel, isSelected && styles.feedTabLabelActive]} numberOfLines={1}>
-                  {label}
-                </Text>
-                {option === 'following' && followingFeed.listings.length > 0 ? (
-                  <Text style={[styles.feedTabCount, isSelected && styles.feedTabCountActive]}>
-                    {followingFeed.listings.length}
-                  </Text>
-                ) : null}
-                {isSelected ? <View style={styles.feedTabIndicator} /> : null}
-              </AnimatedPressable>
-            );
-          })}
-        </View>
-
-        {showFeedLoadingSkeleton || showFollowingLoading ? (
-          renderExploreLoadingState()
-        ) : feedGridData.length === 0 ? (
-          feedMode === 'following' ? (
-            <Reanimated.View entering={FadeInDown.duration(300)} style={{ flex: 1 }}>
-              <EmptyState
-                density="compact"
-                icon={followingFeed.hasFollowing ? 'pricetag-outline' : 'people-outline'}
-                title={followingFeed.hasFollowing ? 'No new drops from sellers you follow' : 'Follow sellers to see their drops here'}
-                subtitle={followingFeed.hasFollowing
-                  ? 'When sellers you follow list new items, they\u2019ll appear here in chronological order. Pull to refresh.'
-                  : 'Build your following feed by tapping follow on seller profiles. Their latest listings will show up here.'
-                }
-                ctaLabel={followingFeed.hasFollowing ? 'Refresh' : 'Discover sellers'}
-                onCtaPress={followingFeed.hasFollowing ? () => void handleRefresh() : () => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
-                secondaryCtaLabel={followingFeed.hasFollowing ? 'Explore all' : undefined}
-                onSecondaryCtaPress={followingFeed.hasFollowing ? () => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' }) : undefined}
-              />
-            </Reanimated.View>
-          ) : (
-            // Premium empty state — backend returned zero items and we are not
-            // loading. Preserves the flagship layout instead of collapsing to
-            // a blank masonry. Distinct from the sync-error banner above.
-            <Reanimated.View entering={FadeInDown.duration(300)} style={{ flex: 1 }}>
-              <EmptyState
-                density="compact"
-                icon="sparkles-outline"
-                title="No drops live yet"
-                subtitle="The community hasn't listed anything live yet. Pull to refresh or explore curated categories."
-                ctaLabel="Browse all"
-                onCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
-                secondaryCtaLabel="Refresh"
-                onSecondaryCtaPress={() => void handleRefresh()}
-              />
-            </Reanimated.View>
-          )
-        ) : (
-          <View style={styles.masonryGrid}>
-            <View style={styles.masonryColumn}>
-              {masonryColumns[0].map(({ tile: item, originalIndex }) => {
-                const listing = activeListings.find((l) => l.id === item.routeId);
-                return (
-                <View key={item.id}>
-                  <ExploreGridItem
-                    item={item}
-                    tileWidth={gridTileWidth}
-                    formatPrice={formatFromFiat}
-                    onPress={handleTilePress}
-                    onLongPress={handleTileLongPress}
-                    onPressSellerProfile={handleSellerProfilePress}
-                    onPressSellerMessage={handleSellerMessagePress}
-                    sellerUsername={listing?.seller?.username}
-                    sellerAvatar={listing?.seller?.avatar}
-                  />
-                </View>
-                );
-              })}
-            </View>
-            <View style={styles.masonryColumn}>
-              {masonryColumns[1].map(({ tile: item, originalIndex }) => {
-                const listing = activeListings.find((l) => l.id === item.routeId);
-                return (
-                <View key={item.id}>
-                  <ExploreGridItem
-                    item={item}
-                    tileWidth={gridTileWidth}
-                    formatPrice={formatFromFiat}
-                    onPress={handleTilePress}
-                    onLongPress={handleTileLongPress}
-                    onPressSellerProfile={handleSellerProfilePress}
-                    onPressSellerMessage={handleSellerMessagePress}
-                    sellerUsername={listing?.seller?.username}
-                    sellerAvatar={listing?.seller?.avatar}
-                  />
-                </View>
-                );
-              })}
-            </View>
-          </View>
-        )}
-
-        {isLoadingMore && (
-          <View style={{ paddingVertical: Space.md, alignItems: 'center' }}>
-            <Text style={{ color: Colors.textMuted, fontSize: 13 }}>Loading more...</Text>
-          </View>
-        )}
-      </Reanimated.ScrollView>
+      />
 
       <Modal
         transparent
@@ -1734,6 +1718,10 @@ const styles = StyleSheet.create({
   masonryColumn: {
     flex: 1,
     gap: Space.sm,
+  },
+  flashListItem: {
+    paddingHorizontal: Space.xs,
+    paddingBottom: GRID_GAP,
   },
   exploreItemBox: {
     backgroundColor: Colors.background,

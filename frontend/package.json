@@ -18,6 +18,7 @@
     "lint:design-tokens": "node scripts/check-design-tokens.mjs",
     "check": "npm run typecheck",
     "check:animated-scroll": "node scripts/check-animated-scroll-usage.mjs",
+    "check:maestro-flows": "node scripts/check-maestro-flows.mjs",
     "doctor": "npx expo-doctor",
     "test": "vitest run --dir src",
     "test:watch": "vitest --dir src",

@@ -101,7 +101,8 @@ export async function uploadAllLocalMedia(
       let lastError: Error | null = null;
       for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
         try {
-          remoteUri = await uploadMedia(ref.currentUri, folder);
+          const uploaded = await uploadMedia(ref.currentUri, folder);
+          remoteUri = uploaded.publicUrl;
           cache.set(ref.currentUri, remoteUri);
           lastError = null;
           break;

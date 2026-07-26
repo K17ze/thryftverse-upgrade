@@ -1,5 +1,6 @@
 import { fetchJson } from '../lib/apiClient';
 import { ENABLE_RUNTIME_MOCKS } from '../constants/runtimeFlags';
+import { warnIfMockSuppressed } from '../utils/mockGate';
 
 export type AuctionLifecycle = 'upcoming' | 'live' | 'ended' | 'cancelled' | 'settled';
 export type AuctionStatus = AuctionLifecycle;
@@ -723,6 +724,7 @@ export async function getAuctionHome(): Promise<AuctionHomeResponse> {
       console.warn('[marketApi] /auctions/home failed — returning dev mock fallback:', err instanceof Error ? err.message : err);
       return getMockAuctionHome();
     }
+    warnIfMockSuppressed('getAuctionHome', err);
     throw err;
   }
 }
@@ -1030,6 +1032,7 @@ export async function listCoOwnAssets(
       console.warn('[marketApi] /co-own/assets failed — returning dev mock fallback:', err instanceof Error ? err.message : err);
       return getMockCoOwnAssets();
     }
+    warnIfMockSuppressed('listCoOwnAssets', err);
     throw err;
   }
 }
@@ -1052,6 +1055,7 @@ export async function fetchCoOwnAssetById(assetId: string): Promise<MarketCoOwnA
       const found = mockAssets.find((a) => a.id === assetId);
       if (found) return found;
     }
+    warnIfMockSuppressed('getCoOwnAsset', err);
     throw err;
   }
 }
@@ -1148,6 +1152,7 @@ export async function fetchCoOwnOrderBook(
         source: 'development-fallback',
       };
     }
+    warnIfMockSuppressed('getCoOwnOrderBook', err);
     throw err;
   }
 }
@@ -1414,6 +1419,7 @@ export async function listCoOwnAssetOrders(
         { id: 4, assetId, userId: 'mock-user-4', side: 'buy', units: 1, unitPriceGbp: basePrice + 2, feeGbp: (basePrice + 2) * 0.01, totalGbp: (basePrice + 2) * 1.01, status: 'open', createdAt: new Date(Date.now() - 15 * 60_000).toISOString() },
       ] as MarketCoOwnOrder[];
     }
+    warnIfMockSuppressed('fetchCoOwnOrders', err);
     throw err;
   }
 }
@@ -1443,6 +1449,7 @@ export async function fetchCoOwnHoldings(userId: string): Promise<MarketCoOwnHol
       console.warn('[marketApi] /co-own/holdings failed — returning dev mock fallback:', err instanceof Error ? err.message : err);
       return getMockCoOwnHoldings(userId);
     }
+    warnIfMockSuppressed('fetchCoOwnHoldings', err);
     throw err;
   }
 }
@@ -1478,6 +1485,7 @@ export async function listUserMarketHistory(
       ];
       return { items: mockItems, pageInfo: { hasMore: false } };
     }
+    warnIfMockSuppressed('listUserMarketHistory', err);
     throw err;
   }
 }

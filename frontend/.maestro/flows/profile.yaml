@@ -1,0 +1,36 @@
+appId: ${APP_ID}
+---
+tags:
+  - flagship
+  - profile
+---
+- launchApp:
+    clearState: true
+    permissions:
+      all: allow
+
+# Navigate to the Profile tab. The tab bar label is "Profile".
+- tapOn:
+    text: "Profile"
+    optional: true
+
+- extendedWaitUntil:
+    visible:
+      id: "profile-screen"
+      optional: true
+    timeout: 15000
+
+- waitForAnimationToEnd:
+    timeout: 3000
+
+- takeScreenshot: profile_first_viewport
+
+# Scroll to capture the closet / collection section.
+- scroll:
+    direction: DOWN
+    distance: 400
+
+- waitForAnimationToEnd:
+    timeout: 3000
+
+- takeScreenshot: profile_scrolled

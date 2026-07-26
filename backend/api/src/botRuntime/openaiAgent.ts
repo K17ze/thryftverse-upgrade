@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { BotRuntimeContext, BotHandlerResult } from './types.js';
+import { AI_RATE_LIMITS, computeRetryDelayMs } from '../lib/aiTruth.js';
 
 const runtimeConfig = {
   apiKey: process.env.OPENAI_API_KEY?.trim() || null,
@@ -83,48 +84,78 @@ export async function executeOpenAiAgent(ctx: BotRuntimeContext): Promise<BotHan
     },
   ];
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), runtimeConfig.timeoutMs);
+  // P0-9: Retry with exponential backoff + jitter for transient provider
+  // failures. 429 (rate-limit) and 5xx are retried; 4xx (auth, bad
+  // request) are not retried because they will not succeed on retry.
+  const maxRetries = AI_RATE_LIMITS.maxRetries;
+  const body = JSON.stringify({
+    model: ctx.agentConfig.model || runtimeConfig.defaultModel,
+    instructions,
+    input,
+    reasoning: { effort: ctx.agentConfig.reasoningEffort },
+    text: { verbosity: responseVerbosity(ctx.agentConfig.responseLength) },
+    max_output_tokens: Math.min(
+      runtimeConfig.maxOutputTokens,
+      AI_RATE_LIMITS.hardMaxOutputTokens,
+    ),
+    safety_identifier: safetyIdentifier,
+    store: false,
+  });
 
-  try {
-    const response = await fetch(`${runtimeConfig.baseUrl}/responses`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${runtimeConfig.apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: ctx.agentConfig.model || runtimeConfig.defaultModel,
-        instructions,
-        input,
-        reasoning: { effort: ctx.agentConfig.reasoningEffort },
-        text: { verbosity: responseVerbosity(ctx.agentConfig.responseLength) },
-        max_output_tokens: runtimeConfig.maxOutputTokens,
-        safety_identifier: safetyIdentifier,
-        store: false,
-      }),
-      signal: controller.signal,
-    });
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), runtimeConfig.timeoutMs);
+    try {
+      const response = await fetch(`${runtimeConfig.baseUrl}/responses`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${runtimeConfig.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body,
+        signal: controller.signal,
+      });
 
-    if (!response.ok) {
-      throw new Error(`AI provider returned ${response.status}`);
+      if (response.ok) {
+        const payload = (await response.json()) as unknown;
+        const text = extractResponseText(payload);
+        if (!text) {
+          throw new Error('AI provider returned an empty response');
+        }
+        return {
+          text,
+          shouldReply: true,
+          metadata: {
+            agentRuntime: 'openai-responses',
+            model: ctx.agentConfig.model,
+            attempt,
+          },
+        };
+      }
+
+      // 429 and 5xx are retried. Other 4xx are not — they will not
+      // succeed on retry and retrying wastes the user's time.
+      const retryable =
+        response.status === 429 || (response.status >= 500 && response.status < 600);
+      lastError = new Error(`AI provider returned ${response.status}`);
+      if (!retryable || attempt === maxRetries) {
+        throw lastError;
+      }
+      // Fall through to backoff below.
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      // Network errors and aborts are retried unless this was the last
+      // attempt.
+      if (attempt === maxRetries) {
+        throw lastError;
+      }
+    } finally {
+      clearTimeout(timeout);
     }
-
-    const payload = await response.json() as unknown;
-    const text = extractResponseText(payload);
-    if (!text) {
-      throw new Error('AI provider returned an empty response');
-    }
-
-    return {
-      text,
-      shouldReply: true,
-      metadata: {
-        agentRuntime: 'openai-responses',
-        model: ctx.agentConfig.model,
-      },
-    };
-  } finally {
-    clearTimeout(timeout);
+    // Exponential backoff with jitter before the next attempt.
+    await new Promise((r) => setTimeout(r, computeRetryDelayMs(attempt)));
   }
+
+  throw lastError ?? new Error('AI provider request failed after retries');
 }

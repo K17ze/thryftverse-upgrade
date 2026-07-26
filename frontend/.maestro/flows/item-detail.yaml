@@ -1,0 +1,48 @@
+appId: ${APP_ID}
+---
+tags:
+  - flagship
+  - item-detail
+---
+- launchApp:
+    clearState: true
+    permissions:
+      all: allow
+
+# Wait for Home to load, then tap the first listing tile to open Item
+# Detail.
+- extendedWaitUntil:
+    visible:
+      id: "home-brand-title"
+      optional: true
+    timeout: 20000
+
+- waitForAnimationToEnd:
+    timeout: 3000
+
+# Tap the first explore tile. Coordinates target the upper-left tile of
+# the masonry grid — adjust per device if needed.
+- tapOn:
+    point: 25%, 35%
+    optional: true
+
+- extendedWaitUntil:
+    visible:
+      id: "item-detail-screen"
+      optional: true
+    timeout: 15000
+
+- waitForAnimationToEnd:
+    timeout: 3000
+
+- takeScreenshot: item_detail_first_viewport
+
+# Scroll to capture the seller card + action cluster.
+- scroll:
+    direction: DOWN
+    distance: 600
+
+- waitForAnimationToEnd:
+    timeout: 3000
+
+- takeScreenshot: item_detail_scrolled

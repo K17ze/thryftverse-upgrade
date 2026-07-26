@@ -400,8 +400,8 @@ export default function CreatePosterScreen({ navigation, route }: Props) {
         setPublishStateForUri(uri, 'uploading');
         setPublishProgress(`Uploading ${i + 1} of ${uncachedUris.length}`);
         try {
-          const url = await uploadMedia(uri, 'posters');
-          cache[uri] = url;
+          const uploaded = await uploadMedia(uri, 'posters');
+          cache[uri] = uploaded.publicUrl;
           setPublishStateForUri(uri, 'uploaded');
         } catch {
           setPublishStateForUri(uri, 'failed');

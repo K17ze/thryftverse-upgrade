@@ -113,8 +113,8 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
       setIsUploadingEvidence(true);
       const uploaded: string[] = [];
       for (const asset of result.assets) {
-        const publicUrl = await uploadMedia(asset.uri, 'evidence');
-        uploaded.push(publicUrl);
+        const uploadedMedia = await uploadMedia(asset.uri, 'evidence');
+        uploaded.push(uploadedMedia.publicUrl);
       }
       setEvidenceUris((prev) => [...prev, ...uploaded]);
       show(`${uploaded.length} photo${uploaded.length > 1 ? 's' : ''} attached.`, 'success');

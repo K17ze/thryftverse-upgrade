@@ -12,6 +12,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { Space, Type, Typography } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
+import { fetchAiCapability, type AiCapabilitySummary } from '../services/aiTruthApi';
 
 type Props = StackScreenProps<RootStackParamList, 'BotDirectory'>;
 type AgentCategory =
@@ -40,6 +41,16 @@ export default function BotDirectoryScreen({ navigation }: Props) {
   const customAgents = useStore((state) => state.customBots);
   const loadBotsFromApi = useStore((state) => state.loadBotsFromApi);
 
+  // P0-9: Honest AI capability labeling. The header subtitle reflects
+  // the actual capability level — "AI specialists" only when a real
+  // provider is configured, "Heuristic specialists" on baselines, and
+  // "Assistant unavailable" when nothing is wired. The product must
+  // never market heuristic baselines as trained ML.
+  const [aiCapability, setAiCapability] = useState<AiCapabilitySummary | null>(null);
+  useEffect(() => {
+    fetchAiCapability().then(setAiCapability).catch(() => undefined);
+  }, []);
+
   useEffect(() => {
     void loadBotsFromApi();
   }, [loadBotsFromApi]);
@@ -55,6 +66,14 @@ export default function BotDirectoryScreen({ navigation }: Props) {
     [selectedCategory, systemAgents]
   );
 
+  const directorySubtitle = aiCapability
+    ? aiCapability.capabilityLevel === 'provider_backed'
+      ? 'AI specialists for your group conversations'
+      : aiCapability.capabilityLevel === 'heuristic_baseline'
+      ? 'Heuristic specialists for your group conversations'
+      : 'Assistant unavailable on this deployment'
+    : 'Specialists for your group conversations';
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar
@@ -63,7 +82,7 @@ export default function BotDirectoryScreen({ navigation }: Props) {
       />
       <ScreenHeader
         title="Agents"
-        subtitle="Specialists for your group conversations"
+        subtitle={directorySubtitle}
         onBack={() => navigation.goBack()}
         rightAction={
           <AnimatedPressable
@@ -72,7 +91,11 @@ export default function BotDirectoryScreen({ navigation }: Props) {
             scaleValue={0.92}
             hapticFeedback="light"
             accessibilityRole="button"
-            accessibilityLabel="Create an AI agent"
+            accessibilityLabel={
+              aiCapability?.capabilityLevel === 'provider_backed'
+                ? 'Create an AI agent'
+                : 'Create a specialist agent'
+            }
           >
             <Ionicons name="add" size={23} color={Colors.textPrimary} />
           </AnimatedPressable>

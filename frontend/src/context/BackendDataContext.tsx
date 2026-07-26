@@ -2,7 +2,12 @@ import React from 'react';
 import { Listing, MOCK_LISTINGS, MOCK_USERS } from '../data/mockData';
 import { getApiBaseUrl } from '../lib/apiClient';
 import { fetchListingsFromApi } from '../services/listingsApi';
-import { ENABLE_RUNTIME_MOCKS, SHOW_BACKEND_DIAGNOSTICS } from '../constants/runtimeFlags';
+import {
+  ENABLE_RUNTIME_MOCKS,
+  IS_INTEGRATION_TRUTH_MODE,
+  MOCK_MODE,
+  SHOW_BACKEND_DIAGNOSTICS,
+} from '../constants/runtimeFlags';
 import { recordListingsSync } from '../lib/backendDiagnostics';
 import { BackendDiagnosticsOverlay } from '../dev/BackendDiagnosticsOverlay';
 
@@ -56,6 +61,9 @@ export function BackendDataProvider({ children }: { children: React.ReactNode })
       setHasMore(Boolean(result.nextCursor));
       setLastError(result.error ?? null);
     } else if (ENABLE_RUNTIME_MOCKS) {
+      // fixture-design mode: substitute demo listings so design work proceeds
+      // without a live backend. This branch never runs in integration-truth or
+      // production modes — empty API responses stay empty there.
       setListings(DEVELOPMENT_LISTINGS);
       setCursor(undefined);
       setHasMore(false);
@@ -65,6 +73,12 @@ export function BackendDataProvider({ children }: { children: React.ReactNode })
       setCursor(undefined);
       setHasMore(false);
       setLastError(result.error ?? null);
+      if (IS_INTEGRATION_TRUTH_MODE && result.error) {
+        console.warn(
+          `[BackendDataContext] integration-truth mode: listings API returned no results. ` +
+            `Backend error honoured (mock fallback suppressed): ${result.error}`,
+        );
+      }
     }
     recordListingsSync(result.listings.length, result.error ?? null);
     setIsSyncing(false);

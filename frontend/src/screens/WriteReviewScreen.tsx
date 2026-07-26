@@ -100,8 +100,8 @@ export default function WriteReviewScreen() {
       setIsUploadingPhotos(true);
       const uploaded: string[] = [];
       for (const asset of result.assets) {
-        const publicUrl = await uploadMedia(asset.uri, 'review');
-        uploaded.push(publicUrl);
+        const uploadedMedia = await uploadMedia(asset.uri, 'review');
+        uploaded.push(uploadedMedia.publicUrl);
       }
       setPhotoUris((prev) => [...prev, ...uploaded]);
       show(`${uploaded.length} photo${uploaded.length > 1 ? 's' : ''} attached.`, 'success');

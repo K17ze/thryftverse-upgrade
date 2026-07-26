@@ -29,6 +29,7 @@ import { AppButton } from '../components/ui/AppButton';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { CachedImage } from '../components/CachedImage';
 import { fetchListingByIdFromApi } from '../services/listingsApi';
+import { createListingOfferOnApi } from '../services/listingOffersApi';
 import { haptics } from '../utils/haptics';
 
 type Props = StackScreenProps<RootStackParamList, 'MakeOffer'>;
@@ -55,6 +56,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
   const [errorMsg, setErrorMsg] = useState('');
   const [listing, setListing] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [expiryHours, setExpiryHours] = useState(48);
   const isCounterOffer = route.params.counterOffer ?? false;
   const previousOffer = route.params.previousOffer;
@@ -92,7 +94,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
     if (errorMsg) setErrorMsg('');
   };
 
-  const handleSendOffer = () => {
+  const handleSendOffer = async () => {
     if (!numericOffer || !Number.isFinite(numericOfferGbp) || numericOfferGbp <= 0) {
       setErrorMsg('Enter a valid offer amount.');
       return;
@@ -107,27 +109,51 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
       setErrorMsg(`Seller's minimum offer is ${formatFromFiat(sellerMinOffer, 'GBP')}.`);
       return;
     }
-    // No backend offer API yet — send offer context via chat
     if (!listing?.sellerId) {
       setErrorMsg('Could not load seller info. Please try again.');
       return;
     }
-    const offerText = isCounterOffer
-      ? `Counter-offer: ${formatFromFiat(numericOfferGbp, 'GBP')} (was ${formatFromFiat(previousOffer ?? 0, 'GBP')}). Valid for ${expiryHours}h.`
-      : `Offer: ${formatFromFiat(numericOfferGbp, 'GBP')} for ${title}. Valid for ${expiryHours}h.`;
-    const expiresAt = new Date(Date.now() + expiryHours * 3600000).toISOString();
-    navigation.navigate('Chat', {
-      conversationId: `offer_${listing.sellerId}_${itemId}`,
-      focusQuery: offerText,
-      partnerUserId: listing.sellerId,
-      offerPayload: {
-        price: numericOfferGbp,
-        originalPrice: price,
-        expiresAt,
+
+    setIsSubmitting(true);
+    try {
+      // Persist the offer server-side so expiry, accept/decline and counter
+      // chains are authoritative across devices. The server computes
+      // expires_at — the frontend only suggests an expiryHours window.
+      const offer = await createListingOfferOnApi({
+        listingId: itemId,
+        offerPriceGbp: numericOfferGbp,
+        expiryHours,
         counterRound,
-      },
-    });
-    show('Opening chat to send your offer.', 'info');
+        metadata: {
+          originalPriceGbp: price,
+          source: isCounterOffer ? 'counter' : 'initial',
+        },
+      });
+
+      const offerText = isCounterOffer
+        ? `Counter-offer: ${formatFromFiat(numericOfferGbp, 'GBP')} (was ${formatFromFiat(previousOffer ?? 0, 'GBP')}). Valid for ${expiryHours}h.`
+        : `Offer: ${formatFromFiat(numericOfferGbp, 'GBP')} for ${title}. Valid for ${expiryHours}h.`;
+
+      navigation.navigate('Chat', {
+        conversationId: `offer_${listing.sellerId}_${itemId}`,
+        focusQuery: offerText,
+        partnerUserId: listing.sellerId,
+        offerPayload: {
+          offerId: offer.id,
+          price: numericOfferGbp,
+          originalPrice: price,
+          expiresAt: offer.expiresAt,
+          counterRound,
+        },
+      });
+      show('Opening chat to send your offer.', 'info');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not submit offer.';
+      setErrorMsg(message);
+      show('Could not submit offer. Please try again.', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const quickOfferPercentages = [0.8, 0.9, 0.95];
@@ -312,13 +338,19 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
       <View style={styles.footer}>
         <AppButton
           style={styles.sendBtn}
-          title={isCounterOffer ? "Send counter-offer" : "Send offer via chat"}
+          title={
+            isSubmitting
+              ? 'Submitting…'
+              : isCounterOffer
+              ? 'Send counter-offer'
+              : 'Send offer via chat'
+          }
           subtitle={formatFromFiat(total, 'GBP')}
           icon={<Ionicons name="paper-plane-outline" size={16} color={Colors.textInverse} />}
           variant="primary"
           size="lg"
           onPress={handleSendOffer}
-          disabled={numericOffer <= 0}
+          disabled={numericOffer <= 0 || isSubmitting}
           accessibilityLabel={`Send ${isCounterOffer ? 'counter-offer' : 'offer'} totaling ${formatFromFiat(total, 'GBP')} via chat`}
         />
       </View>
