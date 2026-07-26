@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Svg, { Path, Defs, LinearGradient, Stop, Rect, Circle } from 'react-native-svg';
+import Svg, { Path, Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -17,8 +17,12 @@ type ChartMode = 'line' | 'candle';
 export interface CoOwnPriceChartProps {
   assetId: string;
   unitPriceGbp: number;
-  marketMovePct24h: number;
-  volume24hGbp: number;
+  /** 24h movement percentage. When null/undefined, no movement badge is
+   *  rendered — missing movement is never coerced to zero. */
+  marketMovePct24h?: number | null;
+  /** 24h volume in GBP. When null/undefined, the volume footer metric is
+   *  hidden rather than rendered as zero. */
+  volume24hGbp?: number | null;
   // Phase 2: last-age + 24h change timestamp
   lastAgeSeconds?: number | null;
   change24hTimestamp?: string;
@@ -130,6 +134,7 @@ export function CoOwnPriceChart({
   const [executions, setExecutions] = useState<MarketCoOwnExecution[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -148,7 +153,7 @@ export function CoOwnPriceChart({
         if (!cancelled) setIsLoading(false);
       });
     return () => { cancelled = true; };
-  }, [assetId]);
+  }, [assetId, reloadKey]);
 
   const priceSeries = useMemo(
     () => buildPriceSeries(executions, period),
@@ -170,7 +175,15 @@ export function CoOwnPriceChart({
     haptics.selection();
   }, []);
 
-  const isPositive = marketMovePct24h >= 0;
+  const handleRetry = useCallback(() => {
+    haptics.tap();
+    setReloadKey((k) => k + 1);
+  }, []);
+
+  // Movement is only rendered when genuinely derived. Missing movement
+  // is never coerced to zero — spec 03 §6: "Do not show +0.0%".
+  const hasMovement = marketMovePct24h != null && !Number.isNaN(marketMovePct24h);
+  const isPositive = hasMovement && marketMovePct24h! >= 0;
   const changeColor = isPositive ? colors.success : colors.danger;
   const sparklineColor = isPositive ? colors.success : colors.danger;
   const gradientId = `sparkGradient-${isPositive ? 'up' : 'down'}`;
@@ -185,6 +198,7 @@ export function CoOwnPriceChart({
   );
 
   const tradeCount = priceSeries.length;
+  const hasHistory = priceSeries.length >= 2;
 
   const periodHigh = priceSeries.length > 0 ? Math.max(...priceSeries.map((p) => p.price)) : unitPriceGbp;
   const periodLow = priceSeries.length > 0 ? Math.min(...priceSeries.map((p) => p.price)) : unitPriceGbp;
@@ -193,16 +207,69 @@ export function CoOwnPriceChart({
   const lastAgeLabel = lastAgeSeconds != null ? formatLastAge(lastAgeSeconds) : null;
   const isStaleLast = lastAgeSeconds != null && lastAgeSeconds > 24 * 60 * 60;
 
-  // Phase 2: textual summary for screen readers
+  // Phase 2: textual summary for screen readers — only mentions movement
+  // when it is genuinely derived.
   const textualSummary = useMemo(() => {
-    const direction = marketMovePct24h >= 0 ? 'up' : 'down';
     const agePart = lastAgeLabel ? `, last trade ${lastAgeLabel}` : '';
     const timestampPart = change24hTimestamp ? `, as of ${change24hTimestamp}` : '';
-    return `1ZE last ${unitPriceGbp.toFixed(2)}, ${direction} ${Math.abs(marketMovePct24h).toFixed(1)}% over 24h${agePart}${timestampPart}, ${Math.max(0, tradeCount)} trades in range.`;
-  }, [unitPriceGbp, marketMovePct24h, lastAgeLabel, change24hTimestamp, tradeCount]);
+    const movementPart = hasMovement
+      ? `, ${isPositive ? 'up' : 'down'} ${Math.abs(marketMovePct24h!).toFixed(1)}% over 24h`
+      : '';
+    return `1ZE last ${unitPriceGbp.toFixed(2)}${movementPart}${agePart}${timestampPart}, ${Math.max(0, tradeCount)} trades in range.`;
+  }, [unitPriceGbp, marketMovePct24h, hasMovement, isPositive, lastAgeLabel, change24hTimestamp, tradeCount]);
+
+  // ── Error state — compact inline with a real Retry action ──
+  // Spec 03 §6: "Price history unavailable" + Retry. No +0.0%. No large
+  // blank chart.
+  if (hasError) {
+    return (
+      <View style={styles.inlineState}>
+        <View style={styles.inlineStateTextCluster}>
+          <Ionicons name="cloud-offline-outline" size={18} color={colors.danger} style={styles.inlineStateIcon} />
+          <View style={styles.inlineStateCopy}>
+            <Text style={[styles.inlineStateTitle, { color: colors.danger }]} numberOfLines={2}>
+              Price history unavailable
+            </Text>
+            <Text style={[styles.inlineStateBody, { color: colors.textMuted }]} numberOfLines={3}>
+              We couldn't load settled trade data. Check your connection and try again.
+            </Text>
+          </View>
+        </View>
+        <Pressable
+          onPress={handleRetry}
+          hitSlop={8}
+          accessibilityLabel="Retry price history load"
+          accessibilityRole="button"
+          style={({ pressed }) => [styles.retryBtn, pressed && styles.pressed]}
+        >
+          <Text style={[styles.retryText, { color: colors.textPrimary }]}>Retry</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  // ── Empty state — compact inline, no controls, no footer ──
+  // Spec 03 §6: "No settled trade history yet"; hide period/mode/volume.
+  if (!isLoading && !hasHistory && executions.length === 0) {
+    return (
+      <View style={styles.inlineState}>
+        <View style={styles.inlineStateTextCluster}>
+          <Ionicons name="bar-chart-outline" size={18} color={colors.textMuted} style={styles.inlineStateIcon} />
+          <View style={styles.inlineStateCopy}>
+            <Text style={[styles.inlineStateTitle, { color: colors.textSecondary }]} numberOfLines={2}>
+              No settled trade history yet
+            </Text>
+            <Text style={[styles.inlineStateBody, { color: colors.textMuted }]} numberOfLines={3}>
+              The last price will update after a settled execution.
+            </Text>
+          </View>
+        </View>
+      </View>
+    );
+  }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+    <View style={styles.container}>
       {/* Phase 2: textual summary for screen readers */}
       <Text
         style={styles.a11ySummary}
@@ -212,7 +279,9 @@ export function CoOwnPriceChart({
         {textualSummary}
       </Text>
 
-      {/* Header: current price + 24h change + last-age badge */}
+      {/* Header: movement badge + last-age badge only.
+          The current price is NOT repeated here — it lives in the
+          transaction surface above (spec 02 §C: one dominant price). */}
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
           <Ionicons name="analytics-outline" size={16} color={colors.textMuted} />
@@ -227,10 +296,7 @@ export function CoOwnPriceChart({
             </View>
           )}
         </View>
-        <View style={styles.headerRight}>
-          <Text style={[styles.currentPrice, { color: colors.textPrimary }]}>
-            {formatCoOwnIze(unitPriceGbp)}
-          </Text>
+        {hasMovement && (
           <View style={[styles.changeBadge, { backgroundColor: `${changeColor}15` }]}>
             <Ionicons
               name={isPositive ? 'trending-up' : 'trending-down'}
@@ -238,10 +304,10 @@ export function CoOwnPriceChart({
               color={changeColor}
             />
             <Text style={[styles.changeText, { color: changeColor }]}>
-              {isPositive ? '+' : ''}{marketMovePct24h.toFixed(1)}%
+              {isPositive ? '+' : ''}{marketMovePct24h!.toFixed(1)}%
             </Text>
           </View>
-        </View>
+        )}
       </View>
 
       {/* Phase 2: 24h change timestamp */}
@@ -251,100 +317,95 @@ export function CoOwnPriceChart({
         </Text>
       )}
 
-      {/* Controls row: period selector + mode toggle + volume toggle */}
-      <View style={styles.controlsRow}>
-        <View style={styles.periodRow}>
-          {PERIOD_LABELS.map((p) => {
-            const isActive = period === p;
-            return (
-              <AnimatedPressable
-                key={p}
-                style={[
-                  styles.periodChip,
-                  { borderColor: colors.border },
-                  isActive && { backgroundColor: `${colors.brand}12`, borderColor: colors.brand },
-                ]}
-                onPress={() => handlePeriodChange(p)}
-                activeOpacity={0.8}
-                scaleValue={0.97}
-                accessibilityRole="button"
-                accessibilityLabel={`Price chart period: ${p}`}
-                accessibilityState={{ selected: isActive }}
-              >
-                <Text
+      {/* Controls row: period selector + mode toggle + volume toggle.
+          Only rendered when there is genuine history to chart. */}
+      {hasHistory && (
+        <View style={styles.controlsRow}>
+          <View style={styles.periodRow}>
+            {PERIOD_LABELS.map((p) => {
+              const isActive = period === p;
+              return (
+                <AnimatedPressable
+                  key={p}
                   style={[
-                    styles.periodChipText,
-                    { color: colors.textSecondary },
-                    isActive && { color: colors.brand },
+                    styles.periodChip,
+                    { borderColor: colors.border },
+                    isActive && { backgroundColor: `${colors.brand}12`, borderColor: colors.brand },
                   ]}
+                  onPress={() => handlePeriodChange(p)}
+                  activeOpacity={0.8}
+                  scaleValue={0.97}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Price chart period: ${p}`}
+                  accessibilityState={{ selected: isActive }}
                 >
-                  {p}
-                </Text>
+                  <Text
+                    style={[
+                      styles.periodChipText,
+                      { color: colors.textSecondary },
+                      isActive && { color: colors.brand },
+                    ]}
+                  >
+                    {p}
+                  </Text>
+                </AnimatedPressable>
+              );
+            })}
+          </View>
+          <View style={styles.toggleRow}>
+            {/* Phase 2: volume toggle — only when volume data exists */}
+            {volume24hGbp != null && (
+              <AnimatedPressable
+                style={[
+                  styles.toggleBtn,
+                  { borderColor: colors.border },
+                  showVolume && { backgroundColor: `${colors.brand}12`, borderColor: colors.brand },
+                ]}
+                onPress={handleVolumeToggle}
+                activeOpacity={0.8}
+                scaleValue={0.95}
+                accessibilityRole="button"
+                accessibilityLabel={showVolume ? 'Hide volume bars' : 'Show volume bars'}
+                accessibilityState={{ selected: showVolume }}
+              >
+                <Ionicons name="stats-chart-outline" size={13} color={showVolume ? colors.brand : colors.textMuted} />
               </AnimatedPressable>
-            );
-          })}
+            )}
+            {/* Phase 2: line/candle toggle */}
+            {candleChart && (
+              <AnimatedPressable
+                style={[
+                  styles.toggleBtn,
+                  { borderColor: colors.border },
+                  chartMode === 'candle' && { backgroundColor: `${colors.brand}12`, borderColor: colors.brand },
+                ]}
+                onPress={handleModeToggle}
+                activeOpacity={0.8}
+                scaleValue={0.95}
+                accessibilityRole="button"
+                accessibilityLabel={chartMode === 'candle' ? 'Switch to line chart' : 'Switch to candle chart'}
+                accessibilityState={{ selected: chartMode === 'candle' }}
+              >
+                <Ionicons
+                  name={chartMode === 'candle' ? 'analytics-outline' : 'analytics'}
+                  size={13}
+                  color={chartMode === 'candle' ? colors.brand : colors.textMuted}
+                />
+              </AnimatedPressable>
+            )}
+          </View>
         </View>
-        <View style={styles.toggleRow}>
-          {/* Phase 2: volume toggle */}
-          <AnimatedPressable
-            style={[
-              styles.toggleBtn,
-              { borderColor: colors.border },
-              showVolume && { backgroundColor: `${colors.brand}12`, borderColor: colors.brand },
-            ]}
-            onPress={handleVolumeToggle}
-            activeOpacity={0.8}
-            scaleValue={0.95}
-            accessibilityRole="button"
-            accessibilityLabel={showVolume ? 'Hide volume bars' : 'Show volume bars'}
-            accessibilityState={{ selected: showVolume }}
-          >
-            <Ionicons name="stats-chart-outline" size={13} color={showVolume ? colors.brand : colors.textMuted} />
-          </AnimatedPressable>
-          {/* Phase 2: line/candle toggle */}
-          {candleChart && (
-            <AnimatedPressable
-              style={[
-                styles.toggleBtn,
-                { borderColor: colors.border },
-                chartMode === 'candle' && { backgroundColor: `${colors.brand}12`, borderColor: colors.brand },
-              ]}
-              onPress={handleModeToggle}
-              activeOpacity={0.8}
-              scaleValue={0.95}
-              accessibilityRole="button"
-              accessibilityLabel={chartMode === 'candle' ? 'Switch to line chart' : 'Switch to candle chart'}
-              accessibilityState={{ selected: chartMode === 'candle' }}
-            >
-              <Ionicons
-                name={chartMode === 'candle' ? 'analytics-outline' : 'analytics'}
-                size={13}
-                color={chartMode === 'candle' ? colors.brand : colors.textMuted}
-              />
-            </AnimatedPressable>
-          )}
-        </View>
-      </View>
+      )}
 
       {/* Chart area */}
-      {chartMode === 'candle' && candleChart ? (
+      {chartMode === 'candle' && candleChart && hasHistory ? (
         candleChart
       ) : isLoading ? (
         <View style={styles.chartLoading}>
           <View style={[styles.skeletonLine, { backgroundColor: colors.surfaceAlt, width: '60%' }]} />
           <View style={[styles.skeletonArea, { backgroundColor: colors.surfaceAlt }]} />
         </View>
-      ) : hasError ? (
-        <View style={styles.chartEmpty}>
-          <Ionicons name="cloud-offline-outline" size={24} color={colors.textMuted} />
-          <Text style={[styles.chartEmptyText, { color: colors.textMuted }]}>
-            Unable to load price data
-          </Text>
-          <Text style={[styles.chartEmptySubtext, { color: colors.textSecondary }]}>
-            Tap a period to retry, or check your connection.
-          </Text>
-        </View>
-      ) : priceSeries.length < 2 ? (
+      ) : !hasHistory ? (
         <View style={styles.chartEmpty}>
           <Ionicons name="bar-chart-outline" size={24} color={colors.textMuted} />
           <Text style={[styles.chartEmptyText, { color: colors.textMuted }]}>
@@ -352,8 +413,8 @@ export function CoOwnPriceChart({
           </Text>
           <Text style={[styles.chartEmptySubtext, { color: colors.textSecondary }]}>
             {tradeCount === 0
-              ? 'A chart appears only after real settled trades. The listing price is not fabricated as history.'
-              : 'One settled execution is shown in market activity; a trend needs at least two executions.'}
+              ? 'A chart appears only after real settled trades.'
+              : 'A trend needs at least two settled executions.'}
           </Text>
         </View>
       ) : (
@@ -404,36 +465,44 @@ export function CoOwnPriceChart({
         </View>
       )}
 
-      {/* Footer: high/low + volume + trade count */}
-      <View style={[styles.footerRow, { borderTopColor: colors.border }]}>
-        <View style={styles.footerItem}>
-          <Text style={[styles.footerLabel, { color: colors.textMuted }]}>High</Text>
-          <Text style={[styles.footerValue, { color: colors.textPrimary }]}>
-            {formatCoOwnIze(periodHigh)}
-          </Text>
+      {/* Footer: high/low + volume + trade count.
+          Only rendered when there is genuine history — spec 03 §6:
+          "hide period/mode/volume controls" when history unavailable. */}
+      {hasHistory && (
+        <View style={[styles.footerRow, { borderTopColor: colors.border }]}>
+          <View style={styles.footerItem}>
+            <Text style={[styles.footerLabel, { color: colors.textMuted }]}>High</Text>
+            <Text style={[styles.footerValue, { color: colors.textPrimary }]}>
+              {formatCoOwnIze(periodHigh)}
+            </Text>
+          </View>
+          <View style={[styles.footerDivider, { backgroundColor: colors.border }]} />
+          <View style={styles.footerItem}>
+            <Text style={[styles.footerLabel, { color: colors.textMuted }]}>Low</Text>
+            <Text style={[styles.footerValue, { color: colors.textPrimary }]}>
+              {formatCoOwnIze(periodLow)}
+            </Text>
+          </View>
+          {volume24hGbp != null && (
+            <>
+              <View style={[styles.footerDivider, { backgroundColor: colors.border }]} />
+              <View style={styles.footerItem}>
+                <Text style={[styles.footerLabel, { color: colors.textMuted }]}>24h volume</Text>
+                <Text style={[styles.footerValue, { color: colors.textPrimary }]}>
+                  {formatCoOwnIze(volume24hGbp)}
+                </Text>
+              </View>
+            </>
+          )}
+          <View style={[styles.footerDivider, { backgroundColor: colors.border }]} />
+          <View style={styles.footerItem}>
+            <Text style={[styles.footerLabel, { color: colors.textMuted }]}>Trades</Text>
+            <Text style={[styles.footerValue, { color: colors.textPrimary }]}>
+              {Math.max(0, tradeCount)}
+            </Text>
+          </View>
         </View>
-        <View style={[styles.footerDivider, { backgroundColor: colors.border }]} />
-        <View style={styles.footerItem}>
-          <Text style={[styles.footerLabel, { color: colors.textMuted }]}>Low</Text>
-          <Text style={[styles.footerValue, { color: colors.textPrimary }]}>
-            {formatCoOwnIze(periodLow)}
-          </Text>
-        </View>
-        <View style={[styles.footerDivider, { backgroundColor: colors.border }]} />
-        <View style={styles.footerItem}>
-          <Text style={[styles.footerLabel, { color: colors.textMuted }]}>24h volume</Text>
-          <Text style={[styles.footerValue, { color: colors.textPrimary }]}>
-            {formatCoOwnIze(volume24hGbp)}
-          </Text>
-        </View>
-        <View style={[styles.footerDivider, { backgroundColor: colors.border }]} />
-        <View style={styles.footerItem}>
-          <Text style={[styles.footerLabel, { color: colors.textMuted }]}>Trades</Text>
-          <Text style={[styles.footerValue, { color: colors.textPrimary }]}>
-            {Math.max(0, tradeCount)}
-          </Text>
-        </View>
-      </View>
+      )}
     </View>
   );
 }
@@ -442,9 +511,6 @@ export function CoOwnPriceChart({
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
     gap: Space.sm,
   },
   headerRow: {
@@ -461,17 +527,6 @@ const styles = StyleSheet.create({
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: -0.2,
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-  },
-  currentPrice: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: -0.3,
-    fontVariant: ['tabular-nums'],
   },
   changeBadge: {
     flexDirection: 'row',
@@ -622,5 +677,50 @@ const styles = StyleSheet.create({
     letterSpacing: 0.1,
     textAlign: 'center',
     marginTop: Space.xs,
+  },
+  // ── Inline states (error / empty) ──
+  inlineState: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Space.sm,
+    paddingVertical: Space.md,
+  },
+  inlineStateTextCluster: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.sm,
+    flexShrink: 1,
+  },
+  inlineStateIcon: {
+    marginTop: 2,
+  },
+  inlineStateCopy: {
+    flexShrink: 1,
+    gap: 2,
+  },
+  inlineStateTitle: {
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.medium,
+  },
+  inlineStateBody: {
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+  },
+  retryBtn: {
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs + 2,
+    minHeight: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pressed: {
+    opacity: 0.6,
+  },
+  retryText: {
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.semibold,
   },
 });

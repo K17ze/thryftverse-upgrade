@@ -18,7 +18,7 @@ import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { Space, Radius, Type, Typography, DockConstants } from '../theme/designTokens';
+import { Space, Type, Typography, DockConstants } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { fetchCoOwnAssetById, fetchCoOwnOrderBook, fetchCoOwnHoldings } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
@@ -127,7 +127,6 @@ export default function AssetDetailScreen() {
   const [fullscreenIndex, setFullscreenIndex] = React.useState(0);
   const [fullscreenVisible, setFullscreenVisible] = React.useState(false);
   const [orderBookExpanded, setOrderBookExpanded] = React.useState(false);
-  const [valuationExpanded, setValuationExpanded] = React.useState(false);
   const [guideVisible, setGuideVisible] = React.useState(false);
   const [pendingTradeSide, setPendingTradeSide] = React.useState<'buy' | 'sell' | null>(null);
   const [rightsSheetVisible, setRightsSheetVisible] = React.useState(false);
@@ -400,18 +399,16 @@ export default function AssetDetailScreen() {
         />
 
         {/* ── Zone B — Identity seam ──
-            One compact identity composition: eyebrow + title + primary
-            value + secondary truth line. No second large issuer card.
-            Spec 02 §B + spec 03 §2. */}
+            One compact identity composition: eyebrow + title + secondary
+            truth line. The family badge lives on the media stage above;
+            the dominant price lives in the transaction surface below.
+            Spec 02 §B + spec 03 §2: no repeated family labels, no
+            repeated price. */}
         <CommerceDetailIdentity
-          eyebrow="Co-Own"
+          eyebrow={asset.category ?? undefined}
           title={asset.title}
-          primaryValue={formatCoOwnIze(asset.unitPriceGbp)}
           secondaryLine={dataStale && dataStaleAgeLabel ? `Last update ${dataStaleAgeLabel}` : undefined}
           interestSignal={asset.holders ? `${asset.holders} holders` : undefined}
-          familyChip={
-            <ProductFamilyBadge family="co_own" stateAccent={familyStateAccent} compact />
-          }
         />
 
         {/* Slim issuer confidence row — replaces the large CoOwnIssuerCard.
@@ -597,13 +594,15 @@ export default function AssetDetailScreen() {
         {/* ── Price history ──
             Spec 03 §6: empty state shows compact inline "No settled trade
             history yet"; error state shows "Price history unavailable" +
-            Retry. Do not show +0.0%. Do not reserve a large blank chart. */}
+            Retry. Do not show +0.0%. Do not reserve a large blank chart.
+            Movement is passed as nullable — missing movement is never
+            coerced to zero. */}
         <CommerceDetailSection label="Price history" divider>
           <CoOwnPriceChart
             assetId={asset.id}
             unitPriceGbp={asset.unitPriceGbp}
-            marketMovePct24h={asset.marketMovePct24h ?? 0}
-            volume24hGbp={asset.volume24hGbp ?? 0}
+            marketMovePct24h={asset.marketMovePct24h ?? null}
+            volume24hGbp={asset.volume24hGbp ?? null}
             lastAgeSeconds={undefined}
             change24hTimestamp={undefined}
             candleChart={
@@ -693,83 +692,21 @@ export default function AssetDetailScreen() {
             />
           )}
 
-          {/* Valuation provenance — collapsible deep-dive.
-              Spec 10 §8.1: every displayed valuation exposes method,
-              valuer, date, range. Fails closed with "—" when backend
-              doesn't expose. */}
-          <CommerceDetailDisclosureRow
-            label="Valuation provenance"
-            summary={asset.appraisalMethod ?? 'No appraisal'}
-            onPress={() => setValuationExpanded((prev) => !prev)}
-            leadingIcon="analytics-outline"
-          />
-          {valuationExpanded && (
-            <View style={[styles.valuationCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <View style={styles.valuationGrid}>
-                <View style={styles.valuationRow}>
-                  <Text style={[styles.valuationLabel, { color: colors.textMuted }]}>Method</Text>
-                  <Text style={[styles.valuationValue, { color: colors.textSecondary }]}>
-                    {asset.appraisalMethod ?? '—'}
-                  </Text>
-                </View>
-                <View style={styles.valuationRow}>
-                  <Text style={[styles.valuationLabel, { color: colors.textMuted }]}>Valuer</Text>
-                  <Text style={[styles.valuationValue, { color: colors.textSecondary }]}>
-                    {asset.appraisalValuer ?? '—'}
-                  </Text>
-                </View>
-                <View style={styles.valuationRow}>
-                  <Text style={[styles.valuationLabel, { color: colors.textMuted }]}>Effective date</Text>
-                  <Text style={[styles.valuationValue, { color: colors.textSecondary }]}>
-                    {asset.appraisalValuedAt ?? '—'}
-                  </Text>
-                </View>
-                <View style={styles.valuationRow}>
-                  <Text style={[styles.valuationLabel, { color: colors.textMuted }]}>Next review</Text>
-                  <Text style={[styles.valuationValue, { color: colors.textSecondary }]}>
-                    {asset.appraisalNextScheduled ?? '—'}
-                  </Text>
-                </View>
-                <View style={[styles.valuationRow, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: Space.xs, marginTop: Space.xs }]}>
-                  <Text style={[styles.valuationLabel, { color: colors.textMuted }]}>NAV/unit</Text>
-                  <Text style={[styles.valuationValue, { color: colors.textPrimary, fontFamily: Typography.family.semibold }]}>
-                    {asset.appraisalValue ? `${formatFromFiat(asset.appraisalValue / totalUnits, 'GBP')}` : '—'}
-                  </Text>
-                </View>
-                <View style={styles.valuationRow}>
-                  <Text style={[styles.valuationLabel, { color: colors.textMuted }]}>Range</Text>
-                  <Text style={[styles.valuationValue, { color: colors.textSecondary }]}>
-                    {asset.appraisalRangeLow && asset.appraisalRangeHigh
-                      ? `${formatFromFiat(asset.appraisalRangeLow, 'GBP')} – ${formatFromFiat(asset.appraisalRangeHigh, 'GBP')}`
-                      : '—'}
-                  </Text>
-                </View>
-                <View style={styles.valuationRow}>
-                  <Text style={[styles.valuationLabel, { color: colors.textMuted }]}>Last trade</Text>
-                  <Text style={[styles.valuationValue, { color: colors.textSecondary }]}>
-                    {formatCoOwnIze(asset.unitPriceGbp)}
-                  </Text>
-                </View>
-                {asset.appraisalValue && totalUnits > 0 && (
-                  <View style={[styles.valuationRow, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: Space.xs, marginTop: Space.xs }]}>
-                    <Text style={[styles.valuationLabel, { color: colors.textMuted }]}>vs NAV</Text>
-                    <Text style={[
-                      styles.valuationValue,
-                      { color: asset.unitPriceGbp > (asset.appraisalValue / totalUnits) ? colors.success : colors.danger },
-                    ]}>
-                      {(() => {
-                        const navPerUnit = asset.appraisalValue / totalUnits;
-                        const pct = ((asset.unitPriceGbp - navPerUnit) / navPerUnit) * 100;
-                        return `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}% vs NAV`;
-                      })()}
-                    </Text>
-                  </View>
-                )}
-              </View>
-              <Text style={[styles.valuationNote, { color: colors.textMuted }]}>
-                NAV is an appraisal, not an executable price. Last trade is the only executable price.
-              </Text>
-            </View>
+          {/* NAV vs last trade — one compact metric row, not a duplicated
+              appraisal card. The full appraisal provenance (method,
+              valuer, date, range, next review) lives in the dossier
+              above. Spec 03 §8: "Combine ... appraisal into one Asset
+              dossier section." */}
+          {asset.appraisalValue && totalUnits > 0 && (
+            <CommerceDetailMetricRow
+              label="Last trade vs NAV"
+              value={`${(() => {
+                const navPerUnit = asset.appraisalValue / totalUnits;
+                const pct = ((asset.unitPriceGbp - navPerUnit) / navPerUnit) * 100;
+                return `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`;
+              })()}`}
+              subLabel="NAV is an appraisal, not an executable price"
+            />
           )}
         </CommerceDetailSection>
 
@@ -798,8 +735,10 @@ export default function AssetDetailScreen() {
         </CommerceDetailSection>
 
         {/* ── Exit language ──
-            Spec 03 §10: "Do not show Buyout options when the only available
-            route is not full-asset buyout." Use the real capability. */}
+            Spec 03 §10: "Do not show Buyout options when the only
+            available route is not full-asset buyout." The Buyout row is
+            rendered as a truthful unavailable state — it does not
+            navigate to a Buyout flow that does not exist. */}
         {isHolder && !isIssuer && (
           <CommerceDetailSection label="Exit options" divider>
             <CommerceDetailDisclosureRow
@@ -814,12 +753,17 @@ export default function AssetDetailScreen() {
               onPress={() => setRightsSheetVisible(true)}
               leadingIcon="lock-closed-outline"
             />
-            <CommerceDetailDisclosureRow
-              label="Buyout"
-              summary="Full-asset buyout unavailable"
-              onPress={() => navigation.navigate('Buyout', { assetId: asset.id })}
-              leadingIcon="swap-horizontal-outline"
-            />
+            <View style={styles.unavailableRow}>
+              <View style={styles.unavailableRowLabelCluster}>
+                <Ionicons name="swap-horizontal-outline" size={18} color={colors.textMuted} />
+                <Text style={[styles.unavailableRowLabel, { color: colors.textMuted }]} numberOfLines={1}>
+                  Full-asset buyout
+                </Text>
+              </View>
+              <Text style={[styles.unavailableRowSummary, { color: colors.textMuted }]} numberOfLines={1}>
+                Not available
+              </Text>
+            </View>
           </CommerceDetailSection>
         )}
 
@@ -1125,40 +1069,30 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.medium,
     lineHeight: Type.body.lineHeight + 2,
   },
-  // ── Valuation provenance card ──
-  valuationCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
-    marginTop: Space.sm,
-  },
-  valuationGrid: {
-    gap: Space.xs,
-  },
-  valuationRow: {
+  // ── Unavailable exit row (truthful disabled state) ──
+  unavailableRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 2,
+    justifyContent: 'space-between',
+    gap: Space.sm,
+    paddingVertical: Space.sm + 2,
+    minHeight: 44,
   },
-  valuationLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
+  unavailableRowLabelCluster: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    flexShrink: 1,
   },
-  valuationValue: {
+  unavailableRowLabel: {
     fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.medium,
-    letterSpacing: Type.body.letterSpacing,
-    fontVariant: ['tabular-nums'],
-    textAlign: 'right',
+    flexShrink: 1,
   },
-  valuationNote: {
+  unavailableRowSummary: {
     fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-    marginTop: Space.sm,
-    fontStyle: 'italic',
+    lineHeight: Type.caption.lineHeight,
   },
   // ── Dock state badge ──
   dockStateBadge: {

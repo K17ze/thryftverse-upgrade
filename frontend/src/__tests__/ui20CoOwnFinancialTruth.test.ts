@@ -47,7 +47,12 @@ describe('UI-20 co-own financial truth and UX', () => {
   it('AssetDetailScreen has clear trade/buyout/ledger/issue routing', () => {
     const src = read(resolve(SCREENS, 'AssetDetailScreen.tsx'));
     expect(src).toContain("navigation.navigate('Trade'");
-    expect(src).toContain("navigation.navigate('Buyout'");
+    // Spec 03 §10: full-asset buyout is unavailable, so it must NOT
+    // navigate to a Buyout flow. Instead it renders a truthful
+    // unavailable state.
+    expect(src).not.toContain("navigation.navigate('Buyout'");
+    expect(src).toContain('Full-asset buyout');
+    expect(src).toContain('Not available');
     expect(src).toContain("navigation.navigate('CoOwnIssue'");
     expect(src).toContain("navigation.navigate('CoOwnOrderHistory'");
   });

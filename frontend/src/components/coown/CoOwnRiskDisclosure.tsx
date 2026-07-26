@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Type, Typography } from '../../theme/designTokens';
+import { useHaptic } from '../../hooks/useHaptic';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 export interface CoOwnRiskDisclosureProps {
   risks?: string[];
@@ -17,18 +19,33 @@ const DEFAULT_RISKS = [
   'Fees apply to both buying and selling transactions.',
 ];
 
+const PREVIEW_COUNT = 2;
+
 export function CoOwnRiskDisclosure({ risks = DEFAULT_RISKS, onReportIssue }: CoOwnRiskDisclosureProps) {
   const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const reducedMotion = useReducedMotion();
+  const [expanded, setExpanded] = useState(false);
+
+  const visibleRisks = expanded ? risks : risks.slice(0, PREVIEW_COUNT);
+  const hiddenCount = Math.max(0, risks.length - PREVIEW_COUNT);
+
+  const toggleExpanded = () => {
+    if (!reducedMotion) haptic.light();
+    setExpanded((prev) => !prev);
+  };
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+    <View style={styles.root}>
       <View style={styles.headerRow}>
-        <Ionicons name="information-circle-outline" size={20} color={colors.textSecondary} />
-        <Text style={[styles.title, { color: colors.textPrimary }]}>Risk & limitations</Text>
+        <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
+        <Text style={[styles.title, { color: colors.textPrimary }]}>
+          {risks.length} key risks
+        </Text>
       </View>
 
       <View style={styles.risksList}>
-        {risks.map((risk, i) => (
+        {visibleRisks.map((risk, i) => (
           <View key={i} style={styles.riskRow}>
             <View style={[styles.riskDot, { backgroundColor: colors.textMuted }]} />
             <Text style={[styles.riskText, { color: colors.textSecondary }]}>{risk}</Text>
@@ -36,15 +53,35 @@ export function CoOwnRiskDisclosure({ risks = DEFAULT_RISKS, onReportIssue }: Co
         ))}
       </View>
 
+      {hiddenCount > 0 && (
+        <Pressable
+          onPress={toggleExpanded}
+          style={({ pressed }) => [styles.expandBtn, pressed && styles.pressed]}
+          accessibilityLabel={expanded ? 'Hide remaining risks' : `View all ${risks.length} risks`}
+          accessibilityRole="button"
+          hitSlop={8}
+        >
+          <Text style={[styles.expandText, { color: colors.textSecondary }]}>
+            {expanded ? 'Show fewer' : `View all risks`}
+          </Text>
+          <Ionicons
+            name={expanded ? 'chevron-up' : 'chevron-down'}
+            size={14}
+            color={colors.textSecondary}
+          />
+        </Pressable>
+      )}
+
       {onReportIssue ? (
         <Pressable
           onPress={onReportIssue}
-          style={[styles.reportBtn, { borderColor: colors.border }]}
+          style={({ pressed }) => [styles.reportBtn, pressed && styles.pressed]}
           accessibilityRole="button"
           accessibilityLabel="Report an issue with this Co-Own asset"
+          hitSlop={8}
         >
-          <Ionicons name="flag-outline" size={15} color={colors.textSecondary} />
-          <Text style={[styles.reportText, { color: colors.textSecondary }]}>Report an issue</Text>
+          <Ionicons name="flag-outline" size={14} color={colors.textMuted} />
+          <Text style={[styles.reportText, { color: colors.textMuted }]}>Report an issue</Text>
         </Pressable>
       ) : null}
     </View>
@@ -53,20 +90,18 @@ export function CoOwnRiskDisclosure({ risks = DEFAULT_RISKS, onReportIssue }: Co
 
 const styles = StyleSheet.create({
   root: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
     gap: Space.sm,
+    paddingTop: Space.sm,
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
+    gap: Space.xs,
   },
   title: {
-    fontSize: Type.subtitle.size,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: -0.3,
+    letterSpacing: -0.2,
   },
   risksList: {
     gap: Space.sm,
@@ -88,14 +123,25 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
     lineHeight: 20,
   },
+  expandBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: Space.xs,
+    alignSelf: 'flex-start',
+  },
+  pressed: {
+    opacity: 0.6,
+  },
+  expandText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+  },
   reportBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingVertical: Space.sm,
-    paddingHorizontal: Space.md,
-    borderRadius: Radius.md,
-    borderWidth: 1,
+    paddingVertical: Space.xs,
     alignSelf: 'flex-start',
   },
   reportText: {

@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Type, Typography } from '../../theme/designTokens';
 
 export interface CoOwnTrustPanelProps {
   authenticityStatus?: 'not_offered' | 'eligible' | 'verified' | null;
@@ -45,19 +45,18 @@ export function CoOwnTrustPanel({
 
   const a11yLabel = `Trust and protection. ${items.map((i) => `${i.label}: ${i.value}`).join('. ')}`;
 
+  // Flat composition — no rounded card. The parent CommerceDetailSection
+  // provides the section context; this renders as quiet rows inside it.
+  // Spec 02: "no card-on-card composition."
   return (
     <View
-      style={[styles.root, { backgroundColor: colors.surface, borderColor: colors.border }]}
       accessibilityRole="summary"
       accessibilityLabel={a11yLabel}
     >
-      <Text style={[styles.title, { color: colors.textPrimary }]}>Trust & protection</Text>
       <View style={styles.itemsList}>
         {items.map((item, i) => (
-          <View key={`${item.label}-${i}`} style={[styles.itemRow, { borderColor: colors.border }]}>
-            <View style={[styles.itemIcon, { backgroundColor: item.positive ? colors.brand + '15' : colors.surfaceAlt }]}>
-              <Ionicons name={item.icon as any} size={16} color={item.positive ? colors.brand : colors.textMuted} />
-            </View>
+          <View key={`${item.label}-${i}`} style={[styles.itemRow, i < items.length - 1 && { borderBottomColor: colors.borderSubtle }]}>
+            <Ionicons name={item.icon as any} size={16} color={item.positive ? colors.brand : colors.textMuted} />
             <View style={styles.itemBody}>
               <Text style={[styles.itemLabel, { color: colors.textMuted }]}>{item.label}</Text>
               <Text style={[styles.itemValue, { color: item.positive ? colors.textPrimary : colors.textSecondary }]}>
@@ -72,33 +71,15 @@ export function CoOwnTrustPanel({
 }
 
 const styles = StyleSheet.create({
-  root: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
-    gap: Space.sm,
-  },
-  title: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: -0.3,
-  },
   itemsList: {
-    gap: Space.sm,
+    gap: 0,
   },
   itemRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    paddingBottom: Space.sm,
+    paddingVertical: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  itemIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   itemBody: {
     flex: 1,
