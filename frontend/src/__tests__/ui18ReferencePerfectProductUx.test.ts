@@ -22,8 +22,8 @@ describe('UI-18 reference-perfect product UX', () => {
 
   it('ItemDetailScreen has trust badge', () => {
     const src = read(resolve(SCREENS, 'ItemDetailScreen.tsx'));
-    expect(src).toContain('SellerTrustCard');
-    expect(src).toContain('ProductCommerceSummary');
+    expect(src).toContain('CommerceDetailSellerRow');
+    expect(src).toContain('CommerceDetailSection');
   });
 
   it('ItemDetailScreen has upgraded empty state with FlagshipEmptyGraphic', () => {

@@ -87,12 +87,28 @@ describe('VQ-08A Product Detail Page Revamp', () => {
       expect(screen).toContain('CommerceMediaStage');
     });
 
-    it('uses ProductCommerceSummary', () => {
-      expect(screen).toContain('ProductCommerceSummary');
+    it('uses shared commerce detail shell (CommerceDetailIdentity)', () => {
+      expect(screen).toContain('CommerceDetailIdentity');
     });
 
-    it('uses SellerTrustCard', () => {
-      expect(screen).toContain('SellerTrustCard');
+    it('uses shared commerce detail shell (CommerceDetailStateDock)', () => {
+      expect(screen).toContain('CommerceDetailStateDock');
+    });
+
+    it('uses shared commerce detail shell (CommerceDetailSellerRow)', () => {
+      expect(screen).toContain('CommerceDetailSellerRow');
+    });
+
+    it('uses shared commerce detail shell (CommerceDetailSection)', () => {
+      expect(screen).toContain('CommerceDetailSection');
+    });
+
+    it('uses shared commerce detail shell (CommerceDetailHeader)', () => {
+      expect(screen).toContain('CommerceDetailHeader');
+    });
+
+    it('uses shared commerce detail shell (CommerceDetailMediaRail)', () => {
+      expect(screen).toContain('CommerceDetailMediaRail');
     });
 
     it('uses RecommendationRail', () => {
@@ -107,24 +123,16 @@ describe('VQ-08A Product Detail Page Revamp', () => {
       expect(screen).toContain('DiscoveryGrid');
     });
 
-    it('uses ProductActionBar', () => {
-      expect(screen).toContain('ProductActionBar');
-    });
-
     it('uses ProductDetailSkeleton for loading', () => {
       expect(screen).toContain('ProductDetailSkeleton');
     });
 
-    it('uses ProductErrorState for errors', () => {
-      expect(screen).toContain('ProductErrorState');
+    it('uses CommerceStateCanvas for errors', () => {
+      expect(screen).toContain('CommerceStateCanvas');
     });
 
     it('uses FullscreenMediaViewer', () => {
       expect(screen).toContain('FullscreenMediaViewer');
-    });
-
-    it('uses ProductDetailHeader for collapsed sticky header', () => {
-      expect(screen).toContain('ProductDetailHeader');
     });
 
     it('uses TanStack Query hooks', () => {

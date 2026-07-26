@@ -6,6 +6,7 @@ import {
   StatusBar,
   ActivityIndicator,
   Pressable,
+  useWindowDimensions,
 } from 'react-native';
 import Reanimated, {
   useAnimatedScrollHandler,
@@ -16,8 +17,6 @@ import Reanimated, {
   FadeInDown,
 } from 'react-native-reanimated';
 import { useRoute, useNavigation } from '@react-navigation/native';
-import { Colors } from '../constants/colors';
-import { Typography, Space, DockConstants } from '../theme/designTokens';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Listing } from '../data/mockData';
@@ -36,32 +35,33 @@ import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModa
 import { ShareSheet } from '../components/ShareSheet';
 
 import {
-  ProductDetailHeader,
-  ProductIdentitySummary,
-  ProductAttributeChips,
   ProductDescription,
-  ProductCommerceSummary,
-  BuyerProtectionStrip,
-  SellerTrustCard,
   RecommendationRail,
   SeenInLooksRail,
   DiscoveryGrid,
-  ProductActionBar,
   ProductDetailSkeleton,
-  ProductErrorState,
   FullscreenMediaViewer,
   ProductFamilyBadge,
-  PriceInsightStrip,
   SizeGuideSheet,
   BundleUpsellRow,
   ListingQA,
 } from '../components/product';
 import {
   CommerceMediaStage,
-  CommerceStickyDock,
   CommerceStateCanvas,
   CategoryEvidence,
 } from '../components/commerce';
+import {
+  CommerceDetailHeader,
+  CommerceDetailIdentity,
+  CommerceDetailSellerRow,
+  CommerceDetailSection,
+  CommerceDetailDisclosureRow,
+  CommerceDetailMetricRow,
+  CommerceDetailStateDock,
+  CommerceDetailMediaRail,
+  CommerceDetailUnavailableInline,
+} from '../components/commerce/detail';
 import { resolveEvidenceGroups } from '../platform/commerce/categoryEvidence';
 import { FlagshipEmptyGraphic } from '../components/flagship';
 
@@ -81,11 +81,10 @@ import {
 } from '../platform/product';
 import type { RecommendationLook } from '../platform/product';
 import { trackTelemetryEvent } from '../lib/telemetry';
-
-import { useWindowDimensions } from 'react-native';
+import { Space, Type, Typography, DockConstants } from '../theme/designTokens';
 
 export default function ItemDetailScreen() {
-  const { isDark } = useAppTheme();
+  const { isDark, colors } = useAppTheme();
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
@@ -98,6 +97,8 @@ export default function ItemDetailScreen() {
   const [fullscreenIndex, setFullscreenIndex] = useState(0);
   const [fullscreenVisible, setFullscreenVisible] = useState(false);
   const [sizeGuideVisible, setSizeGuideVisible] = useState(false);
+  const [overflowVisible, setOverflowVisible] = useState(false);
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
 
   const isItemSavedAnywhere = useStore((state) => state.isItemSavedAnywhere);
   const isFav = useStore((state) => state.isWishlisted(route.params?.itemId));
@@ -268,20 +269,9 @@ export default function ItemDetailScreen() {
     };
   }, [backendListings, item]);
 
-  // Price history — derived from originalPrice and current price
-  const priceHistory = useMemo(() => {
-    if (!item) return null;
-    const history: { price: number; date: string }[] = [];
-    if (item.originalPrice && item.originalPrice > item.price) {
-      history.push({ price: item.originalPrice, date: item.createdAt ?? new Date().toISOString() });
-    }
-    history.push({ price: item.price, date: new Date().toISOString() });
-    return history.length > 1 ? history : null;
-  }, [item]);
-
   if (queryLoading && !item) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         <StatusBar translucent backgroundColor="transparent" barStyle={isDark ? 'light-content' : 'dark-content'} />
         <ProductDetailSkeleton />
       </View>
@@ -290,7 +280,7 @@ export default function ItemDetailScreen() {
 
   if (queryError && !item) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         <StatusBar translucent backgroundColor="transparent" barStyle={isDark ? 'light-content' : 'dark-content'} />
         <CommerceStateCanvas
           state="error"
@@ -302,12 +292,12 @@ export default function ItemDetailScreen() {
 
   if (!item) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         <StatusBar translucent backgroundColor="transparent" barStyle={isDark ? 'light-content' : 'dark-content'} />
         <View style={styles.unavailableContainer}>
           <FlagshipEmptyGraphic variant="box" size={160} />
-          <Text style={styles.unavailableTitle}>Item not found</Text>
-          <Text style={styles.unavailableBody}>
+          <Text style={[styles.unavailableTitle, { color: colors.textPrimary }]}>Item not found</Text>
+          <Text style={[styles.unavailableBody, { color: colors.textSecondary }]}>
             This listing may have been removed or is no longer available.
           </Text>
         </View>
@@ -356,8 +346,6 @@ export default function ItemDetailScreen() {
     ? moreFromSellerSection.items.filter((i): i is Listing => !isRecommendationLook(i))
     : [];
 
-  const heroHeight = Math.min(screenHeight * 0.62, screenWidth * 1.35);
-
   const handlePressRecommendation = (recItem: Listing) => {
     navigation.push('ItemDetail', { itemId: recItem.id });
   };
@@ -366,28 +354,103 @@ export default function ItemDetailScreen() {
     navigation.navigate('LookDetail', { lookId: lookItem.id });
   };
 
+  // ── Identity composition ──
+  // One dominant price location (identity). The dock carries a compact
+  // actionable price. No price repetition in between.
+  const interestSignal = (() => {
+    const interestCount = (item.likes ?? 0) + (isItemSavedAnywhere(item.id) ? 1 : 0);
+    if (interestCount >= 5) return `${interestCount} people interested`;
+    if (item.likes && item.likes > 0) return `${item.likes} like${item.likes > 1 ? 's' : ''}`;
+    return undefined;
+  })();
+
+  const attributeLine = [
+    item.size && `Size ${item.size}`,
+    item.condition,
+    item.category,
+  ].filter(Boolean).join(' · ');
+
+  const secondaryLine = [
+    hasDiscount && formattedOriginal ? `Was ${formattedOriginal}` : null,
+    discountPercent ? `-${Math.round(discountPercent)}%` : null,
+    formattedProtectionTotal ? `${formattedProtectionTotal} with Buyer Protection` : null,
+  ].filter(Boolean).join(' · ') || undefined;
+
+  const familyStateAccent = item.isSold ? 'Sold' : null;
+
+  // ── Dock geometry ──
+  const isDualActionDock = !capabilities.isOwner && !capabilities.isSold && capabilities.canBuy && capabilities.canOffer;
+  const dockHeight = isDualActionDock
+    ? DockConstants.dualActionHeight
+    : DockConstants.singleActionHeight;
+  const scrollBottomPadding = Math.max(insets.bottom, Space.md) + dockHeight + Space.md;
+
+  // ── Price insight rows (only truthful facts) ──
+  const priceInsightRows: Array<{ label: string; value: string; muted?: boolean }> = [];
+  if (hasDiscount && discountPercent && discountPercent > 0) {
+    priceInsightRows.push({ label: 'Price drop', value: `-${Math.round(discountPercent)}%` });
+  }
+  if (soldComps && soldComps.sampleSize > 0) {
+    priceInsightRows.push({
+      label: 'Similar sold',
+      value: `£${soldComps.minPrice.toFixed(0)}–£${soldComps.maxPrice.toFixed(0)}`,
+      muted: true,
+    });
+  }
+  if (item.likes && item.likes >= 10) {
+    priceInsightRows.push({ label: 'Demand', value: `${item.likes} likes` });
+  }
+  const daysListed = item.createdAt
+    ? Math.max(0, Math.floor((Date.now() - new Date(item.createdAt).getTime()) / (1000 * 60 * 60 * 24)))
+    : null;
+  if (daysListed != null && daysListed >= 3) {
+    priceInsightRows.push({
+      label: 'Time on market',
+      value: daysListed === 1 ? '1 day' : `${daysListed} days`,
+      muted: true,
+    });
+  }
+
+  // ── Purchase detail rows (compact summary + disclosure) ──
+  const purchaseSummary = [
+    commerce.shippingMethod,
+    commerce.protectionPolicy?.available ? commerce.protectionPolicy.label : null,
+    commerce.returnPolicy
+      ? commerce.returnPolicy.accepted
+        ? commerce.returnPolicy.windowDays
+          ? `Returns within ${commerce.returnPolicy.windowDays} days`
+          : 'Returns accepted'
+        : 'No returns'
+      : null,
+    commerce.authenticity && commerce.authenticity.status !== 'not_offered'
+      ? commerce.authenticity.label ?? (commerce.authenticity.status === 'verified' ? 'Verified' : 'Eligible')
+      : null,
+  ].filter(Boolean).join(' · ');
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar translucent backgroundColor="transparent" barStyle={isDark ? 'light-content' : 'dark-content'} />
 
-      <ProductDetailHeader
-        brand={item.brand}
-        title={item.title}
-        price={formattedPrice}
+      {/* ── Collapsed scrolling header ──
+          Quiet glyph hit targets, no large rounded-square containers.
+          Spec 02 shape system: separate hit area from visible shape. */}
+      <CommerceDetailHeader
         scrollY={scrollY}
-        heroHeight={heroHeight}
+        title={item.title}
         onBack={() => navigation.goBack()}
-        onShare={handleShare}
-        isFav={isFav}
-        onToggleFav={handleToggleFav}
       />
 
       <Reanimated.ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, Space.md) + DockConstants.dualActionHeight }}
+        contentContainerStyle={{ paddingBottom: scrollBottomPadding }}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
       >
+        {/* ── Zone A — Media stage ──
+            CommerceMediaStage handles paging/zoom/fullscreen only.
+            CommerceDetailMediaRail overlays the max-3-visible-controls
+            (Back, Share, Save) + overflow (Fav, Watch, Report).
+            Spec 02 §A + spec 05 §1. */}
         <CommerceMediaStage
           images={item.images}
           objectId={item.id}
@@ -397,7 +460,7 @@ export default function ItemDetailScreen() {
           topInset={insets.top}
           scrollY={scrollY}
           onBack={() => navigation.goBack()}
-          onShare={() => { haptic.light(); handleShare(); }}
+          onShare={handleShare}
           onSave={() => { haptic.medium(); setCollectionModalVisible(true); }}
           onToggleFav={handleToggleFav}
           onDoubleTap={handleDoubleTap}
@@ -406,45 +469,220 @@ export default function ItemDetailScreen() {
           heightFraction={isCompactScreen ? 0.5 : 0.62}
           bigHeartOpacity={bigHeartOpacity}
           bigHeartScale={bigHeartScale}
+          showDefaultControls={false}
           overlayTopContent={
-            <View style={{ alignItems: 'flex-start' }}>
+            <View style={styles.familyBadgeOverlay}>
               <ProductFamilyBadge
                 family="direct"
-                stateAccent={item.isSold ? 'Sold' : null}
+                stateAccent={familyStateAccent}
                 compact
               />
             </View>
           }
         />
+        <CommerceDetailMediaRail
+          onBack={() => navigation.goBack()}
+          topInset={insets.top}
+          rightActions={[
+            {
+              icon: 'share-outline',
+              label: 'Share',
+              onPress: handleShare,
+            },
+            {
+              icon: isItemSavedAnywhere(item.id) ? 'bookmark' : 'bookmark-outline',
+              activeIcon: 'bookmark',
+              label: isItemSavedAnywhere(item.id) ? 'Saved to collection' : 'Save to collection',
+              onPress: () => { haptic.medium(); setCollectionModalVisible(true); },
+              isActive: isItemSavedAnywhere(item.id),
+            },
+          ]}
+          onOverflow={() => setOverflowVisible(true)}
+          showOverflow
+        />
 
-        <Reanimated.View entering={FadeInDown.duration(350).delay(80)}>
-          <ProductIdentitySummary
-            brand={item.brand}
-            title={item.title}
-            price={formattedPrice}
-            originalPrice={formattedOriginal}
-            hasDiscount={hasDiscount}
-            discountPercent={discountPercent}
-            protectionTotal={formattedProtectionTotal}
-            izeText={priceIzeText}
-            engagement={{
-              likes: item.likes,
-              views: item.views,
-              saves: 0,
-              offers: 0,
-            }}
-          />
+        {/* ── Zone B — Identity seam ──
+            One compact identity composition: brand eyebrow + title +
+            dominant price + discount/protection secondary line +
+            interest signal. The family badge lives on the media stage
+            above; the price is NOT repeated elsewhere except the dock.
+            Spec 02 §B + spec 05 §2. */}
+        <CommerceDetailIdentity
+          eyebrow={item.brand ?? undefined}
+          title={item.title}
+          primaryValue={formattedPrice}
+          secondaryLine={secondaryLine}
+          interestSignal={interestSignal}
+        />
 
-          <BuyerProtectionStrip
-            policyLabel={commerce.protectionPolicy?.label}
-          />
+        {/* Key attributes — one quiet row, not filled pills.
+            Spec 05 §2: "Do not make every attribute a filled pill." */}
+        {attributeLine ? (
+          <View style={styles.attributeRow}>
+            <Text style={[styles.attributeText, { color: colors.textMuted }]} numberOfLines={2}>
+              {attributeLine}
+            </Text>
+            {item.size && (
+              <Pressable
+                onPress={() => { haptic.light(); setSizeGuideVisible(true); }}
+                hitSlop={8}
+                accessibilityLabel="View size guide"
+                accessibilityRole="button"
+              >
+                <Text style={[styles.sizeGuideLink, { color: colors.brand }]}>
+                  Size guide
+                </Text>
+              </Pressable>
+            )}
+          </View>
+        ) : null}
 
-          <ProductAttributeChips
-            size={item.size}
-            condition={item.condition}
-            category={item.category}
-            onSizePress={() => { haptic.light(); setSizeGuideVisible(true); }}
-          />
+        {/* 1ZE equivalent — quiet secondary line when gold rates exist */}
+        {priceIzeText ? (
+          <Text style={[styles.izeText, { color: colors.textSecondary }]} numberOfLines={1}>
+            {priceIzeText}
+          </Text>
+        ) : null}
+
+        {/* ── Zone C — Seller confidence ──
+            Slim seller row — the primary seller presentation. Carries
+            Follow/Message and navigates to the full profile on tap.
+            Spec 05 §3: "Move seller identity closer to the purchase
+            decision. Compact row." */}
+        {seller && (
+          <View style={styles.sellerRowWrap}>
+            <CommerceDetailSellerRow
+              avatarUri={seller.avatar ?? undefined}
+              name={seller.username}
+              verified={seller.verified}
+              ratingLine={
+                seller.rating != null
+                  ? `${seller.rating.toFixed(1)}${seller.reviewCount != null ? ` · ${seller.reviewCount} reviews` : ''}`
+                  : undefined
+              }
+              locationLine={seller.location ?? seller.dispatchTimeLabel ?? undefined}
+              onPress={() => {
+                if (item) ProductAnalytics.sellerProfileOpen(item.id, seller.id);
+                navigation.navigate('UserProfile', { userId: seller.id });
+              }}
+              primaryAction={
+                !capabilities.isOwner
+                  ? {
+                      label: 'Message',
+                      onPress: () => {
+                        if (item) ProductAnalytics.sellerMessageStart(item.id);
+                        navigation.navigate('NewMessage', {
+                          preselectedUserId: seller.id,
+                          preselectedDisplayName: seller.username,
+                        });
+                      },
+                    }
+                  : undefined
+              }
+              secondaryAction={
+                !capabilities.isOwner
+                  ? {
+                      label: 'Follow',
+                      onPress: () => sellerFollowMutation.mutate(),
+                    }
+                  : undefined
+              }
+            />
+          </View>
+        )}
+
+        {/* ── Zone D — Purchase details ──
+            Compact summary + disclosure. Groups shipping, buyer
+            protection, returns, authenticity, payment context.
+            Spec 05 §4: "Use a compact summary plus disclosure sheet.
+            Do not render a separate bordered strip for every policy." */}
+        {purchaseSummary ? (
+          <CommerceDetailSection label="Purchase details" divider>
+            <Text style={[styles.purchaseSummary, { color: colors.textSecondary }]}>
+              {purchaseSummary}
+            </Text>
+            <CommerceDetailDisclosureRow
+              label="Shipping & delivery"
+              summary={commerce.shippingMethod ?? undefined}
+              onPress={() => {
+                haptic.light();
+                show(
+                  commerce.estimatedDeliveryStart && commerce.estimatedDeliveryEnd
+                    ? `${commerce.shippingMethod ?? 'Standard shipping'} · ${commerce.estimatedDeliveryStart}–${commerce.estimatedDeliveryEnd}`
+                    : commerce.shippingMethod ?? 'Shipping confirmed at checkout',
+                  'info'
+                );
+              }}
+              leadingIcon="cube-outline"
+            />
+            <CommerceDetailDisclosureRow
+              label="Buyer protection"
+              summary={commerce.protectionPolicy?.available ? commerce.protectionPolicy.label : 'Not included'}
+              onPress={() => {
+                haptic.light();
+                show(
+                  commerce.protectionPolicy?.summary ?? 'Your money is held safely until you confirm receipt.',
+                  'info'
+                );
+              }}
+              leadingIcon="shield-checkmark-outline"
+            />
+            <CommerceDetailDisclosureRow
+              label="Returns"
+              summary={
+                commerce.returnPolicy
+                  ? commerce.returnPolicy.accepted
+                    ? commerce.returnPolicy.windowDays
+                      ? `${commerce.returnPolicy.windowDays} days`
+                      : 'Accepted'
+                    : 'Not accepted'
+                  : undefined
+              }
+              onPress={() => {
+                haptic.light();
+                show(
+                  commerce.returnPolicy?.accepted
+                    ? `Returns accepted${commerce.returnPolicy?.windowDays ? ` within ${commerce.returnPolicy.windowDays} days` : ''}.`
+                    : 'This seller does not accept returns.',
+                  'info'
+                );
+              }}
+              leadingIcon="return-up-back-outline"
+            />
+            <CommerceDetailMetricRow
+              label="Secure payment"
+              value="Thryftverse checkout"
+              muted
+            />
+          </CommerceDetailSection>
+        ) : null}
+
+        {/* ── Zone E — Product details ──
+            Description + condition + category evidence + posted date.
+            Spec 05 §5. */}
+        <CommerceDetailSection label="Item details" divider>
+          {item.description ? (
+            <View style={styles.descriptionWrap}>
+              <Text
+                style={[styles.descriptionText, { color: colors.textPrimary }]}
+                numberOfLines={descriptionExpanded ? undefined : 4}
+              >
+                {item.description}
+              </Text>
+              {item.description.length > 120 && (
+                <Pressable
+                  onPress={() => setDescriptionExpanded((prev) => !prev)}
+                  hitSlop={8}
+                  accessibilityLabel={descriptionExpanded ? 'Show less' : 'Read more'}
+                  accessibilityRole="button"
+                >
+                  <Text style={[styles.descriptionToggle, { color: colors.textSecondary }]}>
+                    {descriptionExpanded ? 'Show less' : 'Read more'}
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+          ) : null}
 
           {(() => {
             const evidenceGroups = resolveEvidenceGroups({
@@ -460,141 +698,107 @@ export default function ItemDetailScreen() {
             ) : null;
           })()}
 
-          <ProductDescription description={item.description} />
-
           {item.createdAt ? (
-            <Text style={styles.postedDate} numberOfLines={1}>
+            <Text style={[styles.postedDate, { color: colors.textMuted }]} numberOfLines={1}>
               Posted {new Date(item.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
             </Text>
           ) : null}
+        </CommerceDetailSection>
 
-          <ProductCommerceSummary
-            commerce={commerce}
-            formattedPrice={formattedPrice}
-            formattedProtectionTotal={formattedProtectionTotal}
-          />
-
-          {/* Authentication service CTA for high-value items */}
-          {(() => {
-            const authStatus = commerce.authenticity?.status ?? 'not_offered';
-            const isHighValue = item.price >= 200;
-            if (authStatus === 'verified') {
-              return (
-                <View style={styles.authCard}>
-                  <View style={styles.authIconWrap}>
-                    <Ionicons name="shield-checkmark" size={20} color={Colors.brand} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.authTitle}>Authenticity verified</Text>
-                    <Text style={styles.authSubtitle}>This item has been verified by Thryftverse authentication partners.</Text>
-                  </View>
+        {/* ── Zone F — Price insight ──
+            Only render facts that are genuinely supported. No fabricated
+            history. Spec 05 §6. */}
+        {priceInsightRows.length > 0 ? (
+          <CommerceDetailSection label="Price insight" divider>
+            {priceInsightRows.map((row) => (
+              <CommerceDetailMetricRow
+                key={row.label}
+                label={row.label}
+                value={row.value}
+                muted={row.muted}
+              />
+            ))}
+            {hasDiscount && discountPercent && discountPercent > 0 ? (
+              <Pressable
+                onPress={handleTogglePriceAlert}
+                style={({ pressed }) => [styles.alertRow, pressed && styles.pressed]}
+                accessibilityRole="switch"
+                accessibilityState={{ checked: priceAlertEnabled }}
+                accessibilityLabel={priceAlertEnabled ? 'Disable price drop alert' : 'Enable price drop alert'}
+              >
+                <View style={styles.alertRowLeft}>
+                  <Ionicons
+                    name={priceAlertEnabled ? 'notifications' : 'notifications-outline'}
+                    size={18}
+                    color={priceAlertEnabled ? colors.brand : colors.textSecondary}
+                  />
+                  <Text style={[styles.alertRowLabel, { color: colors.textSecondary }]}>
+                    Price drop alerts
+                  </Text>
                 </View>
-              );
-            }
-            if (isHighValue && authStatus === 'not_offered') {
-              return (
-                <Pressable
-                  style={styles.authCard}
-                  onPress={() => {
-                    haptic.light();
-                    show('Authentication request submitted. We\'ll review and notify you within 48 hours.', 'info');
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Request authenticity verification"
-                >
-                  <View style={styles.authIconWrap}>
-                    <Ionicons name="shield-outline" size={20} color={Colors.brand} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.authTitle}>Request authenticity check</Text>
-                    <Text style={styles.authSubtitle}>High-value item. Request professional verification before purchase.</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
-                </Pressable>
-              );
-            }
-            return null;
-          })()}
+                <View style={[styles.toggleTrack, { borderColor: priceAlertEnabled ? colors.brand : colors.border, backgroundColor: priceAlertEnabled ? `${colors.brand}20` : colors.surfaceAlt }]}>
+                  <View style={[styles.toggleThumb, { backgroundColor: priceAlertEnabled ? colors.brand : colors.textMuted, alignSelf: priceAlertEnabled ? 'flex-end' : 'flex-start' }]} />
+                </View>
+              </Pressable>
+            ) : null}
+          </CommerceDetailSection>
+        ) : null}
 
-          <Reanimated.View entering={FadeInDown.duration(350).delay(120)}>
-            <PriceInsightStrip
-              price={item.price}
-              originalPrice={item.originalPrice}
-              listedAt={item.createdAt}
-              likes={item.likes}
-              alertEnabled={priceAlertEnabled}
-              onToggleAlert={handleTogglePriceAlert}
-              soldComps={soldComps}
-              priceHistory={priceHistory}
-            />
-          </Reanimated.View>
-
-          {lastError ? (
+        {/* Sync retry banner — only when there is a real sync error */}
+        {lastError ? (
+          <View style={styles.syncRetryWrap}>
             <SyncRetryBanner
               message="Pull latest listing changes now."
               onRetry={() => void refreshListings()}
               isRetrying={isSyncing}
               telemetryContext="item_detail_listing_sync"
-              containerStyle={styles.syncRetry}
             />
-          ) : null}
+          </View>
+        ) : null}
 
-          {seller && (
-            <SellerTrustCard
-              seller={seller}
-              onFollow={() => sellerFollowMutation.mutate()}
-              onOpenProfile={() => {
-                if (item) ProductAnalytics.sellerProfileOpen(item.id, seller.id);
-                navigation.navigate('UserProfile', { userId: seller.id });
-              }}
-              onMessage={() => {
-                if (item) ProductAnalytics.sellerMessageStart(item.id);
-                navigation.navigate('NewMessage', {
-                  preselectedUserId: seller.id,
-                  preselectedDisplayName: seller.username,
-                });
-              }}
-            />
-          )}
-
-          {/* Public Q&A section */}
+        {/* ── Zone G — Social proof and Q&A ──
+            Q&A remains; wrapped in a flat section. Spec 05 §7. */}
+        <CommerceDetailSection label="Questions & answers" divider>
           <ListingQA
             listingId={item.id}
             currentUserName={currentUser?.username ?? 'You'}
             isSeller={item.seller?.id === currentUser?.id}
           />
+        </CommerceDetailSection>
 
-          <Reanimated.View entering={FadeInDown.duration(350).delay(160)}>
-            <BundleUpsellRow
-              items={bundleItems}
-              currentListingId={item.id}
-              shippingPayer={commerce.shippingPayer}
-              onPressItem={handlePressRecommendation}
-              sellerId={item.seller?.id ?? undefined}
-              sellerName={item.seller?.username ?? undefined}
-              onOpenBundleBag={(sellerId, sellerName) => navigation.navigate('BundleBag', { sellerId, sellerName })}
-            />
-          </Reanimated.View>
+        {/* ── Zone H — Discovery ──
+            Order: More from seller → Bundle → Seen in Looks → More like
+            this → Continue exploring. Spec 05 §8. */}
+        <Reanimated.View entering={FadeInDown.duration(350).delay(120)}>
+          <BundleUpsellRow
+            items={bundleItems}
+            currentListingId={item.id}
+            shippingPayer={commerce.shippingPayer}
+            onPressItem={handlePressRecommendation}
+            sellerId={item.seller?.id ?? undefined}
+            sellerName={item.seller?.username ?? undefined}
+            onOpenBundleBag={(sellerId, sellerName) => navigation.navigate('BundleBag', { sellerId, sellerName })}
+          />
+        </Reanimated.View>
 
-          {/* More like this — visual-similar grid by category/brand */}
-          {(() => {
-            const visualSimilar = backendListings
-              .filter((l) =>
-                l.id !== item.id &&
-                !l.isSold &&
-                (l.category === item.category || l.brand === item.brand)
-              )
-              .slice(0, 6);
-            if (visualSimilar.length < 2) return null;
-            return (
-              <Reanimated.View entering={FadeInDown.duration(350).delay(180)}>
-                <View style={styles.sectionDivider} />
-                <Text style={styles.moreLikeThisTitle}>More like this</Text>
+        {/* More like this — visual-similar grid by category/brand */}
+        {(() => {
+          const visualSimilar = backendListings
+            .filter((l) =>
+              l.id !== item.id &&
+              !l.isSold &&
+              (l.category === item.category || l.brand === item.brand)
+            )
+            .slice(0, 6);
+          if (visualSimilar.length < 2) return null;
+          return (
+            <Reanimated.View entering={FadeInDown.duration(350).delay(180)}>
+              <CommerceDetailSection label="More like this" divider>
                 <View style={styles.moreLikeThisGrid}>
                   {visualSimilar.map((simItem) => (
                     <Pressable
                       key={simItem.id}
-                      style={styles.moreLikeThisCard}
+                      style={({ pressed }) => [styles.moreLikeThisCard, pressed && styles.pressed]}
                       onPress={() => handlePressRecommendation(simItem)}
                       accessibilityRole="button"
                       accessibilityLabel={`View ${simItem.title}`}
@@ -606,91 +810,144 @@ export default function ItemDetailScreen() {
                           contentFit="cover"
                         />
                       ) : (
-                        <View style={[styles.moreLikeThisImage, styles.moreLikeThisPlaceholder]}>
-                          <Ionicons name="shirt-outline" size={20} color={Colors.textMuted} />
+                        <View style={[styles.moreLikeThisImage, { backgroundColor: colors.surfaceAlt }]}>
+                          <Ionicons name="shirt-outline" size={20} color={colors.textMuted} />
                         </View>
                       )}
-                      <Text style={styles.moreLikeThisPrice}>
+                      <Text style={[styles.moreLikeThisPrice, { color: colors.textPrimary }]} numberOfLines={1}>
                         £{simItem.price.toFixed(0)}
                       </Text>
                     </Pressable>
                   ))}
                 </View>
-              </Reanimated.View>
-            );
-          })()}
+              </CommerceDetailSection>
+            </Reanimated.View>
+          );
+        })()}
 
-          {seenInLooksSection && seenInLooksSection.items.length > 0 && (
-            <>
-              <View style={styles.sectionDivider} />
-              <SeenInLooksRail
-                items={seenInLooksSection.items.filter(isRecommendationLook) as RecommendationLook[]}
-                onPressItem={handlePressLook}
-              />
-            </>
-          )}
+        {seenInLooksSection && seenInLooksSection.items.length > 0 && (
+          <View style={styles.recommendationSection}>
+            <SeenInLooksRail
+              items={seenInLooksSection.items.filter(isRecommendationLook) as RecommendationLook[]}
+              onPressItem={handlePressLook}
+            />
+          </View>
+        )}
 
-          {recsLoading && recommendationSections.length === 0 ? (
-            <View style={styles.railLoading}>
-              <ActivityIndicator size="small" color={Colors.textMuted} />
-              <Text style={styles.railLoadingText} numberOfLines={1}>Finding recommendations...</Text>
-            </View>
-          ) : (
-            railSections.map((section) => (
-              <RecommendationRail
-                key={section.key}
-                section={section}
-                listingId={item.id}
-                onPressItem={handlePressRecommendation}
-              />
-            ))
-          )}
+        {recsLoading && recommendationSections.length === 0 ? (
+          <View style={styles.railLoading}>
+            <ActivityIndicator size="small" color={colors.textMuted} />
+            <Text style={[styles.railLoadingText, { color: colors.textMuted }]} numberOfLines={1}>
+              Finding recommendations...
+            </Text>
+          </View>
+        ) : (
+          railSections.map((section) => (
+            <RecommendationRail
+              key={section.key}
+              section={section}
+              listingId={item.id}
+              onPressItem={handlePressRecommendation}
+            />
+          ))
+        )}
 
-          {exploreItems.length > 0 && (
-            <>
-              <View style={styles.sectionDivider} />
-              <DiscoveryGrid
-                items={exploreItems}
-                listingId={item.id}
-                onPressItem={handlePressRecommendation}
-                onEndReached={() => exploreNextPage()}
-                hasMore={!!exploreHasNextPage && !exploreFetching}
-              />
-            </>
-          )}
+        {exploreItems.length > 0 && (
+          <View style={styles.recommendationSection}>
+            <DiscoveryGrid
+              items={exploreItems}
+              listingId={item.id}
+              onPressItem={handlePressRecommendation}
+              onEndReached={() => exploreNextPage()}
+              hasMore={!!exploreHasNextPage && !exploreFetching}
+            />
+          </View>
+        )}
 
-          {recsError && recommendationSections.length === 0 && (
-            <View style={styles.recErrorRow}>
-              <Text style={styles.recErrorText} numberOfLines={2}>
-                Recommendations are temporarily unavailable.
-              </Text>
-            </View>
-          )}
-        </Reanimated.View>
+        {recsError && recommendationSections.length === 0 && (
+          <View style={styles.recErrorRow}>
+            <CommerceDetailUnavailableInline
+              title="Recommendations unavailable"
+              body="Recommendations are temporarily unavailable."
+            />
+          </View>
+        )}
       </Reanimated.ScrollView>
 
-      <CommerceStickyDock bottomInset={insets.bottom}>
-        <ProductActionBar
-          capabilities={capabilities}
-          formattedPrice={formattedPrice}
-          onBuy={() => {
-            if (item) ProductAnalytics.checkoutStart(item.id);
-            navigation.navigate('Checkout', { itemId: item.id });
-          }}
-          onOffer={() => {
-            if (item) ProductAnalytics.offerStart(item.id);
-            navigation.navigate('MakeOffer', { itemId: item.id, price: item.price, title: item.title });
-          }}
-          onMessage={() => {
-            if (item) ProductAnalytics.sellerMessageStart(item.id);
-            navigation.navigate('NewMessage', {
-              preselectedUserId: item.sellerId,
-              preselectedDisplayName: item.seller?.username,
-            });
-          }}
-          onManage={() => navigation.navigate('ManageListing', { itemId: item.id })}
-        />
-      </CommerceStickyDock>
+      {/* ── Zone I — Sticky action dock ──
+          Buyer: price + Buy now + Make offer.
+          Seller: Manage listing.
+          Sold/unavailable: factual state + one next action.
+          Spec 05 §9. */}
+      {(() => {
+        if (capabilities.isOwner) {
+          return (
+            <CommerceDetailStateDock
+              value={formattedPrice}
+              valueLabel="Your listing"
+              primaryAction={{
+                label: 'Manage listing',
+                onPress: () => navigation.navigate('ManageListing', { itemId: item.id }),
+              }}
+            />
+          );
+        }
+
+        if (capabilities.isSold) {
+          return (
+            <CommerceDetailStateDock
+              stateBadge={
+                <Text style={[styles.dockStateBadge, { color: colors.success }]}>
+                  Sold
+                </Text>
+              }
+              subtitle="This item has been sold"
+              primaryAction={{
+                label: 'More like this',
+                onPress: () => navigation.navigate('Home'),
+              }}
+            />
+          );
+        }
+
+        if (!capabilities.isAvailable) {
+          return (
+            <CommerceDetailStateDock
+              stateBadge={
+                <Text style={[styles.dockStateBadge, { color: colors.textSecondary }]}>
+                  Unavailable
+                </Text>
+              }
+              subtitle="This listing is no longer available"
+            />
+          );
+        }
+
+        return (
+          <CommerceDetailStateDock
+            value={formattedPrice}
+            valueLabel="Price"
+            primaryAction={{
+              label: 'Buy now',
+              onPress: () => {
+                if (item) ProductAnalytics.checkoutStart(item.id);
+                navigation.navigate('Checkout', { itemId: item.id });
+              },
+            }}
+            secondaryAction={
+              capabilities.canOffer
+                ? {
+                    label: 'Make offer',
+                    onPress: () => {
+                      if (item) ProductAnalytics.offerStart(item.id);
+                      navigation.navigate('MakeOffer', { itemId: item.id, price: item.price, title: item.title });
+                    },
+                  }
+                : undefined
+            }
+          />
+        );
+      })()}
 
       <FullscreenMediaViewer
         images={item.images}
@@ -720,12 +977,54 @@ export default function ItemDetailScreen() {
         currentSize={item.size}
         onClose={() => setSizeGuideVisible(false)}
       />
+
+      {/* Overflow sheet — lower-frequency hero actions (Fav, Report). */}
+      {overflowVisible && (
+        <View style={styles.overflowBackdrop}>
+          <Pressable
+            style={styles.overflowBackdropPress}
+            onPress={() => setOverflowVisible(false)}
+            accessibilityLabel="Close more actions"
+            accessibilityRole="button"
+          />
+          <View style={[styles.overflowSheet, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Pressable
+              style={({ pressed }) => [styles.overflowRow, pressed && styles.pressed]}
+              onPress={() => {
+                setOverflowVisible(false);
+                handleToggleFav();
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={isFav ? 'Remove from wishlist' : 'Add to wishlist'}
+            >
+              <Ionicons name={isFav ? 'heart' : 'heart-outline'} size={18} color={isFav ? colors.danger : colors.textPrimary} />
+              <Text style={[styles.overflowRowText, { color: colors.textPrimary }]}>
+                {isFav ? 'Remove from wishlist' : 'Add to wishlist'}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.overflowRow, pressed && styles.pressed]}
+              onPress={() => {
+                setOverflowVisible(false);
+                navigation.navigate('ReportListing', { itemId: item.id });
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Report this listing"
+            >
+              <Ionicons name="flag-outline" size={18} color={colors.textSecondary} />
+              <Text style={[styles.overflowRowText, { color: colors.textSecondary }]}>
+                Report listing
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1 },
   unavailableContainer: {
     flex: 1,
     alignItems: 'center',
@@ -736,33 +1035,115 @@ const styles = StyleSheet.create({
   unavailableTitle: {
     fontSize: 18,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
     textAlign: 'center',
   },
   unavailableBody: {
     fontSize: 14,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
   },
-  sectionDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
-    marginHorizontal: Space.md,
-    marginVertical: Space.lg,
+  familyBadgeOverlay: {
+    alignSelf: 'flex-start',
   },
-  moreLikeThisTitle: {
-    fontSize: 16,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+  // ── Attribute row ──
+  attributeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Space.sm,
     paddingHorizontal: Space.md,
-    marginBottom: Space.sm,
+    paddingBottom: Space.xs,
   },
+  attributeText: {
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    flexShrink: 1,
+  },
+  sizeGuideLink: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.semibold,
+    flexShrink: 0,
+  },
+  izeText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.sm,
+    letterSpacing: 0.1,
+  },
+  // ── Seller row ──
+  sellerRowWrap: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
+    paddingBottom: Space.xs,
+  },
+  // ── Purchase details ──
+  purchaseSummary: {
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight + 2,
+    paddingBottom: Space.sm,
+  },
+  // ── Description ──
+  descriptionWrap: {
+    gap: Space.xs,
+    paddingBottom: Space.sm,
+  },
+  descriptionText: {
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight + 4,
+    fontFamily: Typography.family.regular,
+  },
+  descriptionToggle: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+    alignSelf: 'flex-start',
+  },
+  postedDate: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.regular,
+    paddingTop: Space.xs,
+  },
+  // ── Price insight alert row ──
+  alertRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Space.sm,
+    minHeight: 44,
+  },
+  alertRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    flex: 1,
+  },
+  alertRowLabel: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
+  },
+  toggleTrack: {
+    width: 36,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 2,
+  },
+  toggleThumb: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+  },
+  // ── Sync retry ──
+  syncRetryWrap: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
+  },
+  // ── More like this grid ──
   moreLikeThisGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    paddingHorizontal: Space.md,
     gap: Space.sm,
   },
   moreLikeThisCard: {
@@ -775,59 +1156,16 @@ const styles = StyleSheet.create({
     width: '100%',
     aspectRatio: 1,
     borderRadius: 8,
-    backgroundColor: Colors.surfaceAlt,
-  },
-  moreLikeThisPlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
   },
   moreLikeThisPrice: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
-  postedDate: {
-    fontSize: 12,
-    fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
-  },
-  authCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    marginHorizontal: Space.md,
-    marginTop: Space.sm,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.md,
-    borderRadius: 12,
-    backgroundColor: Colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-  },
-  authIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: `${Colors.brand}15`,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  authTitle: {
-    fontSize: 14,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-  },
-  authSubtitle: {
-    fontSize: 12,
-    fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-    marginTop: 2,
-  },
-  syncRetry: {
-    marginHorizontal: Space.md,
-    marginTop: Space.sm,
+  // ── Discovery ──
+  recommendationSection: {
+    marginTop: Space.lg,
   },
   railLoading: {
     flexDirection: 'row',
@@ -837,18 +1175,51 @@ const styles = StyleSheet.create({
     paddingVertical: Space.lg,
   },
   railLoadingText: {
-    fontSize: 13,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
   },
   recErrorRow: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
-    alignItems: 'center',
   },
-  recErrorText: {
-    fontSize: 13,
-    fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+  // ── Dock state badge ──
+  dockStateBadge: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: 0,
+  },
+  // ── Overflow sheet ──
+  overflowBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 200,
+    justifyContent: 'flex-end',
+  },
+  overflowBackdropPress: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  overflowSheet: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    paddingBottom: Space.lg,
+  },
+  overflowRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+    paddingVertical: Space.md,
+    minHeight: 48,
+  },
+  overflowRowText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.medium,
+  },
+  pressed: {
+    opacity: 0.6,
   },
 });

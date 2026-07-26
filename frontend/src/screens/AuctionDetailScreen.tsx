@@ -41,7 +41,7 @@ import { BottomSheet } from '../components/BottomSheet';
 import { BidSheet } from '../components/ui/BidSheet';
 import { BuyNowSheet } from '../components/ui/BuyNowSheet';
 import { FullscreenMediaViewer } from '../components/product/FullscreenMediaViewer';
-import { SellerTrustCard, ProductFamilyBadge, RecommendationRail } from '../components/product';
+import { ProductFamilyBadge, RecommendationRail } from '../components/product';
 import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
 import { ShareSheet } from '../components/ShareSheet';
 import { CommerceStickyDock, CommerceStateCanvas, CommerceRelatedRail, CategoryEvidence, CommerceMediaStage } from '../components/commerce';
@@ -587,10 +587,10 @@ export default function AuctionDetailScreen() {
           }
         />
 
-        {/* Slim seller confidence row — replaces the large seller module
-            near the identity. The canonical SellerTrustCard remains lower
-            in the page. Spec 02 §B: "seller/issuer may appear as a compact
-            inline confidence row when enough data exists." */}
+        {/* Slim seller confidence row — the primary seller presentation.
+            Carries Follow/Message and navigates to the full profile on
+            tap. Spec 02 §B + spec 04: "choose either the slim seller row
+            or the full seller card; do not show both by default." */}
         <View style={styles.identityExtension}>
           <CommerceDetailSellerRow
             name={auction.seller.displayName ?? auction.seller.username}
@@ -889,30 +889,12 @@ export default function AuctionDetailScreen() {
           />
         )}
 
-        {/* Canonical seller confidence module — full SellerTrustCard.
-            The slim row near identity gives the quick signal; this gives
-            the full follow/message/profile surface. */}
-        {(() => {
-          const seller = sellerTrustData ?? {
-            id: auction.seller.id,
-            username: auction.seller.username,
-            avatar: auction.seller.avatarUrl,
-            verified: false,
-          };
-          return (
-            <SellerTrustCard
-              seller={seller}
-              onFollow={() => sellerFollowMutation.mutate()}
-              onOpenProfile={() => navigation.navigate('UserProfile', { userId: auction.seller.id })}
-              onMessage={!isSeller ? () =>
-                navigation.navigate('NewMessage', {
-                  preselectedUserId: auction.seller.id,
-                  preselectedDisplayName: auction.seller.username,
-                })
-              : undefined}
-            />
-          );
-        })()}
+        {/* The slim seller row near identity is the primary seller
+            presentation. The full SellerTrustCard is not rendered by
+            default — the slim row already carries Follow/Message and
+            navigates to the full profile on tap. Spec 04: "choose either
+            the slim seller row or the full seller card as the primary
+            presentation; do not show both by default." */}
 
         {seenInLooksSection && seenInLooksSection.items.length > 0 && (
           <View style={styles.recommendationSection}>
