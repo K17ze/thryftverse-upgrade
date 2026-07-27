@@ -2,6 +2,7 @@ import React from 'react';
 import { View, StyleSheet, Text } from 'react-native';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { Space, Type } from '../../../theme/designTokens';
+import type { CommerceDetailSectionVariant } from './types';
 
 /**
  * Section rhythm — a flat section header for grouped content.
@@ -9,6 +10,14 @@ import { Space, Type } from '../../../theme/designTokens';
  * Per spec 02: no separate rounded card for every subsection. Use
  * whitespace, hairline dividers and a quiet section label. The section
  * header is a single small label, not a large bordered title.
+ *
+ * Per spec 05 §2 (section rhythm variants):
+ *   - standard: existing simple section.
+ *   - editorial: stronger heading, more breathing room, no divider.
+ *   - compact: disclosure row with minimal vertical spacing.
+ *   - continuation: no heading or divider.
+ *   - legal: subdued, collapsed-first.
+ *   - discovery: visual heading and rail spacing.
  *
  * Optional `trailing` slot renders a quiet action (e.g. "See all").
  */
@@ -22,6 +31,8 @@ export interface CommerceDetailSectionProps {
   divider?: boolean;
   /** Optional accessibility label override. */
   accessibilityLabel?: string;
+  /** Section rhythm variant. Defaults to `standard`. */
+  variant?: CommerceDetailSectionVariant;
 }
 
 export function CommerceDetailSection({
@@ -30,17 +41,43 @@ export function CommerceDetailSection({
   children,
   divider = false,
   accessibilityLabel,
+  variant = 'standard',
 }: CommerceDetailSectionProps) {
   const { colors } = useAppTheme();
 
+  // Per spec 05 §2: variant-driven rhythm.
+  const containerStyle = [
+    styles.container,
+    variant === 'editorial' && styles.containerEditorial,
+    variant === 'compact' && styles.containerCompact,
+    variant === 'continuation' && styles.containerContinuation,
+    variant === 'legal' && styles.containerLegal,
+    variant === 'discovery' && styles.containerDiscovery,
+  ];
+
+  const labelStyle = [
+    styles.label,
+    variant === 'editorial' && styles.labelEditorial,
+    variant === 'legal' && styles.labelLegal,
+    { color: colors.textSecondary },
+  ];
+
+  // continuation: no heading or divider — children render directly.
+  if (variant === 'continuation') {
+    return <View style={containerStyle}>{children}</View>;
+  }
+
+  // compact: minimal vertical spacing, divider suppressed.
+  const showDivider = divider && variant !== 'compact' && variant !== 'editorial';
+
   return (
-    <View style={styles.container}>
-      {divider ? (
+    <View style={containerStyle}>
+      {showDivider ? (
         <View style={[styles.divider, { backgroundColor: colors.borderSubtle }]} />
       ) : null}
       <View style={styles.header}>
         <Text
-          style={[styles.label, { color: colors.textSecondary }]}
+          style={labelStyle}
           accessibilityRole="header"
           accessibilityLabel={accessibilityLabel ?? label}
         >
@@ -56,6 +93,32 @@ export function CommerceDetailSection({
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: Space.md,
+    paddingTop: Space.lg,
+    paddingBottom: Space.sm,
+  },
+  // editorial: stronger heading, more breathing room, no divider.
+  containerEditorial: {
+    paddingTop: Space.xl,
+    paddingBottom: Space.sm,
+  },
+  // compact: disclosure row with minimal vertical spacing.
+  containerCompact: {
+    paddingTop: Space.sm,
+    paddingBottom: Space.xs,
+  },
+  // continuation: no heading or divider — just children with page padding.
+  containerContinuation: {
+    paddingHorizontal: Space.md,
+    paddingTop: 0,
+    paddingBottom: 0,
+  },
+  // legal: subdued, collapsed-first.
+  containerLegal: {
+    paddingTop: Space.md,
+    paddingBottom: Space.sm,
+  },
+  // discovery: visual heading and rail spacing.
+  containerDiscovery: {
     paddingTop: Space.lg,
     paddingBottom: Space.sm,
   },
@@ -76,5 +139,18 @@ const styles = StyleSheet.create({
     lineHeight: Type.metaElevated.lineHeight,
     fontWeight: '600',
     letterSpacing: Type.metaElevated.letterSpacing,
+  },
+  // editorial: stronger heading — slightly larger, tighter tracking.
+  labelEditorial: {
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
+    fontWeight: '700',
+    letterSpacing: Type.subtitle.letterSpacing,
+  },
+  // legal: subdued — muted weight, smaller.
+  labelLegal: {
+    fontSize: Type.metaElevated.size,
+    lineHeight: Type.metaElevated.lineHeight,
+    fontWeight: '500',
   },
 });

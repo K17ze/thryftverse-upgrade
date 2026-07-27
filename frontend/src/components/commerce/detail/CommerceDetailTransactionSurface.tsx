@@ -2,6 +2,7 @@ import React from 'react';
 import { View, StyleSheet, Text } from 'react-native';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { Space, Radius, Type } from '../../../theme/designTokens';
+import type { CommerceDetailFamily } from './types';
 
 /**
  * Family transaction surface — the one strongly contained module near
@@ -11,6 +12,16 @@ import { Space, Radius, Type } from '../../../theme/designTokens';
  *   - Direct: price + protection + availability.
  *   - Auction: current bid + countdown + reserve + viewer state.
  *   - Co-Own: last trade + top of book + market mode + trade eligibility.
+ *
+ * Per spec 05 §1 (family-aware transaction variants):
+ *   - Direct: near-flat, minimal radius, limited surface contrast.
+ *     Price often remains in identity; no unnecessary card when there
+ *     is no complex transaction state.
+ *   - Auction: stronger numeric composition, current bid dominant,
+ *     countdown integrated, reserve/viewer state secondary, controlled
+ *     urgency.
+ *   - Co-Own: structured market grid, tabular bid/ask, precise status
+ *     row, no crypto visual gimmicks.
  *
  * This is the only place a strong card radius is justified near the
  * top of the page. The surface is a single composed block, not several
@@ -35,6 +46,9 @@ export interface CommerceDetailTransactionSurfaceProps {
   /** When true, the surface uses the elevated surface fill. Useful for
    * dark-mode parity on critical state. */
   elevated?: boolean;
+  /** Family variant — controls containment, radius and numeric
+   * composition weight. Defaults to `direct` for backward compatibility. */
+  family?: CommerceDetailFamily;
 }
 
 export function CommerceDetailTransactionSurface({
@@ -46,16 +60,32 @@ export function CommerceDetailTransactionSurface({
   viewerState,
   children,
   elevated = false,
+  family = 'direct',
 }: CommerceDetailTransactionSurfaceProps) {
   const { colors } = useAppTheme();
+
+  // Per spec 05 §1: family-aware containment.
+  //   - direct: near-flat, minimal radius, subtle surface contrast.
+  //   - auction: contained, medium radius, stronger numeric weight.
+  //   - co_own: contained, medium radius, structured market grid.
+  const familyContainerStyle =
+    family === 'direct'
+      ? styles.containerDirect
+      : family === 'auction'
+        ? styles.containerAuction
+        : styles.containerCoOwn;
+
+  const familyRadius =
+    family === 'direct' ? Radius.lg : Radius.xl;
 
   return (
     <View
       style={[
         styles.container,
+        familyContainerStyle,
         {
           backgroundColor: elevated ? colors.surfaceElevated : colors.surface,
-          borderRadius: Radius.xl,
+          borderRadius: familyRadius,
         },
       ]}
       accessibilityRole="summary"
@@ -117,6 +147,22 @@ const styles = StyleSheet.create({
   container: {
     marginHorizontal: Space.md,
     marginTop: Space.sm,
+    padding: Space.md,
+  },
+  // Per spec 05 §1: Direct is near-flat — subtle surface contrast and
+  // lighter padding so it reads as a quiet confidence block, not a
+  // dashboard card.
+  containerDirect: {
+    padding: Space.sm + 2,
+  },
+  // Auction has stronger numeric composition — standard padding keeps
+  // the current bid dominant with breathing room for the countdown.
+  containerAuction: {
+    padding: Space.md,
+  },
+  // Co-Own uses a structured market grid — standard padding with
+  // slightly more vertical room for the bid/ask row.
+  containerCoOwn: {
     padding: Space.md,
   },
   primaryRow: {

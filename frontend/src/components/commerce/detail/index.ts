@@ -30,3 +30,9 @@ export { CommerceDetailSellerRow } from './CommerceDetailSellerRow';
 export { CommerceDetailUnavailableInline } from './CommerceDetailUnavailableInline';
 export { CommerceDetailStateDock } from './CommerceDetailStateDock';
 export { CommerceDetailMediaRail } from './CommerceDetailMediaRail';
+export type {
+  CommerceDetailFamily,
+  CommerceDetailSectionVariant,
+  CommerceDetailIdentityDensity,
+  CommerceDetailDockLayout,
+} from './types';

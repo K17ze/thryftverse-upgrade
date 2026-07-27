@@ -1,12 +1,13 @@
 import React from 'react';
-import { View, StyleSheet, Text, Pressable } from 'react-native';
+import { View, StyleSheet, Text, Pressable, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Reanimated from 'react-native-reanimated';
 import { FadeIn } from 'react-native-reanimated';
 import { useAppTheme } from '../../../theme/ThemeContext';
-import { Space, Elevation, Type } from '../../../theme/designTokens';
+import { Space, Elevation, Type, Radius } from '../../../theme/designTokens';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useHaptic } from '../../../hooks/useHaptic';
+import type { CommerceDetailDockLayout } from './types';
 
 /**
  * Sticky state/action dock — the bottom dock that holds the current
@@ -25,6 +26,18 @@ import { useHaptic } from '../../../hooks/useHaptic';
  *
  * Per spec 04 (Auction terminal): one result state, one next valid
  * action.
+ *
+ * Per spec 05 §4 (dock geometry):
+ *   - layout: 'inline' | 'stacked' | 'auto';
+ *   - auto: inline on sufficient width, stacked on compact widths;
+ *   - prevent button labels from truncating;
+ *   - keep visible controls from becoming giant pills;
+ *   - preserve 44–48pt hit targets.
+ *
+ * Per spec 05 §5 (restrained radii):
+ *   - primary commerce action: medium radius (Radius.md = 8);
+ *   - secondary: quiet text or outlined control;
+ *   - no radius 24 for every action by default.
  *
  * The dock is the only persistent chrome at the bottom of the page. It
  * never covers the last content row because screens add bottom padding
@@ -61,7 +74,18 @@ export interface CommerceDetailStateDockProps {
   elevated?: boolean;
   /** Optional bottom inset override. Defaults to safe area inset. */
   bottomInset?: number;
+  /** Dock layout strategy. Defaults to `auto`.
+   *
+   * Per spec 05 §4:
+   *   - inline: actions sit on the right of the value cluster.
+   *   - stacked: actions sit below the value cluster, full width.
+   *   - auto: inline on sufficient width (>= 360), stacked on compact.
+   */
+  layout?: CommerceDetailDockLayout;
 }
+
+/** Compact width threshold below which `auto` layout stacks actions. */
+const COMPACT_STACK_THRESHOLD = 360;
 
 export function CommerceDetailStateDock({
   value,
@@ -72,12 +96,21 @@ export function CommerceDetailStateDock({
   secondaryAction,
   elevated = false,
   bottomInset,
+  layout = 'auto',
 }: CommerceDetailStateDockProps) {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
   const haptic = useHaptic();
   const safeBottom = bottomInset ?? insets.bottom;
+  const { width: screenWidth } = useWindowDimensions();
+
+  // Per spec 05 §4: auto stacks on compact widths to prevent label
+  // truncation and giant pill overflow.
+  const hasSecondary = !!secondaryAction;
+  const shouldStack =
+    layout === 'stacked' ||
+    (layout === 'auto' && hasSecondary && screenWidth < COMPACT_STACK_THRESHOLD);
 
   const handlePress = (action: CommerceDetailStateDockAction) => {
     if (action.disabled || action.loading) return;
@@ -96,7 +129,7 @@ export function CommerceDetailStateDock({
         },
       ]}
     >
-      <View style={styles.row}>
+      <View style={shouldStack ? styles.rowStacked : styles.row}>
         <View style={styles.valueCluster}>
           {stateBadge}
           {value ? (
@@ -117,13 +150,13 @@ export function CommerceDetailStateDock({
           ) : null}
         </View>
 
-        <View style={styles.actionCluster}>
+        <View style={shouldStack ? styles.actionClusterStacked : styles.actionCluster}>
           {secondaryAction ? (
             <Pressable
               onPress={() => handlePress(secondaryAction)}
               disabled={secondaryAction.disabled || secondaryAction.loading}
               style={({ pressed }) => [
-                styles.secondaryAction,
+                shouldStack ? styles.secondaryActionStacked : styles.secondaryAction,
                 { borderColor: colors.border },
                 pressed && !secondaryAction.disabled && styles.pressed,
               ]}
@@ -143,6 +176,7 @@ export function CommerceDetailStateDock({
                       : colors.textPrimary,
                   },
                 ]}
+                numberOfLines={1}
               >
                 {secondaryAction.label}
               </Text>
@@ -153,7 +187,7 @@ export function CommerceDetailStateDock({
               onPress={() => handlePress(primaryAction)}
               disabled={primaryAction.disabled || primaryAction.loading}
               style={({ pressed }) => [
-                styles.primaryAction,
+                shouldStack ? styles.primaryActionStacked : styles.primaryAction,
                 {
                   backgroundColor: primaryAction.disabled
                     ? colors.surfaceAlt
@@ -177,6 +211,7 @@ export function CommerceDetailStateDock({
                       : colors.textInverse,
                   },
                 ]}
+                numberOfLines={1}
               >
                 {primaryAction.loading ? '…' : primaryAction.label}
               </Text>
@@ -230,6 +265,15 @@ const styles = StyleSheet.create({
     gap: Space.md,
     minHeight: 48,
   },
+  // Per spec 05 §4: stacked layout — value cluster on top, actions
+  // below in a full-width row. Prevents label truncation on compact
+  // widths while preserving 44–48pt hit targets.
+  rowStacked: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: Space.sm,
+    minHeight: 48,
+  },
   valueCluster: {
     flexDirection: 'column',
     gap: 2,
@@ -252,26 +296,58 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     flexShrink: 0,
   },
+  // Stacked action cluster: full-width row, primary consumes available
+  // space, secondary is constrained.
+  actionClusterStacked: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    flexGrow: 1,
+  },
+  // Per spec 05 §5: restrained radii — medium radius (Radius.md = 8)
+  // for primary commerce action, not radius 24.
   primaryAction: {
     height: 48,
     paddingHorizontal: Space.lg,
-    borderRadius: 24,
+    borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
     minWidth: 120,
+  },
+  // Stacked primary: flexes to consume available width so the label
+  // never truncates on compact widths.
+  primaryActionStacked: {
+    height: 48,
+    paddingHorizontal: Space.lg,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexGrow: 1,
+    flexShrink: 1,
   },
   primaryActionText: {
     fontSize: Type.bodyEmphasis.size,
     lineHeight: Type.bodyEmphasis.lineHeight,
     fontWeight: '600',
   },
+  // Per spec 05 §5: secondary is a quiet outlined control with medium
+  // radius, not a giant pill.
   secondaryAction: {
     height: 48,
     paddingHorizontal: Space.md,
-    borderRadius: 24,
+    borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
+  },
+  secondaryActionStacked: {
+    height: 48,
+    paddingHorizontal: Space.md,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    flexShrink: 0,
   },
   secondaryActionText: {
     fontSize: Type.bodyEmphasis.size,
