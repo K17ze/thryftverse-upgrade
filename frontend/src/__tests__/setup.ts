@@ -45,6 +45,7 @@ vi.mock('react-native', async () => {
     Dimensions: {
       get: () => ({ width: 375, height: 812, scale: 3, fontScale: 1 }),
     },
+    useWindowDimensions: () => ({ width: 375, height: 812, scale: 3, fontScale: 1 }),
     Appearance: {
       getColorScheme: () => 'light',
       addChangeListener: () => ({ remove: () => {} }),
