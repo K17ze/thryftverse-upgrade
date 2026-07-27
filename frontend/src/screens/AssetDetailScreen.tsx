@@ -436,6 +436,7 @@ export default function AssetDetailScreen() {
         <View style={styles.identityExtension}>
           <CommerceDetailSellerRow
             roleLabel="Issuer"
+            institutional
             name={issuerUsername}
             verified={issuerTrust?.verified}
             ratingLine={
@@ -541,25 +542,58 @@ export default function AssetDetailScreen() {
         {/* ── Fundamentals — stacked layout, not three columns ──
             Per spec 03_COOWN §1: replace the compact-phone three-column
             fundamentals strip with a stacked layout. Three equal columns
-            feel cramped on phones. */}
+            feel cramped on phones.
+            Real values use textPrimary + tabular nums; unavailable values
+            use textMuted to distinguish data presence at a glance. */}
         <View style={[styles.fundamentalsStacked, { borderBottomColor: colors.borderSubtle }]}>
-          <View style={styles.fundamentalsRow}>
-            <Text style={[styles.fundamentalsLabel, { color: colors.textMuted }]}>NAV / unit</Text>
-            <Text style={[styles.fundamentalsValue, { color: colors.textSecondary }]} numberOfLines={2}>
-              {asset.appraisalValue && totalUnits > 0
-                ? formatFromFiat(asset.appraisalValue / totalUnits, 'GBP')
-                : 'Not available'}
-            </Text>
-          </View>
-          <View style={styles.fundamentalsRow}>
-            <Text style={[styles.fundamentalsLabel, { color: colors.textMuted }]}>Reporting</Text>
-            <Text style={[styles.fundamentalsValue, { color: colors.textSecondary }]} numberOfLines={2}>
-              {asset.appraisalNextScheduled ? `Next report · ${asset.appraisalNextScheduled}` : 'Next report · Not scheduled'}
-            </Text>
-          </View>
+          {(() => {
+            const navAvailable = asset.appraisalValue && totalUnits > 0;
+            const navValue = navAvailable ? formatFromFiat(asset.appraisalValue / totalUnits, 'GBP') : 'Not available';
+            return (
+              <View style={styles.fundamentalsRow}>
+                <Text style={[styles.fundamentalsLabel, { color: colors.textMuted }]}>NAV / unit</Text>
+                <Text
+                  style={[
+                    styles.fundamentalsValue,
+                    { color: navAvailable ? colors.textPrimary : colors.textMuted },
+                    !navAvailable && styles.fundamentalsValueUnavailable,
+                  ]}
+                  numberOfLines={2}
+                >
+                  {navValue}
+                </Text>
+              </View>
+            );
+          })()}
+          {(() => {
+            const reportingAvailable = !!asset.appraisalNextScheduled;
+            const reportingValue = reportingAvailable ? `Next report · ${asset.appraisalNextScheduled}` : 'Next report · Not scheduled';
+            return (
+              <View style={styles.fundamentalsRow}>
+                <Text style={[styles.fundamentalsLabel, { color: colors.textMuted }]}>Reporting</Text>
+                <Text
+                  style={[
+                    styles.fundamentalsValue,
+                    { color: reportingAvailable ? colors.textPrimary : colors.textMuted },
+                    !reportingAvailable && styles.fundamentalsValueUnavailable,
+                  ]}
+                  numberOfLines={2}
+                >
+                  {reportingValue}
+                </Text>
+              </View>
+            );
+          })()}
           <View style={styles.fundamentalsRow}>
             <Text style={[styles.fundamentalsLabel, { color: colors.textMuted }]}>Distribution</Text>
-            <Text style={[styles.fundamentalsValue, { color: colors.textSecondary }]} numberOfLines={2}>
+            <Text
+              style={[
+                styles.fundamentalsValue,
+                { color: colors.textMuted },
+                styles.fundamentalsValueUnavailable,
+              ]}
+              numberOfLines={2}
+            >
               Not scheduled
             </Text>
           </View>
@@ -570,7 +604,7 @@ export default function AssetDetailScreen() {
             Spec 03 §4: "Use a compact personalised surface." Appears before
             generic supply. */}
         {isHolder && (
-          <CommerceDetailSection label="Your position" divider>
+          <CommerceDetailSection label="Your position" divider variant="editorial">
             <View style={styles.viewerPositionHeader}>
               <Text style={[styles.viewerPositionValue, { color: colors.textPrimary }]}>
                 {yourUnits} units · {viewerPct.toFixed(1)}% ownership
@@ -637,7 +671,7 @@ export default function AssetDetailScreen() {
             Per spec 03_COOWN §4: only expose the line/candle toggle
             when real OHLC candles exist. Do not pass an empty candle
             component merely to satisfy a layout path. */}
-        <CommerceDetailSection label="Price history" divider>
+        <CommerceDetailSection label="Price history" divider variant="editorial">
           <CoOwnPriceChart
             assetId={asset.id}
             unitPriceGbp={asset.unitPriceGbp}
@@ -693,7 +727,7 @@ export default function AssetDetailScreen() {
             decision facts (Authenticity, Condition, Storage, Insurance,
             Latest appraisal). Full dossier opens via "View full asset
             dossier" disclosure. Do not render — rows; omit missing. */}
-        <CommerceDetailSection label="Asset dossier" divider>
+        <CommerceDetailSection label="Asset dossier" divider variant="editorial">
           {/* Summary facts — maximum five decision facts */}
           {asset.authenticityStatus && (
             <CommerceDetailMetricRow
@@ -807,7 +841,7 @@ export default function AssetDetailScreen() {
             plain-language statement + "Review N terms" + "View risk
             disclosure". Both expand via disclosure rows, not inline
             blocks. */}
-        <CommerceDetailSection label="Rights & risks" divider>
+        <CommerceDetailSection label="Rights & risks" divider variant="editorial">
           <View style={styles.rightsSummary}>
             <Text style={[styles.rightsCriticalStatement, { color: colors.textPrimary }]}>
               You own units in the asset, not the physical item.
@@ -1216,6 +1250,11 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
     textAlign: 'right',
     flexShrink: 1,
+  },
+  // Unavailable fundamentals values: italic, no tabular nums.
+  fundamentalsValueUnavailable: {
+    fontStyle: 'italic',
+    fontVariant: [],
   },
   // ── Risk disclosure modal (per spec 03_COOWN §8) ──
   riskDisclosureModalOverlay: {

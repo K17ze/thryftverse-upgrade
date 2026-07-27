@@ -528,6 +528,8 @@ export default function ItemDetailScreen() {
         />
 
         {/* Key attributes — one quiet row, not filled pills.
+            Rendered inside the identity's padding rhythm so it reads as
+            part of the identity composition, not a disconnected block.
             Spec 05 §2: "Do not make every attribute a filled pill." */}
         {attributeLine ? (
           <View style={styles.attributeRow}>
@@ -672,7 +674,7 @@ export default function ItemDetailScreen() {
         {/* ── Zone E — Product details ──
             Description + condition + category evidence + posted date.
             Spec 05 §5. */}
-        <CommerceDetailSection label="Item details" divider>
+        <CommerceDetailSection label="Item details" divider variant="editorial">
           {item.description ? (
             <View style={styles.descriptionWrap}>
               <Text
@@ -721,7 +723,7 @@ export default function ItemDetailScreen() {
             Only render facts that are genuinely supported. No fabricated
             history. Spec 05 §6. */}
         {priceInsightRows.length > 0 ? (
-          <CommerceDetailSection label="Price insight" divider>
+          <CommerceDetailSection label="Price insight" divider variant="editorial">
             {priceInsightRows.map((row) => (
               <CommerceDetailMetricRow
                 key={row.label}
@@ -804,7 +806,10 @@ export default function ItemDetailScreen() {
           />
         </Reanimated.View>
 
-        {/* More like this — visual-similar grid by category/brand */}
+        {/* More like this — visual-similar grid by category/brand.
+            Contextual heading: prefer brand when available, fall back
+            to category, then to the generic label. Curation cue per
+            spec 04_DIRECT §4. */}
         {(() => {
           const visualSimilar = backendListings
             .filter((l) =>
@@ -814,9 +819,14 @@ export default function ItemDetailScreen() {
             )
             .slice(0, 6);
           if (visualSimilar.length < 2) return null;
+          const discoveryLabel = item.brand
+            ? `More from ${item.brand}`
+            : item.category
+            ? `More ${item.category.toLowerCase()}`
+            : 'More like this';
           return (
             <Reanimated.View entering={FadeInDown.duration(350).delay(180)}>
-              <CommerceDetailSection label="More like this" divider>
+              <CommerceDetailSection label={discoveryLabel} divider variant="discovery">
                 <View style={styles.moreLikeThisGrid}>
                   {visualSimilar.map((simItem) => (
                     <Pressable
@@ -919,7 +929,6 @@ export default function ItemDetailScreen() {
         return (
           <CommerceDetailStateDock
             value={formattedPrice}
-            valueLabel="Price"
             primaryAction={{
               label: 'Buy now',
               onPress: () => {
@@ -1068,13 +1077,17 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   // ── Attribute row ──
+  // Rendered inside the identity's padding rhythm — no separate
+  // horizontal padding. The negative top margin pulls it closer to
+  // the identity block so it reads as part of the composition.
   attributeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Space.sm,
     paddingHorizontal: Space.md,
-    paddingBottom: Space.xs,
+    marginTop: -Space.xs,
+    paddingBottom: Space.sm,
   },
   attributeText: {
     fontSize: Type.body.size,
@@ -1256,6 +1269,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.medium,
   },
   pressed: {
-    opacity: 0.6,
+    opacity: 0.85,
+    transform: [{ scale: 0.97 }],
   },
 });

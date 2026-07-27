@@ -47,7 +47,13 @@ export function CommerceDetailHeader({
 
   const containerStyle = useAnimatedStyle(() => {
     const opacity = interpolate(scrollY.value, [0, fadeThreshold], [0, 1], Extrapolation.CLAMP);
-    return { opacity: reducedMotion ? 1 : opacity };
+    // Subtle translate so the header settles into place rather than
+    // appearing abruptly. Per spec 05 §7: native motion is restrained.
+    const translateY = interpolate(scrollY.value, [0, fadeThreshold], [8, 0], Extrapolation.CLAMP);
+    return {
+      opacity: reducedMotion ? 1 : opacity,
+      transform: [{ translateY: reducedMotion ? 0 : translateY }],
+    };
   });
 
   const titleStyle = useAnimatedStyle(() => {

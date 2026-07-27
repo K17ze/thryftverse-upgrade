@@ -355,7 +355,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   pressed: {
-    opacity: 0.7,
+    opacity: 0.85,
+    transform: [{ scale: 0.97 }],
   },
   subtitle: {
     fontSize: Type.caption.size,

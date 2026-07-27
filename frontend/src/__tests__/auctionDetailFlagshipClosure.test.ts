@@ -181,7 +181,9 @@ describe('auction-detail flagship closure (spec 02_AUCTION)', () => {
 
     it('retains one related-auctions rail', () => {
       expect(src).toContain('CommerceRelatedRail');
-      expect(src).toContain('More from this category');
+      // Heading is now contextual with the category name, but the
+      // fallback label and the rail component must still be present.
+      expect(src).toMatch(/More\s+auctions|More\s+.*auctions/);
     });
 
     it('retains one Seen in Looks rail', () => {

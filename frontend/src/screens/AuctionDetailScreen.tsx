@@ -14,7 +14,6 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Reanimated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
-import { Colors } from '../constants/colors';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useToast } from '../context/ToastContext';
@@ -482,7 +481,7 @@ export default function AuctionDetailScreen() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <CommerceStateCanvas state="loading" />
+        <CommerceStateCanvas state="loading" family="auction" />
       </View>
     );
   }
@@ -698,7 +697,7 @@ export default function AuctionDetailScreen() {
           {/* Minimum to lead (outbid) — actionable emphasis inside the
               surface. The dock carries the "Bid again" action. */}
           {isLive && viewerState === 'outbid' && auction.minimumNextBidGbp > 0 && (
-            <View style={styles.transactionMinRow}>
+            <View style={[styles.transactionMinRow, { borderTopColor: colors.border }]}>
               <Text style={[styles.transactionMinLabel, { color: colors.textSecondary }]}>
                 Minimum to lead
               </Text>
@@ -830,7 +829,7 @@ export default function AuctionDetailScreen() {
             presentation. Section label "Bid activity", latest bid row,
             bid count, one "View all bids" action. Do not show both a
             disclosure row and a three-row preview. */}
-        <CommerceDetailSection label="Bid activity" divider>
+        <CommerceDetailSection label="Bid activity" divider variant="editorial">
           {auction.bidCount > 0 && bidActivity.length > 0 ? (
             (() => {
               const topBid = formatBidActivityRow(bidActivity[0], 0, formatFromFiat, serverNowRef.current);
@@ -886,7 +885,7 @@ export default function AuctionDetailScreen() {
             understandable. Spec 02 §F. */}
         {relatedAuctions.length > 0 && (
           <CommerceRelatedRail
-            label="More from this category"
+            label={auction.category ? `More ${auction.category.toLowerCase()} auctions` : 'More auctions'}
             items={relatedAuctions.map((rel) => {
               const relTiming = resolveAuctionTiming(rel, secondClock);
               const relPrice = rel.bidCount > 0 ? rel.currentBidGbp : rel.startingBidGbp;
@@ -1172,53 +1171,53 @@ export default function AuctionDetailScreen() {
         <View style={styles.sheetHeader}>
           <Headline style={styles.sheetTitle}>Bid history</Headline>
           {auction && auction.bidCount > 0 && (
-            <Meta style={styles.sheetSubtitle}>{auction.bidCount} bids</Meta>
+            <Meta style={[styles.sheetSubtitle, { color: colors.textMuted }]}>{auction.bidCount} bids</Meta>
           )}
         </View>
 
         {bidActivityError && (
-          <View style={styles.subSectionError}>
-            <Text style={styles.subSectionErrorText}>Couldn't load bid history</Text>
+          <View style={[styles.subSectionError, { backgroundColor: colors.surfaceAlt }]}>
+            <Text style={[styles.subSectionErrorText, { color: colors.textMuted }]}>Couldn't load bid history</Text>
             <Pressable onPress={() => { setBidActivityError(false); void fetchDetail(); }}>
-              <Text style={styles.retryText}>Retry</Text>
+              <Text style={[styles.retryText, { color: colors.brand }]}>Retry</Text>
             </Pressable>
           </View>
         )}
 
         {!bidActivityError && bidActivity.length === 0 && (
-          <Text style={styles.noBidsText}>No bids placed yet.</Text>
+          <Text style={[styles.noBidsText, { color: colors.textMuted }]}>No bids placed yet.</Text>
         )}
 
         {!bidActivityError && bidActivity.length > 0 && (
           <ScrollView style={styles.sheetScroll} showsVerticalScrollIndicator={false}>
-            <View style={styles.bidList}>
+            <View style={[styles.bidList, { borderColor: colors.border, backgroundColor: colors.surface }]}>
               {bidActivity.map((bid, index) => {
                 const row = formatBidActivityRow(bid, index, formatFromFiat, serverNowRef.current);
                 return (
                   <View
                     key={bid.id}
-                    style={[styles.bidRow, row.isTopBid && styles.bidRowTop]}
+                    style={[styles.bidRow, { borderBottomColor: colors.border }, row.isTopBid && { backgroundColor: colors.surfaceAlt }]}
                   >
                     <View style={styles.bidRowLeft}>
                       {row.isViewer && (
-                        <View style={styles.viewerBadge}>
-                          <Text style={styles.viewerBadgeText}>YOU</Text>
+                        <View style={[styles.viewerBadge, { backgroundColor: colors.brand }]}>
+                          <Text style={[styles.viewerBadgeText, { color: colors.textInverse }]}>YOU</Text>
                         </View>
                       )}
                       <View style={styles.bidRowInfo}>
                         <View style={styles.bidRowNameLine}>
-                          <Text style={styles.bidderName}>{row.bidderLabel}</Text>
+                          <Text style={[styles.bidderName, { color: colors.textSecondary }]}>{row.bidderLabel}</Text>
                           {row.isTopBid && (
-                            <Text style={styles.topBidLabel}>Top bid</Text>
+                            <Text style={[styles.topBidLabel, { color: colors.success }]}>Top bid</Text>
                           )}
                         </View>
                         {row.relativeTime && (
-                          <Text style={styles.bidRelativeTime}>{row.relativeTime}</Text>
+                          <Text style={[styles.bidRelativeTime, { color: colors.textMuted }]}>{row.relativeTime}</Text>
                         )}
                       </View>
                     </View>
                     <View style={styles.bidRowRight}>
-                      <Text style={styles.bidAmount}>{row.amountText}</Text>
+                      <Text style={[styles.bidAmount, { color: colors.textPrimary }]}>{row.amountText}</Text>
                     </View>
                   </View>
                 );
@@ -1240,72 +1239,72 @@ export default function AuctionDetailScreen() {
         <ScrollView style={styles.sheetScroll} showsVerticalScrollIndicator={false}>
           <View style={styles.rulesContainer}>
             <View style={styles.ruleItem}>
-              <View style={styles.ruleNumber}>
-                <Text style={styles.ruleNumberText}>1</Text>
+              <View style={[styles.ruleNumber, { backgroundColor: colors.brand }]}>
+                <Text style={[styles.ruleNumberText, { color: colors.textInverse }]}>1</Text>
               </View>
               <View style={styles.ruleContent}>
                 <BodyEmphasis style={styles.ruleTitle}>Place your bid</BodyEmphasis>
-                <Text style={styles.ruleDescription}>
+                <Text style={[styles.ruleDescription, { color: colors.textSecondary }]}>
                   Enter an amount equal to or above the minimum next bid shown. The system accepts your bid instantly if it's higher than the current top bid.
                 </Text>
               </View>
             </View>
 
             <View style={styles.ruleItem}>
-              <View style={styles.ruleNumber}>
-                <Text style={styles.ruleNumberText}>2</Text>
+              <View style={[styles.ruleNumber, { backgroundColor: colors.brand }]}>
+                <Text style={[styles.ruleNumberText, { color: colors.textInverse }]}>2</Text>
               </View>
               <View style={styles.ruleContent}>
                 <BodyEmphasis style={styles.ruleTitle}>Outbid alerts</BodyEmphasis>
-                <Text style={styles.ruleDescription}>
+                <Text style={[styles.ruleDescription, { color: colors.textSecondary }]}>
                   If another bidder places a higher bid, you'll be notified immediately. Come back and place a new bid to reclaim the top spot.
                 </Text>
               </View>
             </View>
 
             <View style={styles.ruleItem}>
-              <View style={styles.ruleNumber}>
-                <Text style={styles.ruleNumberText}>3</Text>
+              <View style={[styles.ruleNumber, { backgroundColor: colors.brand }]}>
+                <Text style={[styles.ruleNumberText, { color: colors.textInverse }]}>3</Text>
               </View>
               <View style={styles.ruleContent}>
                 <BodyEmphasis style={styles.ruleTitle}>Winning the auction</BodyEmphasis>
-                <Text style={styles.ruleDescription}>
+                <Text style={[styles.ruleDescription, { color: colors.textSecondary }]}>
                   When the auction ends, the highest bidder wins. You'll be prompted to complete checkout and arrange delivery.
                 </Text>
               </View>
             </View>
 
             <View style={styles.ruleItem}>
-              <View style={styles.ruleNumber}>
-                <Text style={styles.ruleNumberText}>4</Text>
+              <View style={[styles.ruleNumber, { backgroundColor: colors.brand }]}>
+                <Text style={[styles.ruleNumberText, { color: colors.textInverse }]}>4</Text>
               </View>
               <View style={styles.ruleContent}>
                 <BodyEmphasis style={styles.ruleTitle}>Buy Now option</BodyEmphasis>
-                <Text style={styles.ruleDescription}>
+                <Text style={[styles.ruleDescription, { color: colors.textSecondary }]}>
                   Some auctions include a Buy Now price. Use it to skip bidding and purchase the item instantly before the auction ends.
                 </Text>
               </View>
             </View>
 
             <View style={styles.ruleItem}>
-              <View style={styles.ruleNumber}>
-                <Text style={styles.ruleNumberText}>5</Text>
+              <View style={[styles.ruleNumber, { backgroundColor: colors.brand }]}>
+                <Text style={[styles.ruleNumberText, { color: colors.textInverse }]}>5</Text>
               </View>
               <View style={styles.ruleContent}>
                 <BodyEmphasis style={styles.ruleTitle}>Reserve prices</BodyEmphasis>
-                <Text style={styles.ruleDescription}>
+                <Text style={[styles.ruleDescription, { color: colors.textSecondary }]}>
                   Some auctions have a hidden reserve price set by the seller. If the highest bid hasn't met the reserve when the auction ends, the seller isn't obligated to sell. The "Reserve met" badge means the current top bid has reached or exceeded this threshold.
                 </Text>
               </View>
             </View>
 
             <View style={styles.ruleItem}>
-              <View style={styles.ruleNumber}>
-                <Text style={styles.ruleNumberText}>6</Text>
+              <View style={[styles.ruleNumber, { backgroundColor: colors.brand }]}>
+                <Text style={[styles.ruleNumberText, { color: colors.textInverse }]}>6</Text>
               </View>
               <View style={styles.ruleContent}>
                 <BodyEmphasis style={styles.ruleTitle}>Currency & payments</BodyEmphasis>
-                <Text style={styles.ruleDescription}>
+                <Text style={[styles.ruleDescription, { color: colors.textSecondary }]}>
                   Bids are placed in GBP and automatically converted to your local currency for display. Final settlement uses the 1ZE platform value.
                 </Text>
               </View>
@@ -1365,30 +1364,13 @@ function resolveEffectiveState(
   return 'upcoming';
 }
 
-const stylesViewerTreatment: Record<string, { backgroundColor: string; borderColor: string }> = {
-  calm: { backgroundColor: 'rgba(22,163,74,0.08)', borderColor: 'rgba(22,163,74,0.2)' },
-  warning: { backgroundColor: 'rgba(220,38,38,0.08)', borderColor: 'rgba(220,38,38,0.2)' },
-  restrained: { backgroundColor: Colors.surfaceAlt, borderColor: Colors.border },
-  result: { backgroundColor: 'rgba(22,163,74,0.08)', borderColor: 'rgba(22,163,74,0.2)' },
-  subdued: { backgroundColor: Colors.surfaceAlt, borderColor: Colors.border },
-  seller: { backgroundColor: 'rgba(244,240,232,0.06)', borderColor: 'rgba(244,240,232,0.15)' },
-  none: { backgroundColor: Colors.surfaceAlt, borderColor: Colors.border },
-};
-
-const stylesViewerTitle: Record<string, { color: string }> = {
-  calm: { color: Colors.success },
-  warning: { color: Colors.danger },
-  restrained: { color: Colors.textSecondary },
-  result: { color: Colors.success },
-  subdued: { color: Colors.textMuted },
-  seller: { color: Colors.brand },
-  none: { color: Colors.textPrimary },
-};
+// Viewer-state treatment and title colour maps were dead code from the
+// pre-reconstruction implementation. The shared CommerceDetailTransactionSurface
+// and inline viewer-state rendering now own this logic.
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   loadingContainer: {
     flex: 1,
@@ -1403,325 +1385,8 @@ const styles = StyleSheet.create({
     marginTop: Space.md,
     minWidth: 120,
   },
-  heroWrap: {
-    position: 'relative',
-    width: '100%',
-  },
-  heroImageContainer: {
-    width: '100%',
-    height: '100%',
-  },
-  heroImage: {
-    width: '100%',
-    height: '100%',
-  },
-  heroPlaceholder: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: Colors.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  heroGradient: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-  },
-  heroTopRow: {
-    position: 'absolute',
-    top: Space.sm,
-    left: Space.sm,
-    flexDirection: 'row',
-    gap: 6,
-  },
-  heroBottomStage: {
-    position: 'absolute',
-    bottom: Space.md,
-    left: Space.md,
-    right: Space.md,
-    gap: 6,
-  },
-  stateLine: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    fontFamily: Typography.family.semibold,
-  },
-  priceStageRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-  },
-  priceStagePrimary: {
-    flex: 1,
-  },
-  priceStageLabel: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.7)',
-    marginBottom: 2,
-    fontFamily: Typography.family.regular,
-  },
-  priceStageValue: {
-    fontSize: 42,
-    lineHeight: 48,
-    fontWeight: '700',
-    letterSpacing: -1,
-    color: '#FFFFFF',
-    fontFamily: Typography.family.bold,
-  },
-  outbidMinText: {
-    fontSize: 13,
-    color: Colors.danger,
-    marginTop: 4,
-    fontFamily: Typography.family.medium,
-  },
-  priceStageIze: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.6)',
-    marginTop: 2,
-    fontFamily: Typography.family.regular,
-  },
-  priceStageMeta: {
-    alignItems: 'flex-end',
-    paddingBottom: 4,
-  },
-  bidCountInline: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.7)',
-    fontFamily: Typography.family.medium,
-  },
-  countdownRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  countdownText: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.85)',
-    fontFamily: Typography.family.medium,
-  },
-  countdownTextUrgent: {
-    color: Colors.danger,
-    fontWeight: '700',
-    fontSize: 16,
-    fontFamily: Typography.family.bold,
-  },
-  livePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    borderRadius: Radius.full,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  liveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.danger,
-  },
-  livePillText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  scheduledPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    borderRadius: Radius.full,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  scheduledPillText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '600',
-    letterSpacing: 0.5,
-  },
-  endedPill: {
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    borderRadius: Radius.full,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  endedPillText: {
-    color: Colors.textMuted,
-    fontSize: 10,
-    fontWeight: '600',
-    letterSpacing: 0.5,
-  },
-  cancelledPill: {
-    backgroundColor: 'rgba(220,38,38,0.8)',
-    borderRadius: Radius.full,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  cancelledPillText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  settledPill: {
-    backgroundColor: 'rgba(22,163,74,0.8)',
-    borderRadius: Radius.full,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  settledPillText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  backBtnFloating: {
-    position: 'absolute',
-    left: Space.sm,
-    width: 42,
-    height: 42,
-    borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  watchBtnFloating: {
-    position: 'absolute',
-    right: Space.sm,
-    width: 44,
-    height: 44,
-    borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  watchBtnFloatingActive: {
-    backgroundColor: 'rgba(244,240,232,0.15)',
-    borderColor: 'rgba(244,240,232,0.3)',
-  },
-  floatingControlsRight: {
-    position: 'absolute',
-    right: Space.sm,
-    flexDirection: 'row',
-    gap: 8,
-    alignItems: 'center',
-  },
-  floatingControlBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  familyBadgeWrap: {
-    position: 'absolute',
-    left: Space.sm,
-  },
   recommendationSection: {
     marginTop: Space.md,
-  },
-  stateHeader: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.md,
-  },
-  priceRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-  },
-  pricePrimary: {
-    flex: 1,
-  },
-  priceLabel: {
-    marginBottom: 4,
-  },
-  priceValue: {
-    fontSize: 28,
-    lineHeight: 34,
-    fontWeight: '700',
-    letterSpacing: -0.5,
-    color: Colors.textPrimary,
-    fontFamily: Typography.family.bold,
-  },
-  priceSecondary: {
-    alignItems: 'flex-end',
-  },
-  bidCountBadge: {
-    alignItems: 'center',
-  },
-  bidCountValue: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.semibold,
-  },
-  bidCountLabel: {
-    fontSize: 11,
-    color: Colors.textMuted,
-    marginTop: 1,
-  },
-  outbidHint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 6,
-  },
-  outbidHintText: {
-    fontSize: 13,
-    color: Colors.danger,
-    fontFamily: Typography.family.medium,
-  },
-  outbidHintAmount: {
-    fontFamily: Typography.family.bold,
-  },
-  timeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: Space.sm,
-  },
-  timeText: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.medium,
-  },
-  timeTextUrgent: {
-    color: Colors.danger,
-    fontWeight: '700',
-    fontSize: 16,
-    fontFamily: Typography.family.bold,
-  },
-  viewerMessage: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    marginTop: Space.sm,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 2,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-  },
-  viewerMessageContent: {
-    flex: 1,
-  },
-  viewerMessageTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-    fontFamily: Typography.family.semibold,
-  },
-  viewerMessageSubtitle: {
-    marginTop: 2,
   },
   resyncBanner: {
     flexDirection: 'row',
@@ -1729,376 +1394,7 @@ const styles = StyleSheet.create({
     gap: 6,
     marginTop: Space.sm,
   },
-  resyncText: {
-    color: Colors.textMuted,
-  },
-  // ── Removed inline action styles (PASS 4 correction pass 1) ──
-  // ── Active viewer-state compositions ──
-  outbidActionBlock: {
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.lg,
-    alignItems: 'center',
-    gap: Space.xs,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
-  },
-  outbidHeadline: {
-    fontSize: 18,
-    fontFamily: Typography.family.bold,
-    color: Colors.danger,
-    marginBottom: Space.xs,
-  },
-  outbidMinLabel: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.regular,
-  },
-  outbidMinValue: {
-    fontSize: 28,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    letterSpacing: -0.5,
-    marginBottom: Space.sm,
-  },
-  outbidAction: {
-    width: '100%',
-  },
-  leadingBlock: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
-  },
-  leadingTextWrap: {
-    flex: 1,
-  },
-  leadingTitle: {
-    fontSize: 16,
-    fontFamily: Typography.family.semibold,
-    color: Colors.success,
-  },
-  leadingSubtitle: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.regular,
-    marginTop: 2,
-  },
-  watchingBlock: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
-  },
-  watchingText: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.regular,
-  },
-  // ── Item story ──
-  itemStorySection: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.lg,
-    gap: Space.xs,
-  },
-  itemStoryBrand: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.medium,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  itemStoryTitle: {
-    fontSize: 22,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    letterSpacing: -0.3,
-  },
-  itemStoryCondition: {
-    fontSize: 13,
-    color: Colors.textMuted,
-    fontFamily: Typography.family.regular,
-  },
-  itemStoryDescription: {
-    fontSize: 15,
-    color: Colors.textSecondary,
-    lineHeight: 22,
-    fontFamily: Typography.family.regular,
-    marginTop: Space.xs,
-  },
-
-  // ── B. Item identity — one primary location below media ──
-  itemIdentitySection: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.lg,
-    paddingBottom: Space.sm,
-    gap: Space.xs,
-  },
-  itemIdentityEyebrow: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.semibold,
-    textTransform: 'uppercase',
-    letterSpacing: 1.0,
-  },
-  itemIdentityTitle: {
-    fontSize: 26,
-    lineHeight: 32,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    letterSpacing: -0.6,
-  },
-  itemIdentityCondition: {
-    fontSize: 13,
-    color: Colors.textMuted,
-    fontFamily: Typography.family.regular,
-    marginTop: 2,
-  },
-
-  // ── C. Auction transaction module — one strong surface ──
-  transactionModule: {
-    marginHorizontal: Space.md,
-    marginTop: Space.sm,
-    padding: Space.md + 2,
-    borderRadius: Radius.lg,
-    backgroundColor: Colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    gap: Space.sm,
-  },
-  transactionStateLine: {
-    fontSize: 13,
-    fontWeight: '600',
-    fontFamily: Typography.family.semibold,
-    letterSpacing: -0.1,
-  },
-  transactionPriceRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-  },
-  transactionPricePrimary: {
-    flex: 1,
-  },
-  transactionPriceLabel: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: Colors.textMuted,
-    fontFamily: Typography.family.medium,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: 2,
-  },
-  transactionPriceValue: {
-    fontSize: 28,
-    lineHeight: 32,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    fontFamily: Typography.family.bold,
-    letterSpacing: -0.5,
-    fontVariant: ['tabular-nums'],
-  },
-  transactionPriceSecondary: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.regular,
-    marginTop: 2,
-    fontVariant: ['tabular-nums'],
-  },
-  transactionPriceMeta: {
-    alignItems: 'flex-end',
-    paddingBottom: 2,
-  },
-  transactionBidCount: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.medium,
-  },
-  transactionMinRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    paddingVertical: Space.xs,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
-  },
-  transactionMinLabel: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.medium,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  transactionMinValue: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.danger,
-    fontFamily: Typography.family.bold,
-    fontVariant: ['tabular-nums'],
-  },
-  transactionReserveRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    flexWrap: 'wrap',
-  },
-  transactionReserveHint: {
-    fontSize: 11,
-    color: Colors.textMuted,
-    fontFamily: Typography.family.regular,
-    flexShrink: 1,
-  },
-  transactionCountdownRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-  },
-  transactionCountdownText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.medium,
-    fontVariant: ['tabular-nums'],
-  },
-
-  // ── Terminal result — one compact module (120-220pt) ──
-  terminalResultModule: {
-    marginHorizontal: Space.md,
-    marginTop: Space.sm,
-    padding: Space.md + 2,
-    borderRadius: Radius.lg,
-    backgroundColor: Colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    gap: Space.xs + 2,
-  },
-  terminalResultTitleWon: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: Colors.success,
-    fontFamily: Typography.family.bold,
-  },
-  terminalResultTitleLost: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    fontFamily: Typography.family.bold,
-  },
-  terminalResultTitleSold: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: Colors.brand,
-    fontFamily: Typography.family.bold,
-  },
-  terminalResultValue: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    fontFamily: Typography.family.bold,
-    letterSpacing: -0.3,
-    fontVariant: ['tabular-nums'],
-  },
-  terminalResultNote: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.regular,
-    lineHeight: 18,
-  },
-
-  // ── E. Item details ──
-  itemDetailsSection: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.lg,
-  },
-  itemDetailsDescription: {
-    fontSize: 15,
-    color: Colors.textSecondary,
-    lineHeight: 22,
-    fontFamily: Typography.family.regular,
-  },
-  titleSection: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.lg,
-  },
-  brandLabel: {
-    color: Colors.textSecondary,
-    marginBottom: 4,
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  title: {
-    marginBottom: 4,
-  },
-  conditionLabel: {
-    color: Colors.textMuted,
-  },
-  expandableHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: Space.xs,
-  },
-  expandableHeaderRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-  },
-  section: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.lg,
-  },
-  sectionTitle: {
-    marginBottom: Space.sm,
-    fontSize: 15,
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: Space.sm,
-  },
-  bidCountTotal: {
-    color: Colors.textMuted,
-  },
-  bidSummaryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: Space.xs,
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.sm,
-    borderRadius: Radius.sm,
-    backgroundColor: Colors.surfaceAlt,
-  },
-  bidSummaryLabel: {
-    color: Colors.textMuted,
-    fontSize: 13,
-    fontFamily: Typography.family.medium,
-  },
-  bidSummaryValue: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-    fontFamily: Typography.family.semibold,
-  },
-  bidPreviewMore: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    paddingVertical: Space.sm,
-  },
-  bidPreviewMoreText: {
-    color: Colors.brand,
-    fontSize: 13,
-    fontFamily: Typography.family.medium,
-  },
+  resyncText: {},
   // ── Bid activity (consolidated pattern per spec 02_AUCTION §3) ──
   bidActivityRow: {
     flexDirection: 'row',
@@ -2160,303 +1456,80 @@ const styles = StyleSheet.create({
     lineHeight: Type.bodyEmphasis.lineHeight,
     fontWeight: '600',
   },
-  bidList: {
-    borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-    overflow: 'hidden',
-  },
-  bidRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 2,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
-  },
-  bidRowTop: {
-    backgroundColor: Colors.surfaceAlt,
-  },
-  bidRowLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    flex: 1,
-  },
-  viewerBadge: {
-    backgroundColor: Colors.brand,
-    borderRadius: Radius.sm,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  viewerBadgeText: {
-    color: Colors.textInverse,
-    fontSize: 9,
-    fontWeight: '700',
-  },
-  bidderName: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    fontFamily: Typography.family.regular,
-  },
-  bidRowInfo: {
-    flexDirection: 'column',
-    gap: 1,
-  },
-  bidRowNameLine: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-  },
-  bidRelativeTime: {
-    fontSize: 11,
-    color: Colors.textMuted,
-    fontFamily: Typography.family.regular,
-  },
-  bidRowRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  bidAmount: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-    fontFamily: Typography.family.semibold,
-  },
-  topBidLabel: {
-    color: Colors.success,
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  noBidsText: {
-    color: Colors.textMuted,
-    fontSize: 14,
-    fontFamily: Typography.family.regular,
-  },
-  subSectionError: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
-  },
-  subSectionErrorText: {
-    color: Colors.textMuted,
-  },
-  retryText: {
-    color: Colors.brand,
-    fontSize: 13,
-    fontWeight: '600',
-  },
   descriptionText: {
-    color: Colors.textSecondary,
     fontSize: Type.body.size,
     lineHeight: Type.body.lineHeight + 2,
     fontFamily: Typography.family.regular,
   },
-  itemInfoList: {
-    gap: Space.sm,
+  // ── Terminal result — one compact module ──
+  terminalResultModule: {
+    marginHorizontal: Space.md,
+    marginTop: Space.sm,
+    padding: Space.md + 2,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    gap: Space.xs + 2,
   },
-  itemInfoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  terminalResultTitleWon: {
+    fontSize: 20,
+    fontWeight: '700',
+    fontFamily: Typography.family.bold,
   },
-  itemInfoLabel: {
-    color: Colors.textMuted,
+  terminalResultTitleLost: {
+    fontSize: 20,
+    fontWeight: '700',
+    fontFamily: Typography.family.bold,
   },
-  itemInfoValue: {
-    fontSize: 14,
-    color: Colors.textPrimary,
+  terminalResultTitleSold: {
+    fontSize: 20,
+    fontWeight: '700',
+    fontFamily: Typography.family.bold,
   },
-  infoList: {
-    gap: Space.sm,
+  terminalResultValue: {
+    fontSize: 22,
+    fontWeight: '700',
+    fontFamily: Typography.family.bold,
+    letterSpacing: -0.3,
+    fontVariant: ['tabular-nums'],
   },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Space.sm,
-  },
-  infoText: {
-    flex: 1,
-    color: Colors.textSecondary,
-    lineHeight: 20,
-  },
-  actionDock: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    backgroundColor: Colors.surface,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
-  },
-  // ── Removed actionDockRow/Primary/Secondary (PASS 4 correction: single primary CTA) ──
-  actionDockFull: {
-    width: '100%',
-  },
-  buyNowLink: {
-    alignItems: 'center',
-    paddingVertical: Space.sm,
-    marginTop: Space.xs,
-  },
-  buyNowLinkText: {
+  terminalResultNote: {
     fontSize: 13,
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.medium,
-    textDecorationLine: 'underline',
+    fontFamily: Typography.family.regular,
+    lineHeight: 18,
   },
-  sellerDockInfo: {
+  // ── Transaction surface internal rows ──
+  transactionMinRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingVertical: Space.sm,
-  },
-  sellerDockText: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.medium,
-  },
-  terminalDock: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    backgroundColor: Colors.surface,
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    paddingVertical: Space.xs,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
-    alignItems: 'center',
-    paddingVertical: Space.md,
   },
-  terminalDockRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  terminalDockText: {
-    fontSize: 14,
-    color: Colors.textMuted,
-    fontFamily: Typography.family.medium,
-  },
-  resultBodySection: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.xl,
-    paddingBottom: Space.md,
-  },
-  resultExperience: {
-    alignItems: 'center',
-    gap: Space.sm,
-  },
-  resultEyebrow: {
+  transactionMinLabel: {
     fontSize: 12,
-    color: Colors.textMuted,
     fontFamily: Typography.family.medium,
     textTransform: 'uppercase',
-    letterSpacing: 1.5,
+    letterSpacing: 0.5,
   },
-  resultTitleWon: {
-    fontSize: 32,
-    fontFamily: Typography.family.bold,
-    color: Colors.success,
-    letterSpacing: -0.5,
-  },
-  resultTitleLost: {
-    fontSize: 32,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    letterSpacing: -0.5,
-  },
-  resultTitleSold: {
-    fontSize: 32,
-    fontFamily: Typography.family.bold,
-    color: Colors.brand,
-    letterSpacing: -0.5,
-  },
-  resultPrice: {
-    fontSize: 28,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-    marginTop: Space.xs,
-  },
-  resultPriceSecondary: {
-    fontSize: 22,
-    fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
-    marginTop: Space.xs,
-  },
-  resultItemTitle: {
+  transactionMinValue: {
     fontSize: 16,
-    color: Colors.textSecondary,
+    fontWeight: '700',
+    fontFamily: Typography.family.bold,
+    fontVariant: ['tabular-nums'],
+  },
+  transactionReserveRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    flexWrap: 'wrap',
+  },
+  transactionReserveHint: {
+    fontSize: 11,
     fontFamily: Typography.family.regular,
-    textAlign: 'center',
-    marginTop: Space.xs,
+    flexShrink: 1,
   },
-  resultBrand: {
-    fontSize: 13,
-    color: Colors.textMuted,
-    fontFamily: Typography.family.regular,
-  },
-  resultMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    marginTop: Space.xs,
-  },
-  resultMetaText: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.medium,
-  },
-  resultNote: {
-    color: Colors.textMuted,
-    textAlign: 'center',
-    marginTop: Space.sm,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  discoverLinkInline: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: Space.sm,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    alignSelf: 'center',
-  },
-  discoverLinkInlineText: {
-    color: Colors.brand,
-    fontFamily: Typography.family.semibold,
-    fontSize: 14,
-  },
-  transactionTruthSection: {
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
-  transactionTruthText: {
-    color: Colors.textMuted,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  discoverLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: Space.sm,
-  },
-  discoverLinkText: {
-    flex: 1,
-    fontSize: 15,
-    color: Colors.brand,
-    fontFamily: Typography.family.semibold,
+  transactionStatusRow: {
+    gap: Space.xs,
   },
   // ── Bottom sheet styles ──
   sheetHeader: {
@@ -2468,9 +1541,7 @@ const styles = StyleSheet.create({
   sheetTitle: {
     fontSize: 22,
   },
-  sheetSubtitle: {
-    color: Colors.textMuted,
-  },
+  sheetSubtitle: {},
   sheetScroll: {
     flex: 1,
   },
@@ -2485,13 +1556,11 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: Colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
   ruleNumberText: {
-    color: Colors.textInverse,
     fontSize: 13,
     fontWeight: '700',
     fontFamily: Typography.family.bold,
@@ -2504,7 +1573,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   ruleDescription: {
-    color: Colors.textSecondary,
     fontSize: 14,
     lineHeight: 20,
     fontFamily: Typography.family.regular,
@@ -2525,9 +1593,6 @@ const styles = StyleSheet.create({
     fontSize: Type.bodyEmphasis.size,
     lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.semibold,
-  },
-  transactionStatusRow: {
-    gap: Space.xs,
   },
   descriptionBlock: {
     paddingHorizontal: Space.md,
@@ -2550,5 +1615,95 @@ const styles = StyleSheet.create({
   overflowRowText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
+  },
+  discoverLinkInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: Space.sm,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    alignSelf: 'center',
+  },
+  discoverLinkInlineText: {
+    fontFamily: Typography.family.semibold,
+    fontSize: 14,
+  },
+  // ── Bid history sheet rows ──
+  bidList: {
+    borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
+  },
+  bidRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm + 2,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  bidRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    flex: 1,
+  },
+  viewerBadge: {
+    borderRadius: Radius.sm,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  viewerBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+  },
+  bidderName: {
+    fontSize: 13,
+    fontFamily: Typography.family.regular,
+  },
+  bidRowInfo: {
+    flexDirection: 'column',
+    gap: 1,
+  },
+  bidRowNameLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  bidRelativeTime: {
+    fontSize: 11,
+    fontFamily: Typography.family.regular,
+  },
+  bidRowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  bidAmount: {
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: Typography.family.semibold,
+  },
+  topBidLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  noBidsText: {
+    fontSize: 14,
+    fontFamily: Typography.family.regular,
+  },
+  subSectionError: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.md,
+  },
+  subSectionErrorText: {},
+  retryText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
 });

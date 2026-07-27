@@ -5,6 +5,7 @@ import { useAppTheme } from '../../../theme/ThemeContext';
 import { Space, Radius, Type } from '../../../theme/designTokens';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
+import { CachedImage } from '../../CachedImage';
 
 /**
  * Seller / issuer row — a slim inline confidence row.
@@ -39,6 +40,11 @@ export interface CommerceDetailSellerRowProps {
   /** When true, the row uses the issuer copy ("Issuer" instead of
    * "Seller"). Visual treatment is identical. */
   roleLabel?: string;
+  /** When true, the row renders with institutional differentiation:
+   * a rounded-square avatar and a "Verified issuer" badge. Use for
+   * Co-Own issuers (institutional custodians) to distinguish them
+   * from individual sellers. */
+  institutional?: boolean;
   onPress?: () => void;
 }
 
@@ -51,6 +57,7 @@ export function CommerceDetailSellerRow({
   primaryAction,
   secondaryAction,
   roleLabel,
+  institutional = false,
   onPress,
 }: CommerceDetailSellerRowProps) {
   const { colors } = useAppTheme();
@@ -77,20 +84,19 @@ export function CommerceDetailSellerRow({
         accessibilityRole={onPress ? 'button' : undefined}
       >
         {avatarUri ? (
-          <View style={[styles.avatar, { backgroundColor: colors.surfaceAlt }]}>
-            {/* CachedImage is intentionally not imported here to keep the
-               primitive dependency-free. The screen wraps the avatar in
-               CachedImage and passes the uri via a render-prop pattern is
-               not used — instead we render a plain colored ring and let
-               the family screen overlay the image. For simplicity and
-               theme-correctness, we render a fallback initial. */}
+          <View style={[styles.avatar, institutional && styles.avatarInstitutional, { backgroundColor: colors.surfaceAlt }]}>
+            <CachedImage
+              uri={avatarUri}
+              style={styles.avatarImage}
+              transition={200}
+              emptyIcon="person-outline"
+            />
+          </View>
+        ) : (
+          <View style={[styles.avatar, institutional && styles.avatarInstitutional, { backgroundColor: colors.surfaceAlt }]}>
             <Text style={[styles.avatarInitial, { color: colors.textSecondary }]}>
               {name.charAt(0).toUpperCase()}
             </Text>
-          </View>
-        ) : (
-          <View style={[styles.avatar, { backgroundColor: colors.surfaceAlt }]}>
-            <Ionicons name="person-outline" size={18} color={colors.textMuted} />
           </View>
         )}
         <View style={styles.identityText}>
@@ -101,7 +107,14 @@ export function CommerceDetailSellerRow({
             >
               {name}
             </Text>
-            {verified ? (
+            {institutional ? (
+              <View style={[styles.issuerBadge, { backgroundColor: `${colors.brand}18` }]}>
+                <Ionicons name="shield-checkmark" size={10} color={colors.brand} />
+                <Text style={[styles.issuerBadgeText, { color: colors.brand }]}>
+                  Verified issuer
+                </Text>
+              </View>
+            ) : verified ? (
               <Ionicons name="checkmark-circle" size={14} color={colors.success} />
             ) : null}
           </View>
@@ -164,7 +177,8 @@ const styles = StyleSheet.create({
     minHeight: 44,
   },
   pressed: {
-    opacity: 0.6,
+    opacity: 0.7,
+    transform: [{ scale: 0.985 }],
   },
   avatar: {
     width: 40,
@@ -172,6 +186,32 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  // Institutional issuers use a rounded-square avatar to visually
+  // distinguish them from individual sellers (circles).
+  avatarInstitutional: {
+    borderRadius: Radius.md,
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  // "Verified issuer" badge — subtle brand-tinted pill with a shield
+  // glyph. Distinguishes institutional custodians from individual
+  // sellers per spec 03_COOWN §2.
+  issuerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: Radius.sm,
+  },
+  issuerBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 0.2,
   },
   avatarInitial: {
     fontSize: 16,

@@ -114,7 +114,8 @@ const styles = StyleSheet.create({
     minHeight: 44,
   },
   pressed: {
-    opacity: 0.6,
+    opacity: 0.7,
+    transform: [{ scale: 0.985 }],
   },
   labelCluster: {
     flexDirection: 'row',
