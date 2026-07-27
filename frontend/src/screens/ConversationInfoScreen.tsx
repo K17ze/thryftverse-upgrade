@@ -7,7 +7,7 @@ import { CachedImage } from '../components/CachedImage';
 import { ChatInfoRow, ChatInfoSection } from '../components/chat/ChatInfoSection';
 import { FlagshipHeader, FlagshipScreen } from '../components/flagship';
 import { Caption } from '../components/ui/Text';
-import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { useBackendData } from '../context/BackendDataContext';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
@@ -18,7 +18,16 @@ import { Radius, Space, Type, TypeStyles } from '../theme/designTokens';
 type Props = StackScreenProps<RootStackParamList, 'ConversationInfo'>;
 
 export default function ConversationInfoScreen({ navigation, route }: Props) {
+  const { colors, isDark } = useAppTheme();
   const { conversationId } = route.params;
+
+  const t = useMemo(() => ({
+    avatar: { backgroundColor: colors.surfaceAlt },
+    avatarText: { color: colors.textPrimary },
+    displayName: { color: colors.textPrimary },
+    handle: { color: colors.textMuted },
+    quickActions: { borderColor: colors.border },
+  }), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
   const { listings } = useBackendData();
@@ -46,7 +55,7 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
         scrollEnabled={false}
       >
         <View style={styles.center}>
-          <Caption color={Colors.textMuted}>Conversation not found</Caption>
+          <Caption color={colors.textMuted}>Conversation not found</Caption>
         </View>
       </FlagshipScreen>
     );
@@ -131,7 +140,7 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
           accessibilityRole="button"
           accessibilityLabel={`View ${displayName}'s profile`}
         >
-          <View style={styles.avatar}>
+          <View style={[styles.avatar, t.avatar]}>
             {avatarUrl ? (
               <CachedImage
                 uri={avatarUrl}
@@ -140,18 +149,18 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
                 contentFit="cover"
               />
             ) : (
-              <Text style={styles.avatarText}>{displayName.charAt(0).toUpperCase()}</Text>
+              <Text style={[styles.avatarText, t.avatarText]}>{displayName.charAt(0).toUpperCase()}</Text>
             )}
           </View>
-          <Text style={styles.displayName} numberOfLines={1}>
+          <Text style={[styles.displayName, t.displayName]} numberOfLines={1}>
             {displayName}
           </Text>
-          <Text style={styles.handle} numberOfLines={1}>
+          <Text style={[styles.handle, t.handle]} numberOfLines={1}>
             {handle}
           </Text>
         </AnimatedPressable>
 
-        <View style={styles.quickActions}>
+        <View style={[styles.quickActions, t.quickActions]}>
           <QuickAction icon="person-outline" label="Profile" onPress={viewProfile} />
           <QuickAction
             icon="images-outline"
@@ -226,6 +235,10 @@ function QuickAction({
   label: string;
   onPress: () => void;
 }) {
+  const { colors } = useAppTheme();
+  const quickThemed = useMemo(() => ({
+    quickActionLabel: { color: colors.textSecondary },
+  }), [colors]);
   return (
     <AnimatedPressable
       style={styles.quickAction}
@@ -236,8 +249,8 @@ function QuickAction({
       accessibilityRole="button"
       accessibilityLabel={label}
     >
-      <Ionicons name={icon} size={21} color={Colors.textPrimary} />
-      <Text style={styles.quickActionLabel}>{label}</Text>
+      <Ionicons name={icon} size={21} color={colors.textPrimary} />
+      <Text style={[styles.quickActionLabel, quickThemed.quickActionLabel]}>{label}</Text>
     </AnimatedPressable>
   );
 }
@@ -265,7 +278,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.surfaceAlt,
     marginBottom: Space.sm,
   },
   avatarImage: {
@@ -274,20 +286,17 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
   },
   avatarText: {
-    color: Colors.textPrimary,
     fontFamily: TypeStyles.title.fontFamily,
     fontSize: 27,
   },
   displayName: {
     maxWidth: '88%',
-    color: Colors.textPrimary,
     fontFamily: TypeStyles.title.fontFamily,
     fontSize: Type.title.size,
     lineHeight: Type.title.lineHeight,
     letterSpacing: Type.title.letterSpacing,
   },
   handle: {
-    color: Colors.textMuted,
     fontFamily: TypeStyles.body.fontFamily,
     fontSize: Type.captionElevated.size,
     marginTop: 3,
@@ -297,7 +306,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
   },
   quickAction: {
     flex: 1,
@@ -307,7 +315,6 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   quickActionLabel: {
-    color: Colors.textSecondary,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     fontSize: Type.caption.size,
   },

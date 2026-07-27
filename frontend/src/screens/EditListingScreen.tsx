@@ -16,7 +16,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 
 import { RootStackParamList } from '../navigation/types';
-import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Space, Typography, DockConstants } from '../theme/designTokens';
 import { useToast } from '../context/ToastContext';
 import { useCurrencyPref } from '../hooks/useCurrencyPref';
@@ -46,6 +46,36 @@ type SaveStage = 'idle' | 'uploading_media' | 'updating_listing' | 'completed' |
 
 export default function EditListingScreen() {
   const insets = useSafeAreaInsets();
+  const { colors } = useAppTheme();
+  // Theme-aware color overrides for the static styles. The static
+  // StyleSheet contains only non-color properties; colors are applied
+  // via this themed proxy so the screen is fully dark-mode compatible.
+  const t = useMemo(() => ({
+    root: { backgroundColor: colors.background },
+    navHeader: { borderBottomColor: colors.border },
+    navTitle: { color: colors.textPrimary },
+    navStatusText: { color: colors.textMuted },
+    navStatusUnsaved: { color: colors.brand },
+    loadingText: { color: colors.textMuted },
+    errorTitle: { color: colors.textPrimary },
+    retryBtn: { backgroundColor: colors.brand },
+    retryBtnText: { color: colors.textInverse },
+    statusDot: { backgroundColor: colors.textMuted },
+    statusDotActive: { backgroundColor: colors.success },
+    statusText: { color: colors.textSecondary },
+    restrictedText: { color: colors.textMuted },
+    sectionHeading: { color: colors.textSecondary },
+    fieldLabel: { color: colors.textSecondary },
+    fieldInput: { color: colors.textPrimary },
+    hairline: { backgroundColor: colors.border },
+    pickerValue: { color: colors.textPrimary },
+    pickerPlaceholder: { color: colors.textMuted },
+    currencySymbol: { color: colors.textMuted },
+    discountPreview: { color: colors.success },
+    descInput: { color: colors.textPrimary },
+    charCount: { color: colors.textMuted },
+    inlineErrorText: { color: colors.danger },
+  }), [colors]);
   const navigation = useNavigation<any>();
   const route = useRoute<RouteT>();
   const { itemId } = route.params;
@@ -504,10 +534,10 @@ export default function EditListingScreen() {
   /* ── loading state ── */
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.root} edges={['top']}>
+      <SafeAreaView style={[styles.root, t.root]} edges={['top']}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.brand} />
-          <Text style={styles.loadingText}>Loading listing…</Text>
+          <ActivityIndicator size="large" color={colors.brand} />
+          <Text style={[styles.loadingText, t.loadingText]}>Loading listing…</Text>
         </View>
       </SafeAreaView>
     );
@@ -515,8 +545,8 @@ export default function EditListingScreen() {
 
   if (loadError) {
     return (
-      <SafeAreaView style={styles.root} edges={['top']}>
-        <View style={styles.navHeader}>
+      <SafeAreaView style={[styles.root, t.root]} edges={['top']}>
+        <View style={[styles.navHeader, t.navHeader]}>
           <Pressable
             style={styles.navCloseBtn}
             onPress={() => navigation.goBack()}
@@ -524,16 +554,16 @@ export default function EditListingScreen() {
             accessibilityRole="button"
             accessibilityLabel="Go back"
           >
-            <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
           </Pressable>
-          <Text style={styles.navTitle}>Edit listing</Text>
+          <Text style={[styles.navTitle, t.navTitle]}>Edit listing</Text>
           <View style={{ width: 60 }} />
         </View>
         <View style={styles.errorContainer}>
-          <Ionicons name="cloud-offline-outline" size={40} color={Colors.textMuted} />
-          <Text style={styles.errorTitle}>Could not load listing</Text>
+          <Ionicons name="cloud-offline-outline" size={40} color={colors.textMuted} />
+          <Text style={[styles.errorTitle, t.errorTitle]}>Could not load listing</Text>
           <Pressable
-            style={styles.retryBtn}
+            style={[styles.retryBtn, t.retryBtn]}
             onPress={() => {
               setLoadError(false);
               setIsLoading(true);
@@ -572,7 +602,7 @@ export default function EditListingScreen() {
             accessibilityRole="button"
             accessibilityLabel="Retry loading listing"
           >
-            <Text style={styles.retryBtnText}>Retry</Text>
+            <Text style={[styles.retryBtnText, t.retryBtnText]}>Retry</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -580,9 +610,9 @@ export default function EditListingScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.root} edges={['top']}>
+    <SafeAreaView style={[styles.root, t.root]} edges={['top']}>
         {/* ── 1. COMPACT NAVIGATION HEADER ── */}
-        <View style={styles.navHeader}>
+        <View style={[styles.navHeader, t.navHeader]}>
           <Pressable
             style={styles.navCloseBtn}
             onPress={handleCancel}
@@ -590,11 +620,11 @@ export default function EditListingScreen() {
             accessibilityRole="button"
             accessibilityLabel="Cancel and go back"
           >
-            <Ionicons name="close" size={24} color={Colors.textPrimary} />
+            <Ionicons name="close" size={24} color={colors.textPrimary} />
           </Pressable>
-          <Text style={styles.navTitle}>Edit listing</Text>
+          <Text style={[styles.navTitle, t.navTitle]}>Edit listing</Text>
           <View style={styles.navStatusWrap}>
-            <Text style={[styles.navStatusText, hasChanges && styles.navStatusUnsaved]}>
+            <Text style={[styles.navStatusText, t.navStatusText, hasChanges && styles.navStatusUnsaved, hasChanges && t.navStatusUnsaved]}>
               {hasChanges ? 'Unsaved' : 'Saved'}
             </Text>
           </View>
@@ -642,34 +672,34 @@ export default function EditListingScreen() {
           {/* ── 3. LISTING STATUS/CONTEXT ── */}
           {listingStatusLabel && (
             <View style={styles.statusRow}>
-              <View style={[styles.statusDot, listing?.status === 'active' && styles.statusDotActive]} />
-              <Text style={styles.statusText}>{listingStatusLabel}</Text>
+              <View style={[styles.statusDot, t.statusDot, listing?.status === 'active' && styles.statusDotActive, listing?.status === 'active' && t.statusDotActive]} />
+              <Text style={[styles.statusText, t.statusText]}>{listingStatusLabel}</Text>
             </View>
           )}
 
           {isEditingRestricted && (
             <View style={styles.restrictedRow}>
-              <Ionicons name="lock-closed" size={14} color={Colors.textMuted} />
-              <Text style={styles.restrictedText}>Editing is limited for this listing status.</Text>
+              <Ionicons name="lock-closed" size={14} color={colors.textMuted} />
+              <Text style={[styles.restrictedText, t.restrictedText]}>Editing is limited for this listing status.</Text>
             </View>
           )}
 
           {/* ── 4. DETAILS ── */}
           <View style={styles.sectionGroup}>
-            <Text style={styles.sectionHeading}>Details</Text>
+            <Text style={[styles.sectionHeading, t.sectionHeading]}>Details</Text>
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Title</Text>
+              <Text style={[styles.fieldLabel, t.fieldLabel]}>Title</Text>
               <TextInput
-                style={[styles.fieldInput, isEditingRestricted && styles.fieldInputDisabled]}
+                style={[styles.fieldInput, t.fieldInput, isEditingRestricted && styles.fieldInputDisabled]}
                 value={title}
                 onChangeText={(t) => { setTitle(t); setErrorMsg(''); }}
                 placeholder="e.g. Vintage Levi's 501 Denim Jacket"
-                placeholderTextColor={Colors.textMuted}
+                placeholderTextColor={colors.textMuted}
                 returnKeyType="next"
                 editable={!isEditingRestricted}
               />
-              <View style={styles.hairline} />
+              <View style={[styles.hairline, t.hairline]} />
             </View>
 
             <Pressable
@@ -679,14 +709,14 @@ export default function EditListingScreen() {
               accessibilityLabel="Select category"
             >
               <View style={styles.pickerRowInner}>
-                <Text style={styles.fieldLabel}>Category</Text>
-                <Text style={[styles.pickerValue, !category && styles.pickerPlaceholder]}>
+                <Text style={[styles.fieldLabel, t.fieldLabel]}>Category</Text>
+                <Text style={[styles.pickerValue, t.pickerValue, !category && styles.pickerPlaceholder, !category && t.pickerPlaceholder]}>
                   {category || 'Select category'}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
             </Pressable>
-            <View style={styles.hairline} />
+            <View style={[styles.hairline, t.hairline]} />
 
             <Pressable
               style={styles.pickerRow}
@@ -695,14 +725,14 @@ export default function EditListingScreen() {
               accessibilityLabel="Select brand"
             >
               <View style={styles.pickerRowInner}>
-                <Text style={styles.fieldLabel}>Brand</Text>
-                <Text style={[styles.pickerValue, !brand && styles.pickerPlaceholder]}>
+                <Text style={[styles.fieldLabel, t.fieldLabel]}>Brand</Text>
+                <Text style={[styles.pickerValue, t.pickerValue, !brand && styles.pickerPlaceholder, !brand && t.pickerPlaceholder]}>
                   {brand || 'Select brand'}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
             </Pressable>
-            <View style={styles.hairline} />
+            <View style={[styles.hairline, t.hairline]} />
 
             <Pressable
               style={styles.pickerRow}
@@ -711,14 +741,14 @@ export default function EditListingScreen() {
               accessibilityLabel="Select size"
             >
               <View style={styles.pickerRowInner}>
-                <Text style={styles.fieldLabel}>Size</Text>
-                <Text style={[styles.pickerValue, !size && styles.pickerPlaceholder]}>
+                <Text style={[styles.fieldLabel, t.fieldLabel]}>Size</Text>
+                <Text style={[styles.pickerValue, t.pickerValue, !size && styles.pickerPlaceholder, !size && t.pickerPlaceholder]}>
                   {size || 'Select size'}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
             </Pressable>
-            <View style={styles.hairline} />
+            <View style={[styles.hairline, t.hairline]} />
 
             <Pressable
               style={styles.pickerRow}
@@ -727,49 +757,49 @@ export default function EditListingScreen() {
               accessibilityLabel="Select condition"
             >
               <View style={styles.pickerRowInner}>
-                <Text style={styles.fieldLabel}>Condition</Text>
-                <Text style={[styles.pickerValue, !condition && styles.pickerPlaceholder]}>
+                <Text style={[styles.fieldLabel, t.fieldLabel]}>Condition</Text>
+                <Text style={[styles.pickerValue, t.pickerValue, !condition && styles.pickerPlaceholder, !condition && t.pickerPlaceholder]}>
                   {condition || 'Select condition'}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
             </Pressable>
           </View>
 
           {/* ── 5. PRICING ── */}
           <View style={styles.sectionGroup}>
-            <Text style={styles.sectionHeading}>Pricing</Text>
+            <Text style={[styles.sectionHeading, t.sectionHeading]}>Pricing</Text>
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Price</Text>
+              <Text style={[styles.fieldLabel, t.fieldLabel]}>Price</Text>
               <View style={styles.priceRow}>
-                <Text style={styles.currencySymbol}>{currencySymbol}</Text>
+                <Text style={[styles.currencySymbol, t.currencySymbol]}>{currencySymbol}</Text>
                 <TextInput
-                  style={[styles.fieldInput, styles.priceInput, isEditingRestricted && styles.fieldInputDisabled]}
+                  style={[styles.fieldInput, t.fieldInput, styles.priceInput, isEditingRestricted && styles.fieldInputDisabled]}
                   value={price}
                   onChangeText={(v) => { setPrice(sanitizeDecimalInput(v)); setErrorMsg(''); }}
                   placeholder="0.00"
-                  placeholderTextColor={Colors.textMuted}
+                  placeholderTextColor={colors.textMuted}
                   keyboardType="decimal-pad"
                   editable={!isEditingRestricted}
                 />
               </View>
               {hasDiscount && (
-                <Text style={styles.discountPreview}>−{discountPercent}% off original</Text>
+                <Text style={[styles.discountPreview, t.discountPreview]}>−{discountPercent}% off original</Text>
               )}
-              <View style={styles.hairline} />
+              <View style={[styles.hairline, t.hairline]} />
             </View>
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Original price</Text>
+              <Text style={[styles.fieldLabel, t.fieldLabel]}>Original price</Text>
               <View style={styles.priceRow}>
-                <Text style={styles.currencySymbol}>{currencySymbol}</Text>
+                <Text style={[styles.currencySymbol, t.currencySymbol]}>{currencySymbol}</Text>
                 <TextInput
-                  style={[styles.fieldInput, styles.priceInput, isEditingRestricted && styles.fieldInputDisabled]}
+                  style={[styles.fieldInput, t.fieldInput, styles.priceInput, isEditingRestricted && styles.fieldInputDisabled]}
                   value={originalPrice}
                   onChangeText={(v) => { setOriginalPrice(sanitizeDecimalInput(v)); setErrorMsg(''); }}
                   placeholder="0.00"
-                  placeholderTextColor={Colors.textMuted}
+                  placeholderTextColor={colors.textMuted}
                   keyboardType="decimal-pad"
                   editable={!isEditingRestricted}
                 />
@@ -779,26 +809,26 @@ export default function EditListingScreen() {
 
           {/* ── 6. DESCRIPTION ── */}
           <View style={styles.sectionGroup}>
-            <Text style={styles.sectionHeading}>Description</Text>
+            <Text style={[styles.sectionHeading, t.sectionHeading]}>Description</Text>
             <View style={styles.fieldGroup}>
               <TextInput
-                style={[styles.descInput, isEditingRestricted && styles.fieldInputDisabled]}
+                style={[styles.descInput, t.descInput, isEditingRestricted && styles.fieldInputDisabled]}
                 value={description}
                 onChangeText={(t) => { setDescription(t); setErrorMsg(''); }}
                 placeholder="Describe the item, condition, and any notable details…"
-                placeholderTextColor={Colors.textMuted}
+                placeholderTextColor={colors.textMuted}
                 multiline
                 numberOfLines={4}
                 textAlignVertical="top"
                 editable={!isEditingRestricted}
               />
-              <Text style={styles.charCount}>{description.trim().length} characters</Text>
+              <Text style={[styles.charCount, t.charCount]}>{description.trim().length} characters</Text>
             </View>
           </View>
 
           {/* ── 7. SHIPPING ── */}
           <View style={styles.sectionGroup}>
-            <Text style={styles.sectionHeading}>Shipping</Text>
+            <Text style={[styles.sectionHeading, t.sectionHeading]}>Shipping</Text>
 
             <Pressable
               style={styles.pickerRow}
@@ -807,14 +837,14 @@ export default function EditListingScreen() {
               accessibilityLabel="Toggle shipping method"
             >
               <View style={styles.pickerRowInner}>
-                <Text style={styles.fieldLabel}>Shipping method</Text>
-                <Text style={[styles.pickerValue, !shippingMethod && styles.pickerPlaceholder]}>
+                <Text style={[styles.fieldLabel, t.fieldLabel]}>Shipping method</Text>
+                <Text style={[styles.pickerValue, t.pickerValue, !shippingMethod && styles.pickerPlaceholder, !shippingMethod && t.pickerPlaceholder]}>
                   {shippingMethod === 'standard' ? 'Standard' : shippingMethod === 'express' ? 'Express' : 'Select method'}
                 </Text>
               </View>
-              <Ionicons name="swap-horizontal" size={16} color={Colors.textMuted} />
+              <Ionicons name="swap-horizontal" size={16} color={colors.textMuted} />
             </Pressable>
-            <View style={styles.hairline} />
+            <View style={[styles.hairline, t.hairline]} />
 
             <Pressable
               style={styles.pickerRow}
@@ -823,20 +853,20 @@ export default function EditListingScreen() {
               accessibilityLabel="Toggle who pays shipping"
             >
               <View style={styles.pickerRowInner}>
-                <Text style={styles.fieldLabel}>Who pays</Text>
-                <Text style={[styles.pickerValue, !shippingPayer && styles.pickerPlaceholder]}>
+                <Text style={[styles.fieldLabel, t.fieldLabel]}>Who pays</Text>
+                <Text style={[styles.pickerValue, t.pickerValue, !shippingPayer && styles.pickerPlaceholder, !shippingPayer && t.pickerPlaceholder]}>
                   {shippingPayer === 'buyer' ? 'Buyer pays' : shippingPayer === 'seller' ? 'I pay' : 'Select payer'}
                 </Text>
               </View>
-              <Ionicons name="swap-horizontal" size={16} color={Colors.textMuted} />
+              <Ionicons name="swap-horizontal" size={16} color={colors.textMuted} />
             </Pressable>
           </View>
 
           {/* ── 8. SAVE/UPDATE FEEDBACK ── */}
           {errorMsg && saveStage !== 'idle' && (
             <View style={styles.inlineErrorRow}>
-              <Ionicons name="alert-circle" size={14} color={Colors.danger} />
-              <Text style={styles.inlineErrorText}>{errorMsg}</Text>
+              <Ionicons name="alert-circle" size={14} color={colors.danger} />
+              <Text style={[styles.inlineErrorText, t.inlineErrorText]}>{errorMsg}</Text>
             </View>
           )}
 
@@ -872,7 +902,6 @@ export default function EditListingScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   keyboardView: {
     flex: 1,
@@ -884,7 +913,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
   },
   navCloseBtn: {
     width: 40,
@@ -895,7 +923,6 @@ const styles = StyleSheet.create({
   navTitle: {
     fontSize: 16,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   navStatusWrap: {
     minWidth: 60,
@@ -904,10 +931,8 @@ const styles = StyleSheet.create({
   navStatusText: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
   },
   navStatusUnsaved: {
-    color: Colors.brand,
     fontFamily: Typography.family.semibold,
   },
   scroll: {
@@ -925,7 +950,6 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 14,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
   },
   errorContainer: {
     flex: 1,
@@ -937,18 +961,15 @@ const styles = StyleSheet.create({
   errorTitle: {
     fontSize: 16,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   retryBtn: {
     paddingHorizontal: Space.lg,
     paddingVertical: Space.sm,
     borderRadius: 24,
-    backgroundColor: Colors.brand,
   },
   retryBtnText: {
     fontSize: 14,
     fontFamily: Typography.family.semibold,
-    color: Colors.textInverse,
   },
   statusRow: {
     flexDirection: 'row',
@@ -961,15 +982,11 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: Colors.textMuted,
   },
-  statusDotActive: {
-    backgroundColor: Colors.success,
-  },
+  statusDotActive: {},
   statusText: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
   },
   restrictedRow: {
     flexDirection: 'row',
@@ -981,7 +998,6 @@ const styles = StyleSheet.create({
   restrictedText: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
   },
   sectionGroup: {
     paddingHorizontal: Space.md,
@@ -990,7 +1006,6 @@ const styles = StyleSheet.create({
   sectionHeading: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: Space.sm,
@@ -1001,13 +1016,11 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
     marginBottom: 4,
   },
   fieldInput: {
     fontSize: 16,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
     paddingVertical: 8,
   },
   fieldInputDisabled: {
@@ -1015,7 +1028,6 @@ const styles = StyleSheet.create({
   },
   hairline: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
     marginVertical: 4,
   },
   pickerRow: {
@@ -1031,11 +1043,8 @@ const styles = StyleSheet.create({
   pickerValue: {
     fontSize: 16,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
   },
-  pickerPlaceholder: {
-    color: Colors.textMuted,
-  },
+  pickerPlaceholder: {},
   priceRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1043,7 +1052,6 @@ const styles = StyleSheet.create({
   currencySymbol: {
     fontSize: 16,
     fontFamily: Typography.family.bold,
-    color: Colors.textMuted,
     marginRight: 6,
   },
   priceInput: {
@@ -1054,13 +1062,11 @@ const styles = StyleSheet.create({
   discountPreview: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    color: Colors.success,
     marginTop: 4,
   },
   descInput: {
     fontSize: 15,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
     minHeight: 100,
     paddingVertical: 8,
     lineHeight: 22,
@@ -1068,7 +1074,6 @@ const styles = StyleSheet.create({
   charCount: {
     fontSize: 11,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     textAlign: 'right',
   },
   inlineErrorRow: {
@@ -1082,6 +1087,5 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    color: Colors.danger,
   },
 });

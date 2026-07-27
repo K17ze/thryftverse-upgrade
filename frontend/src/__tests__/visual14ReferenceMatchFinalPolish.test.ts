@@ -82,7 +82,7 @@ describe('VISUAL-14 Reference-Match Final Polish', () => {
     const src = read(resolve(SCREENS, 'WithdrawScreen.tsx'));
     expect(src).toContain('...Elevation.subtle');
     expect(src).toContain('borderWidth: StyleSheet.hairlineWidth');
-    expect(src).toContain('borderColor: Colors.border');
+    expect(src).toMatch(/borderColor: (Colors|colors)\.border/);
   });
 
   // ── 5. No fake/external data regressions ──

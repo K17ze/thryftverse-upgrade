@@ -25,7 +25,7 @@ import { StackScreenProps } from "@react-navigation/stack";
 
 import { RootStackParamList } from "../navigation/types";
 
-import { Colors } from "../constants/colors";
+import { useAppTheme } from "../theme/ThemeContext";
 
 import { TypeStyles } from "../theme/designTokens";
 
@@ -228,6 +228,212 @@ function formatMessageTime(dateStr?: string): string | undefined {
 }
 
 export default function ChatScreen({ navigation, route }: Props) {
+  const { colors, isDark } = useAppTheme();
+
+  const styles = useMemo(() => StyleSheet.create({
+    screenRoot: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+
+    selectionToolbar: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
+      backgroundColor: colors.surfaceAlt,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+
+    emptyState: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: Space.xs + 2,
+      paddingHorizontal: Space.xl,
+      paddingBottom: Space.xl,
+    },
+
+    emptyGlyph: {
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: Space.sm,
+      width: 56,
+      height: 56,
+      borderRadius: Radius.full,
+      backgroundColor: colors.surfaceAlt,
+    },
+
+    emptyTitle: {
+      fontSize: Type.subtitle.size,
+      fontFamily: TypeStyles.title.fontFamily,
+      color: colors.textPrimary,
+      textAlign: "center",
+      letterSpacing: Type.subtitle.letterSpacing,
+    },
+
+    emptyBody: {
+      fontSize: Type.caption.size,
+      fontFamily: TypeStyles.body.fontFamily,
+      color: colors.textSecondary,
+      textAlign: "center",
+      lineHeight: Type.caption.lineHeight,
+      marginTop: Space.xs,
+    },
+
+    messageList: {
+      paddingTop: Space.sm,
+      paddingBottom: Space.md,
+    },
+
+    dateWrap: {
+      alignItems: "center",
+      marginVertical: Space.sm + 2,
+      paddingVertical: 3,
+      paddingHorizontal: Space.sm,
+      borderRadius: Radius.full,
+      backgroundColor: colors.surfaceAlt,
+      alignSelf: "center",
+    },
+
+    dateText: {
+      fontSize: Type.meta.size,
+      fontFamily: TypeStyles.body.fontFamily,
+      color: colors.textMuted,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+    },
+
+    statusWrap: {
+      marginVertical: Space.xs,
+      paddingHorizontal: Space.md,
+      alignItems: "center",
+    },
+
+    msgRow: {
+      flexDirection: "column",
+      width: "100%",
+      gap: Space.xs,
+      paddingHorizontal: 0,
+    },
+
+    msgRowRight: {
+      alignItems: "stretch",
+    },
+
+    linkPreviewWrap: {
+      maxWidth: "78%",
+      alignSelf: "flex-start",
+      marginTop: Space.xs,
+    },
+
+    linkPreviewWrapRight: {
+      alignSelf: "flex-end",
+    },
+
+    selectionRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: Space.sm,
+    },
+
+    selectionRowRight: {
+      flexDirection: "row-reverse",
+    },
+
+    checkbox: {
+      width: 22,
+      height: 22,
+      borderRadius: Radius.sm,
+      borderWidth: 2,
+      borderColor: colors.border,
+      backgroundColor: colors.surfaceAlt,
+      alignItems: "center",
+      justifyContent: "center",
+      marginHorizontal: Space.sm,
+    },
+
+    checkboxActive: {
+      backgroundColor: colors.brand,
+      borderColor: colors.brand,
+    },
+
+    composerWrap: {
+      paddingHorizontal: 0,
+      paddingBottom: 0,
+      paddingTop: 0,
+      backgroundColor: colors.surface,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+    },
+
+    undoBanner: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      backgroundColor: colors.surfaceAlt,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+      marginHorizontal: -Space.md,
+      marginTop: -Space.xs,
+      marginBottom: Space.xs,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
+    },
+
+    undoBannerText: {
+      color: colors.textSecondary,
+      fontSize: Type.caption.size,
+      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    },
+
+    undoBannerAction: {
+      color: colors.brand,
+      fontSize: Type.caption.size,
+      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    },
+
+    offlineBanner: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: Space.xs,
+      backgroundColor: `${colors.textMuted}10`,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+      marginHorizontal: -Space.md,
+      marginTop: -Space.xs,
+      marginBottom: Space.xs,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm + 2,
+    },
+
+    offlineBannerText: {
+      color: colors.textSecondary,
+      fontSize: Type.caption.size,
+      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    },
+
+    retryBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Space.xs,
+      backgroundColor: colors.brand,
+      paddingHorizontal: Space.md + 4,
+      paddingVertical: Space.sm + 2,
+      borderRadius: Radius.lg,
+      marginTop: Space.sm,
+    },
+
+    retryBtnText: {
+      color: colors.textInverse,
+      fontSize: Type.bodyEmphasis.size,
+      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    },
+  }), [colors]);
+
   const { conversationId, itemId: routeItemId, offerPayload: routeOfferPayload } = route.params;
 
   const currentUser = useStore((state) => state.currentUser);
@@ -1547,7 +1753,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             hapticFeedback="light"
           >
             {selectedMessageIds.has(msg.id) ? (
-              <Ionicons name="checkmark" size={14} color={Colors.textInverse} />
+              <Ionicons name="checkmark" size={14} color={colors.textInverse} />
             ) : null}
           </AnimatedPressable>
         ) : null}
@@ -1844,10 +2050,10 @@ export default function ChatScreen({ navigation, route }: Props) {
               <Ionicons
                 name="close-outline"
                 size={24}
-                color={Colors.textPrimary}
+                color={colors.textPrimary}
               />
             </AnimatedPressable>
-            <Caption color={Colors.textMuted}>
+            <Caption color={colors.textMuted}>
               {selectedMessageIds.size} selected
             </Caption>
             <AnimatedPressable
@@ -1857,7 +2063,7 @@ export default function ChatScreen({ navigation, route }: Props) {
               hapticFeedback="medium"
               accessibilityLabel="Delete selected"
             >
-              <Ionicons name="trash-outline" size={22} color={Colors.danger} />
+              <Ionicons name="trash-outline" size={22} color={colors.danger} />
             </AnimatedPressable>
           </View>
         ) : null}
@@ -1870,7 +2076,7 @@ export default function ChatScreen({ navigation, route }: Props) {
               <Ionicons
                 name="cloud-offline-outline"
                 size={40}
-                color={Colors.textMuted}
+                color={colors.textMuted}
               />
             </View>
             <Text style={styles.emptyTitle}>Couldn't load messages</Text>
@@ -1883,7 +2089,7 @@ export default function ChatScreen({ navigation, route }: Props) {
               accessibilityRole="button"
               accessibilityLabel="Retry loading messages"
             >
-              <Ionicons name="refresh" size={16} color={Colors.textInverse} />
+              <Ionicons name="refresh" size={16} color={colors.textInverse} />
               <Text style={styles.retryBtnText}>Retry</Text>
             </Pressable>
           </View>
@@ -1915,7 +2121,7 @@ export default function ChatScreen({ navigation, route }: Props) {
               <Ionicons
                 name="chatbubbles-outline"
                 size={26}
-                color={Colors.textMuted}
+                color={colors.textMuted}
               />
             </View>
             <Text style={styles.emptyTitle}>Start the conversation</Text>
@@ -1976,7 +2182,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                     <Ionicons
                       name="cloud-offline-outline"
                       size={16}
-                      color={Colors.textSecondary}
+                      color={colors.textSecondary}
                     />
                     <Text style={styles.offlineBannerText}>
                       You are offline. Messages will be sent when you reconnect.
@@ -2159,207 +2365,3 @@ export default function ChatScreen({ navigation, route }: Props) {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  screenRoot: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-
-  selectionToolbar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    backgroundColor: Colors.surfaceAlt,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
-  },
-
-  emptyState: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: Space.xs + 2,
-    paddingHorizontal: Space.xl,
-    paddingBottom: Space.xl,
-  },
-
-  emptyGlyph: {
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: Space.sm,
-    width: 56,
-    height: 56,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
-  },
-
-  emptyTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: TypeStyles.title.fontFamily,
-    color: Colors.textPrimary,
-    textAlign: "center",
-    letterSpacing: Type.subtitle.letterSpacing,
-  },
-
-  emptyBody: {
-    fontSize: Type.caption.size,
-    fontFamily: TypeStyles.body.fontFamily,
-    color: Colors.textSecondary,
-    textAlign: "center",
-    lineHeight: Type.caption.lineHeight,
-    marginTop: Space.xs,
-  },
-
-  messageList: {
-    paddingTop: Space.sm,
-    paddingBottom: Space.md,
-  },
-
-  dateWrap: {
-    alignItems: "center",
-    marginVertical: Space.sm + 2,
-    paddingVertical: 3,
-    paddingHorizontal: Space.sm,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
-    alignSelf: "center",
-  },
-
-  dateText: {
-    fontSize: Type.meta.size,
-    fontFamily: TypeStyles.body.fontFamily,
-    color: Colors.textMuted,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-
-  statusWrap: {
-    marginVertical: Space.xs,
-    paddingHorizontal: Space.md,
-    alignItems: "center",
-  },
-
-  msgRow: {
-    flexDirection: "column",
-    width: "100%",
-    gap: Space.xs,
-    paddingHorizontal: 0,
-  },
-
-  msgRowRight: {
-    alignItems: "stretch",
-  },
-
-  linkPreviewWrap: {
-    maxWidth: "78%",
-    alignSelf: "flex-start",
-    marginTop: Space.xs,
-  },
-
-  linkPreviewWrapRight: {
-    alignSelf: "flex-end",
-  },
-
-  selectionRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: Space.sm,
-  },
-
-  selectionRowRight: {
-    flexDirection: "row-reverse",
-  },
-
-  checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: Radius.sm,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surfaceAlt,
-    alignItems: "center",
-    justifyContent: "center",
-    marginHorizontal: Space.sm,
-  },
-
-  checkboxActive: {
-    backgroundColor: Colors.brand,
-    borderColor: Colors.brand,
-  },
-
-  composerWrap: {
-    paddingHorizontal: 0,
-    paddingBottom: 0,
-    paddingTop: 0,
-    backgroundColor: Colors.surface,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
-  },
-
-  undoBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: Colors.surfaceAlt,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
-    marginHorizontal: -Space.md,
-    marginTop: -Space.xs,
-    marginBottom: Space.xs,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
-
-  undoBannerText: {
-    color: Colors.textSecondary,
-    fontSize: Type.caption.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-  },
-
-  undoBannerAction: {
-    color: Colors.brand,
-    fontSize: Type.caption.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-  },
-
-  offlineBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: Space.xs,
-    backgroundColor: `${Colors.textMuted}10`,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
-    marginHorizontal: -Space.md,
-    marginTop: -Space.xs,
-    marginBottom: Space.xs,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 2,
-  },
-
-  offlineBannerText: {
-    color: Colors.textSecondary,
-    fontSize: Type.caption.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-  },
-
-  retryBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Space.xs,
-    backgroundColor: Colors.brand,
-    paddingHorizontal: Space.md + 4,
-    paddingVertical: Space.sm + 2,
-    borderRadius: Radius.lg,
-    marginTop: Space.sm,
-  },
-
-  retryBtnText: {
-    color: Colors.textInverse,
-    fontSize: Type.bodyEmphasis.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-  },
-});

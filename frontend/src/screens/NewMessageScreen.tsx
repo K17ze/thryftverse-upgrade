@@ -9,7 +9,7 @@ import { useToast } from '../context/ToastContext';
 import { useBackendData } from '../context/BackendDataContext';
 import { searchUsers, UserSearchResult } from '../services/profileApi';
 import { createDmConversationOnApi } from '../services/chatApi';
-import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Space, Radius, Type, TypeStyles, Typography } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
@@ -32,6 +32,112 @@ interface ContactItem {
 }
 
 export default function NewMessageScreen({ navigation, route }: Props) {
+  const { colors, isDark } = useAppTheme();
+
+  const styles = useMemo(() => StyleSheet.create({
+    searchWrap: {
+      paddingHorizontal: Space.md,
+      paddingTop: Space.sm,
+      paddingBottom: Space.sm,
+    },
+    searchBar: {
+      backgroundColor: colors.surfaceAlt,
+      borderRadius: Radius.full,
+      minHeight: 44,
+    },
+    quickActions: {
+      paddingHorizontal: Space.md,
+      paddingBottom: Space.md,
+      gap: Space.sm,
+    },
+    quickActionRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm + 2,
+      paddingVertical: Space.sm + 2,
+      paddingHorizontal: Space.sm + 2,
+      borderRadius: Radius.lg,
+      backgroundColor: colors.surfaceAlt,
+    },
+    quickActionIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: Radius.full,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    quickActionBody: {
+      flex: 1,
+      gap: 1,
+    },
+    quickActionBadge: {
+      minWidth: 20,
+      height: 20,
+      borderRadius: 10,
+      backgroundColor: colors.brand,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: 6,
+    },
+    quickActionBadgeText: {
+      fontSize: 11,
+      fontFamily: Typography.family.bold,
+      color: colors.textInverse,
+    },
+    searchingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
+    },
+    sectionLabelWrap: {
+      paddingHorizontal: Space.md,
+      paddingBottom: Space.xs,
+    },
+    listContent: {
+      paddingHorizontal: Space.md,
+      paddingBottom: Space.xxl,
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm + 6,
+      paddingVertical: Space.md,
+      paddingHorizontal: Space.md,
+      marginHorizontal: -Space.md,
+      borderRadius: Radius.lg,
+    },
+    contactAvatar: {
+      width: 52,
+      height: 52,
+      borderRadius: Radius.full,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: colors.surfaceAlt,
+      overflow: 'hidden',
+    },
+    contactAvatarImage: {
+      width: 52,
+      height: 52,
+      borderRadius: Radius.full,
+    },
+    contactAvatarText: {
+      fontSize: 15,
+      fontFamily: TypeStyles.title.fontFamily,
+      color: colors.textPrimary,
+    },
+    rowBody: {
+      flex: 1,
+      gap: 2,
+    },
+    separator: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.border,
+      marginHorizontal: -Space.md,
+    },
+  }), [colors]);
+
   const { show } = useToast();
   const haptic = useHaptic();
 
@@ -194,19 +300,19 @@ export default function NewMessageScreen({ navigation, route }: Props) {
       <View style={styles.rowBody}>
         <BodyEmphasis numberOfLines={1}>{item.name}</BodyEmphasis>
         {item.listingTitle ? (
-          <Caption color={Colors.textMuted} numberOfLines={1}>
+          <Caption color={colors.textMuted} numberOfLines={1}>
             {item.listingTitle}
           </Caption>
         ) : item.isExisting ? (
-          <Caption color={Colors.textMuted}>Existing conversation</Caption>
+          <Caption color={colors.textMuted}>Existing conversation</Caption>
         ) : (
-          <Caption color={Colors.textMuted}>No conversation yet — message from a listing</Caption>
+          <Caption color={colors.textMuted}>No conversation yet — message from a listing</Caption>
         )}
       </View>
       <Ionicons
         name={item.isExisting ? 'chevron-forward' : 'pricetag-outline'}
         size={18}
-        color={Colors.textMuted}
+        color={colors.textMuted}
       />
     </AnimatedPressable>
   );
@@ -239,14 +345,14 @@ export default function NewMessageScreen({ navigation, route }: Props) {
             accessibilityHint="Create a new group conversation with multiple people"
             accessibilityRole="button"
           >
-            <View style={[styles.quickActionIcon, { backgroundColor: Colors.brand + '14' }]}>
-              <Ionicons name="people-outline" size={20} color={Colors.brand} />
+            <View style={[styles.quickActionIcon, { backgroundColor: colors.brand + '14' }]}>
+              <Ionicons name="people-outline" size={20} color={colors.brand} />
             </View>
             <View style={styles.quickActionBody}>
               <BodyEmphasis numberOfLines={1}>Start group chat</BodyEmphasis>
-              <Caption color={Colors.textMuted} numberOfLines={1}>Create a group with multiple people</Caption>
+              <Caption color={colors.textMuted} numberOfLines={1}>Create a group with multiple people</Caption>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </AnimatedPressable>
 
           {/* Message requests (only if there are any) */}
@@ -260,17 +366,17 @@ export default function NewMessageScreen({ navigation, route }: Props) {
               accessibilityLabel={`${messageRequests.length} message requests`}
               accessibilityRole="button"
             >
-              <View style={[styles.quickActionIcon, { backgroundColor: Colors.surfaceAlt }]}>
-                <Ionicons name="mail-unread-outline" size={20} color={Colors.textSecondary} />
+              <View style={[styles.quickActionIcon, { backgroundColor: colors.surfaceAlt }]}>
+                <Ionicons name="mail-unread-outline" size={20} color={colors.textSecondary} />
               </View>
               <View style={styles.quickActionBody}>
                 <BodyEmphasis numberOfLines={1}>Message requests</BodyEmphasis>
-                <Caption color={Colors.textMuted} numberOfLines={1}>{messageRequests.length} pending</Caption>
+                <Caption color={colors.textMuted} numberOfLines={1}>{messageRequests.length} pending</Caption>
               </View>
               <View style={styles.quickActionBadge}>
                 <Text style={styles.quickActionBadgeText}>{messageRequests.length}</Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </AnimatedPressable>
           )}
         </View>
@@ -279,8 +385,8 @@ export default function NewMessageScreen({ navigation, route }: Props) {
       {/* Search loading indicator */}
       {isSearching && isSearchingRemote && (
         <View style={styles.searchingRow}>
-          <ActivityIndicator size="small" color={Colors.brand} />
-          <Caption color={Colors.textMuted}>Searching users…</Caption>
+          <ActivityIndicator size="small" color={colors.brand} />
+          <Caption color={colors.textMuted}>Searching users…</Caption>
         </View>
       )}
 
@@ -288,7 +394,7 @@ export default function NewMessageScreen({ navigation, route }: Props) {
         <View style={{ flex: 1 }}>
           {!isSearching && (
             <View style={styles.sectionLabelWrap}>
-              <Meta color={Colors.textMuted}>RECENT CONTACTS</Meta>
+              <Meta color={colors.textMuted}>RECENT CONTACTS</Meta>
             </View>
           )}
           {isSearching && !isSearchingRemote && filtered.length === 0 ? (
@@ -332,107 +438,3 @@ export default function NewMessageScreen({ navigation, route }: Props) {
     </FlagshipScreen>
   );
 }
-
-const styles = StyleSheet.create({
-  searchWrap: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.sm,
-  },
-  searchBar: {
-    backgroundColor: Colors.surfaceAlt,
-    borderRadius: Radius.full,
-    minHeight: 44,
-  },
-  quickActions: {
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.md,
-    gap: Space.sm,
-  },
-  quickActionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm + 2,
-    paddingVertical: Space.sm + 2,
-    paddingHorizontal: Space.sm + 2,
-    borderRadius: Radius.lg,
-    backgroundColor: Colors.surfaceAlt,
-  },
-  quickActionIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  quickActionBody: {
-    flex: 1,
-    gap: 1,
-  },
-  quickActionBadge: {
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: Colors.brand,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-  },
-  quickActionBadgeText: {
-    fontSize: 11,
-    fontFamily: Typography.family.bold,
-    color: Colors.textInverse,
-  },
-  searchingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
-  sectionLabelWrap: {
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.xs,
-  },
-  listContent: {
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.xxl,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm + 6,
-    paddingVertical: Space.md,
-    paddingHorizontal: Space.md,
-    marginHorizontal: -Space.md,
-    borderRadius: Radius.lg,
-  },
-  contactAvatar: {
-    width: 52,
-    height: 52,
-    borderRadius: Radius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: Colors.surfaceAlt,
-    overflow: 'hidden',
-  },
-  contactAvatarImage: {
-    width: 52,
-    height: 52,
-    borderRadius: Radius.full,
-  },
-  contactAvatarText: {
-    fontSize: 15,
-    fontFamily: TypeStyles.title.fontFamily,
-    color: Colors.textPrimary,
-  },
-  rowBody: {
-    flex: 1,
-    gap: 2,
-  },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
-    marginHorizontal: -Space.md,
-  },
-});

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -15,8 +15,8 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Colors } from '../constants/colors';
 import { Type, Space, Radius, Typography } from '../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -40,6 +40,8 @@ export default function CreateLookScreen() {
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
   const { show } = useToast();
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const reducedMotion = useReducedMotion();
   const currentUser = useStore((state) => state.currentUser);
 
@@ -161,12 +163,12 @@ export default function CreateLookScreen() {
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </AnimatedPressable>
         <Text style={styles.headerTitle}>Create Look</Text>
         <View style={styles.headerRight}>
           {isPublishing ? (
-            <ActivityIndicator size="small" color={Colors.brand} />
+            <ActivityIndicator size="small" color={colors.brand} />
           ) : null}
         </View>
       </View>
@@ -200,7 +202,7 @@ export default function CreateLookScreen() {
               value={caption}
               onChangeText={setCaption}
               placeholder="Share the story behind this outfit..."
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
               maxLength={500}
               multiline
               textAlignVertical="top"
@@ -244,7 +246,7 @@ export default function CreateLookScreen() {
                     <Ionicons
                       name={opt.icon}
                       size={18}
-                      color={isActive ? Colors.brand : Colors.textSecondary}
+                      color={isActive ? colors.brand : colors.textSecondary}
                     />
                     <Text
                       style={[
@@ -287,10 +289,11 @@ export default function CreateLookScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -299,7 +302,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   backBtn: {
     width: 40,
@@ -311,7 +314,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   headerRight: {
     minWidth: 60,
@@ -328,23 +331,23 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   captionInput: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     padding: Space.md,
     fontSize: 16,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     minHeight: 80,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   charCount: {
     fontSize: 12,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textAlign: 'right',
   },
   audienceRow: {
@@ -359,21 +362,21 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 10,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   audienceBtnActive: {
-    borderColor: Colors.brand,
+    borderColor: colors.brand,
     backgroundColor: 'rgba(99,102,241,0.06)',
   },
   audienceBtnText: {
     fontSize: 14,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   audienceBtnTextActive: {
-    color: Colors.brand,
+    color: colors.brand,
     fontFamily: Typography.family.semibold,
   },
   publishSection: {
@@ -381,7 +384,7 @@ const styles = StyleSheet.create({
     paddingTop: Space.xl,
   },
   publishBtn: {
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     borderRadius: Radius.lg,
     paddingVertical: 14,
     alignItems: 'center',
@@ -395,4 +398,5 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.bold,
     color: '#fff',
   },
-});
+  });
+}

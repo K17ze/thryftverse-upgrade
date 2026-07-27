@@ -1,5 +1,5 @@
 import { Typography } from '../theme/designTokens';
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -17,7 +17,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { Swipeable } from 'react-native-gesture-handler';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { ActiveTheme, Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import { EmptyState } from '../components/EmptyState';
 import { SkeletonLoader } from '../components/SkeletonLoader';
@@ -42,6 +41,7 @@ import { Space, Radius, Type } from '../theme/designTokens';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 import { isQuietHoursActive } from '../preferences/settingsPreferences';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -80,10 +80,6 @@ const FILTER_TABS: { key: NotificationFilter; label: string }[] = [
   { key: 'price', label: 'Prices' },
   { key: 'auction', label: 'Auctions' },
 ];
-
-const PANEL_BG = Colors.surface;
-const PANEL_ALT = Colors.surfaceAlt;
-const PANEL_BORDER = Colors.border;
 
 function parsePayloadEvent(payload: Record<string, unknown>): string {
   const candidate = payload.event;
@@ -307,6 +303,8 @@ export default function NotificationsScreen() {
   const currentUser = useStore((state) => state.currentUser);
   const reducedMotionEnabled = useReducedMotion();
   const { quietHours } = useSettingsPreferences();
+  const { colors, isDark } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [notifications, setNotifications] = React.useState<NotificationCard[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
   const [isLoadingMore, setIsLoadingMore] = React.useState(false);
@@ -437,7 +435,7 @@ export default function NotificationsScreen() {
       return (
         <View style={styles.swipeActionContainer}>
           <View style={styles.swipeReadAction}>
-            <Ionicons name="checkmark-circle-outline" size={22} color={Colors.success} />
+            <Ionicons name="checkmark-circle-outline" size={22} color={colors.success} />
             <Text style={styles.swipeReadText}>Read</Text>
           </View>
         </View>
@@ -450,7 +448,7 @@ export default function NotificationsScreen() {
     () => (
       <View style={styles.swipeActionContainer}>
         <View style={styles.swipeDeleteAction}>
-          <Ionicons name="trash-outline" size={20} color={Colors.danger} />
+          <Ionicons name="trash-outline" size={20} color={colors.danger} />
           <Text style={styles.swipeDeleteText}>Clear</Text>
         </View>
       </View>
@@ -517,7 +515,7 @@ export default function NotificationsScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+      <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
 
       <ScreenHeader
         title="Notifications"
@@ -530,7 +528,7 @@ export default function NotificationsScreen() {
               accessibilityLabel="Manage notification preferences"
               accessibilityRole="button"
             >
-              <Ionicons name="settings-outline" size={20} color={Colors.textSecondary} />
+              <Ionicons name="settings-outline" size={20} color={colors.textSecondary} />
             </AnimatedPressable>
             <AnimatedPressable
               style={styles.headerAction}
@@ -538,7 +536,7 @@ export default function NotificationsScreen() {
               accessibilityRole="button"
               accessibilityLabel={hasUnread ? 'Mark all notifications as read' : 'All caught up'}
             >
-              <Ionicons name="checkmark-done-outline" size={22} color={hasUnread ? Colors.textPrimary : Colors.textMuted} />
+              <Ionicons name="checkmark-done-outline" size={22} color={hasUnread ? colors.textPrimary : colors.textMuted} />
             </AnimatedPressable>
           </View>
         }
@@ -597,7 +595,7 @@ export default function NotificationsScreen() {
               accessibilityRole="button"
               accessibilityLabel="Quiet hours active. Tap to manage."
             >
-              <Ionicons name="moon" size={12} color={Colors.textMuted} />
+              <Ionicons name="moon" size={12} color={colors.textMuted} />
               <Text style={styles.quietHoursText}>Quiet hours on</Text>
             </Pressable>
           ) : null}
@@ -614,8 +612,8 @@ export default function NotificationsScreen() {
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={handleRefresh}
-            tintColor={Colors.brand}
-            colors={[Colors.brand]}
+            tintColor={colors.brand}
+            colors={[colors.brand]}
           />
         }
         onEndReached={loadMore}
@@ -699,7 +697,7 @@ export default function NotificationsScreen() {
                             />
                           ) : (
                             <View style={styles.notifAggregatedAvatarFallback}>
-                              <Ionicons name="person" size={10} color={Colors.textSecondary} />
+                              <Ionicons name="person" size={10} color={colors.textSecondary} />
                             </View>
                           )}
                           <View style={styles.notifAggregatedCountBadge}>
@@ -746,7 +744,7 @@ export default function NotificationsScreen() {
                       accessibilityLabel={`Message @${actorHandle}`}
                       accessibilityHint="Opens chat with this user"
                     >
-                      <Ionicons name="chatbubble-outline" size={18} color={Colors.textPrimary} />
+                      <Ionicons name="chatbubble-outline" size={18} color={colors.textPrimary} />
                     </AnimatedPressable>
                   </View>
                 ) : null}
@@ -775,7 +773,7 @@ export default function NotificationsScreen() {
               icon="cloud-offline-outline"
               title="Couldn't load notifications"
               subtitle="Pull down to refresh and try again."
-              iconColor={Colors.textMuted}
+              iconColor={colors.textMuted}
               ctaLabel="Retry"
               onCtaPress={() => void syncNotifications()}
             />
@@ -785,7 +783,7 @@ export default function NotificationsScreen() {
               icon="notifications-outline"
               title={`No ${FILTER_TABS.find((t) => t.key === activeFilter)?.label.toLowerCase() ?? 'notifications'} yet`}
               subtitle="Switch to 'All' to see everything."
-              iconColor={Colors.textMuted}
+              iconColor={colors.textMuted}
             />
           ) : (
             <EmptyState
@@ -793,14 +791,14 @@ export default function NotificationsScreen() {
               icon="notifications-outline"
               title="No notifications yet"
               subtitle="We'll notify you about new items, price drops, and order updates."
-              iconColor={Colors.textMuted}
+              iconColor={colors.textMuted}
             />
           )
         }
         ListFooterComponent={
           isLoadingMore ? (
             <View style={styles.loadingState}>
-              <ActivityIndicator color={Colors.brand} size="small" />
+              <ActivityIndicator color={colors.brand} size="small" />
             </View>
           ) : null
         }
@@ -809,8 +807,9 @@ export default function NotificationsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
 
   headerActions: {
     flexDirection: 'row',
@@ -825,7 +824,7 @@ const styles = StyleSheet.create({
 
   filterTabsRow: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   filterTabsContent: {
     paddingHorizontal: 16,
@@ -844,10 +843,10 @@ const styles = StyleSheet.create({
     fontSize: Type.captionElevated.size,
     lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   filterTabTextActive: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
   },
   filterTabIndicator: {
@@ -857,7 +856,7 @@ const styles = StyleSheet.create({
     right: 0,
     height: 2,
     borderRadius: 1,
-    backgroundColor: Colors.textPrimary,
+    backgroundColor: colors.textPrimary,
   },
 
   swipeActionContainer: {
@@ -870,9 +869,9 @@ const styles = StyleSheet.create({
     flex: 1,
     width: 80,
     borderRadius: 20,
-    backgroundColor: `${Colors.success}20`,
+    backgroundColor: `${colors.success}20`,
     borderWidth: 1,
-    borderColor: `${Colors.success}40`,
+    borderColor: `${colors.success}40`,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
@@ -880,7 +879,7 @@ const styles = StyleSheet.create({
   swipeReadText: {
     fontSize: 11,
     fontFamily: Typography.family.semibold,
-    color: Colors.success,
+    color: colors.success,
   },
   swipeDeleteAction: {
     alignItems: 'center',
@@ -892,7 +891,7 @@ const styles = StyleSheet.create({
   swipeDeleteText: {
     fontSize: 11,
     fontFamily: Typography.family.semibold,
-    color: Colors.danger,
+    color: colors.danger,
   },
 
   listContent: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 120 },
@@ -915,12 +914,12 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
   },
   unreadSummaryText: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
+    color: colors.brand,
   },
   quietHoursBadge: {
     flexDirection: 'row',
@@ -929,20 +928,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   quietHoursText: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
 
   sectionTitle: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     letterSpacing: 0.1,
     marginTop: 20,
     marginBottom: 8,
@@ -950,12 +949,12 @@ const styles = StyleSheet.create({
   },
 
   notifCard: {
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: PANEL_BORDER,
+    borderBottomColor: colors.border,
   },
   notifCardUnread: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   notifMainTap: {
     padding: Space.md,
@@ -971,15 +970,15 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
   },
 
   notifImageWrap: {
     width: 52, height: 52, borderRadius: 10,
     overflow: 'hidden',
-    backgroundColor: PANEL_ALT,
+    backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
-    borderColor: PANEL_BORDER,
+    borderColor: colors.border,
   },
   notifImageShared: {
     ...StyleSheet.absoluteFill,
@@ -988,24 +987,24 @@ const styles = StyleSheet.create({
 
   notifBody: { flex: 1 },
   notifTitle: {
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     lineHeight: Type.body.lineHeight,
     marginBottom: 2,
   },
   notifTitleUnread: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
   },
   notifText: {
-    color: Colors.textSecondary, fontSize: Type.body.size, fontFamily: Typography.family.regular,
+    color: colors.textSecondary, fontSize: Type.body.size, fontFamily: Typography.family.regular,
     lineHeight: Type.body.lineHeight, marginBottom: 8,
   },
-  notifTextUnread: { color: Colors.textPrimary, fontFamily: Typography.family.medium },
+  notifTextUnread: { color: colors.textPrimary, fontFamily: Typography.family.medium },
 
   notifMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  notifTime: { fontSize: 12, color: Colors.textMuted, fontFamily: Typography.family.regular },
+  notifTime: { fontSize: 12, color: colors.textMuted, fontFamily: Typography.family.regular },
   notifAggregatedRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1016,7 +1015,7 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     marginRight: -6,
     borderWidth: 1.5,
-    borderColor: PANEL_BG,
+    borderColor: colors.surface,
   },
   notifAggregatedAvatarFallback: {
     width: 18,
@@ -1024,8 +1023,8 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     marginRight: -6,
     borderWidth: 1.5,
-    borderColor: PANEL_BG,
-    backgroundColor: PANEL_ALT,
+    borderColor: colors.surface,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1034,16 +1033,16 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     paddingHorizontal: 6,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
-    borderColor: PANEL_BG,
+    borderColor: colors.surface,
   },
   notifAggregatedCountText: {
     fontSize: 10,
     fontFamily: Typography.family.bold,
-    color: Colors.background,
+    color: colors.background,
   },
   notifActionRow: {
     marginTop: 0,
@@ -1076,14 +1075,14 @@ const styles = StyleSheet.create({
     minWidth: 20,
     height: 20,
     borderRadius: Radius.sm,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: Space.sm,
   },
   notifActorText: {
     flex: 1,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontSize: 11,
     fontFamily: Typography.family.semibold,
   },
@@ -1104,7 +1103,7 @@ const styles = StyleSheet.create({
     gap: Space.sm + 2,
     paddingVertical: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   notificationSkeletonCopy: {
     flex: 1,
@@ -1119,6 +1118,7 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 13,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
-});
+  });
+}

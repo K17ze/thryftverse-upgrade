@@ -9,9 +9,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
-import { ActiveTheme, Colors } from '../constants/colors';
 import { CATEGORIES } from '../constants/categories';
 import { useBackendData } from '../context/BackendDataContext';
+import { useAppTheme } from '../theme/ThemeContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { EmptyState } from '../components/EmptyState';
 import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGrid';
@@ -26,6 +26,7 @@ export default function CategoryDetailScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { listings, isSyncing, lastError, refreshListings } = useBackendData();
+  const { colors, isDark } = useAppTheme();
   const categoryId = route.params?.categoryId as string | undefined;
 
   const category = useMemo(() => {
@@ -54,12 +55,83 @@ export default function CategoryDetailScreen() {
     });
   }, [category, listings]);
 
+  const styles = useMemo(
+    () =>
+      StyleSheet.create({
+        container: {
+          flex: 1,
+          backgroundColor: colors.background,
+        },
+        content: {
+          paddingBottom: Space.xl,
+        },
+        summary: {
+          paddingHorizontal: Space.md,
+          paddingTop: Space.xs,
+          paddingBottom: Space.md,
+          gap: 4,
+        },
+        count: {
+          color: colors.textPrimary,
+          fontFamily: Typography.family.semibold,
+          fontSize: 14,
+          lineHeight: 20,
+        },
+        summaryText: {
+          color: colors.textSecondary,
+          fontFamily: Typography.family.regular,
+          fontSize: 13,
+          lineHeight: 19,
+        },
+        categoryRail: {
+          paddingHorizontal: Space.md,
+          paddingBottom: Space.lg,
+          gap: Space.lg,
+        },
+        categoryAction: {
+          minHeight: 44,
+          justifyContent: 'center',
+          borderBottomWidth: 1,
+          borderBottomColor: colors.border,
+        },
+        categoryActionText: {
+          color: colors.textPrimary,
+          fontFamily: Typography.family.semibold,
+          fontSize: 14,
+        },
+        grid: {
+          paddingTop: Space.xs,
+        },
+        loadingGrid: {
+          flexDirection: 'row',
+          flexWrap: 'wrap',
+          gap: Space.sm,
+          paddingHorizontal: Space.md,
+        },
+        loadingColumn: {
+          width: '48%',
+          marginBottom: Space.md,
+        },
+        skeletonLine: {
+          marginTop: Space.sm,
+        },
+        skeletonMeta: {
+          marginTop: 6,
+        },
+        emptyWrap: {
+          minHeight: 360,
+          justifyContent: 'center',
+        },
+      }),
+    [colors]
+  );
+
   if (!category) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <StatusBar
-          barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'}
-          backgroundColor={Colors.background}
+          barStyle={!isDark ? 'dark-content' : 'light-content'}
+          backgroundColor={colors.background}
         />
         <ScreenHeader title="Category" onBack={() => navigation.goBack()} />
         <EmptyState
@@ -78,8 +150,8 @@ export default function CategoryDetailScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar
-        barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'}
-        backgroundColor={Colors.background}
+        barStyle={!isDark ? 'dark-content' : 'light-content'}
+        backgroundColor={colors.background}
       />
       <ScreenHeader title={category.name} onBack={() => navigation.goBack()} />
 
@@ -172,69 +244,3 @@ export default function CategoryDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  content: {
-    paddingBottom: Space.xl,
-  },
-  summary: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.xs,
-    paddingBottom: Space.md,
-    gap: 4,
-  },
-  count: {
-    color: Colors.textPrimary,
-    fontFamily: Typography.family.semibold,
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  summaryText: {
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.regular,
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  categoryRail: {
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.lg,
-    gap: Space.lg,
-  },
-  categoryAction: {
-    minHeight: 44,
-    justifyContent: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  categoryActionText: {
-    color: Colors.textPrimary,
-    fontFamily: Typography.family.semibold,
-    fontSize: 14,
-  },
-  grid: {
-    paddingTop: Space.xs,
-  },
-  loadingGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Space.sm,
-    paddingHorizontal: Space.md,
-  },
-  loadingColumn: {
-    width: '48%',
-    marginBottom: Space.md,
-  },
-  skeletonLine: {
-    marginTop: Space.sm,
-  },
-  skeletonMeta: {
-    marginTop: 6,
-  },
-  emptyWrap: {
-    minHeight: 360,
-    justifyContent: 'center',
-  },
-});

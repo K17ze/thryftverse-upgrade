@@ -1,9 +1,8 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
-import { Colors } from '../constants/colors';
 import { Space, Typography } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import {
@@ -12,6 +11,7 @@ import {
 } from '../components/flagship';
 import { reportUser, type ReportReason } from '../services/profileApi';
 import { useToast } from '../context/ToastContext';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 
 type Props = StackScreenProps<RootStackParamList, 'Report'>;
 
@@ -54,6 +54,8 @@ const REPORT_REASONS: Array<{
 
 export default function ReportScreen({ navigation, route }: Props) {
   const { show } = useToast();
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { type, targetId } = route.params;
   const [selectedReason, setSelectedReason] =
     React.useState<ReportReason | null>(null);
@@ -94,7 +96,7 @@ export default function ReportScreen({ navigation, route }: Props) {
           <Ionicons
             name="shield-checkmark-outline"
             size={28}
-            color={Colors.textPrimary}
+            color={colors.textPrimary}
           />
           <Text style={styles.completeTitle}>Thank you for reporting this</Text>
           <Text style={styles.completeBody}>
@@ -130,7 +132,7 @@ export default function ReportScreen({ navigation, route }: Props) {
           <Ionicons
             name="alert-circle-outline"
             size={28}
-            color={Colors.textMuted}
+            color={colors.textMuted}
           />
           <Text style={styles.completeTitle}>Report target unavailable</Text>
           <Text style={styles.completeBody}>
@@ -173,7 +175,7 @@ export default function ReportScreen({ navigation, route }: Props) {
           accessibilityState={{ disabled: !canSubmit, busy: isSubmitting }}
         >
           {isSubmitting ? (
-            <ActivityIndicator size="small" color={Colors.textInverse} />
+            <ActivityIndicator size="small" color={colors.textInverse} />
           ) : (
             <Text style={styles.submitText}>Send report</Text>
           )}
@@ -230,7 +232,7 @@ export default function ReportScreen({ navigation, route }: Props) {
             value={details}
             onChangeText={setDetails}
             placeholder="Describe what happened"
-            placeholderTextColor={Colors.textMuted}
+            placeholderTextColor={colors.textMuted}
             multiline
             maxLength={500}
             textAlignVertical="top"
@@ -243,19 +245,20 @@ export default function ReportScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   intro: {
     paddingVertical: Space.md,
   },
   introTitle: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
     fontSize: 17,
   },
   introBody: {
     maxWidth: 340,
     marginTop: 5,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontFamily: Typography.family.regular,
     fontSize: 13,
     lineHeight: 19,
@@ -263,7 +266,7 @@ const styles = StyleSheet.create({
   reasons: {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   reason: {
     minHeight: 68,
@@ -273,7 +276,7 @@ const styles = StyleSheet.create({
   },
   reasonDivider: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   reasonCopy: {
     minWidth: 0,
@@ -281,12 +284,12 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   reasonLabel: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
     fontSize: 14,
   },
   reasonDescription: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontFamily: Typography.family.regular,
     fontSize: 12,
     lineHeight: 17,
@@ -296,25 +299,25 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   radioSelected: {
-    borderColor: Colors.textPrimary,
+    borderColor: colors.textPrimary,
   },
   radioDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: Colors.textPrimary,
+    backgroundColor: colors.textPrimary,
   },
   details: {
     marginTop: Space.lg,
   },
   detailsLabel: {
     marginBottom: 7,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
     fontSize: 13,
   },
@@ -322,17 +325,17 @@ const styles = StyleSheet.create({
     minHeight: 116,
     padding: 13,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     borderRadius: 12,
-    color: Colors.textPrimary,
-    backgroundColor: Colors.background,
+    color: colors.textPrimary,
+    backgroundColor: colors.background,
     fontFamily: Typography.family.regular,
     fontSize: 14,
     lineHeight: 20,
   },
   characterCount: {
     marginTop: 5,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontFamily: Typography.family.regular,
     fontSize: 11,
     textAlign: 'right',
@@ -342,13 +345,13 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.textPrimary,
+    backgroundColor: colors.textPrimary,
   },
   submitDisabled: {
     opacity: 0.36,
   },
   submitText: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
     fontFamily: Typography.family.semibold,
     fontSize: 14,
   },
@@ -359,7 +362,7 @@ const styles = StyleSheet.create({
   },
   completeTitle: {
     marginTop: Space.md,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
     fontSize: 17,
     textAlign: 'center',
@@ -367,7 +370,7 @@ const styles = StyleSheet.create({
   completeBody: {
     maxWidth: 330,
     marginTop: Space.xs,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontFamily: Typography.family.regular,
     fontSize: 13,
     lineHeight: 19,
@@ -379,12 +382,12 @@ const styles = StyleSheet.create({
     marginTop: Space.lg,
     paddingHorizontal: Space.lg,
     borderRadius: 11,
-    backgroundColor: Colors.textPrimary,
+    backgroundColor: colors.textPrimary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   doneActionText: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
     fontFamily: Typography.family.semibold,
     fontSize: 14,
   },
@@ -394,14 +397,15 @@ const styles = StyleSheet.create({
     marginTop: Space.lg,
     paddingHorizontal: Space.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
   },
   secondaryDoneText: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
     fontSize: 14,
   },
-});
+  });
+}

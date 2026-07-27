@@ -28,9 +28,7 @@ import { Video, ResizeMode } from '../components/compat/Video';
 import { ImageContentFit } from 'expo-image';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../constants/colors';
-
-import { useAppTheme } from '../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 
 // Typography simplified - using direct font names
 import { fetchPosterStories } from '../services/postersApi';
@@ -80,8 +78,6 @@ const POSTER_CARD_WIDTH = 76;
 const POSTER_CARD_HEIGHT = 135;
 const LISTING_CARD_CHROME_HEIGHT = 110;
 const SCREEN_WIDTH = Dimensions.get('window').width;
-
-const PANEL_BG = Colors.surfaceAlt;
 
 // Skeleton variation communicates loading without inventing media geometry.
 const SKELETON_HEIGHT_RATIOS = [1.25, 1.08, 1.32, 1.16] as const;
@@ -153,13 +149,6 @@ const STORY_STATUS_LABEL: Record<StoryStatus, string> = {
   'sold-recently': 'sold recently',
 };
 
-const STORY_STATUS_GRADIENT: Record<StoryStatus, [string, string]> = {
-  'new-listing': [Colors.brand, Colors.brandPressed],
-  'live-auction': [Colors.textSecondary, Colors.textMuted],
-  'co-own-launching': [Colors.success, Colors.success + '99'],
-  'sold-recently': [Colors.danger, Colors.danger + '99'],
-};
-
 // Trend clips removed — demo-only content, not real data
 
 type ExploreTile = {
@@ -190,6 +179,8 @@ type StoryBubble = {
 };
 
 const PosterStoryArtwork = React.memo(function PosterStoryArtwork({ story }: { story: PosterStory }) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const firstFrame = story.frames[0];
   const composition = React.useMemo<CreatorDocument | null>(() => {
     if (!story.compositionDocument) return null;
@@ -227,7 +218,7 @@ const PosterStoryArtwork = React.memo(function PosterStoryArtwork({ story }: { s
     return <CachedImage uri={firstFrame.mediaUrl} style={styles.posterImage} contentFit="cover" />;
   }
 
-  const backgroundColor = firstFrame?.backgroundColor ?? Colors.surfaceAlt;
+  const backgroundColor = firstFrame?.backgroundColor ?? colors.surfaceAlt;
   return (
     <LinearGradient
       colors={[backgroundColor, '#111111']}
@@ -245,6 +236,8 @@ const PosterStoryArtwork = React.memo(function PosterStoryArtwork({ story }: { s
 });
 
 function ListingMediaPlaceholder({ category }: { category?: string }) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const normalized = category?.toLowerCase() ?? '';
   const icon: React.ComponentProps<typeof Ionicons>['name'] = normalized.includes('shoe')
     ? 'footsteps-outline'
@@ -256,7 +249,7 @@ function ListingMediaPlaceholder({ category }: { category?: string }) {
 
   return (
     <LinearGradient
-      colors={[Colors.surfaceAlt, Colors.background]}
+      colors={[colors.surfaceAlt, colors.background]}
       start={{ x: 0.08, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.listingMediaPlaceholder}
@@ -265,7 +258,7 @@ function ListingMediaPlaceholder({ category }: { category?: string }) {
       <View style={styles.listingMediaPlaceholderOrbLarge} />
       <View style={styles.listingMediaPlaceholderOrbSmall} />
       <View style={styles.listingMediaPlaceholderIcon}>
-        <Ionicons name={icon} size={28} color={Colors.textMuted} />
+        <Ionicons name={icon} size={28} color={colors.textMuted} />
       </View>
     </LinearGradient>
   );
@@ -295,6 +288,8 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
   sellerUsername,
   sellerAvatar,
 }: ExploreGridItemProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const sharedTag = item.mediaType === 'image' && item.routeId
     ? `image-${item.routeId}-0`
     : undefined;
@@ -371,7 +366,7 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
               />
             ) : (
               <View style={styles.exploreSellerAvatarFallback}>
-                <Ionicons name="person" size={12} color={Colors.textMuted} />
+                <Ionicons name="person" size={12} color={colors.textMuted} />
               </View>
             )}
             <Text style={styles.exploreSellerText} numberOfLines={1}>
@@ -385,7 +380,7 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
             accessibilityRole="button"
             accessibilityLabel="Message seller"
           >
-            <Ionicons name="chatbubble-outline" size={14} color={Colors.textPrimary} />
+            <Ionicons name="chatbubble-outline" size={14} color={colors.textPrimary} />
             <Text style={styles.exploreMessageText}>Chat</Text>
           </AnimatedPressable>
         </View>
@@ -395,7 +390,8 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
 });
 
 export default function HomeScreen() {
-  const { isDark } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<NavT>();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
@@ -718,7 +714,7 @@ export default function HomeScreen() {
 
                 {story.totalFrameCount > 1 && (
                   <View style={styles.frameCountBadge}>
-                    <Ionicons name="layers" size={10} color={Colors.textInverse} />
+                    <Ionicons name="layers" size={10} color={colors.textInverse} />
                     <Text style={styles.frameCountBadgeText}>{story.totalFrameCount}</Text>
                   </View>
                 )}
@@ -754,8 +750,8 @@ export default function HomeScreen() {
           style={styles.newListingsBanner}
           contentStyle={styles.newListingsBannerContent}
           titleStyle={styles.newListingsBannerText}
-          icon={<Ionicons name="sparkles-outline" size={13} color={Colors.background} />}
-          trailingIcon={<Ionicons name="arrow-up" size={13} color={Colors.background} />}
+          icon={<Ionicons name="sparkles-outline" size={13} color={colors.background} />}
+          trailingIcon={<Ionicons name="arrow-up" size={13} color={colors.background} />}
           iconContainerStyle={styles.newListingsBannerIconWrap}
           trailingIconContainerStyle={styles.newListingsBannerIconWrap}
           hapticFeedback="selection"
@@ -821,10 +817,10 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
       <Reanimated.View style={[styles.floatingHeaderShell, headerHeightStyle, headerShadowStyle]}>
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.background }]} />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} />
 
         <View style={[styles.headerForeground, { paddingTop: insets.top + 2, paddingBottom: 8 }]}>
           <Reanimated.View style={[headerTitleStyle, styles.headerTitleWrap]}>
@@ -841,7 +837,7 @@ export default function HomeScreen() {
               activeOpacity={0.58}
               scaleValue={0.94}
             >
-              <Ionicons name="add" size={24} color={Colors.textPrimary} />
+              <Ionicons name="add" size={24} color={colors.textPrimary} />
             </AnimatedPressable>
             <AnimatedPressable
               style={styles.headerBtn}
@@ -852,7 +848,7 @@ export default function HomeScreen() {
               activeOpacity={0.58}
               scaleValue={0.94}
             >
-              <Ionicons name="search" size={22} color={Colors.textPrimary} />
+              <Ionicons name="search" size={22} color={colors.textPrimary} />
             </AnimatedPressable>
             <AnimatedPressable
               style={styles.headerBtn}
@@ -863,7 +859,7 @@ export default function HomeScreen() {
               activeOpacity={0.58}
               scaleValue={0.94}
             >
-              <Ionicons name="notifications-outline" size={22} color={Colors.textPrimary} />
+              <Ionicons name="notifications-outline" size={22} color={colors.textPrimary} />
               {notificationCount > 0 && (
                 <View style={styles.notificationBadge} pointerEvents="none">
                   <Text style={styles.notificationBadgeText}>
@@ -1012,7 +1008,7 @@ export default function HomeScreen() {
         ListFooterComponent={
           isLoadingMore ? (
             <View style={{ paddingVertical: Space.md, alignItems: 'center' }}>
-              <Text style={{ color: Colors.textMuted, fontSize: 13 }}>Loading more...</Text>
+              <Text style={{ color: colors.textMuted, fontSize: 13 }}>Loading more...</Text>
             </View>
           ) : null
         }
@@ -1073,7 +1069,7 @@ export default function HomeScreen() {
                     align="center"
                     style={styles.peekPrimaryBtn}
                     titleStyle={styles.peekPrimaryText}
-                    icon={<Ionicons name="arrow-forward" size={14} color={Colors.background} />}
+                    icon={<Ionicons name="arrow-forward" size={14} color={colors.background} />}
                     iconContainerStyle={styles.peekPrimaryIconWrap}
                     onPress={() => {
                       if (peekItem.routeId) {
@@ -1094,10 +1090,10 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   floatingHeaderShell: {
     position: 'absolute',
@@ -1107,7 +1103,7 @@ const styles = StyleSheet.create({
     zIndex: 20,
     overflow: 'hidden',
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.borderLight,
+    borderBottomColor: colors.borderSubtle,
   },
   headerForeground: {
     flex: 1,
@@ -1124,7 +1120,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.35,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     lineHeight: 26,
   },
   brandSubtitle: {
@@ -1132,7 +1128,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: Typography.family.regular,
     letterSpacing: 0.25,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   headerRight: {
     flexDirection: 'row',
@@ -1151,15 +1147,15 @@ const styles = StyleSheet.create({
     minWidth: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: Colors.danger,
+    backgroundColor: colors.danger,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
     borderWidth: 1.5,
-    borderColor: Colors.background,
+    borderColor: colors.background,
   },
   notificationBadgeText: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
     fontSize: 10,
     fontFamily: 'Inter_700Bold',
     lineHeight: 12,
@@ -1179,7 +1175,7 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
     gap: Space.lg,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   feedTab: {
     minWidth: 76,
@@ -1194,11 +1190,11 @@ const styles = StyleSheet.create({
   feedTabLabel: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   feedTabLabelActive: {
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   feedTabCount: {
     minWidth: 20,
@@ -1211,12 +1207,12 @@ const styles = StyleSheet.create({
     fontSize: Type.meta.size,
     lineHeight: 20,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
-    backgroundColor: Colors.surfaceAlt,
+    color: colors.textSecondary,
+    backgroundColor: colors.surfaceAlt,
   },
   feedTabCountActive: {
-    color: Colors.textInverse,
-    backgroundColor: Colors.textPrimary,
+    color: colors.textInverse,
+    backgroundColor: colors.textPrimary,
   },
   feedTabIndicator: {
     position: 'absolute',
@@ -1225,7 +1221,7 @@ const styles = StyleSheet.create({
     bottom: -1,
     height: 2,
     borderRadius: Radius.full,
-    backgroundColor: Colors.textPrimary,
+    backgroundColor: colors.textPrimary,
   },
   newListingsBannerWrap: {
     marginTop: 6,
@@ -1238,7 +1234,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 20,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     borderWidth: 0,
   },
   newListingsBannerContent: {
@@ -1253,7 +1249,7 @@ const styles = StyleSheet.create({
   newListingsBannerText: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    color: Colors.background,
+    color: colors.background,
     letterSpacing: 0.2,
   },
 
@@ -1267,13 +1263,13 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 17,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: -0.1,
   },
   sectionHint: {
     fontSize: 11,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     letterSpacing: 0.22,
   },
 
@@ -1320,7 +1316,7 @@ const styles = StyleSheet.create({
     borderRadius: 29,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   storyAvatarWrap: {
     width: 54,
@@ -1336,17 +1332,17 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     position: 'absolute',
     right: 1,
     top: 1,
     borderWidth: 1,
-    borderColor: Colors.background,
+    borderColor: colors.background,
   },
   storyName: {
     fontSize: 10,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     width: 66,
     textAlign: 'center',
   },
@@ -1354,7 +1350,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontSize: 9,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     width: 66,
     textAlign: 'center',
     textTransform: 'uppercase',
@@ -1374,8 +1370,8 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surfaceAlt,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
   },
   lookImageWrap: {
     width: '100%',
@@ -1390,8 +1386,8 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surfaceAlt,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
   },
   lookFeedImageWrap: {
     width: '100%',
@@ -1427,12 +1423,12 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   lookOwnerName: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
     fontSize: 11,
     fontFamily: Typography.family.semibold,
   },
   lookTitle: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
     fontSize: 21,
     fontFamily: Typography.family.extrabold,
     letterSpacing: -0.4,
@@ -1460,7 +1456,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.34)',
   },
   lookMetaText: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
     fontSize: 11,
     fontFamily: Typography.family.semibold,
   },
@@ -1480,7 +1476,7 @@ const styles = StyleSheet.create({
     marginBottom: Space.xs,
   },
   posterSectionTitle: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontSize: Type.subtitle.size,
     lineHeight: Type.subtitle.lineHeight,
     fontFamily: Typography.family.bold,
@@ -1505,14 +1501,14 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     overflow: 'hidden',
     position: 'relative',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   posterTileUnseen: {
     borderWidth: 2,
-    borderColor: Colors.brand,
+    borderColor: colors.brand,
   },
   posterTileRing: {
-    shadowColor: Colors.brand,
+    shadowColor: colors.brand,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.35,
     shadowRadius: 6,
@@ -1520,7 +1516,7 @@ const styles = StyleSheet.create({
   },
   posterTileSeen: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   posterImage: {
     width: '100%',
@@ -1543,7 +1539,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.08)',
   },
   posterTextArtworkCopy: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
     fontSize: Type.caption.size,
     lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.bold,
@@ -1563,7 +1559,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: 'hidden',
     borderWidth: 2,
-    borderColor: Colors.textInverse,
+    borderColor: colors.textInverse,
     shadowColor: '#000',
     shadowOpacity: 0.3,
     shadowRadius: 4,
@@ -1611,7 +1607,7 @@ const styles = StyleSheet.create({
     borderRadius: 7,
   },
   posterOwnerName: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
     fontSize: 8,
     fontFamily: Typography.family.medium,
     flex: 1,
@@ -1626,7 +1622,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   posterExpiryText: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
     fontSize: 9,
     fontFamily: Typography.family.bold,
   },
@@ -1640,7 +1636,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.44)',
   },
   posterCaption: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
     fontSize: 9,
     lineHeight: 12,
     fontFamily: Typography.family.medium,
@@ -1660,7 +1656,7 @@ const styles = StyleSheet.create({
   },
   posterCreatorName: {
     flex: 1,
-    color: Colors.textInverse,
+    color: colors.textInverse,
     fontSize: 9,
     lineHeight: 12,
     fontFamily: Typography.family.semibold,
@@ -1678,7 +1674,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   frameCountBadgeText: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
     fontSize: 9,
     fontFamily: Typography.family.bold,
   },
@@ -1686,13 +1682,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 6,
     left: 6,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     borderRadius: 8,
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
   unwatchedBadgeText: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
     fontSize: 9,
     fontFamily: Typography.family.bold,
   },
@@ -1700,13 +1696,13 @@ const styles = StyleSheet.create({
     width: 7,
     height: 7,
     borderRadius: 4,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
   },
   posterSeenDot: {
     width: 7,
     height: 7,
     borderRadius: 4,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
   },
 
   masonryGrid: {
@@ -1724,14 +1720,14 @@ const styles = StyleSheet.create({
     paddingBottom: GRID_GAP,
   },
   exploreItemBox: {
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     // Pinterest feel: no border, no shadow — image is the card
   },
   exploreMediaWrap: {
     position: 'relative',
     borderRadius: Radius.lg,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   exploreSharedMedia: {
     ...StyleSheet.absoluteFill,
@@ -1754,7 +1750,7 @@ const styles = StyleSheet.create({
     top: -76,
     right: -64,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     backgroundColor: 'rgba(255,255,255,0.28)',
   },
   listingMediaPlaceholderOrbSmall: {
@@ -1765,7 +1761,7 @@ const styles = StyleSheet.create({
     bottom: -44,
     left: -30,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   listingMediaPlaceholderIcon: {
     width: 40,
@@ -1774,8 +1770,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    backgroundColor: Colors.background,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
   },
   exploreDetails: {
     paddingTop: Space.sm,
@@ -1786,11 +1782,11 @@ const styles = StyleSheet.create({
     fontSize: Type.bodyEmphasis.size,
     lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: -0.2,
   },
   explorePrice: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontSize: Type.body.size,
     lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.bold,
@@ -1829,11 +1825,11 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   exploreSellerText: {
     flex: 1,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: 0.1,
@@ -1848,7 +1844,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   exploreMessageText: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontSize: 10,
     fontFamily: Typography.family.semibold,
   },
@@ -1891,13 +1887,13 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surfaceAlt,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
   },
   peekMediaWrap: {
     width: '100%',
     height: 340,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   peekMedia: {
     width: '100%',
@@ -1910,14 +1906,14 @@ const styles = StyleSheet.create({
   peekTitle: {
     fontSize: 19,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: -0.2,
   },
   peekSubtitle: {
     marginTop: 4,
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   peekActionsRow: {
     marginTop: 14,
@@ -1933,7 +1929,7 @@ const styles = StyleSheet.create({
   peekGhostText: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   peekPrimaryBtn: {
     flex: 1,
@@ -1950,6 +1946,6 @@ const styles = StyleSheet.create({
   peekPrimaryText: {
     fontSize: 13,
     fontFamily: Typography.family.bold,
-    color: Colors.background,
+    color: colors.background,
   },
 });

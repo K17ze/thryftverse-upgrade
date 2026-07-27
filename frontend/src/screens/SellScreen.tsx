@@ -13,7 +13,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 
-import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Space, Typography, DockConstants } from '../theme/designTokens';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -78,6 +78,48 @@ function resolvePublishedMedia(
 export default function SellScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
+  const { colors, isDark } = useAppTheme();
+
+  // Theme-aware color overrides for the static styles. The static
+  // StyleSheet contains only non-color properties; colors are applied
+  // via this themed proxy so the screen is fully dark-mode compatible.
+  const t = useMemo(() => ({
+    root: { backgroundColor: colors.background },
+    navHeader: { borderBottomColor: colors.border, backgroundColor: colors.background },
+    navTitle: { color: colors.textPrimary },
+    navDraftText: { color: colors.textMuted },
+    autofillCard: { backgroundColor: colors.surface, borderColor: `${colors.brand}20` },
+    autofillTitle: { color: colors.brand },
+    autofillDesc: { color: colors.textMuted },
+    autofillChip: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
+    autofillChipLabel: { color: colors.textMuted },
+    autofillChipValue: { color: colors.textPrimary },
+    autofillApplyBtn: { backgroundColor: `${colors.brand}10` },
+    autofillApplyText: { color: colors.brand },
+    sectionHeading: { color: colors.textMuted },
+    fieldLabel: { color: colors.textSecondary },
+    fieldInput: { color: colors.textPrimary },
+    fieldHelper: { color: colors.textMuted },
+    fieldError: { color: colors.danger },
+    hairline: { backgroundColor: colors.border },
+    pickerValue: { color: colors.textPrimary },
+    pickerPlaceholder: { color: colors.textMuted },
+    currencySymbol: { color: colors.textMuted },
+    priceInput: { color: colors.textPrimary },
+    discountPreview: { color: colors.danger },
+    soldCompsText: { color: colors.textMuted },
+    soldCompsAction: { color: colors.brand },
+    togglePill: { backgroundColor: colors.surface, borderColor: colors.border },
+    togglePillActive: { backgroundColor: colors.brand, borderColor: colors.brand },
+    toggleText: { color: colors.textPrimary },
+    toggleTextActive: { color: colors.textInverse },
+    tagChip: { backgroundColor: colors.surface, borderColor: colors.border },
+    tagText: { color: colors.brand },
+    tagInput: { color: colors.textPrimary },
+    authThumb: { backgroundColor: colors.surfaceAlt },
+    authAddBtn: { borderColor: colors.border, backgroundColor: colors.surface },
+    inlineErrorText: { color: colors.danger },
+  }), [colors]);
 
   const sellDraft = useStore((s) => s.sellDraft);
   const updateSellDraft = useStore((s) => s.updateSellDraft);
@@ -135,7 +177,7 @@ export default function SellScreen() {
   const autofillSuggestion = useListingAutofill(mediaDraftItems);
   const [autofillDismissed, setAutofillDismissed] = useState(false);
 
-  // Reset dismiss when photos change (new photo → new suggestions)
+  // Reset dismiss when photos change (new photo -> new suggestions)
   useEffect(() => {
     if (mediaDraftItems.length === 0) {
       setAutofillDismissed(false);
@@ -150,11 +192,11 @@ export default function SellScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, [autofillSuggestion, title, brand, category]);
 
-  // Sold comparables for pricing guidance — derived from real backend data
+  // Sold comparables for pricing guidance -- derived from real backend data
   const { listings: backendListings } = useBackendData();
   const soldComps = useSoldComps(backendListings, category || undefined, brand || undefined);
 
-  /* ── draft sync on mount ── */
+  /* -- draft sync on mount -- */
   useEffect(() => {
     if (sellDraft.mediaDraftItems && sellDraft.mediaDraftItems.length > 0) {
       setMediaDraftItems(sellDraft.mediaDraftItems);
@@ -194,7 +236,7 @@ export default function SellScreen() {
     if (sellDraft.authPhotos) setAuthPhotos(sellDraft.authPhotos);
   }, []);
 
-  /* ── persist draft on change ── */
+  /* -- persist draft on change -- */
   useEffect(() => {
     updateSellDraft({
       photos,
@@ -222,7 +264,7 @@ export default function SellScreen() {
     });
   }, [photos, mediaDraftItems, title, desc, price, originalPrice, brand, size, condition, category, tags, listingMode, shippingMethod, shippingPayer, startingBid, reservePrice, auctionDurationHours, coOwnEnabled, shareCountInput, sharePriceInput, offeringWindowHours, authPhotos, updateSellDraft]);
 
-  /* ── co-own bidirectional math ── */
+  /* -- co-own bidirectional math -- */
   useEffect(() => {
     if (listingMode !== 'co_own') return;
     const listingPrice = Number(sanitizeDecimalInput(price));
@@ -244,7 +286,7 @@ export default function SellScreen() {
     setCoOwnEnabled(listingMode === 'co_own');
   }, [listingMode]);
 
-  /* ── validation computed ── */
+  /* -- validation computed -- */
   const hasBasePhotos = photos.length > 0;
   const hasRequiredDetails = Boolean(title.trim() && category && size && condition);
   const hasDescription = desc.trim().length >= 10;
@@ -275,7 +317,7 @@ export default function SellScreen() {
     }
   }, [publishReady, errorMsg, errors]);
 
-  /* ── tag handling ── */
+  /* -- tag handling -- */
   const handleTagSubmit = useCallback(() => {
     const raw = tagInput.trim().toLowerCase();
     if (!raw) return;
@@ -286,11 +328,11 @@ export default function SellScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, [tagInput, tags]);
 
-  const removeTag = useCallback((t: string) => {
-    setTags((prev) => prev.filter((x) => x !== t));
+  const removeTag = useCallback((tag: string) => {
+    setTags((prev) => prev.filter((x) => x !== tag));
   }, []);
 
-  /* ── photo handling ── */
+  /* -- photo handling -- */
   const appendPhotoUri = useCallback((uri: string) => {
     setPhotos((prev) => {
       const next = [...prev, uri].slice(0, 10);
@@ -428,7 +470,7 @@ export default function SellScreen() {
     setShareCountInput(String(Math.min(20, parsed)));
   }, []);
 
-  /* ── publish ── */
+  /* -- publish -- */
   const handlePublish = useCallback(async () => {
     const trimmedTitle = title.trim();
     const trimmedDescription = desc.trim();
@@ -661,14 +703,14 @@ export default function SellScreen() {
       const hasListing = !!publishedListingIdRef.current;
       const hasMedia = mediaDraftItems.some((m) => m.status === 'uploaded');
       setPublicationStage('failed_recoverable');
-      setErrorMsg(hasListing ? `${msg} — your listing was created. Tap Publish to retry attaching media.` : hasMedia ? `${msg} — some media uploaded. Tap Publish to retry.` : msg);
+      setErrorMsg(hasListing ? `${msg} -- your listing was created. Tap Publish to retry attaching media.` : hasMedia ? `${msg} -- some media uploaded. Tap Publish to retry.` : msg);
       haptics.error();
     } finally {
       setIsPublishing(false);
     }
   }, [isPublishing, listingMode, photos, mediaDraftItems, title, desc, price, startingBid, category, size, condition, shareCountInput, sharePriceInput, offeringWindowHours, authPhotos, clearSellDraft, navigation, currentUser, brand, originalPrice, shippingMethod, shippingPayer]);
 
-  /* ── picker helpers ── */
+  /* -- picker helpers -- */
   const getPickerOptions = useCallback(() => {
     switch (pickerMode) {
       case 'Category':
@@ -703,7 +745,7 @@ export default function SellScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, [pickerMode, updateSellDraft]);
 
-  /* ── computed values ── */
+  /* -- computed values -- */
   const hasDiscount = useMemo(() => {
     const orig = Number(originalPrice);
     const curr = Number(price);
@@ -719,7 +761,7 @@ export default function SellScreen() {
 
   const publishDisabled = isPublishing || (!publishReady && !isPublishing);
 
-  /* ── preview handler ── */
+  /* -- preview handler -- */
   const handlePreview = useCallback(() => {
     haptics.press();
     navigation.navigate('ListingPreview', {
@@ -741,20 +783,20 @@ export default function SellScreen() {
   }, [title, price, originalPrice, brand, condition, category, size, desc, photos, shippingMethod, shippingPayer, navigation]);
 
   return (
-    <SafeAreaView style={styles.root} edges={['top']}>
-        {/* ── 1. COMPACT NAVIGATION HEADER ── */}
-        <View style={[styles.navHeader, { paddingTop: 0 }]}>
+    <SafeAreaView style={[styles.root, t.root]} edges={['top']}>
+        {/* -- 1. COMPACT NAVIGATION HEADER -- */}
+        <View style={[styles.navHeader, t.navHeader, { paddingTop: 0 }]}>
           <Pressable
             style={styles.navCloseBtn}
             onPress={() => navigation.goBack()}
             accessibilityRole="button"
             accessibilityLabel="Close and go back"
           >
-            <Ionicons name="close" size={24} color={Colors.textPrimary} />
+            <Ionicons name="close" size={24} color={colors.textPrimary} />
           </Pressable>
-          <Text style={styles.navTitle}>Create listing</Text>
+          <Text style={[styles.navTitle, t.navTitle]}>Create listing</Text>
           <View style={styles.navDraftStatus}>
-            <Text style={styles.navDraftText}>Draft saved</Text>
+            <Text style={[styles.navDraftText, t.navDraftText]}>Draft saved</Text>
           </View>
         </View>
 
@@ -765,7 +807,7 @@ export default function SellScreen() {
           keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
-          {/* ── 2. LARGE LISTING MEDIA STUDIO ── */}
+          {/* -- 2. LARGE LISTING MEDIA STUDIO -- */}
           <ListingMediaStudio
             items={mediaDraftItems}
             queueItems={queueState.items}
@@ -778,57 +820,57 @@ export default function SellScreen() {
             onRetryItem={handleRetryItem}
           />
 
-          {/* ── 2b. AI AUTOFILL SUGGESTIONS ── */}
+          {/* -- 2b. AI AUTOFILL SUGGESTIONS -- */}
           {autofillSuggestion.hasSuggestions && !autofillDismissed && (
-            <View style={styles.autofillCard}>
+            <View style={[styles.autofillCard, t.autofillCard]}>
               <View style={styles.autofillHeader}>
-                <Ionicons name="sparkles" size={16} color={Colors.brand} />
-                <Text style={styles.autofillTitle}>Suggested fields</Text>
+                <Ionicons name="sparkles" size={16} color={colors.brand} />
+                <Text style={[styles.autofillTitle, t.autofillTitle]}>Suggested fields</Text>
                 <Pressable
                   hitSlop={8}
                   onPress={() => setAutofillDismissed(true)}
                   accessibilityLabel="Dismiss suggestions"
                   accessibilityRole="button"
                 >
-                  <Ionicons name="close" size={16} color={Colors.textMuted} />
+                  <Ionicons name="close" size={16} color={colors.textMuted} />
                 </Pressable>
               </View>
-              <Text style={styles.autofillDesc}>
+              <Text style={[styles.autofillDesc, t.autofillDesc]}>
                 Based on your photo filename. Tap to fill empty fields.
               </Text>
               <View style={styles.autofillChips}>
                 {autofillSuggestion.title && (
-                  <View style={styles.autofillChip}>
-                    <Text style={styles.autofillChipLabel}>Title</Text>
-                    <Text style={styles.autofillChipValue} numberOfLines={1}>{autofillSuggestion.title}</Text>
+                  <View style={[styles.autofillChip, t.autofillChip]}>
+                    <Text style={[styles.autofillChipLabel, t.autofillChipLabel]}>Title</Text>
+                    <Text style={[styles.autofillChipValue, t.autofillChipValue]} numberOfLines={1}>{autofillSuggestion.title}</Text>
                   </View>
                 )}
                 {autofillSuggestion.brand && (
-                  <View style={styles.autofillChip}>
-                    <Text style={styles.autofillChipLabel}>Brand</Text>
-                    <Text style={styles.autofillChipValue} numberOfLines={1}>{autofillSuggestion.brand}</Text>
+                  <View style={[styles.autofillChip, t.autofillChip]}>
+                    <Text style={[styles.autofillChipLabel, t.autofillChipLabel]}>Brand</Text>
+                    <Text style={[styles.autofillChipValue, t.autofillChipValue]} numberOfLines={1}>{autofillSuggestion.brand}</Text>
                   </View>
                 )}
                 {autofillSuggestion.category && (
-                  <View style={styles.autofillChip}>
-                    <Text style={styles.autofillChipLabel}>Category</Text>
-                    <Text style={styles.autofillChipValue} numberOfLines={1}>{autofillSuggestion.category}</Text>
+                  <View style={[styles.autofillChip, t.autofillChip]}>
+                    <Text style={[styles.autofillChipLabel, t.autofillChipLabel]}>Category</Text>
+                    <Text style={[styles.autofillChipValue, t.autofillChipValue]} numberOfLines={1}>{autofillSuggestion.category}</Text>
                   </View>
                 )}
               </View>
               <Pressable
-                style={styles.autofillApplyBtn}
+                style={[styles.autofillApplyBtn, t.autofillApplyBtn]}
                 onPress={handleApplyAutofill}
                 accessibilityLabel="Apply suggested fields"
                 accessibilityRole="button"
               >
-                <Ionicons name="checkmark-circle" size={16} color={Colors.brand} />
-                <Text style={styles.autofillApplyText}>Apply to empty fields</Text>
+                <Ionicons name="checkmark-circle" size={16} color={colors.brand} />
+                <Text style={[styles.autofillApplyText, t.autofillApplyText]}>Apply to empty fields</Text>
               </Pressable>
             </View>
           )}
 
-          {/* ── 3. LISTING MODE SELECTOR ── */}
+          {/* -- 3. LISTING MODE SELECTOR -- */}
           <View style={styles.sectionSpacing}>
             <ListingModeSelector
               mode={listingMode}
@@ -836,7 +878,7 @@ export default function SellScreen() {
             />
           </View>
 
-          {/* ── 3b. LISTING QUALITY METER ── */}
+          {/* -- 3b. LISTING QUALITY METER -- */}
           <View style={styles.sectionSpacing}>
             <ListingQualityMeter
               result={useMemo(() => calculateListingQuality({
@@ -858,22 +900,22 @@ export default function SellScreen() {
             />
           </View>
 
-          {/* ── 4. PRODUCT DETAILS ── */}
+          {/* -- 4. PRODUCT DETAILS -- */}
           <View style={styles.sectionGroup}>
-            <Text style={styles.sectionHeading}>Details</Text>
+            <Text style={[styles.sectionHeading, t.sectionHeading]}>Details</Text>
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Title</Text>
+              <Text style={[styles.fieldLabel, t.fieldLabel]}>Title</Text>
               <TextInput
-                style={styles.fieldInput}
+                style={[styles.fieldInput, t.fieldInput]}
                 value={title}
                 onChangeText={(t) => { setTitle(t); if (errors.title) setErrors((p) => ({ ...p, title: '' })); }}
                 placeholder="e.g. Vintage Levi's 501 Denim Jacket"
-                placeholderTextColor={Colors.textMuted}
+                placeholderTextColor={colors.textMuted}
                 returnKeyType="next"
               />
-              {errors.title ? <Text style={styles.fieldError}>{errors.title}</Text> : null}
-              <View style={styles.hairline} />
+              {errors.title ? <Text style={[styles.fieldError, t.fieldError]}>{errors.title}</Text> : null}
+              <View style={[styles.hairline, t.hairline]} />
             </View>
 
             <Pressable
@@ -883,15 +925,15 @@ export default function SellScreen() {
               accessibilityLabel="Select category"
             >
               <View style={styles.pickerRowInner}>
-                <Text style={styles.fieldLabel}>Category</Text>
-                <Text style={[styles.pickerValue, !category && styles.pickerPlaceholder]}>
+                <Text style={[styles.fieldLabel, t.fieldLabel]}>Category</Text>
+                <Text style={[styles.pickerValue, t.pickerValue, !category && styles.pickerPlaceholder, !category && t.pickerPlaceholder]}>
                   {category || 'Select category'}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
             </Pressable>
-            {errors.category ? <Text style={styles.fieldError}>{errors.category}</Text> : null}
-            <View style={styles.hairline} />
+            {errors.category ? <Text style={[styles.fieldError, t.fieldError]}>{errors.category}</Text> : null}
+            <View style={[styles.hairline, t.hairline]} />
 
             <Pressable
               style={styles.pickerRow}
@@ -900,14 +942,14 @@ export default function SellScreen() {
               accessibilityLabel="Select brand"
             >
               <View style={styles.pickerRowInner}>
-                <Text style={styles.fieldLabel}>Brand</Text>
-                <Text style={[styles.pickerValue, !brand && styles.pickerPlaceholder]}>
+                <Text style={[styles.fieldLabel, t.fieldLabel]}>Brand</Text>
+                <Text style={[styles.pickerValue, t.pickerValue, !brand && styles.pickerPlaceholder, !brand && t.pickerPlaceholder]}>
                   {brand || 'Select brand'}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
             </Pressable>
-            <View style={styles.hairline} />
+            <View style={[styles.hairline, t.hairline]} />
 
             <Pressable
               style={styles.pickerRow}
@@ -916,15 +958,15 @@ export default function SellScreen() {
               accessibilityLabel="Select size"
             >
               <View style={styles.pickerRowInner}>
-                <Text style={styles.fieldLabel}>Size</Text>
-                <Text style={[styles.pickerValue, !size && styles.pickerPlaceholder]}>
+                <Text style={[styles.fieldLabel, t.fieldLabel]}>Size</Text>
+                <Text style={[styles.pickerValue, t.pickerValue, !size && styles.pickerPlaceholder, !size && t.pickerPlaceholder]}>
                   {size || 'Select size'}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
             </Pressable>
-            {errors.size ? <Text style={styles.fieldError}>{errors.size}</Text> : null}
-            <View style={styles.hairline} />
+            {errors.size ? <Text style={[styles.fieldError, t.fieldError]}>{errors.size}</Text> : null}
+            <View style={[styles.hairline, t.hairline]} />
 
             <Pressable
               style={styles.pickerRow}
@@ -933,40 +975,40 @@ export default function SellScreen() {
               accessibilityLabel="Select condition"
             >
               <View style={styles.pickerRowInner}>
-                <Text style={styles.fieldLabel}>Condition</Text>
-                <Text style={[styles.pickerValue, !condition && styles.pickerPlaceholder]}>
+                <Text style={[styles.fieldLabel, t.fieldLabel]}>Condition</Text>
+                <Text style={[styles.pickerValue, t.pickerValue, !condition && styles.pickerPlaceholder, !condition && t.pickerPlaceholder]}>
                   {condition || 'Select condition'}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
             </Pressable>
-            {errors.condition ? <Text style={styles.fieldError}>{errors.condition}</Text> : null}
-            <View style={styles.hairline} />
+            {errors.condition ? <Text style={[styles.fieldError, t.fieldError]}>{errors.condition}</Text> : null}
+            <View style={[styles.hairline, t.hairline]} />
           </View>
 
-          {/* ── 5. MODE-SPECIFIC PRICING ── */}
+          {/* -- 5. MODE-SPECIFIC PRICING -- */}
           <View style={styles.sectionGroup}>
-            <Text style={styles.sectionHeading}>Pricing</Text>
+            <Text style={[styles.sectionHeading, t.sectionHeading]}>Pricing</Text>
 
             {listingMode === 'sell_now' && (
               <>
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Price</Text>
+                  <Text style={[styles.fieldLabel, t.fieldLabel]}>Price</Text>
                   <View style={styles.priceInputRow}>
-                    <Text style={styles.currencySymbol}>{currencySymbol}</Text>
+                    <Text style={[styles.currencySymbol, t.currencySymbol]}>{currencySymbol}</Text>
                     <TextInput
-                      style={styles.priceInput}
+                      style={[styles.priceInput, t.priceInput]}
                       placeholder="0"
-                      placeholderTextColor={Colors.textMuted}
+                      placeholderTextColor={colors.textMuted}
                       keyboardType="decimal-pad"
                       value={price}
                       onChangeText={(t) => { handlePriceChange(t); setErrors((p) => ({ ...p, price: '' })); }}
                       maxLength={8}
                     />
                   </View>
-                  {errors.price ? <Text style={styles.fieldError}>{errors.price}</Text> : null}
+                  {errors.price ? <Text style={[styles.fieldError, t.fieldError]}>{errors.price}</Text> : null}
 
-                  {/* Sold comparables hint — truthful pricing guidance from real data */}
+                  {/* Sold comparables hint -- truthful pricing guidance from real data */}
                   {soldComps.hasComps && soldComps.minPrice != null && soldComps.maxPrice != null && (
                     <Pressable
                       style={styles.soldCompsHint}
@@ -979,28 +1021,28 @@ export default function SellScreen() {
                       accessibilityRole="button"
                       accessibilityLabel={`Similar items sold for ${currencySymbol}${soldComps.minPrice.toFixed(0)} to ${currencySymbol}${soldComps.maxPrice.toFixed(0)}. Tap to set median price ${currencySymbol}${soldComps.medianPrice?.toFixed(0) ?? ''}.`}
                     >
-                      <Ionicons name="pricetag-outline" size={13} color={Colors.textMuted} />
-                      <Text style={styles.soldCompsText}>
-                        Similar sold: {currencySymbol}{soldComps.minPrice.toFixed(0)}–{currencySymbol}{soldComps.maxPrice.toFixed(0)}
+                      <Ionicons name="pricetag-outline" size={13} color={colors.textMuted} />
+                      <Text style={[styles.soldCompsText, t.soldCompsText]}>
+                        Similar sold: {currencySymbol}{soldComps.minPrice.toFixed(0)}-"{currencySymbol}{soldComps.maxPrice.toFixed(0)}
                         {' '}({soldComps.sampleSize} sold)
                       </Text>
                       {!price && soldComps.medianPrice != null && (
-                        <Text style={styles.soldCompsAction}>Tap for median</Text>
+                        <Text style={[styles.soldCompsAction, t.soldCompsAction]}>Tap for median</Text>
                       )}
                     </Pressable>
                   )}
 
-                  <View style={styles.hairline} />
+                  <View style={[styles.hairline, t.hairline]} />
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Original price (optional)</Text>
+                  <Text style={[styles.fieldLabel, t.fieldLabel]}>Original price (optional)</Text>
                   <View style={styles.priceInputRow}>
-                    <Text style={styles.currencySymbol}>{currencySymbol}</Text>
+                    <Text style={[styles.currencySymbol, t.currencySymbol]}>{currencySymbol}</Text>
                     <TextInput
-                      style={styles.priceInput}
+                      style={[styles.priceInput, t.priceInput]}
                       placeholder="0"
-                      placeholderTextColor={Colors.textMuted}
+                      placeholderTextColor={colors.textMuted}
                       keyboardType="decimal-pad"
                       value={originalPrice}
                       onChangeText={(t) => setOriginalPrice(sanitizeDecimalInput(t))}
@@ -1008,9 +1050,9 @@ export default function SellScreen() {
                     />
                   </View>
                   {hasDiscount && (
-                    <Text style={styles.discountPreview}>−{discountPercent}% off original</Text>
+                    <Text style={[styles.discountPreview, t.discountPreview]}>-{discountPercent}% off original</Text>
                   )}
-                  <View style={styles.hairline} />
+                  <View style={[styles.hairline, t.hairline]} />
                 </View>
               </>
             )}
@@ -1018,61 +1060,61 @@ export default function SellScreen() {
             {listingMode === 'auction' && (
               <>
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Starting bid</Text>
+                  <Text style={[styles.fieldLabel, t.fieldLabel]}>Starting bid</Text>
                   <View style={styles.priceInputRow}>
-                    <Text style={styles.currencySymbol}>{currencySymbol}</Text>
+                    <Text style={[styles.currencySymbol, t.currencySymbol]}>{currencySymbol}</Text>
                     <TextInput
-                      style={styles.priceInput}
+                      style={[styles.priceInput, t.priceInput]}
                       placeholder="0"
-                      placeholderTextColor={Colors.textMuted}
+                      placeholderTextColor={colors.textMuted}
                       keyboardType="decimal-pad"
                       value={startingBid}
                       onChangeText={(t) => { setStartingBid(sanitizeDecimalInput(t)); setErrors((p) => ({ ...p, startingBid: '' })); }}
                       maxLength={8}
                     />
                   </View>
-                  {errors.startingBid ? <Text style={styles.fieldError}>{errors.startingBid}</Text> : null}
-                  <View style={styles.hairline} />
+                  {errors.startingBid ? <Text style={[styles.fieldError, t.fieldError]}>{errors.startingBid}</Text> : null}
+                  <View style={[styles.hairline, t.hairline]} />
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Reserve price (optional)</Text>
+                  <Text style={[styles.fieldLabel, t.fieldLabel]}>Reserve price (optional)</Text>
                   <View style={styles.priceInputRow}>
-                    <Text style={styles.currencySymbol}>{currencySymbol}</Text>
+                    <Text style={[styles.currencySymbol, t.currencySymbol]}>{currencySymbol}</Text>
                     <TextInput
-                      style={styles.priceInput}
+                      style={[styles.priceInput, t.priceInput]}
                       placeholder="0"
-                      placeholderTextColor={Colors.textMuted}
+                      placeholderTextColor={colors.textMuted}
                       keyboardType="decimal-pad"
                       value={reservePrice}
                       onChangeText={(t) => setReservePrice(sanitizeDecimalInput(t))}
                       maxLength={8}
                     />
                   </View>
-                  <View style={styles.hairline} />
+                  <View style={[styles.hairline, t.hairline]} />
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Duration</Text>
+                  <Text style={[styles.fieldLabel, t.fieldLabel]}>Duration</Text>
                   <View style={styles.toggleRow}>
                     {AUCTION_DURATIONS.map((h) => {
                       const active = auctionDurationHours === h;
                       return (
                         <Pressable
                           key={h}
-                          style={[styles.togglePill, active && styles.togglePillActive]}
+                          style={[styles.togglePill, t.togglePill, active && styles.togglePillActive, active && t.togglePillActive]}
                           onPress={() => setAuctionDurationHours(h)}
                           accessibilityRole="button"
                           accessibilityLabel={`Set duration to ${h} hours`}
                         >
-                          <Text style={[styles.toggleText, active && styles.toggleTextActive]}>
+                          <Text style={[styles.toggleText, t.toggleText, active && styles.toggleTextActive, active && t.toggleTextActive]}>
                             {h < 72 ? `${h}h` : `${h / 24}d`}
                           </Text>
                         </Pressable>
                       );
                     })}
                   </View>
-                  <View style={styles.hairline} />
+                  <View style={[styles.hairline, t.hairline]} />
                 </View>
               </>
             )}
@@ -1080,120 +1122,120 @@ export default function SellScreen() {
             {listingMode === 'co_own' && (
               <>
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Total valuation</Text>
+                  <Text style={[styles.fieldLabel, t.fieldLabel]}>Total valuation</Text>
                   <View style={styles.priceInputRow}>
-                    <Text style={styles.currencySymbol}>{currencySymbol}</Text>
+                    <Text style={[styles.currencySymbol, t.currencySymbol]}>{currencySymbol}</Text>
                     <TextInput
-                      style={styles.priceInput}
+                      style={[styles.priceInput, t.priceInput]}
                       placeholder="0"
-                      placeholderTextColor={Colors.textMuted}
+                      placeholderTextColor={colors.textMuted}
                       keyboardType="decimal-pad"
                       value={price}
                       onChangeText={(t) => { handlePriceChange(t); setErrors((p) => ({ ...p, price: '' })); }}
                       maxLength={8}
                     />
                   </View>
-                  {errors.price ? <Text style={styles.fieldError}>{errors.price}</Text> : null}
-                  <View style={styles.hairline} />
+                  {errors.price ? <Text style={[styles.fieldError, t.fieldError]}>{errors.price}</Text> : null}
+                  <View style={[styles.hairline, t.hairline]} />
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Share count</Text>
+                  <Text style={[styles.fieldLabel, t.fieldLabel]}>Share count</Text>
                   <TextInput
-                    style={styles.fieldInput}
+                    style={[styles.fieldInput, t.fieldInput]}
                     placeholder="20"
-                    placeholderTextColor={Colors.textMuted}
+                    placeholderTextColor={colors.textMuted}
                     keyboardType="number-pad"
                     value={shareCountInput}
                     onChangeText={(t) => { handleShareCountChange(t); setErrors((p) => ({ ...p, shareCount: '' })); }}
                   />
-                  <Text style={styles.fieldHelper}>Maximum 20 units per co-own</Text>
-                  {errors.shareCount ? <Text style={styles.fieldError}>{errors.shareCount}</Text> : null}
-                  <View style={styles.hairline} />
+                  <Text style={[styles.fieldHelper, t.fieldHelper]}>Maximum 20 units per co-own</Text>
+                  {errors.shareCount ? <Text style={[styles.fieldError, t.fieldError]}>{errors.shareCount}</Text> : null}
+                  <View style={[styles.hairline, t.hairline]} />
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Share price ({currency.currencyCode})</Text>
+                  <Text style={[styles.fieldLabel, t.fieldLabel]}>Share price ({currency.currencyCode})</Text>
                   <View style={styles.priceInputRow}>
-                    <Text style={styles.currencySymbol}>{currencySymbol}</Text>
+                    <Text style={[styles.currencySymbol, t.currencySymbol]}>{currencySymbol}</Text>
                     <TextInput
-                      style={styles.priceInput}
+                      style={[styles.priceInput, t.priceInput]}
                       placeholder="0.00"
-                      placeholderTextColor={Colors.textMuted}
+                      placeholderTextColor={colors.textMuted}
                       keyboardType="decimal-pad"
                       value={sharePriceInput}
                       onChangeText={(t) => { setSharePriceInput(sanitizeDecimalInput(t)); setErrors((p) => ({ ...p, sharePrice: '' })); }}
                       maxLength={8}
                     />
                   </View>
-                  {errors.sharePrice ? <Text style={styles.fieldError}>{errors.sharePrice}</Text> : null}
+                  {errors.sharePrice ? <Text style={[styles.fieldError, t.fieldError]}>{errors.sharePrice}</Text> : null}
                   {Number(price) > 0 && Number(shareCountInput) > 0 && (
-                    <Text style={styles.fieldHelper}>
+                    <Text style={[styles.fieldHelper, t.fieldHelper]}>
                       {currencySymbol}{(Number(price) / Number(shareCountInput)).toFixed(2)} per share
                     </Text>
                   )}
-                  <View style={styles.hairline} />
+                  <View style={[styles.hairline, t.hairline]} />
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Offering window</Text>
+                  <Text style={[styles.fieldLabel, t.fieldLabel]}>Offering window</Text>
                   <View style={styles.toggleRow}>
                     {[24, 48, 72, 168].map((h) => {
                       const active = offeringWindowHours === h;
                       return (
                         <Pressable
                           key={h}
-                          style={[styles.togglePill, active && styles.togglePillActive]}
+                          style={[styles.togglePill, t.togglePill, active && styles.togglePillActive, active && t.togglePillActive]}
                           onPress={() => setOfferingWindowHours(h)}
                           accessibilityRole="button"
                           accessibilityLabel={`Set offering window to ${h} hours`}
                         >
-                          <Text style={[styles.toggleText, active && styles.toggleTextActive]}>
+                          <Text style={[styles.toggleText, t.toggleText, active && styles.toggleTextActive, active && t.toggleTextActive]}>
                             {h < 72 ? `${h}h` : `${h / 24}d`}
                           </Text>
                         </Pressable>
                       );
                     })}
                   </View>
-                  <View style={styles.hairline} />
+                  <View style={[styles.hairline, t.hairline]} />
                 </View>
               </>
             )}
           </View>
 
-          {/* ── 6. DESCRIPTION AND TAGS ── */}
+          {/* -- 6. DESCRIPTION AND TAGS -- */}
           <View style={styles.sectionGroup}>
-            <Text style={styles.sectionHeading}>Description</Text>
+            <Text style={[styles.sectionHeading, t.sectionHeading]}>Description</Text>
 
             <View style={styles.fieldGroup}>
               <TextInput
-                style={[styles.fieldInput, styles.fieldInputMultiline]}
+                style={[styles.fieldInput, t.fieldInput, styles.fieldInputMultiline]}
                 value={desc}
                 onChangeText={(t) => { setDesc(t); setErrors((p) => ({ ...p, description: '' })); }}
-                placeholder="Describe the fit, fabric, flaws, and why you love it…"
-                placeholderTextColor={Colors.textMuted}
+                placeholder="Describe the fit, fabric, flaws, and why you love it..."
+                placeholderTextColor={colors.textMuted}
                 multiline
                 textAlignVertical="top"
               />
-              <Text style={styles.fieldHelper}>{desc.length} characters</Text>
-              {errors.description ? <Text style={styles.fieldError}>{errors.description}</Text> : null}
-              <View style={styles.hairline} />
+              <Text style={[styles.fieldHelper, t.fieldHelper]}>{desc.length} characters</Text>
+              {errors.description ? <Text style={[styles.fieldError, t.fieldError]}>{errors.description}</Text> : null}
+              <View style={[styles.hairline, t.hairline]} />
             </View>
 
-            <Text style={styles.fieldLabel}>Tags</Text>
+            <Text style={[styles.fieldLabel, t.fieldLabel]}>Tags</Text>
             <View style={styles.tagWrap}>
-              {tags.map((t) => (
-                <View key={t} style={styles.tagChip}>
-                  <Text style={styles.tagText}>#{t}</Text>
-                  <Pressable onPress={() => removeTag(t)} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Remove tag ${t}`}>
-                    <Ionicons name="close" size={12} color={Colors.textMuted} />
+              {tags.map((tag) => (
+                <View key={tag} style={[styles.tagChip, t.tagChip]}>
+                  <Text style={[styles.tagText, t.tagText]}>#{tag}</Text>
+                  <Pressable onPress={() => removeTag(tag)} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Remove tag ${tag}`}>
+                    <Ionicons name="close" size={12} color={colors.textMuted} />
                   </Pressable>
                 </View>
               ))}
               <TextInput
-                style={styles.tagInput}
-                placeholder={tags.length === 0 ? 'vintage, denim, oversized…' : ''}
-                placeholderTextColor={Colors.textMuted}
+                style={[styles.tagInput, t.tagInput]}
+                placeholder={tags.length === 0 ? 'vintage, denim, oversized...' : ''}
+                placeholderTextColor={colors.textMuted}
                 value={tagInput}
                 onChangeText={setTagInput}
                 onSubmitEditing={handleTagSubmit}
@@ -1201,52 +1243,52 @@ export default function SellScreen() {
                 returnKeyType="done"
               />
             </View>
-            <Text style={styles.fieldHelper}>Press space or comma to add. Up to 8 tags.</Text>
+            <Text style={[styles.fieldHelper, t.fieldHelper]}>Press space or comma to add. Up to 8 tags.</Text>
           </View>
 
-          {/* ── 7. SHIPPING ── */}
+          {/* -- 7. SHIPPING -- */}
           <View style={styles.sectionGroup}>
-            <Text style={styles.sectionHeading}>Shipping</Text>
+            <Text style={[styles.sectionHeading, t.sectionHeading]}>Shipping</Text>
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Shipping method</Text>
+              <Text style={[styles.fieldLabel, t.fieldLabel]}>Shipping method</Text>
               <View style={styles.toggleRow}>
                 {(['standard', 'express'] as const).map((m) => {
                   const active = shippingMethod === m;
                   return (
                     <Pressable
                       key={m}
-                      style={[styles.togglePill, active && styles.togglePillActive]}
+                      style={[styles.togglePill, t.togglePill, active && styles.togglePillActive, active && t.togglePillActive]}
                       onPress={() => { setShippingMethod(m); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
                       accessibilityRole="button"
                       accessibilityLabel={`Set shipping method to ${m}`}
                     >
-                      <Ionicons name={m === 'standard' ? 'cube-outline' : 'rocket-outline'} size={14} color={active ? Colors.textInverse : Colors.textMuted} style={{ marginRight: 6 }} />
-                      <Text style={[styles.toggleText, active && styles.toggleTextActive]}>
+                      <Ionicons name={m === 'standard' ? 'cube-outline' : 'rocket-outline'} size={14} color={active ? colors.textInverse : colors.textMuted} style={{ marginRight: 6 }} />
+                      <Text style={[styles.toggleText, t.toggleText, active && styles.toggleTextActive, active && t.toggleTextActive]}>
                         {m === 'standard' ? 'Standard' : 'Express'}
                       </Text>
                     </Pressable>
                   );
                 })}
               </View>
-              <View style={styles.hairline} />
+              <View style={[styles.hairline, t.hairline]} />
             </View>
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Who pays</Text>
+              <Text style={[styles.fieldLabel, t.fieldLabel]}>Who pays</Text>
               <View style={styles.toggleRow}>
                 {(['buyer', 'seller'] as const).map((p) => {
                   const active = shippingPayer === p;
                   return (
                     <Pressable
                       key={p}
-                      style={[styles.togglePill, active && styles.togglePillActive]}
+                      style={[styles.togglePill, t.togglePill, active && styles.togglePillActive, active && t.togglePillActive]}
                       onPress={() => { setShippingPayer(p); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
                       accessibilityRole="button"
                       accessibilityLabel={`Set shipping payer to ${p}`}
                     >
-                      <Ionicons name={p === 'buyer' ? 'person-outline' : 'storefront-outline'} size={14} color={active ? Colors.textInverse : Colors.textMuted} style={{ marginRight: 6 }} />
-                      <Text style={[styles.toggleText, active && styles.toggleTextActive]}>
+                      <Ionicons name={p === 'buyer' ? 'person-outline' : 'storefront-outline'} size={14} color={active ? colors.textInverse : colors.textMuted} style={{ marginRight: 6 }} />
+                      <Text style={[styles.toggleText, t.toggleText, active && styles.toggleTextActive, active && t.toggleTextActive]}>
                         {p === 'buyer' ? 'Buyer pays' : 'I pay (free)'}
                       </Text>
                     </Pressable>
@@ -1256,44 +1298,44 @@ export default function SellScreen() {
             </View>
           </View>
 
-          {/* ── CO-OWN AUTHENTICATION MEDIA ── */}
+          {/* -- CO-OWN AUTHENTICATION MEDIA -- */}
           {listingMode === 'co_own' && (
             <View style={styles.sectionGroup}>
-              <Text style={styles.sectionHeading}>Authentication photos</Text>
-              <Text style={styles.fieldHelper}>Attach proof-of-authenticity photos for investor confidence.</Text>
-              {errors.authPhotos ? <Text style={styles.fieldError}>{errors.authPhotos}</Text> : null}
+              <Text style={[styles.sectionHeading, t.sectionHeading]}>Authentication photos</Text>
+              <Text style={[styles.fieldHelper, t.fieldHelper]}>Attach proof-of-authenticity photos for investor confidence.</Text>
+              {errors.authPhotos ? <Text style={[styles.fieldError, t.fieldError]}>{errors.authPhotos}</Text> : null}
               <View style={styles.authPhotoRow}>
                 {authPhotos.map((uri, i) => (
-                  <View key={`auth_${i}_${uri}`} style={styles.authThumb}>
+                  <View key={`auth_${i}_${uri}`} style={[styles.authThumb, t.authThumb]}>
                     <View style={styles.authThumbImage} />
                   </View>
                 ))}
                 {authPhotos.length < 2 && (
                   <Pressable
-                    style={styles.authAddBtn}
+                    style={[styles.authAddBtn, t.authAddBtn]}
                     onPress={handlePickFromLibrary}
                     accessibilityRole="button"
                     accessibilityLabel="Add authentication photo"
                   >
-                    <Ionicons name="add" size={20} color={Colors.textMuted} />
+                    <Ionicons name="add" size={20} color={colors.textMuted} />
                   </Pressable>
                 )}
               </View>
             </View>
           )}
 
-          {/* ── error message (inline, above footer) ── */}
+          {/* -- error message (inline, above footer) -- */}
           {errorMsg && publicationStage === 'idle' && (
             <View style={styles.inlineErrorRow}>
-              <Ionicons name="alert-circle" size={14} color={Colors.danger} />
-              <Text style={styles.inlineErrorText}>{errorMsg}</Text>
+              <Ionicons name="alert-circle" size={14} color={colors.danger} />
+              <Text style={[styles.inlineErrorText, t.inlineErrorText]}>{errorMsg}</Text>
             </View>
           )}
 
           <View style={{ height: DockConstants.singleActionHeight }} />
         </KeyboardAwareScrollView>
 
-      {/* ── 9. RECOVERABLE PUBLICATION FEEDBACK + 10. STICKY PREVIEW / PUBLISH FOOTER ── */}
+      {/* -- 9. RECOVERABLE PUBLICATION FEEDBACK + 10. STICKY PREVIEW / PUBLISH FOOTER -- */}
       <ListingPublishFooter
         mode={listingMode}
         isPublishing={isPublishing}
@@ -1305,7 +1347,7 @@ export default function SellScreen() {
         bottomInset={insets.bottom}
       />
 
-      {/* ── picker ── */}
+      {/* -- picker -- */}
       <BottomSheetPicker
         visible={pickerMode !== null}
         onClose={() => setPickerMode(null)}
@@ -1321,13 +1363,12 @@ export default function SellScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   keyboardView: {
     flex: 1,
   },
 
-  /* ── nav header ── */
+  /* -- nav header -- */
   navHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1335,8 +1376,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
-    backgroundColor: Colors.background,
   },
   navCloseBtn: {
     width: 40,
@@ -1347,7 +1386,6 @@ const styles = StyleSheet.create({
   navTitle: {
     fontSize: 16,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
     letterSpacing: -0.2,
   },
   navDraftStatus: {
@@ -1357,10 +1395,9 @@ const styles = StyleSheet.create({
   navDraftText: {
     fontSize: 11,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
   },
 
-  /* ── scroll ── */
+  /* -- scroll -- */
   scroll: {
     flex: 1,
   },
@@ -1368,15 +1405,13 @@ const styles = StyleSheet.create({
     paddingBottom: Space.md,
   },
 
-  /* ── sections ── */
+  /* -- sections -- */
   autofillCard: {
     marginHorizontal: Space.md,
     marginTop: Space.sm,
     padding: Space.md,
-    backgroundColor: Colors.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: `${Colors.brand}20`,
   },
   autofillHeader: {
     flexDirection: 'row',
@@ -1388,12 +1423,10 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
   },
   autofillDesc: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     marginBottom: Space.sm,
   },
   autofillChips: {
@@ -1405,24 +1438,20 @@ const styles = StyleSheet.create({
   autofillChip: {
     paddingHorizontal: 10,
     paddingVertical: 6,
-    backgroundColor: Colors.surfaceAlt,
     borderRadius: 8,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
     minWidth: 80,
     maxWidth: 180,
   },
   autofillChipLabel: {
     fontSize: 10,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   autofillChipValue: {
     fontSize: 13,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
     marginTop: 2,
   },
   autofillApplyBtn: {
@@ -1431,14 +1460,12 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    backgroundColor: `${Colors.brand}10`,
     borderRadius: 8,
     alignSelf: 'flex-start',
   },
   autofillApplyText: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
   },
   sectionSpacing: {
     paddingTop: Space.md,
@@ -1450,26 +1477,23 @@ const styles = StyleSheet.create({
   sectionHeading: {
     fontSize: 11,
     fontFamily: Typography.family.bold,
-    color: Colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     marginBottom: Space.sm,
   },
 
-  /* ── fields ── */
+  /* -- fields -- */
   fieldGroup: {
     paddingVertical: 8,
   },
   fieldLabel: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
     marginBottom: 6,
   },
   fieldInput: {
     fontSize: 15,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
     paddingVertical: 8,
     paddingHorizontal: 0,
     minHeight: 40,
@@ -1482,22 +1506,19 @@ const styles = StyleSheet.create({
   fieldHelper: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     marginTop: 4,
   },
   fieldError: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    color: Colors.danger,
     marginTop: 4,
   },
   hairline: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
     marginTop: 8,
   },
 
-  /* ── picker rows ── */
+  /* -- picker rows -- */
   pickerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1510,13 +1531,11 @@ const styles = StyleSheet.create({
   pickerValue: {
     fontSize: 15,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
   },
   pickerPlaceholder: {
-    color: Colors.textMuted,
   },
 
-  /* ── price input ── */
+  /* -- price input -- */
   priceInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1525,20 +1544,17 @@ const styles = StyleSheet.create({
   currencySymbol: {
     fontSize: 20,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
     marginRight: 6,
   },
   priceInput: {
     fontSize: 28,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
     minWidth: 100,
     padding: 0,
   },
   discountPreview: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.danger,
     marginTop: 4,
   },
   soldCompsHint: {
@@ -1551,16 +1567,14 @@ const styles = StyleSheet.create({
   soldCompsText: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     flex: 1,
   },
   soldCompsAction: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
   },
 
-  /* ── toggles ── */
+  /* -- toggles -- */
   toggleRow: {
     flexDirection: 'row',
     gap: 8,
@@ -1574,25 +1588,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 8,
-    backgroundColor: Colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
   },
   togglePillActive: {
-    backgroundColor: Colors.brand,
-    borderColor: Colors.brand,
   },
   toggleText: {
     fontSize: 13,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
   },
   toggleTextActive: {
     fontFamily: Typography.family.bold,
-    color: Colors.textInverse,
   },
 
-  /* ── tags ── */
+  /* -- tags -- */
   tagWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1607,25 +1615,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 6,
-    backgroundColor: Colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
   },
   tagText: {
     fontSize: 13,
     fontFamily: Typography.family.medium,
-    color: Colors.brand,
   },
   tagInput: {
     flex: 1,
     minWidth: 80,
     fontSize: 14,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
     paddingVertical: 6,
   },
 
-  /* ── co-own auth photos ── */
+  /* -- co-own auth photos -- */
   authPhotoRow: {
     flexDirection: 'row',
     gap: 8,
@@ -1636,7 +1640,6 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: 8,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
   },
   authThumbImage: {
     width: 56,
@@ -1647,14 +1650,12 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: 8,
     borderWidth: 1.5,
-    borderColor: Colors.border,
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.surface,
   },
 
-  /* ── inline error ── */
+  /* -- inline error -- */
   inlineErrorRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1666,6 +1667,5 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    color: Colors.danger,
   },
 });

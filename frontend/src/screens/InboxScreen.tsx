@@ -16,7 +16,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 
 import NetInfo from '@react-native-community/netinfo';
 
-import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 
 import { TypeStyles } from '../theme/designTokens';
 
@@ -71,12 +71,16 @@ type ConvoItem = Conversation;
 type InboxSegment = MessagingSegment | 'unread' | 'archived';
 
 function ListingContextThumbnail({ itemId }: { itemId: string }) {
+  const { colors } = useAppTheme();
   const { listings } = useBackendData();
   const listing = useMemo(() => listings.find((l) => l.id === itemId), [listings, itemId]);
+  const listingThemed = useMemo(() => ({
+    contextThumb: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
+  }), [colors]);
   if (!listing?.images?.[0]) {
     return (
-      <View style={styles.contextThumb}>
-        <Ionicons name="pricetag-outline" size={14} color={Colors.textMuted} />
+      <View style={[styles.contextThumb, listingThemed.contextThumb]}>
+        <Ionicons name="pricetag-outline" size={14} color={colors.textMuted} />
       </View>
     );
   }
@@ -84,13 +88,15 @@ function ListingContextThumbnail({ itemId }: { itemId: string }) {
     <CachedImage
       uri={listing.images[0]}
       style={styles.contextThumbImage}
-      containerStyle={styles.contextThumb}
+      containerStyle={[styles.contextThumb, listingThemed.contextThumb]}
       contentFit="cover"
     />
   );
 }
 
 export default function InboxScreen() {
+
+  const { colors, isDark } = useAppTheme();
 
   const navigation = useNavigation<NavT>();
 
@@ -245,6 +251,62 @@ export default function InboxScreen() {
   const AnimatedFlashList = Reanimated.createAnimatedComponent(FlashList);
   const listRef = useRef<any>(null);
   useScrollToTop(listRef);
+
+  const t = useMemo(() => ({
+    screenRoot: { backgroundColor: colors.background },
+    headerTitle: { color: colors.textPrimary },
+    headerSubtitle: { color: colors.textMuted },
+    iconBtn: { backgroundColor: colors.surfaceAlt },
+    newMessageBtn: { backgroundColor: colors.textPrimary },
+    newMessageBtnText: { color: colors.textInverse },
+    searchWrap: { backgroundColor: colors.surfaceAlt },
+    filterChip: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
+    filterChipActive: { backgroundColor: colors.textPrimary, borderColor: colors.textPrimary },
+    filterChipText: { color: colors.textSecondary },
+    filterChipTextActive: { color: colors.textInverse },
+    rowSeparator: { backgroundColor: colors.border },
+    groupAvatar: { backgroundColor: colors.surfaceAlt },
+    groupAvatarText: { color: colors.textPrimary },
+    botIndicator: { backgroundColor: colors.surface, borderColor: colors.border },
+    nameText: { color: colors.textPrimary },
+    memberCount: { color: colors.textMuted },
+    snippet: { color: colors.textSecondary },
+    snippetUnread: { color: colors.textPrimary },
+    unreadDot: { backgroundColor: colors.textPrimary },
+    unreadPill: { backgroundColor: colors.textPrimary },
+    unreadPillText: { color: colors.textInverse },
+    timeUnread: { color: colors.textPrimary },
+    contextThumb: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
+    draftBadge: { backgroundColor: `${colors.brand}1A` },
+    draftBadgeText: { color: colors.brand },
+    rowInnerUnread: { backgroundColor: `${colors.brand}06` },
+    swipeDelete: { backgroundColor: `${colors.danger}1F` },
+    swipePin: { backgroundColor: `${colors.brand}14` },
+    swipeArchive: { backgroundColor: `${colors.brand}14` },
+    swipeMute: { backgroundColor: `${colors.textMuted}1F` },
+    requestRowSurface: { backgroundColor: colors.surface },
+    requestRowAccent: { borderLeftColor: colors.brand, backgroundColor: `${colors.brand}06` },
+    requestBtnDecline: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
+    requestBtnDeclineText: { color: colors.textPrimary },
+    requestBtnAccept: { backgroundColor: colors.brand },
+    requestsBannerRule: { backgroundColor: colors.border },
+    requestsAvatar: { backgroundColor: `${colors.brand}12` },
+    requestsBannerInner: { backgroundColor: colors.surface },
+    requestsBadge: { backgroundColor: colors.textPrimary },
+    requestsBadgeText: { color: colors.textInverse },
+    requestsIconWrap: { backgroundColor: colors.surfaceAlt },
+    requestsBannerText: { color: colors.textPrimary },
+    requestsBannerSub: { color: colors.textMuted },
+    requestBtnAcceptText: { color: colors.textInverse },
+    offlineBanner: { backgroundColor: colors.surfaceAlt, borderBottomColor: colors.border },
+    offlineBannerText: { color: colors.textSecondary },
+    errorBanner: { borderBottomColor: colors.border },
+    errorBannerTitle: { color: colors.danger },
+    errorBannerSub: { color: colors.textMuted },
+    errorBannerRetry: { color: colors.brand },
+    needsActionChip: { backgroundColor: `${colors.brand}0D`, borderColor: `${colors.brand}33` },
+    needsActionText: { color: colors.brand },
+  }), [colors]);
 
 
 
@@ -506,7 +568,7 @@ export default function InboxScreen() {
 
       <AnimatedPressable
 
-        style={styles.swipeArchive}
+        style={[styles.swipeArchive, t.swipeArchive]}
 
         onPress={() => handleArchive(id)}
 
@@ -522,13 +584,13 @@ export default function InboxScreen() {
 
       >
 
-        <Ionicons name="archive-outline" size={20} color={Colors.brand} />
+        <Ionicons name="archive-outline" size={20} color={colors.brand} />
 
       </AnimatedPressable>
 
       <AnimatedPressable
 
-        style={styles.swipeDelete}
+        style={[styles.swipeDelete, t.swipeDelete]}
 
         onPress={() => handleDelete(id)}
 
@@ -544,7 +606,7 @@ export default function InboxScreen() {
 
       >
 
-        <Ionicons name="trash-outline" size={20} color={Colors.danger} />
+        <Ionicons name="trash-outline" size={20} color={colors.danger} />
 
       </AnimatedPressable>
 
@@ -560,7 +622,7 @@ export default function InboxScreen() {
 
       <AnimatedPressable
 
-        style={styles.swipeMute}
+        style={[styles.swipeMute, t.swipeMute]}
 
         onPress={() => handleMute(id)}
 
@@ -576,13 +638,13 @@ export default function InboxScreen() {
 
       >
 
-        <Ionicons name={mutedIds.includes(id) ? 'volume-high-outline' : 'volume-mute-outline'} size={20} color={Colors.textPrimary} />
+        <Ionicons name={mutedIds.includes(id) ? 'volume-high-outline' : 'volume-mute-outline'} size={20} color={colors.textPrimary} />
 
       </AnimatedPressable>
 
       <AnimatedPressable
 
-        style={styles.swipePin}
+        style={[styles.swipePin, t.swipePin]}
 
         onPress={() => handlePin(id)}
 
@@ -598,7 +660,7 @@ export default function InboxScreen() {
 
       >
 
-        <Ionicons name="pin-outline" size={20} color={Colors.brand} />
+        <Ionicons name="pin-outline" size={20} color={colors.brand} />
 
       </AnimatedPressable>
 
@@ -622,13 +684,13 @@ export default function InboxScreen() {
       : undefined;
 
     const avatarEl = isGroup ? (
-      <View style={styles.groupAvatar}>
-        <Text style={styles.groupAvatarText}>
+      <View style={[styles.groupAvatar, t.groupAvatar]}>
+        <Text style={[styles.groupAvatarText, t.groupAvatarText]}>
           {item.title?.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase() ?? 'G'}
         </Text>
         {(item.botIds?.length ?? 0) > 0 && (
-          <View style={styles.botIndicator}>
-            <Ionicons name="hardware-chip-outline" size={10} color={Colors.brand} />
+          <View style={[styles.botIndicator, t.botIndicator]}>
+            <Ionicons name="hardware-chip-outline" size={10} color={colors.brand} />
           </View>
         )}
       </View>
@@ -643,24 +705,24 @@ export default function InboxScreen() {
     );
 
     const requestRow = (
-      <View style={styles.requestRowAccent}>
+      <View style={[styles.requestRowAccent, t.requestRowAccent]}>
         <View style={styles.requestRowInner}>
           {avatarEl}
           <View style={styles.messageBody}>
             <View style={styles.messageTop}>
-              <Text style={[styles.nameText, styles.nameUnread]}>{displayTitle}</Text>
-              <Caption color={Colors.textMuted}>{item.lastMessageTime}</Caption>
+              <Text style={[styles.nameText, t.nameText, styles.nameUnread]}>{displayTitle}</Text>
+              <Caption color={colors.textMuted}>{item.lastMessageTime}</Caption>
             </View>
-            <Caption color={Colors.textSecondary} numberOfLines={1}>{item.lastMessage}</Caption>
+            <Caption color={colors.textSecondary} numberOfLines={1}>{item.lastMessage}</Caption>
             {item.itemId && (
               <View style={styles.requestListingContext}>
                 <ListingContextThumbnail itemId={item.itemId} />
-                <Caption color={Colors.textSecondary} style={styles.requestListingText}>About a listing</Caption>
+                <Caption color={colors.textSecondary} style={styles.requestListingText}>About a listing</Caption>
               </View>
             )}
             <View style={styles.requestActions}>
               <AnimatedPressable
-                style={styles.requestBtnDecline}
+                style={[styles.requestBtnDecline, t.requestBtnDecline]}
                 onPress={() => handleDeclineRequest(item.id)}
                 activeOpacity={0.85}
                 scaleValue={0.96}
@@ -668,10 +730,10 @@ export default function InboxScreen() {
                 accessibilityLabel="Decline message request"
                 accessibilityRole="button"
               >
-                <Text style={styles.requestBtnDeclineText}>Decline</Text>
+                <Text style={[styles.requestBtnDeclineText, t.requestBtnDeclineText]}>Decline</Text>
               </AnimatedPressable>
               <AnimatedPressable
-                style={styles.requestBtnAccept}
+                style={[styles.requestBtnAccept, t.requestBtnAccept]}
                 onPress={() => handleAcceptRequest(item.id)}
                 activeOpacity={0.85}
                 scaleValue={0.96}
@@ -679,7 +741,7 @@ export default function InboxScreen() {
                 accessibilityLabel="Accept message request"
                 accessibilityRole="button"
               >
-                <Text style={styles.requestBtnAcceptText}>Accept</Text>
+                <Text style={[styles.requestBtnAcceptText, t.requestBtnAcceptText]}>Accept</Text>
               </AnimatedPressable>
             </View>
           </View>
@@ -727,7 +789,7 @@ export default function InboxScreen() {
             {conversationRow}
           </Swipeable>
         )}
-        {!isRequest && <View style={styles.rowSeparator} />}
+        {!isRequest && <View style={[styles.rowSeparator, t.rowSeparator]} />}
       </View>
     );
   };
@@ -736,19 +798,19 @@ export default function InboxScreen() {
 
   return (
 
-    <SafeAreaView edges={['top']} style={styles.screenRoot}>
+    <SafeAreaView edges={['top']} style={[styles.screenRoot, t.screenRoot]}>
 
 
 
       <View style={styles.compactHeader}>
 
-        <Text style={styles.headerTitle}>Inbox</Text>
+        <Text style={[styles.headerTitle, t.headerTitle]}>Inbox</Text>
 
         <View style={styles.headerActions}>
 
           <AnimatedPressable
 
-            style={styles.iconBtn}
+            style={[styles.iconBtn, t.iconBtn]}
 
             onPress={() => navigation.navigate('ChatSettings')}
 
@@ -766,13 +828,13 @@ export default function InboxScreen() {
 
           >
 
-            <Ionicons name="settings-outline" size={20} color={Colors.textSecondary} />
+            <Ionicons name="settings-outline" size={20} color={colors.textSecondary} />
 
           </AnimatedPressable>
 
           <AnimatedPressable
 
-            style={styles.newMessageBtn}
+            style={[styles.newMessageBtn, t.newMessageBtn]}
 
             onPress={() => navigation.navigate('NewMessage')}
 
@@ -788,9 +850,9 @@ export default function InboxScreen() {
 
           >
 
-            <Ionicons name="create-outline" size={18} color={Colors.textInverse} />
+            <Ionicons name="create-outline" size={18} color={colors.textInverse} />
 
-            <Text style={styles.newMessageBtnText}>New</Text>
+            <Text style={[styles.newMessageBtnText, t.newMessageBtnText]}>New</Text>
 
           </AnimatedPressable>
 
@@ -810,7 +872,7 @@ export default function InboxScreen() {
 
           onChangeText={setSearchQuery}
 
-          containerStyle={styles.searchWrap}
+          containerStyle={[styles.searchWrap, t.searchWrap]}
 
           inputProps={{
 
@@ -842,11 +904,11 @@ export default function InboxScreen() {
 
       {isOffline && (
 
-        <View style={styles.offlineBanner}>
+        <View style={[styles.offlineBanner, t.offlineBanner]}>
 
-          <Ionicons name="cloud-offline-outline" size={16} color={Colors.textSecondary} />
+          <Ionicons name="cloud-offline-outline" size={16} color={colors.textSecondary} />
 
-          <Text style={styles.offlineBannerText}>You are offline</Text>
+          <Text style={[styles.offlineBannerText, t.offlineBannerText]}>You are offline</Text>
 
         </View>
 
@@ -856,13 +918,13 @@ export default function InboxScreen() {
 
       {!!syncError && (
 
-        <View style={styles.errorBanner}>
+        <View style={[styles.errorBanner, t.errorBanner]}>
 
-          <Ionicons name="alert-circle-outline" size={16} color={Colors.danger} />
+          <Ionicons name="alert-circle-outline" size={16} color={colors.danger} />
 
           <View style={styles.errorBannerCopy}>
-            <Text style={styles.errorBannerTitle}>Couldn't sync messages</Text>
-            <Text style={styles.errorBannerSub}>Check your connection or retry.</Text>
+            <Text style={[styles.errorBannerTitle, t.errorBannerTitle]}>Couldn't sync messages</Text>
+            <Text style={[styles.errorBannerSub, t.errorBannerSub]}>Check your connection or retry.</Text>
           </View>
 
           <AnimatedPressable
@@ -881,7 +943,7 @@ export default function InboxScreen() {
 
           >
 
-            <Text style={styles.errorBannerRetry}>Retry</Text>
+            <Text style={[styles.errorBannerRetry, t.errorBannerRetry]}>Retry</Text>
 
           </AnimatedPressable>
 
@@ -928,7 +990,7 @@ export default function InboxScreen() {
             {segment === 'all' && messageRequests.length > 0 && (
 
               <View style={styles.requestsBanner}>
-                <View style={styles.requestsBannerRule} />
+                <View style={[styles.requestsBannerRule, t.requestsBannerRule]} />
                 <AnimatedPressable
                   onPress={() => navigation.navigate('MessageRequests')}
                   activeOpacity={0.85}
@@ -939,18 +1001,18 @@ export default function InboxScreen() {
                   style={styles.requestsBannerTap}
                 >
                   <View style={styles.requestsAvatarStack}>
-                    <View style={styles.requestsAvatar}>
-                      <Ionicons name="mail-unread-outline" size={16} color={Colors.brand} />
+                    <View style={[styles.requestsAvatar, t.requestsAvatar]}>
+                      <Ionicons name="mail-unread-outline" size={16} color={colors.brand} />
                     </View>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.requestsBannerText}>Requests</Text>
-                    <Text style={styles.requestsBannerSub}>{messageRequests.length} pending</Text>
+                    <Text style={[styles.requestsBannerText, t.requestsBannerText]}>Requests</Text>
+                    <Text style={[styles.requestsBannerSub, t.requestsBannerSub]}>{messageRequests.length} pending</Text>
                   </View>
-                  <View style={styles.requestsBadge}>
-                    <Text style={styles.requestsBadgeText}>{messageRequests.length}</Text>
+                  <View style={[styles.requestsBadge, t.requestsBadge]}>
+                    <Text style={[styles.requestsBadgeText, t.requestsBadgeText]}>{messageRequests.length}</Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
                 </AnimatedPressable>
               </View>
 
@@ -960,7 +1022,7 @@ export default function InboxScreen() {
               <View style={styles.needsActionRow}>
                 {buyingUnreadCount > 0 && (
                   <AnimatedPressable
-                    style={styles.needsActionChip}
+                    style={[styles.needsActionChip, t.needsActionChip]}
                     onPress={() => setSegment('buying')}
                     activeOpacity={0.85}
                     scaleValue={0.97}
@@ -968,13 +1030,13 @@ export default function InboxScreen() {
                     accessibilityLabel={`${buyingUnreadCount} unread buying conversations`}
                     accessibilityRole="button"
                   >
-                    <Ionicons name="cart-outline" size={14} color={Colors.brand} />
-                    <Text style={styles.needsActionText}>{buyingUnreadCount} buying</Text>
+                    <Ionicons name="cart-outline" size={14} color={colors.brand} />
+                    <Text style={[styles.needsActionText, t.needsActionText]}>{buyingUnreadCount} buying</Text>
                   </AnimatedPressable>
                 )}
                 {sellingUnreadCount > 0 && (
                   <AnimatedPressable
-                    style={styles.needsActionChip}
+                    style={[styles.needsActionChip, t.needsActionChip]}
                     onPress={() => setSegment('selling')}
                     activeOpacity={0.85}
                     scaleValue={0.97}
@@ -982,8 +1044,8 @@ export default function InboxScreen() {
                     accessibilityLabel={`${sellingUnreadCount} unread selling conversations`}
                     accessibilityRole="button"
                   >
-                    <Ionicons name="pricetag-outline" size={14} color={Colors.brand} />
-                    <Text style={styles.needsActionText}>{sellingUnreadCount} selling</Text>
+                    <Ionicons name="pricetag-outline" size={14} color={colors.brand} />
+                    <Text style={[styles.needsActionText, t.needsActionText]}>{sellingUnreadCount} selling</Text>
                   </AnimatedPressable>
                 )}
               </View>
@@ -1218,7 +1280,6 @@ const styles = StyleSheet.create({
 
   screenRoot: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
 
   compactHeader: {
@@ -1256,7 +1317,6 @@ const styles = StyleSheet.create({
 
     fontFamily: TypeStyles.title.fontFamily,
 
-    color: Colors.textPrimary,
 
     letterSpacing: Type.title.letterSpacing,
 
@@ -1270,7 +1330,6 @@ const styles = StyleSheet.create({
 
     fontFamily: TypeStyles.body.fontFamily,
 
-    color: Colors.textMuted,
 
   },
 
@@ -1292,7 +1351,6 @@ const styles = StyleSheet.create({
 
     borderRadius: Radius.full,
 
-    backgroundColor: Colors.surfaceAlt,
 
     justifyContent: 'center',
 
@@ -1314,7 +1372,6 @@ const styles = StyleSheet.create({
 
     borderRadius: Radius.full,
 
-    backgroundColor: Colors.textPrimary,
 
   },
 
@@ -1324,13 +1381,11 @@ const styles = StyleSheet.create({
 
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
-    color: Colors.textInverse,
 
   },
 
   searchWrap: {
 
-    backgroundColor: Colors.surfaceAlt,
 
     borderRadius: Radius.full,
 
@@ -1350,21 +1405,15 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     paddingHorizontal: 12,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
   },
   filterChipActive: {
-    backgroundColor: Colors.textPrimary,
-    borderColor: Colors.textPrimary,
   },
   filterChipText: {
     fontSize: Type.meta.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.textSecondary,
   },
   filterChipTextActive: {
-    color: Colors.textInverse,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
   },
 
@@ -1396,7 +1445,6 @@ const styles = StyleSheet.create({
 
     height: StyleSheet.hairlineWidth,
 
-    backgroundColor: Colors.border,
 
     marginLeft: 72,
 
@@ -1414,7 +1462,6 @@ const styles = StyleSheet.create({
 
     borderRadius: Radius.full,
 
-    backgroundColor: Colors.surfaceAlt,
 
     alignItems: 'center',
 
@@ -1430,7 +1477,6 @@ const styles = StyleSheet.create({
 
     fontFamily: TypeStyles.title.fontFamily,
 
-    color: Colors.textPrimary,
 
   },
 
@@ -1448,11 +1494,9 @@ const styles = StyleSheet.create({
 
     borderRadius: Radius.full,
 
-    backgroundColor: Colors.surface,
 
     borderWidth: 1.5,
 
-    borderColor: Colors.border,
 
     justifyContent: 'center',
 
@@ -1490,7 +1534,6 @@ const styles = StyleSheet.create({
 
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
-    color: Colors.textPrimary,
 
     letterSpacing: Type.body.letterSpacing,
 
@@ -1524,13 +1567,11 @@ const styles = StyleSheet.create({
 
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
-    color: Colors.textMuted,
 
   },
 
   snippet: {
 
-    color: Colors.textSecondary,
 
     fontSize: Type.caption.size,
 
@@ -1544,7 +1585,6 @@ const styles = StyleSheet.create({
 
   snippetUnread: {
 
-    color: Colors.textPrimary,
 
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
@@ -1554,10 +1594,8 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: Colors.textPrimary,
   },
   unreadPill: {
-    backgroundColor: Colors.textPrimary,
     borderRadius: Radius.sm,
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -1566,11 +1604,9 @@ const styles = StyleSheet.create({
   unreadPillText: {
     fontSize: 10,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.textInverse,
   },
   timeUnread: {
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.textPrimary,
   },
   rowMeta: {
     alignItems: 'flex-end',
@@ -1588,9 +1624,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: Radius.sm,
-    backgroundColor: Colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
@@ -1614,7 +1648,6 @@ const styles = StyleSheet.create({
 
   draftBadge: {
 
-    backgroundColor: `${Colors.brand}1A`,
 
     paddingHorizontal: Space.sm - 2,
 
@@ -1630,12 +1663,10 @@ const styles = StyleSheet.create({
 
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
-    color: Colors.brand,
 
   },
 
   rowInnerUnread: {
-    backgroundColor: `${Colors.brand}06`,
   },
   requestListingContext: {
     flexDirection: 'row',
@@ -1668,7 +1699,6 @@ const styles = StyleSheet.create({
 
   swipeDelete: {
 
-    backgroundColor: `${Colors.danger}1F`,
 
     justifyContent: 'center',
 
@@ -1684,7 +1714,6 @@ const styles = StyleSheet.create({
 
   swipePin: {
 
-    backgroundColor: `${Colors.brand}14`,
 
     justifyContent: 'center',
 
@@ -1700,7 +1729,6 @@ const styles = StyleSheet.create({
 
   swipeArchive: {
 
-    backgroundColor: `${Colors.brand}14`,
 
     justifyContent: 'center',
 
@@ -1716,7 +1744,6 @@ const styles = StyleSheet.create({
 
   swipeMute: {
 
-    backgroundColor: `${Colors.textMuted}1F`,
 
     justifyContent: 'center',
 
@@ -1732,7 +1759,6 @@ const styles = StyleSheet.create({
 
   requestRowSurface: {
 
-    backgroundColor: Colors.surface,
 
     borderRadius: Radius.lg,
 
@@ -1743,8 +1769,6 @@ const styles = StyleSheet.create({
   },
   requestRowAccent: {
     borderLeftWidth: 3,
-    borderLeftColor: Colors.brand,
-    backgroundColor: `${Colors.brand}06`,
     marginHorizontal: Space.md,
     marginVertical: Space.xs,
     borderRadius: Radius.sm,
@@ -1780,11 +1804,9 @@ const styles = StyleSheet.create({
 
     borderRadius: Radius.md,
 
-    backgroundColor: Colors.surfaceAlt,
 
     borderWidth: StyleSheet.hairlineWidth,
 
-    borderColor: Colors.border,
 
   },
 
@@ -1794,7 +1816,6 @@ const styles = StyleSheet.create({
 
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
-    color: Colors.textPrimary,
 
   },
 
@@ -1810,7 +1831,6 @@ const styles = StyleSheet.create({
 
     borderRadius: Radius.md,
 
-    backgroundColor: Colors.brand,
 
   },
 
@@ -1823,7 +1843,6 @@ const styles = StyleSheet.create({
   },
   requestsBannerRule: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
     marginBottom: Space.sm,
     marginHorizontal: Space.md,
   },
@@ -1841,7 +1860,6 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: Radius.full,
-    backgroundColor: `${Colors.brand}12`,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1858,7 +1876,6 @@ const styles = StyleSheet.create({
 
     paddingHorizontal: Space.md,
 
-    backgroundColor: Colors.surface,
 
     borderRadius: Radius.lg,
 
@@ -1872,7 +1889,6 @@ const styles = StyleSheet.create({
 
     borderRadius: Radius.md,
 
-    backgroundColor: Colors.textPrimary,
 
     justifyContent: 'center',
 
@@ -1886,7 +1902,6 @@ const styles = StyleSheet.create({
 
     fontFamily: TypeStyles.title.fontFamily,
 
-    color: Colors.textInverse,
 
   },
 
@@ -1894,20 +1909,17 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
   },
   requestsBannerText: {
     fontSize: Type.body.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.textPrimary,
     letterSpacing: Type.body.letterSpacing,
   },
   requestsBannerSub: {
     fontSize: Type.caption.size,
     fontFamily: TypeStyles.body.fontFamily,
-    color: Colors.textMuted,
     marginTop: 2,
   },
 
@@ -1917,7 +1929,6 @@ const styles = StyleSheet.create({
 
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
-    color: Colors.textInverse,
 
   },
 
@@ -1931,11 +1942,9 @@ const styles = StyleSheet.create({
 
     gap: Space.xs,
 
-    backgroundColor: Colors.surfaceAlt,
 
     borderBottomWidth: StyleSheet.hairlineWidth,
 
-    borderBottomColor: Colors.border,
 
     paddingVertical: Space.xs + 2,
 
@@ -1945,7 +1954,6 @@ const styles = StyleSheet.create({
 
   offlineBannerText: {
 
-    color: Colors.textSecondary,
 
     fontSize: Type.caption.size,
 
@@ -1969,7 +1977,6 @@ const styles = StyleSheet.create({
 
     borderBottomWidth: StyleSheet.hairlineWidth,
 
-    borderBottomColor: Colors.border,
 
   },
 
@@ -1979,13 +1986,11 @@ const styles = StyleSheet.create({
   },
 
   errorBannerTitle: {
-    color: Colors.danger,
     fontSize: Type.caption.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
   },
 
   errorBannerSub: {
-    color: Colors.textMuted,
     fontSize: 12,
     fontFamily: TypeStyles.body.fontFamily,
   },
@@ -1997,7 +2002,6 @@ const styles = StyleSheet.create({
 
   errorBannerRetry: {
 
-    color: Colors.brand,
 
     fontSize: Type.caption.size,
 
@@ -2046,14 +2050,11 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: Radius.full,
-    backgroundColor: `${Colors.brand}0D`,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: `${Colors.brand}33`,
   },
   needsActionText: {
     fontSize: Type.caption.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.brand,
   },
 
 });

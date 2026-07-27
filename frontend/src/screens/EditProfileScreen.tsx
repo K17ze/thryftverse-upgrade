@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,9 +13,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors } from '../constants/colors';
 import { Space, Typography, Radius, Type } from '../theme/designTokens';
-import { useAppTheme } from '../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
@@ -39,6 +38,7 @@ export default function EditProfileScreen() {
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
   const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const queryClient = useQueryClient();
   const currentUser = useStore((state) => state.currentUser);
   const twoFactorEnabled = useStore((state) => state.twoFactorEnabled);
@@ -200,7 +200,7 @@ export default function EditProfileScreen() {
       style={[styles.saveBtn, canSave && styles.saveBtnActive]}
     >
       {isSaving ? (
-        <ActivityIndicator size="small" color={Colors.textInverse} />
+        <ActivityIndicator size="small" color={colors.textInverse} />
       ) : (
         <Text style={[styles.saveBtnText, canSave && styles.saveBtnTextActive]}>
           Done
@@ -235,7 +235,7 @@ export default function EditProfileScreen() {
               contentFit="cover"
             />
           ) : (
-            <View style={[styles.identityAvatar, { backgroundColor: Colors.surfaceAlt }]}>
+            <View style={[styles.identityAvatar, { backgroundColor: colors.surfaceAlt }]}>
               <Text style={styles.identityAvatarText}>
                 {(user?.username ?? '?').charAt(0).toUpperCase()}
               </Text>
@@ -316,13 +316,13 @@ export default function EditProfileScreen() {
               <View style={styles.detailStatusWrap}>
                 {emailVerified ? (
                   <View style={[styles.statusPill, styles.statusPillVerified]}>
-                    <Ionicons name="checkmark-circle" size={12} color={Colors.brand} />
-                    <Text style={[styles.statusPillText, { color: Colors.brand }]}>Verified</Text>
+                    <Ionicons name="checkmark-circle" size={12} color={colors.brand} />
+                    <Text style={[styles.statusPillText, { color: colors.brand }]}>Verified</Text>
                   </View>
                 ) : (
                   <View style={[styles.statusPill, styles.statusPillUnverified]}>
-                    <Ionicons name="alert-circle" size={12} color={Colors.textMuted} />
-                    <Text style={[styles.statusPillText, { color: Colors.textMuted }]}>Not verified</Text>
+                    <Ionicons name="alert-circle" size={12} color={colors.textMuted} />
+                    <Text style={[styles.statusPillText, { color: colors.textMuted }]}>Not verified</Text>
                   </View>
                 )}
               </View>
@@ -337,7 +337,7 @@ export default function EditProfileScreen() {
               <Text style={styles.detailLabel}>Phone</Text>
               <View style={styles.detailRight}>
                 <Text style={styles.detailValue} numberOfLines={1}>{phone || '—'}</Text>
-                <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
               </View>
             </Pressable>
           </View>
@@ -350,7 +350,7 @@ export default function EditProfileScreen() {
           <View style={styles.detailCard}>
             <PressableRow
               icon="lock-closed-outline"
-              iconColor={Colors.brand}
+              iconColor={colors.brand}
               title="Password"
               subtitle="Change your password"
               onPress={() => (navigation as any).navigate('ChangePassword')}
@@ -359,17 +359,17 @@ export default function EditProfileScreen() {
             <View style={styles.detailDivider} />
             <PressableRow
               icon="shield-checkmark-outline"
-              iconColor={twoFactorEnabled ? Colors.brand : Colors.textMuted}
+              iconColor={twoFactorEnabled ? colors.brand : colors.textMuted}
               title="Two-factor authentication"
               subtitle={twoFactorEnabled ? 'Enabled' : 'Add an extra layer of security'}
               statusPill={
                 twoFactorEnabled ? (
                   <View style={[styles.statusPill, styles.statusPillVerified]}>
-                    <Text style={[styles.statusPillText, { color: Colors.brand }]}>On</Text>
+                    <Text style={[styles.statusPillText, { color: colors.brand }]}>On</Text>
                   </View>
                 ) : (
                   <View style={[styles.statusPill, styles.statusPillUnverified]}>
-                    <Text style={[styles.statusPillText, { color: Colors.textMuted }]}>Off</Text>
+                    <Text style={[styles.statusPillText, { color: colors.textMuted }]}>Off</Text>
                   </View>
                 )
               }
@@ -411,7 +411,7 @@ export default function EditProfileScreen() {
       {/* ── Phone Edit Modal — premium bottom sheet ── */}
       <Modal visible={editingField !== null} transparent animationType="slide" onRequestClose={closeEdit}>
         <Pressable style={styles.modalOverlay} onPress={closeEdit}>
-          <Pressable style={[styles.modalCard, { backgroundColor: Colors.surface }]} onPress={(e) => e.stopPropagation()}>
+          <Pressable style={[styles.modalCard, { backgroundColor: colors.surface }]} onPress={(e) => e.stopPropagation()}>
             <View style={styles.modalHandle} />
             <Text style={styles.modalTitle}>
               {editingField === 'phone' ? 'Phone number' : editingField}
@@ -466,6 +466,8 @@ interface PressableRowProps {
 }
 
 function PressableRow({ icon, iconColor, title, subtitle, statusPill, onPress, isLast }: PressableRowProps) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   return (
     <Pressable
       onPress={onPress}
@@ -487,7 +489,7 @@ function PressableRow({ icon, iconColor, title, subtitle, statusPill, onPress, i
       </View>
       <View style={styles.rowRight}>
         {statusPill}
-        <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+        <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
       </View>
     </Pressable>
   );
@@ -525,6 +527,8 @@ function ProfileEditField({
   returnKeyType = 'next',
   isLast,
 }: ProfileEditFieldProps) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [isFocused, setIsFocused] = useState(false);
   const hasError = Boolean(error);
   const showCounter = maxLength !== undefined;
@@ -549,14 +553,14 @@ function ProfileEditField({
           onFocus={() => setIsFocused(true)}
           onBlur={() => { setIsFocused(false); onBlur?.(); }}
           placeholder={placeholder}
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={colors.textMuted}
           autoCapitalize={autoCapitalize}
           keyboardType={keyboardType}
           returnKeyType={returnKeyType}
           multiline={multiline}
           maxLength={maxLength}
           textAlignVertical={multiline ? 'top' : 'center'}
-          selectionColor={Colors.brand}
+          selectionColor={colors.brand}
         />
         {showCounter && (
           <Text style={[styles.fieldCounter, isNearLimit && styles.fieldCounterError]}>
@@ -574,7 +578,8 @@ function ProfileEditField({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   // ── Top-right Done button — visible pill ──
   saveBtn: {
     paddingHorizontal: Space.md,
@@ -583,21 +588,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     minWidth: 44,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   saveBtnActive: {
-    backgroundColor: Colors.brand,
-    borderColor: Colors.brand,
+    backgroundColor: colors.brand,
+    borderColor: colors.brand,
   },
   saveBtnText: {
     fontSize: 14,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   saveBtnTextActive: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
 
   // ── Identity row ──
@@ -616,7 +621,7 @@ const styles = StyleSheet.create({
   identityAvatarText: {
     fontSize: 16,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     textAlign: 'center',
     lineHeight: 44,
   },
@@ -628,19 +633,19 @@ const styles = StyleSheet.create({
   identityName: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: -0.2,
   },
   identityHandle: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     letterSpacing: Type.caption.letterSpacing,
   },
   photoHint: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     paddingHorizontal: Space.md,
     paddingTop: Space.xs,
     paddingBottom: 0,
@@ -654,7 +659,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginBottom: Space.sm - 2,
   },
 
@@ -668,14 +673,14 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 13,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginBottom: 4,
   },
   fieldSurface: {
     borderRadius: Radius.md + 2,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     paddingHorizontal: Space.md - 2,
     minHeight: 48,
     flexDirection: 'row',
@@ -683,11 +688,11 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   fieldSurfaceFocused: {
-    borderColor: Colors.brand,
+    borderColor: colors.brand,
     borderWidth: 1.5,
   },
   fieldSurfaceError: {
-    borderColor: Colors.danger,
+    borderColor: colors.danger,
   },
   fieldSurfaceMultiline: {
     alignItems: 'flex-end',
@@ -698,7 +703,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     paddingVertical: 8,
     paddingHorizontal: 0,
   },
@@ -711,23 +716,23 @@ const styles = StyleSheet.create({
   fieldCounter: {
     fontSize: 11,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     paddingBottom: 2,
   },
   fieldCounterError: {
-    color: Colors.danger,
+    color: colors.danger,
   },
   fieldHelper: {
     fontSize: 11,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 5,
     lineHeight: 15,
   },
   fieldError: {
     fontSize: 11,
     fontFamily: Typography.family.semibold,
-    color: Colors.danger,
+    color: colors.danger,
     marginTop: 5,
     lineHeight: 15,
   },
@@ -736,8 +741,8 @@ const styles = StyleSheet.create({
   detailCard: {
     borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     overflow: 'hidden',
   },
   detailRow: {
@@ -759,12 +764,12 @@ const styles = StyleSheet.create({
   detailLabel: {
     fontSize: 15,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   detailValue: {
     fontSize: 15,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     flexShrink: 1,
     textAlign: 'right',
     maxWidth: 180,
@@ -780,7 +785,7 @@ const styles = StyleSheet.create({
   },
   detailDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
     marginHorizontal: Space.md - 2,
   },
 
@@ -795,12 +800,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   statusPillVerified: {
-    backgroundColor: Colors.surfaceAlt,
-    borderColor: Colors.border,
+    backgroundColor: colors.surfaceAlt,
+    borderColor: colors.border,
   },
   statusPillUnverified: {
-    backgroundColor: Colors.surfaceAlt,
-    borderColor: Colors.border,
+    backgroundColor: colors.surfaceAlt,
+    borderColor: colors.border,
   },
   statusPillText: {
     fontSize: 12,
@@ -817,7 +822,7 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   pressableRowPressed: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   rowIconChip: {
     width: 32,
@@ -834,12 +839,12 @@ const styles = StyleSheet.create({
   rowTitle: {
     fontSize: 15,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   rowSubtitle: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   rowRight: {
     flexDirection: 'row',
@@ -896,21 +901,21 @@ const styles = StyleSheet.create({
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
     alignSelf: 'center',
     marginBottom: Space.md,
   },
   modalTitle: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginBottom: 2,
     letterSpacing: Type.subtitle.letterSpacing,
   },
   modalSubtitle: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginBottom: Space.md + 2,
   },
   modalActions: {
@@ -923,9 +928,9 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   modalBtnPrimary: {
     flex: 1,
@@ -933,16 +938,17 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
   },
   modalBtnSecondaryText: {
     fontSize: 15,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   modalBtnPrimaryText: {
     fontSize: 15,
     fontFamily: Typography.family.semibold,
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
-});
+  });
+}

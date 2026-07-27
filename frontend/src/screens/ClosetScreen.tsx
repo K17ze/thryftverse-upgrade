@@ -20,8 +20,8 @@ import Reanimated, {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { ActiveTheme, Colors } from '../constants/colors';
 import { Type, Space, Radius, DockConstants } from '../theme/designTokens';
+import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
@@ -47,6 +47,44 @@ type NavT = StackNavigationProp<RootStackParamList>;
 const SORT_OPTIONS: SortOption[] = ['Default', 'Recently saved', 'Price: Low to High', 'Price: High to Low', 'Newest'];
 
 export default function ClosetScreen() {
+  const { colors, isDark } = useAppTheme();
+
+  const t = StyleSheet.create({
+    container: { backgroundColor: colors.background },
+    headerBorder: { backgroundColor: colors.background, borderBottomColor: colors.border },
+    backBtn: { borderColor: colors.border, backgroundColor: colors.surface },
+    shareBtn: { borderColor: colors.border, backgroundColor: colors.surface },
+    headerTitle: { color: colors.textPrimary },
+    tabBar: { borderBottomColor: colors.border },
+    tabLabel: { color: colors.textSecondary },
+    tabLabelActive: { color: colors.textPrimary },
+    tabIndicator: { backgroundColor: colors.textPrimary },
+    countPill: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
+    countBadge: { color: colors.textMuted },
+    resultCount: { color: colors.textSecondary },
+    sortBtn: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
+    sortLabel: { color: colors.textSecondary },
+    sortMenu: { backgroundColor: colors.surface, borderColor: colors.border },
+    sortOption: { borderBottomColor: colors.border },
+    sortOptionActive: { backgroundColor: colors.surfaceAlt },
+    sortOptionText: { color: colors.textPrimary },
+    sortOptionTextActive: { color: colors.brand },
+    filterChip: { backgroundColor: colors.surface, borderColor: colors.border },
+    filterChipActive: { backgroundColor: colors.brand, borderColor: colors.brand },
+    filterChipText: { color: colors.brand },
+    filterChipTextActive: { color: colors.background },
+    statsCard: { backgroundColor: colors.surface, borderColor: colors.border },
+    statDivider: { backgroundColor: colors.border },
+    statValue: { color: colors.textPrimary },
+    statLabel: { color: colors.textMuted },
+    savingsRow: { borderTopColor: colors.border },
+    savingsText: { color: colors.success },
+    brandChip: { backgroundColor: colors.surface, borderColor: colors.border },
+    brandChipActive: { backgroundColor: colors.brand, borderColor: colors.brand },
+    brandChipText: { color: colors.textSecondary },
+    brandChipTextActive: { color: colors.background },
+  });
+
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
   const { formatFromFiat } = useFormattedPrice();
@@ -268,19 +306,19 @@ export default function ClosetScreen() {
         contentContainerStyle={styles.brandChipContent}
       >
         <AnimatedPressable
-          style={[styles.brandChip, !activeBrand && styles.brandChipActive]}
+          style={[styles.brandChip, t.brandChip, !activeBrand && styles.brandChipActive, !activeBrand && t.brandChipActive]}
           onPress={() => { haptic.light(); setActiveBrand(null); }}
           activeOpacity={0.85}
           accessibilityRole="button"
           accessibilityState={{ selected: !activeBrand }}
           accessibilityLabel="All brands"
         >
-          <Text style={[styles.brandChipText, !activeBrand && styles.brandChipTextActive]}>All</Text>
+          <Text style={[styles.brandChipText, t.brandChipText, !activeBrand && styles.brandChipTextActive, !activeBrand && t.brandChipTextActive]}>All</Text>
         </AnimatedPressable>
         {availableBrands.map((brand) => (
           <AnimatedPressable
             key={brand}
-            style={[styles.brandChip, activeBrand === brand && styles.brandChipActive]}
+            style={[styles.brandChip, t.brandChip, activeBrand === brand && styles.brandChipActive, activeBrand === brand && t.brandChipActive]}
             onPress={() => {
               haptic.light();
               setActiveBrand((prev) => (prev === brand ? null : brand));
@@ -290,7 +328,7 @@ export default function ClosetScreen() {
             accessibilityState={{ selected: activeBrand === brand }}
             accessibilityLabel={`Filter by brand ${brand}`}
           >
-            <Text style={[styles.brandChipText, activeBrand === brand && styles.brandChipTextActive]}>{brand}</Text>
+            <Text style={[styles.brandChipText, t.brandChipText, activeBrand === brand && styles.brandChipTextActive, activeBrand === brand && t.brandChipTextActive]}>{brand}</Text>
           </AnimatedPressable>
         ))}
       </ScrollView>
@@ -299,14 +337,14 @@ export default function ClosetScreen() {
 
   const renderSortBar = () => (
     <View style={styles.sortBar}>
-      <Text style={styles.resultCount}>{tabCount} {tabCount === 1 ? 'item' : 'items'}</Text>
+      <Text style={[styles.resultCount, t.resultCount]}>{tabCount} {tabCount === 1 ? 'item' : 'items'}</Text>
       <AnimatedPressable
-        style={styles.sortBtn}
+        style={[styles.sortBtn, t.sortBtn]}
         onPress={() => setShowSortMenu((v) => !v)}
         activeOpacity={0.85}
       >
-        <Text style={styles.sortLabel}>{sortBy}</Text>
-        <Ionicons name={showSortMenu ? 'chevron-up' : 'chevron-down'} size={14} color={Colors.textMuted} />
+        <Text style={[styles.sortLabel, t.sortLabel]}>{sortBy}</Text>
+        <Ionicons name={showSortMenu ? 'chevron-up' : 'chevron-down'} size={14} color={colors.textMuted} />
       </AnimatedPressable>
     </View>
   );
@@ -314,11 +352,11 @@ export default function ClosetScreen() {
   const renderSortMenu = () => {
     if (!showSortMenu || activeTab === 'COLLECTIONS') return null;
     return (
-      <View style={styles.sortMenu}>
+      <View style={[styles.sortMenu, t.sortMenu]}>
         {SORT_OPTIONS.map((opt) => (
           <AnimatedPressable
             key={opt}
-            style={[styles.sortOption, sortBy === opt && styles.sortOptionActive]}
+            style={[styles.sortOption, t.sortOption, sortBy === opt && styles.sortOptionActive, sortBy === opt && t.sortOptionActive]}
             onPress={() => {
               haptic.light();
               setSortBy(opt);
@@ -326,8 +364,8 @@ export default function ClosetScreen() {
             }}
             activeOpacity={0.85}
           >
-            <Text style={[styles.sortOptionText, sortBy === opt && styles.sortOptionTextActive]}>{opt}</Text>
-            {sortBy === opt && <Ionicons name="checkmark" size={16} color={Colors.brand} />}
+            <Text style={[styles.sortOptionText, t.sortOptionText, sortBy === opt && styles.sortOptionTextActive, sortBy === opt && t.sortOptionTextActive]}>{opt}</Text>
+            {sortBy === opt && <Ionicons name="checkmark" size={16} color={colors.brand} />}
           </AnimatedPressable>
         ))}
       </View>
@@ -399,7 +437,7 @@ export default function ClosetScreen() {
         {priceDropCount > 0 ? (
           <View style={styles.filterChipRow}>
             <AnimatedPressable
-              style={[styles.filterChip, showPriceDropsOnly && styles.filterChipActive]}
+              style={[styles.filterChip, t.filterChip, showPriceDropsOnly && styles.filterChipActive, showPriceDropsOnly && t.filterChipActive]}
               onPress={() => {
                 haptic.light();
                 setShowPriceDropsOnly((v) => !v);
@@ -409,8 +447,8 @@ export default function ClosetScreen() {
               accessibilityState={{ selected: showPriceDropsOnly }}
               accessibilityLabel={`Filter price drops: ${priceDropCount} items on sale`}
             >
-              <Ionicons name="pricetag-outline" size={13} color={showPriceDropsOnly ? Colors.background : Colors.brand} />
-              <Text style={[styles.filterChipText, showPriceDropsOnly && styles.filterChipTextActive]}>
+              <Ionicons name="pricetag-outline" size={13} color={showPriceDropsOnly ? colors.background : colors.brand} />
+              <Text style={[styles.filterChipText, t.filterChipText, showPriceDropsOnly && styles.filterChipTextActive, showPriceDropsOnly && t.filterChipTextActive]}>
                 Price drops ({priceDropCount})
               </Text>
             </AnimatedPressable>
@@ -463,7 +501,7 @@ export default function ClosetScreen() {
         {/* FAB-style create button on Collections tab */}
         <AppButton
           title="Create Collection"
-          icon={<Ionicons name="add" size={16} color={Colors.background} />}
+          icon={<Ionicons name="add" size={16} color={colors.background} />}
           onPress={handleCreateCollection}
           style={styles.createCollectionBtn}
         />
@@ -473,32 +511,32 @@ export default function ClosetScreen() {
 
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+    <SafeAreaView style={[styles.container, t.container]} edges={['top']}>
+      <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
 
       {/* Animated Header Border */}
-      <Reanimated.View style={[styles.headerBorder, headerBgStyle]} pointerEvents="none" />
+      <Reanimated.View style={[styles.headerBorder, t.headerBorder, headerBgStyle]} pointerEvents="none" />
 
       {/* Header */}
       <View style={styles.header}>
-        <AnimatedPressable style={styles.backBtn} onPress={handleGoBack} activeOpacity={0.85}>
-          <Ionicons name="arrow-back" size={22} color={Colors.textPrimary} />
+        <AnimatedPressable style={[styles.backBtn, t.backBtn]} onPress={handleGoBack} activeOpacity={0.85}>
+          <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
         </AnimatedPressable>
         <View style={{ flex: 1 }}>
-          <Text style={styles.headerTitle}>Closet</Text>
+          <Text style={[styles.headerTitle, t.headerTitle]}>Closet</Text>
         </View>
         <AnimatedPressable
-          style={styles.shareBtn}
+          style={[styles.shareBtn, t.shareBtn]}
           onPress={handleShareCloset}
           activeOpacity={0.85}
           accessibilityRole="button"
           accessibilityLabel="Share closet"
         >
-          <Ionicons name="share-outline" size={20} color={Colors.textPrimary} />
+          <Ionicons name="share-outline" size={20} color={colors.textPrimary} />
         </AnimatedPressable>
-        <View style={styles.countPill}>
-          <Ionicons name={TAB_ICONS[activeTab]} size={12} color={Colors.textMuted} />
-          <Text style={styles.countBadge}>{tabCount}</Text>
+        <View style={[styles.countPill, t.countPill]}>
+          <Ionicons name={TAB_ICONS[activeTab]} size={12} color={colors.textMuted} />
+          <Text style={[styles.countBadge, t.countBadge]}>{tabCount}</Text>
         </View>
       </View>
 
@@ -525,11 +563,11 @@ export default function ClosetScreen() {
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder={searchPlaceholder}
-            prefix={<Ionicons name="search" size={18} color={Colors.textMuted} />}
+            prefix={<Ionicons name="search" size={18} color={colors.textMuted} />}
             suffix={
               searchQuery.length > 0 ? (
                 <AnimatedPressable onPress={() => setSearchQuery('')} accessibilityLabel="Clear search">
-                  <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
+                  <Ionicons name="close-circle" size={18} color={colors.textMuted} />
                 </AnimatedPressable>
               ) : null
             }
@@ -551,27 +589,27 @@ export default function ClosetScreen() {
 
         {/* Closet stats summary — total items, value, savings */}
         {closetStats.totalItems > 0 ? (
-          <View style={styles.statsCard}>
+          <View style={[styles.statsCard, t.statsCard]}>
             <View style={styles.statsRow}>
               <View style={styles.statItem}>
-                <Text style={styles.statValue}>{closetStats.totalItems}</Text>
-                <Text style={styles.statLabel}>Items</Text>
+                <Text style={[styles.statValue, t.statValue]}>{closetStats.totalItems}</Text>
+                <Text style={[styles.statLabel, t.statLabel]}>Items</Text>
               </View>
-              <View style={styles.statDivider} />
+              <View style={[styles.statDivider, t.statDivider]} />
               <View style={styles.statItem}>
-                <Text style={styles.statValue}>{formatFromFiat(closetStats.totalValue, 'GBP')}</Text>
-                <Text style={styles.statLabel}>Total value</Text>
+                <Text style={[styles.statValue, t.statValue]}>{formatFromFiat(closetStats.totalValue, 'GBP')}</Text>
+                <Text style={[styles.statLabel, t.statLabel]}>Total value</Text>
               </View>
-              <View style={styles.statDivider} />
+              <View style={[styles.statDivider, t.statDivider]} />
               <View style={styles.statItem}>
-                <Text style={styles.statValue}>{closetStats.collectionsCount}</Text>
-                <Text style={styles.statLabel}>Collections</Text>
+                <Text style={[styles.statValue, t.statValue]}>{closetStats.collectionsCount}</Text>
+                <Text style={[styles.statLabel, t.statLabel]}>Collections</Text>
               </View>
             </View>
             {closetStats.totalSavings > 0 ? (
-              <View style={styles.savingsRow}>
-                <Ionicons name="trending-down" size={12} color={Colors.success} />
-                <Text style={styles.savingsText}>
+              <View style={[styles.savingsRow, t.savingsRow]}>
+                <Ionicons name="trending-down" size={12} color={colors.success} />
+                <Text style={[styles.savingsText, t.savingsText]}>
                   {formatFromFiat(closetStats.totalSavings, 'GBP')} in price drops tracked
                 </Text>
               </View>
@@ -581,7 +619,7 @@ export default function ClosetScreen() {
 
         {/* Tabs */}
         <View style={styles.tabsWrap}>
-          <View style={styles.tabBar}>
+          <View style={[styles.tabBar, t.tabBar]}>
             {(['SAVED', 'WISHLIST', 'COLLECTIONS'] as TabKey[]).map((tab) => {
               const isActive = activeTab === tab;
               const tabCounts = {
@@ -599,10 +637,10 @@ export default function ClosetScreen() {
                   accessibilityState={{ selected: isActive }}
                   accessibilityLabel={`${tab.toLowerCase()} tab, ${tabCounts[tab]} items`}
                 >
-                  <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
+                  <Text style={[styles.tabLabel, t.tabLabel, isActive && styles.tabLabelActive, isActive && t.tabLabelActive]}>
                     {tab === 'SAVED' ? 'Saved' : tab === 'WISHLIST' ? 'Wishlist' : 'Collections'}
                   </Text>
-                  {isActive && <View style={styles.tabIndicator} />}
+                  {isActive && <View style={[styles.tabIndicator, t.tabIndicator]} />}
                 </AnimatedPressable>
               );
             })}
@@ -623,7 +661,6 @@ export default function ClosetScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   headerBorder: {
     position: 'absolute',
@@ -631,8 +668,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 90,
-    backgroundColor: Colors.background,
-    borderBottomColor: Colors.border,
     zIndex: 1,
   },
   header: {
@@ -649,8 +684,6 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -659,21 +692,17 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
     fontSize: 22,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
   },
   tabBar: {
     flexDirection: 'row',
     gap: Space.lg,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
   },
   tabItem: {
     paddingVertical: Space.sm,
@@ -682,11 +711,9 @@ const styles = StyleSheet.create({
   tabLabel: {
     fontSize: 15,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
   },
   tabLabelActive: {
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
   },
   tabIndicator: {
     position: 'absolute',
@@ -694,7 +721,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 2,
-    backgroundColor: Colors.textPrimary,
     borderTopLeftRadius: 1,
     borderTopRightRadius: 1,
   },
@@ -705,14 +731,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
     borderWidth: 1,
-    borderColor: Colors.border,
   },
   countBadge: {
     fontSize: 12,
     fontFamily: Typography.family.bold,
-    color: Colors.textMuted,
   },
   searchWrap: {
     paddingHorizontal: Space.md,
@@ -735,7 +758,6 @@ const styles = StyleSheet.create({
   resultCount: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
   },
   sortBtn: {
     flexDirection: 'row',
@@ -744,22 +766,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
     borderWidth: 1,
-    borderColor: Colors.border,
   },
   sortLabel: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
   },
   sortMenu: {
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
-    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
     overflow: 'hidden',
   },
   sortOption: {
@@ -769,19 +786,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
   },
   sortOptionActive: {
-    backgroundColor: Colors.surfaceAlt,
   },
   sortOptionText: {
     fontSize: 14,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
   },
   sortOptionTextActive: {
     fontFamily: Typography.family.bold,
-    color: Colors.brand,
   },
   filterChipRow: {
     flexDirection: 'row',
@@ -796,22 +809,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
     minHeight: 32,
   },
   filterChipActive: {
-    backgroundColor: Colors.brand,
-    borderColor: Colors.brand,
   },
   filterChipText: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
   },
   filterChipTextActive: {
-    color: Colors.background,
   },
   collectionsList: {
     paddingHorizontal: Space.md,
@@ -833,10 +840,8 @@ const styles = StyleSheet.create({
   statsCard: {
     marginHorizontal: Space.md,
     marginBottom: Space.md,
-    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
     padding: Space.md,
   },
   statsRow: {
@@ -851,18 +856,15 @@ const styles = StyleSheet.create({
   statDivider: {
     width: 1,
     height: 28,
-    backgroundColor: Colors.border,
   },
   statValue: {
     fontSize: 17,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
     letterSpacing: -0.3,
   },
   statLabel: {
     fontSize: 11,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
@@ -873,12 +875,10 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
     paddingTop: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
   },
   savingsText: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    color: Colors.success,
   },
   brandChipScroll: {
     marginBottom: Space.sm,
@@ -891,22 +891,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
     minHeight: 32,
     justifyContent: 'center',
   },
   brandChipActive: {
-    backgroundColor: Colors.brand,
-    borderColor: Colors.brand,
   },
   brandChipText: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
   },
   brandChipTextActive: {
-    color: Colors.background,
   },
 });

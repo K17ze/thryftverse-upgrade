@@ -14,7 +14,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CachedImage } from '../components/CachedImage';
 import Reanimated, { useSharedValue, useAnimatedStyle, withTiming, withSequence, withDelay, useAnimatedScrollHandler, runOnJS, FadeInDown } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { Colors } from '../constants/colors';
 
 import { useAppTheme } from '../theme/ThemeContext';
 
@@ -81,7 +80,198 @@ function getSubcategoryToken(categoryId: string, subcategoryId?: string, title?:
 }
 
 export default function BrowseScreen() {
-  const { isDark } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
+
+  const styles = useMemo(() => StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.background },
+
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: Space.md,
+      paddingTop: Space.sm,
+      paddingBottom: Space.xs,
+    },
+    backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+    searchBtn: { width: 44, height: 44, borderRadius: Radius.full, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+
+    titleContainer: {
+      paddingHorizontal: Space.md,
+      paddingTop: Space.sm,
+      paddingBottom: Space.lg,
+    },
+    hugeTitle: {
+      fontSize: 32,
+      fontFamily: Typography.family.bold,
+      color: colors.textPrimary,
+      letterSpacing: -0.8,
+      lineHeight: 38,
+    },
+    itemCountText: {
+      fontSize: 14,
+      fontFamily: Typography.family.medium,
+      color: colors.textMuted,
+      marginTop: 6,
+    },
+
+    filterBar: { paddingBottom: 16 },
+    filterRow: { paddingHorizontal: 20, gap: 8, alignItems: 'center' },
+    filterPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 20,
+      backgroundColor: colors.surface,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+    },
+    filterPillActive: {
+      backgroundColor: colors.textPrimary,
+      borderColor: colors.textPrimary,
+    },
+    filterPillTextActive: { color: colors.background, fontSize: 13, fontFamily: Typography.family.semibold },
+    filterPillOutline: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 20,
+      backgroundColor: colors.surface,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+    },
+    filterPillText: { color: colors.textPrimary, fontSize: 13, fontFamily: Typography.family.medium },
+    saveSearchPillActive: {
+      borderColor: colors.brand,
+      backgroundColor: `${colors.brand}08`,
+    },
+    saveSearchTextActive: {
+      color: colors.brand,
+      fontFamily: Typography.family.semibold,
+    },
+    syncRetryBanner: {
+      marginHorizontal: 20,
+      marginBottom: 14,
+    },
+
+    gridContent: { paddingHorizontal: 20, paddingBottom: 100 },
+    rowWrapper: { justifyContent: 'space-between', marginBottom: 32 },
+    loadingStateWrap: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'space-between',
+      paddingHorizontal: 20,
+      rowGap: 32,
+    },
+    loadingCard: {
+      width: ITEM_WIDTH,
+    },
+    loadingCardOffset: {
+      marginTop: 24,
+    },
+    loadingCardBody: {
+      marginTop: 10,
+      paddingHorizontal: 4,
+    },
+
+    gridItem: { width: ITEM_WIDTH },
+    imageWrap: {
+      width: ITEM_WIDTH,
+      borderRadius: Radius.sm,
+      overflow: 'hidden',
+      backgroundColor: colors.surfaceAlt,
+      marginBottom: 12,
+    },
+    gridImageContainer: {
+      width: '100%',
+      aspectRatio: 0.8,
+      borderRadius: Radius.lg,
+    },
+    gridImage: { width: '100%', height: '100%' },
+    sharedImageLayer: {
+      ...StyleSheet.absoluteFill,
+    },
+    likeBtn: {
+      position: 'absolute',
+      top: 10,
+      right: 10,
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: 'rgba(0,0,0,0.3)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    infoWrap: { paddingHorizontal: 4 },
+    priceRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      justifyContent: 'space-between',
+      marginBottom: 4,
+    },
+    priceText: { color: colors.textPrimary, fontSize: 18, fontFamily: Typography.family.bold },
+    brandText: { color: colors.textSecondary, fontSize: 12, fontFamily: Typography.family.bold, textTransform: 'uppercase' },
+    sizeText: { color: colors.textMuted, fontSize: 13, fontFamily: Typography.family.medium },
+    sellerActionRow: {
+      marginTop: 8,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 6,
+    },
+    sellerIdentityChip: {
+      flex: 1,
+      minHeight: 28,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 8,
+    },
+    sellerActionAvatarWrap: {
+      width: 18,
+      height: 18,
+      borderRadius: 9,
+    },
+    sellerActionAvatar: {
+      width: 18,
+      height: 18,
+      borderRadius: 9,
+    },
+    sellerActionAvatarFallback: {
+      width: 18,
+      height: 18,
+      borderRadius: 9,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.background,
+    },
+    sellerActionHandle: {
+      flex: 1,
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontFamily: Typography.family.semibold,
+    },
+    sellerMessageBtn: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.background,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+  }), [colors]);
+
   const navigation = useNavigation<any>();
   const route = useRoute<BrowseRoute>();
   const { title, categoryId, subcategoryId, searchQuery } = route.params || { title: 'Browse All', categoryId: 'search' };
@@ -296,15 +486,15 @@ export default function BrowseScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
       {/* Heavy Typography Header */}
       <Reanimated.View entering={FadeInDown.duration(300).delay(30)} style={styles.header}>
         <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.8} accessibilityLabel="Go back">
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </AnimatedPressable>
         <AnimatedPressable style={styles.searchBtn} activeOpacity={0.8} onPress={() => navigation.navigate('GlobalSearch')} accessibilityLabel="Search listings">
-          <Ionicons name="search" size={20} color={Colors.textPrimary} />
+          <Ionicons name="search" size={20} color={colors.textPrimary} />
         </AnimatedPressable>
       </Reanimated.View>
 
@@ -321,7 +511,7 @@ export default function BrowseScreen() {
             activeOpacity={0.85}
             accessibilityLabel="Open filters"
           >
-            <Ionicons name="options-outline" size={14} color={hasActiveFilters ? Colors.background : Colors.textPrimary} />
+            <Ionicons name="options-outline" size={14} color={hasActiveFilters ? colors.background : colors.textPrimary} />
             <Text style={[styles.filterPillText, hasActiveFilters && styles.filterPillTextActive]}>{hasActiveFilters ? 'Filter on' : 'Filter'}</Text>
           </AnimatedPressable>
           <AnimatedPressable
@@ -331,7 +521,7 @@ export default function BrowseScreen() {
             accessibilityLabel="Filter by brand"
           >
             <Text style={styles.filterPillText}>{browseFilters.brands.length > 0 ? `Brand (${browseFilters.brands.length})` : 'Brand'}</Text>
-            <Ionicons name="chevron-down" size={12} color={Colors.textMuted} />
+            <Ionicons name="chevron-down" size={12} color={colors.textMuted} />
           </AnimatedPressable>
           <AnimatedPressable
             style={styles.filterPillOutline}
@@ -340,7 +530,7 @@ export default function BrowseScreen() {
             accessibilityLabel="Filter by size"
           >
             <Text style={styles.filterPillText}>{browseFilters.sizes.length > 0 ? `Size (${browseFilters.sizes.length})` : 'Size'}</Text>
-            <Ionicons name="chevron-down" size={12} color={Colors.textMuted} />
+            <Ionicons name="chevron-down" size={12} color={colors.textMuted} />
           </AnimatedPressable>
           <AnimatedPressable
             style={styles.filterPillOutline}
@@ -349,7 +539,7 @@ export default function BrowseScreen() {
             accessibilityLabel="Filter by condition"
           >
             <Text style={styles.filterPillText}>{browseFilters.condition !== 'Any' ? browseFilters.condition : 'Condition'}</Text>
-            <Ionicons name="chevron-down" size={12} color={Colors.textMuted} />
+            <Ionicons name="chevron-down" size={12} color={colors.textMuted} />
           </AnimatedPressable>
           {saveSearchLabel && saveSearchLabel !== 'Browse All' && (
             <AnimatedPressable
@@ -362,7 +552,7 @@ export default function BrowseScreen() {
               <Ionicons
                 name={isCurrentSaved ? 'notifications' : 'notifications-outline'}
                 size={14}
-                color={isCurrentSaved ? Colors.brand : Colors.textSecondary}
+                color={isCurrentSaved ? colors.brand : colors.textSecondary}
               />
               <Text style={[styles.filterPillText, isCurrentSaved && styles.saveSearchTextActive]}>
                 {isCurrentSaved ? 'Saved' : 'Save search'}
@@ -437,192 +627,3 @@ export default function BrowseScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.xs,
-  },
-  backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  searchBtn: { width: 44, height: 44, borderRadius: Radius.full, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' },
-
-  titleContainer: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.lg,
-  },
-  hugeTitle: {
-    fontSize: 32,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    letterSpacing: -0.8,
-    lineHeight: 38,
-  },
-  itemCountText: {
-    fontSize: 14,
-    fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
-    marginTop: 6,
-  },
-
-  filterBar: { paddingBottom: 16 },
-  filterRow: { paddingHorizontal: 20, gap: 8, alignItems: 'center' },
-  filterPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: Colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-  },
-  filterPillActive: {
-    backgroundColor: Colors.textPrimary,
-    borderColor: Colors.textPrimary,
-  },
-  filterPillTextActive: { color: Colors.background, fontSize: 13, fontFamily: Typography.family.semibold },
-  filterPillOutline: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: Colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-  },
-  filterPillText: { color: Colors.textPrimary, fontSize: 13, fontFamily: Typography.family.medium },
-  saveSearchPillActive: {
-    borderColor: Colors.brand,
-    backgroundColor: `${Colors.brand}08`,
-  },
-  saveSearchTextActive: {
-    color: Colors.brand,
-    fontFamily: Typography.family.semibold,
-  },
-  syncRetryBanner: {
-    marginHorizontal: 20,
-    marginBottom: 14,
-  },
-
-  gridContent: { paddingHorizontal: 20, paddingBottom: 100 },
-  rowWrapper: { justifyContent: 'space-between', marginBottom: 32 },
-  loadingStateWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    rowGap: 32,
-  },
-  loadingCard: {
-    width: ITEM_WIDTH,
-  },
-  loadingCardOffset: {
-    marginTop: 24,
-  },
-  loadingCardBody: {
-    marginTop: 10,
-    paddingHorizontal: 4,
-  },
-
-  gridItem: { width: ITEM_WIDTH },
-  imageWrap: {
-    width: ITEM_WIDTH,
-    borderRadius: Radius.sm,
-    overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
-    marginBottom: 12,
-  },
-  gridImageContainer: {
-    width: '100%',
-    aspectRatio: 0.8,
-    borderRadius: Radius.lg,
-  },
-  gridImage: { width: '100%', height: '100%' },
-  sharedImageLayer: {
-    ...StyleSheet.absoluteFill,
-  },
-  likeBtn: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  infoWrap: { paddingHorizontal: 4 },
-  priceRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  priceText: { color: Colors.textPrimary, fontSize: 18, fontFamily: Typography.family.bold },
-  brandText: { color: Colors.textSecondary, fontSize: 12, fontFamily: Typography.family.bold, textTransform: 'uppercase' },
-  sizeText: { color: Colors.textMuted, fontSize: 13, fontFamily: Typography.family.medium },
-  sellerActionRow: {
-    marginTop: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 6,
-  },
-  sellerIdentityChip: {
-    flex: 1,
-    minHeight: 28,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 8,
-  },
-  sellerActionAvatarWrap: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-  },
-  sellerActionAvatar: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-  },
-  sellerActionAvatarFallback: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.background,
-  },
-  sellerActionHandle: {
-    flex: 1,
-    color: Colors.textSecondary,
-    fontSize: 11,
-    fontFamily: Typography.family.semibold,
-  },
-  sellerMessageBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});

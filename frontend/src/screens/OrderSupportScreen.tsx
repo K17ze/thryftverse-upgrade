@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,8 +14,7 @@ import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
-import { useAppTheme } from '../theme/ThemeContext';
-import { Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography, Elevation } from '../theme/designTokens';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
@@ -47,7 +46,8 @@ const ALL_SUPPORT_TOPICS = [
 
 export default function OrderSupportScreen({ navigation, route }: Props) {
   const { orderId } = route.params;
-  const { isDark } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
   const { formatFromFiat } = useFormattedPrice();
@@ -198,10 +198,10 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
             <Reanimated.View entering={FadeInDown.duration(300).delay(20)}>
               <ElevatedSurface variant="surface" style={styles.existingTicketCard}>
                 <View style={styles.existingTicketRow}>
-                  <Ionicons name="help-circle-outline" size={22} color={Colors.brand} />
+                  <Ionicons name="help-circle-outline" size={22} color={colors.brand} />
                   <View style={{ flex: 1, marginLeft: 10 }}>
                     <Text style={styles.existingTicketLabel}>Open support request</Text>
-                    <Caption color={Colors.textMuted}>{openTicket.topicLabel}</Caption>
+                    <Caption color={colors.textMuted}>{openTicket.topicLabel}</Caption>
                   </View>
                 </View>
                 <AppButton
@@ -215,7 +215,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
           )}
 
           <Reanimated.View entering={FadeInDown.duration(300).delay(40)}>
-            <Meta color={Colors.textMuted} style={styles.sectionLabel}>SELECT TOPIC</Meta>
+            <Meta color={colors.textMuted} style={styles.sectionLabel}>SELECT TOPIC</Meta>
             <View style={styles.topicsCard}>
               {availableTopics.map((topic) => {
                 const isActive = selectedTopic === topic.id;
@@ -237,7 +237,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
                         <Ionicons
                           name={topic.icon as any}
                           size={20}
-                          color={isActive ? Colors.textInverse : Colors.textSecondary}
+                          color={isActive ? colors.textInverse : colors.textSecondary}
                         />
                       </View>
                       <View style={styles.topicText}>
@@ -245,14 +245,14 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
                           {topic.label}
                         </Text>
                         <Caption
-                          color={isActive ? Colors.textInverse : Colors.textMuted}
+                          color={isActive ? colors.textInverse : colors.textMuted}
                           numberOfLines={2}
                         >
                           {topic.description}
                         </Caption>
                       </View>
                       {isActive && (
-                        <Ionicons name="checkmark-circle" size={22} color={Colors.textInverse} />
+                        <Ionicons name="checkmark-circle" size={22} color={colors.textInverse} />
                       )}
                     </View>
                   </AnimatedPressable>
@@ -279,13 +279,13 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
               <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
                 <View style={styles.guidanceCard}>
                   <View style={styles.guidanceHeader}>
-                    <Ionicons name="information-circle-outline" size={16} color={Colors.brand} />
+                    <Ionicons name="information-circle-outline" size={16} color={colors.brand} />
                     <Text style={styles.guidanceTitle}>What happens next</Text>
                   </View>
                   <Text style={styles.guidanceBody}>{guidance[topic.id] ?? guidance.other}</Text>
                   {isEscrowHeld && (
                     <View style={styles.escrowNoticeRow}>
-                      <Ionicons name="lock-closed" size={12} color={Colors.success} />
+                      <Ionicons name="lock-closed" size={12} color={colors.success} />
                       <Text style={styles.escrowNoticeText}>
                         Your funds remain held in escrow while this request is open.
                       </Text>
@@ -297,7 +297,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
           })()}
 
           <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
-            <Meta color={Colors.textMuted} style={styles.sectionLabel}>DETAILS</Meta>
+            <Meta color={colors.textMuted} style={styles.sectionLabel}>DETAILS</Meta>
             <View style={styles.detailsCard}>
               <AppInput
                 value={details}
@@ -315,7 +315,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
           {/* Evidence upload */}
           {!isSubmitted && (
             <Reanimated.View entering={FadeInDown.duration(300).delay(100)}>
-              <Meta color={Colors.textMuted} style={styles.sectionLabel}>EVIDENCE (OPTIONAL)</Meta>
+              <Meta color={colors.textMuted} style={styles.sectionLabel}>EVIDENCE (OPTIONAL)</Meta>
               <View style={styles.evidenceCard}>
                 {evidenceUris.length > 0 && (
                   <View style={styles.evidenceThumbs}>
@@ -329,7 +329,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
                           accessibilityRole="button"
                           accessibilityLabel="Remove evidence photo"
                         >
-                          <Ionicons name="close-circle" size={20} color={Colors.textInverse} />
+                          <Ionicons name="close-circle" size={20} color={colors.textInverse} />
                         </Pressable>
                       </View>
                     ))}
@@ -344,10 +344,10 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
                     accessibilityLabel="Add evidence photo"
                   >
                     {isUploadingEvidence ? (
-                      <ActivityIndicator size="small" color={Colors.brand} />
+                      <ActivityIndicator size="small" color={colors.brand} />
                     ) : (
                       <>
-                        <Ionicons name="camera-outline" size={22} color={Colors.brand} />
+                        <Ionicons name="camera-outline" size={22} color={colors.brand} />
                         <Text style={styles.evidenceAddText}>Add photo ({evidenceUris.length}/3)</Text>
                       </>
                     )}
@@ -359,12 +359,12 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
 
           {isSubmitted && submittedTicketId && (
             <Reanimated.View entering={FadeInDown.duration(300)} style={styles.successCard}>
-              <Ionicons name="checkmark-circle" size={32} color={Colors.success} />
+              <Ionicons name="checkmark-circle" size={32} color={colors.success} />
               <BodyEmphasis style={styles.successTitle}>Request received</BodyEmphasis>
-              <Caption color={Colors.textSecondary} style={styles.successSub}>
+              <Caption color={colors.textSecondary} style={styles.successSub}>
                 Ticket #{submittedTicketId.slice(-8).toUpperCase()}
               </Caption>
-              <Caption color={Colors.textMuted} style={styles.successSub}>
+              <Caption color={colors.textMuted} style={styles.successSub}>
                 Our support team will review your request and respond as soon as possible.
               </Caption>
               <AppButton
@@ -379,8 +379,8 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
 
           {!isSubmitted && (
             <Reanimated.View entering={FadeInDown.duration(300).delay(120)} style={styles.honestNote}>
-              <Ionicons name="time-outline" size={16} color={Colors.textMuted} />
-              <Caption color={Colors.textMuted} style={styles.honestNoteText}>
+              <Ionicons name="time-outline" size={16} color={colors.textMuted} />
+              <Caption color={colors.textMuted} style={styles.honestNoteText}>
                 Our support team reviews requests as quickly as possible. For urgent issues, contact us through the Help & Support page.
               </Caption>
             </Reanimated.View>
@@ -414,10 +414,11 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   content: {
     flex: 1,
@@ -434,7 +435,7 @@ const styles = StyleSheet.create({
     marginBottom: Space.sm,
   },
   topicsCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     overflow: 'hidden',
     ...Elevation.subtle,
@@ -444,9 +445,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
-    backgroundColor: `${Colors.brand}08`,
+    backgroundColor: `${colors.brand}08`,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: `${Colors.brand}25`,
+    borderColor: `${colors.brand}25`,
     gap: 6,
   },
   guidanceHeader: {
@@ -457,12 +458,12 @@ const styles = StyleSheet.create({
   guidanceTitle: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   guidanceBody: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     lineHeight: 17,
   },
   escrowNoticeRow: {
@@ -475,7 +476,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 11,
     fontFamily: Typography.family.medium,
-    color: Colors.success,
+    color: colors.success,
   },
   topicRow: {
     flexDirection: 'row',
@@ -484,16 +485,16 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   topicRowActive: {
-    backgroundColor: Colors.textPrimary,
+    backgroundColor: colors.textPrimary,
   },
   topicIcon: {
     width: 36,
     height: 36,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -506,15 +507,15 @@ const styles = StyleSheet.create({
   topicLabel: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: Type.body.letterSpacing,
     marginBottom: 2,
   },
   topicLabelActive: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
   detailsCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     padding: Space.md,
     ...Elevation.subtle,
@@ -526,7 +527,7 @@ const styles = StyleSheet.create({
   charCount: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textAlign: 'right',
     marginTop: Space.xs,
   },
@@ -544,13 +545,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
+    borderTopColor: colors.border,
   },
   btnDisabled: {
     opacity: 0.45,
   },
   successCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     padding: Space.lg,
     alignItems: 'center',
@@ -560,7 +561,7 @@ const styles = StyleSheet.create({
   successTitle: {
     fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginTop: Space.sm,
   },
   successSub: {
@@ -568,7 +569,7 @@ const styles = StyleSheet.create({
     lineHeight: Type.caption.lineHeight + 2,
   },
   orderCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     padding: Space.md,
     ...Elevation.subtle,
@@ -590,21 +591,21 @@ const styles = StyleSheet.create({
   orderTitle: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   orderMeta: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   orderStatus: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
+    color: colors.brand,
     textTransform: 'capitalize',
   },
   existingTicketCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     padding: Space.md,
     gap: Space.sm,
@@ -617,10 +618,10 @@ const styles = StyleSheet.create({
   existingTicketLabel: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   evidenceCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     padding: Space.md,
     ...Elevation.subtle,
@@ -643,7 +644,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -6,
     right: -6,
-    backgroundColor: Colors.textPrimary,
+    backgroundColor: colors.textPrimary,
     borderRadius: Radius.full,
   },
   evidenceAddBtn: {
@@ -655,11 +656,12 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     borderWidth: 1,
     borderStyle: 'dashed',
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   evidenceAddText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    color: Colors.brand,
+    color: colors.brand,
   },
-});
+  });
+}
