@@ -230,6 +230,28 @@ describe('native visual acceptance QA matrix (spec 07_VISUAL)', () => {
       // Per Pass 3: one discovery rail
       expect(assetScreen).toMatch(/recommendation|discovery/i);
     });
+
+    it('Co-Own price chart is width-responsive', () => {
+      const priceChart = readComponent('coown/CoOwnPriceChart.tsx');
+      expect(priceChart).toContain('useWindowDimensions');
+      expect(priceChart).not.toMatch(/^const CHART_WIDTH = 320;$/m);
+      expect(priceChart).toContain('screenWidth');
+    });
+
+    it('Co-Own candle chart is width-responsive', () => {
+      const candleChart = readComponent('coown/CoOwnCandleChart.tsx');
+      expect(candleChart).toContain('useWindowDimensions');
+      expect(candleChart).not.toMatch(/^const CHART_WIDTH = 320;$/m);
+      expect(candleChart).toContain('screenWidth');
+    });
+
+    it('fully allocated state has a real primary action', () => {
+      // Per acceptance matrix: "Fully allocated state has a real action"
+      const fullyAllocatedMatch = assetScreen.match(/availableUnits === 0 && !isHolder[\s\S]*?Browse secondary/);
+      expect(fullyAllocatedMatch).toBeTruthy();
+      expect(fullyAllocatedMatch![0]).toContain('primaryAction');
+      expect(fullyAllocatedMatch![0]).toContain('Browse secondary');
+    });
   });
 
   // ── Light/dark parity ──

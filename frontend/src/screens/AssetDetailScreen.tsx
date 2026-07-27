@@ -943,6 +943,10 @@ export default function AssetDetailScreen() {
                 </Text>
               }
               subtitle="Check the secondary market"
+              primaryAction={{
+                label: 'Browse secondary',
+                onPress: () => handleTradePress('buy'),
+              }}
             />
           );
         }

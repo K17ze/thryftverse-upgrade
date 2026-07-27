@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path, Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
 import { useAppTheme } from '../../theme/ThemeContext';
@@ -114,7 +114,6 @@ function formatLastAge(ageSeconds: number): string {
   return `${days}d ago`;
 }
 
-const CHART_WIDTH = 320;
 const CHART_HEIGHT = 120;
 const CHART_PADDING = 8;
 
@@ -128,6 +127,11 @@ export function CoOwnPriceChart({
   candleChart,
 }: CoOwnPriceChartProps) {
   const { colors } = useAppTheme();
+  const { width: screenWidth } = useWindowDimensions();
+  // Per spec 03_COOWN §4: chart is width-responsive. Use the smaller
+  // of the actual screen width (minus horizontal padding) and a
+  // sensible max to avoid over-stretching on tablets.
+  const CHART_WIDTH = Math.min(Math.max(screenWidth - 32, 280), 440);
   const [period, setPeriod] = useState<Period>('1W');
   const [chartMode, setChartMode] = useState<ChartMode>('line');
   const [showVolume, setShowVolume] = useState(false);
