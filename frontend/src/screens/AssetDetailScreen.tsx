@@ -113,6 +113,8 @@ export default function AssetDetailScreen() {
   const isTablet = screenWidth >= 768;
   const currentUser = useStore((state) => state.currentUser);
   const upsertConversation = useStore((state) => state.upsertConversation);
+  const isCoOwnWatched = useStore((state) => state.isCoOwnWatched);
+  const toggleCoOwnWatch = useStore((state) => state.toggleCoOwnWatch);
   const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
 
@@ -243,6 +245,7 @@ export default function AssetDetailScreen() {
 
   const isIssuer = currentUser?.id === asset.issuerId;
   const isHolder = yourUnits > 0;
+  const isWatched = isCoOwnWatched(asset.id);
   const issuerUsername = issuerTrust?.username || 'Issuer';
   const canMessageIssuer = currentUser?.id !== asset.issuerId;
 
@@ -254,6 +257,9 @@ export default function AssetDetailScreen() {
 
   const bestBid = orderBook.bids.length > 0 ? orderBook.bids[0] : null;
   const bestAsk = orderBook.asks.length > 0 ? orderBook.asks[0] : null;
+  const spreadGbp = bestBid?.unitPriceGbp != null && bestAsk?.unitPriceGbp != null
+    ? Math.max(0, bestAsk.unitPriceGbp - bestBid.unitPriceGbp)
+    : null;
 
   const images = asset.imageUrl ? [asset.imageUrl] : [];
 
@@ -363,7 +369,7 @@ export default function AssetDetailScreen() {
           isFav={social.isLiked}
           isSaved={social.isSavedToCollection}
           showDefaultControls={false}
-          heightFraction={isCompact ? 0.52 : 0.65}
+          heightFraction={isVeryCompact ? 0.48 : isCompact ? 0.5 : 0.56}
           onOpenFullscreen={handleOpenFullscreen}
           overlayTopContent={
             <View style={styles.familyBadgeOverlay}>
@@ -386,13 +392,6 @@ export default function AssetDetailScreen() {
               label: social.isSavedToCollection ? 'Saved to collection' : 'Save to collection',
               onPress: social.openCollectionPicker,
               isActive: social.isSavedToCollection,
-            },
-            {
-              icon: social.isLiked ? 'heart' : 'heart-outline',
-              activeIcon: 'heart',
-              label: social.isLiked ? 'Favourited' : 'Favourite',
-              onPress: social.toggleLike,
-              isActive: social.isLiked,
             },
           ]}
           onOverflow={() => setOverflowVisible(true)}
@@ -470,90 +469,94 @@ export default function AssetDetailScreen() {
         <CommerceDetailTransactionSurface
           primaryLabel="Last trade"
           primaryValue={formatCoOwnIze(asset.unitPriceGbp)}
-          secondaryLabel="Top of book"
-          secondaryValue={
-            bestBid || bestAsk
-              ? `${bestBid ? `${formatCoOwnIze(bestBid.unitPriceGbp ?? 0)} × ${bestBid.units ?? 0}` : '—'} / ${bestAsk ? `${formatCoOwnIze(bestAsk.unitPriceGbp ?? 0)} × ${bestAsk.units ?? 0}` : '—'}`
-              : 'No orders'
-          }
           statusRow={
             <View style={styles.marketStatusRow}>
-              <Text style={[styles.marketStatusText, { color: asset.isOpen ? colors.success : colors.textSecondary }]}>
-                {asset.isOpen ? 'Continuous · Open' : 'Closed'}
-              </Text>
-              {dataStale && dataStaleAgeLabel && (
-                <Text style={[styles.marketStatusStale, { color: colors.warning }]}>
-                  {' · '}Stale {dataStaleAgeLabel}
+              <View style={styles.marketStatusCluster}>
+                <Text style={[styles.marketStatusText, { color: asset.isOpen ? colors.success : colors.textSecondary }]}>
+                  {asset.isOpen ? 'Continuous · Open' : 'Closed'}
                 </Text>
-              )}
-              {asset.rightsVersion && (
-                <Pressable
-                  onPress={() => setRightsSheetVisible(true)}
-                  hitSlop={8}
-                  accessibilityLabel={`Rights version ${formatRightsVersion(asset.rightsVersion)}`}
-                >
-                  <Text style={[styles.marketStatusRights, { color: colors.textSecondary }]}>
-                    {' · '}{formatRightsVersion(asset.rightsVersion)}
-                  </Text>
-                </Pressable>
-              )}
+                {dataStale && dataStaleAgeLabel && (
+                  <Text style={[styles.marketStatusStale, { color: colors.warning }]}>Stale {dataStaleAgeLabel}</Text>
+                )}
+              </View>
+              <View style={styles.marketStatusCluster}>
+                <Text style={[styles.marketStatusRights, { color: colors.textSecondary }]}>
+                  Spread {spreadGbp != null ? formatCoOwnIze(spreadGbp) : 'Not available'}
+                </Text>
+                {asset.rightsVersion && (
+                  <Pressable
+                    onPress={() => setRightsSheetVisible(true)}
+                    hitSlop={8}
+                    accessibilityLabel={`Rights version ${formatRightsVersion(asset.rightsVersion)}`}
+                  >
+                    <Text style={[styles.marketStatusRights, { color: colors.textSecondary }]}>
+                      {formatRightsVersion(asset.rightsVersion)}
+                    </Text>
+                  </Pressable>
+                )}
+              </View>
             </View>
           }
         >
-          {/* Compact secondary rows — NAV / distribution / report.
-              Spec 03 §3: "Do not give unavailable secondary values equal
-              visual weight to the live market." Muted copy, not em dash. */}
-          <View style={styles.secondaryMetrics}>
-            <CommerceDetailMetricRow
-              label="NAV / unit"
-              value={
-                asset.appraisalValue && totalUnits > 0
-                  ? formatFromFiat(asset.appraisalValue / totalUnits, 'GBP')
-                  : 'Not available'
-              }
-              muted={!asset.appraisalValue}
-            />
-            <CommerceDetailMetricRow
-              label="Next distribution"
-              value="Not scheduled"
-              muted
-            />
-            <CommerceDetailMetricRow
-              label="Next report"
-              value={asset.appraisalNextScheduled ?? 'Not scheduled'}
-              muted={!asset.appraisalNextScheduled}
-            />
+          <View style={[styles.marketBookRow, { borderTopColor: colors.borderSubtle }]}>
+            <View style={styles.marketBookSide}>
+              <Text style={[styles.marketBookLabel, { color: colors.textMuted }]}>Bid</Text>
+              <Text style={[styles.marketBookValue, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82}>
+                {bestBid?.unitPriceGbp != null ? `${formatCoOwnIze(bestBid.unitPriceGbp)} × ${bestBid.units ?? 0}` : 'No bid'}
+              </Text>
+            </View>
+            <View style={[styles.marketBookDivider, { backgroundColor: colors.borderSubtle }]} />
+            <View style={styles.marketBookSide}>
+              <Text style={[styles.marketBookLabel, { color: colors.textMuted }]}>Ask</Text>
+              <Text style={[styles.marketBookValue, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82}>
+                {bestAsk?.unitPriceGbp != null ? `${formatCoOwnIze(bestAsk.unitPriceGbp)} × ${bestAsk.units ?? 0}` : 'No ask'}
+              </Text>
+            </View>
           </View>
         </CommerceDetailTransactionSurface>
+
+        <View style={[styles.marketSecondaryFacts, { borderBottomColor: colors.borderSubtle }]}>
+          <View style={styles.marketSecondaryFact}>
+            <Text style={[styles.marketSecondaryLabel, { color: colors.textMuted }]}>NAV / unit</Text>
+            <Text style={[styles.marketSecondaryValue, { color: colors.textSecondary }]} numberOfLines={2}>
+              {asset.appraisalValue && totalUnits > 0
+                ? formatFromFiat(asset.appraisalValue / totalUnits, 'GBP')
+                : 'Not available'}
+            </Text>
+          </View>
+          <View style={styles.marketSecondaryFact}>
+            <Text style={[styles.marketSecondaryLabel, { color: colors.textMuted }]}>Distribution</Text>
+            <Text style={[styles.marketSecondaryValue, { color: colors.textSecondary }]} numberOfLines={2}>Not scheduled</Text>
+          </View>
+          <View style={styles.marketSecondaryFact}>
+            <Text style={[styles.marketSecondaryLabel, { color: colors.textMuted }]}>Next report</Text>
+            <Text style={[styles.marketSecondaryValue, { color: colors.textSecondary }]} numberOfLines={2}>
+              {asset.appraisalNextScheduled ?? 'Not scheduled'}
+            </Text>
+          </View>
+        </View>
 
         {/* ── Zone D — Viewer context ──
             Compact personalised surface — only when the viewer owns units.
             Spec 03 §4: "Use a compact personalised surface." Appears before
             generic supply. */}
         {isHolder && (
-          <CommerceDetailTransactionSurface elevated>
+          <CommerceDetailSection label="Your position" divider>
             <View style={styles.viewerPositionHeader}>
-              <Text style={[styles.viewerPositionLabel, { color: colors.textSecondary }]}>
-                Your position
-              </Text>
               <Text style={[styles.viewerPositionValue, { color: colors.textPrimary }]}>
-                {yourUnits} units · {viewerPct.toFixed(1)}%
+                {yourUnits} units · {viewerPct.toFixed(1)}% ownership
+              </Text>
+              <Text style={[styles.viewerPositionMarketValue, { color: colors.textPrimary }]}>
+                {formatCoOwnIze(asset.unitPriceGbp * yourUnits)}
               </Text>
             </View>
-            <CommerceDetailMetricRow
-              label="Current value"
-              value={formatCoOwnIze(asset.unitPriceGbp * yourUnits)}
-            />
-            <CommerceDetailMetricRow
-              label="Settlement"
-              value={
-                asset.settlementMode === 'ONEZE' ? '1ZE'
+            <Text style={[styles.viewerPositionMeta, { color: colors.textMuted }]}>
+              Settlement {asset.settlementMode === 'ONEZE' ? '1ZE'
                 : asset.settlementMode === 'TVUSD' ? 'TVUSD'
                 : asset.settlementMode === 'GBP' ? 'GBP'
-                : 'GBP + TVUSD'
-              }
-            />
-          </CommerceDetailTransactionSurface>
+                : 'GBP + TVUSD'}
+            </Text>
+          </CommerceDetailSection>
         )}
 
         {/* ── Zone E — Availability and supply ──
@@ -950,7 +953,6 @@ export default function AssetDetailScreen() {
           authorised: totalUnits,
           issued: totalUnits,
           publicFloat: totalUnits - availableUnits,
-          sponsorLocked: 0,
           treasury: availableUnits,
         }}
         rightsVersion={asset.rightsVersion ?? undefined}
@@ -963,8 +965,10 @@ export default function AssetDetailScreen() {
         onToggleFav={social.toggleLike}
         isFav={social.isLiked}
         onWatch={() => {
+          toggleCoOwnWatch(asset.id);
           setOverflowVisible(false);
         }}
+        isWatched={isWatched}
         onReport={() => {
           setOverflowVisible(false);
           navigation.navigate('CoOwnIssue', { assetId: asset.id });
@@ -989,8 +993,14 @@ const styles = StyleSheet.create({
   marketStatusRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     flexWrap: 'wrap',
-    gap: 0,
+    gap: Space.xs,
+  },
+  marketStatusCluster: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
   },
   marketStatusText: {
     fontSize: Type.caption.size,
@@ -1005,9 +1015,57 @@ const styles = StyleSheet.create({
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
   },
-  secondaryMetrics: {
+  // ── Market book row (bid/ask inside transaction surface) ──
+  marketBookRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    borderTopWidth: 1,
     marginTop: Space.sm,
-    gap: 0,
+    paddingTop: Space.sm,
+  },
+  marketBookSide: {
+    flex: 1,
+    gap: 2,
+  },
+  marketBookDivider: {
+    width: 1,
+    marginHorizontal: Space.sm,
+  },
+  marketBookLabel: {
+    fontSize: Type.metaElevated.size,
+    fontFamily: Typography.family.medium,
+    letterSpacing: Type.metaElevated.letterSpacing,
+    textTransform: 'uppercase',
+  },
+  marketBookValue: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: 0,
+    fontVariant: ['tabular-nums'],
+  },
+  // ── Secondary facts (NAV / distribution / report) ──
+  marketSecondaryFacts: {
+    flexDirection: 'row',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderBottomWidth: 1,
+    gap: Space.sm,
+  },
+  marketSecondaryFact: {
+    flex: 1,
+    gap: 2,
+  },
+  marketSecondaryLabel: {
+    fontSize: Type.metaElevated.size,
+    fontFamily: Typography.family.medium,
+    letterSpacing: Type.metaElevated.letterSpacing,
+    textTransform: 'uppercase',
+  },
+  marketSecondaryValue: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
+    lineHeight: Type.body.lineHeight,
+    fontVariant: ['tabular-nums'],
   },
   // ── Viewer position ──
   viewerPositionHeader: {
@@ -1017,16 +1075,23 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     marginBottom: Space.xs,
   },
-  viewerPositionLabel: {
-    fontSize: Type.metaElevated.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.metaElevated.letterSpacing,
-  },
   viewerPositionValue: {
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: 0,
     fontVariant: ['tabular-nums'],
+    flexShrink: 1,
+  },
+  viewerPositionMarketValue: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: 0,
+    fontVariant: ['tabular-nums'],
+  },
+  viewerPositionMeta: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    lineHeight: Type.caption.lineHeight,
   },
   // ── Supply summary ──
   supplySummary: {

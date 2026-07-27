@@ -96,9 +96,13 @@ describe('product-detail-flagship-reconstruction: visual acceptance', () => {
       expect(src).toContain('useWindowDimensions');
     });
 
-    it('AssetDetailScreen uses useWindowDimensions for responsive layout', () => {
+    it('AssetDetailScreen uses compact flagship hero fractions', () => {
       const src = readScreen('AssetDetailScreen.tsx');
       expect(src).toContain('useWindowDimensions');
+      expect(src).toContain('isVeryCompact ? 0.48');
+      expect(src).toContain('isCompact ? 0.5');
+      expect(src).toContain(': 0.56');
+      expect(src).not.toContain(': 0.65');
     });
 
     it('CommerceDetailStateDock adapts to dual-action vs single-action', () => {
@@ -294,6 +298,33 @@ describe('product-detail-flagship-reconstruction: visual acceptance', () => {
         expect(src).toMatch(/insets\.top/);
       });
     }
+  });
+
+  describe('Co-Own native composition regressions', () => {
+    it('renders a structured bid, ask, and spread market snapshot', () => {
+      const src = readScreen('AssetDetailScreen.tsx');
+      expect(src).toContain('marketBookRow');
+      expect(src).toContain('Bid');
+      expect(src).toContain('Ask');
+      expect(src).toContain('Spread');
+    });
+
+    it('keeps unavailable fundamentals outside the dominant market surface', () => {
+      const src = readScreen('AssetDetailScreen.tsx');
+      expect(src).toContain('marketSecondaryFacts');
+      expect(src).not.toContain('secondaryMetrics');
+    });
+
+    it('uses the real Co-Own watchlist action', () => {
+      const src = readScreen('AssetDetailScreen.tsx');
+      expect(src).toContain('toggleCoOwnWatch');
+      expect(src).toContain('isCoOwnWatched');
+    });
+
+    it('does not fabricate sponsor locked as zero', () => {
+      const src = readScreen('AssetDetailScreen.tsx');
+      expect(src).not.toContain('sponsorLocked: 0');
+    });
   });
 
   // ── 13. Dock geometry adapts to action count ──

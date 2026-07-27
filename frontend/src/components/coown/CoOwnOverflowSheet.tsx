@@ -23,6 +23,7 @@ export interface CoOwnOverflowSheetProps {
   onToggleFav: () => void;
   isFav: boolean;
   onWatch: () => void;
+  isWatched: boolean;
   onReport: () => void;
 }
 
@@ -32,6 +33,7 @@ export function CoOwnOverflowSheet({
   onToggleFav,
   isFav,
   onWatch,
+  isWatched,
   onReport,
 }: CoOwnOverflowSheetProps) {
   const { colors } = useAppTheme();
@@ -54,8 +56,8 @@ export function CoOwnOverflowSheet({
       }),
     },
     {
-      icon: 'eye-outline' as keyof typeof Ionicons.glyphMap,
-      label: 'Watch',
+      icon: (isWatched ? 'eye' : 'eye-outline') as keyof typeof Ionicons.glyphMap,
+      label: isWatched ? 'Watching' : 'Watch',
       onPress: () => handleAction(() => {
         onWatch();
       }),
