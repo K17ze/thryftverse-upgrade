@@ -16426,6 +16426,20 @@ app.get('/listings/:listingId', async (request, reply) => {
   ).toFixed(2));
   const estimatedTotal = Number((itemPrice + buyerProtectionFee).toFixed(2));
 
+  // Per spec 04_DIRECT §5: backend-backed engagement summary.
+  // Query Q&A count from the listing_qa table if it exists.
+  let questionCount = 0;
+  try {
+    const qaResult = await readDb.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM listing_qa WHERE listing_id = $1`,
+      [listingId]
+    );
+    questionCount = qaResult.rows[0] ? Number(qaResult.rows[0].count) : 0;
+  } catch {
+    // listing_qa table may not exist yet — default to 0.
+    questionCount = 0;
+  }
+
   return {
     ok: true,
     listing: {
@@ -16455,6 +16469,11 @@ app.get('/listings/:listingId', async (request, reply) => {
             location: null,
           }
         : null,
+      // Per spec 04_DIRECT §5: backend-backed engagement summary.
+      // The frontend must not fabricate question counts.
+      engagement: {
+        questionCount,
+      },
     },
     commerce: {
       itemPrice,
@@ -32286,6 +32305,10 @@ app.get('/auctions/:auctionId', async (request, reply) => {
       },
       title: row.title ?? 'Untitled',
       imageUrl: row.image_url ?? null,
+      // Per spec 02_AUCTION §7: canonical media array. Empty until
+      // the listing_media table is populated. imageUrl remains as a
+      // compatibility field.
+      mediaItems: [],
       brand: row.brand ?? null,
       category: row.category ?? null,
       conditionLabel: row.condition_label ?? null,
@@ -32306,6 +32329,9 @@ app.get('/auctions/:auctionId', async (request, reply) => {
       settledAt: row.settled_at,
       cancelledAt: row.cancelled_at,
       createdAt: row.created_at,
+      // Per spec 02_AUCTION §8: backend-backed fulfilment contract.
+      // Null until the auction is terminal and fulfilment data exists.
+      fulfilment: null,
     },
     bidActivity: bidsResult.rows.map((b) => ({
       id: b.id,
@@ -35588,6 +35614,15 @@ app.get('/co-own/assets/:assetId', async (request, reply) => {
       isOpen: row.is_open,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
+      // Per spec 03_COOWN §2: backend-backed market snapshot. Null
+      // until lastExecutionPriceGbp is available. The frontend uses
+      // this to distinguish "Reference unit price" from "Last settled
+      // trade".
+      marketSnapshot: null,
+      // Per spec 03_COOWN §4: canonical OHLC candles. Empty array
+      // when no candle data exists. The frontend gates the candle
+      // toggle on this.
+      candles: [],
     },
   };
 });

@@ -197,6 +197,42 @@ export interface MarketCoOwnAsset {
   isOpen: boolean;
   createdAt: string;
   updatedAt: string;
+  /** Per spec 03_COOWN §2: backend-backed market snapshot. Null
+   * until the backend exposes lastExecutionPriceGbp. The frontend
+   * must not label reference price as "Last trade" without this. */
+  marketSnapshot?: CoOwnMarketSnapshot | null;
+  /** Per spec 03_COOWN §4: canonical OHLC candles. Empty array when
+   * no candle data exists. The frontend gates the candle toggle on
+   * this. */
+  candles?: CoOwnCandle[];
+}
+
+/** Co-Own market snapshot. Per spec 03_COOWN §2. */
+export interface CoOwnMarketSnapshot {
+  /** Last settled execution price in GBP. Null when no settled trades
+   * exist. The frontend uses this to distinguish "Reference unit
+   * price" from "Last settled trade". */
+  lastExecutionPriceGbp: number | null;
+  /** Timestamp of the last settled execution. */
+  lastExecutionAt: string | null;
+  /** 24h volume in GBP. */
+  volume24hGbp: number | null;
+  /** 24h price change percentage. */
+  marketMovePct24h: number | null;
+  /** Best bid price in GBP. */
+  bestBidGbp: number | null;
+  /** Best ask price in GBP. */
+  bestAskGbp: number | null;
+}
+
+/** Co-Own OHLC candle. Per spec 03_COOWN §4. */
+export interface CoOwnCandle {
+  timestamp: string;
+  openGbp: number;
+  highGbp: number;
+  lowGbp: number;
+  closeGbp: number;
+  volume: number;
 }
 
 export type CoOwnOrderSide = 'buy' | 'sell';

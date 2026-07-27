@@ -168,6 +168,9 @@ export interface ListingEngagementSummary {
   views?: number;
   saves?: number;
   offers?: number;
+  /** Per spec 04_DIRECT §5: backend-backed question count. The
+   * frontend must not fabricate this value. */
+  questionCount?: number;
 }
 
 export interface ListingCapabilities {
