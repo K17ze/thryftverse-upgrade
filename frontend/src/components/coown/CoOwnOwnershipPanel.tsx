@@ -10,11 +10,14 @@ export type CoOwnSettlementMode = 'GBP' | 'TVUSD' | 'HYBRID' | 'ONEZE';
 
 /** Supply buckets — the instrument series structure (§01 §3). */
 export interface CoOwnSupplyBuckets {
-  authorised?: number;
-  issued?: number;
-  publicFloat?: number;
-  sponsorLocked?: number;
-  treasury?: number;
+  // Per spec 03_COOWN §6: nullable to support "do not infer treasury,
+  // authorised, issued, public float or sponsor locked from available
+  // units". The frontend must not fabricate these values.
+  authorised?: number | null;
+  issued?: number | null;
+  publicFloat?: number | null;
+  sponsorLocked?: number | null;
+  treasury?: number | null;
 }
 
 /**
@@ -223,7 +226,7 @@ function SupplyRow({
   note,
 }: {
   label: string;
-  value: number | undefined;
+  value: number | null | undefined;
   colors: ReturnType<typeof useAppTheme>['colors'];
   note?: string;
 }) {

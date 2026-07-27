@@ -137,6 +137,11 @@ export default function AssetDetailScreen() {
   const [candleRange, setCandleRange] = React.useState<CoOwnCandleRange>('1W');
   const [showVolume, setShowVolume] = React.useState(false);
   const [dataLoadedAt, setDataLoadedAt] = React.useState<number | null>(null);
+  // Per spec 03_COOWN §5: dossier collapsed by default.
+  const [dossierExpanded, setDossierExpanded] = React.useState(false);
+  // Per spec 03_COOWN §8: risk disclosure collapsed by default, opens
+  // in a modal sheet via "View risk disclosure" disclosure row.
+  const [riskDisclosureVisible, setRiskDisclosureVisible] = React.useState(false);
 
   const coOwnCompliance = useStore((s) => s.coOwnCompliance);
   const updateCoOwnCompliance = useStore((s) => s.updateCoOwnCompliance);
@@ -260,6 +265,19 @@ export default function AssetDetailScreen() {
   const spreadGbp = bestBid?.unitPriceGbp != null && bestAsk?.unitPriceGbp != null
     ? Math.max(0, bestAsk.unitPriceGbp - bestBid.unitPriceGbp)
     : null;
+
+  // ── Market snapshot ──
+  // Per spec 03_COOWN §2: backend-backed market snapshot. The frontend
+  // must not label reference price as "Last trade" without settled-
+  // execution proof. marketSnapshot is null until the backend exposes
+  // lastExecutionPriceGbp.
+  const marketSnapshot = (asset as any).marketSnapshot ?? null;
+
+  // ── Candle data gating ──
+  // Per spec 03_COOWN §4: only expose the candle toggle when real OHLC
+  // candles exist. Do not pass an empty candle component.
+  const candleData: any[] = (asset as any).candles ?? [];
+  const hasCandleData = candleData.length > 0;
 
   const images = asset.imageUrl ? [asset.imageUrl] : [];
 
@@ -404,6 +422,8 @@ export default function AssetDetailScreen() {
             Spec 02 §B + spec 03 §2: no repeated family labels, no
             repeated price. */}
         <CommerceDetailIdentity
+          family="co_own"
+          density={isVeryCompact ? 'compact' : 'standard'}
           eyebrow={asset.category ?? undefined}
           title={asset.title}
           secondaryLine={dataStale && dataStaleAgeLabel ? `Last update ${dataStaleAgeLabel}` : undefined}
@@ -462,13 +482,16 @@ export default function AssetDetailScreen() {
         </View>
 
         {/* ── Zone C — Family transaction module ──
-            The one strongly contained module near the top: last trade +
-            top-of-book + market mode. Replaces the three-column
+            The one strongly contained module near the top: reference
+            price + top-of-book + market mode. Replaces the three-column
             CoOwnValueStrip + CoOwnMarketStatusStrip.
-            Spec 02 §C + spec 03 §3. */}
+            Spec 02 §C + spec 03 §2/§3: do not label reference price as
+            "Last trade" without settled-execution proof. Use "Reference
+            unit price" unless the backend provides lastExecutionPriceGbp. */}
         <CommerceDetailTransactionSurface
-          primaryLabel="Last trade"
-          primaryValue={formatCoOwnIze(asset.unitPriceGbp)}
+          family="co_own"
+          primaryLabel={marketSnapshot?.lastExecutionPriceGbp != null ? 'Last settled trade' : 'Reference unit price'}
+          primaryValue={formatCoOwnIze(marketSnapshot?.lastExecutionPriceGbp ?? asset.unitPriceGbp)}
           statusRow={
             <View style={styles.marketStatusRow}>
               <View style={styles.marketStatusCluster}>
@@ -515,23 +538,29 @@ export default function AssetDetailScreen() {
           </View>
         </CommerceDetailTransactionSurface>
 
-        <View style={[styles.marketSecondaryFacts, { borderBottomColor: colors.borderSubtle }]}>
-          <View style={styles.marketSecondaryFact}>
-            <Text style={[styles.marketSecondaryLabel, { color: colors.textMuted }]}>NAV / unit</Text>
-            <Text style={[styles.marketSecondaryValue, { color: colors.textSecondary }]} numberOfLines={2}>
+        {/* ── Fundamentals — stacked layout, not three columns ──
+            Per spec 03_COOWN §1: replace the compact-phone three-column
+            fundamentals strip with a stacked layout. Three equal columns
+            feel cramped on phones. */}
+        <View style={[styles.fundamentalsStacked, { borderBottomColor: colors.borderSubtle }]}>
+          <View style={styles.fundamentalsRow}>
+            <Text style={[styles.fundamentalsLabel, { color: colors.textMuted }]}>NAV / unit</Text>
+            <Text style={[styles.fundamentalsValue, { color: colors.textSecondary }]} numberOfLines={2}>
               {asset.appraisalValue && totalUnits > 0
                 ? formatFromFiat(asset.appraisalValue / totalUnits, 'GBP')
                 : 'Not available'}
             </Text>
           </View>
-          <View style={styles.marketSecondaryFact}>
-            <Text style={[styles.marketSecondaryLabel, { color: colors.textMuted }]}>Distribution</Text>
-            <Text style={[styles.marketSecondaryValue, { color: colors.textSecondary }]} numberOfLines={2}>Not scheduled</Text>
+          <View style={styles.fundamentalsRow}>
+            <Text style={[styles.fundamentalsLabel, { color: colors.textMuted }]}>Reporting</Text>
+            <Text style={[styles.fundamentalsValue, { color: colors.textSecondary }]} numberOfLines={2}>
+              {asset.appraisalNextScheduled ? `Next report · ${asset.appraisalNextScheduled}` : 'Next report · Not scheduled'}
+            </Text>
           </View>
-          <View style={styles.marketSecondaryFact}>
-            <Text style={[styles.marketSecondaryLabel, { color: colors.textMuted }]}>Next report</Text>
-            <Text style={[styles.marketSecondaryValue, { color: colors.textSecondary }]} numberOfLines={2}>
-              {asset.appraisalNextScheduled ?? 'Not scheduled'}
+          <View style={styles.fundamentalsRow}>
+            <Text style={[styles.fundamentalsLabel, { color: colors.textMuted }]}>Distribution</Text>
+            <Text style={[styles.fundamentalsValue, { color: colors.textSecondary }]} numberOfLines={2}>
+              Not scheduled
             </Text>
           </View>
         </View>
@@ -586,9 +615,13 @@ export default function AssetDetailScreen() {
               {asset.holders} holders
             </Text>
           )}
+          {/* Per spec 03_COOWN §6: do not infer treasury, authorised,
+              issued, public float or sponsor locked. Use Available
+              units, Allocated units, Holder count. Omit treasury
+              language until explicit nullable backend fields exist. */}
           <CommerceDetailDisclosureRow
             label="View supply structure"
-            summary="Authorised · issued · float · treasury"
+            summary="Available · allocated · holders"
             onPress={() => setSupplySheetVisible(true)}
             leadingIcon="layers-outline"
           />
@@ -600,6 +633,10 @@ export default function AssetDetailScreen() {
             Retry. Do not show +0.0%. Do not reserve a large blank chart.
             Movement is passed as nullable — missing movement is never
             coerced to zero. */}
+        {/* ── Price history ──
+            Per spec 03_COOWN §4: only expose the line/candle toggle
+            when real OHLC candles exist. Do not pass an empty candle
+            component merely to satisfy a layout path. */}
         <CommerceDetailSection label="Price history" divider>
           <CoOwnPriceChart
             assetId={asset.id}
@@ -609,14 +646,16 @@ export default function AssetDetailScreen() {
             lastAgeSeconds={undefined}
             change24hTimestamp={undefined}
             candleChart={
-              <CoOwnCandleChart
-                candles={[]}
-                range={candleRange}
-                onRangeChange={setCandleRange}
-                showVolume={showVolume}
-                lastPrice={asset.unitPriceGbp}
-                lastAgeSeconds={undefined}
-              />
+              hasCandleData ? (
+                <CoOwnCandleChart
+                  candles={candleData}
+                  range={candleRange}
+                  onRangeChange={setCandleRange}
+                  showVolume={showVolume}
+                  lastPrice={asset.unitPriceGbp}
+                  lastAgeSeconds={undefined}
+                />
+              ) : undefined
             }
           />
         </CommerceDetailSection>
@@ -649,60 +688,49 @@ export default function AssetDetailScreen() {
             "Asset dossier" section. Spec 03 §8: "Combine category evidence,
             authenticity, condition, storage, insurance and appraisal into
             one Asset dossier section." */}
+        {/* ── Asset dossier — collapsed by default ──
+            Per spec 03_COOWN §5: default summary shows maximum five
+            decision facts (Authenticity, Condition, Storage, Insurance,
+            Latest appraisal). Full dossier opens via "View full asset
+            dossier" disclosure. Do not render — rows; omit missing. */}
         <CommerceDetailSection label="Asset dossier" divider>
-          {(() => {
-            const evidenceGroups = resolveEvidenceGroups({
-              category: asset.category,
-              condition: asset.conditionLabel,
-              description: asset.description,
-            });
-            return evidenceGroups.length > 0 ? (
-              <CategoryEvidence groups={evidenceGroups} />
-            ) : null;
-          })()}
-
-          <CoOwnTrustPanel
-            authenticityStatus={asset.authenticityStatus ?? null}
-            buyerProtection={asset.buyerProtection ?? false}
-            storageInfo={asset.storageInfo ?? null}
-            possessionInfo={asset.possessionInfo ?? null}
-          />
-
-          {(asset.provenance || asset.conditionGrade || asset.custodyLocation || asset.appraisalValue) && (
-            <CoOwnAssetDossier
-              provenance={asset.provenance}
-              condition={asset.conditionGrade ? {
-                grade: asset.conditionGrade,
-                reportUri: asset.conditionReportUri,
-                inspectedAt: asset.conditionInspectedAt,
-              } : undefined}
-              storage={asset.custodyLocation ? {
-                location: asset.custodyLocation,
-                custodian: asset.custodyCustodian ?? '—',
-                insured: asset.custodyInsured ?? false,
-                policyRef: asset.custodyPolicyRef,
-              } : undefined}
-              appraisal={asset.appraisalValue ? {
-                value: asset.appraisalValue,
-                currency: asset.appraisalCurrency ?? 'GBP',
-                valuedAt: asset.appraisalValuedAt ?? '—',
-                method: asset.appraisalMethod ?? '—',
-                valuer: asset.appraisalValuer,
-                rangeLow: asset.appraisalRangeLow,
-                rangeHigh: asset.appraisalRangeHigh,
-                nextScheduled: asset.appraisalNextScheduled,
-              } : undefined}
+          {/* Summary facts — maximum five decision facts */}
+          {asset.authenticityStatus && (
+            <CommerceDetailMetricRow
+              label="Authenticity"
+              value={asset.authenticityStatus}
+            />
+          )}
+          {asset.conditionGrade && (
+            <CommerceDetailMetricRow
+              label="Condition"
+              value={asset.conditionGrade}
+            />
+          )}
+          {asset.custodyLocation && (
+            <CommerceDetailMetricRow
+              label="Storage"
+              value={asset.custodyLocation}
+            />
+          )}
+          {asset.custodyInsured != null && (
+            <CommerceDetailMetricRow
+              label="Insurance"
+              value={asset.custodyInsured ? 'Covered' : 'Not covered'}
+            />
+          )}
+          {asset.appraisalValue != null && (
+            <CommerceDetailMetricRow
+              label="Latest appraisal"
+              value={formatFromFiat(asset.appraisalValue, asset.appraisalCurrency ?? 'GBP')}
+              subLabel={asset.appraisalValuedAt ?? undefined}
             />
           )}
 
-          {/* NAV vs last trade — one compact metric row, not a duplicated
-              appraisal card. The full appraisal provenance (method,
-              valuer, date, range, next review) lives in the dossier
-              above. Spec 03 §8: "Combine ... appraisal into one Asset
-              dossier section." */}
+          {/* NAV vs reference price — one compact metric row */}
           {asset.appraisalValue && totalUnits > 0 && (
             <CommerceDetailMetricRow
-              label="Last trade vs NAV"
+              label="Reference vs NAV"
               value={`${(() => {
                 const navPerUnit = asset.appraisalValue / totalUnits;
                 const pct = ((asset.unitPriceGbp - navPerUnit) / navPerUnit) * 100;
@@ -711,12 +739,74 @@ export default function AssetDetailScreen() {
               subLabel="NAV is an appraisal, not an executable price"
             />
           )}
+
+          <CommerceDetailDisclosureRow
+            label="View full asset dossier"
+            onPress={() => setDossierExpanded((prev) => !prev)}
+            leadingIcon="document-text-outline"
+            accessibilityLabel="View full asset dossier"
+          />
+
+          {/* Full dossier — expanded on demand */}
+          {dossierExpanded && (
+            <>
+              {(() => {
+                const evidenceGroups = resolveEvidenceGroups({
+                  category: asset.category,
+                  condition: asset.conditionLabel,
+                  description: asset.description,
+                });
+                return evidenceGroups.length > 0 ? (
+                  <CategoryEvidence groups={evidenceGroups} />
+                ) : null;
+              })()}
+
+              <CoOwnTrustPanel
+                authenticityStatus={asset.authenticityStatus ?? null}
+                buyerProtection={asset.buyerProtection ?? false}
+                storageInfo={asset.storageInfo ?? null}
+                possessionInfo={asset.possessionInfo ?? null}
+              />
+
+              {(asset.provenance || asset.conditionGrade || asset.custodyLocation || asset.appraisalValue) && (
+                <CoOwnAssetDossier
+                  provenance={asset.provenance}
+                  condition={asset.conditionGrade ? {
+                    grade: asset.conditionGrade,
+                    reportUri: asset.conditionReportUri,
+                    inspectedAt: asset.conditionInspectedAt,
+                  } : undefined}
+                  storage={asset.custodyLocation ? {
+                    location: asset.custodyLocation,
+                    custodian: asset.custodyCustodian,
+                    insured: asset.custodyInsured ?? false,
+                    policyRef: asset.custodyPolicyRef,
+                  } : undefined}
+                  appraisal={asset.appraisalValue ? {
+                    value: asset.appraisalValue,
+                    currency: asset.appraisalCurrency ?? 'GBP',
+                    valuedAt: asset.appraisalValuedAt,
+                    method: asset.appraisalMethod,
+                    valuer: asset.appraisalValuer,
+                    rangeLow: asset.appraisalRangeLow,
+                    rangeHigh: asset.appraisalRangeHigh,
+                    nextScheduled: asset.appraisalNextScheduled,
+                  } : undefined}
+                />
+              )}
+            </>
+          )}
         </CommerceDetailSection>
 
         {/* ── Rights and risk ──
             Default summary: completion state + one critical plain-language
             statement + "Review N terms". Full sheet keeps all canonical rows.
             Spec 03 §9. */}
+        {/* ── Rights & risks — compressed ──
+            Per spec 03_COOWN §8: default summary shows one critical
+            plain-language statement + "Review N terms" + "View risk
+            disclosure". Both expand via disclosure rows, not inline
+            blocks. */}
         <CommerceDetailSection label="Rights & risks" divider>
           <View style={styles.rightsSummary}>
             <Text style={[styles.rightsCriticalStatement, { color: colors.textPrimary }]}>
@@ -730,10 +820,11 @@ export default function AssetDetailScreen() {
             onPress={() => setRightsSheetVisible(true)}
             leadingIcon="document-text-outline"
           />
-          {/* Risk disclosure — collapsed by default.
-              Spec 03 §9: "Risk disclosure should be collapsed by default." */}
-          <CoOwnRiskDisclosure
-            onReportIssue={() => navigation.navigate('CoOwnIssue', { assetId: asset.id })}
+          <CommerceDetailDisclosureRow
+            label="View risk disclosure"
+            onPress={() => setRiskDisclosureVisible(true)}
+            leadingIcon="warning-outline"
+            accessibilityLabel="View risk disclosure"
           />
         </CommerceDetailSection>
 
@@ -771,8 +862,8 @@ export default function AssetDetailScreen() {
         )}
 
         {/* ── Zone F — Discovery ──
-            Discovery begins only after the core product decision is
-            understandable. Spec 02 §F. */}
+            Per spec 03_COOWN §9: maximum one discovery rail. Do not
+            render generic duplicate recommendation rails after that. */}
         {seenInLooksSection && seenInLooksSection.items.length > 0 && (
           <View style={styles.recommendationSection}>
             <RecommendationRail
@@ -787,24 +878,6 @@ export default function AssetDetailScreen() {
               }}
             />
           </View>
-        )}
-
-        {recsLoading && railSections.length === 0 ? null : (
-          railSections.map((section) => (
-            <View key={section.key} style={styles.recommendationSection}>
-              <RecommendationRail
-                section={section}
-                listingId={asset.listingId}
-                onPressItem={(recItem) => {
-                  if (isRecommendationLook(recItem)) {
-                    handlePressLook(recItem);
-                  } else {
-                    handlePressRecommendation(recItem as unknown as RecommendationItem);
-                  }
-                }}
-              />
-            </View>
-          ))
         )}
       </Reanimated.ScrollView>
 
@@ -874,20 +947,28 @@ export default function AssetDetailScreen() {
           );
         }
 
-        // Tradable states — non-holder gets Buy; holder gets Sell + Buy more.
+        // Tradable states — per spec 03_COOWN §7: holder primary =
+        // "Sell", secondary = "Buy more"; non-holder primary = "Buy units".
         return (
           <CommerceDetailStateDock
             value={formatCoOwnIze(asset.unitPriceGbp)}
             valueLabel="Unit price"
-            primaryAction={{
-              label: 'Buy units',
-              onPress: () => handleTradePress('buy'),
-            }}
-            secondaryAction={
+            primaryAction={
               isHolder
                 ? {
                     label: 'Sell',
                     onPress: () => handleTradePress('sell'),
+                  }
+                : {
+                    label: 'Buy units',
+                    onPress: () => handleTradePress('buy'),
+                  }
+            }
+            secondaryAction={
+              isHolder
+                ? {
+                    label: 'Buy more',
+                    onPress: () => handleTradePress('buy'),
                   }
                 : undefined
             }
@@ -934,8 +1015,45 @@ export default function AssetDetailScreen() {
         rights={rightsRows}
       />
 
-      {/* Supply structure sheet — full authorised/issued/float/locked/
-          treasury ledger. Opens from the "View supply structure" disclosure. */}
+      {/* Risk disclosure modal — per spec 03_COOWN §8: collapsed by
+          default, opens in a modal sheet via "View risk disclosure". */}
+      <Modal
+        visible={riskDisclosureVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setRiskDisclosureVisible(false)}
+      >
+        <View style={styles.riskDisclosureModalOverlay}>
+          <View style={[styles.riskDisclosureModalSheet, { backgroundColor: colors.background }]}>
+            <View style={styles.riskDisclosureModalHeader}>
+              <Text style={[styles.riskDisclosureModalTitle, { color: colors.textPrimary }]}>
+                Risk disclosure
+              </Text>
+              <Pressable
+                onPress={() => setRiskDisclosureVisible(false)}
+                hitSlop={12}
+                accessibilityLabel="Close risk disclosure"
+                accessibilityRole="button"
+              >
+                <Ionicons name="close" size={22} color={colors.textSecondary} />
+              </Pressable>
+            </View>
+            <ScrollView style={styles.riskDisclosureModalScroll} contentContainerStyle={styles.riskDisclosureModalContent}>
+              <CoOwnRiskDisclosure
+                onReportIssue={() => {
+                  setRiskDisclosureVisible(false);
+                  navigation.navigate('CoOwnIssue', { assetId: asset.id });
+                }}
+              />
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Supply structure sheet — per spec 03_COOWN §6: do not infer
+          treasury, authorised, issued, public float or sponsor locked
+          from available units. Pass null for inferred values until
+          explicit backend fields exist. */}
       <CoOwnSupplySheet
         visible={supplySheetVisible}
         onClose={() => setSupplySheetVisible(false)}
@@ -950,10 +1068,10 @@ export default function AssetDetailScreen() {
         holderCount={asset.holders}
         status={asset.isOpen ? (availableUnits > 0 ? 'open' : 'closed') : 'paused'}
         supply={{
-          authorised: totalUnits,
-          issued: totalUnits,
-          publicFloat: totalUnits - availableUnits,
-          treasury: availableUnits,
+          authorised: null,
+          issued: null,
+          publicFloat: null,
+          treasury: null,
         }}
         rightsVersion={asset.rightsVersion ?? undefined}
       />
@@ -1066,6 +1184,66 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
     lineHeight: Type.body.lineHeight,
     fontVariant: ['tabular-nums'],
+  },
+  // ── Fundamentals — stacked layout (per spec 03_COOWN §1) ──
+  fundamentalsStacked: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderBottomWidth: 1,
+    gap: Space.sm,
+  },
+  fundamentalsRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: Space.sm,
+  },
+  fundamentalsLabel: {
+    fontSize: Type.metaElevated.size,
+    fontFamily: Typography.family.medium,
+    letterSpacing: Type.metaElevated.letterSpacing,
+    textTransform: 'uppercase',
+    flexShrink: 0,
+  },
+  fundamentalsValue: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
+    lineHeight: Type.body.lineHeight,
+    fontVariant: ['tabular-nums'],
+    textAlign: 'right',
+    flexShrink: 1,
+  },
+  // ── Risk disclosure modal (per spec 03_COOWN §8) ──
+  riskDisclosureModalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  riskDisclosureModalSheet: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '80%',
+    paddingBottom: 40,
+  },
+  riskDisclosureModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(0,0,0,0.08)',
+  },
+  riskDisclosureModalTitle: {
+    fontSize: Type.subtitle.size,
+    fontFamily: Typography.family.semibold,
+    lineHeight: Type.subtitle.lineHeight,
+  },
+  riskDisclosureModalScroll: {
+    flex: 1,
+  },
+  riskDisclosureModalContent: {
+    padding: Space.md,
   },
   // ── Viewer position ──
   viewerPositionHeader: {
