@@ -376,7 +376,11 @@ export default function App() {
   };
 
   if (showBrandedSplash) {
-    return <BrandedSplash onFinish={() => setShowBrandedSplash(false)} />;
+    return (
+      <ThemeProvider>
+        <BrandedSplash onFinish={() => setShowBrandedSplash(false)} />
+      </ThemeProvider>
+    );
   }
 
   return (
