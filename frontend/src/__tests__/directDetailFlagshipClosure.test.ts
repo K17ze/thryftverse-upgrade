@@ -38,7 +38,7 @@ describe('direct-listing-detail flagship closure (spec 04_DIRECT)', () => {
 
     it('retains truthful price insight rows', () => {
       expect(src).toContain('Price drop');
-      expect(src).toContain('Similar sold');
+      expect(src).toContain('similar sold');
       expect(src).toContain('Time on market');
     });
   });
@@ -51,7 +51,7 @@ describe('direct-listing-detail flagship closure (spec 04_DIRECT)', () => {
       const qaSection = src.match(/CommerceDetailSection label="Questions & answers"[\s\S]*?<\/CommerceDetailSection>/);
       expect(qaSection).toBeTruthy();
       expect(qaSection![0]).toContain('CommerceDetailDisclosureRow');
-      expect(qaSection![0]).toContain('View questions & answers');
+      expect(qaSection![0]).toContain('View all questions');
     });
 
     it('does not render ListingQA inline in the section', () => {
@@ -122,7 +122,7 @@ describe('direct-listing-detail flagship closure (spec 04_DIRECT)', () => {
     });
 
     it('requires at least 2 sold comparables', () => {
-      expect(src).toContain('sold.length < 2');
+      expect(src).toContain('sampleSize >= 2');
     });
   });
 
@@ -130,7 +130,7 @@ describe('direct-listing-detail flagship closure (spec 04_DIRECT)', () => {
   describe('engagement summary', () => {
     it('uses listingEngagement from backend', () => {
       expect(src).toContain('listingEngagement');
-      expect(src).toContain('(item as any).engagement');
+      expect(src).toContain('item?.engagement');
     });
 
     it('uses questionCount from engagement in disclosure summary', () => {

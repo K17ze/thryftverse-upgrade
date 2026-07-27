@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, Text } from 'react-native';
 import { useAppTheme } from '../../../theme/ThemeContext';
-import { Space, Radius, Type } from '../../../theme/designTokens';
+import { Space, Radius, Type, Typography } from '../../../theme/designTokens';
 import type { CommerceDetailFamily } from './types';
 
 /**
@@ -129,7 +129,9 @@ export function CommerceDetailTransactionSurface({
       {children}
 
       {viewerState ? (
-        <View style={styles.viewerStateRow}>{viewerState}</View>
+        <View style={[styles.viewerStateRow, { borderTopColor: colors.borderSubtle }]}>
+          {viewerState}
+        </View>
       ) : null}
 
       {statusRow ? (
@@ -165,23 +167,24 @@ const styles = StyleSheet.create({
   containerCoOwn: {
     padding: Space.md,
   },
+  // Primary row: label sits quietly above the dominant value. The
+  // value is the hero of this surface — it does not compete with the
+  // label for horizontal space.
   primaryRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    gap: Space.sm,
-    flexWrap: 'wrap',
+    flexDirection: 'column',
+    gap: 2,
   },
   label: {
     fontSize: Type.metaElevated.size,
     lineHeight: Type.metaElevated.lineHeight,
-    fontWeight: '600',
+    fontFamily: Typography.family.semibold,
     letterSpacing: Type.metaElevated.letterSpacing,
+    textTransform: 'uppercase',
   },
   primaryValue: {
     fontSize: Type.priceLarge.size,
     lineHeight: Type.priceLarge.lineHeight,
-    fontWeight: '700',
+    fontFamily: Typography.family.bold,
     letterSpacing: Type.priceLarge.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
@@ -190,21 +193,27 @@ const styles = StyleSheet.create({
     alignItems: 'baseline',
     justifyContent: 'space-between',
     gap: Space.sm,
-    marginTop: Space.xs,
+    marginTop: Space.sm,
     flexWrap: 'wrap',
   },
   secondaryLabel: {
     fontSize: Type.body.size,
     lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.regular,
   },
   secondaryValue: {
     fontSize: Type.bodyEmphasis.size,
     lineHeight: Type.bodyEmphasis.lineHeight,
-    fontWeight: '600',
+    fontFamily: Typography.family.semibold,
     fontVariant: ['tabular-nums'],
   },
+  // Viewer state row: separated by a hairline so it reads as a
+  // distinct concern from the primary value, but still part of the
+  // same surface.
   viewerStateRow: {
     marginTop: Space.sm,
+    paddingTop: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   statusRow: {
     marginTop: Space.sm,

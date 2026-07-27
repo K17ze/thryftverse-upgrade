@@ -1,4 +1,4 @@
-import type { Listing, ListingSeller } from '../../data/mockData';
+import type { Listing, ListingSeller } from '../../services/listingsApi';
 
 export interface SellerTrustSummary {
   id: string;
@@ -164,13 +164,19 @@ export interface ListingCommerceContext {
 }
 
 export interface ListingEngagementSummary {
+  listingId?: string;
   likes?: number;
   views?: number;
   saves?: number;
   offers?: number;
+  wishlistCount?: number | null;
+  collectionSaveCount?: number | null;
+  activeOfferCount?: number | null;
   /** Per spec 04_DIRECT §5: backend-backed question count. The
    * frontend must not fabricate this value. */
   questionCount?: number;
+  answeredQuestionCount?: number;
+  generatedAt?: string;
 }
 
 export interface ListingCapabilities {
@@ -232,8 +238,10 @@ export function buildCommerceContext(
 export function buildEngagementSummary(
   listing: Listing
 ): ListingEngagementSummary {
-  const engagement: ListingEngagementSummary = {};
-  if (listing.likes && listing.likes > 0) engagement.likes = listing.likes;
+  const engagement: ListingEngagementSummary = listing.engagement
+    ? { ...listing.engagement }
+    : {};
+  if (listing.likes && listing.likes > 0 && engagement.likes === undefined) engagement.likes = listing.likes;
   if (listing.views && listing.views > 0) engagement.views = listing.views;
   return engagement;
 }

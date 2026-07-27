@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, Text } from 'react-native';
 import { useAppTheme } from '../../../theme/ThemeContext';
-import { Space, Type } from '../../../theme/designTokens';
+import { Space, Type, Typography } from '../../../theme/designTokens';
 import type {
   CommerceDetailFamily,
   CommerceDetailIdentityDensity,
@@ -119,16 +119,17 @@ export function CommerceDetailIdentity({
               {secondaryLine}
             </Text>
           ) : null}
-          {interestSignal ? (
-            <Text
-              style={[styles.interest, { color: colors.textMuted }]}
-              numberOfLines={1}
-            >
-              {interestSignal}
-            </Text>
-          ) : null}
         </View>
       )}
+
+      {interestSignal ? (
+        <Text
+          style={[styles.interest, { color: colors.textMuted }]}
+          numberOfLines={1}
+        >
+          {interestSignal}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -148,13 +149,13 @@ const styles = StyleSheet.create({
   eyebrow: {
     fontSize: Type.metaElevated.size,
     lineHeight: Type.metaElevated.lineHeight,
-    fontWeight: '600',
+    fontFamily: Typography.family.semibold,
     letterSpacing: Type.metaElevated.letterSpacing,
   },
   title: {
     fontSize: 28,
     lineHeight: 34,
-    fontWeight: '700',
+    fontFamily: Typography.family.bold,
     letterSpacing: -0.5,
   },
   // Per spec 05 §3: compact width uses 26pt title with tighter line
@@ -163,27 +164,34 @@ const styles = StyleSheet.create({
     fontSize: 26,
     lineHeight: 31,
   },
+  // Value row: price + secondary line sit on one baseline row. The
+  // price is dominant; the secondary line is a quiet truth partner.
+  // Wrapping is suppressed so the price never stacks below itself.
   valueRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    flexWrap: 'wrap',
     gap: Space.sm,
-    marginTop: Space.xs,
+    marginTop: Space.sm,
   },
   primaryValue: {
     fontSize: Type.priceLarge.size,
     lineHeight: Type.priceLarge.lineHeight,
-    fontWeight: '700',
+    fontFamily: Typography.family.bold,
     letterSpacing: Type.priceLarge.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   secondaryLine: {
     fontSize: Type.body.size,
     lineHeight: Type.body.lineHeight,
-    fontWeight: '400',
+    fontFamily: Typography.family.regular,
+    flexShrink: 1,
   },
+  // Interest signal sits on its own line below the value row — a
+  // quiet metadata line, not a third member of the value cluster.
   interest: {
     fontSize: Type.caption.size,
     lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.medium,
+    marginTop: Space.xs,
   },
 });

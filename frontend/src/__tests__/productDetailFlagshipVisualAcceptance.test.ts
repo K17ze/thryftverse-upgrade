@@ -83,7 +83,7 @@ describe('product-detail-flagship-reconstruction: visual acceptance', () => {
     it('ItemDetailScreen uses useWindowDimensions for responsive layout', () => {
       const src = readScreen('ItemDetailScreen.tsx');
       expect(src).toContain('useWindowDimensions');
-      expect(src).toMatch(/isCompactScreen.*<\s*390/);
+      expect(src).toContain('COMMERCE_DETAIL_COMPACT_WIDTH');
     });
 
     it('ItemDetailScreen adapts media stage height to viewport', () => {

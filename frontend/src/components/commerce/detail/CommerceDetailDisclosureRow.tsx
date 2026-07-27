@@ -2,7 +2,7 @@ import React from 'react';
 import { View, StyleSheet, Text, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../../theme/ThemeContext';
-import { Space, Type } from '../../../theme/designTokens';
+import { Space, Type, Typography } from '../../../theme/designTokens';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useHaptic } from '../../../hooks/useHaptic';
 
@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
   label: {
     fontSize: Type.body.size,
     lineHeight: Type.body.lineHeight,
-    fontWeight: '500',
+    fontFamily: Typography.family.medium,
     flexShrink: 1,
   },
   trailingCluster: {
@@ -141,6 +141,7 @@ const styles = StyleSheet.create({
   summary: {
     fontSize: Type.caption.size,
     lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.regular,
   },
   countBadge: {
     minWidth: 22,
@@ -153,7 +154,7 @@ const styles = StyleSheet.create({
   countText: {
     fontSize: Type.meta.size,
     lineHeight: Type.meta.lineHeight,
-    fontWeight: '600',
+    fontFamily: Typography.family.semibold,
     fontVariant: ['tabular-nums'],
   },
   chevron: {

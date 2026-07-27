@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, Text } from 'react-native';
 import { useAppTheme } from '../../../theme/ThemeContext';
-import { Space, Type } from '../../../theme/designTokens';
+import { Space, Type, Typography } from '../../../theme/designTokens';
 import type { CommerceDetailSectionVariant } from './types';
 
 /**
@@ -125,7 +125,7 @@ const styles = StyleSheet.create({
   divider: {
     height: StyleSheet.hairlineWidth,
     marginHorizontal: -Space.md,
-    marginBottom: Space.lg,
+    marginBottom: Space.md,
   },
   header: {
     flexDirection: 'row',
@@ -137,20 +137,23 @@ const styles = StyleSheet.create({
   label: {
     fontSize: Type.metaElevated.size,
     lineHeight: Type.metaElevated.lineHeight,
-    fontWeight: '600',
+    fontFamily: Typography.family.semibold,
     letterSpacing: Type.metaElevated.letterSpacing,
+    textTransform: 'uppercase',
   },
   // editorial: stronger heading — slightly larger, tighter tracking.
   labelEditorial: {
     fontSize: Type.subtitle.size,
     lineHeight: Type.subtitle.lineHeight,
-    fontWeight: '700',
+    fontFamily: Typography.family.bold,
     letterSpacing: Type.subtitle.letterSpacing,
+    textTransform: 'none',
   },
   // legal: subdued — muted weight, smaller.
   labelLegal: {
     fontSize: Type.metaElevated.size,
     lineHeight: Type.metaElevated.lineHeight,
-    fontWeight: '500',
+    fontFamily: Typography.family.medium,
+    textTransform: 'none',
   },
 });

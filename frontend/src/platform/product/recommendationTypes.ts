@@ -1,4 +1,4 @@
-import type { Listing } from '../../data/mockData';
+import type { Listing } from '../../services/listingsApi';
 
 export type RecommendationSectionKey =
   | 'similar_style'

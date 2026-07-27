@@ -4,10 +4,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Reanimated from 'react-native-reanimated';
 import { FadeIn } from 'react-native-reanimated';
 import { useAppTheme } from '../../../theme/ThemeContext';
-import { Space, Elevation, Type, Radius } from '../../../theme/designTokens';
+import { Space, Elevation, Type, Radius, Typography } from '../../../theme/designTokens';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useHaptic } from '../../../hooks/useHaptic';
 import type { CommerceDetailDockLayout } from './types';
+import { COMMERCE_DETAIL_COMPACT_WIDTH } from './types';
 
 /**
  * Sticky state/action dock — the bottom dock that holds the current
@@ -84,8 +85,10 @@ export interface CommerceDetailStateDockProps {
   layout?: CommerceDetailDockLayout;
 }
 
-/** Compact width threshold below which `auto` layout stacks actions. */
-const COMPACT_STACK_THRESHOLD = 360;
+/** Compact width threshold below which `auto` layout stacks actions.
+ *  Aligned with the shared product-detail compact width so identity,
+ *  media and dock all switch behaviour at the same breakpoint. */
+const COMPACT_STACK_THRESHOLD = COMMERCE_DETAIL_COMPACT_WIDTH;
 
 export function CommerceDetailStateDock({
   value,
@@ -252,7 +255,6 @@ const styles = StyleSheet.create({
   container: {
     width: '100%',
     minWidth: 0,
-    minHeight: 72,
     paddingHorizontal: Space.md,
     paddingTop: Space.sm + 2,
     borderTopWidth: StyleSheet.hairlineWidth,
@@ -282,13 +284,15 @@ const styles = StyleSheet.create({
   value: {
     fontSize: Type.priceList.size,
     lineHeight: Type.priceList.lineHeight,
-    fontWeight: '700',
+    fontFamily: Typography.family.bold,
     letterSpacing: Type.priceList.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   valueLabel: {
     fontSize: Type.caption.size,
     lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.medium,
+    letterSpacing: Type.caption.letterSpacing,
   },
   actionCluster: {
     flexDirection: 'row',
@@ -328,7 +332,7 @@ const styles = StyleSheet.create({
   primaryActionText: {
     fontSize: Type.bodyEmphasis.size,
     lineHeight: Type.bodyEmphasis.lineHeight,
-    fontWeight: '600',
+    fontFamily: Typography.family.semibold,
   },
   // Per spec 05 §5: secondary is a quiet outlined control with medium
   // radius, not a giant pill.
@@ -352,7 +356,7 @@ const styles = StyleSheet.create({
   secondaryActionText: {
     fontSize: Type.bodyEmphasis.size,
     lineHeight: Type.bodyEmphasis.lineHeight,
-    fontWeight: '600',
+    fontFamily: Typography.family.semibold,
   },
   pressed: {
     opacity: 0.85,
@@ -361,6 +365,7 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: Type.caption.size,
     lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.regular,
     marginTop: Space.xs,
   },
 });

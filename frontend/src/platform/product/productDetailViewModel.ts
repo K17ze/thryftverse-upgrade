@@ -12,7 +12,7 @@
  * `listingDetailContract` types and emit a single typed union.
  */
 
-import type { Listing } from '../../data/mockData';
+import type { Listing } from '../../services/listingsApi';
 import type {
   AuctionDetail,
   AuctionViewerState,

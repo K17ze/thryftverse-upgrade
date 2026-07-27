@@ -2,9 +2,13 @@ import { useQuery, useInfiniteQuery, useMutation, useQueryClient, keepPreviousDa
 import { queryKeys } from '../server/queryKeys';
 import { fetchRecommendations } from './recommendationService';
 import type { RecommendationSectionKey } from './recommendationTypes';
-import { fetchListingByIdFromApi } from '../../services/listingsApi';
-import type { ListingCommerceServerContext } from '../../services/listingsApi';
-import type { Listing } from '../../data/mockData';
+import {
+  fetchListingByIdFromApi,
+  fetchListingPriceHistory,
+  fetchListingQaSummary,
+  fetchListingSoldComparables,
+} from '../../services/listingsApi';
+import type { Listing, ListingCommerceServerContext } from '../../services/listingsApi';
 import { fetchJson } from '../../lib/apiClient';
 import type { SellerTrustSummary } from './listingDetailContract';
 import { mapBackendListingToListing } from '../../services/listingMapper';
@@ -36,6 +40,36 @@ export function useListingDetail(listingId: string | undefined) {
       return failureCount < 2;
     },
     placeholderData: keepPreviousData,
+  });
+}
+
+export function useListingSoldComparables(listingId: string | undefined) {
+  return useQuery({
+    queryKey: listingId ? ['listing', 'sold-comparables', listingId] : ['listing', 'sold-comparables', 'none'],
+    queryFn: () => fetchListingSoldComparables(listingId!),
+    enabled: !!listingId,
+    staleTime: 15 * 60 * 1000,
+    retry: 1,
+  });
+}
+
+export function useListingPriceHistory(listingId: string | undefined) {
+  return useQuery({
+    queryKey: listingId ? ['listing', 'price-history', listingId] : ['listing', 'price-history', 'none'],
+    queryFn: () => fetchListingPriceHistory(listingId!),
+    enabled: !!listingId,
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
+}
+
+export function useListingQaSummary(listingId: string | undefined) {
+  return useQuery({
+    queryKey: listingId ? ['listing', 'qa-summary', listingId] : ['listing', 'qa-summary', 'none'],
+    queryFn: () => fetchListingQaSummary(listingId!),
+    enabled: !!listingId,
+    staleTime: 60 * 1000,
+    retry: 1,
   });
 }
 

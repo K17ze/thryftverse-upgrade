@@ -18,7 +18,7 @@ import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { Space, Type, Typography, DockConstants } from '../theme/designTokens';
+import { Space, Type, Typography, Radius, DockConstants } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { fetchCoOwnAssetById, fetchCoOwnOrderBook, fetchCoOwnHoldings } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
@@ -40,6 +40,7 @@ import {
   CommerceDetailUnavailableInline,
   CommerceDetailStateDock,
   CommerceDetailMediaRail,
+  COMMERCE_DETAIL_COMPACT_WIDTH,
 } from '../components/commerce/detail';
 import { ProductFamilyBadge, RecommendationRail, FullscreenMediaViewer } from '../components/product';
 import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
@@ -108,7 +109,7 @@ export default function AssetDetailScreen() {
   const { isOffline } = useConnectivity();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
-  const isCompact = screenWidth < 390;
+  const isCompact = screenWidth < COMMERCE_DETAIL_COMPACT_WIDTH;
   const isVeryCompact = screenWidth < 340;
   const isTablet = screenWidth >= 768;
   const currentUser = useStore((state) => state.currentUser);
@@ -191,10 +192,18 @@ export default function AssetDetailScreen() {
   // ── Hooks must run before conditional returns (Rules of Hooks) ──
 
   // Market-data staleness computation (spec 07 §1.4)
+  // Prefer the last settled execution timestamp from the market snapshot
+  // (spec 03_COOWN §2) over asset.updatedAt — it is the most precise
+  // signal for market-data freshness.
   const STALENESS_THRESHOLD_SECONDS = 24 * 60 * 60;
   const { dataStale, dataStaleAgeLabel } = React.useMemo(() => {
     if (!asset || !dataLoadedAt) return { dataStale: false, dataStaleAgeLabel: undefined };
-    const sourceTimestamp = asset.updatedAt ? new Date(asset.updatedAt).getTime() : dataLoadedAt;
+    const snapshotTimestamp = asset.marketSnapshot?.lastExecutionAt;
+    const sourceTimestamp = snapshotTimestamp
+      ? new Date(snapshotTimestamp).getTime()
+      : asset.updatedAt
+        ? new Date(asset.updatedAt).getTime()
+        : dataLoadedAt;
     const ageSeconds = Math.max(0, (Date.now() - sourceTimestamp) / 1000);
     const stale = ageSeconds > STALENESS_THRESHOLD_SECONDS;
     if (!stale) return { dataStale: false, dataStaleAgeLabel: undefined };
@@ -271,12 +280,12 @@ export default function AssetDetailScreen() {
   // must not label reference price as "Last trade" without settled-
   // execution proof. marketSnapshot is null until the backend exposes
   // lastExecutionPriceGbp.
-  const marketSnapshot = (asset as any).marketSnapshot ?? null;
+  const marketSnapshot = asset.marketSnapshot ?? null;
 
   // ── Candle data gating ──
   // Per spec 03_COOWN §4: only expose the candle toggle when real OHLC
   // candles exist. Do not pass an empty candle component.
-  const candleData: any[] = (asset as any).candles ?? [];
+  const candleData = asset.candles ?? [];
   const hasCandleData = candleData.length > 0;
 
   const images = asset.imageUrl ? [asset.imageUrl] : [];
@@ -1175,7 +1184,7 @@ const styles = StyleSheet.create({
   marketBookRow: {
     flexDirection: 'row',
     alignItems: 'stretch',
-    borderTopWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
     marginTop: Space.sm,
     paddingTop: Space.sm,
   },
@@ -1184,7 +1193,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   marketBookDivider: {
-    width: 1,
+    width: StyleSheet.hairlineWidth,
     marginHorizontal: Space.sm,
   },
   marketBookLabel: {
@@ -1204,7 +1213,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     gap: Space.sm,
   },
   marketSecondaryFact: {
@@ -1227,7 +1236,7 @@ const styles = StyleSheet.create({
   fundamentalsStacked: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     gap: Space.sm,
   },
   fundamentalsRow: {
@@ -1263,8 +1272,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.4)',
   },
   riskDisclosureModalSheet: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
     maxHeight: '80%',
     paddingBottom: 40,
   },

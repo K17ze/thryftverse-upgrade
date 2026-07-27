@@ -2,7 +2,7 @@ import React from 'react';
 import { View, StyleSheet, Text, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../../theme/ThemeContext';
-import { Space, Radius, Type } from '../../../theme/designTokens';
+import { Space, Radius, Type, Typography } from '../../../theme/designTokens';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { CachedImage } from '../../CachedImage';
@@ -210,12 +210,12 @@ const styles = StyleSheet.create({
   },
   issuerBadgeText: {
     fontSize: 10,
-    fontWeight: '600',
+    fontFamily: Typography.family.semibold,
     letterSpacing: 0.2,
   },
   avatarInitial: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: Typography.family.semibold,
   },
   identityText: {
     flexShrink: 1,
@@ -229,11 +229,12 @@ const styles = StyleSheet.create({
   name: {
     fontSize: Type.bodyEmphasis.size,
     lineHeight: Type.bodyEmphasis.lineHeight,
-    fontWeight: '600',
+    fontFamily: Typography.family.semibold,
   },
   subtitle: {
     fontSize: Type.caption.size,
     lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.regular,
   },
   actions: {
     flexDirection: 'row',
@@ -244,6 +245,6 @@ const styles = StyleSheet.create({
   quietAction: {
     fontSize: Type.body.size,
     lineHeight: Type.body.lineHeight,
-    fontWeight: '600',
+    fontFamily: Typography.family.semibold,
   },
 });

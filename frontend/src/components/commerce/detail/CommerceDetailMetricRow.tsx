@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, Text } from 'react-native';
 import { useAppTheme } from '../../../theme/ThemeContext';
-import { Space, Type } from '../../../theme/designTokens';
+import { Space, Type, Typography } from '../../../theme/designTokens';
 
 /**
  * Compact metric row — a label/value pair laid out for tabular numerals.
@@ -77,6 +77,7 @@ const styles = StyleSheet.create({
   label: {
     fontSize: Type.body.size,
     lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.regular,
     flexShrink: 1,
   },
   valueCluster: {
@@ -88,11 +89,12 @@ const styles = StyleSheet.create({
   value: {
     fontSize: Type.bodyEmphasis.size,
     lineHeight: Type.bodyEmphasis.lineHeight,
-    fontWeight: '600',
+    fontFamily: Typography.family.semibold,
     fontVariant: ['tabular-nums'],
   },
   subLabel: {
     fontSize: Type.caption.size,
     lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.regular,
   },
 });

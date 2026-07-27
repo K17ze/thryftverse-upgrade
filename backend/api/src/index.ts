@@ -16440,6 +16440,32 @@ app.get('/listings/:listingId', async (request, reply) => {
     questionCount = 0;
   }
 
+  const [wishlistResult, collectionResult, offerResult, answeredResult] = await Promise.all([
+    readDb.query<{ count: string }>(
+      `SELECT COUNT(DISTINCT user_id)::text AS count FROM interactions WHERE listing_id = $1 AND action = 'wishlist'`,
+      [listingId]
+    ),
+    readDb.query<{ count: string }>(
+      `SELECT COUNT(DISTINCT c.user_id)::text AS count
+       FROM collection_items ci
+       INNER JOIN collections c ON c.id = ci.collection_id
+       WHERE ci.listing_id = $1`,
+      [listingId]
+    ),
+    readDb.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM listing_offers WHERE listing_id = $1 AND status = 'pending'`,
+      [listingId]
+    ),
+    readDb.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM listing_qa WHERE listing_id = $1 AND answer_text IS NOT NULL`,
+      [listingId]
+    ),
+  ]);
+  const wishlistCount = Number(wishlistResult.rows[0]?.count ?? 0);
+  const collectionSaveCount = Number(collectionResult.rows[0]?.count ?? 0);
+  const activeOfferCount = Number(offerResult.rows[0]?.count ?? 0);
+  const answeredQuestionCount = Number(answeredResult.rows[0]?.count ?? 0);
+
   return {
     ok: true,
     listing: {
@@ -16472,7 +16498,14 @@ app.get('/listings/:listingId', async (request, reply) => {
       // Per spec 04_DIRECT §5: backend-backed engagement summary.
       // The frontend must not fabricate question counts.
       engagement: {
+        listingId,
+        likes: wishlistCount,
+        wishlistCount,
+        collectionSaveCount,
+        activeOfferCount,
         questionCount,
+        answeredQuestionCount,
+        generatedAt: new Date().toISOString(),
       },
     },
     commerce: {
@@ -16498,6 +16531,321 @@ app.get('/listings/:listingId', async (request, reply) => {
       },
     },
   };
+});
+
+app.get('/listings/:listingId/sold-comparables', async (request, reply) => {
+  const paramsSchema = z.object({ listingId: z.string().min(2) });
+  const { listingId } = paramsSchema.parse(request.params);
+  const sourceResult = await readDb.query<{ category: string | null; brand: string | null }>(
+    `SELECT category, brand FROM listings WHERE id = $1 LIMIT 1`,
+    [listingId]
+  );
+  const source = sourceResult.rows[0];
+  if (!source) {
+    reply.code(404);
+    return { ok: false, error: 'Listing not found' };
+  }
+
+  const comparableResult = source.category
+    ? await readDb.query<{ price_gbp: number | string; sold_at: string }>(
+        `SELECT o.subtotal_gbp AS price_gbp, o.created_at AS sold_at
+         FROM orders o
+         INNER JOIN listings l ON l.id = o.listing_id
+         WHERE o.listing_id <> $1
+           AND o.status IN ('paid', 'shipped', 'delivered')
+           AND l.status = 'sold'
+           AND LOWER(l.category) = LOWER($2)
+           AND ($3::text IS NULL OR LOWER(l.brand) = LOWER($3))
+         ORDER BY o.created_at DESC
+         LIMIT 100`,
+        [listingId, source.category, source.brand]
+      )
+    : { rows: [] as Array<{ price_gbp: number | string; sold_at: string }> };
+
+  const samples = comparableResult.rows
+    .map((row) => ({ price: Number(row.price_gbp), soldAt: row.sold_at }))
+    .filter((row) => Number.isFinite(row.price) && row.price >= 0);
+  const prices = samples.map((row) => row.price).sort((a, b) => a - b);
+  const middle = Math.floor(prices.length / 2);
+  const medianPrice = prices.length === 0
+    ? null
+    : prices.length % 2 === 0
+      ? Number(((prices[middle - 1] + prices[middle]) / 2).toFixed(2))
+      : prices[middle];
+  const soldDates = samples.map((row) => row.soldAt).sort();
+
+  return {
+    ok: true,
+    comparables: {
+      listingId,
+      category: source.category,
+      brand: source.brand,
+      currency: 'GBP',
+      sampleSize: prices.length,
+      minPrice: prices[0] ?? null,
+      medianPrice,
+      maxPrice: prices[prices.length - 1] ?? null,
+      dateFrom: soldDates[0] ?? null,
+      dateTo: soldDates[soldDates.length - 1] ?? null,
+      generatedAt: new Date().toISOString(),
+    },
+  };
+});
+
+app.get('/listings/:listingId/price-history', async (request, reply) => {
+  const paramsSchema = z.object({ listingId: z.string().min(2) });
+  const { listingId } = paramsSchema.parse(request.params);
+  const listingResult = await readDb.query<{ id: string }>(
+    `SELECT id FROM listings WHERE id = $1 LIMIT 1`,
+    [listingId]
+  );
+  if (!listingResult.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Listing not found' };
+  }
+  const result = await readDb.query<{
+    previous_price_gbp: number | string;
+    new_price_gbp: number | string;
+    changed_at: string;
+  }>(
+    `SELECT previous_price_gbp, new_price_gbp, changed_at
+     FROM listing_price_events
+     WHERE listing_id = $1
+     ORDER BY changed_at DESC
+     LIMIT 100`,
+    [listingId]
+  );
+  return {
+    ok: true,
+    listingId,
+    items: result.rows.map((row) => ({
+      previousPrice: Number(row.previous_price_gbp),
+      newPrice: Number(row.new_price_gbp),
+      currency: 'GBP',
+      changedAt: row.changed_at,
+    })),
+  };
+});
+
+app.get('/listings/:listingId/qa-summary', async (request, reply) => {
+  const paramsSchema = z.object({ listingId: z.string().min(2) });
+  const { listingId } = paramsSchema.parse(request.params);
+  const listingResult = await readDb.query<{ id: string }>(
+    `SELECT id FROM listings WHERE id = $1 LIMIT 1`,
+    [listingId]
+  );
+  if (!listingResult.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Listing not found' };
+  }
+  const [countsResult, latestResult] = await Promise.all([
+    readDb.query<{ question_count: string; answered_count: string; latest_activity_at: string | null }>(
+      `SELECT
+         COUNT(*)::text AS question_count,
+         COUNT(*) FILTER (WHERE answer_text IS NOT NULL)::text AS answered_count,
+         MAX(GREATEST(created_at, COALESCE(answered_at, created_at))) AS latest_activity_at
+       FROM listing_qa
+       WHERE listing_id = $1`,
+      [listingId]
+    ),
+    readDb.query<{ question_text: string; answer_text: string; answered_at: string }>(
+      `SELECT question_text, answer_text, answered_at
+       FROM listing_qa
+       WHERE listing_id = $1 AND answer_text IS NOT NULL
+       ORDER BY answered_at DESC
+       LIMIT 1`,
+      [listingId]
+    ),
+  ]);
+  const counts = countsResult.rows[0];
+  const latest = latestResult.rows[0] ?? null;
+  return {
+    ok: true,
+    summary: {
+      listingId,
+      questionCount: Number(counts?.question_count ?? 0),
+      answeredQuestionCount: Number(counts?.answered_count ?? 0),
+      latestAnsweredQuestion: latest?.question_text ?? null,
+      latestAnswer: latest?.answer_text ?? null,
+      latestActivityAt: counts?.latest_activity_at ?? null,
+    },
+  };
+});
+
+app.get('/listings/:listingId/questions', async (request, reply) => {
+  const paramsSchema = z.object({ listingId: z.string().min(2) });
+  const { listingId } = paramsSchema.parse(request.params);
+  const listingResult = await readDb.query<{ id: string }>(
+    `SELECT id FROM listings WHERE id = $1 LIMIT 1`,
+    [listingId]
+  );
+  if (!listingResult.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Listing not found' };
+  }
+  const result = await readDb.query<{
+    id: string;
+    asker_id: string;
+    asker_name: string;
+    question_text: string;
+    created_at: string;
+    answer_text: string | null;
+    responder_name: string | null;
+    answered_at: string | null;
+  }>(
+    `SELECT
+       q.id,
+       q.asker_id,
+       asker.username AS asker_name,
+       q.question_text,
+       q.created_at,
+       q.answer_text,
+       responder.username AS responder_name,
+       q.answered_at
+     FROM listing_qa q
+     INNER JOIN users asker ON asker.id = q.asker_id
+     LEFT JOIN users responder ON responder.id = q.answered_by
+     WHERE q.listing_id = $1
+     ORDER BY q.created_at DESC
+     LIMIT 100`,
+    [listingId]
+  );
+  return {
+    ok: true,
+    items: result.rows.map((row) => ({
+      id: row.id,
+      listingId,
+      askerId: row.asker_id,
+      askerName: row.asker_name,
+      text: row.question_text,
+      createdAt: row.created_at,
+      answer: row.answer_text && row.answered_at
+        ? {
+            text: row.answer_text,
+            responderName: row.responder_name ?? 'Seller',
+            createdAt: row.answered_at,
+          }
+        : null,
+    })),
+  };
+});
+
+app.post('/listings/:listingId/questions', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+  const paramsSchema = z.object({ listingId: z.string().min(2) });
+  const bodySchema = z.object({ text: z.string().trim().min(5).max(300) });
+  const { listingId } = paramsSchema.parse(request.params);
+  const { text } = bodySchema.parse(request.body);
+  const listingResult = await db.query<{ seller_id: string }>(
+    `SELECT seller_id FROM listings WHERE id = $1 LIMIT 1`,
+    [listingId]
+  );
+  if (!listingResult.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Listing not found' };
+  }
+  if (listingResult.rows[0].seller_id === request.authUser.userId) {
+    reply.code(403);
+    return { ok: false, error: 'Sellers cannot ask questions on their own listing' };
+  }
+  const questionId = `lq_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  const result = await db.query<{ id: string; created_at: string }>(
+    `INSERT INTO listing_qa (id, listing_id, asker_id, question_text)
+     VALUES ($1, $2, $3, $4)
+     RETURNING id, created_at`,
+    [questionId, listingId, request.authUser.userId, text]
+  );
+  reply.code(201);
+  return {
+    ok: true,
+    question: {
+      id: result.rows[0].id,
+      listingId,
+      askerId: request.authUser.userId,
+      text,
+      createdAt: result.rows[0].created_at,
+      answer: null,
+    },
+  };
+});
+
+app.post('/listings/:listingId/questions/:questionId/answer', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+  const paramsSchema = z.object({ listingId: z.string().min(2), questionId: z.string().min(2) });
+  const bodySchema = z.object({ text: z.string().trim().min(3).max(500) });
+  const { listingId, questionId } = paramsSchema.parse(request.params);
+  const { text } = bodySchema.parse(request.body);
+  const ownerResult = await db.query<{ seller_id: string }>(
+    `SELECT seller_id FROM listings WHERE id = $1 LIMIT 1`,
+    [listingId]
+  );
+  if (!ownerResult.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Listing not found' };
+  }
+  if (ownerResult.rows[0].seller_id !== request.authUser.userId) {
+    reply.code(403);
+    return { ok: false, error: 'Only the seller can answer listing questions' };
+  }
+  const result = await db.query<{ answered_at: string }>(
+    `UPDATE listing_qa
+     SET answer_text = $4, answered_by = $3, answered_at = NOW(), updated_at = NOW()
+     WHERE id = $1 AND listing_id = $2
+     RETURNING answered_at`,
+    [questionId, listingId, request.authUser.userId, text]
+  );
+  if (!result.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Question not found' };
+  }
+  return {
+    ok: true,
+    answer: {
+      text,
+      responderName: 'Seller',
+      createdAt: result.rows[0].answered_at,
+    },
+  };
+});
+
+app.post('/listings/:listingId/report', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+  const paramsSchema = z.object({ listingId: z.string().min(2) });
+  const bodySchema = z.object({
+    reason: z.enum(['spam', 'inappropriate', 'counterfeit', 'unresponsive', 'harassment', 'other']),
+    details: z.string().trim().max(500).optional(),
+  });
+  const { listingId } = paramsSchema.parse(request.params);
+  const payload = bodySchema.parse(request.body);
+  const listingResult = await db.query<{ seller_id: string }>(
+    `SELECT seller_id FROM listings WHERE id = $1 LIMIT 1`,
+    [listingId]
+  );
+  if (!listingResult.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Listing not found' };
+  }
+  if (listingResult.rows[0].seller_id === request.authUser.userId) {
+    reply.code(403);
+    return { ok: false, error: 'You cannot report your own listing' };
+  }
+  const reportId = `listing_report_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  await db.query(
+    `INSERT INTO listing_reports (id, reporter_id, listing_id, reason, details)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [reportId, request.authUser.userId, listingId, payload.reason, payload.details ?? null]
+  );
+  reply.code(201);
+  return { ok: true, reportId };
 });
 
 app.get('/listings/:listingId/related', async (request, reply) => {
@@ -17137,12 +17485,16 @@ app.patch('/listings/:listingId', async (request, reply) => {
 
   const payload = bodySchema.parse(request.body);
 
-  const existing = await db.query('SELECT id FROM listings WHERE id = $1 LIMIT 1', [listingId]);
+  const existing = await db.query<{ id: string; price_gbp: number | string }>(
+    'SELECT id, price_gbp FROM listings WHERE id = $1 LIMIT 1',
+    [listingId]
+  );
   if (!existing.rowCount) {
     reply.code(404);
     return { ok: false, error: 'Listing not found' };
   }
 
+  const previousPriceGbp = Number(existing.rows[0].price_gbp);
   const sets: string[] = [];
   const values: unknown[] = [];
   let idx = 1;
@@ -17175,6 +17527,14 @@ app.patch('/listings/:listingId', async (request, reply) => {
     `UPDATE listings SET ${sets.join(', ')} WHERE id = $${idx}`,
     values
   );
+
+  if (payload.priceGbp !== undefined && payload.priceGbp !== previousPriceGbp) {
+    await db.query(
+      `INSERT INTO listing_price_events (listing_id, previous_price_gbp, new_price_gbp)
+       VALUES ($1, $2, $3)`,
+      [listingId, previousPriceGbp, payload.priceGbp]
+    );
+  }
 
   return { ok: true, listingId };
 });
@@ -35594,6 +35954,127 @@ app.get('/co-own/assets/:assetId', async (request, reply) => {
     return { ok: false, error: 'Asset not found' };
   }
 
+  // ── Market snapshot (spec 03_COOWN §2) ──
+  // Compute from settled trades and open orders so the frontend can
+  // distinguish "Reference unit price" from "Last settled trade".
+  const snapshotResult = await db.query<{
+    last_execution_price_gbp: string | null;
+    last_execution_at: string | null;
+    volume_24h_gbp: string | null;
+    price_24h_ago_gbp: string | null;
+    best_bid_gbp: string | null;
+    best_ask_gbp: string | null;
+  }>(
+    `
+      WITH last_trade AS (
+        SELECT unit_price_gbp, created_at
+        FROM coOwn_trades
+        WHERE asset_id = $1 AND settlement_status = 'settled'
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1
+      ),
+      vol_24h AS (
+        SELECT COALESCE(SUM(notional_gbp), 0)::text AS volume
+        FROM coOwn_trades
+        WHERE asset_id = $1
+          AND settlement_status = 'settled'
+          AND created_at >= NOW() - INTERVAL '24 hours'
+      ),
+      price_24h_ago AS (
+        SELECT unit_price_gbp
+        FROM coOwn_trades
+        WHERE asset_id = $1
+          AND settlement_status = 'settled'
+          AND created_at < NOW() - INTERVAL '24 hours'
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1
+      ),
+      best_bid AS (
+        SELECT MAX(unit_price_gbp)::text AS price
+        FROM coOwn_orders
+        WHERE asset_id = $1
+          AND side = 'buy'
+          AND status IN ('open', 'partially_filled')
+          AND remaining_units > 0
+      ),
+      best_ask AS (
+        SELECT MIN(unit_price_gbp)::text AS price
+        FROM coOwn_orders
+        WHERE asset_id = $1
+          AND side = 'sell'
+          AND status IN ('open', 'partially_filled')
+          AND remaining_units > 0
+      )
+      SELECT
+        (SELECT unit_price_gbp::text FROM last_trade) AS last_execution_price_gbp,
+        (SELECT to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') FROM last_trade) AS last_execution_at,
+        (SELECT volume FROM vol_24h) AS volume_24h_gbp,
+        (SELECT unit_price_gbp::text FROM price_24h_ago) AS price_24h_ago_gbp,
+        (SELECT price FROM best_bid) AS best_bid_gbp,
+        (SELECT price FROM best_ask) AS best_ask_gbp
+    `,
+    [assetId]
+  );
+
+  const snap = snapshotResult.rows[0];
+  const lastExecutionPriceGbp = snap?.last_execution_price_gbp
+    ? Number(snap.last_execution_price_gbp)
+    : null;
+  const price24hAgo = snap?.price_24h_ago_gbp ? Number(snap.price_24h_ago_gbp) : null;
+  const volume24h = snap?.volume_24h_gbp ? Number(snap.volume_24h_gbp) : 0;
+  let marketMovePct24h: number | null = null;
+  if (lastExecutionPriceGbp != null && price24hAgo != null && price24hAgo > 0) {
+    marketMovePct24h = ((lastExecutionPriceGbp - price24hAgo) / price24hAgo) * 100;
+  }
+
+  const marketSnapshot = {
+    lastExecutionPriceGbp,
+    lastExecutionAt: snap?.last_execution_at ?? null,
+    volume24hGbp: volume24h > 0 ? volume24h : null,
+    marketMovePct24h,
+    bestBidGbp: snap?.best_bid_gbp ? Number(snap.best_bid_gbp) : null,
+    bestAskGbp: snap?.best_ask_gbp ? Number(snap.best_ask_gbp) : null,
+  };
+
+  // ── OHLC candles (spec 03_COOWN §4) ──
+  // Aggregate settled trades into daily buckets for the last 7 days.
+  // Returns empty array when no trades exist — the frontend gates the
+  // candle toggle on this.
+  const candleResult = await db.query<{
+    bucket_day: string;
+    open_price: string;
+    high_price: string;
+    low_price: string;
+    close_price: string;
+    total_volume: string;
+  }>(
+    `
+      SELECT
+        date_trunc('day', created_at) AS bucket_day,
+        (array_agg(unit_price_gbp ORDER BY created_at ASC, id ASC))[1]::text AS open_price,
+        MAX(unit_price_gbp)::text AS high_price,
+        MIN(unit_price_gbp)::text AS low_price,
+        (array_agg(unit_price_gbp ORDER BY created_at DESC, id DESC))[1]::text AS close_price,
+        SUM(units)::text AS total_volume
+      FROM coOwn_trades
+      WHERE asset_id = $1
+        AND settlement_status = 'settled'
+        AND created_at >= NOW() - INTERVAL '7 days'
+      GROUP BY bucket_day
+      ORDER BY bucket_day ASC
+    `,
+    [assetId]
+  );
+
+  const candles = candleResult.rows.map((c) => ({
+    timestamp: c.bucket_day,
+    openGbp: Number(c.open_price),
+    highGbp: Number(c.high_price),
+    lowGbp: Number(c.low_price),
+    closeGbp: Number(c.close_price),
+    volume: Number(c.total_volume),
+  }));
+
   return {
     ok: true,
     item: {
@@ -35614,15 +36095,12 @@ app.get('/co-own/assets/:assetId', async (request, reply) => {
       isOpen: row.is_open,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
-      // Per spec 03_COOWN §2: backend-backed market snapshot. Null
-      // until lastExecutionPriceGbp is available. The frontend uses
-      // this to distinguish "Reference unit price" from "Last settled
-      // trade".
-      marketSnapshot: null,
-      // Per spec 03_COOWN §4: canonical OHLC candles. Empty array
-      // when no candle data exists. The frontend gates the candle
-      // toggle on this.
-      candles: [],
+      // Per spec 03_COOWN §2: backend-backed market snapshot computed
+      // from settled trades and open orders.
+      marketSnapshot,
+      // Per spec 03_COOWN §4: canonical OHLC candles aggregated from
+      // settled trades. Empty array when no trades exist.
+      candles,
     },
   };
 });

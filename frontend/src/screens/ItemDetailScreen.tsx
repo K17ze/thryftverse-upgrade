@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -19,12 +19,13 @@ import Reanimated, {
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Listing } from '../data/mockData';
+import type { Listing } from '../services/listingsApi';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { enablePriceAlert, disablePriceAlert, getPriceAlertStatus } from '../services/priceAlertsApi';
 import { toIze, formatIzeAmount } from '../utils/currency';
 import { Motion } from '../constants/motion';
@@ -62,12 +63,17 @@ import {
   CommerceDetailStateDock,
   CommerceDetailMediaRail,
   CommerceDetailUnavailableInline,
+  CommerceDetailOfflineBanner,
+  COMMERCE_DETAIL_COMPACT_WIDTH,
 } from '../components/commerce/detail';
 import { resolveEvidenceGroups } from '../platform/commerce/categoryEvidence';
 import { FlagshipEmptyGraphic } from '../components/flagship';
 
 import {
   useListingDetail,
+  useListingPriceHistory,
+  useListingQaSummary,
+  useListingSoldComparables,
   useRecommendations,
   useContinueExploring,
   useSellerTrust,
@@ -82,7 +88,7 @@ import {
 } from '../platform/product';
 import type { RecommendationLook } from '../platform/product';
 import { trackTelemetryEvent } from '../lib/telemetry';
-import { Space, Type, Typography, DockConstants } from '../theme/designTokens';
+import { Space, Type, Typography, Radius, DockConstants } from '../theme/designTokens';
 
 export default function ItemDetailScreen() {
   const { isDark, colors } = useAppTheme();
@@ -90,7 +96,8 @@ export default function ItemDetailScreen() {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
-  const isCompactScreen = screenWidth < 390;
+  const isCompactScreen = screenWidth < COMMERCE_DETAIL_COMPACT_WIDTH;
+  const { isOffline } = useConnectivity();
   const [collectionModalVisible, setCollectionModalVisible] = useState(false);
   const [shareVisible, setShareVisible] = useState(false);
   const [priceAlertEnabled, setPriceAlertEnabled] = useState(false);
@@ -120,16 +127,17 @@ export default function ItemDetailScreen() {
 
   const {
     data: recommendationsData,
-    isLoading: recsLoading,
     isError: recsError,
   } = useRecommendations(itemId);
-
   const {
     data: exploreData,
     fetchNextPage: exploreNextPage,
     hasNextPage: exploreHasNextPage,
     isFetchingNextPage: exploreFetching,
   } = useContinueExploring(itemId);
+  const { data: soldComps } = useListingSoldComparables(itemId);
+  const { data: priceHistory = [] } = useListingPriceHistory(itemId);
+  const { data: qaSummary } = useListingQaSummary(itemId);
 
   const item = queryData?.listing ?? null;
   const serverCommerce = queryData?.commerce ?? null;
@@ -240,43 +248,30 @@ export default function ItemDetailScreen() {
 
   // NOTE: exploreItems useMemo must run BEFORE any conditional return so the
   // hook count stays stable across loading → loaded (Rules of Hooks).
+  // Per spec 04_DIRECT §4: "Continue exploring" items are prefetched via
+  // the useContinueExploring hook but not rendered as a fourth discovery
+  // module — the three-module budget (Bundle upsell → Seen in Looks →
+  // More like this) is the canonical order. The prefetched data is
+  // available for downstream navigation surfaces.
   const exploreItems: Listing[] = useMemo(() => {
     const allPages = exploreData?.pages ?? [];
     const items: Listing[] = [];
     for (const page of allPages) {
       const section = page.sections.find((s) => s.key === 'continue_exploring');
       if (section) {
-        for (const item of section.items) {
-          if (!isRecommendationLook(item)) items.push(item);
+        for (const recItem of section.items) {
+          if (!isRecommendationLook(recItem)) items.push(recItem);
         }
       }
     }
     return items;
   }, [exploreData]);
 
-  // Sold comparables — derived from backend listings with same category/brand that are sold
-  const soldComps = useMemo(() => {
-    if (!item) return null;
-    const sold = backendListings.filter((l) =>
-      l.id !== item.id &&
-      l.isSold &&
-      (l.category === item.category || l.brand === item.brand)
-    );
-    if (sold.length < 2) return null;
-    const prices = sold.map((l) => l.price).sort((a, b) => a - b);
-    return {
-      minPrice: prices[0],
-      maxPrice: prices[prices.length - 1],
-      medianPrice: prices[Math.floor(prices.length / 2)],
-      sampleSize: sold.length,
-    };
-  }, [backendListings, item]);
-
   // ── Listing engagement summary ──
   // Per spec 04_DIRECT §5: backend-backed engagement summary. The
   // frontend must not fabricate question counts. listingEngagement is
   // null until the backend exposes questionCount.
-  const listingEngagement = (item as any).engagement ?? null;
+  const listingEngagement = item?.engagement ?? null;
 
   if (queryLoading && !item) {
     return (
@@ -400,10 +395,23 @@ export default function ItemDetailScreen() {
   if (hasDiscount && discountPercent && discountPercent > 0) {
     priceInsightRows.push({ label: 'Price drop', value: `-${Math.round(discountPercent)}%` });
   }
-  if (soldComps && soldComps.sampleSize > 0) {
+  if (
+    soldComps &&
+    soldComps.sampleSize >= 2 &&
+    soldComps.minPrice != null &&
+    soldComps.maxPrice != null
+  ) {
     priceInsightRows.push({
-      label: 'Similar sold',
-      value: `£${soldComps.minPrice.toFixed(0)}–£${soldComps.maxPrice.toFixed(0)}`,
+      label: `${soldComps.sampleSize} similar sold`,
+      value: `${formatFromFiat(soldComps.minPrice, soldComps.currency)}–${formatFromFiat(soldComps.maxPrice, soldComps.currency)}`,
+      muted: true,
+    });
+  }
+  const latestPriceEvent = priceHistory[0];
+  if (latestPriceEvent) {
+    priceInsightRows.push({
+      label: 'Previous price',
+      value: formatFromFiat(latestPriceEvent.previousPrice, latestPriceEvent.currency),
       muted: true,
     });
   }
@@ -510,6 +518,11 @@ export default function ItemDetailScreen() {
           onOverflow={() => setOverflowVisible(true)}
           showOverflow
         />
+
+        {/* ── Offline banner ──
+            Per spec 05 §14: offline state must be designed, not a blank
+            screen. Cached listing data may still be visible. */}
+        <CommerceDetailOfflineBanner isOffline={isOffline} />
 
         {/* ── Zone B — Identity seam ──
             One compact identity composition: brand eyebrow + title +
@@ -776,13 +789,20 @@ export default function ItemDetailScreen() {
             vertical length without aiding the purchase decision. The
             disclosure opens a canonical BottomSheet with the full Q&A. */}
         <CommerceDetailSection label="Questions & answers" divider>
+          {qaSummary?.latestAnsweredQuestion && qaSummary.latestAnswer ? (
+            <View style={styles.qaPreview}>
+              <Text style={[styles.qaPreviewQuestion, { color: colors.textPrimary }]} numberOfLines={2}>
+                {qaSummary.latestAnsweredQuestion}
+              </Text>
+              <Text style={[styles.qaPreviewAnswer, { color: colors.textSecondary }]} numberOfLines={2}>
+                {qaSummary.latestAnswer}
+              </Text>
+            </View>
+          ) : null}
           <CommerceDetailDisclosureRow
-            label="View questions & answers"
-            summary={
-              listingEngagement?.questionCount
-                ? `${listingEngagement.questionCount} ${listingEngagement.questionCount === 1 ? 'question' : 'questions'}`
-                : 'No questions yet'
-            }
+            label={qaSummary?.questionCount ? 'View all questions' : 'Ask a question'}
+            summary={qaSummary?.questionCount ? undefined : 'No questions yet'}
+            count={qaSummary?.questionCount ?? listingEngagement?.questionCount}
             onPress={() => setQaSheetVisible(true)}
             leadingIcon="chatbubble-outline"
             accessibilityLabel="View questions and answers"
@@ -847,8 +867,8 @@ export default function ItemDetailScreen() {
                           <Ionicons name="shirt-outline" size={20} color={colors.textMuted} />
                         </View>
                       )}
-                      <Text style={[styles.moreLikeThisPrice, { color: colors.textPrimary }]} numberOfLines={1}>
-                        £{simItem.price.toFixed(0)}
+                      <Text style={[styles.moreLikeThisPrice, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+                        {formatFromFiat(simItem.price, 'GBP', { displayMode: 'fiat' })}
                       </Text>
                     </Pressable>
                   ))}
@@ -969,7 +989,7 @@ export default function ItemDetailScreen() {
         onDismiss={() => setShareVisible(false)}
         url={`https://thryftverse.com/item/${item.id}`}
         title={item.title}
-        subtitle={item.brand ? `${item.brand} · £${item.price}` : `£${item.price}`}
+        subtitle={item.brand ? `${item.brand} · ${formattedPrice}` : formattedPrice}
         imageUri={item.images?.[0]}
       />
 
@@ -988,7 +1008,7 @@ export default function ItemDetailScreen() {
         onDismiss={() => setQaSheetVisible(false)}
         snapPoint={0.7}
       >
-        <View style={styles.qaSheetHeader}>
+        <View style={[styles.qaSheetHeader, { borderBottomColor: colors.borderSubtle }]}>
           <Text style={[styles.qaSheetTitle, { color: colors.textPrimary }]}>
             Questions & answers
           </Text>
@@ -1009,46 +1029,41 @@ export default function ItemDetailScreen() {
       </BottomSheet>
 
       {/* Overflow sheet — lower-frequency hero actions (Fav, Report). */}
-      {overflowVisible && (
-        <View style={styles.overflowBackdrop}>
-          <Pressable
-            style={styles.overflowBackdropPress}
-            onPress={() => setOverflowVisible(false)}
-            accessibilityLabel="Close more actions"
-            accessibilityRole="button"
-          />
-          <View style={[styles.overflowSheet, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Pressable
-              style={({ pressed }) => [styles.overflowRow, pressed && styles.pressed]}
-              onPress={() => {
-                setOverflowVisible(false);
-                handleToggleFav();
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={isFav ? 'Remove from wishlist' : 'Add to wishlist'}
-            >
-              <Ionicons name={isFav ? 'heart' : 'heart-outline'} size={18} color={isFav ? colors.danger : colors.textPrimary} />
-              <Text style={[styles.overflowRowText, { color: colors.textPrimary }]}>
-                {isFav ? 'Remove from wishlist' : 'Add to wishlist'}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [styles.overflowRow, pressed && styles.pressed]}
-              onPress={() => {
-                setOverflowVisible(false);
-                navigation.navigate('ReportListing', { itemId: item.id });
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="Report this listing"
-            >
-              <Ionicons name="flag-outline" size={18} color={colors.textSecondary} />
-              <Text style={[styles.overflowRowText, { color: colors.textSecondary }]}>
-                Report listing
-              </Text>
-            </Pressable>
-          </View>
+      <BottomSheet
+        visible={overflowVisible}
+        onDismiss={() => setOverflowVisible(false)}
+        snapPoint={0.4}
+      >
+        <View style={[styles.overflowHeader, { borderColor: colors.border }]}>
+          <Text style={[styles.overflowTitle, { color: colors.textPrimary }]}>More actions</Text>
         </View>
-      )}
+        <Pressable
+          style={({ pressed }) => [styles.overflowRow, pressed && styles.pressed]}
+          onPress={() => {
+            setOverflowVisible(false);
+            handleToggleFav();
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={isFav ? 'Remove from wishlist' : 'Add to wishlist'}
+        >
+          <Ionicons name={isFav ? 'heart' : 'heart-outline'} size={20} color={isFav ? colors.danger : colors.textPrimary} />
+          <Text style={[styles.overflowRowText, { color: colors.textPrimary }]}>
+            {isFav ? 'Remove from wishlist' : 'Add to wishlist'}
+          </Text>
+        </Pressable>
+        <Pressable
+          style={({ pressed }) => [styles.overflowRow, pressed && styles.pressed]}
+          onPress={() => {
+            setOverflowVisible(false);
+            navigation.navigate('Report', { type: 'item', targetId: item.id });
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Report this listing"
+        >
+          <Ionicons name="flag-outline" size={20} color={colors.textSecondary} />
+          <Text style={[styles.overflowRowText, { color: colors.textSecondary }]}>Report listing</Text>
+        </Pressable>
+      </BottomSheet>
     </View>
   );
 }
@@ -1184,18 +1199,20 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: '31%',
     maxWidth: '33%',
-    gap: 4,
+    gap: Space.xs,
   },
   moreLikeThisImage: {
     width: '100%',
     aspectRatio: 1,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
   moreLikeThisPrice: {
-    fontSize: 13,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.semibold,
+    fontVariant: ['tabular-nums'],
   },
   // ── Discovery ──
   recommendationSection: {
@@ -1224,12 +1241,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(0,0,0,0.08)',
   },
   qaSheetTitle: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
     lineHeight: Type.subtitle.lineHeight,
+  },
+  // ── Q&A preview (latest answered question, above disclosure) ──
+  qaPreview: {
+    gap: Space.xs,
+    paddingBottom: Space.sm,
+  },
+  qaPreviewQuestion: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.medium,
+    lineHeight: Type.body.lineHeight,
+  },
+  qaPreviewAnswer: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    lineHeight: Type.caption.lineHeight,
   },
   // ── Dock state badge ──
   dockStateBadge: {
@@ -1237,25 +1268,16 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
     letterSpacing: 0,
   },
-  // ── Overflow sheet ──
-  overflowBackdrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 200,
-    justifyContent: 'flex-end',
+  // ── Overflow sheet (rendered inside canonical BottomSheet) ──
+  overflowHeader: {
+    paddingBottom: Space.sm,
+    marginBottom: Space.xs,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(0,0,0,0.08)',
   },
-  overflowBackdropPress: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-  },
-  overflowSheet: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    paddingBottom: Space.lg,
+  overflowTitle: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
   },
   overflowRow: {
     flexDirection: 'row',

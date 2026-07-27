@@ -19,6 +19,18 @@
 export type CommerceDetailFamily = 'direct' | 'auction' | 'co_own';
 
 /**
+ * Compact width threshold for product-detail surfaces.
+ *
+ * Per spec 05 §4: below this width, identity density switches to
+ * compact, media height shrinks, and the dock stacks its actions
+ * to prevent label truncation. All three product-detail screens
+ * and the shared dock must use this single threshold so that a
+ * compact-width device sees consistent behaviour across identity,
+ * media and dock.
+ */
+export const COMMERCE_DETAIL_COMPACT_WIDTH = 390;
+
+/**
  * Section rhythm variants.
  *
  * Per spec 05 §2:

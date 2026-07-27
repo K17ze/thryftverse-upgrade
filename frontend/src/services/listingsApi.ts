@@ -1,8 +1,54 @@
-import { Listing, ListingSeller } from '../data/mockData';
 import { fetchJson } from '../lib/apiClient';
 import { mapBackendListingToListing, friendlyBackendError } from './listingMapper';
+import type { SupportedCurrencyCode } from '../constants/currencies';
 
-export { ListingSeller };
+export interface ListingSeller {
+  id: string;
+  username: string | null;
+  avatar: string | null;
+  rating?: number | null;
+  reviewCount?: number | null;
+  location?: string | null;
+}
+
+export interface ListingEngagementSummaryApi {
+  listingId: string;
+  likes: number;
+  wishlistCount: number | null;
+  collectionSaveCount: number | null;
+  activeOfferCount: number | null;
+  questionCount: number;
+  answeredQuestionCount: number;
+  generatedAt: string;
+}
+
+export interface Listing {
+  id: string;
+  title: string;
+  brand: string;
+  size: string;
+  condition: 'New with tags' | 'Very good' | 'Good' | 'Satisfactory';
+  price: number;
+  originalPrice?: number;
+  priceWithProtection?: number;
+  images: string[];
+  mediaAspectRatio?: number | null;
+  mediaWidth?: number | null;
+  mediaHeight?: number | null;
+  likes: number;
+  views?: number;
+  isBumped?: boolean;
+  isSold?: boolean;
+  sellerId: string;
+  seller?: ListingSeller | null;
+  category: string;
+  subcategory: string;
+  description: string;
+  createdAt?: string;
+  shippingMethod?: string | null;
+  shippingPayer?: string | null;
+  engagement?: ListingEngagementSummaryApi | null;
+}
 
 interface ApiListingRow {
   id: string;
@@ -233,13 +279,66 @@ export interface ListingApiItem {
   shippingPayer: string | null;
   createdAt: string;
   seller?: ListingSeller | null;
+  engagement?: ListingEngagementSummaryApi | null;
 }
+
+export interface ListingSoldComparables {
+  listingId: string;
+  category: string | null;
+  brand: string | null;
+  currency: SupportedCurrencyCode;
+  sampleSize: number;
+  minPrice: number | null;
+  medianPrice: number | null;
+  maxPrice: number | null;
+  dateFrom: string | null;
+  dateTo: string | null;
+  generatedAt: string;
+}
+
+export interface ListingPriceEvent {
+  previousPrice: number;
+  newPrice: number;
+  currency: SupportedCurrencyCode;
+  changedAt: string;
+}
+
+export interface ListingQaSummary {
+  listingId: string;
+  questionCount: number;
+  answeredQuestionCount: number;
+  latestAnsweredQuestion: string | null;
+  latestAnswer: string | null;
+  latestActivityAt: string | null;
+}
+
+export interface ListingQuestionApi {
+  id: string;
+  listingId: string;
+  askerId: string;
+  askerName?: string;
+  text: string;
+  createdAt: string;
+  answer: {
+    text: string;
+    responderName: string;
+    createdAt: string;
+  } | null;
+}
+
+export type ListingReportReason =
+  | 'spam'
+  | 'inappropriate'
+  | 'counterfeit'
+  | 'unresponsive'
+  | 'harassment'
+  | 'other';
 
 export interface ListingCommerceServerContext {
   itemPrice: number;
   buyerProtectionFee: number;
   estimatedTotal: number;
-  currency: string;
+  currency: SupportedCurrencyCode;
   shippingMethod: string | null;
   shippingPayer: string | null;
   protectionPolicy: {
@@ -279,7 +378,78 @@ export async function createListingOnApi(body: ListingCreateBody): Promise<{ ok:
 }
 
 export async function fetchListingByIdFromApi(listingId: string): Promise<ListingSingleResponse> {
-  return fetchJson<ListingSingleResponse>(`/listings/${listingId}`);
+  return fetchJson<ListingSingleResponse>(`/listings/${encodeURIComponent(listingId)}`);
+}
+
+export async function fetchListingSoldComparables(listingId: string): Promise<ListingSoldComparables> {
+  const payload = await fetchJson<{ ok: boolean; comparables: ListingSoldComparables }>(
+    `/listings/${encodeURIComponent(listingId)}/sold-comparables`
+  );
+  return payload.comparables;
+}
+
+export async function fetchListingPriceHistory(listingId: string): Promise<ListingPriceEvent[]> {
+  const payload = await fetchJson<{ ok: boolean; items: ListingPriceEvent[] }>(
+    `/listings/${encodeURIComponent(listingId)}/price-history`
+  );
+  return payload.items;
+}
+
+export async function fetchListingQaSummary(listingId: string): Promise<ListingQaSummary> {
+  const payload = await fetchJson<{ ok: boolean; summary: ListingQaSummary }>(
+    `/listings/${encodeURIComponent(listingId)}/qa-summary`
+  );
+  return payload.summary;
+}
+
+export async function fetchListingQuestions(listingId: string): Promise<ListingQuestionApi[]> {
+  const payload = await fetchJson<{ ok: boolean; items: ListingQuestionApi[] }>(
+    `/listings/${encodeURIComponent(listingId)}/questions`
+  );
+  return payload.items;
+}
+
+export async function askListingQuestion(listingId: string, text: string): Promise<ListingQuestionApi> {
+  const payload = await fetchJson<{ ok: boolean; question: ListingQuestionApi }>(
+    `/listings/${encodeURIComponent(listingId)}/questions`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    }
+  );
+  return payload.question;
+}
+
+export async function answerListingQuestion(
+  listingId: string,
+  questionId: string,
+  text: string
+): Promise<ListingQuestionApi['answer']> {
+  const payload = await fetchJson<{ ok: boolean; answer: NonNullable<ListingQuestionApi['answer']> }>(
+    `/listings/${encodeURIComponent(listingId)}/questions/${encodeURIComponent(questionId)}/answer`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    }
+  );
+  return payload.answer;
+}
+
+export async function reportListing(
+  listingId: string,
+  reason: ListingReportReason,
+  details?: string
+): Promise<{ reportId: string }> {
+  return fetchJson<{ ok: boolean; reportId: string }>(
+    `/listings/${encodeURIComponent(listingId)}/report`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason, details }),
+    }
+  );
 }
 
 export async function patchListingOnApi(

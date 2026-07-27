@@ -18,6 +18,7 @@ import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { useCurrencyContext } from '../context/CurrencyContext';
 import { parseApiError } from '../lib/apiClient';
 import { Meta, BodyEmphasis, Headline } from '../components/ui/Text';
@@ -54,6 +55,8 @@ import {
   CommerceDetailSellerRow,
   CommerceDetailStateDock,
   CommerceDetailMediaRail,
+  CommerceDetailOfflineBanner,
+  COMMERCE_DETAIL_COMPACT_WIDTH,
 } from '../components/commerce/detail';
 import { resolveEvidenceGroups } from '../platform/commerce/categoryEvidence';
 import {
@@ -71,7 +74,7 @@ import {
 } from '../platform/product';
 import type { RecommendationLook } from '../platform/product';
 import { useStore } from '../store/useStore';
-import { Listing } from '../data/mockData';
+import type { Listing } from '../services/listingsApi';
 import {
   resolveStateAction,
   resolveDetailPriceLabel,
@@ -133,7 +136,8 @@ export default function AuctionDetailScreen() {
   const currentUser = useStore((state) => state.currentUser);
 
   const { width: screenWidth } = useWindowDimensions();
-  const isCompact = screenWidth < 390;
+  const isCompact = screenWidth < COMMERCE_DETAIL_COMPACT_WIDTH;
+  const { isOffline } = useConnectivity();
 
   const serverNowRef = React.useRef<string | null>(null);
   const { secondClock, minuteClock, resync, needsResync, resyncFailed, markResyncFailed, clearResyncFailed } =
@@ -592,6 +596,11 @@ export default function AuctionDetailScreen() {
           </View>
         )}
 
+        {/* ── Offline banner ──
+            Per spec 05 §14: offline state must be designed, not a blank
+            screen. Cached auction data may still be visible. */}
+        <CommerceDetailOfflineBanner isOffline={isOffline} />
+
         {/* ── Zone B — Identity seam ──
             One compact identity composition: eyebrow + title + condition.
             Per spec 02 §B + spec 05 §3: auction identity must NOT show
@@ -983,6 +992,15 @@ export default function AuctionDetailScreen() {
                 }
               },
               accessibilityLabel: auctionFulfilment?.sellerNextAction ?? 'View sale result',
+            };
+          } else {
+            // Not participating (or any other terminal state) — offer
+            // discovery as the next valid step so the dock is never
+            // empty in a terminal state.
+            terminalAction = {
+              label: 'Discover similar',
+              onPress: () => navigation.navigate('AuctionHome'),
+              accessibilityLabel: 'Discover similar auctions',
             };
           }
 
@@ -1411,33 +1429,35 @@ const styles = StyleSheet.create({
   bidActivityLabel: {
     fontSize: Type.caption.size,
     lineHeight: Type.caption.lineHeight,
-    fontWeight: '500',
+    fontFamily: Typography.family.medium,
   },
   bidActivityBidder: {
     fontSize: Type.body.size,
     lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.regular,
   },
   bidActivityAmount: {
     fontSize: Type.bodyEmphasis.size,
     lineHeight: Type.bodyEmphasis.lineHeight,
-    fontWeight: '700',
+    fontFamily: Typography.family.bold,
     fontVariant: ['tabular-nums'],
   },
   bidActivityEmpty: {
     fontSize: Type.body.size,
     lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.regular,
     paddingVertical: Space.sm,
   },
   bidActivityViewAll: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Space.xs,
     paddingVertical: Space.sm,
   },
   bidActivityViewAllText: {
     fontSize: Type.body.size,
     lineHeight: Type.body.lineHeight,
-    fontWeight: '600',
+    fontFamily: Typography.family.semibold,
   },
   // ── Item details rows (per spec 02_AUCTION §5) ──
   itemDetailRow: {
@@ -1450,11 +1470,13 @@ const styles = StyleSheet.create({
   itemDetailLabel: {
     fontSize: Type.body.size,
     lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.regular,
   },
   itemDetailValue: {
     fontSize: Type.bodyEmphasis.size,
     lineHeight: Type.bodyEmphasis.lineHeight,
-    fontWeight: '600',
+    fontFamily: Typography.family.semibold,
+    fontVariant: ['tabular-nums'],
   },
   descriptionText: {
     fontSize: Type.body.size,
@@ -1471,31 +1493,34 @@ const styles = StyleSheet.create({
     gap: Space.xs + 2,
   },
   terminalResultTitleWon: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
     fontFamily: Typography.family.bold,
+    letterSpacing: Type.subtitle.letterSpacing,
   },
   terminalResultTitleLost: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
     fontFamily: Typography.family.bold,
+    letterSpacing: Type.subtitle.letterSpacing,
   },
   terminalResultTitleSold: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
     fontFamily: Typography.family.bold,
+    letterSpacing: Type.subtitle.letterSpacing,
   },
   terminalResultValue: {
-    fontSize: 22,
-    fontWeight: '700',
+    fontSize: Type.priceList.size,
+    lineHeight: Type.priceList.lineHeight,
     fontFamily: Typography.family.bold,
-    letterSpacing: -0.3,
+    letterSpacing: Type.priceList.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   terminalResultNote: {
-    fontSize: 13,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.regular,
-    lineHeight: 18,
   },
   // ── Transaction surface internal rows ──
   transactionMinRow: {
@@ -1506,14 +1531,15 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   transactionMinLabel: {
-    fontSize: 12,
-    fontFamily: Typography.family.medium,
+    fontSize: Type.metaElevated.size,
+    lineHeight: Type.metaElevated.lineHeight,
+    fontFamily: Typography.family.semibold,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: Type.metaElevated.letterSpacing,
   },
   transactionMinValue: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.bold,
     fontVariant: ['tabular-nums'],
   },
@@ -1524,7 +1550,8 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   transactionReserveHint: {
-    fontSize: 11,
+    fontSize: Type.metaElevated.size,
+    lineHeight: Type.metaElevated.lineHeight,
     fontFamily: Typography.family.regular,
     flexShrink: 1,
   },
@@ -1539,7 +1566,10 @@ const styles = StyleSheet.create({
     paddingBottom: Space.md,
   },
   sheetTitle: {
-    fontSize: 22,
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
+    fontFamily: Typography.family.bold,
+    letterSpacing: Type.subtitle.letterSpacing,
   },
   sheetSubtitle: {},
   sheetScroll: {
@@ -1555,26 +1585,28 @@ const styles = StyleSheet.create({
   ruleNumber: {
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
   ruleNumberText: {
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.bold,
   },
   ruleContent: {
     flex: 1,
-    gap: 4,
+    gap: Space.xs,
   },
   ruleTitle: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontFamily: Typography.family.semibold,
   },
   ruleDescription: {
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.regular,
   },
   // ── Shared-shell reconstruction styles ──
@@ -1619,15 +1651,16 @@ const styles = StyleSheet.create({
   discoverLinkInline: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
     marginTop: Space.sm,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    paddingVertical: Space.xs + 2,
+    paddingHorizontal: Space.sm + 4,
     alignSelf: 'center',
   },
   discoverLinkInlineText: {
     fontFamily: Typography.family.semibold,
-    fontSize: 14,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
   },
   // ── Bid history sheet rows ──
   bidList: {
@@ -1651,15 +1684,18 @@ const styles = StyleSheet.create({
   },
   viewerBadge: {
     borderRadius: Radius.sm,
-    paddingHorizontal: 6,
+    paddingHorizontal: Space.xs + 2,
     paddingVertical: 2,
   },
   viewerBadgeText: {
-    fontSize: 9,
-    fontWeight: '700',
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    fontFamily: Typography.family.bold,
+    letterSpacing: Type.meta.letterSpacing,
   },
   bidderName: {
-    fontSize: 13,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.regular,
   },
   bidRowInfo: {
@@ -1672,25 +1708,30 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   bidRelativeTime: {
-    fontSize: 11,
+    fontSize: Type.metaElevated.size,
+    lineHeight: Type.metaElevated.lineHeight,
     fontFamily: Typography.family.regular,
   },
   bidRowRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
   },
   bidAmount: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.semibold,
+    fontVariant: ['tabular-nums'],
   },
   topBidLabel: {
-    fontSize: 10,
-    fontWeight: '600',
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.meta.letterSpacing,
   },
   noBidsText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.regular,
   },
   subSectionError: {
@@ -1703,7 +1744,8 @@ const styles = StyleSheet.create({
   },
   subSectionErrorText: {},
   retryText: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.semibold,
   },
 });

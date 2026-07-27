@@ -10,6 +10,7 @@ import {
   FlagshipScreen,
 } from '../components/flagship';
 import { reportUser, type ReportReason } from '../services/profileApi';
+import { reportListing, type ListingReportReason } from '../services/listingsApi';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 
@@ -64,7 +65,6 @@ export default function ReportScreen({ navigation, route }: Props) {
   const [isSubmitted, setIsSubmitted] = React.useState(false);
 
   const canSubmit =
-    type === 'user' &&
     Boolean(targetId) &&
     Boolean(selectedReason) &&
     !isSubmitting;
@@ -73,7 +73,15 @@ export default function ReportScreen({ navigation, route }: Props) {
     if (!canSubmit || !selectedReason || !targetId) return;
     setIsSubmitting(true);
     try {
-      await reportUser(targetId, selectedReason, details.trim() || undefined);
+      if (type === 'user') {
+        await reportUser(targetId, selectedReason, details.trim() || undefined);
+      } else {
+        await reportListing(
+          targetId,
+          selectedReason as ListingReportReason,
+          details.trim() || undefined
+        );
+      }
       setIsSubmitted(true);
     } catch {
       show('The report could not be sent. Check your connection and try again.', 'error');
@@ -118,7 +126,7 @@ export default function ReportScreen({ navigation, route }: Props) {
     );
   }
 
-  if (type !== 'user' || !targetId) {
+  if (!targetId) {
     return (
       <FlagshipScreen
         header={
@@ -136,7 +144,7 @@ export default function ReportScreen({ navigation, route }: Props) {
           />
           <Text style={styles.completeTitle}>Report target unavailable</Text>
           <Text style={styles.completeBody}>
-            This report was opened without a valid account reference. Nothing
+            This report was opened without a valid reference. Nothing
             has been submitted.
           </Text>
           <AnimatedPressable
@@ -154,11 +162,13 @@ export default function ReportScreen({ navigation, route }: Props) {
     );
   }
 
+  const reportTitle = type === 'user' ? 'Report account' : 'Report listing';
+
   return (
     <FlagshipScreen
       header={
         <FlagshipHeader
-          title="Report account"
+          title={reportTitle}
           subtitle="Reports are confidential"
           onBack={() => navigation.goBack()}
         />

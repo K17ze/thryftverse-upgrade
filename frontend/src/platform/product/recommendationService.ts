@@ -1,4 +1,4 @@
-import { Listing } from '../../data/mockData';
+import type { Listing } from '../../services/listingsApi';
 import { fetchJson } from '../../lib/apiClient';
 import { mapBackendListingToListing } from '../../services/listingMapper';
 import type {

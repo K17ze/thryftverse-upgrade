@@ -1,4 +1,4 @@
-import type { Listing, ListingSeller } from '../data/mockData';
+import type { Listing, ListingEngagementSummaryApi, ListingSeller } from './listingsApi';
 
 /**
  * Canonical backend listing → frontend Listing view-model mapper.
@@ -44,6 +44,7 @@ export interface BackendListingRow {
   seller?: ListingSeller | null;
   likes?: number | null;
   views?: number | null;
+  engagement?: ListingEngagementSummaryApi | null;
 }
 
 const VALID_CONDITIONS: readonly Listing['condition'][] = [
@@ -205,6 +206,7 @@ export function mapBackendListingToListing(row: BackendListingRow): Listing {
         : SAFE_CREATED_AT,
     shippingMethod: row.shippingMethod ?? null,
     shippingPayer: row.shippingPayer ?? null,
+    engagement: row.engagement ?? null,
   };
 }
 

@@ -244,13 +244,28 @@ function BookSide({
                   { width: `${Math.min(depthFraction * 100, 100)}%`, backgroundColor: isEdge ? barEdgeColor : barColor },
                 ]}
               />
-              <Text style={[styles.levelPrice, { color: priceColor }]} numberOfLines={1}>
+              <Text
+                style={[styles.levelPrice, { color: priceColor }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.7}
+              >
                 {level.price.toFixed(2)}
               </Text>
-              <Text style={[styles.levelSize, { color: colors.textPrimary }]} numberOfLines={1}>
+              <Text
+                style={[styles.levelSize, { color: colors.textPrimary }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.7}
+              >
                 {level.size.toLocaleString('en-GB')}
               </Text>
-              <Text style={[styles.levelTotal, { color: colors.textSecondary }]} numberOfLines={1}>
+              <Text
+                style={[styles.levelTotal, { color: colors.textSecondary }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.7}
+              >
                 {cumulative.toLocaleString('en-GB')}
               </Text>
             </View>
