@@ -400,6 +400,16 @@ describe('PRODUCT-01 co-own adapter', () => {
     expect(coOwn.marketMovePct24h).toBe(2.5);
     expect(coOwn.volume24hGbp).toBe(500);
   });
+
+  it('preserves missing market movement and volume as null', () => {
+    const vm = buildCoOwnViewModel({
+      asset: { ...baseAsset, marketMovePct24h: null, volume24hGbp: null },
+      viewerUnits: 0,
+    });
+    const coOwn = vm as Extract<typeof vm, { family: 'co_own' }>;
+    expect(coOwn.marketMovePct24h).toBeNull();
+    expect(coOwn.volume24hGbp).toBeNull();
+  });
 });
 
 // ── Family narrowing ─────────────────────────────────────────────────────────

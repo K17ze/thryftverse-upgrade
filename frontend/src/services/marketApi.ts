@@ -144,9 +144,9 @@ export interface MarketCoOwnAsset {
   unitPriceStable: number;
   settlementMode: CoOwnSettlementMode;
   issuerJurisdiction: string | null;
-  marketMovePct24h: number;
+  marketMovePct24h: number | null;
   holders: number;
-  volume24hGbp: number;
+  volume24hGbp: number | null;
   isOpen: boolean;
   createdAt: string;
   updatedAt: string;
@@ -856,8 +856,9 @@ function mockCoOwnAsset(
     unitPriceStable?: number;
     settlementMode?: CoOwnSettlementMode;
     issuerJurisdiction?: string | null;
+    marketMovePct24h?: number | null;
     holders?: number;
-    volume24hGbp?: number;
+    volume24hGbp?: number | null;
     isOpen?: boolean;
     imageUrl?: string | null;
     createdAtMinAgo?: number;
@@ -877,9 +878,9 @@ function mockCoOwnAsset(
     unitPriceStable: opts.unitPriceStable ?? 30,
     settlementMode: opts.settlementMode ?? 'HYBRID',
     issuerJurisdiction: opts.issuerJurisdiction ?? 'United Kingdom',
-    marketMovePct24h: 0,
+    marketMovePct24h: opts.marketMovePct24h ?? null,
     holders: opts.holders ?? total - available,
-    volume24hGbp: opts.volume24hGbp ?? 0,
+    volume24hGbp: opts.volume24hGbp ?? null,
     isOpen: opts.isOpen ?? true,
     createdAt: new Date(Date.now() - (opts.createdAtMinAgo ?? 180) * 60_000).toISOString(),
     updatedAt: new Date(Date.now() - (opts.createdAtMinAgo ?? 60) * 60_000).toISOString(),

@@ -794,7 +794,7 @@ export default function CoOwnHubScreen() {
         data={hubRows}
         renderItem={renderRow}
         keyExtractor={(item) => item.key}
-        stickyHeaderIndices={[2]}
+        stickyHeaderIndices={[1]}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
         refreshControl={

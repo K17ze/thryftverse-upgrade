@@ -182,8 +182,8 @@ export interface CoOwnFamilyContext {
   viewerOwnershipPct: number;
   holders: number;
   settlementMode: CoOwnSettlementMode;
-  marketMovePct24h: number;
-  volume24hGbp: number;
+  marketMovePct24h: number | null;
+  volume24hGbp: number | null;
   isOpen: boolean;
   orderBook: CoOwnOrderBookSummary | null;
   capabilities: {
@@ -602,8 +602,8 @@ export function buildCoOwnViewModel(input: CoOwnAdapterInput): ProductDetailView
     viewerOwnershipPct,
     holders: asset.holders,
     settlementMode: asset.settlementMode,
-    marketMovePct24h: asset.marketMovePct24h ?? 0,
-    volume24hGbp: asset.volume24hGbp ?? 0,
+    marketMovePct24h: asset.marketMovePct24h ?? null,
+    volume24hGbp: asset.volume24hGbp ?? null,
     isOpen: marketOpen,
     orderBook: orderBookSummary,
     capabilities: {

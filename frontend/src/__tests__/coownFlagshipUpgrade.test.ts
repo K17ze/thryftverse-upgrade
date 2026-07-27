@@ -135,7 +135,8 @@ describe('COOWN-FLAGSHIP: Co-Own department flagship upgrade', () => {
 
     it('SyndicateHubScreen keeps market tabs sticky and listing controls inline', () => {
       const src = readSrc('screens/SyndicateHubScreen.tsx');
-      expect(src).toContain('stickyHeaderIndices');
+      expect(src).toContain('stickyHeaderIndices={[1]}');
+      expect(src).not.toContain('stickyHeaderIndices={[2]}');
       expect(src).toContain('Market search and sorting');
       expect(src).not.toContain('CoOwnFeaturedAsset');
     });
