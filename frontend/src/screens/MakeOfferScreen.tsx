@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Typography } from '../theme/designTokens';
 import {
   AnimatedPressable } from '../components/AnimatedPressable';
@@ -15,7 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useCurrencyContext } from '../context/CurrencyContext';
 import { CURRENCIES } from '../constants/currencies';
@@ -35,19 +35,209 @@ import { haptics } from '../utils/haptics';
 type Props = StackScreenProps<RootStackParamList, 'MakeOffer'>;
 
 
-const BG = Colors.background;
-const CARD = Colors.surface;
-const CARD_ALT = Colors.surfaceAlt;
-const BORDER = Colors.border;
-const MUTED = Colors.textMuted;
-const TEXT = Colors.textPrimary;
-const BRAND = Colors.brand;
-const TIP_BG = Colors.surfaceAlt;
-const TIP_BORDER = Colors.border;
-const FOOTER_BG = Colors.background;
-
 export default function MakeOfferScreen({ navigation, route }: Props) {
   const { itemId, price, title } = route.params;
+  const { colors, isDark } = useAppTheme();
+  const BG = colors.background;
+  const CARD = colors.surface;
+  const CARD_ALT = colors.surfaceAlt;
+  const BORDER = colors.border;
+  const MUTED = colors.textMuted;
+  const TEXT = colors.textPrimary;
+  const BRAND = colors.brand;
+  const TIP_BG = colors.surfaceAlt;
+  const TIP_BORDER = colors.border;
+  const FOOTER_BG = colors.background;
+
+  const styles = useMemo(() => StyleSheet.create({
+    container: { flex: 1, backgroundColor: BG },
+    content: { paddingHorizontal: 20, paddingBottom: 40 },
+    itemCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: CARD,
+      borderWidth: 1,
+      borderColor: BORDER,
+      borderRadius: 20,
+      padding: 16,
+      marginBottom: 32,
+      gap: 14,
+    },
+    itemThumb: {
+      width: 60,
+      height: 60,
+      borderRadius: 16,
+      backgroundColor: CARD_ALT,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    itemInfo: { flex: 1 },
+    itemTitle: { fontSize: 18, fontFamily: Typography.family.bold, color: TEXT, marginBottom: 4, maxWidth: '90%' },
+    sellerActionRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 8,
+      marginBottom: 4,
+    },
+    sellerIdentityChip: {
+      flex: 1,
+      minHeight: 30,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: BORDER,
+      backgroundColor: CARD_ALT,
+      paddingHorizontal: 8,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    sellerAvatarWrap: { width: 16, height: 16, borderRadius: 8 },
+    sellerAvatar: { width: 16, height: 16, borderRadius: 8 },
+    sellerHandle: { flex: 1, fontSize: 12, fontFamily: Typography.family.medium, color: MUTED },
+    sellerMessageBtn: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: BORDER,
+      backgroundColor: CARD,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    itemListingPrice: { fontSize: 15, fontFamily: Typography.family.medium, color: MUTED },
+    section: { marginBottom: 32 },
+    sectionLabel: {
+      fontSize: 14,
+      fontFamily: Typography.family.bold,
+      color: MUTED,
+      marginBottom: 12,
+      textTransform: 'uppercase',
+      letterSpacing: 1,
+    },
+    priceInputRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: CARD,
+      borderRadius: 24,
+      paddingHorizontal: 24,
+      paddingVertical: 8,
+      borderWidth: 2,
+      borderColor: BORDER,
+    },
+    currencySymbol: { fontSize: 48, fontFamily: Typography.family.bold, color: BRAND, marginRight: 12, marginBottom: 4 },
+    priceInput: {
+      flex: 1,
+      fontSize: 56,
+      fontFamily: Typography.family.bold,
+      color: TEXT,
+      paddingVertical: 12,
+      letterSpacing: -2,
+    },
+    quickOfferRow: { flexDirection: 'row', gap: 8, marginTop: 16 },
+    quickOfferChip: {
+      flex: 1,
+      paddingVertical: 10,
+      paddingHorizontal: 8,
+      borderRadius: 12,
+      backgroundColor: CARD_ALT,
+      borderWidth: 1,
+      borderColor: BORDER,
+      alignItems: 'center',
+    },
+    quickOfferChipText: {
+      fontSize: 12,
+      fontFamily: Typography.family.semibold,
+      color: colors.textSecondary,
+    },
+    counterContextRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12 },
+    counterContextText: { fontSize: 12, fontFamily: Typography.family.regular, color: MUTED },
+    expiryRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
+    expiryChip: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 12,
+      backgroundColor: CARD_ALT,
+      borderWidth: 1,
+      borderColor: BORDER,
+      alignItems: 'center',
+    },
+    expiryChipActive: {
+      backgroundColor: `${BRAND}15`,
+      borderColor: BRAND,
+    },
+    expiryChipText: {
+      fontSize: 14,
+      fontFamily: Typography.family.semibold,
+      color: colors.textSecondary,
+    },
+    expiryChipTextActive: { color: BRAND },
+    expiryHint: {
+      fontSize: 12,
+      fontFamily: Typography.family.regular,
+      color: MUTED,
+      marginTop: 10,
+      lineHeight: 16,
+    },
+    protectionCard: {
+      backgroundColor: CARD,
+      borderWidth: 1,
+      borderColor: BORDER,
+      borderRadius: 24,
+      padding: 24,
+      marginBottom: 24,
+    },
+    protectionRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    protectionLabel: { flex: 1, fontSize: 15, fontFamily: Typography.family.medium, color: MUTED },
+    protectionValue: { fontSize: 15, fontFamily: Typography.family.semibold, color: TEXT },
+    totalLabel: { flex: 1, fontSize: 18, fontFamily: Typography.family.bold, color: TEXT },
+    totalValue: { fontSize: 22, fontFamily: Typography.family.bold, color: BRAND },
+    protectionNote: {
+      fontSize: 13,
+      fontFamily: Typography.family.regular,
+      color: MUTED,
+      lineHeight: 20,
+      marginTop: 16,
+      paddingTop: 16,
+      borderTopWidth: 1,
+      borderTopColor: BORDER,
+    },
+    tipCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: TIP_BG,
+      borderWidth: 1,
+      borderColor: TIP_BORDER,
+      borderRadius: 20,
+      padding: 16,
+      gap: 16,
+    },
+    tipIconBox: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: BRAND,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    tipText: { flex: 1, fontSize: 14, fontFamily: Typography.family.medium, color: colors.textSecondary, lineHeight: 20 },
+    errorText: {
+      marginTop: 14,
+      color: colors.danger,
+      fontSize: 13,
+      fontFamily: Typography.family.medium,
+    },
+    footer: {
+      paddingHorizontal: 20,
+      paddingTop: 16,
+      paddingBottom: Platform.OS === 'ios' ? 34 : 24,
+      borderTopWidth: 1,
+      borderTopColor: BORDER,
+      backgroundColor: FOOTER_BG,
+    },
+    sendBtn: { width: '100%' },
+  }), [BG, CARD, CARD_ALT, BORDER, MUTED, TEXT, BRAND, TIP_BG, TIP_BORDER, FOOTER_BG, colors]);
+
   const { formatFromFiat } = useFormattedPrice();
   const { currencyCode, goldRates } = useCurrencyContext();
   const { show } = useToast();
@@ -178,7 +368,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={BG} />
+      <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={BG} />
 
       <ScreenHeader
         title="Make Offer"
@@ -203,7 +393,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
                 accessibilityLabel="Message seller"
                 accessibilityHint="Opens chat with the seller"
               >
-                <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
+                <Ionicons name="chatbubble-ellipses-outline" size={12} color={TEXT} />
                 <Text style={styles.sellerHandle}>Message seller</Text>
               </AnimatedPressable>
             </View>
@@ -324,7 +514,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
         {/* Tip Pill */}
         <View style={styles.tipCard}>
           <View style={styles.tipIconBox}>
-            <Ionicons name="bulb" size={16} color={Colors.textInverse} />
+            <Ionicons name="bulb" size={16} color={colors.textInverse} />
           </View>
           <Text style={styles.tipText}>
             Offers within 10% of the listing price are <Text style={{ fontFamily: Typography.family.bold, color: TEXT }}>3x</Text> more likely to be accepted.
@@ -346,7 +536,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
               : 'Send offer via chat'
           }
           subtitle={formatFromFiat(total, 'GBP')}
-          icon={<Ionicons name="paper-plane-outline" size={16} color={Colors.textInverse} />}
+          icon={<Ionicons name="paper-plane-outline" size={16} color={colors.textInverse} />}
           variant="primary"
           size="lg"
           onPress={handleSendOffer}
@@ -358,236 +548,3 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG },
-
-
-  content: { paddingHorizontal: 20, paddingBottom: 40 },
-
-  itemCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: CARD,
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 32,
-    gap: 14,
-  },
-  itemThumb: {
-    width: 60,
-    height: 60,
-    borderRadius: 16,
-    backgroundColor: CARD_ALT,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  itemInfo: {
-    flex: 1,
-  },
-  itemTitle: { fontSize: 18, fontFamily: Typography.family.bold, color: TEXT, marginBottom: 4, maxWidth: '90%' },
-  sellerActionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-    marginBottom: 4,
-  },
-  sellerIdentityChip: {
-    flex: 1,
-    minHeight: 30,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD_ALT,
-    paddingHorizontal: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  sellerAvatarWrap: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-  },
-  sellerAvatar: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-  },
-  sellerHandle: {
-    flex: 1,
-    fontSize: 12,
-    fontFamily: Typography.family.medium,
-    color: MUTED,
-  },
-  sellerMessageBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  itemListingPrice: { fontSize: 15, fontFamily: Typography.family.medium, color: MUTED },
-
-  section: { marginBottom: 32 },
-  sectionLabel: {
-    fontSize: 14,
-    fontFamily: Typography.family.bold,
-    color: MUTED,
-    marginBottom: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 1
-  },
-
-  priceInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: CARD,
-    borderRadius: 24,
-    paddingHorizontal: 24,
-    paddingVertical: 8,
-    borderWidth: 2,
-    borderColor: BORDER,
-  },
-  currencySymbol: { fontSize: 48, fontFamily: Typography.family.bold, color: BRAND, marginRight: 12, marginBottom: 4 },
-  priceInput: {
-    flex: 1,
-    fontSize: 56,
-    fontFamily: Typography.family.bold,
-    color: TEXT,
-    paddingVertical: 12,
-    letterSpacing: -2,
-  },
-
-  quickOfferRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 16,
-  },
-  quickOfferChip: {
-    flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderRadius: 12,
-    backgroundColor: CARD_ALT,
-    borderWidth: 1,
-    borderColor: BORDER,
-    alignItems: 'center',
-  },
-  quickOfferChipText: {
-    fontSize: 12,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
-  },
-  counterContextRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 12,
-  },
-  counterContextText: {
-    fontSize: 12,
-    fontFamily: Typography.family.regular,
-    color: MUTED,
-  },
-  expiryRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 12,
-  },
-  expiryChip: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: CARD_ALT,
-    borderWidth: 1,
-    borderColor: BORDER,
-    alignItems: 'center',
-  },
-  expiryChipActive: {
-    backgroundColor: `${BRAND}15`,
-    borderColor: BRAND,
-  },
-  expiryChipText: {
-    fontSize: 14,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
-  },
-  expiryChipTextActive: {
-    color: BRAND,
-  },
-  expiryHint: {
-    fontSize: 12,
-    fontFamily: Typography.family.regular,
-    color: MUTED,
-    marginTop: 10,
-    lineHeight: 16,
-  },
-
-  protectionCard: {
-    backgroundColor: CARD,
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 24,
-    padding: 24,
-    marginBottom: 24,
-  },
-  protectionRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  protectionLabel: { flex: 1, fontSize: 15, fontFamily: Typography.family.medium, color: MUTED },
-  protectionValue: { fontSize: 15, fontFamily: Typography.family.semibold, color: TEXT },
-
-  totalLabel: { flex: 1, fontSize: 18, fontFamily: Typography.family.bold, color: TEXT },
-  totalValue: { fontSize: 22, fontFamily: Typography.family.bold, color: BRAND },
-
-  protectionNote: {
-    fontSize: 13,
-    fontFamily: Typography.family.regular,
-    color: MUTED,
-    lineHeight: 20,
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: BORDER
-  },
-
-  tipCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: TIP_BG,
-    borderWidth: 1,
-    borderColor: TIP_BORDER,
-    borderRadius: 20,
-    padding: 16,
-    gap: 16,
-  },
-  tipIconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: BRAND,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tipText: { flex: 1, fontSize: 14, fontFamily: Typography.family.medium, color: Colors.textSecondary, lineHeight: 20 },
-  errorText: {
-    marginTop: 14,
-    color: Colors.danger,
-    fontSize: 13,
-    fontFamily: Typography.family.medium,
-  },
-
-  footer: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 24,
-    borderTopWidth: 1,
-    borderTopColor: BORDER,
-    backgroundColor: FOOTER_BG,
-  },
-  sendBtn: { width: '100%' },
-});
