@@ -33,6 +33,7 @@ import { useBackendData } from '../context/BackendDataContext';
 import { CachedImage } from '../components/CachedImage';
 import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
 import { ShareSheet } from '../components/ShareSheet';
+import { BottomSheet } from '../components/BottomSheet';
 
 import {
   ProductDescription,
@@ -97,6 +98,8 @@ export default function ItemDetailScreen() {
   const [fullscreenIndex, setFullscreenIndex] = useState(0);
   const [fullscreenVisible, setFullscreenVisible] = useState(false);
   const [sizeGuideVisible, setSizeGuideVisible] = useState(false);
+  // Per spec 04_DIRECT §3: Q&A opens in a canonical BottomSheet.
+  const [qaSheetVisible, setQaSheetVisible] = useState(false);
   const [overflowVisible, setOverflowVisible] = useState(false);
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
 
@@ -269,6 +272,12 @@ export default function ItemDetailScreen() {
     };
   }, [backendListings, item]);
 
+  // ── Listing engagement summary ──
+  // Per spec 04_DIRECT §5: backend-backed engagement summary. The
+  // frontend must not fabricate question counts. listingEngagement is
+  // null until the backend exposes questionCount.
+  const listingEngagement = (item as any).engagement ?? null;
+
   if (queryLoading && !item) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -357,9 +366,10 @@ export default function ItemDetailScreen() {
   // ── Identity composition ──
   // One dominant price location (identity). The dock carries a compact
   // actionable price. No price repetition in between.
+  // Per spec 04_DIRECT §1: do not fabricate "N people interested" by
+  // adding saved-to-collection to likes. Only show truthful likes from
+  // the backend, and only when the count is meaningful (>= 1).
   const interestSignal = (() => {
-    const interestCount = (item.likes ?? 0) + (isItemSavedAnywhere(item.id) ? 1 : 0);
-    if (interestCount >= 5) return `${interestCount} people interested`;
     if (item.likes && item.likes > 0) return `${item.likes} like${item.likes > 1 ? 's' : ''}`;
     return undefined;
   })();
@@ -397,9 +407,9 @@ export default function ItemDetailScreen() {
       muted: true,
     });
   }
-  if (item.likes && item.likes >= 10) {
-    priceInsightRows.push({ label: 'Demand', value: `${item.likes} likes` });
-  }
+  // Per spec 04_DIRECT §2: do not label likes as "Demand". Likes are
+  // not a demand signal — they are a wishlist signal. The interest
+  // signal in the identity already shows truthful likes.
   const daysListed = item.createdAt
     ? Math.max(0, Math.floor((Date.now() - new Date(item.createdAt).getTime()) / (1000 * 60 * 60 * 24)))
     : null;
@@ -508,6 +518,8 @@ export default function ItemDetailScreen() {
             above; the price is NOT repeated elsewhere except the dock.
             Spec 02 §B + spec 05 §2. */}
         <CommerceDetailIdentity
+          family="direct"
+          density={isCompactScreen ? 'compact' : 'standard'}
           eyebrow={item.brand ?? undefined}
           title={item.title}
           primaryValue={formattedPrice}
@@ -757,18 +769,29 @@ export default function ItemDetailScreen() {
         ) : null}
 
         {/* ── Zone G — Social proof and Q&A ──
-            Q&A remains; wrapped in a flat section. Spec 05 §7. */}
+            Per spec 04_DIRECT §3: collapse Q&A into a disclosure row.
+            Do not render the full Q&A inline by default — it adds
+            vertical length without aiding the purchase decision. The
+            disclosure opens a canonical BottomSheet with the full Q&A. */}
         <CommerceDetailSection label="Questions & answers" divider>
-          <ListingQA
-            listingId={item.id}
-            currentUserName={currentUser?.username ?? 'You'}
-            isSeller={item.seller?.id === currentUser?.id}
+          <CommerceDetailDisclosureRow
+            label="View questions & answers"
+            summary={
+              listingEngagement?.questionCount
+                ? `${listingEngagement.questionCount} ${listingEngagement.questionCount === 1 ? 'question' : 'questions'}`
+                : 'No questions yet'
+            }
+            onPress={() => setQaSheetVisible(true)}
+            leadingIcon="chatbubble-outline"
+            accessibilityLabel="View questions and answers"
           />
         </CommerceDetailSection>
 
         {/* ── Zone H — Discovery ──
-            Order: More from seller → Bundle → Seen in Looks → More like
-            this → Continue exploring. Spec 05 §8. */}
+            Per spec 04_DIRECT §4: maximum three discovery modules.
+            Order: Bundle upsell → Seen in Looks → More like this.
+            Removed generic recommendation rail mapping and DiscoveryGrid
+            to stay within the three-module budget. */}
         <Reanimated.View entering={FadeInDown.duration(350).delay(120)}>
           <BundleUpsellRow
             items={bundleItems}
@@ -830,36 +853,6 @@ export default function ItemDetailScreen() {
             <SeenInLooksRail
               items={seenInLooksSection.items.filter(isRecommendationLook) as RecommendationLook[]}
               onPressItem={handlePressLook}
-            />
-          </View>
-        )}
-
-        {recsLoading && recommendationSections.length === 0 ? (
-          <View style={styles.railLoading}>
-            <ActivityIndicator size="small" color={colors.textMuted} />
-            <Text style={[styles.railLoadingText, { color: colors.textMuted }]} numberOfLines={1}>
-              Finding recommendations...
-            </Text>
-          </View>
-        ) : (
-          railSections.map((section) => (
-            <RecommendationRail
-              key={section.key}
-              section={section}
-              listingId={item.id}
-              onPressItem={handlePressRecommendation}
-            />
-          ))
-        )}
-
-        {exploreItems.length > 0 && (
-          <View style={styles.recommendationSection}>
-            <DiscoveryGrid
-              items={exploreItems}
-              listingId={item.id}
-              onPressItem={handlePressRecommendation}
-              onEndReached={() => exploreNextPage()}
-              hasMore={!!exploreHasNextPage && !exploreFetching}
             />
           </View>
         )}
@@ -977,6 +970,34 @@ export default function ItemDetailScreen() {
         currentSize={item.size}
         onClose={() => setSizeGuideVisible(false)}
       />
+
+      {/* ── Q&A BottomSheet ──
+          Per spec 04_DIRECT §3: canonical BottomSheet for Q&A. Opens
+          from the "View questions & answers" disclosure row. */}
+      <BottomSheet
+        visible={qaSheetVisible}
+        onDismiss={() => setQaSheetVisible(false)}
+        snapPoint={0.7}
+      >
+        <View style={styles.qaSheetHeader}>
+          <Text style={[styles.qaSheetTitle, { color: colors.textPrimary }]}>
+            Questions & answers
+          </Text>
+          <Pressable
+            onPress={() => setQaSheetVisible(false)}
+            hitSlop={12}
+            accessibilityLabel="Close questions and answers"
+            accessibilityRole="button"
+          >
+            <Ionicons name="close" size={22} color={colors.textSecondary} />
+          </Pressable>
+        </View>
+        <ListingQA
+          listingId={item.id}
+          currentUserName={currentUser?.username ?? 'You'}
+          isSeller={item.seller?.id === currentUser?.id}
+        />
+      </BottomSheet>
 
       {/* Overflow sheet — lower-frequency hero actions (Fav, Report). */}
       {overflowVisible && (
@@ -1181,6 +1202,21 @@ const styles = StyleSheet.create({
   recErrorRow: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
+  },
+  // ── Q&A BottomSheet header (per spec 04_DIRECT §3) ──
+  qaSheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(0,0,0,0.08)',
+  },
+  qaSheetTitle: {
+    fontSize: Type.subtitle.size,
+    fontFamily: Typography.family.semibold,
+    lineHeight: Type.subtitle.lineHeight,
   },
   // ── Dock state badge ──
   dockStateBadge: {

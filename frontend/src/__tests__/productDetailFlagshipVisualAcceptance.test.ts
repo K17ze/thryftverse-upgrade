@@ -180,8 +180,9 @@ describe('product-detail-flagship-reconstruction: visual acceptance', () => {
     it('ItemDetailScreen does not repeat family label in identity eyebrow and media badge', () => {
       const src = readScreen('ItemDetailScreen.tsx');
       // The family badge lives on the media stage; the identity eyebrow
-      // is the brand, not the family label.
-      const identityMatch = src.match(/CommerceDetailIdentity[^}]*eyebrow=/);
+      // is the brand, not the family label. Note: family="direct" is a
+      // prop that controls art direction, not a visible family label.
+      const identityMatch = src.match(/<CommerceDetailIdentity[\s\S]*?\/>/);
       expect(identityMatch).toBeTruthy();
       expect(identityMatch![0]).not.toContain('"Direct"');
     });
