@@ -57,6 +57,10 @@ export interface AuctionDetail {
   seller: AuctionSeller;
   title: string;
   imageUrl: string | null;
+  /** Canonical media array. Per spec 02_AUCTION §7: replaces single
+   * imageUrl dependence. imageUrl remains as a temporary compatibility
+   * field. */
+  mediaItems?: AuctionMediaItem[];
   brand: string | null;
   category: string | null;
   conditionLabel: string | null;
@@ -78,6 +82,49 @@ export interface AuctionDetail {
   settledAt: string | null;
   cancelledAt: string | null;
   createdAt: string;
+  /** Terminal fulfilment summary. Per spec 02_AUCTION §8: backend-backed
+   * result/fulfilment contract. Null when the auction is not terminal
+   * or fulfilment data is not yet available. */
+  fulfilment?: AuctionFulfilmentSummary | null;
+}
+
+/** Canonical auction media record. Per spec 02_AUCTION §7. */
+export interface AuctionMediaItem {
+  id: string;
+  type: 'image' | 'video';
+  url: string;
+  width: number | null;
+  height: number | null;
+  blurhash: string | null;
+  focalX: number | null;
+  focalY: number | null;
+  posterUrl: string | null;
+  order: number;
+}
+
+/** Auction result and fulfilment contract. Per spec 02_AUCTION §8.
+ * The frontend must not invent next steps — these come from the
+ * backend. */
+export interface AuctionFulfilmentSummary {
+  orderId: string | null;
+  paymentStatus:
+    | 'not_started'
+    | 'pending'
+    | 'authorised'
+    | 'paid'
+    | 'failed'
+    | 'refunded';
+  fulfilmentStatus:
+    | 'not_started'
+    | 'awaiting_seller'
+    | 'awaiting_buyer'
+    | 'ready_to_ship'
+    | 'shipped'
+    | 'delivered'
+    | 'completed'
+    | 'cancelled';
+  buyerNextAction: string | null;
+  sellerNextAction: string | null;
 }
 
 export interface AuctionDetailResponse {

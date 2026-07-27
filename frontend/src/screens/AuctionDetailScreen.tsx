@@ -41,7 +41,7 @@ import { BottomSheet } from '../components/BottomSheet';
 import { BidSheet } from '../components/ui/BidSheet';
 import { BuyNowSheet } from '../components/ui/BuyNowSheet';
 import { FullscreenMediaViewer } from '../components/product/FullscreenMediaViewer';
-import { ProductFamilyBadge, RecommendationRail } from '../components/product';
+import { RecommendationRail } from '../components/product';
 import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
 import { ShareSheet } from '../components/ShareSheet';
 import { CommerceStickyDock, CommerceStateCanvas, CommerceRelatedRail, CategoryEvidence, CommerceMediaStage } from '../components/commerce';
@@ -451,6 +451,26 @@ export default function AuctionDetailScreen() {
   const familyStateAccent = isLive ? 'Live' : isUpcoming ? 'Upcoming' : isCancelled ? 'Cancelled'
     : isSettled ? 'Settled' : isEnded ? 'Ended' : null;
 
+  // ── Canonical media array ──
+  // Per spec 02_AUCTION §7: render the canonical media array through
+  // CommerceMediaStage. Maintain imageUrl as a temporary compatibility
+  // field.
+  const auctionMediaImages = React.useMemo(() => {
+    if (!auction) return [] as string[];
+    if (auction.mediaItems && auction.mediaItems.length > 0) {
+      return auction.mediaItems
+        .filter((m) => m.type === 'image')
+        .sort((a, b) => a.order - b.order)
+        .map((m) => m.url);
+    }
+    return auction.imageUrl ? [auction.imageUrl] : [];
+  }, [auction]);
+
+  // ── Fulfilment summary ──
+  // Per spec 02_AUCTION §8: backend-backed result/fulfilment contract.
+  // The frontend must not invent next steps.
+  const auctionFulfilment = auction?.fulfilment ?? null;
+
   // Compute scroll bottom padding from dock geometry + safe area so the
   // sticky dock never covers the last content row.
   const hasDualDock = showBidControls && buyNowAvailable && stateAction?.secondary.type === 'buyNow' && !isBuyNowLoading;
@@ -523,7 +543,7 @@ export default function AuctionDetailScreen() {
             §1: "Watch is the auction participation state. Save-to-
             collection may remain in overflow." */}
         <CommerceMediaStage
-          images={auction.imageUrl ? [auction.imageUrl] : []}
+          images={auctionMediaImages}
           objectId={auction.id}
           topInset={insets.top}
           scrollY={scrollY}
@@ -574,17 +594,17 @@ export default function AuctionDetailScreen() {
         )}
 
         {/* ── Zone B — Identity seam ──
-            One compact identity composition: eyebrow + title + primary
-            value + secondary truth line. No second large title elsewhere.
-            Spec 02 §B + spec 04 §2. */}
+            One compact identity composition: eyebrow + title + condition.
+            Per spec 02 §B + spec 05 §3: auction identity must NOT show
+            price (the transaction surface owns the current bid) and
+            must NOT show a second family/state chip (the media overlay
+            already carries AuctionStateBadge). */}
         <CommerceDetailIdentity
+          family="auction"
+          density={isCompact ? 'compact' : 'standard'}
           eyebrow={auction.brand ?? undefined}
           title={auction.title}
-          primaryValue={priceText}
           secondaryLine={auction.conditionLabel ?? undefined}
-          familyChip={
-            <ProductFamilyBadge family="auction" stateAccent={familyStateAccent} compact />
-          }
         />
 
         {/* Slim seller confidence row — the primary seller presentation.
@@ -631,6 +651,7 @@ export default function AuctionDetailScreen() {
             + spec 04 §3/§4: "Integrate viewer state into the transaction
             surface rather than adding another full-width block." */}
         <CommerceDetailTransactionSurface
+          family="auction"
           primaryLabel={priceLabel}
           primaryValue={priceText}
           secondaryLabel={auction.bidCount > 0 ? 'Bids' : undefined}
@@ -701,7 +722,11 @@ export default function AuctionDetailScreen() {
                   {formatIzeAmount(toIze(auction.currentBidGbp || auction.buyNowPriceGbp || 0, 'GBP', goldRates), 2)}
                 </Text>
                 <Text style={[styles.terminalResultNote, { color: colors.textSecondary }]}>
-                  Next step required — view result for fulfilment details.
+                  {auctionFulfilment?.buyerNextAction
+                    ? auctionFulfilment.buyerNextAction
+                    : auctionFulfilment?.fulfilmentStatus
+                      ? `Fulfilment · ${auctionFulfilment.fulfilmentStatus.replace(/_/g, ' ')}`
+                      : 'Next step required — view result for fulfilment details.'}
                 </Text>
               </>
             )}
@@ -730,7 +755,11 @@ export default function AuctionDetailScreen() {
                   {formatIzeAmount(toIze(auction.currentBidGbp || auction.buyNowPriceGbp || 0, 'GBP', goldRates), 2)}
                 </Text>
                 <Text style={[styles.terminalResultNote, { color: colors.textSecondary }]}>
-                  Fulfilment not yet available for this result.
+                  {auctionFulfilment?.sellerNextAction
+                    ? auctionFulfilment.sellerNextAction
+                    : auctionFulfilment?.fulfilmentStatus
+                      ? `Fulfilment · ${auctionFulfilment.fulfilmentStatus.replace(/_/g, ' ')}`
+                      : 'Next step required — view result for fulfilment details.'}
                 </Text>
               </>
             )}
@@ -758,90 +787,88 @@ export default function AuctionDetailScreen() {
           </View>
         )}
 
-        {/* ── Zone E — Evidence and confidence ──
-            Flat sections + disclosure rows. No separate rounded card for
-            every subsection. Spec 02 §E + spec 04 §6: "Auction rules
-            should be a disclosure row, not another large generic card." */}
-        {auction.description && (
-          <View style={styles.descriptionBlock}>
-            <Text style={[styles.descriptionText, { color: colors.textPrimary }]}>
-              {auction.description}
-            </Text>
-          </View>
-        )}
-
-        {(() => {
-          const evidenceGroups = resolveEvidenceGroups({
-            category: auction.category,
-            brand: auction.brand,
-            condition: auction.conditionLabel,
-            description: auction.description,
-          });
-          return evidenceGroups.length > 0 ? (
-            <CategoryEvidence groups={evidenceGroups} />
-          ) : null;
-        })()}
-
-        {/* Bid history — compact disclosure + preview. Spec 04 §5. */}
-        <CommerceDetailSection label="Bid history" divider>
-          <CommerceDetailDisclosureRow
-            label="Bid history"
-            count={auction.bidCount > 0 ? auction.bidCount : undefined}
-            summary={
-              auction.bidCount > 0 && bidActivity.length > 0
-                ? `${formatFromFiat(auction.currentBidGbp, 'GBP')} · ${auction.bidCount} ${auction.bidCount === 1 ? 'bid' : 'bids'}`
-                : auction.bidCount > 0
-                  ? `${auction.bidCount} ${auction.bidCount === 1 ? 'bid' : 'bids'}`
-                  : 'No bids yet'
-            }
-            onPress={() => setBidHistorySheetVisible(true)}
-            leadingIcon="list-outline"
-            accessibilityLabel="View bid history"
-          />
-          {auction.bidCount > 0 && bidActivity.length > 0 && (
-            <View style={styles.bidPreviewList}>
-              {bidActivity.slice(0, 3).map((bid, index) => {
-                const row = formatBidActivityRow(bid, index, formatFromFiat, serverNowRef.current);
-                return (
-                  <View
-                    key={bid.id}
-                    style={[styles.bidPreviewRow, { borderColor: colors.borderSubtle }, row.isTopBid && styles.bidPreviewRowTop]}
-                  >
-                    <View style={styles.bidPreviewLeft}>
-                      <Text style={[styles.bidPreviewRank, { color: colors.textMuted }]}>{index + 1}</Text>
-                      <Text style={[styles.bidPreviewBidder, { color: colors.textPrimary }]} numberOfLines={1}>
-                        {row.bidderLabel}
-                      </Text>
-                      {row.isTopBid && (
-                        <View style={[styles.bidPreviewTopBadge, { backgroundColor: colors.surfaceAlt }]}>
-                          <Text style={[styles.bidPreviewTopBadgeText, { color: colors.success }]}>LEADING</Text>
-                        </View>
-                      )}
-                    </View>
-                    <View style={styles.bidPreviewRight}>
-                      <Text style={[styles.bidPreviewAmount, { color: colors.textPrimary }]}>{row.amountText}</Text>
-                      {row.relativeTime && (
-                        <Text style={[styles.bidPreviewTime, { color: colors.textMuted }]}>{row.relativeTime}</Text>
-                      )}
-                    </View>
-                  </View>
-                );
-              })}
-              {bidActivity.length > 3 && (
-                <Pressable
-                  style={styles.bidPreviewMore}
-                  onPress={() => setBidHistorySheetVisible(true)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`View all ${auction.bidCount} bids`}
-                >
-                  <Text style={[styles.bidPreviewMoreText, { color: colors.brand }]}>
-                    View all {auction.bidCount} bids
-                  </Text>
-                  <Ionicons name="chevron-forward" size={14} color={colors.brand} />
-                </Pressable>
-              )}
+        {/* ── Zone E — Item details ──
+            Per spec 02_AUCTION §5: wrap description, category evidence,
+            condition and authenticity inside one deliberate "Item
+            details" section. Do not leave description and evidence as
+            independent unlabelled blocks. */}
+        <CommerceDetailSection label="Item details" divider variant="editorial">
+          {auction.description && (
+            <View style={styles.descriptionBlock}>
+              <Text style={[styles.descriptionText, { color: colors.textPrimary }]}>
+                {auction.description}
+              </Text>
             </View>
           )}
+
+          {(() => {
+            const evidenceGroups = resolveEvidenceGroups({
+              category: auction.category,
+              brand: auction.brand,
+              condition: auction.conditionLabel,
+              description: auction.description,
+            });
+            return evidenceGroups.length > 0 ? (
+              <CategoryEvidence groups={evidenceGroups} />
+            ) : null;
+          })()}
+
+          {auction.conditionLabel && (
+            <View style={styles.itemDetailRow}>
+              <Text style={[styles.itemDetailLabel, { color: colors.textSecondary }]}>
+                Condition
+              </Text>
+              <Text style={[styles.itemDetailValue, { color: colors.textPrimary }]}>
+                {auction.conditionLabel}
+              </Text>
+            </View>
+          )}
+        </CommerceDetailSection>
+
+        {/* ── Bid activity — one compact pattern ──
+            Per spec 02_AUCTION §3: consolidate bid history into one
+            presentation. Section label "Bid activity", latest bid row,
+            bid count, one "View all bids" action. Do not show both a
+            disclosure row and a three-row preview. */}
+        <CommerceDetailSection label="Bid activity" divider>
+          {auction.bidCount > 0 && bidActivity.length > 0 ? (
+            (() => {
+              const topBid = formatBidActivityRow(bidActivity[0], 0, formatFromFiat, serverNowRef.current);
+              return (
+                <View style={styles.bidActivityRow}>
+                  <View style={styles.bidActivityLeft}>
+                    <Text style={[styles.bidActivityLabel, { color: colors.textSecondary }]} numberOfLines={1}>
+                      Leading bid
+                    </Text>
+                    <Text style={[styles.bidActivityBidder, { color: colors.textPrimary }]} numberOfLines={1}>
+                      {topBid.bidderLabel}
+                      {topBid.relativeTime ? `  ·  ${topBid.relativeTime}` : ''}
+                    </Text>
+                  </View>
+                  <Text style={[styles.bidActivityAmount, { color: colors.textPrimary }]}>
+                    {topBid.amountText}
+                  </Text>
+                </View>
+              );
+            })()
+          ) : (
+            <Text style={[styles.bidActivityEmpty, { color: colors.textMuted }]}>
+              No bids yet
+            </Text>
+          )}
+          <Pressable
+            style={styles.bidActivityViewAll}
+            onPress={() => setBidHistorySheetVisible(true)}
+            accessibilityRole="button"
+            accessibilityLabel={`View all ${auction.bidCount} bids`}
+          >
+            <Text style={[styles.bidActivityViewAllText, { color: colors.brand }]}>
+              {auction.bidCount > 0
+                ? `View all ${auction.bidCount} ${auction.bidCount === 1 ? 'bid' : 'bids'}`
+                : 'View bid history'}
+            </Text>
+            <Ionicons name="chevron-forward" size={14} color={colors.brand} />
+          </Pressable>
         </CommerceDetailSection>
 
         {/* Auction rules — disclosure row, not a large card. Spec 04 §6. */}
@@ -896,6 +923,9 @@ export default function AuctionDetailScreen() {
             the slim seller row or the full seller card as the primary
             presentation; do not show both by default." */}
 
+        {/* ── Discovery — maximum one related-auctions rail + one Seen in
+            Looks rail. Per spec 02_AUCTION §9: no generic duplicate
+            recommendation rails after that. */}
         {seenInLooksSection && seenInLooksSection.items.length > 0 && (
           <View style={styles.recommendationSection}>
             <RecommendationRail
@@ -911,59 +941,55 @@ export default function AuctionDetailScreen() {
             />
           </View>
         )}
-
-        {recsLoading && railSections.length === 0 ? null : (
-          railSections.map((section) => (
-            <View key={section.key} style={styles.recommendationSection}>
-              <RecommendationRail
-                section={section}
-                listingId={auction.listingId}
-                onPressItem={(recItem) => {
-                  if (isRecommendationLook(recItem)) {
-                    handlePressLook(recItem);
-                  } else {
-                    handlePressRecommendation(recItem as Listing);
-                  }
-                }}
-              />
-            </View>
-          ))
-        )}
       </Reanimated.ScrollView>
 
       {/* ── Zone G — Sticky action dock ──
-          Shared shell dock. Spec 04 §7: live → current/min next bid +
-          Place bid (+ optional Buy now); outbid → Minimum to lead + Bid
-          again; leading → calm; terminal → one result state + one next
-          valid action. Blocked state includes a valid next step. */}
+          Shared shell dock. Per spec 02_AUCTION §4: the body owns the
+          detailed terminal result; the dock contains the action only.
+          Do not repeat "You won", "Auction closed", "Sold" or "Ended
+          without bids" in both the body and the dock. */}
       {(() => {
-        // Terminal — one result state, one next valid action.
+        // Terminal — dock carries the next valid action only.
+        // The body terminal result module already shows the result
+        // message and value; the dock must not duplicate it.
         if (isTerminal) {
-          const terminalMessage = isCancelled ? 'Auction cancelled'
-            : viewerState === 'won' ? 'You won this auction'
-            : viewerState === 'lost' ? 'Auction ended — you did not win'
-            : isSeller && auction.bidCount > 0 ? `Sold — ${auction.bidCount} ${auction.bidCount === 1 ? 'bid' : 'bids'}`
-            : isSeller ? 'Ended without bids'
-            : 'Auction ended';
-          const terminalColor = viewerState === 'won' ? colors.success
-            : isSeller && auction.bidCount > 0 ? colors.brand
-            : colors.textSecondary;
+          // Determine the next valid action for each terminal state.
+          let terminalAction: { label: string; onPress: () => void; accessibilityLabel: string } | undefined;
+
+          if (viewerState === 'won') {
+            // Winner — fulfilment next step (backend-backed when
+            // available, otherwise a truthful "View result" action).
+            terminalAction = {
+              label: auctionFulfilment?.buyerNextAction ?? 'View result',
+              onPress: () => {
+                if (auctionFulfilment?.orderId) {
+                  navigation.navigate('OrderDetail', { orderId: auctionFulfilment.orderId });
+                }
+              },
+              accessibilityLabel: auctionFulfilment?.buyerNextAction ?? 'View auction result',
+            };
+          } else if (viewerState === 'lost' || (isSeller && auction.bidCount === 0)) {
+            terminalAction = {
+              label: 'Discover similar',
+              onPress: () => navigation.navigate('AuctionHome'),
+              accessibilityLabel: 'Discover similar auctions',
+            };
+          } else if (isSeller && auction.bidCount > 0) {
+            // Seller with a sale — fulfilment next step.
+            terminalAction = {
+              label: auctionFulfilment?.sellerNextAction ?? 'View result',
+              onPress: () => {
+                if (auctionFulfilment?.orderId) {
+                  navigation.navigate('OrderDetail', { orderId: auctionFulfilment.orderId });
+                }
+              },
+              accessibilityLabel: auctionFulfilment?.sellerNextAction ?? 'View sale result',
+            };
+          }
+
           return (
             <CommerceDetailStateDock
-              stateBadge={
-                <Text style={[styles.dockStateBadge, { color: terminalColor }]}>
-                  {terminalMessage}
-                </Text>
-              }
-              primaryAction={
-                viewerState === 'lost' || (isSeller && auction.bidCount === 0)
-                  ? {
-                      label: 'Discover similar',
-                      onPress: () => navigation.navigate('AuctionHome'),
-                      accessibilityLabel: 'Discover similar auctions',
-                    }
-                  : undefined
-              }
+              primaryAction={terminalAction}
             />
           );
         }
@@ -1017,7 +1043,11 @@ export default function AuctionDetailScreen() {
               secondaryAction={
                 buyNowAvailable && stateAction.secondary.type === 'buyNow'
                   ? {
-                      label: isBuyNowLoading ? 'Processing…' : `Buy Now · ${formatFromFiat(auction.buyNowPriceGbp!, 'GBP')}`,
+                      // Per spec 02_AUCTION §6: button labels are
+                      // "Place bid", "Bid again", "Increase bid", "Buy
+                      // now". Price stays above buttons or inside the
+                      // transaction surface, not in the button label.
+                      label: isBuyNowLoading ? 'Processing…' : 'Buy now',
                       onPress: openBuyNowSheet,
                       disabled: isBuyNowLoading,
                       loading: isBuyNowLoading,
@@ -2057,74 +2087,6 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontFamily: Typography.family.semibold,
   },
-  bidPreviewList: {
-    marginTop: Space.xs,
-    borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-    overflow: 'hidden',
-  },
-  bidPreviewRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
-  },
-  bidPreviewRowTop: {
-    backgroundColor: `${Colors.brand}08`,
-  },
-  bidPreviewLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    flex: 1,
-  },
-  bidPreviewRank: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Colors.textMuted,
-    fontFamily: Typography.family.bold,
-    minWidth: 14,
-  },
-  bidPreviewBidder: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    fontFamily: Typography.family.regular,
-    flexShrink: 1,
-  },
-  bidPreviewTopBadge: {
-    backgroundColor: Colors.success,
-    borderRadius: 3,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-  },
-  bidPreviewTopBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 8,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  bidPreviewRight: {
-    flexDirection: 'column',
-    alignItems: 'flex-end',
-    gap: 1,
-  },
-  bidPreviewAmount: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-    fontFamily: Typography.family.semibold,
-    fontVariant: ['tabular-nums'],
-  },
-  bidPreviewTime: {
-    fontSize: 10,
-    color: Colors.textMuted,
-    fontFamily: Typography.family.regular,
-  },
   bidPreviewMore: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2136,6 +2098,67 @@ const styles = StyleSheet.create({
     color: Colors.brand,
     fontSize: 13,
     fontFamily: Typography.family.medium,
+  },
+  // ── Bid activity (consolidated pattern per spec 02_AUCTION §3) ──
+  bidActivityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Space.sm,
+    paddingVertical: Space.sm,
+  },
+  bidActivityLeft: {
+    flexDirection: 'column',
+    gap: 2,
+    flexShrink: 1,
+  },
+  bidActivityLabel: {
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    fontWeight: '500',
+  },
+  bidActivityBidder: {
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+  },
+  bidActivityAmount: {
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+  bidActivityEmpty: {
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    paddingVertical: Space.sm,
+  },
+  bidActivityViewAll: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: Space.sm,
+  },
+  bidActivityViewAllText: {
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    fontWeight: '600',
+  },
+  // ── Item details rows (per spec 02_AUCTION §5) ──
+  itemDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Space.sm,
+    paddingVertical: Space.sm,
+  },
+  itemDetailLabel: {
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+  },
+  itemDetailValue: {
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontWeight: '600',
   },
   bidList: {
     borderRadius: Radius.md,
