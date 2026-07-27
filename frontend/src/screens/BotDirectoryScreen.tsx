@@ -7,11 +7,10 @@ import { AgentIcon } from '../components/agents/AgentIcon';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { EmptyState } from '../components/EmptyState';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
-import { Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { Space, Type, Typography } from '../theme/designTokens';
-import { useAppTheme } from '../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { fetchAiCapability, type AiCapabilitySummary } from '../services/aiTruthApi';
 
 type Props = StackScreenProps<RootStackParamList, 'BotDirectory'>;
@@ -35,7 +34,8 @@ const CATEGORIES: Array<{ value: AgentCategory; label: string }> = [
 ];
 
 export default function BotDirectoryScreen({ navigation }: Props) {
-  const { isDark } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [selectedCategory, setSelectedCategory] = useState<AgentCategory>('all');
   const systemAgents = useStore((state) => state.availableChatBots);
   const customAgents = useStore((state) => state.customBots);
@@ -78,7 +78,7 @@ export default function BotDirectoryScreen({ navigation }: Props) {
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar
         barStyle={isDark ? 'light-content' : 'dark-content'}
-        backgroundColor={Colors.background}
+        backgroundColor={colors.background}
       />
       <ScreenHeader
         title="Agents"
@@ -97,7 +97,7 @@ export default function BotDirectoryScreen({ navigation }: Props) {
                 : 'Create a specialist agent'
             }
           >
-            <Ionicons name="add" size={23} color={Colors.textPrimary} />
+            <Ionicons name="add" size={23} color={colors.textPrimary} />
           </AnimatedPressable>
         }
       />
@@ -116,7 +116,7 @@ export default function BotDirectoryScreen({ navigation }: Props) {
           accessibilityLabel="Open your agents"
         >
           <View style={styles.leadingIcon}>
-            <Ionicons name="person-outline" size={21} color={Colors.textPrimary} />
+            <Ionicons name="person-outline" size={21} color={colors.textPrimary} />
           </View>
           <View style={styles.yourAgentsCopy}>
             <Text style={styles.yourAgentsTitle}>Your agents</Text>
@@ -126,7 +126,7 @@ export default function BotDirectoryScreen({ navigation }: Props) {
                 : 'Create a private agent with its own instructions and voice'}
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={19} color={Colors.textMuted} />
+          <Ionicons name="chevron-forward" size={19} color={colors.textMuted} />
         </AnimatedPressable>
 
         <View style={styles.sectionIntro}>
@@ -185,7 +185,7 @@ export default function BotDirectoryScreen({ navigation }: Props) {
                       category={agent.category}
                       name={agent.name}
                       size={21}
-                      color={Colors.textPrimary}
+                      color={colors.textPrimary}
                     />
                   </View>
                   <View style={styles.agentCopy}>
@@ -207,7 +207,7 @@ export default function BotDirectoryScreen({ navigation }: Props) {
                       </Text>
                     </View>
                   </View>
-                  <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+                  <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
                 </AnimatedPressable>
                 {index < filteredAgents.length - 1 ? <View style={styles.divider} /> : null}
               </View>
@@ -219,10 +219,11 @@ export default function BotDirectoryScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   content: {
     paddingBottom: Space.xxl,
@@ -241,7 +242,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   leadingIcon: {
     width: 32,
@@ -254,12 +255,12 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   yourAgentsTitle: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
     fontSize: Type.subtitle.size,
   },
   yourAgentsDetail: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontFamily: Typography.family.regular,
     fontSize: Type.caption.size,
     lineHeight: 17,
@@ -270,18 +271,18 @@ const styles = StyleSheet.create({
     paddingBottom: Space.sm,
   },
   sectionTitle: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
     fontSize: Type.subtitle.size,
   },
   sectionDetail: {
     marginTop: 2,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontFamily: Typography.family.regular,
     fontSize: Type.caption.size,
   },
   filterBackground: {
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   filters: {
     paddingHorizontal: Space.md,
@@ -296,15 +297,15 @@ const styles = StyleSheet.create({
     borderBottomColor: 'transparent',
   },
   filterSelected: {
-    borderBottomColor: Colors.textPrimary,
+    borderBottomColor: colors.textPrimary,
   },
   filterText: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontFamily: Typography.family.medium,
     fontSize: Type.captionElevated.size,
   },
   filterTextSelected: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
   },
   list: {
@@ -322,12 +323,12 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   agentName: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
     fontSize: Type.bodyEmphasis.size,
   },
   agentDescription: {
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontFamily: Typography.family.regular,
     fontSize: Type.captionElevated.size,
     lineHeight: 18,
@@ -339,30 +340,31 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   categoryText: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontFamily: Typography.family.medium,
     fontSize: Type.caption.size,
     textTransform: 'capitalize',
   },
   agentMetaText: {
     flexShrink: 1,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontFamily: Typography.family.medium,
     fontSize: Type.caption.size,
   },
   statusText: {
     flexShrink: 0,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontFamily: Typography.family.medium,
     fontSize: Type.caption.size,
   },
   metaDot: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontSize: Type.caption.size,
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
     marginLeft: 44,
   },
-});
+  });
+}

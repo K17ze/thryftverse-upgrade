@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -20,7 +20,8 @@ import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
-import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
+import type { ThemeColors } from '../theme/ThemeContext';
 import { Type, Space, Radius, Typography } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
@@ -44,6 +45,8 @@ export default function LookDetailScreen() {
   const { listings } = useBackendData();
   const reducedMotion = useReducedMotion();
   const currentUser = useStore((state) => state.currentUser);
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const { lookId } = route.params;
 
@@ -124,11 +127,11 @@ export default function LookDetailScreen() {
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.headerRow}>
           <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.85}>
-            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </AnimatedPressable>
         </View>
         <View style={styles.loadingWrap}>
-          <ActivityIndicator size="large" color={Colors.brand} />
+          <ActivityIndicator size="large" color={colors.brand} />
         </View>
       </SafeAreaView>
     );
@@ -139,7 +142,7 @@ export default function LookDetailScreen() {
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.headerRow}>
           <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.85}>
-            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </AnimatedPressable>
         </View>
         <EmptyState
@@ -158,7 +161,7 @@ export default function LookDetailScreen() {
       {/* Floating Header */}
       <View style={styles.headerRow}>
         <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.85}>
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </AnimatedPressable>
         <View style={styles.headerActions}>
           <AnimatedPressable
@@ -168,7 +171,7 @@ export default function LookDetailScreen() {
             accessibilityRole="button"
             accessibilityLabel="Share look"
           >
-            <Ionicons name="share-outline" size={20} color={Colors.textPrimary} />
+            <Ionicons name="share-outline" size={20} color={colors.textPrimary} />
           </AnimatedPressable>
         </View>
       </View>
@@ -250,7 +253,7 @@ export default function LookDetailScreen() {
               {look.creator.avatar ? (
                 <CachedImage uri={look.creator.avatar} style={styles.creatorAvatarImg} contentFit="cover" />
               ) : (
-                <Ionicons name="person-circle" size={32} color={Colors.textMuted} />
+                <Ionicons name="person-circle" size={32} color={colors.textMuted} />
               )}
             </View>
             <View style={styles.creatorInfo}>
@@ -300,7 +303,7 @@ export default function LookDetailScreen() {
                         <CachedImage uri={listing.images[0]} style={styles.trayImg} contentFit="cover" />
                       ) : (
                         <View style={styles.trayImgEmpty}>
-                          <Ionicons name="pricetag" size={20} color={Colors.textMuted} />
+                          <Ionicons name="pricetag" size={20} color={colors.textMuted} />
                         </View>
                       )}
                     </View>
@@ -337,8 +340,9 @@ export default function LookDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   headerRow: {
     position: 'absolute',
@@ -374,7 +378,7 @@ const styles = StyleSheet.create({
     width: SCREEN_W,
     height: SCREEN_W * 1.15,
     position: 'relative',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     overflow: 'hidden',
   },
   heroImage: { width: '100%', height: '100%' },
@@ -404,7 +408,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(0,0,0,0.25)',
   },
   hotspotDotActive: {
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     borderColor: '#fff',
   },
   tagTooltip: {
@@ -419,10 +423,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 8,
   },
-  tagTooltipImg: { width: 36, height: 36, borderRadius: 6, backgroundColor: Colors.surfaceAlt },
+  tagTooltipImg: { width: 36, height: 36, borderRadius: 6, backgroundColor: colors.surfaceAlt },
   tagTooltipTitle: { fontSize: 11, fontFamily: Typography.family.semibold, color: '#fff' },
   tagTooltipPrice: { fontSize: 10, fontFamily: Typography.family.medium, color: 'rgba(255,255,255,0.7)' },
-  tagTooltipSold: { fontSize: 10, fontFamily: Typography.family.semibold, color: Colors.danger },
+  tagTooltipSold: { fontSize: 10, fontFamily: Typography.family.semibold, color: colors.danger },
 
   infoSection: {
     paddingHorizontal: Space.md,
@@ -432,7 +436,7 @@ const styles = StyleSheet.create({
   caption: {
     fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: Type.title.letterSpacing,
     lineHeight: 24,
   },
@@ -445,7 +449,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -455,12 +459,12 @@ const styles = StyleSheet.create({
   creatorName: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   creatorMeta: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
 
   traySection: {
@@ -470,7 +474,7 @@ const styles = StyleSheet.create({
   trayTitle: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginBottom: Space.sm,
   },
   trayScroll: {
@@ -485,7 +489,7 @@ const styles = StyleSheet.create({
     height: 170,
     borderRadius: Radius.md,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     position: 'relative',
   },
   trayImg: { width: '100%', height: '100%' },
@@ -494,22 +498,23 @@ const styles = StyleSheet.create({
     height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   trayCardTitle: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginTop: 4,
   },
   trayCardPrice: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.bold,
-    color: Colors.brand,
+    color: colors.brand,
   },
   trayCardSold: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.bold,
-    color: Colors.danger,
+    color: colors.danger,
   },
-});
+  });
+}

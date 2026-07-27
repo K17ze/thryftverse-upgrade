@@ -7,7 +7,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { ChatInfoRow, ChatInfoSection } from '../components/chat/ChatInfoSection';
 import { FlagshipHeader, FlagshipScreen } from '../components/flagship';
 import { Caption } from '../components/ui/Text';
-import { Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { RootStackParamList } from '../navigation/types';
@@ -18,6 +18,8 @@ type Props = StackScreenProps<RootStackParamList, 'GroupChatInfo'>;
 
 export default function GroupChatInfoScreen({ navigation, route }: Props) {
   const { conversationId } = route.params;
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
   const insets = useSafeAreaInsets();
@@ -42,7 +44,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
         scrollEnabled={false}
       >
         <View style={styles.center}>
-          <Caption color={Colors.textMuted}>Group not found</Caption>
+          <Caption color={colors.textMuted}>Group not found</Caption>
         </View>
       </FlagshipScreen>
     );
@@ -126,7 +128,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
               accessibilityRole="button"
               accessibilityLabel="Edit group"
             >
-              <Ionicons name="create-outline" size={21} color={Colors.textPrimary} />
+              <Ionicons name="create-outline" size={21} color={colors.textPrimary} />
             </AnimatedPressable>
           }
         />
@@ -220,6 +222,8 @@ function QuickAction({
   label: string;
   onPress: () => void;
 }) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   return (
     <AnimatedPressable
       style={styles.quickAction}
@@ -230,13 +234,14 @@ function QuickAction({
       accessibilityRole="button"
       accessibilityLabel={label}
     >
-      <Ionicons name={icon} size={21} color={Colors.textPrimary} />
+      <Ionicons name={icon} size={21} color={colors.textPrimary} />
       <Text style={styles.quickActionLabel}>{label}</Text>
     </AnimatedPressable>
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   content: {
     paddingHorizontal: Space.md,
     gap: Space.lg,
@@ -263,18 +268,18 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     marginBottom: Space.sm,
   },
   avatarText: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: TypeStyles.title.fontFamily,
     fontSize: 25,
     letterSpacing: -0.5,
   },
   groupName: {
     maxWidth: '88%',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: TypeStyles.title.fontFamily,
     fontSize: Type.title.size,
     lineHeight: Type.title.lineHeight,
@@ -282,7 +287,7 @@ const styles = StyleSheet.create({
   },
   description: {
     maxWidth: '84%',
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontFamily: TypeStyles.body.fontFamily,
     fontSize: Type.captionElevated.size,
     lineHeight: 19,
@@ -290,7 +295,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   identityMeta: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontFamily: TypeStyles.body.fontFamily,
     fontSize: Type.caption.size,
     marginTop: 5,
@@ -300,7 +305,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   quickAction: {
     flex: 1,
@@ -310,8 +315,9 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   quickActionLabel: {
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     fontSize: Type.caption.size,
   },
-});
+  });
+}

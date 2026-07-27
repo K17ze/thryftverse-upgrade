@@ -13,8 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
-import { useAppTheme } from '../theme/ThemeContext';
-import { Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -25,7 +24,8 @@ import { Caption, BodyEmphasis, Meta } from '../components/ui/Text';
 type Props = StackScreenProps<RootStackParamList, 'CustomBots'>;
 
 export default function CustomBotsScreen({ navigation }: Props) {
-  const { isDark } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
 
@@ -95,7 +95,7 @@ export default function CustomBotsScreen({ navigation }: Props) {
             accessibilityLabel="Create bot"
           >
             <View style={styles.createBtn}>
-              <Ionicons name="add" size={22} color={Colors.textPrimary} />
+              <Ionicons name="add" size={22} color={colors.textPrimary} />
             </View>
           </AnimatedPressable>
         }
@@ -153,10 +153,10 @@ export default function CustomBotsScreen({ navigation }: Props) {
         {customBots.length === 0 && (
           <View style={styles.empty}>
             <View style={styles.emptyMark}>
-              <Ionicons name="chatbubble-ellipses-outline" size={25} color={Colors.textPrimary} />
+              <Ionicons name="chatbubble-ellipses-outline" size={25} color={colors.textPrimary} />
             </View>
             <Text style={styles.emptyTitle}>Create an agent that works your way</Text>
-            <Caption color={Colors.textSecondary} style={styles.emptyText}>
+            <Caption color={colors.textSecondary} style={styles.emptyText}>
               Give it a specialty, clear boundaries, and the context it needs. You decide when it joins a chat.
             </Caption>
             <AnimatedPressable
@@ -168,7 +168,7 @@ export default function CustomBotsScreen({ navigation }: Props) {
             >
               <Text style={styles.createEmptyBtnText}>Create your first agent</Text>
             </AnimatedPressable>
-            <Caption color={Colors.textMuted} style={styles.emptyNote}>
+            <Caption color={colors.textMuted} style={styles.emptyNote}>
               Agents stay private to your account until you connect them.
             </Caption>
           </View>
@@ -179,9 +179,11 @@ export default function CustomBotsScreen({ navigation }: Props) {
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   return (
     <View style={styles.section}>
-      <Meta color={Colors.textMuted} style={styles.sectionLabel}>
+      <Meta color={colors.textMuted} style={styles.sectionLabel}>
         {title}
       </Meta>
       <View style={styles.card}>{children}</View>
@@ -202,6 +204,8 @@ function BotRow({
   onDelete: () => void;
   onView: () => void;
 }) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   return (
     <AnimatedPressable
       onPress={onView}
@@ -217,13 +221,13 @@ function BotRow({
             category={bot.category}
             name={bot.name}
             size={21}
-            color={Colors.textPrimary}
+            color={colors.textPrimary}
           />
         </View>
 
         <View style={styles.botText}>
           <BodyEmphasis numberOfLines={1}>{bot.name}</BodyEmphasis>
-          <Caption color={Colors.textMuted} numberOfLines={1}>
+          <Caption color={colors.textMuted} numberOfLines={1}>
             {bot.isDraft
               ? 'Draft'
               : bot.runtimeReady === false
@@ -242,7 +246,7 @@ function BotRow({
             accessibilityRole="button"
             accessibilityLabel="Edit bot"
           >
-            <Ionicons name="create-outline" size={20} color={Colors.textSecondary} />
+            <Ionicons name="create-outline" size={20} color={colors.textSecondary} />
           </AnimatedPressable>
 
           <AnimatedPressable
@@ -254,7 +258,7 @@ function BotRow({
             accessibilityRole="button"
             accessibilityLabel="Delete bot"
           >
-            <Ionicons name="trash-outline" size={20} color={Colors.danger} />
+            <Ionicons name="trash-outline" size={20} color={colors.danger} />
           </AnimatedPressable>
         </View>
       </View>
@@ -262,10 +266,11 @@ function BotRow({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   content: {
     paddingHorizontal: Space.md,
@@ -287,7 +292,7 @@ const styles = StyleSheet.create({
     marginLeft: Space.xs,
   },
   card: {
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     gap: 1,
   },
   row: {
@@ -333,7 +338,7 @@ const styles = StyleSheet.create({
   emptyTitle: {
     maxWidth: 300,
     textAlign: 'center',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontSize: Type.subtitle.size,
     lineHeight: Type.subtitle.lineHeight,
     fontFamily: Typography.family.semibold,
@@ -345,13 +350,13 @@ const styles = StyleSheet.create({
     lineHeight: 19,
   },
   createEmptyBtn: {
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     paddingHorizontal: Space.md,
     paddingVertical: 12,
     borderRadius: Radius.lg,
   },
   createEmptyBtnText: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
   },
@@ -360,4 +365,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 17,
   },
-});
+  });
+}

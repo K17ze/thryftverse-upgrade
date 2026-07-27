@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
-import { Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type } from '../theme/designTokens';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -19,6 +19,8 @@ type Props = StackScreenProps<RootStackParamList, 'HelpSupport'>;
 
 export default function HelpSupportScreen({ navigation }: Props) {
   const { show } = useToast();
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { formatFromFiat } = useFormattedPrice();
   const [expanded, setExpanded] = useState<string | null>(null);
   const [faqSearch, setFaqSearch] = useState('');
@@ -116,17 +118,17 @@ export default function HelpSupportScreen({ navigation }: Props) {
         {/* FAQ Search */}
         <Reanimated.View entering={FadeIn.duration(300)} style={{ marginHorizontal: Space.md, marginBottom: Space.md }}>
           <View style={styles.searchWrap}>
-            <Ionicons name="search-outline" size={18} color={Colors.textMuted} />
+            <Ionicons name="search-outline" size={18} color={colors.textMuted} />
             <TextInput
               style={styles.searchInput}
               value={faqSearch}
               onChangeText={setFaqSearch}
               placeholder="Search FAQs..."
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
             />
             {faqSearch ? (
               <AnimatedPressable onPress={() => setFaqSearch('')} hitSlop={8}>
-                <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
+                <Ionicons name="close-circle" size={18} color={colors.textMuted} />
               </AnimatedPressable>
             ) : null}
           </View>
@@ -154,7 +156,7 @@ export default function HelpSupportScreen({ navigation }: Props) {
                       <Ionicons
                         name={expanded === faq.q ? 'chevron-up' : 'chevron-down'}
                         size={18}
-                        color={Colors.textMuted}
+                        color={colors.textMuted}
                       />
                     </View>
                     {expanded === faq.q && (
@@ -196,23 +198,24 @@ export default function HelpSupportScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.xl,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 4,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   searchInput: {
     flex: 1,
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: Type.body.letterSpacing,
     paddingVertical: 0,
   },
@@ -223,7 +226,7 @@ const styles = StyleSheet.create({
   emptyFaqsText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     letterSpacing: Type.body.letterSpacing,
   },
   faqRow: {
@@ -235,13 +238,13 @@ const styles = StyleSheet.create({
   },
   border: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   faqQ: {
     flex: 1,
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     lineHeight: Type.body.lineHeight,
     letterSpacing: Type.body.letterSpacing,
     paddingRight: Space.sm,
@@ -249,7 +252,7 @@ const styles = StyleSheet.create({
   faqA: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     lineHeight: Type.caption.lineHeight,
     letterSpacing: Type.caption.letterSpacing,
     paddingHorizontal: Space.md,
@@ -258,10 +261,11 @@ const styles = StyleSheet.create({
   version: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textAlign: 'center',
     marginTop: Space.lg,
     marginBottom: Space.md,
     letterSpacing: Type.meta.letterSpacing,
   },
-});
+  });
+}

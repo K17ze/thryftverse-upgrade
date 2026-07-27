@@ -1,11 +1,11 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
-import { Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Type, Typography } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
@@ -20,6 +20,8 @@ type Props = StackScreenProps<RootStackParamList, 'BlockedUsers'>;
 
 export default function BlockedUsersScreen({ navigation }: Props) {
   const { show } = useToast();
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const blockedIds = useStore((state) => state.blockedUsers);
   const toggleBlocked = useStore((state) => state.toggleBlockedUser);
   const [profiles, setProfiles] = React.useState<
@@ -86,7 +88,7 @@ export default function BlockedUsersScreen({ navigation }: Props) {
           <Ionicons
             name="shield-checkmark-outline"
             size={25}
-            color={Colors.textMuted}
+            color={colors.textMuted}
           />
           <Text style={styles.emptyTitle}>No blocked accounts</Text>
           <Text style={styles.emptyBody}>
@@ -96,7 +98,7 @@ export default function BlockedUsersScreen({ navigation }: Props) {
         </View>
       ) : loadingProfiles && Object.keys(profiles).length === 0 ? (
         <View style={styles.loading}>
-          <ActivityIndicator size="small" color={Colors.textMuted} />
+          <ActivityIndicator size="small" color={colors.textMuted} />
           <Text style={styles.loadingText}>Loading blocked accounts</Text>
         </View>
       ) : (
@@ -126,7 +128,7 @@ export default function BlockedUsersScreen({ navigation }: Props) {
                     <Ionicons
                       name="person-outline"
                       size={18}
-                      color={Colors.textMuted}
+                      color={colors.textMuted}
                     />
                   </View>
                 )}
@@ -158,7 +160,7 @@ export default function BlockedUsersScreen({ navigation }: Props) {
                   {pendingId === userId ? (
                     <ActivityIndicator
                       size="small"
-                      color={Colors.textPrimary}
+                      color={colors.textPrimary}
                     />
                   ) : (
                     <Text style={styles.unblockText}>Unblock</Text>
@@ -173,92 +175,94 @@ export default function BlockedUsersScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  list: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-  },
-  userRow: {
-    minHeight: 74,
-    marginLeft: Space.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  divider: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
-  },
-  avatar: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-  },
-  avatarFallback: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.surfaceAlt,
-  },
-  userText: {
-    minWidth: 0,
-    flex: 1,
-  },
-  userName: {
-    color: Colors.textPrimary,
-    fontFamily: Typography.family.semibold,
-    fontSize: 14,
-  },
-  userMeta: {
-    color: Colors.textMuted,
-    fontFamily: Typography.family.regular,
-    fontSize: 12,
-    marginTop: 3,
-  },
-  unblockTarget: {
-    minWidth: 76,
-    minHeight: 52,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  unblockText: {
-    color: Colors.textPrimary,
-    fontFamily: Typography.family.semibold,
-    fontSize: 12,
-  },
-  empty: {
-    alignItems: 'center',
-    paddingHorizontal: Space.xl,
-    paddingTop: 72,
-  },
-  emptyTitle: {
-    marginTop: Space.md,
-    color: Colors.textPrimary,
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-  },
-  emptyBody: {
-    maxWidth: 300,
-    marginTop: Space.xs,
-    color: Colors.textMuted,
-    fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-    lineHeight: 18,
-    textAlign: 'center',
-  },
-  loading: {
-    minHeight: 160,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.sm,
-  },
-  loadingText: {
-    color: Colors.textMuted,
-    fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    list: {
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+    },
+    userRow: {
+      minHeight: 74,
+      marginLeft: Space.md,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    divider: {
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    avatar: {
+      width: 46,
+      height: 46,
+      borderRadius: 23,
+    },
+    avatarFallback: {
+      width: 46,
+      height: 46,
+      borderRadius: 23,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surfaceAlt,
+    },
+    userText: {
+      minWidth: 0,
+      flex: 1,
+    },
+    userName: {
+      color: colors.textPrimary,
+      fontFamily: Typography.family.semibold,
+      fontSize: 14,
+    },
+    userMeta: {
+      color: colors.textMuted,
+      fontFamily: Typography.family.regular,
+      fontSize: 12,
+      marginTop: 3,
+    },
+    unblockTarget: {
+      minWidth: 76,
+      minHeight: 52,
+      paddingHorizontal: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    unblockText: {
+      color: colors.textPrimary,
+      fontFamily: Typography.family.semibold,
+      fontSize: 12,
+    },
+    empty: {
+      alignItems: 'center',
+      paddingHorizontal: Space.xl,
+      paddingTop: 72,
+    },
+    emptyTitle: {
+      marginTop: Space.md,
+      color: colors.textPrimary,
+      fontFamily: Typography.family.semibold,
+      fontSize: Type.body.size,
+    },
+    emptyBody: {
+      maxWidth: 300,
+      marginTop: Space.xs,
+      color: colors.textMuted,
+      fontFamily: Typography.family.regular,
+      fontSize: Type.caption.size,
+      lineHeight: 18,
+      textAlign: 'center',
+    },
+    loading: {
+      minHeight: 160,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: Space.sm,
+    },
+    loadingText: {
+      color: colors.textMuted,
+      fontFamily: Typography.family.regular,
+      fontSize: Type.caption.size,
+    },
+  });
+}

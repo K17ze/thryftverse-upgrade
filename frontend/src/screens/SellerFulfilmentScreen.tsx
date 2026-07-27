@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
-import { ActiveTheme, Colors } from '../constants/colors';
 import { Space, Typography } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useStore } from '../store/useStore';
@@ -24,6 +23,7 @@ import { parseApiError } from '../lib/apiClient';
 import { fetchJson } from '../lib/apiClient';
 import { CachedImage } from '../components/CachedImage';
 import { normaliseOrderStatus, humaniseStatus } from '../components/orders/orderCapabilities';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 
 type SellerFulfilmentRoute = RouteProp<{ SellerFulfilment: { orderId: string } }, 'SellerFulfilment'>;
 
@@ -50,6 +50,8 @@ export default function SellerFulfilmentScreen() {
   const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
   const currentUser = useStore((state) => state.currentUser);
+  const { colors, isDark } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const { orderId } = route.params;
 
@@ -141,16 +143,16 @@ export default function SellerFulfilmentScreen() {
   if (isLoading) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
         <View style={[styles.header, { paddingTop: insets.top }]}>
           <Pressable style={styles.headerBtn} onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityRole="button" accessibilityLabel="Go back">
-            <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
           </Pressable>
           <Text style={styles.headerTitle}>Dispatch</Text>
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.textSecondary} />
+          <ActivityIndicator size="large" color={colors.textSecondary} />
           <Text style={styles.loadingText}>Loading order…</Text>
         </View>
       </View>
@@ -160,16 +162,16 @@ export default function SellerFulfilmentScreen() {
   if (loadError || !order) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
         <View style={[styles.header, { paddingTop: insets.top }]}>
           <Pressable style={styles.headerBtn} onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityRole="button" accessibilityLabel="Go back">
-            <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
           </Pressable>
           <Text style={styles.headerTitle}>Dispatch</Text>
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.errorContainer}>
-          <Ionicons name="cloud-offline-outline" size={36} color={Colors.textMuted} />
+          <Ionicons name="cloud-offline-outline" size={36} color={colors.textMuted} />
           <Text style={styles.errorTitle}>Order could not be loaded</Text>
           <Pressable style={styles.retryBtn} onPress={() => { setLoadError(null); setIsLoading(true); void fetchOrder(); }} accessibilityRole="button" accessibilityLabel="Retry">
             <Text style={styles.retryBtnText}>Retry</Text>
@@ -182,16 +184,16 @@ export default function SellerFulfilmentScreen() {
   if (!isSeller) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
         <View style={[styles.header, { paddingTop: insets.top }]}>
           <Pressable style={styles.headerBtn} onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityRole="button" accessibilityLabel="Go back">
-            <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
           </Pressable>
           <Text style={styles.headerTitle}>Dispatch</Text>
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.errorContainer}>
-          <Ionicons name="lock-closed-outline" size={36} color={Colors.textMuted} />
+          <Ionicons name="lock-closed-outline" size={36} color={colors.textMuted} />
           <Text style={styles.errorTitle}>Only the seller can dispatch this order</Text>
         </View>
       </View>
@@ -203,11 +205,11 @@ export default function SellerFulfilmentScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+      <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
 
       <View style={[styles.header, { paddingTop: insets.top }]}>
         <Pressable style={styles.headerBtn} onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityRole="button" accessibilityLabel="Go back">
-          <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
         </Pressable>
         <Text style={styles.headerTitle}>Dispatch item</Text>
         <View style={styles.headerSpacer} />
@@ -227,7 +229,7 @@ export default function SellerFulfilmentScreen() {
             <CachedImage uri={order.listingImageUrl} style={styles.itemImage} contentFit="cover" />
           ) : (
             <View style={[styles.itemImage, styles.itemImagePlaceholder]}>
-              <Ionicons name="image-outline" size={24} color={Colors.textMuted} />
+              <Ionicons name="image-outline" size={24} color={colors.textMuted} />
             </View>
           )}
           <View style={styles.itemInfo}>
@@ -251,7 +253,7 @@ export default function SellerFulfilmentScreen() {
           return (
             <View style={styles.escrowBanner}>
               <View style={styles.escrowIconWrap}>
-                <Ionicons name="lock-closed" size={14} color={Colors.success} />
+                <Ionicons name="lock-closed" size={14} color={colors.success} />
               </View>
               <View style={styles.escrowTextWrap}>
                 <Text style={styles.escrowTitle}>Funds held in escrow</Text>
@@ -284,7 +286,7 @@ export default function SellerFulfilmentScreen() {
           <Text style={[styles.carrierSelectorText, !shippingProvider && styles.placeholderText]}>
             {shippingProvider || 'Select carrier (optional)'}
           </Text>
-          <Ionicons name={showCarrierDropdown ? 'chevron-up' : 'chevron-down'} size={18} color={Colors.textMuted} />
+          <Ionicons name={showCarrierDropdown ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} />
         </Pressable>
 
         {showCarrierDropdown && (
@@ -308,7 +310,7 @@ export default function SellerFulfilmentScreen() {
                   {carrier}
                 </Text>
                 {shippingProvider === carrier && (
-                  <Ionicons name="checkmark" size={16} color={Colors.brand} />
+                  <Ionicons name="checkmark" size={16} color={colors.brand} />
                 )}
               </Pressable>
             ))}
@@ -319,7 +321,7 @@ export default function SellerFulfilmentScreen() {
         <TextInput
           style={styles.textInput}
           placeholder="Enter tracking number (optional)"
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={colors.textMuted}
           value={trackingNumber}
           onChangeText={setTrackingNumber}
           autoCapitalize="none"
@@ -338,10 +340,10 @@ export default function SellerFulfilmentScreen() {
               accessibilityLabel="Generate shipping label"
             >
               {isGeneratingLabel ? (
-                <ActivityIndicator size="small" color={Colors.brand} />
+                <ActivityIndicator size="small" color={colors.brand} />
               ) : (
                 <>
-                  <Ionicons name="document-text-outline" size={18} color={Colors.brand} />
+                  <Ionicons name="document-text-outline" size={18} color={colors.brand} />
                   <Text style={styles.generateLabelBtnText}>
                     {generatedLabelUrl ? 'Regenerate label' : 'Generate shipping label'}
                   </Text>
@@ -363,7 +365,7 @@ export default function SellerFulfilmentScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="View and print shipping label"
               >
-                <Ionicons name="print-outline" size={18} color={Colors.textPrimary} />
+                <Ionicons name="print-outline" size={18} color={colors.textPrimary} />
                 <Text style={styles.printLabelBtnText}>View & print label</Text>
               </Pressable>
             )}
@@ -376,7 +378,7 @@ export default function SellerFulfilmentScreen() {
 
         {!canShip && (
           <View style={styles.warningBanner}>
-            <Ionicons name="alert-circle-outline" size={16} color={Colors.danger} />
+            <Ionicons name="alert-circle-outline" size={16} color={colors.danger} />
             <Text style={styles.warningText}>
               This order cannot be dispatched from its current status ({statusLabel}).
             </Text>
@@ -406,7 +408,7 @@ export default function SellerFulfilmentScreen() {
             accessibilityLabel="Mark order as shipped"
           >
             {isShipping ? (
-              <ActivityIndicator size="small" color={Colors.textInverse} />
+              <ActivityIndicator size="small" color={colors.textInverse} />
             ) : (
               <Text style={styles.shipBtnText}>Mark as shipped</Text>
             )}
@@ -417,10 +419,11 @@ export default function SellerFulfilmentScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -429,7 +432,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingBottom: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   headerBtn: {
     width: 44,
@@ -440,7 +443,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 17,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   headerSpacer: {
     width: 44,
@@ -454,7 +457,7 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 14,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   errorContainer: {
     flex: 1,
@@ -466,14 +469,14 @@ const styles = StyleSheet.create({
   errorTitle: {
     fontSize: 18,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     textAlign: 'center',
   },
   retryBtn: {
     paddingVertical: 14,
     paddingHorizontal: Space.xl,
     borderRadius: 10,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
@@ -481,7 +484,7 @@ const styles = StyleSheet.create({
   retryBtnText: {
     fontSize: 16,
     fontFamily: Typography.family.semibold,
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
   scrollContent: {
     paddingHorizontal: Space.md,
@@ -494,14 +497,14 @@ const styles = StyleSheet.create({
   orderNumber: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
   },
   statusLabel: {
     fontSize: 22,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   itemCard: {
     flexDirection: 'row',
@@ -514,7 +517,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   itemImagePlaceholder: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -526,17 +529,17 @@ const styles = StyleSheet.create({
   itemTitle: {
     fontSize: 15,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     lineHeight: 20,
   },
   itemTotal: {
     fontSize: 15,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   sectionDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
     marginVertical: Space.sm,
   },
   escrowBanner: {
@@ -546,15 +549,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
     borderRadius: 12,
-    backgroundColor: `${Colors.success}08`,
+    backgroundColor: `${colors.success}08`,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: `${Colors.success}25`,
+    borderColor: `${colors.success}25`,
   },
   escrowIconWrap: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: `${Colors.success}15`,
+    backgroundColor: `${colors.success}15`,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -565,24 +568,24 @@ const styles = StyleSheet.create({
   escrowTitle: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   escrowSub: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     lineHeight: 16,
   },
   escrowCountdown: {
     fontSize: 11,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 2,
   },
   sectionLabel: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 1.2,
     marginBottom: Space.sm,
@@ -590,7 +593,7 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 14,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginBottom: 6,
     marginTop: Space.sm,
   },
@@ -601,23 +604,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     height: 48,
     borderRadius: 10,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     minHeight: 48,
   },
   carrierSelectorText: {
     fontSize: 15,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   placeholderText: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   carrierDropdown: {
     marginTop: 4,
     borderRadius: 10,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     overflow: 'hidden',
   },
   carrierOption: {
@@ -631,26 +634,26 @@ const styles = StyleSheet.create({
   carrierOptionText: {
     fontSize: 15,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   carrierOptionTextActive: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
   },
   textInput: {
     paddingHorizontal: Space.md,
     height: 48,
     borderRadius: 10,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     fontSize: 15,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     minHeight: 48,
   },
   hintText: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: Space.xs,
     lineHeight: 18,
   },
@@ -666,8 +669,8 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm + 2,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: Colors.brand,
-    backgroundColor: `${Colors.brand}08`,
+    borderColor: colors.brand,
+    backgroundColor: `${colors.brand}08`,
   },
   generateLabelBtnDisabled: {
     opacity: 0.6,
@@ -675,7 +678,7 @@ const styles = StyleSheet.create({
   generateLabelBtnText: {
     fontSize: 14,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
+    color: colors.brand,
   },
   printLabelBtn: {
     flexDirection: 'row',
@@ -685,13 +688,13 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm + 2,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
   },
   printLabelBtnText: {
     fontSize: 14,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   warningBanner: {
     flexDirection: 'row',
@@ -700,13 +703,13 @@ const styles = StyleSheet.create({
     marginTop: Space.md,
     padding: Space.sm,
     borderRadius: 8,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
   },
   warningText: {
     flex: 1,
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.danger,
+    color: colors.danger,
   },
   footer: {
     position: 'absolute',
@@ -716,13 +719,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
-    backgroundColor: Colors.background,
+    borderTopColor: colors.border,
+    backgroundColor: colors.background,
   },
   shipBtn: {
     paddingVertical: 16,
     borderRadius: 12,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 52,
@@ -733,6 +736,7 @@ const styles = StyleSheet.create({
   shipBtnText: {
     fontSize: 16,
     fontFamily: Typography.family.bold,
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
-});
+  });
+}

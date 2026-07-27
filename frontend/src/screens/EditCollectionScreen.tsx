@@ -14,7 +14,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Colors } from '../constants/colors';
+import type { ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography, Elevation } from '../theme/designTokens';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -27,7 +27,8 @@ type Props = StackScreenProps<RootStackParamList, 'EditCollection'>;
 
 export default function EditCollectionScreen({ navigation, route }: Props) {
   const { collectionId } = route.params;
-  const { isDark } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
 
@@ -175,7 +176,7 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
                 <Ionicons
                   name={isPrivate ? 'lock-closed-outline' : 'lock-open-outline'}
                   size={20}
-                  color={Colors.textSecondary}
+                  color={colors.textSecondary}
                 />
               </View>
               <View style={styles.toggleText}>
@@ -206,8 +207,8 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
               title="Delete Collection"
               variant="secondary"
               size="lg"
-              icon={<Ionicons name="trash-outline" size={18} color={Colors.danger} />}
-              titleStyle={{ color: Colors.danger }}
+              icon={<Ionicons name="trash-outline" size={18} color={colors.danger} />}
+              titleStyle={{ color: colors.danger }}
               style={styles.deleteBtn}
               onPress={handleDelete}
               hapticFeedback="heavy"
@@ -222,10 +223,11 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   content: {
     flex: 1,
@@ -244,19 +246,19 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   headerAction: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: Type.body.letterSpacing,
   },
   headerActionDisabled: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   card: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     padding: Space.md,
     ...Elevation.subtle,
@@ -264,7 +266,7 @@ const styles = StyleSheet.create({
   label: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 1.2,
     marginBottom: Space.sm,
@@ -276,7 +278,7 @@ const styles = StyleSheet.create({
   charCount: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textAlign: 'right',
     marginTop: Space.xs,
   },
@@ -289,7 +291,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -299,13 +301,13 @@ const styles = StyleSheet.create({
   toggleLabel: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: Type.body.letterSpacing,
   },
   toggleSub: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 2,
     letterSpacing: Type.caption.letterSpacing,
   },
@@ -313,28 +315,28 @@ const styles = StyleSheet.create({
     width: 48,
     height: 28,
     borderRadius: 14,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     justifyContent: 'center',
     paddingHorizontal: 3,
   },
   togglePillActive: {
-    backgroundColor: Colors.textPrimary,
-    borderColor: Colors.textPrimary,
+    backgroundColor: colors.textPrimary,
+    borderColor: colors.textPrimary,
   },
   toggleKnob: {
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     ...Elevation.card,
   },
   toggleKnobActive: {
     transform: [{ translateX: 20 }],
   },
   dangerCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     padding: Space.md,
     ...Elevation.subtle,
@@ -343,19 +345,20 @@ const styles = StyleSheet.create({
   dangerLabel: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.danger,
+    color: colors.danger,
     textTransform: 'uppercase',
     letterSpacing: 1.2,
     marginBottom: Space.sm,
   },
   deleteBtn: {
-    borderColor: Colors.danger,
+    borderColor: colors.danger,
   },
   dangerSub: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: Space.sm,
     textAlign: 'center',
   },
-});
+  });
+}

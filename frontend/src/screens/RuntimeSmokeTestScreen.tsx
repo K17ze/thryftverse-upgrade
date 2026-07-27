@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Typography } from '../theme/designTokens';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -68,6 +68,8 @@ export default function RuntimeSmokeTestScreen({ navigation }: Props) {
   const conversations = useStore((s) => s.conversations);
   const currentUser = useStore((s) => s.currentUser);
   const { listings } = useBackendData();
+  const { colors, isDark } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const firstConversation = conversations[0] ?? null;
   const firstGroupConversation =
@@ -172,7 +174,7 @@ export default function RuntimeSmokeTestScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar
-        barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'}
+        barStyle={!isDark ? 'dark-content' : 'light-content'}
       />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
@@ -182,10 +184,10 @@ export default function RuntimeSmokeTestScreen({ navigation }: Props) {
           <BodyEmphasis style={styles.headerTitle}>
             Runtime Smoke Test
           </BodyEmphasis>
-          <Caption color={Colors.textMuted}>Dev-only</Caption>
+          <Caption color={colors.textMuted}>Dev-only</Caption>
         </View>
 
-        <Meta color={Colors.textMuted} style={styles.subtitle}>
+        <Meta color={colors.textMuted} style={styles.subtitle}>
           Tap a route to open it. Red screens are NOT swallowed — copy the
           terminal logs starting with [DIAGNOSTIC CRASH].
         </Meta>
@@ -267,20 +269,23 @@ export default function RuntimeSmokeTestScreen({ navigation }: Props) {
 }
 
 function StatRow({ label, value }: { label: string; value: string }) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   return (
     <View style={styles.statRow}>
-      <Caption color={Colors.textSecondary}>{label}</Caption>
-      <Caption color={Colors.textPrimary} style={styles.statValue}>
+      <Caption color={colors.textSecondary}>{label}</Caption>
+      <Caption color={colors.textPrimary} style={styles.statValue}>
         {value}
       </Caption>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   scrollContent: {
     padding: Space.md,
@@ -302,12 +307,12 @@ const styles = StyleSheet.create({
     lineHeight: Type.body.lineHeight,
   },
   statsCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     padding: Space.md,
     marginBottom: Space.md,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     gap: Space.xs + 2,
   },
   statRow: {
@@ -327,56 +332,57 @@ const styles = StyleSheet.create({
     width: '30%',
     flexGrow: 1,
     minWidth: 100,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     paddingVertical: Space.md,
     paddingHorizontal: Space.sm,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     minHeight: 72,
     gap: Space.xs,
   },
   tileDisabled: {
-    backgroundColor: Colors.surfaceAlt,
-    borderColor: `${Colors.border}60`,
+    backgroundColor: colors.surfaceAlt,
+    borderColor: `${colors.border}60`,
   },
   tileLabel: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     textAlign: 'center',
   },
   tileLabelDisabled: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   tileMissing: {
     fontSize: 10,
-    color: Colors.danger,
+    color: colors.danger,
   },
   resetTile: {
     width: '100%',
-    backgroundColor: Colors.danger + '18',
+    backgroundColor: colors.danger + '18',
     borderRadius: Radius.lg,
     paddingVertical: Space.md,
     paddingHorizontal: Space.sm,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.danger + '40',
+    borderColor: colors.danger + '40',
     marginBottom: Space.md,
     gap: Space.xs,
   },
   resetTileLabel: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.danger,
+    color: colors.danger,
     textAlign: 'center',
   },
   resetTileCaption: {
     fontSize: 10,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textAlign: 'center',
   },
-});
+  });
+}

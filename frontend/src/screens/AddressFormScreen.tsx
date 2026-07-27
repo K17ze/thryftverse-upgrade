@@ -11,7 +11,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
-import { Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Typography } from '../theme/designTokens';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { useToast } from '../context/ToastContext';
@@ -140,6 +140,8 @@ function validateForm(f: FormState): FieldErrors {
 }
 
 export default function AddressFormScreen({ navigation, route }: Props) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
   const savedAddress = useStore((state) => state.savedAddress);
   const saveAddress = useStore((state) => state.saveAddress);
@@ -437,7 +439,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
         scrollEnabled={false}
       >
         <View style={styles.signedOutContainer}>
-          <Ionicons name="lock-closed-outline" size={36} color={Colors.textMuted} />
+          <Ionicons name="lock-closed-outline" size={36} color={colors.textMuted} />
           <Text style={styles.signedOutTitle}>Sign in required</Text>
           <Text style={styles.signedOutBody}>
             You need to be signed in to manage your delivery address.
@@ -500,11 +502,11 @@ export default function AddressFormScreen({ navigation, route }: Props) {
               returnKeyType="next"
               onSubmitEditing={() => streetRef.current?.focus()}
               placeholder="Recipient name"
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
             />
             {errors.name && (
               <View style={styles.errorRow}>
-                <Ionicons name="alert-circle" size={13} color={Colors.danger} />
+                <Ionicons name="alert-circle" size={13} color={colors.danger} />
                 <Text style={styles.errorText}>{errors.name}</Text>
               </View>
             )}
@@ -527,11 +529,11 @@ export default function AddressFormScreen({ navigation, route }: Props) {
               returnKeyType="next"
               onSubmitEditing={() => apartmentRef.current?.focus()}
               placeholder="Street address"
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
             />
             {errors.streetAddress && (
               <View style={styles.errorRow}>
-                <Ionicons name="alert-circle" size={13} color={Colors.danger} />
+                <Ionicons name="alert-circle" size={13} color={colors.danger} />
                 <Text style={styles.errorText}>{errors.streetAddress}</Text>
               </View>
             )}
@@ -549,7 +551,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
               returnKeyType="next"
               onSubmitEditing={() => cityRef.current?.focus()}
               placeholder="Apartment, suite, unit"
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
             />
           </View>
 
@@ -569,11 +571,11 @@ export default function AddressFormScreen({ navigation, route }: Props) {
               returnKeyType="next"
               onSubmitEditing={() => regionRef.current?.focus()}
               placeholder="City or town"
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
             />
             {errors.city && (
               <View style={styles.errorRow}>
-                <Ionicons name="alert-circle" size={13} color={Colors.danger} />
+                <Ionicons name="alert-circle" size={13} color={colors.danger} />
                 <Text style={styles.errorText}>{errors.city}</Text>
               </View>
             )}
@@ -591,7 +593,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
               returnKeyType="next"
               onSubmitEditing={() => postalRef.current?.focus()}
               placeholder="State, county or region"
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
             />
           </View>
 
@@ -609,11 +611,11 @@ export default function AddressFormScreen({ navigation, route }: Props) {
               returnKeyType="done"
               onSubmitEditing={handleSave}
               placeholder="Postal code"
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
             />
             {errors.postalCode && (
               <View style={styles.errorRow}>
-                <Ionicons name="alert-circle" size={13} color={Colors.danger} />
+                <Ionicons name="alert-circle" size={13} color={colors.danger} />
                 <Text style={styles.errorText}>{errors.postalCode}</Text>
               </View>
             )}
@@ -624,12 +626,12 @@ export default function AddressFormScreen({ navigation, route }: Props) {
                 accessibilityRole="button"
                 accessibilityLabel={`Use ${postcodeSuggestion.city}, ${postcodeSuggestion.region} for this postcode`}
               >
-                <Ionicons name="location-outline" size={14} color={Colors.brand} />
+                <Ionicons name="location-outline" size={14} color={colors.brand} />
                 <Text style={styles.postcodeSuggestionText}>
                   Use <Text style={styles.postcodeSuggestionBold}>{postcodeSuggestion.city}</Text>
                   {postcodeSuggestion.region ? `, ${postcodeSuggestion.region}` : ''}
                 </Text>
-                <Ionicons name="arrow-forward-circle" size={16} color={Colors.brand} />
+                <Ionicons name="arrow-forward-circle" size={16} color={colors.brand} />
               </Pressable>
             )}
           </View>
@@ -653,11 +655,11 @@ export default function AddressFormScreen({ navigation, route }: Props) {
               >
                 {countryDisplayName}
               </Text>
-              <Ionicons name="chevron-down" size={18} color={Colors.textMuted} />
+              <Ionicons name="chevron-down" size={18} color={colors.textMuted} />
             </Pressable>
             {errors.country && (
               <View style={styles.errorRow}>
-                <Ionicons name="alert-circle" size={13} color={Colors.danger} />
+                <Ionicons name="alert-circle" size={13} color={colors.danger} />
                 <Text style={styles.errorText}>{errors.country}</Text>
               </View>
             )}
@@ -665,7 +667,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
 
           {/* 6. Default-address note */}
           <View style={styles.defaultNote}>
-            <Ionicons name="information-circle-outline" size={14} color={Colors.textMuted} />
+            <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
             <Text style={styles.defaultNoteText}>
               This will be used as your default delivery address.
             </Text>
@@ -680,7 +682,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
               accessibilityRole="button"
               accessibilityLabel="Remove delivery address"
             >
-              <Ionicons name="trash-outline" size={15} color={Colors.textMuted} />
+              <Ionicons name="trash-outline" size={15} color={colors.textMuted} />
               <Text style={styles.removeBtnText}>Remove address</Text>
             </Pressable>
           )}
@@ -689,7 +691,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
       {/* Save error display */}
       {saveError ? (
         <View style={styles.saveErrorRow}>
-          <Ionicons name="alert-circle" size={14} color={Colors.danger} />
+          <Ionicons name="alert-circle" size={14} color={colors.danger} />
           <Text style={styles.saveErrorText}>{saveError}</Text>
         </View>
       ) : null}
@@ -727,10 +729,11 @@ export default function AddressFormScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   flex: {
     flex: 1,
@@ -751,13 +754,13 @@ const styles = StyleSheet.create({
   headerCancelText: {
     fontSize: 16,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   headerTitle: {
     flex: 1,
     fontSize: 17,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     textAlign: 'center',
   },
   headerSpacer: {
@@ -778,13 +781,13 @@ const styles = StyleSheet.create({
   introTitle: {
     fontSize: 24,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: -0.3,
   },
   introBody: {
     fontSize: 15,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     lineHeight: 21,
   },
 
@@ -795,20 +798,20 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 13,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginBottom: 6,
   },
   input: {
     fontSize: 16,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     paddingVertical: 10,
     paddingHorizontal: 0,
     minHeight: 44,
   },
   separator: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
   },
 
   // Error
@@ -821,7 +824,7 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.danger,
+    color: colors.danger,
   },
   postcodeSuggestion: {
     flexDirection: 'row',
@@ -830,20 +833,20 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    backgroundColor: `${Colors.brand}08`,
+    backgroundColor: `${colors.brand}08`,
     borderRadius: 8,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: `${Colors.brand}30`,
+    borderColor: `${colors.brand}30`,
   },
   postcodeSuggestionText: {
     flex: 1,
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   postcodeSuggestionBold: {
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   saveErrorRow: {
     flexDirection: 'row',
@@ -856,7 +859,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontFamily: Typography.family.medium,
-    color: Colors.danger,
+    color: colors.danger,
   },
 
   // Country
@@ -870,10 +873,10 @@ const styles = StyleSheet.create({
   countryText: {
     fontSize: 16,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   countryPlaceholder: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
 
   // Default note
@@ -887,7 +890,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     lineHeight: 18,
   },
 
@@ -904,19 +907,19 @@ const styles = StyleSheet.create({
   removeBtnText: {
     fontSize: 14,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
 
   // Sticky footer
   stickyFooter: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
+    borderTopColor: colors.border,
   },
   saveBtn: {
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     paddingVertical: 14,
     borderRadius: 8,
     alignItems: 'center',
@@ -929,7 +932,7 @@ const styles = StyleSheet.create({
   saveBtnText: {
     fontSize: 16,
     fontFamily: Typography.family.semibold,
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
 
   // Signed out
@@ -943,13 +946,13 @@ const styles = StyleSheet.create({
   signedOutTitle: {
     fontSize: 20,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginTop: Space.sm,
   },
   signedOutBody: {
     fontSize: 15,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 21,
   },
@@ -957,7 +960,7 @@ const styles = StyleSheet.create({
     marginTop: Space.md,
     paddingHorizontal: Space.xl,
     paddingVertical: 14,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     borderRadius: 8,
     minHeight: 48,
     justifyContent: 'center',
@@ -965,6 +968,7 @@ const styles = StyleSheet.create({
   signedOutBtnText: {
     fontSize: 16,
     fontFamily: Typography.family.semibold,
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
-});
+  });
+}

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Confetti } from '../components/Confetti';
 import { useToast } from '../context/ToastContext';
 import { Typography } from '../theme/designTokens';
@@ -32,6 +32,8 @@ export default function SuccessScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<RouteT>();
   const { orderId } = route.params;
+  const { colors, isDark } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
   const reducedMotionEnabled = useReducedMotion();
@@ -79,13 +81,13 @@ export default function SuccessScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+      <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
       {!reducedMotionEnabled && <Confetti />}
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.centerContent}>
           <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400)} style={styles.iconCircle}>
-            <Ionicons name="checkmark" size={48} color={Colors.background} />
+            <Ionicons name="checkmark" size={48} color={colors.background} />
           </Reanimated.View>
 
           <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(80)}>
@@ -169,11 +171,11 @@ export default function SuccessScreen() {
               accessibilityLabel="Open order support"
             >
               <View style={styles.supportIdentity}>
-                <View style={[styles.supportAvatarWrap, { backgroundColor: Colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }]}>
-                  <Ionicons name="help-circle-outline" size={20} color={Colors.textSecondary} />
+                <View style={[styles.supportAvatarWrap, { backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }]}>
+                  <Ionicons name="help-circle-outline" size={20} color={colors.textSecondary} />
                 </View>
                 <Text style={styles.supportText}>Need help with this order?</Text>
-                <Ionicons name="chevron-forward" size={14} color={Colors.textMuted} />
+                <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
               </View>
             </AnimatedPressable>
           </Reanimated.View>
@@ -210,7 +212,9 @@ function TimelineStep({
   isActive?: boolean;
   isLast?: boolean;
 }) {
-  const color = isComplete ? Colors.success : isActive ? Colors.brand : Colors.textMuted;
+  const { colors } = useAppTheme();
+  const timelineStyles = useMemo(() => createTimelineStyles(colors), [colors]);
+  const color = isComplete ? colors.success : isActive ? colors.brand : colors.textMuted;
   return (
     <View style={timelineStyles.step}>
       <View style={timelineStyles.iconCol}>
@@ -219,7 +223,7 @@ function TimelineStep({
           isComplete && timelineStyles.iconWrapComplete,
           isActive && timelineStyles.iconWrapActive,
         ]}>
-          <Ionicons name={icon as any} size={14} color={isComplete || isActive ? Colors.background : Colors.textMuted} />
+          <Ionicons name={icon as any} size={14} color={isComplete || isActive ? colors.background : colors.textMuted} />
         </View>
         {!isLast && <View style={[
           timelineStyles.connector,
@@ -227,7 +231,7 @@ function TimelineStep({
         ]} />}
       </View>
       <View style={timelineStyles.textCol}>
-        <Text style={[timelineStyles.label, { color: isComplete || isActive ? Colors.textPrimary : Colors.textMuted }]}>
+        <Text style={[timelineStyles.label, { color: isComplete || isActive ? colors.textPrimary : colors.textMuted }]}>
           {label}
         </Text>
         <Text style={timelineStyles.detail}>{detail}</Text>
@@ -236,7 +240,8 @@ function TimelineStep({
   );
 }
 
-const timelineStyles = StyleSheet.create({
+function createTimelineStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   step: {
     flexDirection: 'row',
     gap: 12,
@@ -249,25 +254,25 @@ const timelineStyles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
   iconWrapComplete: {
-    backgroundColor: Colors.success,
+    backgroundColor: colors.success,
   },
   iconWrapActive: {
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
   },
   connector: {
     width: 2,
     flex: 1,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
     marginTop: 4,
     minHeight: 20,
   },
   connectorComplete: {
-    backgroundColor: Colors.success,
+    backgroundColor: colors.success,
   },
   textCol: {
     flex: 1,
@@ -281,24 +286,26 @@ const timelineStyles = StyleSheet.create({
   detail: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     lineHeight: 16,
   },
-});
+  });
+}
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   scrollContent: { flexGrow: 1, paddingHorizontal: 24 },
   centerContent: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 40, paddingBottom: 20 },
   iconCircle: {
     width: 96, height: 96, borderRadius: 48,
-    backgroundColor: Colors.success,
+    backgroundColor: colors.success,
     alignItems: 'center', justifyContent: 'center',
     marginBottom: 32,
   },
 
-  title: { fontSize: 28, fontFamily: Typography.family.bold, color: Colors.textPrimary, marginBottom: 12, textAlign: 'center' },
-  subtitle: { fontSize: 15, fontFamily: Typography.family.regular, color: Colors.textSecondary, textAlign: 'center', lineHeight: 22 },
+  title: { fontSize: 28, fontFamily: Typography.family.bold, color: colors.textPrimary, marginBottom: 12, textAlign: 'center' },
+  subtitle: { fontSize: 15, fontFamily: Typography.family.regular, color: colors.textSecondary, textAlign: 'center', lineHeight: 22 },
 
   orderCardWrap: { width: '100%', marginTop: 24 },
   orderCard: {
@@ -307,13 +314,13 @@ const styles = StyleSheet.create({
     gap: 12,
     padding: 12,
     borderRadius: Radius.lg,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   orderImage: { width: 64, height: 64, borderRadius: Radius.md },
   orderInfo: { flex: 1, gap: 2 },
-  orderTitle: { fontSize: 15, fontFamily: Typography.family.semibold, color: Colors.textPrimary },
-  orderSeller: { fontSize: 13, fontFamily: Typography.family.regular, color: Colors.textSecondary },
-  orderAmount: { fontSize: 15, fontFamily: Typography.family.bold, color: Colors.textPrimary, marginTop: 2 },
+  orderTitle: { fontSize: 15, fontFamily: Typography.family.semibold, color: colors.textPrimary },
+  orderSeller: { fontSize: 13, fontFamily: Typography.family.regular, color: colors.textSecondary },
+  orderAmount: { fontSize: 15, fontFamily: Typography.family.bold, color: colors.textPrimary, marginTop: 2 },
 
   timelineWrap: {
     width: '100%',
@@ -323,7 +330,7 @@ const styles = StyleSheet.create({
   timelineTitle: {
     fontSize: 16,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginBottom: 14,
     textAlign: 'left',
   },
@@ -338,8 +345,8 @@ const styles = StyleSheet.create({
     gap: 10,
     borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
@@ -352,8 +359,9 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
 
   footer: { paddingHorizontal: 24, paddingBottom: 40, gap: 12 },
-});
+  });
+}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -9,8 +9,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
-import { Colors } from '../constants/colors';
 import { Space, Type } from '../theme/designTokens';
+import { useAppTheme } from '../theme/ThemeContext';
+import type { ThemeColors } from '../theme/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { changePassword } from '../services/authApi';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -22,6 +23,8 @@ import { FlagshipScreen, FlagshipHeader, FlagshipStickyFooter, FlagshipFormSecti
 export default function ChangePasswordScreen() {
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
   const { show } = useToast();
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -63,7 +66,7 @@ export default function ChangePasswordScreen() {
       <Ionicons
         name={isSecure ? 'eye-off-outline' : 'eye-outline'}
         size={20}
-        color={Colors.textSecondary}
+        color={colors.textSecondary}
       />
     </AnimatedPressable>
   );
@@ -124,11 +127,12 @@ export default function ChangePasswordScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   infoText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginBottom: Space.sm,
     lineHeight: Type.caption.lineHeight,
     letterSpacing: Type.caption.letterSpacing,
@@ -141,7 +145,8 @@ const styles = StyleSheet.create({
   forgotPasswordText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    color: Colors.brand,
+    color: colors.brand,
     letterSpacing: Type.body.letterSpacing,
   },
 });
+}

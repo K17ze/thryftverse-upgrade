@@ -10,8 +10,7 @@ import { StackScreenProps } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
-import { useAppTheme } from '../theme/ThemeContext';
-import { Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -24,7 +23,8 @@ type MemberRole = 'owner' | 'admin' | 'member';
 
 export default function GroupMembersScreen({ navigation, route }: Props) {
   const { conversationId } = route.params;
-  const { isDark } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
 
   const conversations = useStore((state) => state.conversations);
@@ -66,22 +66,22 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
     return (
       <FlagshipScreen header={<FlagshipHeader title="Members" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
         <View style={styles.center}>
-          <Caption color={Colors.textMuted}>Group not found</Caption>
+          <Caption color={colors.textMuted}>Group not found</Caption>
         </View>
       </FlagshipScreen>
     );
   }
 
   const roleBadge = (role: MemberRole) => {
-    const colors = {
-      owner: { bg: `${Colors.brand}15`, text: Colors.brand },
-      admin: { bg: `${Colors.textPrimary}15`, text: Colors.textPrimary },
-      member: { bg: Colors.surfaceAlt, text: Colors.textMuted },
+    const roleColors = {
+      owner: { bg: `${colors.brand}15`, text: colors.brand },
+      admin: { bg: `${colors.textPrimary}15`, text: colors.textPrimary },
+      member: { bg: colors.surfaceAlt, text: colors.textMuted },
     };
     const labels = { owner: 'Owner', admin: 'Admin', member: 'Member' };
     return (
-      <View style={[styles.roleBadge, { backgroundColor: colors[role].bg }]}>
-        <Caption style={[styles.roleBadgeText, { color: colors[role].text }]}>{labels[role]}</Caption>
+      <View style={[styles.roleBadge, { backgroundColor: roleColors[role].bg }]}>
+        <Caption style={[styles.roleBadgeText, { color: roleColors[role].text }]}>{labels[role]}</Caption>
       </View>
     );
   };
@@ -92,13 +92,13 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         {/* Search */}
         <View style={styles.searchRow}>
-          <Ionicons name="search-outline" size={18} color={Colors.textMuted} />
+          <Ionicons name="search-outline" size={18} color={colors.textMuted} />
           <TextInput
             style={styles.searchInput}
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder="Search members..."
-            placeholderTextColor={Colors.textMuted}
+            placeholderTextColor={colors.textMuted}
             autoCapitalize="none"
             autoCorrect={false}
             returnKeyType="search"
@@ -111,7 +111,7 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
               scaleValue={0.9}
               hapticFeedback="light"
             >
-              <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
+              <Ionicons name="close-circle" size={18} color={colors.textMuted} />
             </AnimatedPressable>
           )}
         </View>
@@ -119,8 +119,8 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
         {/* Member list */}
         {filteredMembers.length === 0 ? (
           <View style={styles.emptyWrapV2}>
-            <Ionicons name="people-outline" size={32} color={Colors.textMuted} />
-            <Caption color={Colors.textMuted} style={styles.emptyTextV2}>No members match your search.</Caption>
+            <Ionicons name="people-outline" size={32} color={colors.textMuted} />
+            <Caption color={colors.textMuted} style={styles.emptyTextV2}>No members match your search.</Caption>
           </View>
         ) : (
           <View style={styles.memberList}>
@@ -135,7 +135,7 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
                   accessibilityLabel={`View ${member.name} profile`}
                   style={styles.memberRowV2}
                 >
-                  <View style={[styles.memberAvatarV2, { backgroundColor: Colors.surfaceAlt }]}>
+                  <View style={[styles.memberAvatarV2, { backgroundColor: colors.surfaceAlt }]}>
                     <Text style={styles.memberAvatarTextV2}>
                       {member.name.slice(0, 2).toUpperCase()}
                     </Text>
@@ -146,10 +146,10 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
                       {roleBadge(member.role)}
                     </View>
                     {member.role === 'owner' && (
-                      <Caption color={Colors.textMuted}>{member.isMe ? 'You · Group creator' : 'Group creator'}</Caption>
+                      <Caption color={colors.textMuted}>{member.isMe ? 'You · Group creator' : 'Group creator'}</Caption>
                     )}
                   </View>
-                  <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+                  <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
                 </AnimatedPressable>
                 {index < filteredMembers.length - 1 && (
                   <View style={styles.memberDivider} />
@@ -163,10 +163,11 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   center: {
     flex: 1,
@@ -179,10 +180,10 @@ const styles = StyleSheet.create({
     gap: Space.md,
   },
   listCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     overflow: 'hidden',
   },
   memberRow: {
@@ -202,7 +203,7 @@ const styles = StyleSheet.create({
   memberAvatarText: {
     fontSize: 13,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   memberText: {
     flex: 1,
@@ -210,7 +211,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
     marginLeft: Space.md + 40 + Space.sm,
   },
   searchRow: {
@@ -219,17 +220,17 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     paddingHorizontal: Space.sm + 4,
     paddingVertical: Space.sm,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     marginBottom: Space.sm,
   },
   searchInput: {
     flex: 1,
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   nameRow: {
     flexDirection: 'row',
@@ -250,10 +251,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: Space.xl,
     gap: Space.sm,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   emptyText: {
     textAlign: 'center',
@@ -278,7 +279,7 @@ const styles = StyleSheet.create({
   memberAvatarTextV2: {
     fontSize: 14,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   memberTextV2: {
     flex: 1,
@@ -291,7 +292,7 @@ const styles = StyleSheet.create({
   },
   memberDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
     marginLeft: Space.md + 44 + Space.sm + 4,
     marginRight: Space.md,
   },
@@ -304,4 +305,5 @@ const styles = StyleSheet.create({
   emptyTextV2: {
     textAlign: 'center',
   },
-});
+  });
+}

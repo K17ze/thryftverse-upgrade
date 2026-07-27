@@ -5,7 +5,7 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
-import { Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Type, Typography } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { ConversationManagementRow } from '../components/chat/ConversationManagementRow';
@@ -14,6 +14,7 @@ type NavT = StackNavigationProp<RootStackParamList>;
 
 export default function MutedConversationsScreen() {
   const navigation = useNavigation<NavT>();
+  const { colors } = useAppTheme();
   const conversations = useStore((s) => s.conversations);
   const mutedIds = useStore((s) => s.mutedConversationIds);
   const toggleMuted = useStore((s) => s.toggleMutedConversation);
@@ -22,6 +23,8 @@ export default function MutedConversationsScreen() {
   const mutedConversations = useMemo(() => {
     return conversations.filter((c) => mutedIds.includes(c.id));
   }, [conversations, mutedIds]);
+
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const handleUnmute = (id: string) => {
     toggleMuted(id);
@@ -39,7 +42,7 @@ export default function MutedConversationsScreen() {
     >
       {mutedConversations.length === 0 ? (
         <View style={styles.empty}>
-          <Ionicons name="notifications-off-outline" size={25} color={Colors.textMuted} />
+          <Ionicons name="notifications-off-outline" size={25} color={colors.textMuted} />
           <Text style={styles.emptyTitle}>
             No muted conversations
           </Text>
@@ -67,30 +70,32 @@ export default function MutedConversationsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  list: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-  },
-  empty: {
-    alignItems: 'center',
-    paddingHorizontal: Space.xl,
-    paddingTop: 72,
-  },
-  emptyTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-    marginTop: Space.md,
-  },
-  emptyBody: {
-    maxWidth: 300,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-    textAlign: 'center',
-    lineHeight: 18,
-    marginTop: Space.xs,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    list: {
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+    },
+    empty: {
+      alignItems: 'center',
+      paddingHorizontal: Space.xl,
+      paddingTop: 72,
+    },
+    emptyTitle: {
+      fontSize: Type.body.size,
+      fontFamily: Typography.family.semibold,
+      color: colors.textPrimary,
+      marginTop: Space.md,
+    },
+    emptyBody: {
+      maxWidth: 300,
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+      color: colors.textMuted,
+      textAlign: 'center',
+      lineHeight: 18,
+      marginTop: Space.xs,
+    },
+  });
+}

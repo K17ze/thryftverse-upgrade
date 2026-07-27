@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { formatCountryPolicyScope, isPaymentMethodAllowed } from '../utils/capabilityPolicy';
@@ -25,16 +25,9 @@ import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 
 type Props = StackScreenProps<RootStackParamList, 'AddBankAccount'>;
 
-const BG = Colors.background;
-const CARD = Colors.surface;
-const CARD_SOFT = Colors.surfaceAlt;
-const BORDER = Colors.border;
-const DIVIDER = Colors.border;
-const MUTED = Colors.textMuted;
-const TEXT = Colors.textPrimary;
-const BRAND = Colors.brand;
-
 export default function AddBankAccountScreen({ navigation }: Props) {
+  const { colors, isDark } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [accountName, setAccountName] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
   const [sortCode, setSortCode] = useState('');
@@ -141,7 +134,7 @@ export default function AddBankAccountScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={BG} />
+      <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
       <View style={styles.header}>
         <AnimatedPressable
           onPress={() => navigation.goBack()}
@@ -149,7 +142,7 @@ export default function AddBankAccountScreen({ navigation }: Props) {
           accessibilityLabel="Go back"
           accessibilityHint="Returns to the previous screen"
         >
-          <Ionicons name="arrow-back" size={24} color={TEXT} />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </AnimatedPressable>
         <Text style={styles.headerTitle}>Add bank account</Text>
         <View style={{ width: 24 }} />
@@ -184,9 +177,9 @@ export default function AddBankAccountScreen({ navigation }: Props) {
                 value={accountName}
                 onChangeText={setAccountName}
                 placeholder="Full name on account"
-                placeholderTextColor={MUTED}
+                placeholderTextColor={colors.textMuted}
                 autoCapitalize="words"
-                selectionColor={BRAND}
+                selectionColor={colors.brand}
                 accessibilityLabel="Account holder name"
                 accessibilityHint="Enter the full legal name on the bank account"
               />
@@ -199,9 +192,9 @@ export default function AddBankAccountScreen({ navigation }: Props) {
                 value={accountNumber}
                 onChangeText={v => setAccountNumber(v.replace(/\D/g, '').slice(0, 8))}
                 placeholder="8 digits"
-                placeholderTextColor={MUTED}
+                placeholderTextColor={colors.textMuted}
                 keyboardType="number-pad"
-                selectionColor={BRAND}
+                selectionColor={colors.brand}
                 maxLength={8}
                 accessibilityLabel="Account number"
                 accessibilityHint="Enter your 8-digit account number"
@@ -215,9 +208,9 @@ export default function AddBankAccountScreen({ navigation }: Props) {
                 value={sortCode}
                 onChangeText={v => setSortCode(formatSortCode(v))}
                 placeholder="00-00-00"
-                placeholderTextColor={MUTED}
+                placeholderTextColor={colors.textMuted}
                 keyboardType="number-pad"
-                selectionColor={BRAND}
+                selectionColor={colors.brand}
                 maxLength={8}
                 accessibilityLabel="Sort code"
                 accessibilityHint="Enter the 6-digit sort code"
@@ -226,12 +219,12 @@ export default function AddBankAccountScreen({ navigation }: Props) {
           </View>
 
           <View style={styles.secureRow}>
-            <Ionicons name="shield-checkmark-outline" size={14} color={BRAND} />
+            <Ionicons name="shield-checkmark-outline" size={14} color={colors.brand} />
             <Text style={styles.secureText}>Protected by bank-level encryption</Text>
           </View>
 
           <View style={styles.infoCard}>
-            <Ionicons name="information-circle-outline" size={16} color={MUTED} />
+            <Ionicons name="information-circle-outline" size={16} color={colors.textMuted} />
             <Text style={styles.infoText}>
               Withdrawals typically take 1-3 business days. You'll receive a confirmation email once initiated.
             </Text>
@@ -252,46 +245,48 @@ export default function AddBankAccountScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: BORDER,
-  },
-  headerTitle: { fontSize: 17, fontWeight: '700', color: TEXT },
-  policyLabel: { fontSize: 12, color: MUTED, textAlign: 'center', marginTop: 8 },
-  content: { padding: 20, paddingBottom: 40 },
-  blockedCard: {
-    backgroundColor: CARD_SOFT,
-    borderColor: BORDER,
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    marginBottom: 16,
-  },
-  blockedTitle: { fontSize: 13, fontWeight: '700', color: TEXT, marginBottom: 4 },
-  blockedText: { fontSize: 12, color: MUTED, lineHeight: 18 },
-  intro: { fontSize: 13, color: MUTED, lineHeight: 20, marginBottom: 20, textAlign: 'center' },
-  sectionLabel: { fontSize: 11, color: MUTED, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 10, marginLeft: 4 },
-  card: { backgroundColor: CARD, borderWidth: 1, borderColor: BORDER, borderRadius: 16, overflow: 'hidden', marginBottom: 20 },
-  fieldRow: { paddingHorizontal: 18, paddingVertical: 14 },
-  fieldLabel: { fontSize: 12, color: MUTED, marginBottom: 6, fontWeight: '600' },
-  fieldInput: { fontSize: 16, color: TEXT, fontWeight: '500', paddingVertical: 4 },
-  divider: { height: 1, backgroundColor: DIVIDER },
-  secureRow: { flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'center', marginBottom: 16 },
-  secureText: { fontSize: 12, color: BRAND },
-  infoCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    backgroundColor: CARD_SOFT,
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 12,
-    padding: 14,
-  },
-  infoText: { flex: 1, fontSize: 12, color: MUTED, lineHeight: 18 },
-  footer: { padding: 20, borderTopWidth: 1, borderTopColor: BORDER },
-  saveBtn: { borderRadius: 30 },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.background },
+    header: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.border,
+    },
+    headerTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
+    policyLabel: { fontSize: 12, color: colors.textMuted, textAlign: 'center', marginTop: 8 },
+    content: { padding: 20, paddingBottom: 40 },
+    blockedCard: {
+      backgroundColor: colors.surfaceAlt,
+      borderColor: colors.border,
+      borderWidth: 1,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 14,
+      marginBottom: 16,
+    },
+    blockedTitle: { fontSize: 13, fontWeight: '700', color: colors.textPrimary, marginBottom: 4 },
+    blockedText: { fontSize: 12, color: colors.textMuted, lineHeight: 18 },
+    intro: { fontSize: 13, color: colors.textMuted, lineHeight: 20, marginBottom: 20, textAlign: 'center' },
+    sectionLabel: { fontSize: 11, color: colors.textMuted, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 10, marginLeft: 4 },
+    card: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 16, overflow: 'hidden', marginBottom: 20 },
+    fieldRow: { paddingHorizontal: 18, paddingVertical: 14 },
+    fieldLabel: { fontSize: 12, color: colors.textMuted, marginBottom: 6, fontWeight: '600' },
+    fieldInput: { fontSize: 16, color: colors.textPrimary, fontWeight: '500', paddingVertical: 4 },
+    divider: { height: 1, backgroundColor: colors.border },
+    secureRow: { flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'center', marginBottom: 16 },
+    secureText: { fontSize: 12, color: colors.brand },
+    infoCard: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 10,
+      backgroundColor: colors.surfaceAlt,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      padding: 14,
+    },
+    infoText: { flex: 1, fontSize: 12, color: colors.textMuted, lineHeight: 18 },
+    footer: { padding: 20, borderTopWidth: 1, borderTopColor: colors.border },
+    saveBtn: { borderRadius: 30 },
+  });
+}

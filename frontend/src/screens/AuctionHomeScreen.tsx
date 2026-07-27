@@ -16,7 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors, ActiveTheme } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useBucketedServerClock, resolveAuctionTiming } from '../hooks/useServerClock';
@@ -114,6 +114,8 @@ const CategoryRailTile = memo(function CategoryRailTile({
   onPress: () => void;
   cardWidth: number;
 }) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const hasImage = Boolean(world.representativeImageUrl);
   return (
     <Pressable
@@ -131,7 +133,7 @@ const CategoryRailTile = memo(function CategoryRailTile({
         />
       ) : (
         // Deliberate editorial placeholder — not a skeleton
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.surfaceAlt }]} />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surfaceAlt }]} />
       )}
       {/* Restrained gradient only behind label */}
       <LinearGradient
@@ -159,6 +161,8 @@ const UpcomingRow = memo(function UpcomingRow({
   onPress: () => void;
   formatValueLockup: (amountGbp: number) => { izeText: string; localText: string | null };
 }) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const valueLockup = formatValueLockup(item.startingBidGbp);
   const startDate = new Date(item.startsAt);
   const timeStr = startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -182,7 +186,7 @@ const UpcomingRow = memo(function UpcomingRow({
             contentFit="cover"
           />
         ) : (
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.surface }]} />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surface }]} />
         )}
       </View>
       <View style={styles.upcomingBody}>
@@ -203,7 +207,7 @@ const UpcomingRow = memo(function UpcomingRow({
         accessibilityRole="button"
         accessibilityLabel="View auction"
       >
-        <Ionicons name="chevron-forward" size={18} color={Colors.brand} />
+        <Ionicons name="chevron-forward" size={18} color={colors.brand} />
       </Pressable>
     </Pressable>
   );
@@ -221,17 +225,19 @@ const ResultRow = memo(function ResultRow({
   onPress: () => void;
   formatValueLockup: (amountGbp: number) => { izeText: string; localText: string | null };
 }) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
   const resultText = item.viewerState === 'won' ? 'Won'
     : item.viewerState === 'lost' ? 'Lost'
     : item.terminalReason === 'cancelled' ? 'Cancelled'
     : item.bidCount === 0 ? 'No bids'
     : 'Sold';
-  const resultColor = item.viewerState === 'won' ? Colors.success
-    : item.viewerState === 'lost' ? Colors.danger
-    : item.terminalReason === 'cancelled' ? Colors.textMuted
-    : item.bidCount === 0 ? Colors.textMuted
-    : Colors.textSecondary;
+  const resultColor = item.viewerState === 'won' ? colors.success
+    : item.viewerState === 'lost' ? colors.danger
+    : item.terminalReason === 'cancelled' ? colors.textMuted
+    : item.bidCount === 0 ? colors.textMuted
+    : colors.textSecondary;
   // Truthful continuation action
   const continuationLabel = item.viewerState === 'won' ? 'Continue'
     : item.viewerState === 'lost' ? 'View'
@@ -255,7 +261,7 @@ const ResultRow = memo(function ResultRow({
             contentFit="cover"
           />
         ) : (
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.surface }]} />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surface }]} />
         )}
       </View>
       <View style={styles.resultBody}>
@@ -273,7 +279,7 @@ const ResultRow = memo(function ResultRow({
       {continuationLabel && (
         <View style={styles.resultActionWrap}>
           <Text style={styles.resultActionLabel}>{continuationLabel}</Text>
-          <Ionicons name="chevron-forward" size={14} color={Colors.textMuted} />
+          <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
         </View>
       )}
     </Pressable>
@@ -313,6 +319,8 @@ const EMPTY_HOME_DATA: HomeData = {
 // ── Main screen ──
 export default function AuctionHomeScreen() {
   const navigation = useNavigation<NavT>();
+  const { colors, isDark } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { currencyCode, displayMode, goldRates } = useFormattedPrice();
   const { width } = useWindowDimensions();
   const [homeData, setHomeData] = React.useState<HomeData>(EMPTY_HOME_DATA);
@@ -918,14 +926,14 @@ export default function AuctionHomeScreen() {
             accessibilityRole="button"
             accessibilityLabel="Close search"
           >
-            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </Pressable>
           <TextInput
             value={searchQuery}
             onChangeText={handleSearchChange}
             placeholder="Search auctions…"
             autoFocus
-            placeholderTextColor={Colors.textMuted}
+            placeholderTextColor={colors.textMuted}
             style={styles.searchOverlayInput}
           />
           {searchQuery.length > 0 && (
@@ -935,7 +943,7 @@ export default function AuctionHomeScreen() {
               accessibilityRole="button"
               accessibilityLabel="Clear search"
             >
-              <Ionicons name="close-circle" size={20} color={Colors.textMuted} />
+              <Ionicons name="close-circle" size={20} color={colors.textMuted} />
             </Pressable>
           )}
         </View>
@@ -962,9 +970,9 @@ export default function AuctionHomeScreen() {
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={handleRefresh}
-                tintColor={Colors.brand}
-                colors={[Colors.brand]}
-                progressBackgroundColor={Colors.surfaceAlt}
+                tintColor={colors.brand}
+                colors={[colors.brand]}
+                progressBackgroundColor={colors.surfaceAlt}
               />
             }
             onEndReached={loadMoreSearch}
@@ -991,7 +999,7 @@ export default function AuctionHomeScreen() {
             accessibilityLabel="Clear filters and go back"
             style={styles.filterResultBackBtn}
           >
-            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </Pressable>
           <View style={styles.filterResultTitleWrap}>
             <Text style={styles.filterResultTitle}>Filtered results</Text>
@@ -1005,7 +1013,7 @@ export default function AuctionHomeScreen() {
             accessibilityRole="button"
             accessibilityLabel="Open filter sheet"
           >
-            <Ionicons name="options-outline" size={24} color={Colors.textPrimary} />
+            <Ionicons name="options-outline" size={24} color={colors.textPrimary} />
           </Pressable>
         </View>
 
@@ -1045,9 +1053,9 @@ export default function AuctionHomeScreen() {
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={handleRefresh}
-                tintColor={Colors.brand}
-                colors={[Colors.brand]}
-                progressBackgroundColor={Colors.surfaceAlt}
+                tintColor={colors.brand}
+                colors={[colors.brand]}
+                progressBackgroundColor={colors.surfaceAlt}
               />
             }
             onEndReached={loadMoreFilters}
@@ -1075,7 +1083,7 @@ export default function AuctionHomeScreen() {
   // ── Loading state ──
   if (loading && !homeData.attentionItem) {
     return (
-      <View style={[styles.container, { backgroundColor: Colors.background }]}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         <AuctionMarketHeader
           title="Auctions"
           actions={headerActions}
@@ -1108,7 +1116,7 @@ export default function AuctionHomeScreen() {
   if (!hasActiveMarket && !hasAnyContent) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} />
+        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} />
         <AuctionMarketHeader
           title="Auctions"
           actions={headerActions}
@@ -1120,9 +1128,9 @@ export default function AuctionHomeScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={handleRefresh}
-              tintColor={Colors.brand}
-              colors={[Colors.brand]}
-              progressBackgroundColor={Colors.surfaceAlt}
+              tintColor={colors.brand}
+              colors={[colors.brand]}
+              progressBackgroundColor={colors.surfaceAlt}
             />
           }
         >
@@ -1605,7 +1613,7 @@ export default function AuctionHomeScreen() {
                           contentFit="cover"
                         />
                       ) : (
-                        <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.surface }]} />
+                        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surface }]} />
                       )}
                     </View>
                     <View style={styles.endingSoonBody}>
@@ -1619,7 +1627,7 @@ export default function AuctionHomeScreen() {
                       <Text style={styles.endingSoonBids}>{item.bidCount} {item.bidCount === 1 ? 'bid' : 'bids'}</Text>
                     </View>
                     <View style={styles.endingSoonTimeCol}>
-                      <Text style={[styles.endingSoonTime, isUrgent && { color: Colors.danger }]}>
+                      <Text style={[styles.endingSoonTime, isUrgent && { color: colors.danger }]}>
                         {timeLabel}
                       </Text>
                       {isUrgent && <View style={styles.urgencyBar} />}
@@ -1803,7 +1811,7 @@ export default function AuctionHomeScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} />
+      <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} />
       <AuctionMarketHeader
         title="Auctions"
         context={headerContext}
@@ -1817,9 +1825,9 @@ export default function AuctionHomeScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor={Colors.brand}
-            colors={[Colors.brand]}
-            progressBackgroundColor={Colors.surfaceAlt}
+            tintColor={colors.brand}
+            colors={[colors.brand]}
+            progressBackgroundColor={colors.surfaceAlt}
           />
         }
       >
@@ -1961,6 +1969,8 @@ const FilterSheet = memo(function FilterSheet({
   onReset: () => void;
   onApply: () => void;
 }) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   return (
     <BottomSheet visible={visible} onDismiss={onDismiss}>
       <View style={styles.filterSheetContent}>
@@ -2044,10 +2054,11 @@ const FilterSheet = memo(function FilterSheet({
   );
 });
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   contentContainer: {
     paddingBottom: Space.xxl + 24,
@@ -2065,7 +2076,7 @@ const styles = StyleSheet.create({
     lineHeight: 28,
     fontWeight: '700',
     letterSpacing: -0.6,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.bold,
     marginBottom: Space.sm + 2,
   },
@@ -2092,13 +2103,13 @@ const styles = StyleSheet.create({
   railTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.5,
   },
   railCount: {
     fontSize: 12,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontFamily: Typography.family.medium,
     letterSpacing: 0.2,
   },
@@ -2119,7 +2130,7 @@ const styles = StyleSheet.create({
   },
   compositionEmptyText: {
     fontSize: 14,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontFamily: Typography.family.regular,
   },
   asymmetricRow: {
@@ -2153,7 +2164,7 @@ const styles = StyleSheet.create({
     gap: Space.md,
     paddingVertical: Space.sm + 2,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   endingSoonImageWrap: {
     width: 76,
@@ -2172,7 +2183,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 18,
     fontWeight: '600',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
     letterSpacing: -0.2,
     marginBottom: 3,
@@ -2180,7 +2191,7 @@ const styles = StyleSheet.create({
   endingSoonPrice: {
     fontSize: 15,
     fontWeight: '700',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.bold,
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.3,
@@ -2188,7 +2199,7 @@ const styles = StyleSheet.create({
   },
   endingSoonBids: {
     fontSize: 11,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontFamily: Typography.family.regular,
   },
   endingSoonTimeCol: {
@@ -2197,7 +2208,7 @@ const styles = StyleSheet.create({
   endingSoonTime: {
     fontSize: 14,
     fontWeight: '700',
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontFamily: Typography.family.bold,
     fontVariant: ['tabular-nums'],
   },
@@ -2205,7 +2216,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 2,
     borderRadius: 1,
-    backgroundColor: Colors.danger,
+    backgroundColor: colors.danger,
     marginTop: 4,
   },
 
@@ -2222,7 +2233,7 @@ const styles = StyleSheet.create({
     height: 148,
     borderRadius: Radius.lg,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   categoryTileOverlay: {
     position: 'absolute',
@@ -2235,7 +2246,7 @@ const styles = StyleSheet.create({
   categoryTileName: {
     fontSize: 15,
     fontWeight: '700',
-    color: Colors.textInverse,
+    color: colors.textInverse,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.1,
   },
@@ -2250,7 +2261,7 @@ const styles = StyleSheet.create({
     gap: Space.md,
     paddingVertical: Space.sm + 2,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   upcomingImageWrap: {
     width: 72,
@@ -2270,13 +2281,13 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     letterSpacing: 0.2,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontFamily: Typography.family.semibold,
     marginBottom: 2,
   },
   upcomingEyebrow: {
     fontSize: 10,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontFamily: Typography.family.medium,
     marginBottom: 1,
     letterSpacing: 0.1,
@@ -2285,7 +2296,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 18,
     fontWeight: '600',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
     letterSpacing: -0.2,
   },
@@ -2306,14 +2317,14 @@ const styles = StyleSheet.create({
     gap: Space.md,
     paddingVertical: Space.sm + 2,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   resultImageWrap: {
     width: 60,
     height: 60,
     borderRadius: Radius.md,
     overflow: 'hidden',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
   },
   resultImage: {
     width: 60,
@@ -2327,7 +2338,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 18,
     fontWeight: '600',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
     letterSpacing: -0.2,
   },
@@ -2345,7 +2356,7 @@ const styles = StyleSheet.create({
   resultActionLabel: {
     fontSize: 12,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     letterSpacing: 0.1,
   },
 
@@ -2367,19 +2378,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   searchOverlayInput: {
     flex: 1,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     borderRadius: Radius.md,
     paddingHorizontal: Space.md,
     paddingVertical: 10,
     fontSize: 15,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.medium,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   searchIdleContainer: {
     flex: 1,
@@ -2389,7 +2400,7 @@ const styles = StyleSheet.create({
   },
   searchIdleHint: {
     fontSize: 14,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontFamily: Typography.family.regular,
     textAlign: 'center',
   },
@@ -2402,7 +2413,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   filterResultBackBtn: {
     padding: Space.xs,
@@ -2413,12 +2424,12 @@ const styles = StyleSheet.create({
   filterResultTitle: {
     fontSize: 17,
     fontWeight: '700',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.bold,
   },
   filterResultCount: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontFamily: Typography.family.regular,
     marginTop: 2,
   },
@@ -2430,14 +2441,14 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     paddingHorizontal: Space.sm + 2,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     marginRight: Space.xs,
   },
   filterChipText: {
     fontSize: 12,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.medium,
     letterSpacing: 0.1,
   },
@@ -2448,7 +2459,7 @@ const styles = StyleSheet.create({
   },
   filterChipClearText: {
     fontSize: 12,
-    color: Colors.danger,
+    color: colors.danger,
     fontFamily: Typography.family.medium,
   },
 
@@ -2459,7 +2470,7 @@ const styles = StyleSheet.create({
   filterSheetTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.bold,
     marginBottom: Space.lg,
   },
@@ -2467,7 +2478,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     letterSpacing: 0.2,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontFamily: Typography.family.semibold,
     marginBottom: Space.sm,
     marginTop: Space.md,
@@ -2484,22 +2495,22 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: Space.md,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     marginRight: Space.sm,
   },
   filterOptionActive: {
-    backgroundColor: Colors.brand,
-    borderColor: Colors.brand,
+    backgroundColor: colors.brand,
+    borderColor: colors.brand,
   },
   filterOptionText: {
     fontSize: 13,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.medium,
   },
   filterOptionTextActive: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
   filterActionsRow: {
     flexDirection: 'row',
@@ -2511,24 +2522,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.lg,
     borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   filterResetText: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontFamily: Typography.family.medium,
   },
   filterApplyBtn: {
     flex: 1,
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     alignItems: 'center',
     marginLeft: Space.md,
   },
   filterApplyText: {
     fontSize: 14,
-    color: Colors.textInverse,
+    color: colors.textInverse,
     fontFamily: Typography.family.semibold,
   },
-});
+  });
+}

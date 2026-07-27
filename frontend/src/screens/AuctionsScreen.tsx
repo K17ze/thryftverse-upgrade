@@ -1,11 +1,11 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, StyleSheet, RefreshControl, ScrollView } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useToast } from '../context/ToastContext';
 import { EmptyState } from '../components/EmptyState';
@@ -106,6 +106,8 @@ const STATUS_OPTIONS: { label: string; value: StatusFilter }[] = [
 
 export default function AuctionsScreen() {
   const navigation = useNavigation<NavT>();
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
   const { currencyCode, goldRates } = useCurrencyContext();
@@ -435,7 +437,7 @@ export default function AuctionsScreen() {
               />
             ) : (
               <View style={styles.featuredImagePlaceholder}>
-                <Ionicons name="image-outline" size={32} color={Colors.textMuted} />
+                <Ionicons name="image-outline" size={32} color={colors.textMuted} />
               </View>
             )}
             <View style={styles.featuredOverlay}>
@@ -467,13 +469,13 @@ export default function AuctionsScreen() {
             </View>
             {featuredAuction.viewerState === 'outbid' && (
               <View style={styles.outbidBanner}>
-                <Ionicons name="trending-down-outline" size={14} color={Colors.danger} />
+                <Ionicons name="trending-down-outline" size={14} color={colors.danger} />
                 <Meta style={styles.outbidText}>You've been outbid</Meta>
               </View>
             )}
             {featuredAuction.viewerState === 'leading' && (
               <View style={styles.leadingBanner}>
-                <Ionicons name="trophy-outline" size={14} color={Colors.brand} />
+                <Ionicons name="trophy-outline" size={14} color={colors.brand} />
                 <Meta style={styles.leadingText}>You're leading</Meta>
               </View>
             )}
@@ -500,7 +502,7 @@ export default function AuctionsScreen() {
           value={searchQuery}
           onChangeText={setSearchQuery}
           placeholder="Search auctions..."
-          prefix={<Ionicons name="search-outline" size={16} color={Colors.textMuted} />}
+          prefix={<Ionicons name="search-outline" size={16} color={colors.textMuted} />}
           accessibilityLabel="Search auctions"
           returnKeyType="search"
           onSubmitEditing={() => void syncAuctions()}
@@ -524,12 +526,12 @@ export default function AuctionsScreen() {
             accessibilityLabel="My Bids"
             accessibilityHint="View your active bids"
           >
-            <Ionicons name="list-outline" size={15} color={Colors.brand} />
+            <Ionicons name="list-outline" size={15} color={colors.brand} />
             <Meta style={styles.myBidsBtnText}>My Bids</Meta>
           </AnimatedPressable>
           <AppButton
             title="Create"
-            icon={<Ionicons name="add" size={15} color={Colors.background} />}
+            icon={<Ionicons name="add" size={15} color={colors.background} />}
             style={styles.launchBtn}
             variant="primary"
             size="sm"
@@ -701,9 +703,9 @@ export default function AuctionsScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor={Colors.brand}
-            colors={[Colors.brand]}
-            progressBackgroundColor={Colors.surfaceAlt}
+            tintColor={colors.brand}
+            colors={[colors.brand]}
+            progressBackgroundColor={colors.surfaceAlt}
           />
         }
       />
@@ -725,7 +727,8 @@ export default function AuctionsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   contentContainer: {
     paddingBottom: 130,
     paddingTop: Space.sm,
@@ -744,21 +747,21 @@ const styles = StyleSheet.create({
   sortChip: {
     borderRadius: Radius.full,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
   sortChipActive: {
-    backgroundColor: Colors.brand,
-    borderColor: Colors.brand,
+    backgroundColor: colors.brand,
+    borderColor: colors.brand,
   },
   sortChipText: {
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontSize: 12,
   },
   sortChipTextActive: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
   statusFilterBar: {
     flexDirection: 'row',
@@ -770,29 +773,29 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     paddingVertical: 7,
     alignItems: 'center',
   },
   statusChipActive: {
-    backgroundColor: Colors.brand,
-    borderColor: Colors.brand,
+    backgroundColor: colors.brand,
+    borderColor: colors.brand,
   },
   statusChipText: {
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontSize: 12,
   },
   statusChipTextActive: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
   launchRow: {
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
     borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     flexDirection: 'row',
@@ -819,13 +822,13 @@ const styles = StyleSheet.create({
     gap: 4,
     borderRadius: Radius.full,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     paddingHorizontal: 10,
     paddingVertical: 7,
   },
   myBidsBtnText: {
-    color: Colors.brand,
+    color: colors.brand,
   },
   syncBanner: {
     marginHorizontal: Space.md,
@@ -838,13 +841,13 @@ const styles = StyleSheet.create({
   featuredLabel: {
     marginBottom: Space.sm,
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   featuredCard: {
     borderRadius: Radius.xl,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     overflow: 'hidden',
   },
   featuredImageFrame: {
@@ -863,7 +866,7 @@ const styles = StyleSheet.create({
   featuredImagePlaceholder: {
     width: '100%',
     height: 200,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -885,7 +888,7 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: Colors.danger,
+    backgroundColor: colors.danger,
   },
   featuredLiveText: {
     color: '#fff',
@@ -910,7 +913,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   featuredTimer: {
-    color: Colors.danger,
+    color: colors.danger,
   },
   outbidBanner: {
     flexDirection: 'row',
@@ -923,7 +926,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,68,68,0.1)',
   },
   outbidText: {
-    color: Colors.danger,
+    color: colors.danger,
   },
   leadingBanner: {
     flexDirection: 'row',
@@ -936,7 +939,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.05)',
   },
   leadingText: {
-    color: Colors.brand,
+    color: colors.brand,
   },
   sectionWrap: {
     marginBottom: Space.sm,
@@ -955,11 +958,11 @@ const styles = StyleSheet.create({
   },
   upcomingCard: {
     width: 208,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   upcomingImageFrame: {
     width: '100%',
@@ -982,7 +985,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   upcomingTimer: {
-    color: Colors.brand,
+    color: colors.brand,
     marginBottom: 2,
   },
   upcomingBid: {},
@@ -993,8 +996,8 @@ const styles = StyleSheet.create({
   loadingCard: {
     borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     overflow: 'hidden',
     marginBottom: Space.sm,
   },
@@ -1005,4 +1008,5 @@ const styles = StyleSheet.create({
   loadMoreBtn: {
     minWidth: 140,
   },
-});
+  });
+}

@@ -12,7 +12,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AgentIcon } from '../components/agents/AgentIcon';
 import { FlagshipHeader, FlagshipScreen } from '../components/flagship';
 import { BodyEmphasis, Caption, Meta } from '../components/ui/Text';
-import { Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { RootStackParamList } from '../navigation/types';
@@ -37,6 +37,8 @@ type AgentRowModel = {
 
 export default function GroupBotManagementScreen({ navigation, route }: Props) {
   const { conversationId } = route.params;
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
   const conversations = useStore((state) => state.conversations);
@@ -134,7 +136,7 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
               accessibilityLabel="My agents"
             >
               <View style={styles.headerAction}>
-                <Ionicons name="person-outline" size={21} color={Colors.textPrimary} />
+                <Ionicons name="person-outline" size={21} color={colors.textPrimary} />
               </View>
             </AnimatedPressable>
           }
@@ -161,8 +163,8 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
 
         {deployedBots.length === 0 && availableToDeploy.length === 0 && (
           <View style={styles.empty}>
-            <Ionicons name="chatbubble-ellipses-outline" size={30} color={Colors.textMuted} />
-            <Caption color={Colors.textMuted} style={styles.emptyText}>
+            <Ionicons name="chatbubble-ellipses-outline" size={30} color={colors.textMuted} />
+            <Caption color={colors.textMuted} style={styles.emptyText}>
               No agents are ready to connect.
             </Caption>
           </View>
@@ -181,9 +183,11 @@ function AgentSection({
   agents: AgentRowModel[];
   renderAgent: (bot: AgentRowModel) => React.ReactNode;
 }) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   return (
     <View style={styles.section}>
-      <Meta color={Colors.textMuted} style={styles.sectionLabel}>
+      <Meta color={colors.textMuted} style={styles.sectionLabel}>
         {title}
       </Meta>
       <View>
@@ -213,6 +217,8 @@ function AgentRow({
   onDeploy: () => void;
   onView: () => void;
 }) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const statusLabel =
     bot.status === 'available'
       ? 'Ready'
@@ -235,25 +241,25 @@ function AgentRow({
             category={bot.category}
             name={bot.name}
             size={21}
-            color={Colors.textPrimary}
+            color={colors.textPrimary}
           />
         </View>
 
         <View style={styles.agentText}>
           <BodyEmphasis numberOfLines={1}>{bot.name}</BodyEmphasis>
-          <Caption color={Colors.textMuted} numberOfLines={1}>
+          <Caption color={colors.textMuted} numberOfLines={1}>
             {bot.description}
           </Caption>
           <View style={styles.detailLine}>
             <Caption
-              color={deployed ? Colors.textPrimary : Colors.textMuted}
+              color={deployed ? colors.textPrimary : colors.textMuted}
               style={styles.detailText}
               numberOfLines={1}
             >
               {deployed ? bot.commandHint : bot.type === 'custom' ? 'Your agent' : 'ThryftVerse agent'}
             </Caption>
             <View style={styles.metaDot} />
-            <Caption color={Colors.textMuted} style={styles.statusText} numberOfLines={1}>
+            <Caption color={colors.textMuted} style={styles.statusText} numberOfLines={1}>
               {statusLabel}
             </Caption>
           </View>
@@ -261,7 +267,7 @@ function AgentRow({
 
         {pending ? (
           <View style={styles.rowAction}>
-            <ActivityIndicator size="small" color={Colors.textMuted} />
+            <ActivityIndicator size="small" color={colors.textMuted} />
           </View>
         ) : (
           <AnimatedPressable
@@ -276,7 +282,7 @@ function AgentRow({
               <Ionicons
                 name={deployed ? 'remove' : 'add'}
                 size={deployed ? 20 : 21}
-                color={deployed ? Colors.danger : Colors.textPrimary}
+                color={deployed ? colors.danger : colors.textPrimary}
               />
             </View>
           </AnimatedPressable>
@@ -286,7 +292,8 @@ function AgentRow({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   content: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.xxl,
@@ -331,7 +338,7 @@ const styles = StyleSheet.create({
     width: 3,
     height: 3,
     borderRadius: 2,
-    backgroundColor: Colors.textMuted,
+    backgroundColor: colors.textMuted,
   },
   statusText: {
     fontSize: 11,
@@ -345,7 +352,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
     marginLeft: 44,
   },
   empty: {
@@ -362,4 +369,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-});
+  });
+}

@@ -16,7 +16,7 @@ import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
-import { Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Type, Space, Radius, Typography } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
 import { EmptyState } from '../components/EmptyState';
@@ -44,6 +44,8 @@ interface FeedEvent {
 function EventCard({ event, index }: { event: FeedEvent; index: number }) {
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const iconMap: Record<ActivityType, string> = {
     auction_live: 'flame-outline',
@@ -52,11 +54,11 @@ function EventCard({ event, index }: { event: FeedEvent; index: number }) {
     sold: 'checkmark-circle-outline',
   };
   const accentMap: Record<ActivityType, string> = {
-    auction_live: Colors.danger,
-    fresh_drop: Colors.brand,
+    auction_live: colors.danger,
+    fresh_drop: colors.brand,
     // Price-drop orange — semantic accent not yet in token system
     price_drop: '#dd6a33',
-    sold: Colors.success,
+    sold: colors.success,
   };
 
   const handlePress = () => {
@@ -92,6 +94,8 @@ function EventCard({ event, index }: { event: FeedEvent; index: number }) {
 export default function PulseFeedScreen() {
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { listings } = useBackendData();
   const customAuctions = useStore((state) => state.customAuctions);
   const now = Date.now();
@@ -191,66 +195,68 @@ export default function PulseFeedScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  scrollContent: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.xl,
-  },
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    padding: Space.md,
-    marginBottom: Space.sm,
-    gap: Space.md,
-  },
-  cardImage: {
-    width: 80,
-    height: 80,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
-  },
-  cardContent: {
-    flex: 1,
-    gap: 4,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  cardTypeLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 0.8,
-  },
-  cardTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-    lineHeight: Type.body.lineHeight,
-  },
-  cardSubtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
-    letterSpacing: Type.caption.letterSpacing,
-  },
-  cardMeta: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
-    letterSpacing: Type.meta.letterSpacing,
-    marginTop: 2,
-  },
-  cardMetaAccent: {
-    color: Colors.danger,
-    fontFamily: Typography.family.semibold,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.background },
+    scrollContent: {
+      paddingHorizontal: Space.md,
+      paddingTop: Space.sm,
+      paddingBottom: Space.xl,
+    },
+    card: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.surface,
+      borderRadius: Radius.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      padding: Space.md,
+      marginBottom: Space.sm,
+      gap: Space.md,
+    },
+    cardImage: {
+      width: 80,
+      height: 80,
+      borderRadius: Radius.md,
+      backgroundColor: colors.surfaceAlt,
+    },
+    cardContent: {
+      flex: 1,
+      gap: 4,
+    },
+    cardHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    cardTypeLabel: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.semibold,
+      letterSpacing: 0.8,
+    },
+    cardTitle: {
+      fontSize: Type.body.size,
+      fontFamily: Typography.family.semibold,
+      color: colors.textPrimary,
+      letterSpacing: Type.body.letterSpacing,
+      lineHeight: Type.body.lineHeight,
+    },
+    cardSubtitle: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.medium,
+      color: colors.textSecondary,
+      letterSpacing: Type.caption.letterSpacing,
+    },
+    cardMeta: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.medium,
+      color: colors.textMuted,
+      letterSpacing: Type.meta.letterSpacing,
+      marginTop: 2,
+    },
+    cardMetaAccent: {
+      color: colors.danger,
+      fontFamily: Typography.family.semibold,
+    },
+  });
+}

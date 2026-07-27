@@ -21,7 +21,8 @@ import Reanimated, {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
+import type { ThemeColors } from '../theme/ThemeContext';
 import { Type, Space, Radius, DockConstants } from '../theme/designTokens';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -48,6 +49,8 @@ export default function CollectionDetailScreen() {
   const haptic = useHaptic();
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
+  const { colors, isDark } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [refreshing, setRefreshing] = useState(false);
   const [shareVisible, setShareVisible] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
@@ -162,13 +165,13 @@ export default function CollectionDetailScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+      <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
 
       {/* Floating Header with scroll fade */}
       <Reanimated.View style={[styles.floatingHeader, headerBgStyle]}>
         <View style={styles.headerInner}>
           <AnimatedPressable style={styles.backBtn} onPress={handleGoBack} activeOpacity={0.85}>
-            <Ionicons name="arrow-back" size={22} color={Colors.textPrimary} />
+            <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
           </AnimatedPressable>
           <Text style={styles.floatingTitle} numberOfLines={1}>{collection.name}</Text>
           <View style={{ width: 40 }} />
@@ -209,7 +212,7 @@ export default function CollectionDetailScreen() {
                 <Text style={styles.coverTitle} numberOfLines={1}>{collection.name}</Text>
                 {collection.isPrivate && (
                   <View style={styles.privacyBadge}>
-                    <Ionicons name="lock-closed" size={10} color={Colors.textInverse} />
+                    <Ionicons name="lock-closed" size={10} color={colors.textInverse} />
                     <Text style={styles.privacyText}>Private</Text>
                   </View>
                 )}
@@ -231,7 +234,7 @@ export default function CollectionDetailScreen() {
                     accessibilityLabel={isFollowing ? 'Unfollow collection' : 'Follow collection'}
                     accessibilityRole="button"
                   >
-                    <Ionicons name={isFollowing ? 'heart' : 'heart-outline'} size={18} color={isFollowing ? Colors.brand : '#fff'} />
+                    <Ionicons name={isFollowing ? 'heart' : 'heart-outline'} size={18} color={isFollowing ? colors.brand : '#fff'} />
                   </AnimatedPressable>
                 )}
                 <AnimatedPressable
@@ -265,7 +268,7 @@ export default function CollectionDetailScreen() {
                 <Text style={styles.noCoverTitle}>{collection.name}</Text>
                 {collection.isPrivate && (
                   <View style={styles.privacyBadgeOutline}>
-                    <Ionicons name="lock-closed" size={10} color={Colors.textMuted} />
+                    <Ionicons name="lock-closed" size={10} color={colors.textMuted} />
                     <Text style={styles.privacyTextOutline}>Private</Text>
                   </View>
                 )}
@@ -284,7 +287,7 @@ export default function CollectionDetailScreen() {
                   accessibilityLabel={isFollowing ? 'Unfollow collection' : 'Follow collection'}
                   accessibilityRole="button"
                 >
-                  <Ionicons name={isFollowing ? 'heart' : 'heart-outline'} size={20} color={isFollowing ? Colors.brand : Colors.textPrimary} />
+                  <Ionicons name={isFollowing ? 'heart' : 'heart-outline'} size={20} color={isFollowing ? colors.brand : colors.textPrimary} />
                 </AnimatedPressable>
               )}
               <AnimatedPressable
@@ -294,7 +297,7 @@ export default function CollectionDetailScreen() {
                 accessibilityLabel="Share collection"
                 accessibilityRole="button"
               >
-                <Ionicons name="share-outline" size={20} color={Colors.textPrimary} />
+                <Ionicons name="share-outline" size={20} color={colors.textPrimary} />
               </AnimatedPressable>
               <AnimatedPressable
                 style={styles.actionBtn}
@@ -303,7 +306,7 @@ export default function CollectionDetailScreen() {
                 accessibilityLabel="Edit collection"
                 accessibilityRole="button"
               >
-                <Ionicons name="settings-outline" size={20} color={Colors.textPrimary} />
+                <Ionicons name="settings-outline" size={20} color={colors.textPrimary} />
               </AnimatedPressable>
             </View>
           </View>
@@ -319,9 +322,9 @@ export default function CollectionDetailScreen() {
             accessibilityLabel="Manage collection items"
             accessibilityRole="button"
           >
-            <Ionicons name="list-outline" size={18} color={Colors.textSecondary} />
+            <Ionicons name="list-outline" size={18} color={colors.textSecondary} />
             <Text style={styles.manageRowText}>Manage items</Text>
-            <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </AnimatedPressable>
         )}
 
@@ -379,6 +382,8 @@ function MoreLikeThisRow({
   navigation: any;
   formatFromFiat: any;
 }) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const similarItems = React.useMemo(() => {
     if (collectionItems.length === 0) return [];
     const brands = new Set(collectionItems.map((i) => i.brand?.toLowerCase()));
@@ -421,10 +426,11 @@ function MoreLikeThisRow({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   floatingHeader: {
     position: 'absolute',
@@ -432,9 +438,9 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 50,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   headerInner: {
     flexDirection: 'row',
@@ -448,7 +454,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     textAlign: 'center',
   },
   absoluteBack: {
@@ -462,8 +468,8 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -534,12 +540,12 @@ const styles = StyleSheet.create({
   noCoverTitle: {
     fontSize: 22,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   noCoverMeta: {
     fontSize: 13,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 2,
   },
   coverTitleRow: {
@@ -556,7 +562,7 @@ const styles = StyleSheet.create({
   noCoverDesc: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginTop: 2,
   },
   privacyBadge: {
@@ -571,7 +577,7 @@ const styles = StyleSheet.create({
   privacyText: {
     fontSize: 10,
     fontFamily: Typography.family.bold,
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
   privacyBadgeOutline: {
     flexDirection: 'row',
@@ -580,28 +586,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   privacyTextOutline: {
     fontSize: 10,
     fontFamily: Typography.family.bold,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   actionBtn: {
     width: 40,
     height: 40,
     borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   actionBtnActive: {
-    borderColor: Colors.brand,
-    backgroundColor: `${Colors.brand}15`,
+    borderColor: colors.brand,
+    backgroundColor: `${colors.brand}15`,
   },
   manageRow: {
     flexDirection: 'row',
@@ -612,15 +618,15 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm,
     paddingHorizontal: Space.md,
     borderRadius: Radius.lg,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   manageRowText: {
     flex: 1,
     fontSize: 14,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   listContent: {
     paddingBottom: 120,
@@ -628,7 +634,7 @@ const styles = StyleSheet.create({
   moreTitle: {
     fontSize: 16,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginBottom: 14,
     paddingHorizontal: Space.md,
   },
@@ -650,6 +656,7 @@ const styles = StyleSheet.create({
   morePrice: {
     fontSize: 14,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
-});
+  });
+}

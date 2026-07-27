@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -24,7 +24,7 @@ import Reanimated, {
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { FlagshipActionCluster } from '../components/flagship';
 import { AppButton } from '../components/ui/AppButton';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useToast } from '../context/ToastContext';
@@ -37,17 +37,13 @@ import { fetchListingByIdFromApi, patchListingOnApi, deleteListingOnApi } from '
 import { useStore } from '../store/useStore';
 
 const { width: SCREEN_W } = Dimensions.get('window');
-const CARD_BG = Colors.surface;
-const CARD_BORDER = Colors.border;
-const SUCCESS_TEXT = Colors.success;
-const DANGER_TEXT = Colors.danger;
-const BRAND_TINT = Colors.surfaceAlt;
 const WARN_TINT = 'rgba(245,166,35,0.12)';
-const ICON_BG = Colors.surfaceAlt;
 
 type RouteT = RouteProp<RootStackParamList, 'ManageListing'>;
 
 export default function ManageListingScreen() {
+  const { colors, isDark } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<any>();
   const route = useRoute<RouteT>();
   const insets = useSafeAreaInsets();
@@ -108,8 +104,8 @@ export default function ManageListingScreen() {
   if (isLoading) {
     return (
       <View style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor="transparent" translucent />
-        <ActivityIndicator size="large" color={Colors.brand} />
+        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor="transparent" translucent />
+        <ActivityIndicator size="large" color={colors.brand} />
       </View>
     );
   }
@@ -117,12 +113,12 @@ export default function ManageListingScreen() {
   if (isNotFound || !item) {
     return (
       <View style={[styles.container, { alignItems: 'center', justifyContent: 'center', padding: Space.lg }]}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor="transparent" translucent />
-        <Ionicons name="pricetag-outline" size={48} color={Colors.textMuted} />
-        <Text style={{ fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginTop: Space.md }}>
+        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor="transparent" translucent />
+        <Ionicons name="pricetag-outline" size={48} color={colors.textMuted} />
+        <Text style={{ fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: colors.textPrimary, marginTop: Space.md }}>
           Listing not found
         </Text>
-        <Text style={{ fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: Colors.textMuted, marginTop: Space.xs, textAlign: 'center' }}>
+        <Text style={{ fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textMuted, marginTop: Space.xs, textAlign: 'center' }}>
           This listing may have been removed or you may not have access to it.
         </Text>
         <AppButton title="Go back" variant="secondary" size="md" style={{ marginTop: Space.lg }} onPress={() => navigation.goBack()} />
@@ -133,9 +129,9 @@ export default function ManageListingScreen() {
   if (hasError) {
     return (
       <View style={[styles.container, { alignItems: 'center', justifyContent: 'center', padding: Space.lg }]}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor="transparent" translucent />
-        <Ionicons name="warning-outline" size={48} color={Colors.textMuted} />
-        <Text style={{ fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginTop: Space.md }}>
+        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor="transparent" translucent />
+        <Ionicons name="warning-outline" size={48} color={colors.textMuted} />
+        <Text style={{ fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: colors.textPrimary, marginTop: Space.md }}>
           Could not load listing
         </Text>
         <AppButton title="Retry" variant="secondary" size="md" style={{ marginTop: Space.lg }} onPress={() => {
@@ -160,12 +156,12 @@ export default function ManageListingScreen() {
   if (!isOwner) {
     return (
       <View style={[styles.container, { alignItems: 'center', justifyContent: 'center', padding: Space.lg }]}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor="transparent" translucent />
-        <Ionicons name="lock-closed-outline" size={48} color={Colors.textMuted} />
-        <Text style={{ fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: Colors.textPrimary, marginTop: Space.md }}>
+        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor="transparent" translucent />
+        <Ionicons name="lock-closed-outline" size={48} color={colors.textMuted} />
+        <Text style={{ fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: colors.textPrimary, marginTop: Space.md }}>
           Permission denied
         </Text>
-        <Text style={{ fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: Colors.textMuted, marginTop: Space.xs, textAlign: 'center' }}>
+        <Text style={{ fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textMuted, marginTop: Space.xs, textAlign: 'center' }}>
           You do not have permission to manage this listing.
         </Text>
         <AppButton title="Go back" variant="secondary" size="md" style={{ marginTop: Space.lg }} onPress={() => navigation.goBack()} />
@@ -290,17 +286,17 @@ export default function ManageListingScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor="transparent" translucent />
+      <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor="transparent" translucent />
 
       <Reanimated.View style={[styles.floatingHeader, headerBgStyle, { paddingTop: Math.max(insets.top, 20) }]}>
         <AnimatedPressable style={styles.hdrBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </AnimatedPressable>
         <Reanimated.View style={headerTitleStyle}>
           <Text style={styles.hdrTitle} numberOfLines={1}>Manage</Text>
         </Reanimated.View>
         <AnimatedPressable style={styles.hdrBtn} onPress={handleShare}>
-          <Ionicons name="share-outline" size={22} color={Colors.textPrimary} />
+          <Ionicons name="share-outline" size={22} color={colors.textPrimary} />
         </AnimatedPressable>
       </Reanimated.View>
 
@@ -329,7 +325,7 @@ export default function ManageListingScreen() {
           <View style={styles.heroOverlay} />
 
           <View style={styles.statusPill}>
-            <View style={[styles.statusDot, { backgroundColor: isSold ? DANGER_TEXT : isPaused ? WARN_TINT.replace('0.12', '1') : SUCCESS_TEXT }]} />
+            <View style={[styles.statusDot, { backgroundColor: isSold ? colors.danger : isPaused ? WARN_TINT.replace('0.12', '1') : colors.success }]} />
             <Text style={styles.statusPillText}>{isSold ? 'Sold' : isPaused ? 'Paused' : 'Active'}</Text>
           </View>
 
@@ -366,7 +362,7 @@ export default function ManageListingScreen() {
         {/* Primary Edit Button */}
         <AppButton
           title="Edit Listing"
-          icon={<Ionicons name="create-outline" size={18} color={Colors.background} />}
+          icon={<Ionicons name="create-outline" size={18} color={colors.background} />}
           variant="primary"
           size="lg"
           style={styles.editBtn}
@@ -379,12 +375,12 @@ export default function ManageListingScreen() {
         {/* Action Cluster */}
         <FlagshipActionCluster
           actions={[
-            { icon: <Ionicons name="image-outline" size={20} color={Colors.brand} />, label: 'Poster', onPress: () => navigation.navigate('CreatorStudio', { type: 'poster' }) },
-            { icon: <Ionicons name="share-outline" size={20} color={Colors.textPrimary} />, label: 'Share', onPress: handleShare },
-            { icon: <Ionicons name="eye-outline" size={20} color={Colors.textPrimary} />, label: 'Preview', onPress: () => navigation.push('ItemDetail', { itemId: item.id }) },
-            ...(status === 'active' && item.likes > 0 ? [{ icon: <Ionicons name="heart-outline" size={20} color={Colors.brand} />, label: 'Offer', onPress: () => setOfferToLikersVisible(true) }] : []),
-            ...(status === 'active' ? [{ icon: <Ionicons name="rocket-outline" size={20} color={Colors.brand} />, label: 'Boost', onPress: () => setBoostSheetVisible(true) }] : []),
-            ...(status === 'active' ? [{ icon: <Ionicons name="hammer-outline" size={20} color={Colors.brand} />, label: 'Auction', onPress: () => navigation.navigate('CreateAuction', { listingId: item.id }) }] : []),
+            { icon: <Ionicons name="image-outline" size={20} color={colors.brand} />, label: 'Poster', onPress: () => navigation.navigate('CreatorStudio', { type: 'poster' }) },
+            { icon: <Ionicons name="share-outline" size={20} color={colors.textPrimary} />, label: 'Share', onPress: handleShare },
+            { icon: <Ionicons name="eye-outline" size={20} color={colors.textPrimary} />, label: 'Preview', onPress: () => navigation.push('ItemDetail', { itemId: item.id }) },
+            ...(status === 'active' && item.likes > 0 ? [{ icon: <Ionicons name="heart-outline" size={20} color={colors.brand} />, label: 'Offer', onPress: () => setOfferToLikersVisible(true) }] : []),
+            ...(status === 'active' ? [{ icon: <Ionicons name="rocket-outline" size={20} color={colors.brand} />, label: 'Boost', onPress: () => setBoostSheetVisible(true) }] : []),
+            ...(status === 'active' ? [{ icon: <Ionicons name="hammer-outline" size={20} color={colors.brand} />, label: 'Auction', onPress: () => navigation.navigate('CreateAuction', { listingId: item.id }) }] : []),
           ]}
           style={{ marginHorizontal: Space.md, marginBottom: Space.md }}
         />
@@ -455,7 +451,7 @@ export default function ManageListingScreen() {
             </View>
 
             {/* Minimum offer floor */}
-            <View style={[styles.offerFloorRow, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Colors.border }]}>
+            <View style={[styles.offerFloorRow, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }]}>
               <View style={styles.offerFloorInfo}>
                 <Text style={styles.offerFloorLabel}>Minimum offer</Text>
                 <Text style={styles.offerFloorSub}>
@@ -502,7 +498,7 @@ export default function ManageListingScreen() {
           <View style={styles.toggleRow}>
             <View style={styles.toggleLeft}>
               <View style={[styles.toggleIconWrap, { backgroundColor: isSold ? 'rgba(255,59,48,0.12)' : isPaused ? WARN_TINT : 'rgba(52,199,89,0.12)' }]}>
-                <Ionicons name={isSold ? 'close-circle-outline' : isPaused ? 'pause-circle-outline' : 'checkmark-circle-outline'} size={20} color={isSold ? DANGER_TEXT : isPaused ? Colors.warning : SUCCESS_TEXT} />
+                <Ionicons name={isSold ? 'close-circle-outline' : isPaused ? 'pause-circle-outline' : 'checkmark-circle-outline'} size={20} color={isSold ? colors.danger : isPaused ? colors.warning : colors.success} />
               </View>
               <View>
                 <Text style={styles.toggleTitle}>{isSold ? 'Sold' : isPaused ? 'Paused' : 'Active'}</Text>
@@ -514,19 +510,19 @@ export default function ManageListingScreen() {
           </View>
 
           {status === 'active' && (
-            <View style={{ flexDirection: 'row', gap: Space.sm, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Colors.border }}>
+            <View style={{ flexDirection: 'row', gap: Space.sm, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
               <AppButton title="Pause" variant="secondary" size="sm" style={{ flex: 1 }} onPress={handlePause} />
-              <AppButton title="Mark Sold" variant="secondary" size="sm" style={{ flex: 1 }} titleStyle={{ color: Colors.danger }} onPress={handleMarkSold} />
+              <AppButton title="Mark Sold" variant="secondary" size="sm" style={{ flex: 1 }} titleStyle={{ color: colors.danger }} onPress={handleMarkSold} />
             </View>
           )}
           {status === 'paused' && (
-            <View style={{ flexDirection: 'row', gap: Space.sm, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Colors.border }}>
+            <View style={{ flexDirection: 'row', gap: Space.sm, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
               <AppButton title="Reactivate" variant="primary" size="sm" style={{ flex: 1 }} onPress={handleReactivate} />
-              <AppButton title="Mark Sold" variant="secondary" size="sm" style={{ flex: 1 }} titleStyle={{ color: Colors.danger }} onPress={handleMarkSold} />
+              <AppButton title="Mark Sold" variant="secondary" size="sm" style={{ flex: 1 }} titleStyle={{ color: colors.danger }} onPress={handleMarkSold} />
             </View>
           )}
           {status === 'sold' && (
-            <View style={{ paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Colors.border }}>
+            <View style={{ paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
               <AppButton title="Reactivate Listing" variant="secondary" size="sm" style={{ width: '100%' }} onPress={handleReactivate} />
             </View>
           )}
@@ -534,7 +530,7 @@ export default function ManageListingScreen() {
 
         {/* Delete */}
         <AnimatedPressable style={styles.deleteRow} activeOpacity={0.8} onPress={handleDeleteListing}>
-          <Ionicons name="trash-outline" size={18} color={DANGER_TEXT} />
+          <Ionicons name="trash-outline" size={18} color={colors.danger} />
           <Text style={styles.deleteText}>Delete this listing</Text>
         </AnimatedPressable>
       </Reanimated.ScrollView>
@@ -576,8 +572,9 @@ export default function ManageListingScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
 
   floatingHeader: {
     position: 'absolute',
@@ -602,7 +599,7 @@ const styles = StyleSheet.create({
   hdrTitle: {
     fontSize: 17,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     maxWidth: SCREEN_W * 0.5,
   },
 
@@ -610,7 +607,7 @@ const styles = StyleSheet.create({
     width: SCREEN_W,
     height: SCREEN_W,
     position: 'relative',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
   },
   heroImage: {
     width: SCREEN_W,
@@ -666,11 +663,11 @@ const styles = StyleSheet.create({
   infoCard: {
     marginTop: -24,
     marginHorizontal: 16,
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surface,
     borderRadius: 20,
     padding: 20,
     borderWidth: 1,
-    borderColor: CARD_BORDER,
+    borderColor: colors.border,
     shadowColor: '#000',
     shadowOpacity: 0.06,
     shadowRadius: 16,
@@ -680,14 +677,14 @@ const styles = StyleSheet.create({
   infoTitle: {
     fontSize: 20,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     lineHeight: 28,
     marginBottom: 6,
   },
   infoPrice: {
     fontSize: 26,
     fontFamily: Typography.family.bold,
-    color: Colors.brand,
+    color: colors.brand,
     letterSpacing: -0.5,
     marginBottom: 14,
   },
@@ -697,7 +694,7 @@ const styles = StyleSheet.create({
   },
   attrChip: {
     flex: 1,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 10,
@@ -706,7 +703,7 @@ const styles = StyleSheet.create({
   attrLabel: {
     fontSize: 10,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
     marginBottom: 3,
@@ -714,7 +711,7 @@ const styles = StyleSheet.create({
   attrValue: {
     fontSize: 13,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
 
   editBtn: {
@@ -726,12 +723,12 @@ const styles = StyleSheet.create({
     marginTop: 16,
     paddingVertical: 16,
     borderRadius: 16,
-    backgroundColor: Colors.textPrimary,
+    backgroundColor: colors.textPrimary,
   },
   editBtnText: {
     fontSize: 15,
     fontFamily: Typography.family.bold,
-    color: Colors.background,
+    color: colors.background,
   },
 
   iconActionsRow: {
@@ -755,16 +752,16 @@ const styles = StyleSheet.create({
   iconActionLabel: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
 
   card: {
     marginHorizontal: 16,
     marginTop: 16,
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surface,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: CARD_BORDER,
+    borderColor: colors.border,
     paddingVertical: 4,
     paddingHorizontal: 16,
     overflow: 'hidden',
@@ -790,12 +787,12 @@ const styles = StyleSheet.create({
   toggleTitle: {
     fontSize: 15,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   toggleSub: {
     fontSize: 12,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 2,
   },
 
@@ -809,18 +806,18 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   healthCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     padding: Space.lg,
     marginHorizontal: Space.md,
     marginBottom: Space.md,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   healthTitle: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 1.2,
     marginBottom: Space.sm,
@@ -836,23 +833,23 @@ const styles = StyleSheet.create({
   healthValue: {
     fontSize: Type.priceLarge.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   healthLabel: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 2,
   },
   deleteText: {
     fontSize: 14,
     fontFamily: Typography.family.semibold,
-    color: DANGER_TEXT,
+    color: colors.danger,
   },
   offerFloorDescription: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginBottom: Space.sm,
   },
   offerFloorRow: {
@@ -865,12 +862,12 @@ const styles = StyleSheet.create({
   offerFloorLabel: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   offerFloorSub: {
     fontSize: 11,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   thresholdChips: {
     flexDirection: 'row',
@@ -883,20 +880,21 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surfaceAlt,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
   },
   thresholdChipActive: {
-    borderColor: Colors.brand,
-    backgroundColor: `${Colors.brand}15`,
+    borderColor: colors.brand,
+    backgroundColor: `${colors.brand}15`,
   },
   thresholdChipText: {
     fontSize: 13,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   thresholdChipTextActive: {
-    color: Colors.brand,
+    color: colors.brand,
     fontFamily: Typography.family.semibold,
   },
-});
+  });
+}

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
-import { Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useStore } from '../store/useStore';
@@ -43,6 +43,8 @@ function mapCapabilityCarriers(carriers: CapabilityCarrier[]) {
 }
 
 export default function PostageScreen({ navigation }: Props) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const currentUser = useStore((state) => state.currentUser);
   const { show } = useToast();
   const postagePreferences = useStore((state) => state.postagePreferences);
@@ -109,9 +111,9 @@ export default function PostageScreen({ navigation }: Props) {
       }
     >
       <Reanimated.View entering={FadeIn.duration(300)}>
-        <View style={[styles.deliveryTrust, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
-          <Ionicons name="cube-outline" size={18} color={Colors.brand} />
-          <Text style={[styles.deliveryTrustText, { color: Colors.textSecondary }]}>
+        <View style={[styles.deliveryTrust, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Ionicons name="cube-outline" size={18} color={colors.brand} />
+          <Text style={[styles.deliveryTrustText, { color: colors.textSecondary }]}>
             Set your preferred carrier and postage defaults for faster listing. Manage saved delivery addresses in Settings.
           </Text>
         </View>
@@ -122,21 +124,21 @@ export default function PostageScreen({ navigation }: Props) {
         onPress={() => navigation.navigate('SavedAddresses')}
         style={({ pressed }) => [
           styles.addressLinkRow,
-          { backgroundColor: Colors.surface, borderColor: Colors.border, opacity: pressed ? 0.7 : 1 },
+          { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
         ]}
         accessibilityRole="button"
         accessibilityLabel="Manage saved addresses"
       >
         <View style={styles.addressLinkLeft}>
-          <Ionicons name="location-outline" size={20} color={Colors.textPrimary} />
+          <Ionicons name="location-outline" size={20} color={colors.textPrimary} />
           <View>
-            <Text style={[styles.addressLinkTitle, { color: Colors.textPrimary }]}>Saved addresses</Text>
-            <Text style={[styles.addressLinkSubtitle, { color: Colors.textMuted }]}>
+            <Text style={[styles.addressLinkTitle, { color: colors.textPrimary }]}>Saved addresses</Text>
+            <Text style={[styles.addressLinkSubtitle, { color: colors.textMuted }]}>
               {savedAddress ? '1 saved' : 'None saved'}
             </Text>
           </View>
         </View>
-        <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
       </Pressable>
 
       {/* Default Carrier */}
@@ -149,7 +151,7 @@ export default function PostageScreen({ navigation }: Props) {
               {carriers.map((c, idx) => (
                 <AnimatedPressable
                   key={c.key}
-                  style={[styles.carrierRow, c.selected && { backgroundColor: `${Colors.brand}08` }, idx < carriers.length - 1 && styles.carrierRowBorder]}
+                  style={[styles.carrierRow, c.selected && { backgroundColor: `${colors.brand}08` }, idx < carriers.length - 1 && styles.carrierRowBorder]}
                   onPress={() => selectCarrier(c.key)}
                   hapticFeedback="light"
                   accessibilityRole="radio"
@@ -175,7 +177,7 @@ export default function PostageScreen({ navigation }: Props) {
         <PremiumListSection title="Shipping Options">
           <SettingsCell
             icon="gift-outline"
-            iconColor={Colors.brand}
+            iconColor={colors.brand}
             title="Offer free shipping"
             subtitle="You'll cover the postage cost for buyers"
             variant="toggle"
@@ -185,7 +187,7 @@ export default function PostageScreen({ navigation }: Props) {
           />
           <SettingsCell
             icon="cube-outline"
-            iconColor={Colors.brand}
+            iconColor={colors.brand}
             title="Bundle discount on postage"
             subtitle="Buyers save when buying multiple items"
             variant="toggle"
@@ -207,7 +209,8 @@ export default function PostageScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   skeletonWrap: {
     marginBottom: Space.md,
   },
@@ -248,7 +251,7 @@ const styles = StyleSheet.create({
   },
   carrierRowBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   carrierText: {
     flex: 1,
@@ -257,20 +260,20 @@ const styles = StyleSheet.create({
   carrierLabel: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginBottom: 2,
     letterSpacing: Type.body.letterSpacing,
   },
   carrierPrice: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     letterSpacing: Type.caption.letterSpacing,
   },
   footerNote: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     lineHeight: Type.caption.lineHeight,
     paddingHorizontal: Space.xs,
     marginTop: Space.sm,
@@ -294,4 +297,5 @@ const styles = StyleSheet.create({
     letterSpacing: Type.caption.letterSpacing,
     lineHeight: Type.caption.lineHeight,
   },
-});
+  });
+}

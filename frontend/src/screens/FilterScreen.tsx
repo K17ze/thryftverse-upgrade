@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   AnimatedPressable,
 } from '../components/AnimatedPressable';
@@ -23,7 +23,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Typography } from '../theme/designTokens';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
@@ -43,15 +43,6 @@ const { height, width } = Dimensions.get('window');
 const SNAP_HALF = height * 0.5;
 const SNAP_FULL = height * 0.1;
 const OVERLAY_BG = 'rgba(0,0,0,0.45)';
-const SHEET_BG = Colors.surface;
-const HANDLE_BG = Colors.borderLight;
-const CHIP_BG = Colors.surface;
-const CHIP_BORDER = Colors.border;
-const DIVIDER_COLOR = Colors.border;
-const RETRY_BANNER_BG = Colors.surface;
-const RETRY_BUTTON_BG = Colors.surface;
-const FOOTER_BG = Colors.background;
-const APPLY_DISABLED_BG = Colors.border;
 
 type SortOption = 'Recommended' | 'Newest' | 'Price: Low to High' | 'Price: High to Low';
 type ConditionOption = 'Any' | 'New with tags' | 'Very good' | 'Good' | 'Satisfactory';
@@ -108,6 +99,8 @@ export default function FilterScreen() {
   const { listings, source, isSyncing, lastError, refreshListings } = useBackendData();
   const { show } = useToast();
   const { mySizes, setMySizes, toggleMySize, filterPresets, saveFilterPreset, removeFilterPreset } = useSettingsPreferences();
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const categoryId = route.params?.categoryId ?? 'search';
   const title = route.params?.title;
   const subcategoryId = route.params?.subcategoryId;
@@ -380,7 +373,7 @@ export default function FilterScreen() {
               accessibilityLabel="Open category tree"
               accessibilityHint="Shows the full category tree for this filter context"
             >
-              <Ionicons name="funnel-outline" size={14} color={Colors.textPrimary} />
+              <Ionicons name="funnel-outline" size={14} color={colors.textPrimary} />
               <Text style={styles.contextText} numberOfLines={1}>
                 {title ?? categoryId}
               </Text>
@@ -409,7 +402,7 @@ export default function FilterScreen() {
                   <TextInput
                     style={styles.presetInput}
                     placeholder="Preset name (e.g. Streetwear M)"
-                    placeholderTextColor={Colors.textMuted}
+                    placeholderTextColor={colors.textMuted}
                     value={presetName}
                     onChangeText={setPresetName}
                     autoFocus
@@ -423,7 +416,7 @@ export default function FilterScreen() {
                     accessibilityLabel="Save preset"
                     accessibilityRole="button"
                   >
-                    <Ionicons name="checkmark" size={18} color={Colors.surface} />
+                    <Ionicons name="checkmark" size={18} color={colors.surface} />
                   </AnimatedPressable>
                   <AnimatedPressable
                     style={styles.presetCancelBtn}
@@ -431,7 +424,7 @@ export default function FilterScreen() {
                     accessibilityLabel="Cancel saving preset"
                     accessibilityRole="button"
                   >
-                    <Ionicons name="close" size={18} color={Colors.textMuted} />
+                    <Ionicons name="close" size={18} color={colors.textMuted} />
                   </AnimatedPressable>
                 </View>
               ) : (
@@ -444,7 +437,7 @@ export default function FilterScreen() {
                         accessibilityLabel={`Apply filter preset ${preset.name}`}
                         accessibilityRole="button"
                       >
-                        <Ionicons name="bookmark" size={12} color={Colors.brand} />
+                        <Ionicons name="bookmark" size={12} color={colors.brand} />
                         <Text style={styles.presetChipText} numberOfLines={1}>{preset.name}</Text>
                       </AnimatedPressable>
                       <AnimatedPressable
@@ -453,7 +446,7 @@ export default function FilterScreen() {
                         accessibilityLabel={`Remove filter preset ${preset.name}`}
                         accessibilityRole="button"
                       >
-                        <Ionicons name="close-circle" size={14} color={Colors.textMuted} />
+                        <Ionicons name="close-circle" size={14} color={colors.textMuted} />
                       </AnimatedPressable>
                     </View>
                   ))}
@@ -470,7 +463,7 @@ export default function FilterScreen() {
               accessibilityLabel="Save current filters as a preset"
               accessibilityRole="button"
             >
-              <Ionicons name="bookmark-outline" size={14} color={Colors.brand} />
+              <Ionicons name="bookmark-outline" size={14} color={colors.brand} />
               <Text style={styles.presetsEmptyCtaText}>Save current filters as a preset</Text>
             </AnimatedPressable>
           )}
@@ -588,7 +581,7 @@ export default function FilterScreen() {
                       >
                         <AppButton
                           title={s}
-                          icon={isMySize ? <Ionicons name="star" size={11} color={Colors.brand} /> : undefined}
+                          icon={isMySize ? <Ionicons name="star" size={11} color={colors.brand} /> : undefined}
                           iconContainerStyle={styles.chipIconWrap}
                           variant="secondary"
                           size="sm"
@@ -607,7 +600,7 @@ export default function FilterScreen() {
                   <View style={styles.saveSizesRow}>
                     <AppButton
                       title={selectedSizes.every(s => mySizes.includes(s)) ? 'All saved' : 'Save as my sizes'}
-                      icon={selectedSizes.every(s => mySizes.includes(s)) ? <Ionicons name="checkmark-circle" size={14} color={Colors.brand} /> : undefined}
+                      icon={selectedSizes.every(s => mySizes.includes(s)) ? <Ionicons name="checkmark-circle" size={14} color={colors.brand} /> : undefined}
                       iconContainerStyle={styles.chipIconWrap}
                       variant="secondary"
                       size="sm"
@@ -663,14 +656,15 @@ export default function FilterScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: { flex: 1, backgroundColor: 'transparent' },
   sheet: {
     position: 'absolute',
     bottom: 0,
     width: width,
     height: height,
-    backgroundColor: SHEET_BG,
+    backgroundColor: colors.surface,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     shadowColor: '#000',
@@ -687,7 +681,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: HANDLE_BG,
+    backgroundColor: colors.borderSubtle,
   },
 
   header: {
@@ -697,7 +691,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingBottom: 16,
   },
-  headerTitle: { fontSize: 20, fontFamily: Typography.family.bold, color: Colors.textPrimary, letterSpacing: -0.3 },
+  headerTitle: { fontSize: 20, fontFamily: Typography.family.bold, color: colors.textPrimary, letterSpacing: -0.3 },
   clearBtn: {
     minHeight: 32,
     borderRadius: 16,
@@ -705,7 +699,7 @@ const styles = StyleSheet.create({
     borderWidth: 0,
     backgroundColor: 'transparent',
   },
-  clearText: { color: Colors.brand, fontSize: 15, fontFamily: Typography.family.semibold },
+  clearText: { color: colors.brand, fontSize: 15, fontFamily: Typography.family.semibold },
   statusRow: {
     paddingHorizontal: 24,
     paddingBottom: 8,
@@ -715,7 +709,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   statusMeta: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontSize: 13,
     fontFamily: Typography.family.medium,
   },
@@ -732,8 +726,8 @@ const styles = StyleSheet.create({
     minHeight: 32,
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: CHIP_BORDER,
-    backgroundColor: CHIP_BG,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     paddingHorizontal: 10,
     flexDirection: 'row',
     alignItems: 'center',
@@ -741,7 +735,7 @@ const styles = StyleSheet.create({
   },
   contextText: {
     flex: 1,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontSize: 12,
     fontFamily: Typography.family.semibold,
   },
@@ -753,9 +747,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 12,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   presetsHeaderRow: {
     flexDirection: 'row',
@@ -766,14 +760,14 @@ const styles = StyleSheet.create({
   presetsLabel: {
     fontSize: 11,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
   presetsSaveLink: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
+    color: colors.brand,
   },
   presetsScroll: {
     gap: 8,
@@ -781,10 +775,10 @@ const styles = StyleSheet.create({
   presetChipWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     paddingLeft: 10,
     paddingRight: 4,
     paddingVertical: 3,
@@ -798,7 +792,7 @@ const styles = StyleSheet.create({
   presetChipText: {
     fontSize: 13,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     maxWidth: 120,
   },
   presetRemoveBtn: {
@@ -818,18 +812,18 @@ const styles = StyleSheet.create({
     height: 38,
     borderRadius: 10,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     paddingHorizontal: 12,
     fontSize: 14,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   presetSaveBtn: {
     width: 38,
     height: 38,
     borderRadius: 10,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -852,23 +846,23 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 14,
     borderRadius: 12,
-    backgroundColor: `${Colors.brand}0A`,
+    backgroundColor: `${colors.brand}0A`,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: `${Colors.brand}30`,
+    borderColor: `${colors.brand}30`,
   },
   presetsEmptyCtaText: {
     fontSize: 13,
     fontFamily: Typography.family.medium,
-    color: Colors.brand,
+    color: colors.brand,
   },
 
   syncRetryBanner: {
     marginHorizontal: 24,
     marginBottom: 8,
-    backgroundColor: RETRY_BANNER_BG,
+    backgroundColor: colors.surface,
   },
   syncRetryBtn: {
-    backgroundColor: RETRY_BUTTON_BG,
+    backgroundColor: colors.surface,
   },
 
   scrollContent: { paddingTop: 8, paddingBottom: 40 },
@@ -892,7 +886,7 @@ const styles = StyleSheet.create({
   sectionHeading: {
     fontSize: 16,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     paddingHorizontal: 20,
     marginBottom: 12,
     letterSpacing: -0.2,
@@ -911,7 +905,7 @@ const styles = StyleSheet.create({
     borderWidth: 0,
     backgroundColor: 'transparent',
   },
-  seeAllText: { color: Colors.brand, fontSize: 14, fontFamily: Typography.family.semibold },
+  seeAllText: { color: colors.brand, fontSize: 14, fontFamily: Typography.family.semibold },
 
   hScroll: { paddingHorizontal: 20, gap: 8 },
 
@@ -926,18 +920,18 @@ const styles = StyleSheet.create({
     minHeight: 36,
     paddingHorizontal: 14,
     borderRadius: 18,
-    backgroundColor: CHIP_BG,
+    backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: CHIP_BORDER,
+    borderColor: colors.border,
   },
   sizeChip: { minWidth: 56, alignItems: 'center' },
   mySizeChip: {
-    borderColor: Colors.brand,
+    borderColor: colors.brand,
     borderWidth: 1.5,
   },
   mySizeMarkedChip: {
     borderWidth: 1.5,
-    borderColor: Colors.brand,
+    borderColor: colors.brand,
   },
   mySizesRow: {
     flexDirection: 'row',
@@ -949,7 +943,7 @@ const styles = StyleSheet.create({
   mySizesLabel: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   mySizesScroll: {
     gap: 6,
@@ -964,15 +958,15 @@ const styles = StyleSheet.create({
     minHeight: 32,
     borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.brand,
+    borderColor: colors.brand,
     backgroundColor: 'transparent',
   },
   saveSizesBtnText: {
-    color: Colors.brand,
+    color: colors.brand,
     fontSize: 13,
     fontFamily: Typography.family.semibold,
   },
-  chipActive: { backgroundColor: Colors.textPrimary, borderColor: Colors.textPrimary },
+  chipActive: { backgroundColor: colors.textPrimary, borderColor: colors.textPrimary },
 
   chipIconWrap: {
     width: 18,
@@ -980,12 +974,12 @@ const styles = StyleSheet.create({
     borderRadius: 9,
   },
 
-  chipText: { fontSize: 14, fontFamily: Typography.family.semibold, color: Colors.textPrimary },
-  chipTextActive: { color: Colors.background, fontFamily: Typography.family.bold },
+  chipText: { fontSize: 14, fontFamily: Typography.family.semibold, color: colors.textPrimary },
+  chipTextActive: { color: colors.background, fontFamily: Typography.family.bold },
 
   sectionDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: DIVIDER_COLOR,
+    backgroundColor: colors.border,
     marginVertical: 20,
     marginHorizontal: 20,
   },
@@ -996,9 +990,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 14,
     paddingBottom: Platform.OS === 'ios' ? 32 : 22,
-    backgroundColor: FOOTER_BG,
+    backgroundColor: colors.background,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: DIVIDER_COLOR,
+    borderTopColor: colors.border,
   },
   applyBtn: {
     width: '100%',
@@ -1009,12 +1003,13 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   applyBtnText: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontSize: 16,
     fontFamily: Typography.family.bold,
     letterSpacing: 0.2,
   },
   applyBtnTextDisabled: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
-});
+  });
+}

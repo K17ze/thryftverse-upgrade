@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,9 +13,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
-import { Colors } from '../constants/colors';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
-import { useAppTheme } from '../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useToast } from '../context/ToastContext';
 import { fetchPosterStoryActivity } from '../services/postersApi';
@@ -34,7 +33,8 @@ const REACTION_LABELS: Record<string, string> = {
 };
 
 export default function PosterStoryActivityScreen({ navigation, route }: Props) {
-  const { isDark } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const storyId = route.params.storyId;
 
@@ -147,13 +147,13 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
         <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
         <View style={styles.topBar}>
           <AnimatedPressable onPress={() => navigation.goBack()} style={styles.iconBtn} activeOpacity={0.7} scaleValue={0.9} hapticFeedback="light">
-            <Ionicons name="chevron-back" size={26} color={Colors.textPrimary} />
+            <Ionicons name="chevron-back" size={26} color={colors.textPrimary} />
           </AnimatedPressable>
           <Text style={styles.topTitle}>Story Activity</Text>
           <View style={styles.iconBtn} />
         </View>
         <View style={styles.loadingBody}>
-          <ActivityIndicator size="large" color={Colors.brand} />
+          <ActivityIndicator size="large" color={colors.brand} />
         </View>
       </SafeAreaView>
     );
@@ -175,7 +175,7 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
           scaleValue={0.9}
           hapticFeedback="light"
         >
-          <Ionicons name="chevron-back" size={26} color={Colors.textPrimary} />
+          <Ionicons name="chevron-back" size={26} color={colors.textPrimary} />
         </AnimatedPressable>
         <Text style={styles.topTitle}>Story Activity</Text>
         <View style={styles.iconBtn} />
@@ -211,12 +211,12 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={() => loadActivity(true)}
-            tintColor={Colors.brand}
+            tintColor={colors.brand}
           />
         }
         ListEmptyComponent={
           <View style={styles.emptyBody}>
-            <Ionicons name="people-outline" size={40} color={Colors.textMuted} />
+            <Ionicons name="people-outline" size={40} color={colors.textMuted} />
             <Text style={styles.emptyText}>No {activeTab} yet</Text>
           </View>
         }
@@ -225,132 +225,134 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.sm,
-    paddingVertical: 10,
-  },
-  topTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    letterSpacing: Type.subtitle.letterSpacing,
-  },
-  iconBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingBody: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  tabBar: {
-    flexDirection: 'row',
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
-    gap: Space.sm,
-  },
-  tab: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    paddingVertical: 8,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
-  },
-  tabActive: {
-    backgroundColor: Colors.brand,
-  },
-  tabText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
-  },
-  tabTextActive: {
-    color: '#fff',
-  },
-  tabBadge: {
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    borderRadius: 8,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    minWidth: 16,
-    alignItems: 'center',
-  },
-  tabBadgeText: {
-    color: '#fff',
-    fontSize: 10,
-    fontFamily: Typography.family.bold,
-  },
-  listContent: {
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.xl,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingVertical: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatarPlaceholder: {
-    backgroundColor: Colors.surfaceAlt,
-  },
-  avatarText: {
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.bold,
-    fontSize: 16,
-  },
-  rowContent: {
-    flex: 1,
-    gap: 2,
-  },
-  rowTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-  },
-  rowSubtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
-  },
-  rowTime: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-  },
-  emptyBody: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: Space.xxl,
-    gap: Space.md,
-  },
-  emptyText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    topBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: Space.sm,
+      paddingVertical: 10,
+    },
+    topTitle: {
+      fontSize: Type.subtitle.size,
+      fontFamily: Typography.family.bold,
+      color: colors.textPrimary,
+      letterSpacing: Type.subtitle.letterSpacing,
+    },
+    iconBtn: {
+      width: 44,
+      height: 44,
+      borderRadius: Radius.full,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    loadingBody: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    tabBar: {
+      flexDirection: 'row',
+      paddingHorizontal: Space.md,
+      paddingBottom: Space.sm,
+      gap: Space.sm,
+    },
+    tab: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 4,
+      paddingVertical: 8,
+      borderRadius: Radius.md,
+      backgroundColor: colors.surfaceAlt,
+    },
+    tabActive: {
+      backgroundColor: colors.brand,
+    },
+    tabText: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.semibold,
+      color: colors.textSecondary,
+    },
+    tabTextActive: {
+      color: '#fff',
+    },
+    tabBadge: {
+      backgroundColor: 'rgba(255,255,255,0.25)',
+      borderRadius: 8,
+      paddingHorizontal: 6,
+      paddingVertical: 1,
+      minWidth: 16,
+      alignItems: 'center',
+    },
+    tabBadgeText: {
+      color: '#fff',
+      fontSize: 10,
+      fontFamily: Typography.family.bold,
+    },
+    listContent: {
+      paddingHorizontal: Space.md,
+      paddingBottom: Space.xl,
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm,
+      paddingVertical: Space.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    avatar: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    avatarPlaceholder: {
+      backgroundColor: colors.surfaceAlt,
+    },
+    avatarText: {
+      color: colors.textSecondary,
+      fontFamily: Typography.family.bold,
+      fontSize: 16,
+    },
+    rowContent: {
+      flex: 1,
+      gap: 2,
+    },
+    rowTitle: {
+      fontSize: Type.body.size,
+      fontFamily: Typography.family.semibold,
+      color: colors.textPrimary,
+    },
+    rowSubtitle: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+      color: colors.textSecondary,
+    },
+    rowTime: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+      color: colors.textMuted,
+    },
+    emptyBody: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingTop: Space.xxl,
+      gap: Space.md,
+    },
+    emptyText: {
+      fontSize: Type.body.size,
+      fontFamily: Typography.family.medium,
+      color: colors.textMuted,
+    },
+  });
+}

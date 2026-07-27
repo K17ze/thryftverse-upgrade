@@ -6,7 +6,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
-import { Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Type, Typography } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
@@ -17,11 +17,14 @@ type NavT = StackNavigationProp<RootStackParamList>;
 export default function ArchivedConversationsScreen() {
   const navigation = useNavigation<NavT>();
   const { show } = useToast();
+  const { colors } = useAppTheme();
   const conversations = useStore((s) => s.conversations);
   const archivedIds = useStore((s) => s.archivedConversationIds);
   const toggleArchived = useStore((s) => s.toggleArchivedConversation);
   const deleteConversation = useStore((s) => s.deleteConversation);
   const currentUser = useStore((s) => s.currentUser);
+
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const archivedConversations = useMemo(() => {
     return conversations.filter((c) => archivedIds.includes(c.id));
@@ -94,7 +97,7 @@ export default function ArchivedConversationsScreen() {
     >
       {archivedConversations.length === 0 ? (
         <View style={styles.empty}>
-          <Ionicons name="archive-outline" size={25} color={Colors.textMuted} />
+          <Ionicons name="archive-outline" size={25} color={colors.textMuted} />
           <Text style={styles.emptyTitle}>
             No archived conversations
           </Text>
@@ -141,36 +144,38 @@ export default function ArchivedConversationsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  list: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-  },
-  empty: {
-    alignItems: 'center',
-    paddingHorizontal: Space.xl,
-    paddingTop: 72,
-  },
-  emptyTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-    marginTop: Space.md,
-  },
-  emptyBody: {
-    maxWidth: 300,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-    textAlign: 'center',
-    lineHeight: 18,
-    marginTop: Space.xs,
-  },
-  clearAllBtn: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: Colors.danger,
-    letterSpacing: Type.caption.letterSpacing,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    list: {
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+    },
+    empty: {
+      alignItems: 'center',
+      paddingHorizontal: Space.xl,
+      paddingTop: 72,
+    },
+    emptyTitle: {
+      fontSize: Type.body.size,
+      fontFamily: Typography.family.semibold,
+      color: colors.textPrimary,
+      marginTop: Space.md,
+    },
+    emptyBody: {
+      maxWidth: 300,
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+      color: colors.textMuted,
+      textAlign: 'center',
+      lineHeight: 18,
+      marginTop: Space.xs,
+    },
+    clearAllBtn: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.semibold,
+      color: colors.danger,
+      letterSpacing: Type.caption.letterSpacing,
+    },
+  });
+}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -15,9 +15,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
-import { Colors } from '../constants/colors';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
-import { useAppTheme } from '../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useToast } from '../context/ToastContext';
 import { fetchPosterStoryArchive, deletePosterStory } from '../services/postersApi';
@@ -31,7 +30,8 @@ const CARD_W = (SCREEN_W - Space.md * 3) / 2;
 const CARD_H = CARD_W * (16 / 9);
 
 export default function PosterArchiveScreen({ navigation }: Props) {
-  const { isDark } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
 
   const [stories, setStories] = useState<PosterStory[]>([]);
@@ -101,7 +101,7 @@ export default function PosterArchiveScreen({ navigation }: Props) {
               containerStyle={{ borderRadius: Radius.lg, overflow: 'hidden' }}
             />
           ) : (
-            <View style={[styles.cardPlaceholder, { backgroundColor: firstFrame?.backgroundColor ?? Colors.surfaceAlt }]}>
+            <View style={[styles.cardPlaceholder, { backgroundColor: firstFrame?.backgroundColor ?? colors.surfaceAlt }]}>
               <Text style={styles.cardPlaceholderText} numberOfLines={2}>
                 {firstFrame?.caption || 'Text story'}
               </Text>
@@ -130,7 +130,7 @@ export default function PosterArchiveScreen({ navigation }: Props) {
             {new Date(item.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
           </Text>
           <Pressable onPress={() => handleDelete(item.id)} accessibilityLabel="Delete story">
-            <Ionicons name="trash-outline" size={18} color={Colors.textMuted} />
+            <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
           </Pressable>
         </View>
       </Pressable>
@@ -143,13 +143,13 @@ export default function PosterArchiveScreen({ navigation }: Props) {
         <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
         <View style={styles.topBar}>
           <AnimatedPressable onPress={() => navigation.goBack()} style={styles.iconBtn} activeOpacity={0.7} scaleValue={0.9} hapticFeedback="light">
-            <Ionicons name="chevron-back" size={26} color={Colors.textPrimary} />
+            <Ionicons name="chevron-back" size={26} color={colors.textPrimary} />
           </AnimatedPressable>
           <Text style={styles.topTitle}>Archive</Text>
           <View style={styles.iconBtn} />
         </View>
         <View style={styles.loadingBody}>
-          <ActivityIndicator size="large" color={Colors.brand} />
+          <ActivityIndicator size="large" color={colors.brand} />
         </View>
       </SafeAreaView>
     );
@@ -167,7 +167,7 @@ export default function PosterArchiveScreen({ navigation }: Props) {
           scaleValue={0.9}
           hapticFeedback="light"
         >
-          <Ionicons name="chevron-back" size={26} color={Colors.textPrimary} />
+          <Ionicons name="chevron-back" size={26} color={colors.textPrimary} />
         </AnimatedPressable>
         <Text style={styles.topTitle}>My Poster Archive</Text>
         <View style={styles.iconBtn} />
@@ -184,12 +184,12 @@ export default function PosterArchiveScreen({ navigation }: Props) {
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={() => loadArchive(true)}
-            tintColor={Colors.brand}
+            tintColor={colors.brand}
           />
         }
         ListEmptyComponent={
           <View style={styles.emptyBody}>
-            <Ionicons name="archive-outline" size={48} color={Colors.textMuted} />
+            <Ionicons name="archive-outline" size={48} color={colors.textMuted} />
             <Text style={styles.emptyTitle}>No archived stories</Text>
             <Text style={styles.emptySubtitle}>Your past poster stories will appear here</Text>
           </View>
@@ -199,24 +199,25 @@ export default function PosterArchiveScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.sm,
-    paddingVertical: 10,
-  },
-  topTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    letterSpacing: Type.subtitle.letterSpacing,
-  },
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    topBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: Space.sm,
+      paddingVertical: 10,
+    },
+    topTitle: {
+      fontSize: Type.subtitle.size,
+      fontFamily: Typography.family.bold,
+      color: colors.textPrimary,
+      letterSpacing: Type.subtitle.letterSpacing,
+    },
   iconBtn: {
     width: 44,
     height: 44,
@@ -304,7 +305,7 @@ const styles = StyleSheet.create({
   cardDate: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   emptyBody: {
     flex: 1,
@@ -316,11 +317,12 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   emptySubtitle: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
-});
+  });
+}

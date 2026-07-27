@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, RouteProp, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { TypeStyles, Space, Radius, Type, Typography } from '../theme/designTokens';
 import { RootStackParamList } from '../navigation/types';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -21,11 +21,13 @@ type NavT = StackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'MyListings'>;
 
 function ListingRow({ item, onPress }: { item: ListingApiItem; onPress: () => void }) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const statusColor =
-    item.status === 'active' ? Colors.success
-    : item.status === 'paused' ? Colors.textMuted
-    : item.status === 'sold' ? Colors.brand
-    : Colors.danger;
+    item.status === 'active' ? colors.success
+    : item.status === 'paused' ? colors.textMuted
+    : item.status === 'sold' ? colors.brand
+    : colors.danger;
 
   return (
     <AnimatedPressable style={styles.row} onPress={onPress} activeOpacity={0.85}>
@@ -33,7 +35,7 @@ function ListingRow({ item, onPress }: { item: ListingApiItem; onPress: () => vo
         <CachedImage uri={item.images[0]} style={styles.rowImage} containerStyle={styles.rowImageWrap} contentFit="cover" />
       ) : (
         <View style={[styles.rowImageWrap, styles.rowImageFallback]}>
-          <Ionicons name="bag-handle-outline" size={20} color={Colors.textMuted} />
+          <Ionicons name="bag-handle-outline" size={20} color={colors.textMuted} />
         </View>
       )}
       <View style={styles.rowBody}>
@@ -46,13 +48,15 @@ function ListingRow({ item, onPress }: { item: ListingApiItem; onPress: () => vo
           {item.category ? <Text style={styles.rowCategory}>{item.category}</Text> : null}
         </View>
       </View>
-      <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
     </AnimatedPressable>
   );
 }
 
 function StatCard({ icon, label, value, tone }: { icon: string; label: string; value: string; tone?: 'default' | 'success' | 'brand' }) {
-  const color = tone === 'success' ? Colors.success : tone === 'brand' ? Colors.brand : Colors.textPrimary;
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const color = tone === 'success' ? colors.success : tone === 'brand' ? colors.brand : colors.textPrimary;
   return (
     <View style={styles.statCard}>
       <Ionicons name={icon as any} size={16} color={color} />
@@ -63,6 +67,8 @@ function StatCard({ icon, label, value, tone }: { icon: string; label: string; v
 }
 
 export default function MyListingsScreen() {
+  const { colors, isDark } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<NavT>();
   const route = useRoute<RouteT>();
   const { show } = useToast();
@@ -127,10 +133,10 @@ export default function MyListingsScreen() {
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} />
+        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} />
         <ScreenHeader title={headerTitle} onBack={() => navigation.goBack()} />
         <View style={styles.body}>
-          <ActivityIndicator size="large" color={Colors.brand} />
+          <ActivityIndicator size="large" color={colors.brand} />
         </View>
       </SafeAreaView>
     );
@@ -180,7 +186,7 @@ export default function MyListingsScreen() {
             accessibilityLabel="Create new listing"
             accessibilityRole="button"
           >
-            <Ionicons name="add-circle-outline" size={18} color={Colors.brand} />
+            <Ionicons name="add-circle-outline" size={18} color={colors.brand} />
             <Text style={styles.quickActionText}>New listing</Text>
           </AnimatedPressable>
           <AnimatedPressable
@@ -190,7 +196,7 @@ export default function MyListingsScreen() {
             accessibilityLabel="View seller analytics"
             accessibilityRole="button"
           >
-            <Ionicons name="bar-chart-outline" size={18} color={Colors.brand} />
+            <Ionicons name="bar-chart-outline" size={18} color={colors.brand} />
             <Text style={styles.quickActionText}>Analytics</Text>
           </AnimatedPressable>
           <AnimatedPressable
@@ -200,7 +206,7 @@ export default function MyListingsScreen() {
             accessibilityLabel="Manage auctions"
             accessibilityRole="button"
           >
-            <Ionicons name="trophy-outline" size={18} color={Colors.brand} />
+            <Ionicons name="trophy-outline" size={18} color={colors.brand} />
             <Text style={styles.quickActionText}>Auctions</Text>
           </AnimatedPressable>
           <AnimatedPressable
@@ -210,7 +216,7 @@ export default function MyListingsScreen() {
             accessibilityLabel="View payout account"
             accessibilityRole="button"
           >
-            <Ionicons name="wallet-outline" size={18} color={Colors.brand} />
+            <Ionicons name="wallet-outline" size={18} color={colors.brand} />
             <Text style={styles.quickActionText}>Payouts</Text>
           </AnimatedPressable>
         </View>
@@ -227,7 +233,7 @@ export default function MyListingsScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} />
+      <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} />
       <ScreenHeader title={headerTitle} onBack={() => navigation.goBack()} />
 
       {listings.length === 0 ? (
@@ -259,10 +265,11 @@ export default function MyListingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   body: {
     flex: 1,
@@ -290,9 +297,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm,
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     gap: 2,
   },
   statValue: {
@@ -302,7 +309,7 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 11,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   quickActionsRow: {
     flexDirection: 'row',
@@ -316,14 +323,14 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   quickActionText: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
+    color: colors.brand,
   },
   listingsHeaderRow: {
     flexDirection: 'row',
@@ -334,7 +341,7 @@ const styles = StyleSheet.create({
   listingsHeaderText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -343,17 +350,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.md,
     padding: Space.md,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   rowImageWrap: {
     width: 64,
     height: 64,
     borderRadius: Radius.md,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   rowImage: {
     width: 64,
@@ -370,12 +377,12 @@ const styles = StyleSheet.create({
   rowTitle: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   rowPrice: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   rowMeta: {
     flexDirection: 'row',
@@ -397,6 +404,7 @@ const styles = StyleSheet.create({
   rowCategory: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
-});
+  });
+}

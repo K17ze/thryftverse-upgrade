@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,6 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
-import { Colors } from '../constants/colors';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsSection } from '../components/settings/SettingsSection';
@@ -22,6 +21,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
 import { useAppTheme } from '../theme/ThemeContext';
+import type { ThemeColors } from '../theme/ThemeContext';
 import {
   VERIFICATION_TIERS,
   VerificationTier,
@@ -43,6 +43,7 @@ const UK_COUNTRIES = ['GB', 'IE'];
 export default function VerificationScreen({ navigation }: Props) {
   const { show } = useToast();
   const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const currentUser = useStore((state) => state.currentUser);
   const coOwnCompliance = useStore((state) => state.coOwnCompliance);
   const updateCoOwnCompliance = useStore((state) => state.updateCoOwnCompliance);
@@ -377,7 +378,7 @@ export default function VerificationScreen({ navigation }: Props) {
                   accessibilityLabel="Submit verification"
                 >
                   {isSubmittingKyc ? (
-                    <ActivityIndicator size="small" color={Colors.textInverse} />
+                    <ActivityIndicator size="small" color={colors.textInverse} />
                   ) : (
                     <Text style={styles.flowPrimaryBtnText}>Submit</Text>
                   )}
@@ -493,7 +494,7 @@ export default function VerificationScreen({ navigation }: Props) {
                   accessibilityLabel="Save tax information"
                 >
                   {isSubmittingDac7 ? (
-                    <ActivityIndicator size="small" color={Colors.textInverse} />
+                    <ActivityIndicator size="small" color={colors.textInverse} />
                   ) : (
                     <Text style={styles.flowPrimaryBtnText}>Save</Text>
                   )}
@@ -520,7 +521,8 @@ export default function VerificationScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   statusCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -549,10 +551,10 @@ const styles = StyleSheet.create({
     lineHeight: Type.body.lineHeight,
   },
   flowCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     marginBottom: Space.md,
     overflow: 'hidden',
   },
@@ -562,7 +564,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   flowTitle: {
     fontSize: Type.body.size,
@@ -610,7 +612,7 @@ const styles = StyleSheet.create({
     paddingVertical: Space.lg,
     borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     borderStyle: 'dashed',
   },
   uploadText: {
@@ -623,15 +625,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.xs,
     borderRadius: Radius.sm,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     marginTop: Space.xs,
   },
   uploadBtnText: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   flowNavRow: {
     flexDirection: 'row',
@@ -643,20 +645,20 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   flowBackBtnText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   flowPrimaryBtn: {
     flex: 1,
     height: 44,
     borderRadius: Radius.md,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -666,7 +668,7 @@ const styles = StyleSheet.create({
   flowPrimaryBtnText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
   reviewRow: {
     flexDirection: 'row',
@@ -674,7 +676,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     paddingVertical: Space.xs,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
     gap: Space.md,
   },
   reviewLabel: {
@@ -725,7 +727,8 @@ const styles = StyleSheet.create({
     paddingBottom: Space.lg,
   },
   footerLink: {
-    color: Colors.brand,
+    color: colors.brand,
     fontFamily: Typography.family.semibold,
   },
 });
+}

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -21,8 +21,9 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Linking from 'expo-linking';
-import { Colors } from '../constants/colors';
 import { Typography, Radius } from '../theme/designTokens';
+import { useAppTheme } from '../theme/ThemeContext';
+import type { ThemeColors } from '../theme/ThemeContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useStore } from '../store/useStore';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -46,6 +47,8 @@ function firstQueryParam(value: string | string[] | undefined): string | undefin
 
 export default function AuthLandingScreen() {
   const navigation = useNavigation<any>();
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const login = useStore((state) => state.login);
   const setTwoFactorEnabled = useStore((state) => state.setTwoFactorEnabled);
   const reducedMotionEnabled = useReducedMotion();
@@ -287,7 +290,7 @@ export default function AuthLandingScreen() {
             entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}
             style={styles.errorBanner}
           >
-            <Ionicons name="alert-circle-outline" size={16} color={Colors.danger} />
+            <Ionicons name="alert-circle-outline" size={16} color={colors.danger} />
             <Text style={styles.errorBannerText}>{authError}</Text>
             <Pressable
               onPress={() => setAuthError(null)}
@@ -394,7 +397,8 @@ export default function AuthLandingScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#090909',
@@ -479,23 +483,23 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 12,
     fontFamily: Typography.family.medium,
-    color: Colors.danger,
+    color: colors.danger,
     lineHeight: 16,
   },
   primaryBtn: {
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     height: 56,
     borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: Colors.brand,
+    shadowColor: colors.brand,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.2,
     shadowRadius: 16,
     elevation: 8,
   },
   primaryText: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
     fontSize: 16,
     fontFamily: Typography.family.bold,
     letterSpacing: 0.2,
@@ -504,9 +508,9 @@ const styles = StyleSheet.create({
     marginHorizontal: 0,
     padding: 0,
     overflow: 'hidden',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     borderRadius: Radius.lg,
   },
   secondaryBtnGlass: {
@@ -578,7 +582,8 @@ const styles = StyleSheet.create({
   devBypassText: {
     fontSize: 12,
     fontFamily: Typography.family.medium,
-    color: Colors.success,
+    color: colors.success,
     textAlign: 'center',
   },
 });
+}

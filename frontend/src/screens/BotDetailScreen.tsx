@@ -9,7 +9,6 @@ import { ChatInfoRow, ChatInfoSection } from '../components/chat/ChatInfoSection
 import { AppButton } from '../components/ui/AppButton';
 import { Caption } from '../components/ui/Text';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
-import { Colors } from '../constants/colors';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { RootStackParamList } from '../navigation/types';
@@ -19,13 +18,14 @@ import {
 } from '../services/chatApi';
 import { useStore } from '../store/useStore';
 import { Space, Type, Typography } from '../theme/designTokens';
-import { useAppTheme } from '../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 
 type Props = StackScreenProps<RootStackParamList, 'BotDetail'>;
 
 export default function BotDetailScreen({ navigation, route }: Props) {
   const { botId, conversationId } = route.params;
-  const { isDark } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
   const bots = useStore((state) => state.availableChatBots);
@@ -58,7 +58,7 @@ export default function BotDetailScreen({ navigation, route }: Props) {
         <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
         <ScreenHeader title="Agent details" onBack={() => navigation.goBack()} />
         <View style={styles.center}>
-          <Caption color={Colors.textMuted}>Agent not found</Caption>
+          <Caption color={colors.textMuted}>Agent not found</Caption>
         </View>
       </SafeAreaView>
     );
@@ -147,7 +147,7 @@ export default function BotDetailScreen({ navigation, route }: Props) {
               accessibilityRole="button"
               accessibilityLabel="Edit agent"
             >
-              <Ionicons name="create-outline" size={21} color={Colors.textPrimary} />
+              <Ionicons name="create-outline" size={21} color={colors.textPrimary} />
             </AnimatedPressable>
           ) : undefined
         }
@@ -160,7 +160,7 @@ export default function BotDetailScreen({ navigation, route }: Props) {
               category={bot.category}
               name={bot.name}
               size={25}
-              color={Colors.textPrimary}
+              color={colors.textPrimary}
             />
           </View>
           <View style={styles.identityCopy}>
@@ -260,10 +260,11 @@ export default function BotDetailScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   center: {
     flex: 1,
@@ -298,19 +299,19 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   agentName: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.bold,
     fontSize: Type.title.size,
     letterSpacing: Type.title.letterSpacing,
   },
   identityMeta: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontFamily: Typography.family.regular,
     fontSize: Type.caption.size,
     textTransform: 'capitalize',
   },
   description: {
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontFamily: Typography.family.regular,
     fontSize: Type.body.size,
     lineHeight: 22,
@@ -318,4 +319,5 @@ const styles = StyleSheet.create({
   chatAction: {
     marginTop: Space.xs,
   },
-});
+  });
+}

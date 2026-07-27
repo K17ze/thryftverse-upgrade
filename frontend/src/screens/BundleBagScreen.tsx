@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { RootStackParamList } from '../navigation/types';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
@@ -39,6 +39,8 @@ function getBundleDiscount(selectedCount: number): number {
 }
 
 export default function BundleBagScreen() {
+  const { colors, isDark } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<NavT>();
   const route = useRoute<RouteT>();
   const { sellerId, sellerName } = route.params ?? { sellerId: '', sellerName: '' };
@@ -106,13 +108,13 @@ export default function BundleBagScreen() {
         accessibilityLabel={`${isSelected ? 'Deselect' : 'Select'} ${item.title}`}
       >
         <View style={[styles.checkbox, isSelected && styles.checkboxChecked]}>
-          {isSelected && <Ionicons name="checkmark" size={16} color={Colors.background} />}
+          {isSelected && <Ionicons name="checkmark" size={16} color={colors.background} />}
         </View>
         {item.images?.[0] ? (
           <CachedImage uri={item.images[0]} style={styles.itemImage} contentFit="cover" />
         ) : (
           <View style={[styles.itemImage, styles.itemImagePlaceholder]}>
-            <Ionicons name="shirt-outline" size={20} color={Colors.textMuted} />
+            <Ionicons name="shirt-outline" size={20} color={colors.textMuted} />
           </View>
         )}
         <View style={styles.itemInfo}>
@@ -127,10 +129,10 @@ export default function BundleBagScreen() {
   if (isSyncing && sellerListings.length === 0) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} />
+        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} />
         <ScreenHeader title="Bundle Bag" onBack={() => navigation.goBack()} />
         <View style={styles.loadingBody}>
-          <ActivityIndicator size="large" color={Colors.brand} />
+          <ActivityIndicator size="large" color={colors.brand} />
         </View>
       </SafeAreaView>
     );
@@ -138,7 +140,7 @@ export default function BundleBagScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} />
+      <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} />
       <ScreenHeader title="Bundle Bag" onBack={() => navigation.goBack()} />
 
       {sellerListings.length === 0 ? (
@@ -155,7 +157,7 @@ export default function BundleBagScreen() {
         <View style={styles.body}>
           {/* Seller info */}
           <View style={styles.sellerBanner}>
-            <Ionicons name="storefront-outline" size={20} color={Colors.brand} />
+            <Ionicons name="storefront-outline" size={20} color={colors.brand} />
             <Text style={styles.sellerText}>
               {sellerListings.length} items from {sellerName ?? 'this seller'}
             </Text>
@@ -173,7 +175,7 @@ export default function BundleBagScreen() {
                   <Ionicons
                     name={achieved ? 'checkmark-circle' : 'ellipse-outline'}
                     size={12}
-                    color={achieved ? Colors.brand : Colors.textMuted}
+                    color={achieved ? colors.brand : colors.textMuted}
                   />
                   <Text style={[styles.tierChipText, achieved && styles.tierChipTextActive]}>
                     {tier.label}
@@ -200,8 +202,8 @@ export default function BundleBagScreen() {
               </View>
               {discountAmount > 0 && (
                 <View style={styles.summaryRow}>
-                  <Text style={[styles.summaryLabel, { color: Colors.brand }]}>Bundle discount ({discountPercent}%)</Text>
-                  <Text style={[styles.summaryValue, { color: Colors.brand }]}>-{formatFromFiat(discountAmount, 'GBP', { displayMode: 'fiat' })}</Text>
+                  <Text style={[styles.summaryLabel, { color: colors.brand }]}>Bundle discount ({discountPercent}%)</Text>
+                  <Text style={[styles.summaryValue, { color: colors.brand }]}>-{formatFromFiat(discountAmount, 'GBP', { displayMode: 'fiat' })}</Text>
                 </View>
               )}
               <View style={styles.summaryRow}>
@@ -230,10 +232,11 @@ export default function BundleBagScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   loadingBody: {
     flex: 1,
@@ -249,14 +252,14 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   sellerText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   tiersRow: {
     flexDirection: 'row',
@@ -273,20 +276,20 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
   },
   tierChipActive: {
-    borderColor: Colors.brand,
-    backgroundColor: `${Colors.brand}10`,
+    borderColor: colors.brand,
+    backgroundColor: `${colors.brand}10`,
   },
   tierChipText: {
     fontSize: 11,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   tierChipTextActive: {
-    color: Colors.brand,
+    color: colors.brand,
     fontFamily: Typography.family.semibold,
   },
   list: {
@@ -302,32 +305,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   itemRowSelected: {
-    borderColor: Colors.brand,
-    backgroundColor: `${Colors.brand}08`,
+    borderColor: colors.brand,
+    backgroundColor: `${colors.brand}08`,
   },
   checkbox: {
     width: 24,
     height: 24,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   checkboxChecked: {
-    backgroundColor: Colors.brand,
-    borderColor: Colors.brand,
+    backgroundColor: colors.brand,
+    borderColor: colors.brand,
   },
   itemImage: {
     width: 56,
     height: 56,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   itemImagePlaceholder: {
     alignItems: 'center',
@@ -340,26 +343,26 @@ const styles = StyleSheet.create({
   itemTitle: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   itemPrice: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   itemMeta: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   footer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopColor: colors.border,
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
     gap: 4,
@@ -373,31 +376,32 @@ const styles = StyleSheet.create({
   summaryLabel: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   summaryValue: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   totalRow: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
+    borderTopColor: colors.border,
     marginTop: 4,
     paddingTop: 8,
   },
   totalLabel: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   totalValue: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   checkoutBtn: {
     marginTop: Space.sm,
     width: '100%',
   },
-});
+  });
+}

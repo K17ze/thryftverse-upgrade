@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { RootStackParamList } from '../navigation/types';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
@@ -33,6 +33,8 @@ interface HubAction {
 }
 
 export default function SellerHubScreen() {
+  const { colors, isDark } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<NavT>();
   const currentUser = useStore((s) => s.currentUser);
   const { data: sellerTrust } = useSellerTrust(currentUser?.id);
@@ -140,10 +142,10 @@ export default function SellerHubScreen() {
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} />
+        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} />
         <ScreenHeader title="Seller Hub" onBack={() => navigation.goBack()} />
         <View style={styles.loadingBody}>
-          <ActivityIndicator size="large" color={Colors.brand} />
+          <ActivityIndicator size="large" color={colors.brand} />
         </View>
       </SafeAreaView>
     );
@@ -151,7 +153,7 @@ export default function SellerHubScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} />
+      <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} />
       <ScreenHeader title="Seller Hub" onBack={() => navigation.goBack()} />
 
       <ScrollView
@@ -172,7 +174,7 @@ export default function SellerHubScreen() {
         </View>
         <View style={styles.statsGrid}>
           {stats.map((stat) => {
-            const color = stat.tone === 'success' ? Colors.success : stat.tone === 'brand' ? Colors.brand : Colors.textPrimary;
+            const color = stat.tone === 'success' ? colors.success : stat.tone === 'brand' ? colors.brand : colors.textPrimary;
             return (
               <View key={stat.label} style={styles.statCard}>
                 <Ionicons name={stat.icon as any} size={16} color={color} />
@@ -198,13 +200,13 @@ export default function SellerHubScreen() {
               accessibilityLabel={action.accessibilityLabel}
             >
               <View style={styles.actionIconWrap}>
-                <Ionicons name={action.icon as any} size={20} color={Colors.brand} />
+                <Ionicons name={action.icon as any} size={20} color={colors.brand} />
               </View>
               <View style={styles.actionInfo}>
                 <Text style={styles.actionLabel}>{action.label}</Text>
                 <Text style={styles.actionSubtitle}>{action.subtitle}</Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </AnimatedPressable>
           ))}
         </View>
@@ -212,7 +214,7 @@ export default function SellerHubScreen() {
         {/* Primary CTA */}
         <AppButton
           title="Create new listing"
-          icon={<Ionicons name="add-circle-outline" size={18} color={Colors.background} />}
+          icon={<Ionicons name="add-circle-outline" size={18} color={colors.background} />}
           variant="primary"
           size="lg"
           style={styles.ctaBtn}
@@ -225,10 +227,11 @@ export default function SellerHubScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   loadingBody: {
     flex: 1,
@@ -249,7 +252,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   statsGrid: {
     flexDirection: 'row',
@@ -262,9 +265,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm,
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     gap: 2,
   },
   statValue: {
@@ -274,7 +277,7 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 11,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   actionsList: {
     gap: Space.xs,
@@ -286,15 +289,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   actionIconWrap: {
     width: 40,
     height: 40,
     borderRadius: Radius.md,
-    backgroundColor: `${Colors.brand}12`,
+    backgroundColor: `${colors.brand}12`,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -305,14 +308,15 @@ const styles = StyleSheet.create({
   actionLabel: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   actionSubtitle: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   ctaBtn: {
     marginTop: Space.lg,
   },
-});
+  });
+}
