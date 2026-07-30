@@ -211,6 +211,24 @@ export interface MarketCoOwnAsset {
    * no candle data exists. The frontend gates the candle toggle on
    * this. */
   candles?: CoOwnCandle[];
+  /** T06: Versioned rights/dossier. Null when no rights have been
+   * published for this asset. The frontend must not claim rights
+   * guarantees without this being populated. */
+  rights?: CoOwnRights | null;
+}
+
+/** Co-Own rights/dossier. Per T06: versioned, attributable rights
+ * document attached to each Co-Own asset. */
+export interface CoOwnRights {
+  id: string;
+  version: number;
+  rightsType: 'fractional_ownership' | 'revenue_share' | 'usage_rights' | 'custody';
+  jurisdiction: string;
+  governingLaw: string | null;
+  summaryTerms: string;
+  transferable: boolean;
+  minHoldingUnits: number;
+  publishedAt: string;
 }
 
 /** Co-Own market snapshot. Per spec 03_COOWN §2. */
@@ -883,6 +901,9 @@ export async function placeAuctionBid(
 export interface BuyNowResult {
   ok: true;
   isBuyNow: true;
+  /** T08: Order ID created by Buy Now. The order flows into the standard
+   * fulfilment workflow (orders table with auction_id). */
+  orderId?: string;
   idempotent?: boolean;
   bid: MarketAuctionBid;
   auction: {

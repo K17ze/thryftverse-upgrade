@@ -35032,6 +35032,7 @@ app.post('/auctions/:auctionId/buy-now', async (request, reply) => {
     const auctionResult = await client.query<{
       id: string;
       seller_id: string;
+      listing_id: string;
       starts_at: string;
       ends_at: string;
       current_bid_gbp: number | string;
@@ -35044,7 +35045,7 @@ app.post('/auctions/:auctionId/buy-now', async (request, reply) => {
       winner_bid_id: number | null;
     }>(
       `
-        SELECT id, seller_id, starts_at, ends_at, current_bid_gbp, min_increment_gbp, bid_count, buy_now_price_gbp, cancelled_at, settled_at, winner_bidder_id, winner_bid_id
+        SELECT id, seller_id, listing_id, starts_at, ends_at, current_bid_gbp, min_increment_gbp, bid_count, buy_now_price_gbp, cancelled_at, settled_at, winner_bidder_id, winner_bid_id
         FROM auctions
         WHERE id = $1
         FOR UPDATE
@@ -35236,6 +35237,23 @@ app.post('/auctions/:auctionId/buy-now', async (request, reply) => {
       [auctionId, transactionAmountGbp, nextBidCount, buyerId, bidResult.rows[0].id]
     );
 
+    // T08: Create an order record so Buy Now flows into fulfilment.
+    // The orders.auction_id column (migration 065) has a unique index,
+    // guaranteeing exactly one order per auction Buy Now.
+    const orderId = `auc-${auctionId}-${scopedKey.slice(-12)}`;
+    await client.query(
+      `
+        INSERT INTO orders (
+          id, buyer_id, seller_id, listing_id,
+          subtotal_gbp, buyer_protection_fee_gbp, total_gbp,
+          status, auction_id
+        )
+        VALUES ($1, $2, $3, $4, $5, 0, $5, 'created', $6)
+        ON CONFLICT (auction_id) DO NOTHING
+      `,
+      [orderId, buyerId, auction.seller_id, auction.listing_id, transactionAmountGbp, auctionId]
+    );
+
     if (amlAssessment.shouldCreateAlert) {
       amlAlert = await createAmlAlert(client, {
         userId: buyerId,
@@ -35265,6 +35283,7 @@ app.post('/auctions/:auctionId/buy-now', async (request, reply) => {
       responseBody: {
         ok: true,
         isBuyNow: true,
+        orderId,
         bid: {
           id: bidResult.rows[0].id,
           auctionId,
@@ -35346,6 +35365,7 @@ app.post('/auctions/:auctionId/buy-now', async (request, reply) => {
     return {
       ok: true,
       isBuyNow: true,
+      orderId,
       bid: {
         id: bidResult.rows[0].id,
         auctionId,
@@ -35402,6 +35422,7 @@ app.get('/auctions/:auctionId', async (request, reply) => {
     winner_bidder_id: string | null;
     settled_at: string | null;
     cancelled_at: string | null;
+    reserve_price_gbp: number | string | null;
     created_at: string;
     title: string | null;
     image_url: string | null;
@@ -35432,6 +35453,7 @@ app.get('/auctions/:auctionId', async (request, reply) => {
         a.winner_bidder_id,
         a.settled_at,
         a.cancelled_at,
+        a.reserve_price_gbp,
         a.created_at,
         l.title,
         l.image_url,
@@ -35599,6 +35621,9 @@ app.get('/auctions/:auctionId', async (request, reply) => {
       currentBidGbp: currentBid,
       minimumNextBidGbp: minimumNextBid,
       buyNowPriceGbp: row.buy_now_price_gbp === null ? null : Number(row.buy_now_price_gbp),
+      // T07: authoritative reserve price from the auctions table.
+      // NULL means no reserve set (auction is effectively reserve-met).
+      reservePriceGbp: row.reserve_price_gbp === null ? null : Number(row.reserve_price_gbp),
       bidCount: row.bid_count,
       lifecycle: computedStatus,
       terminalReason: canonical.terminalReason,
@@ -36858,37 +36883,31 @@ app.get('/co-own/assets/:assetId/holdings', async (request, reply) => {
   const { assetId } = paramsSchema.parse(request.params);
   const { limit } = querySchema.parse(request.query);
 
+  // T05: Privacy — this public endpoint must not expose per-user
+  // identifiers, entry prices, or realised P&L. Only aggregate holdings
+  // data (holder count, total units held) is returned. Per-user detail
+  // is available only via the authenticated /users/:userId/co-own/holdings
+  // endpoint.
   const result = await db.query<{
-    user_id: string;
-    units_owned: number;
-    avg_entry_price_gbp: string;
-    realized_pnl_gbp: string;
-    updated_at: string;
+    total_holders: number;
+    total_units_held: number;
   }>(
     `
       SELECT
-        user_id,
-        units_owned,
-        avg_entry_price_gbp::text,
-        realized_pnl_gbp::text,
-        updated_at::text
+        COUNT(*)::integer AS total_holders,
+        COALESCE(SUM(units_owned), 0)::integer AS total_units_held
       FROM coOwn_holdings
       WHERE asset_id = $1
-      ORDER BY units_owned DESC, updated_at DESC
-      LIMIT $2
     `,
-    [assetId, limit]
+    [assetId]
   );
 
   return {
     ok: true,
-    items: result.rows.map((row) => ({
-      userId: row.user_id,
-      unitsOwned: row.units_owned,
-      avgEntryPriceGbp: Number(row.avg_entry_price_gbp),
-      realizedPnlGbp: Number(row.realized_pnl_gbp),
-      updatedAt: row.updated_at,
-    })),
+    aggregate: {
+      totalHolders: result.rows[0]?.total_holders ?? 0,
+      totalUnitsHeld: result.rows[0]?.total_units_held ?? 0,
+    },
   };
 });
 
@@ -39016,6 +39035,45 @@ app.get('/co-own/assets/:assetId', async (request, reply) => {
     volume: Number(c.total_volume),
   }));
 
+  // T06: Co-Own rights/dossier — fetch the currently published rights
+  // version for this asset. Returns null when no rights have been
+  // published (e.g., a new asset with no dossier yet).
+  const rightsResult = await db.query<{
+    id: string;
+    version: number;
+    rights_type: string;
+    jurisdiction: string;
+    governing_law: string | null;
+    summary_terms: string;
+    transferable: boolean;
+    min_holding_units: number;
+    published_at: string;
+  }>(
+    `
+      SELECT id, version, rights_type, jurisdiction, governing_law,
+             summary_terms, transferable, min_holding_units, published_at
+      FROM coown_rights
+      WHERE asset_id = $1 AND status = 'published'
+      ORDER BY version DESC
+      LIMIT 1
+    `,
+    [assetId]
+  );
+
+  const rights = rightsResult.rows[0]
+    ? {
+        id: rightsResult.rows[0].id,
+        version: rightsResult.rows[0].version,
+        rightsType: rightsResult.rows[0].rights_type,
+        jurisdiction: rightsResult.rows[0].jurisdiction,
+        governingLaw: rightsResult.rows[0].governing_law,
+        summaryTerms: rightsResult.rows[0].summary_terms,
+        transferable: rightsResult.rows[0].transferable,
+        minHoldingUnits: rightsResult.rows[0].min_holding_units,
+        publishedAt: rightsResult.rows[0].published_at,
+      }
+    : null;
+
   return {
     ok: true,
     item: {
@@ -39050,6 +39108,9 @@ app.get('/co-own/assets/:assetId', async (request, reply) => {
       // Per spec 03_COOWN §4: canonical OHLC candles aggregated from
       // settled trades. Empty array when no trades exist.
       candles,
+      // T06: versioned rights/dossier. Null when no rights have been
+      // published for this asset.
+      rights,
     },
   };
 });

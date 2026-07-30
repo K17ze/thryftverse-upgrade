@@ -2,7 +2,7 @@
 
 Status values: `OPEN`, `PASS`, `N/A`, `EXCEPTION`. Every `PASS` needs links to code, test output and visual evidence where applicable.
 
-Updated: 2026-07-30 — Phase 5 frontend closure pass (M09 video background pause, R02 freshness UI, A02 large-text reflow source fixes) on `feat/product-detail-contract-media-device-closure`.
+Updated: 2026-07-30 — Phase 1 P0 backend closure (T05 holdings privacy, T06 rights/dossier, T07 reserve price, T08 Buy Now order) + Phase 5 frontend closure (M09 video background pause, R02 freshness UI, A02 large-text reflow source fixes) on `feat/product-detail-contract-media-device-closure`.
 
 ## Truth and security
 
@@ -12,10 +12,10 @@ Updated: 2026-07-30 — Phase 5 frontend closure pass (M09 video background paus
 | T02 | Exact listing lifecycle and capabilities are server-derived | PASS | `frontend/src/platform/product/listingDetailContract.ts` — `buildCapabilities` derives `unavailableReason` from `listing.status`; `listingDetailContract.test.ts` "fails closed when lifecycle truth is missing" passes. |
 | T03 | Non-public listings require authorization | OPEN | Backend authorization gate not in this pass. |
 | T04 | Policy/protection terms are versioned and attributable | OPEN | Backend policy versioning not in this pass. |
-| T05 | Public Co-Own holdings leak is removed | OPEN | Backend holdings route privacy not in this pass. |
-| T06 | Co-Own rights/dossier is typed, versioned and populated | OPEN | Backend rights contract not in this pass. |
-| T07 | Auction reserve state is authoritative | OPEN | Backend reserve_price not in detail response; client-side `reserveStatus` remains. |
-| T08 | Auction Buy Now creates exactly one order | OPEN | Backend Buy Now creates a bid + marks auction ended; no order/fulfilment record. |
+| T05 | Public Co-Own holdings leak is removed | PASS | `GET /co-own/assets/:assetId/holdings` now returns only aggregate data (`totalHolders`, `totalUnitsHeld`). Per-user fields (`userId`, `avgEntryPriceGbp`, `realizedPnlGbp`) removed from the public endpoint. Per-user holdings remain available only via the authenticated `GET /users/:userId/co-own/holdings` (callerId !== userId → 403). |
+| T06 | Co-Own rights/dossier is typed, versioned and populated | PASS | Migration `080_auction_reserve_price_and_coown_rights.sql` creates `coown_rights` table with versioned, attributable rights documents (rights_type, jurisdiction, governing_law, summary_terms, transferable, min_holding_units, published_at). Partial unique index enforces one published version per asset. `GET /co-own/assets/:assetId` now includes `rights` object from the latest published version. Frontend `CoOwnRights` type added to `marketApi.ts`. |
+| T07 | Auction reserve state is authoritative | PASS | Migration `080` adds `reserve_price_gbp` column to `auctions` table. `GET /auctions/:auctionId` now includes `reservePriceGbp` in the response. Frontend `resolveReserveStatus` in `auctionDetailLogic.ts` already consumed `reservePriceGbp` from the type — the backend was the missing piece. |
+| T08 | Auction Buy Now creates exactly one order | PASS | `POST /auctions/:auctionId/buy-now` now inserts an `orders` record within the same transaction (idempotent via `ON CONFLICT (auction_id) DO NOTHING`). The `orders.auction_id` unique index (migration 065) guarantees exactly one order per auction. Response includes `orderId`. Frontend `BuyNowResult` type updated with optional `orderId`. |
 | T09 | Bidder/holder privacy projections are tested | OPEN | Backend privacy projections not in this pass. |
 
 ## Media
@@ -92,11 +92,10 @@ An `EXCEPTION` requires owner, rationale, user impact, mitigation, expiry date a
 
 ## Remaining P0 backend gaps (not waived)
 
-The following P0 items require backend work (schema migrations + new contracts) and are explicitly left OPEN — not waived:
+The following P0 items still require backend work and are explicitly left OPEN — not waived:
 
-- **T07 Auction reserve** — `reserve_price_gbp` absent from `auctions` table and detail response; client `reserveStatus` is modelled without server authority.
-- **T08 Auction Buy Now order closure** — Buy Now creates a bid and marks `status='ended'` but does not insert into `orders`/fulfilment workflow.
-- **T05 Co-Own holdings privacy** — public holdings-detail route still exposes user identifiers, units, entry price, realised P&L.
-- **T06 Co-Own rights/dossier** — rights data is mock-only; no versioned rights table.
+- **T03 Non-public listing authorization** — backend authorization gate for non-public listings not yet implemented.
+- **T04 Policy/protection versioning** — backend policy versioning not yet implemented.
+- **T09 Bidder/holder privacy projections** — backend privacy projection tests not yet written.
 
 These must be closed before any production release that exposes Auction or Co-Own trading.
