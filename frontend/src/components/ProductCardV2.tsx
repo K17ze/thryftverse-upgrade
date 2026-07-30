@@ -126,11 +126,16 @@ export function ProductCardV2({
           />
         )}
 
-        {/* Sold overlay */}
+        {/* Sold — editorial scrim keeps the image as visual anchor while
+            clearly deactivating the card. The pill communicates status
+            without washing out the media into a white rectangle. */}
         {item.isSold && (
-          <View style={styles.soldOverlay}>
-            <Text style={styles.soldText}>SOLD</Text>
-          </View>
+          <>
+            <View style={styles.soldScrim} />
+            <View style={styles.soldPill}>
+              <Text style={styles.soldPillText}>Sold</Text>
+            </View>
+          </>
         )}
 
         {/* Condition badge - top left, more subtle */}
@@ -345,25 +350,32 @@ const styles = StyleSheet.create({
     width: '100%',
   },
 
-  // Overlays
-  soldOverlay: {
+  // Sold — editorial scrim + pill (image stays visible)
+  soldScrim: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(255,255,255,0.82)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.22)',
   },
-  soldText: {
-    fontSize: 13,
+  soldPill: {
+    position: 'absolute',
+    top: Space.sm,
+    left: Space.sm,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: Radius.md,
+  },
+  soldPillText: {
+    fontSize: 11,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    letterSpacing: 1.5,
+    color: Colors.textInverse,
+    letterSpacing: 0.3,
     textTransform: 'uppercase',
   },
   mediaBadge: {
     position: 'absolute',
     top: Space.sm,
     right: Space.sm,
-    backgroundColor: 'rgba(0,0,0,0.40)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
     width: 28,
     height: 28,
     borderRadius: Radius.full,
@@ -380,7 +392,7 @@ const styles = StyleSheet.create({
     width: Control.chromeCompact,
     height: Control.chromeCompact,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.56)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -481,13 +493,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.45)',
     paddingHorizontal: 8,
     paddingVertical: 5,
-    borderRadius: 8,
+    borderRadius: Radius.md,
   },
   priceDropBadge: {
     backgroundColor: 'rgba(200,50,50,0.65)',
   },
   conditionText: {
-    fontSize: 10,
+    fontSize: 11,
     fontFamily: Typography.family.bold,
     color: Colors.textInverse,
     letterSpacing: 0.3,
