@@ -2072,10 +2072,10 @@ function createStyles(colors: ThemeColors) {
 
   // ── Section title (no subtitle) ──
   sectionTitle: {
-    fontSize: 22,
-    lineHeight: 28,
+    fontSize: 18,
+    lineHeight: 24,
     fontWeight: '700',
-    letterSpacing: -0.6,
+    letterSpacing: -0.4,
     color: colors.textPrimary,
     fontFamily: Typography.family.bold,
     marginBottom: Space.sm + 2,
@@ -2105,10 +2105,10 @@ function createStyles(colors: ThemeColors) {
     fontWeight: '700',
     color: colors.textPrimary,
     fontFamily: Typography.family.bold,
-    letterSpacing: -0.5,
+    letterSpacing: -0.4,
   },
   railCount: {
-    fontSize: 12,
+    fontSize: 11,
     color: colors.textMuted,
     fontFamily: Typography.family.medium,
     letterSpacing: 0.2,
@@ -2286,7 +2286,7 @@ function createStyles(colors: ThemeColors) {
     marginBottom: 2,
   },
   upcomingEyebrow: {
-    fontSize: 10,
+    fontSize: 11,
     color: colors.textMuted,
     fontFamily: Typography.family.medium,
     marginBottom: 1,

@@ -55,7 +55,7 @@ import { DoubleTapHeart } from '../components/DoubleTapHeart';
 import { getBackendSyncStatus } from '../utils/syncStatus';
 import { isVideoUri } from '../utils/media';
 import { AppButton } from '../components/ui/AppButton';
-import { Space, Radius, Type } from '../theme/designTokens';
+import { Space, Radius, Type, Stroke } from '../theme/designTokens';
 import { T } from '../components/ui/Text';
 import { Typography } from '../theme/designTokens';
 import { DiscoverySectionHeader } from '../components/discover/DiscoverySectionHeader';
@@ -1146,12 +1146,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     right: -2,
     minWidth: 18,
     height: 18,
-    borderRadius: 9,
+    borderRadius: Radius.full,
     backgroundColor: colors.danger,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
-    borderWidth: 1.5,
+    borderWidth: Stroke.standard,
     borderColor: colors.background,
   },
   notificationBadgeText: {
@@ -1233,7 +1233,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     minHeight: 40,
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 20,
+    borderRadius: Radius.full,
     backgroundColor: colors.brand,
     borderWidth: 0,
   },
@@ -1884,7 +1884,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   peekCard: {
     width: '100%',
     maxWidth: 420,
-    borderRadius: 18,
+    borderRadius: Radius.xl,
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
@@ -1923,7 +1923,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   peekGhostBtn: {
     flex: 1,
     height: 44,
-    borderRadius: 22,
+    borderRadius: Radius.full,
     backgroundColor: 'transparent',
   },
   peekGhostText: {
@@ -1934,7 +1934,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   peekPrimaryBtn: {
     flex: 1,
     height: 44,
-    borderRadius: 22,
+    borderRadius: Radius.full,
     backgroundColor: 'transparent',
   },
   peekPrimaryIconWrap: {

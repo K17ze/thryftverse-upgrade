@@ -200,7 +200,7 @@ export default function LookDetailScreen() {
               />
             )}
 
-            {/* Hotspots */}
+            {/* Hotspots — editorial pin with halo for legibility on any media */}
             {look.tags.map((tag) => {
               const isActive = activeTagId === tag.id;
               const listing = resolveListing(tag.listingId);
@@ -216,11 +216,12 @@ export default function LookDetailScreen() {
                   accessibilityRole="button"
                   accessibilityLabel={tag.label || 'Tagged item'}
                 >
+                  <View style={styles.hotspotHalo} />
                   <View style={[styles.hotspotDot, isActive && styles.hotspotDotActive]} />
                   {isActive && listing && (
                     <Reanimated.View entering={FadeInDown.duration(180)} style={styles.tagTooltip}>
                       {listing.images?.[0] && (
-                        <CachedImage uri={listing.images[0]} style={styles.tagTooltipImg} containerStyle={{ borderRadius: 4 }} contentFit="cover" />
+                        <CachedImage uri={listing.images[0]} style={styles.tagTooltipImg} containerStyle={{ borderRadius: 6 }} contentFit="cover" />
                       )}
                       <View style={{ flex: 1 }}>
                         <Text style={styles.tagTooltipTitle} numberOfLines={1}>{listing.title}</Text>
@@ -241,8 +242,9 @@ export default function LookDetailScreen() {
           </View>
         </Reanimated.View>
 
-        {/* Info */}
+        {/* Info — editorial chapter: eyebrow, caption, creator attribution */}
         <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(350).delay(80)} style={styles.infoSection}>
+          <Text style={styles.eyebrow}>Look</Text>
           {look.caption ? (
             <Text style={styles.caption}>{look.caption}</Text>
           ) : look.title ? (
@@ -253,7 +255,7 @@ export default function LookDetailScreen() {
               {look.creator.avatar ? (
                 <CachedImage uri={look.creator.avatar} style={styles.creatorAvatarImg} contentFit="cover" />
               ) : (
-                <Ionicons name="person-circle" size={32} color={colors.textMuted} />
+                <Ionicons name="person-circle" size={36} color={colors.textMuted} />
               )}
             </View>
             <View style={styles.creatorInfo}>
@@ -282,10 +284,13 @@ export default function LookDetailScreen() {
           />
         </Reanimated.View>
 
-        {/* Tagged Products Tray */}
+        {/* Tagged Products Tray — editorial shop-the-look rail */}
         {look.tags.length > 0 && (
           <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(350).delay(160)} style={styles.traySection}>
-            <Text style={styles.trayTitle}>Outfit Pieces</Text>
+            <View style={styles.trayHeader}>
+              <Text style={styles.trayTitle}>Shop the look</Text>
+              <Text style={styles.trayCount}>{look.tags.length} pieces</Text>
+            </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.trayScroll}>
               {look.tags.map((tag) => {
                 const listing = resolveListing(tag.listingId);
@@ -306,6 +311,7 @@ export default function LookDetailScreen() {
                           <Ionicons name="pricetag" size={20} color={colors.textMuted} />
                         </View>
                       )}
+                      {listing?.isSold && <View style={styles.traySoldScrim} />}
                     </View>
                     <Text style={styles.trayCardTitle} numberOfLines={1}>{listing?.title ?? tag.label ?? 'Untitled'}</Text>
                     {listing && (
@@ -399,13 +405,20 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
     zIndex: 3,
   },
+  hotspotHalo: {
+    position: 'absolute',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.28)',
+  },
   hotspotDot: {
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: 'rgba(255,255,255,0.85)',
+    backgroundColor: 'rgba(255,255,255,0.92)',
     borderWidth: 2,
-    borderColor: 'rgba(0,0,0,0.25)',
+    borderColor: 'rgba(0,0,0,0.18)',
   },
   hotspotDotActive: {
     backgroundColor: colors.brand,
@@ -433,31 +446,40 @@ function createStyles(colors: ThemeColors) {
     paddingTop: Space.lg,
     gap: Space.sm,
   },
+  eyebrow: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.textMuted,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: -2,
+  },
   caption: {
     fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     letterSpacing: Type.title.letterSpacing,
-    lineHeight: 24,
+    lineHeight: 26,
   },
   creatorRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
+    marginTop: 2,
   },
   creatorAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  creatorAvatarImg: { width: 36, height: 36, borderRadius: 18 },
+  creatorAvatarImg: { width: 40, height: 40, borderRadius: 20 },
   creatorInfo: { gap: 2 },
   creatorName: {
-    fontSize: Type.body.size,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
@@ -468,26 +490,38 @@ function createStyles(colors: ThemeColors) {
   },
 
   traySection: {
-    marginTop: Space.lg,
+    marginTop: Space.xl,
     paddingHorizontal: Space.md,
+  },
+  trayHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginBottom: Space.sm,
   },
   trayTitle: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
-    marginBottom: Space.sm,
+    letterSpacing: -0.2,
+  },
+  trayCount: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.medium,
+    color: colors.textMuted,
   },
   trayScroll: {
     gap: Space.sm,
+    paddingRight: Space.md,
   },
   trayCard: {
-    width: 140,
-    gap: 4,
+    width: 148,
+    gap: 6,
   },
   trayImgWrap: {
-    width: 140,
-    height: 170,
-    borderRadius: Radius.md,
+    width: 148,
+    height: 184,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
     backgroundColor: colors.surfaceAlt,
     position: 'relative',
@@ -500,11 +534,15 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
     backgroundColor: colors.surfaceAlt,
   },
+  traySoldScrim: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(255,255,255,0.55)',
+  },
   trayCardTitle: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
-    marginTop: 4,
+    marginTop: 2,
   },
   trayCardPrice: {
     fontSize: Type.meta.size,

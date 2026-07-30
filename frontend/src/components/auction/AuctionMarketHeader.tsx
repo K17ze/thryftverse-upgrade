@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable, useWindowDimensions, Modal, ScrollVi
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/colors';
-import { Space, Radius, Typography, Elevation } from '../../theme/designTokens';
+import { Space, Radius, Typography, Elevation, Stroke } from '../../theme/designTokens';
 
 export type AuctionHeaderActionKey = 'search' | 'filter' | 'create' | 'seller' | 'activity';
 
@@ -69,7 +69,7 @@ export function AuctionMarketHeader({
             accessibilityLabel="Go back"
             style={styles.iconBtn}
           >
-            <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+            <Ionicons name="chevron-back" size={22} color={Colors.textPrimary} />
           </Pressable>
         ) : null}
 
@@ -198,10 +198,10 @@ const styles = StyleSheet.create({
   createBtn: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(244,240,232,0.10)',
+    backgroundColor: Colors.surfaceAlt,
     marginLeft: 4,
   },
   titleWrap: {
@@ -209,9 +209,9 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: Typography.family.bold,
-    fontSize: 30,
+    fontSize: 24,
     color: Colors.textPrimary,
-    letterSpacing: -0.8,
+    letterSpacing: -0.6,
   },
   context: {
     fontFamily: Typography.family.regular,
@@ -280,5 +280,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 5,
+    borderWidth: Stroke.standard,
+    borderColor: Colors.surface,
   },
 });
