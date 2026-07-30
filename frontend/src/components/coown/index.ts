@@ -11,6 +11,8 @@ export { CoOwnCompactPositionCard, COOWN_POSITION_CARD_WIDTH } from './CoOwnComp
 export type { CoOwnCompactPositionCardProps } from './CoOwnCompactPositionCard';
 export { CoOwnInstrumentCard } from './CoOwnInstrumentCard';
 export type { CoOwnInstrumentCardProps } from './CoOwnInstrumentCard';
+export { CoOwnMarketOverview } from './CoOwnMarketOverview';
+export type { CoOwnMarketOverviewProps } from './CoOwnMarketOverview';
 export { CoOwnAssetTile } from './CoOwnAssetTile';
 export type { CoOwnAssetTileProps, CoOwnAssetTileVariant, CoOwnMarketTileData } from './CoOwnAssetTile';
 export { CoOwnDiscoveryCard } from './CoOwnDiscoveryCard';

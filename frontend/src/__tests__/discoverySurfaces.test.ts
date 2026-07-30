@@ -175,7 +175,7 @@ describe('Discovery surfaces — backend data truth', () => {
             id: 'l2',
             sellerId: 's2',
             title: 'Filtered item',
-            description: '',
+            description: 'Filtered listing description',
             priceGbp: 50,
             imageUrl: 'img.jpg',
             images: [],

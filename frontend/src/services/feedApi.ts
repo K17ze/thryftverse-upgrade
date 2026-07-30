@@ -1,6 +1,6 @@
 import { Listing, ListingSeller } from '../data/mockData';
 import { fetchJson } from '../lib/apiClient';
-import { mapBackendListingToListing, friendlyBackendError } from './listingMapper';
+import { mapBackendListings, friendlyBackendError } from './listingMapper';
 
 interface FeedListingRow {
   id: string;
@@ -52,7 +52,7 @@ export interface HomeFeedResult {
 export async function fetchHomeFeed(): Promise<HomeFeedResult> {
   try {
     const payload = await fetchJson<HomeFeedResponse>('/feed/home');
-    const listings = (payload.listings ?? []).map(mapBackendListingToListing);
+    const listings = mapBackendListings(payload.listings);
     const posterIds = (payload.posters ?? []).map((p) => p.id);
     const lookIds = (payload.looks ?? []).map((l) => l.id);
 

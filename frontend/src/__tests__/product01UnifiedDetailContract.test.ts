@@ -44,6 +44,7 @@ const baseListing: Listing = {
   images: ['https://cdn.example.com/img1.jpg', 'https://cdn.example.com/img2.jpg'],
   likes: 12,
   views: 340,
+  status: 'active',
   sellerId: 'seller_001',
   seller: { id: 'seller_001', username: 'vintage_co', avatar: null },
   category: 'women',
@@ -146,7 +147,7 @@ describe('PRODUCT-01 direct adapter', () => {
 
   it('sets availability=sold and suppresses buy when isSold', () => {
     const vm = buildDirectViewModel({
-      listing: { ...baseListing, isSold: true },
+      listing: { ...baseListing, isSold: true, status: 'sold' },
       currentUserId: 'buyer_001',
     });
     expect(vm.availability).toBe('sold');

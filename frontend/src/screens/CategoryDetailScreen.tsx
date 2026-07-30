@@ -50,7 +50,7 @@ export default function CategoryDetailScreen() {
 
     return listings.filter((listing) => {
       const categoryToken = normalize(listing.category);
-      const subcategoryToken = normalize(listing.subcategory);
+      const subcategoryToken = normalize(listing.subcategory ?? undefined);
       return categoryTokens.has(categoryToken) || categoryTokens.has(subcategoryToken);
     });
   }, [category, listings]);

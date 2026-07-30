@@ -311,7 +311,11 @@ export default function GlobalSearchScreen({ navigation }: Props) {
     () => ({
       brandSet: buildAffinitySet(wishlistListings.map((listing) => listing.brand)),
       categorySet: buildAffinitySet(wishlistListings.map((listing) => listing.category)),
-      subcategorySet: buildAffinitySet(wishlistListings.map((listing) => listing.subcategory)),
+      subcategorySet: buildAffinitySet(
+        wishlistListings
+          .map((listing) => listing.subcategory)
+          .filter((subcategory): subcategory is string => !!subcategory)
+      ),
     }),
     [wishlistListings],
   );

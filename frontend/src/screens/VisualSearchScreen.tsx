@@ -179,7 +179,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
     const payload = buildFilterPayload();
 
     const apiResult = await visualSearch(payload);
-    let items = apiResult.listings;
+    let items: Listing[] = apiResult.listings;
     let usedFallback = apiResult.source === 'fallback';
 
     if (apiResult.source === 'fallback' || items.length === 0) {

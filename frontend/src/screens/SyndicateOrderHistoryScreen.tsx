@@ -86,10 +86,12 @@ function mapRemoteHistoryToEntries(history: MarketHistoryItem[]): HistoryEntry[]
       const quantity = Math.max(0, item.units ?? 0);
       const pricePerShare = item.unitPriceGbp ?? (quantity > 0 ? Number((item.amountGbp / quantity).toFixed(4)) : 0);
       const rawStatus = item.status;
-      // Map backend status to canonical OrderStatus. If the backend sends
-      // a legacy 'partially_filled', map it to 'partial' (canonical).
+      // Preserve the backend's display status verbatim. The canonical
+      // OrderStatus type includes 'partially_filled' so the order history
+      // row can show "X of Y filled" without a lossy downgrade to the
+      // internal lifecycle label.
       const status: HistoryEntry['status'] =
-        rawStatus === 'partially_filled' ? 'partial'
+        rawStatus === 'partially_filled' ? 'partially_filled'
         : rawStatus === 'open' || rawStatus === 'filled' || rawStatus === 'cancelled' || rawStatus === 'rejected'
           ? rawStatus
           : 'open';
@@ -324,7 +326,7 @@ export default function CoOwnOrderHistoryScreen() {
               totalAmount={formatCoOwnIze(item.totalAmount)}
               status={item.status}
               timestamp={item.createdAt}
-              onCancel={item.source === 'backend' && (item.status === 'open' || item.status === 'partial')
+              onCancel={item.source === 'backend' && (item.status === 'open' || item.status === 'partially_filled')
                 ? () => requestCancelOrder(item)
                 : undefined}
               isCancelling={cancellingOrderId === item.id}

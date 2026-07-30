@@ -153,7 +153,7 @@ export function OrderHistoryRow({
 
         <View style={styles.metaRow}>
           <Meta style={styles.metaLabel} numberOfLines={1}>
-            {side.toUpperCase()}  {type}  {status === 'partial' && filledQuantity != null
+            {side.toUpperCase()}  {type}  {status === 'partially_filled' && filledQuantity != null
               ? `${filledQuantity} of ${quantity} filled`
               : `${quantity} units`}
           </Meta>

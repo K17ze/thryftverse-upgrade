@@ -35,6 +35,7 @@ import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { SharedTransitionImage } from '../SharedTransitionImage';
 import { Video, ResizeMode } from '../compat/Video';
+import type { ProductMediaItem } from '../../platform/product/productDetailViewModel';
 
 const MAX_ZOOM = 4;
 const MIN_ZOOM = 1;
@@ -47,15 +48,24 @@ const applyRubberBand = (v: number, min: number, max: number, friction = 0.24) =
 };
 
 interface MediaPageProps {
-  uri: string;
+  item: ProductMediaItem;
   width: number;
   height: number;
   onDoubleTap?: () => void;
   sharedTransitionTag?: string;
   onZoomStart?: () => void;
+  onOpenFullscreen?: () => void;
 }
 
-function MediaPage({ uri, width, height, onDoubleTap, sharedTransitionTag, onZoomStart }: MediaPageProps) {
+function MediaPage({
+  item,
+  width,
+  height,
+  onDoubleTap,
+  sharedTransitionTag,
+  onZoomStart,
+  onOpenFullscreen,
+}: MediaPageProps) {
   const reducedMotion = useReducedMotion();
   const [failed, setFailed] = useState(false);
   const scale = useSharedValue(1);
@@ -133,52 +143,95 @@ function MediaPage({ uri, width, height, onDoubleTap, sharedTransitionTag, onZoo
       }
     });
 
-  const composed = Gesture.Simultaneous(Gesture.Race(doubleTap, pan), pinch);
+  const singleTap = Gesture.Tap()
+    .numberOfTaps(1)
+    .onEnd(() => {
+      if (onOpenFullscreen) runOnJS(onOpenFullscreen)();
+    });
+
+  const composed = Gesture.Simultaneous(
+    Gesture.Race(Gesture.Exclusive(doubleTap, singleTap), pan),
+    pinch,
+  );
   const animStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }, { translateY: translateY.value }, { scale: scale.value }],
   }));
 
   return (
     <GestureDetector gesture={composed}>
-      <Reanimated.View style={[styles.page, { width, height }, animStyle]}>
-        {failed || !uri ? (
+      <Reanimated.View
+        style={[styles.page, { width, height }, animStyle]}
+        accessible
+        accessibilityRole="imagebutton"
+        accessibilityLabel={`${item.altText ?? 'Product image'}. Open fullscreen.`}
+        onAccessibilityTap={onOpenFullscreen}
+      >
+        {failed || !item.uri ? (
           <ImageEmptyGraphic
             icon="image-outline"
             label="Photo unavailable"
             style={styles.image}
           />
         ) : (
-          <SharedTransitionImage
-            source={{ uri }}
-            style={styles.image}
-            resizeMode="cover"
-            sharedTransitionTag={sharedTransitionTag}
-            onError={() => setFailed(true)}
-          />
+          item.focalPoint ? (
+            <CachedImage
+              uri={item.uri}
+              style={styles.image}
+              containerStyle={styles.image}
+              contentFit={item.fit ?? 'contain'}
+              focalPoint={item.focalPoint}
+              onError={() => setFailed(true)}
+            />
+          ) : (
+            <SharedTransitionImage
+              source={{ uri: item.uri }}
+              style={styles.image}
+              resizeMode={item.fit ?? 'contain'}
+              sharedTransitionTag={sharedTransitionTag}
+              onError={() => setFailed(true)}
+            />
+          )
         )}
       </Reanimated.View>
     </GestureDetector>
   );
 }
 
-function VideoPage({ uri, width, height, shouldPlay }: { uri: string; width: number; height: number; shouldPlay: boolean }) {
+function VideoPage({
+  item,
+  width,
+  height,
+}: {
+  item: ProductMediaItem;
+  width: number;
+  height: number;
+}) {
   return (
-    <View style={[styles.page, { width, height }]}>
+    <View
+      style={[styles.page, { width, height }]}
+      accessible
+      accessibilityLabel={item.altText ?? 'Product video'}
+    >
       <Video
-        source={{ uri }}
+        source={{ uri: item.uri }}
         style={styles.image}
-        resizeMode={ResizeMode.COVER}
-        shouldPlay={shouldPlay}
+        resizeMode={item.fit === 'cover' ? ResizeMode.COVER : ResizeMode.CONTAIN}
+        shouldPlay={false}
         isMuted
-        isLooping
+        isLooping={false}
         useNativeControls
+        usePoster={!!item.posterUri}
+        posterSource={item.posterUri ? { uri: item.posterUri } : undefined}
       />
     </View>
   );
 }
 
 export interface CommerceMediaStageProps {
-  images: string[];
+  images?: string[];
+  /** Authoritative typed media. When supplied, media kind is never guessed
+   * from a URL and crop/poster metadata remains attached end-to-end. */
+  media?: readonly ProductMediaItem[];
   /** Canonical video URLs supplied by the API. URL-suffix detection remains
    * as a compatibility fallback for older callers. */
   videoUris?: readonly string[];
@@ -212,10 +265,14 @@ export interface CommerceMediaStageProps {
    * pages default to swipe pagination so the hero is not duplicated by chrome.
    */
   showThumbnailStrip?: boolean;
+  onActiveIndexChange?: (index: number) => void;
+  /** Keeps the inline stage aligned with the last fullscreen page. */
+  initialIndex?: number;
 }
 
 export function CommerceMediaStage({
-  images,
+  images = [],
+  media,
   videoUris = [],
   objectId,
   topInset,
@@ -239,16 +296,33 @@ export function CommerceMediaStage({
   overlayTopContent,
   overlayBottomContent,
   showThumbnailStrip = false,
+  onActiveIndexChange,
+  initialIndex = 0,
 }: CommerceMediaStageProps) {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const reducedMotion = useReducedMotion();
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [activeIndex, setActiveIndex] = useState(initialIndex);
   const listRef = useRef<FlatList<any>>(null);
-  const videoUriSet = React.useMemo(() => new Set(videoUris), [videoUris]);
-  const isVideo = React.useCallback(
-    (uri: string) => videoUriSet.has(uri) || isVideoUri(uri),
-    [videoUriSet],
-  );
+  const mediaItems = React.useMemo<ProductMediaItem[]>(() => {
+    if (media) return media.filter((item) => !!item.uri);
+    const videoUriSet = new Set(videoUris);
+    return images
+      .filter(Boolean)
+      .map((uri) => ({
+        uri,
+        kind: videoUriSet.has(uri) || isVideoUri(uri) ? 'video' : 'image',
+        fit: 'contain',
+      }));
+  }, [images, media, videoUris]);
+
+  React.useEffect(() => {
+    if (mediaItems.length === 0) return;
+    const nextIndex = Math.min(Math.max(initialIndex, 0), mediaItems.length - 1);
+    setActiveIndex(nextIndex);
+    requestAnimationFrame(() => {
+      listRef.current?.scrollToIndex({ index: nextIndex, animated: false });
+    });
+  }, [initialIndex, mediaItems.length]);
 
   const heroHeight = Math.min(screenHeight * heightFraction, screenWidth * 1.35);
 
@@ -295,8 +369,9 @@ export function CommerceMediaStage({
     if (viewableItems.length > 0) {
       const next = viewableItems[0].index ?? 0;
       setActiveIndex(next);
+      onActiveIndexChange?.(next);
     }
-  }, []);
+  }, [onActiveIndexChange]);
   const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 50 });
 
   const scrollToIndex = (index: number) => {
@@ -305,13 +380,13 @@ export function CommerceMediaStage({
 
   const announceMedia = (index: number) => {
     AccessibilityInfo.announceForAccessibility(
-      `${isVideo(images[index]) ? 'Video' : 'Image'} ${index + 1} of ${images.length}`,
+      `${mediaItems[index]?.kind === 'video' ? 'Video' : 'Image'} ${index + 1} of ${mediaItems.length}`,
     );
   };
 
   return (
     <Reanimated.View style={[styles.heroContainer, { height: heroHeight }, heroStyle]}>
-      {images.length === 0 ? (
+      {mediaItems.length === 0 ? (
         // Premium fallback hero — matches Thryftverse visual language.
         <ImageEmptyGraphic
           icon="image-outline"
@@ -321,24 +396,25 @@ export function CommerceMediaStage({
       ) : (
       <FlatList
         ref={listRef}
-        data={images}
-        keyExtractor={(_, i) => String(i)}
+        data={mediaItems}
+        keyExtractor={(item, i) => item.id ?? `${item.uri}-${i}`}
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig.current}
         renderItem={({ item, index }) =>
-          isVideo(item) ? (
-            <VideoPage uri={item} width={screenWidth} height={heroHeight} shouldPlay={index === activeIndex} />
+          item.kind === 'video' ? (
+            <VideoPage item={item} width={screenWidth} height={heroHeight} />
           ) : (
             <MediaPage
-              uri={item}
+              item={item}
               width={screenWidth}
               height={heroHeight}
               onDoubleTap={onDoubleTap}
               sharedTransitionTag={index === 0 && objectId ? `image-${objectId}-0` : undefined}
               onZoomStart={onZoomStart}
+              onOpenFullscreen={() => onOpenFullscreen(index)}
             />
           )
         }
@@ -443,36 +519,37 @@ export function CommerceMediaStage({
         </Reanimated.View>
       )}
 
-      {images.length > 1 && (
+      {mediaItems.length > 1 && (
         <Pressable
           style={styles.indexBadge}
           onPress={() => onOpenFullscreen(activeIndex)}
-          accessibilityLabel={`Image ${activeIndex + 1} of ${images.length}. Tap for fullscreen.`}
+          accessibilityRole="button"
+          accessibilityLabel={`${mediaItems[activeIndex]?.kind === 'video' ? 'Video' : 'Image'} ${activeIndex + 1} of ${mediaItems.length}. Open fullscreen.`}
         >
           <Text style={styles.indexText}>
-            {activeIndex + 1} / {images.length}
+            {activeIndex + 1} / {mediaItems.length}
           </Text>
         </Pressable>
       )}
 
-      {images.length > 0 && isVideo(images[activeIndex]) && (
+      {mediaItems.length > 0 && mediaItems[activeIndex]?.kind === 'video' && (
         <View style={styles.videoBadge}>
           <Ionicons name="play-circle" size={16} color="#fff" />
           <Text style={styles.videoBadgeText}>Video</Text>
         </View>
       )}
 
-      {showThumbnailStrip && images.length > 1 && (
+      {showThumbnailStrip && mediaItems.length > 1 && (
         <View style={styles.thumbnailStrip}>
           <FlatList
-            data={images}
-            keyExtractor={(_, i) => String(i)}
+            data={mediaItems}
+            keyExtractor={(item, i) => item.id ?? `${item.uri}-${i}`}
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.thumbnailContent}
             renderItem={({ item, index }) => {
               const isActive = index === activeIndex;
-              const isVid = isVideo(item);
+              const isVid = item.kind === 'video';
               return (
                 <Pressable
                   onPress={() => {
@@ -490,10 +567,12 @@ export function CommerceMediaStage({
                     </View>
                   ) : (
                     <CachedImage
-                      uri={item}
+                      uri={item.uri}
+                      previewUri={item.posterUri ?? undefined}
                       style={styles.thumbnailImage}
                       containerStyle={{ width: '100%', height: '100%', borderRadius: Radius.sm }}
                       contentFit="cover"
+                      focalPoint={item.focalPoint ?? undefined}
                     />
                   )}
                   {isVid && (

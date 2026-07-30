@@ -74,6 +74,7 @@ import {
   CoOwnOfflineBanner,
   CoOwnSupplySheet,
   CoOwnOverflowSheet,
+  CoOwnMarketOverview,
   CANONICAL_RIGHTS_LABELS,
   type CoOwnRightsRow,
   type CoOwnCandleRange,
@@ -522,6 +523,8 @@ export default function AssetDetailScreen() {
           isSaved={social.isSavedToCollection}
           showDefaultControls={false}
           heightFraction={isVeryCompact ? 0.48 : isCompact ? 0.5 : 0.56}
+          initialIndex={fullscreenIndex}
+          onActiveIndexChange={setFullscreenIndex}
           onOpenFullscreen={handleOpenFullscreen}
           overlayTopContent={
             <View style={styles.familyBadgeOverlay}>
@@ -556,13 +559,10 @@ export default function AssetDetailScreen() {
           showOverflow
         />
 
-        {/* ── Zone B — Identity seam ──
-            One compact identity composition: eyebrow + title + secondary
-            truth line. The family badge lives on the media stage above;
-            the dominant price lives in the transaction surface below.
-            Spec 02 §B + spec 03 §2: no repeated family labels, no
-            repeated price. */}
-        <View style={styles.identityExtension}>
+        {/* Issuer confidence remains on the page canvas. It is visually
+            connected to the asset story without forcing identity into a
+            finance-themed colour block. */}
+        <View style={[styles.identityExtension, { borderBottomColor: colors.borderSubtle }]}>
           <CommerceDetailSellerRow
             roleLabel="Issuer"
             institutional
@@ -613,63 +613,68 @@ export default function AssetDetailScreen() {
         </View>
 
         {/* ── Zone C — Family transaction module ──
-            The one strongly contained module near the top: reference
-            price + top-of-book + market mode. Replaces the three-column
-            CoOwnValueStrip + CoOwnMarketStatusStrip.
+            The one non-media surface near the top: reference price,
+            top-of-book, depth and market mode. It follows the active
+            light/dark theme and stays flat/full-width rather than becoming
+            a dashboard card or a forced trading-terminal canvas.
             Spec 02 §C + spec 03 §2/§3: do not label reference price as
             "Last trade" without settled-execution proof. Use "Reference
             unit price" unless the backend provides lastExecutionPriceGbp. */}
-        <CommerceDetailTransactionSurface
-          family="co_own"
-          primaryLabel={marketSnapshot?.lastExecutionPriceGbp != null ? 'Last settled trade' : 'Reference unit price'}
-          primaryValue={formatCoOwnIze(marketSnapshot?.lastExecutionPriceGbp ?? asset.unitPriceGbp)}
-          statusRow={
-            <View style={styles.marketStatusRow}>
-              <View style={styles.marketStatusCluster}>
-                <Text
-                  style={[
-                    styles.marketStatusText,
-                    {
-                      color: reconciliationActive
-                        ? colors.textSecondary
-                        : asset.isOpen
-                          ? colors.textPrimary
-                          : colors.textSecondary,
-                    },
-                  ]}
-                >
-                  {reconciliationActive ? 'Orders paused · settling' : asset.isOpen ? 'Continuous · Open' : 'Closed'}
-                </Text>
-                {dataStale && dataStaleAgeLabel && (
-                  <Text style={[styles.marketStatusStale, { color: colors.warning }]}>Stale {dataStaleAgeLabel}</Text>
-                )}
-              </View>
-              <View style={styles.marketStatusCluster}>
-                <Text style={[styles.marketStatusRights, { color: colors.textSecondary }]}>
-                  {orderBookError
-                    ? 'Market depth unavailable'
-                    : `Spread ${spreadGbp != null ? formatCoOwnIze(spreadGbp) : 'Not available'}`}
-                </Text>
-                {asset.rightsVersion && (
-                  <Pressable
-                    onPress={() => setRightsSheetVisible(true)}
-                    hitSlop={8}
-                    accessibilityLabel={`Rights version ${formatRightsVersion(asset.rightsVersion)}`}
-                  >
-                    <Text style={[styles.marketStatusRights, { color: colors.textSecondary }]}>
-                      {formatRightsVersion(asset.rightsVersion)}
-                    </Text>
-                  </Pressable>
-                )}
-                {marketSnapshotLabel && (
-                  <Text style={[styles.marketStatusRights, { color: colors.textMuted }]} numberOfLines={1}>
-                    {marketSnapshotLabel}
+        <CoOwnMarketOverview>
+          <CommerceDetailTransactionSurface
+            family="co_own"
+            flush
+            surfaceColor={colors.surface}
+            primaryLabel={marketSnapshot?.lastExecutionPriceGbp != null ? 'Last settled trade' : 'Reference unit price'}
+            primaryValue={formatCoOwnIze(marketSnapshot?.lastExecutionPriceGbp ?? asset.unitPriceGbp)}
+            statusRow={
+              <View style={styles.marketStatusRow}>
+                <View style={styles.marketStatusCluster}>
+                  <View
+                    style={[
+                      styles.marketStatusDot,
+                      {
+                        backgroundColor: reconciliationActive
+                          ? colors.warning
+                          : asset.isOpen
+                            ? colors.success
+                            : colors.textMuted,
+                      },
+                    ]}
+                  />
+                  <Text style={[styles.marketStatusText, { color: colors.textPrimary }]}>
+                    {reconciliationActive ? 'Orders paused · settling' : asset.isOpen ? 'Continuous · Open' : 'Closed'}
                   </Text>
-                )}
+                  {dataStale && dataStaleAgeLabel && (
+                    <Text style={[styles.marketStatusStale, { color: colors.warning }]}>Stale {dataStaleAgeLabel}</Text>
+                  )}
+                </View>
+                <View style={styles.marketStatusCluster}>
+                  <Text style={[styles.marketStatusRights, { color: colors.textSecondary }]}>
+                    {orderBookError
+                      ? 'Depth unavailable'
+                      : `Spread ${spreadGbp != null ? formatCoOwnIze(spreadGbp) : 'Not available'}`}
+                  </Text>
+                  {asset.rightsVersion && (
+                    <Pressable
+                      onPress={() => setRightsSheetVisible(true)}
+                      hitSlop={8}
+                      accessibilityLabel={`Rights version ${formatRightsVersion(asset.rightsVersion)}`}
+                    >
+                      <Text style={[styles.marketStatusRights, { color: colors.textSecondary }]}>
+                        {formatRightsVersion(asset.rightsVersion)}
+                      </Text>
+                    </Pressable>
+                  )}
+                  {marketSnapshotLabel && (
+                    <Text style={[styles.marketStatusRights, { color: colors.textMuted }]} numberOfLines={1}>
+                      {marketSnapshotLabel}
+                    </Text>
+                  )}
+                </View>
               </View>
-            </View>
-          }
-        >
+            }
+          >
           {orderBookError ? (
             <CommerceDetailUnavailableInline
               title="Live market unavailable"
@@ -677,32 +682,33 @@ export default function AssetDetailScreen() {
               onRetry={retryOrderBook}
             />
           ) : (
-          <View style={[styles.marketBookRow, { borderTopColor: colors.borderSubtle }]}>
-            <View style={styles.marketBookSide}>
-              <Text style={[styles.marketBookLabel, { color: colors.textMuted }]}>Bid</Text>
-              <Text style={[styles.marketBookValue, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82}>
-                {bestBid?.unitPriceGbp != null ? `${formatCoOwnIze(bestBid.unitPriceGbp)} × ${bestBid.units ?? 0}` : 'No bid'}
-              </Text>
+            <View style={[styles.marketBookRow, { borderTopColor: colors.border }]}>
+              <View style={styles.marketBookSide}>
+                <Text style={[styles.marketBookLabel, { color: colors.textSecondary }]}>Highest bid</Text>
+                <Text style={[styles.marketBookValue, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82}>
+                  {bestBid?.unitPriceGbp != null ? `${formatCoOwnIze(bestBid.unitPriceGbp)} × ${bestBid.units ?? 0}` : 'No bid'}
+                </Text>
+              </View>
+              <View style={[styles.marketBookDivider, { backgroundColor: colors.border }]} />
+              <View style={styles.marketBookSide}>
+                <Text style={[styles.marketBookLabel, { color: colors.textSecondary }]}>Lowest ask</Text>
+                <Text style={[styles.marketBookValue, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82}>
+                  {bestAsk?.unitPriceGbp != null ? `${formatCoOwnIze(bestAsk.unitPriceGbp)} × ${bestAsk.units ?? 0}` : 'No ask'}
+                </Text>
+              </View>
             </View>
-            <View style={[styles.marketBookDivider, { backgroundColor: colors.borderSubtle }]} />
-            <View style={styles.marketBookSide}>
-              <Text style={[styles.marketBookLabel, { color: colors.textMuted }]}>Ask</Text>
-              <Text style={[styles.marketBookValue, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82}>
-                {bestAsk?.unitPriceGbp != null ? `${formatCoOwnIze(bestAsk.unitPriceGbp)} × ${bestAsk.units ?? 0}` : 'No ask'}
-              </Text>
-            </View>
-          </View>
           )}
           {!orderBookError && orderBook ? (
             <>
               <CommerceDetailDisclosureRow
-                label="Market depth"
+                label={orderBookExpanded ? 'Hide market depth' : 'Explore market depth'}
                 summary={`${orderBook.bids.length + orderBook.asks.length} offers`}
                 onPress={() => setOrderBookExpanded((prev) => !prev)}
                 leadingIcon="bar-chart-outline"
               />
               {orderBookExpanded ? (
                 <CoOwnOrderBook
+                  embedded
                   bids={orderBook.bids.map((level) => ({
                     price: level.unitPriceGbp,
                     size: level.units,
@@ -714,7 +720,7 @@ export default function AssetDetailScreen() {
                     orderCount: level.orderCount,
                   }))}
                   visibleLevels={5}
-                  lastPrice={asset.unitPriceGbp}
+                  lastPrice={marketSnapshot?.lastExecutionPriceGbp ?? undefined}
                   lastAgeSeconds={undefined}
                   mode={asset.isOpen ? 'continuous' : 'closed'}
                   onSelectLevel={handleSelectOrderBookLevel}
@@ -723,7 +729,7 @@ export default function AssetDetailScreen() {
             </>
           ) : null}
           <CommerceDetailDisclosureRow
-            label="Key facts"
+            label={fundamentalsExpanded ? 'Hide valuation facts' : 'Review valuation facts'}
             summary={
               navPerUnitGbp != null
                 ? `${formatFromFiat(navPerUnitGbp, 'GBP')} NAV / unit`
@@ -733,9 +739,9 @@ export default function AssetDetailScreen() {
             leadingIcon="analytics-outline"
           />
           {fundamentalsExpanded ? (
-            <View style={[styles.fundamentalsStacked, { borderTopColor: colors.borderSubtle }]}>
+            <View style={[styles.fundamentalsStacked, { borderTopColor: colors.border }]}>
               <View style={styles.fundamentalsRow}>
-                <Text style={[styles.fundamentalsLabel, { color: colors.textMuted }]}>Reference vs NAV</Text>
+                <Text style={[styles.fundamentalsLabel, { color: colors.textSecondary }]}>Reference vs NAV</Text>
                 <Text style={[styles.fundamentalsValue, { color: colors.textPrimary }]}>
                   {referenceVsNavPct != null
                     ? `${referenceVsNavPct >= 0 ? '+' : ''}${referenceVsNavPct.toFixed(1)}%`
@@ -743,7 +749,7 @@ export default function AssetDetailScreen() {
                 </Text>
               </View>
               <View style={styles.fundamentalsRow}>
-                <Text style={[styles.fundamentalsLabel, { color: colors.textMuted }]}>NAV / unit</Text>
+                <Text style={[styles.fundamentalsLabel, { color: colors.textSecondary }]}>NAV / unit</Text>
                 <Text style={[styles.fundamentalsValue, { color: colors.textPrimary }]}>
                   {navPerUnitGbp != null
                     ? formatFromFiat(navPerUnitGbp, 'GBP')
@@ -751,20 +757,25 @@ export default function AssetDetailScreen() {
                 </Text>
               </View>
               <View style={styles.fundamentalsRow}>
-                <Text style={[styles.fundamentalsLabel, { color: colors.textMuted }]}>Next report</Text>
+                <Text style={[styles.fundamentalsLabel, { color: colors.textSecondary }]}>Next report</Text>
                 <Text style={[styles.fundamentalsValue, { color: colors.textPrimary }]}>
                   {asset.appraisalNextScheduled ?? 'Not scheduled'}
                 </Text>
               </View>
               <View style={styles.fundamentalsRow}>
-                <Text style={[styles.fundamentalsLabel, { color: colors.textMuted }]}>Distribution</Text>
+                <Text style={[styles.fundamentalsLabel, { color: colors.textSecondary }]}>Distribution</Text>
                 <Text style={[styles.fundamentalsValue, { color: colors.textPrimary }]}>Not scheduled</Text>
               </View>
             </View>
           ) : null}
-        </CommerceDetailTransactionSurface>
+          </CommerceDetailTransactionSurface>
+        </CoOwnMarketOverview>
 
-        <CommerceDetailSection label={isHolder ? 'Your position' : 'Availability'} divider variant="editorial">
+        <CommerceDetailSection
+          label={isHolder ? 'Your ownership' : 'Current ownership'}
+          divider
+          variant="editorial"
+        >
           {holdingsError ? (
             <CommerceDetailUnavailableInline
               title="Position unavailable"
@@ -777,7 +788,7 @@ export default function AssetDetailScreen() {
                 <Text style={[styles.viewerPositionValue, { color: colors.textPrimary }]}>
                   {yourUnits} units · {viewerPct.toFixed(1)}%
                 </Text>
-                <Text style={[styles.viewerPositionMeta, { color: colors.textMuted }]}>
+                <Text style={[styles.viewerPositionMeta, { color: colors.textSecondary }]}>
                   Your settled position
                 </Text>
               </View>
@@ -785,30 +796,43 @@ export default function AssetDetailScreen() {
                 <Text style={[styles.viewerPositionMarketValue, { color: colors.textPrimary }]}>
                   {formatCoOwnIze(asset.unitPriceGbp * yourUnits)}
                 </Text>
-                <Text style={[styles.viewerPositionMeta, { color: colors.textMuted, textAlign: 'right' }]}>
+                <Text style={[styles.viewerPositionMeta, { color: colors.textSecondary, textAlign: 'right' }]}>
                   Reference value
                 </Text>
               </View>
             </View>
           ) : null}
           <View style={styles.supplySummary}>
-            <Text style={[styles.supplyUnits, { color: colors.textPrimary }]}>
-              {availableUnits} units available
-            </Text>
-            <Text style={[styles.supplyAllocated, { color: colors.textSecondary }]}>
-              {allocatedPct}% allocated
-            </Text>
+            <View style={styles.supplyMetric}>
+              <Text style={[styles.supplyMetricLabel, { color: colors.textSecondary }]}>
+                Available
+              </Text>
+              <Text style={[styles.supplyUnits, { color: colors.textPrimary }]}>
+                {availableUnits} / {totalUnits} units
+              </Text>
+            </View>
+            <View style={[styles.supplyMetric, styles.supplyMetricTrailing]}>
+              <Text style={[styles.supplyMetricLabel, { color: colors.textSecondary }]}>
+                Allocated
+              </Text>
+              <Text style={[styles.supplyAllocated, { color: colors.textPrimary }]}>
+                {allocatedPct}%
+              </Text>
+            </View>
           </View>
           <View style={[styles.allocationBar, { backgroundColor: colors.surfaceAlt }]}>
             <View
               style={[
                 styles.allocationFill,
-                { backgroundColor: colors.brand, width: `${Math.min(100, allocatedPct)}%` },
+                {
+                  backgroundColor: colors.brand,
+                  width: `${Math.min(100, allocatedPct)}%`,
+                },
               ]}
             />
           </View>
           {asset.holders != null && (
-            <Text style={[styles.supplyHolders, { color: colors.textMuted }]}>
+            <Text style={[styles.supplyHolders, { color: colors.textSecondary }]}>
               {asset.holders} holders
             </Text>
           )}
@@ -849,7 +873,7 @@ export default function AssetDetailScreen() {
                   range={candleRange}
                   onRangeChange={setCandleRange}
                   showVolume={showVolume}
-                  lastPrice={asset.unitPriceGbp}
+                  lastPrice={marketSnapshot?.lastExecutionPriceGbp ?? undefined}
                   lastAgeSeconds={undefined}
                 />
               ) : undefined
@@ -1152,6 +1176,7 @@ export default function AssetDetailScreen() {
         images={images}
         initialIndex={fullscreenIndex}
         visible={fullscreenVisible}
+        onActiveIndexChange={setFullscreenIndex}
         onClose={() => setFullscreenVisible(false)}
       />
 
@@ -1274,7 +1299,9 @@ const styles = StyleSheet.create({
   },
   identityExtension: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
+    paddingTop: Space.xs,
+    paddingBottom: Space.xs,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   // ── Market status row (inside transaction surface) ──
   marketStatusRow: {
@@ -1288,6 +1315,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
+  },
+  marketStatusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
   },
   marketStatusText: {
     fontSize: Type.caption.size,
@@ -1319,10 +1351,10 @@ const styles = StyleSheet.create({
     marginHorizontal: Space.sm,
   },
   marketBookLabel: {
-    fontSize: Type.metaElevated.size,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.metaElevated.letterSpacing,
-    textTransform: 'uppercase',
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.caption.letterSpacing,
   },
   marketBookValue: {
     fontSize: Type.bodyEmphasis.size,
@@ -1368,10 +1400,10 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   fundamentalsLabel: {
-    fontSize: Type.metaElevated.size,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.metaElevated.letterSpacing,
-    textTransform: 'uppercase',
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.caption.letterSpacing,
     flexShrink: 0,
   },
   fundamentalsValue: {
@@ -1462,19 +1494,35 @@ const styles = StyleSheet.create({
   // ── Supply summary ──
   supplySummary: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'flex-end',
     justifyContent: 'space-between',
     gap: Space.sm,
     marginBottom: Space.sm,
   },
+  supplyMetric: {
+    gap: 2,
+    flex: 1,
+  },
+  supplyMetricTrailing: {
+    alignItems: 'flex-end',
+  },
+  supplyMetricLabel: {
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.caption.letterSpacing,
+  },
   supplyUnits: {
-    fontSize: Type.bodyEmphasis.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 0,
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
+    fontFamily: Typography.family.bold,
+    letterSpacing: Type.subtitle.letterSpacing,
+    fontVariant: ['tabular-nums'],
   },
   supplyAllocated: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
+    fontFamily: Typography.family.bold,
     fontVariant: ['tabular-nums'],
   },
   allocationBar: {

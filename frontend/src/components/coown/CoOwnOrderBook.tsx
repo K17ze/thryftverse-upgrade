@@ -36,6 +36,10 @@ export interface CoOwnOrderBookProps {
   lastAgeSeconds?: number | null;
   onSelectLevel?: (side: 'bid' | 'ask', price: number) => void;
   mode: CoOwnBookMode;
+  /** Removes the outer card treatment when the book sits inside the
+   * page's single market surface. Data, row targets and states remain
+   * identical. */
+  embedded?: boolean;
 }
 
 export function CoOwnOrderBook({
@@ -46,13 +50,22 @@ export function CoOwnOrderBook({
   lastAgeSeconds,
   onSelectLevel,
   mode,
+  embedded = false,
 }: CoOwnOrderBookProps) {
   const { colors } = useAppTheme();
+  const containerStyle = [
+    styles.container,
+    embedded && styles.containerEmbedded,
+    {
+      backgroundColor: colors.surface,
+      borderColor: colors.border,
+    },
+  ];
 
   // RFQ mode — show CTA instead of book
   if (mode === 'rfq') {
     return (
-      <View style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <View style={containerStyle}>
         <View style={styles.rfqWrap}>
           <Ionicons name="chatbubbles-outline" size={28} color={colors.brand} />
           <Text style={[styles.rfqTitle, { color: colors.textPrimary }]}>Request for quote</Text>
@@ -76,7 +89,7 @@ export function CoOwnOrderBook({
   if (mode === 'halted' || mode === 'closed') {
     const label = mode === 'halted' ? 'Trading halted' : 'Market closed';
     return (
-      <View style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <View style={containerStyle}>
         <View style={styles.haltedWrap}>
           <Ionicons name="pause-circle-outline" size={28} color={colors.textMuted} />
           <Text style={[styles.haltedTitle, { color: colors.textSecondary }]}>{label}</Text>
@@ -120,7 +133,7 @@ export function CoOwnOrderBook({
   const isCallAuction = mode === 'call_auction';
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+    <View style={containerStyle}>
       {/* Header */}
       <View style={styles.headerRow}>
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Order book</Text>
@@ -340,6 +353,12 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
     gap: Space.xs,
+  },
+  containerEmbedded: {
+    borderRadius: 0,
+    borderWidth: 0,
+    paddingHorizontal: 0,
+    paddingTop: Space.sm,
   },
   headerRow: {
     flexDirection: 'row',

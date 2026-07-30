@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -31,19 +31,27 @@ import { AnimatedPressable } from '../AnimatedPressable';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { Video, ResizeMode } from '../compat/Video';
+import type { ProductMediaItem } from '../../platform/product/productDetailViewModel';
 
 const MAX_ZOOM = 5;
 const MIN_ZOOM = 1;
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 
 interface FullscreenImagePageProps {
-  uri: string;
+  item: ProductMediaItem;
   width: number;
   height: number;
   onClose?: () => void;
+  onZoomStart?: () => void;
 }
 
-function FullscreenImagePage({ uri, width, height, onClose }: FullscreenImagePageProps) {
+function FullscreenImagePage({
+  item,
+  width,
+  height,
+  onClose,
+  onZoomStart,
+}: FullscreenImagePageProps) {
   const reducedMotion = useReducedMotion();
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
@@ -53,6 +61,9 @@ function FullscreenImagePage({ uri, width, height, onClose }: FullscreenImagePag
   const savedTranslateY = useSharedValue(0);
 
   const pinch = Gesture.Pinch()
+    .onStart(() => {
+      if (onZoomStart) runOnJS(onZoomStart)();
+    })
     .onUpdate((e) => {
       scale.value = Math.min(Math.max(savedScale.value * e.scale, MIN_ZOOM), MAX_ZOOM);
     })
@@ -127,10 +138,12 @@ function FullscreenImagePage({ uri, width, height, onClose }: FullscreenImagePag
     <GestureDetector gesture={composed}>
       <Reanimated.View style={[styles.page, { width, height }, animStyle]}>
         <CachedImage
-          uri={uri}
+          uri={item.uri}
+          previewUri={item.posterUri ?? undefined}
           style={styles.image}
-          containerStyle={{ width: '100%', height: '100%' }}
+          containerStyle={{ width: '100%', height: '100%', backgroundColor: '#000' }}
           contentFit="contain"
+          focalPoint={item.focalPoint ?? undefined}
         />
       </Reanimated.View>
     </GestureDetector>
@@ -138,7 +151,8 @@ function FullscreenImagePage({ uri, width, height, onClose }: FullscreenImagePag
 }
 
 export interface FullscreenMediaViewerProps {
-  images: string[];
+  images?: string[];
+  media?: readonly ProductMediaItem[];
   /** Canonical video URLs supplied by the API. URL-suffix detection remains
    * as a compatibility fallback for older callers. */
   videoUris?: readonly string[];
@@ -146,71 +160,111 @@ export interface FullscreenMediaViewerProps {
   visible: boolean;
   onClose: () => void;
   onZoomStart?: () => void;
+  onActiveIndexChange?: (index: number) => void;
 }
 
 export function FullscreenMediaViewer({
-  images,
+  images = [],
+  media,
   videoUris = [],
   initialIndex,
   visible,
   onClose,
   onZoomStart,
+  onActiveIndexChange,
 }: FullscreenMediaViewerProps) {
   const { width, height } = useWindowDimensions();
-  const [activeIndex, setActiveIndex] = useState(initialIndex);
-  const videoUriSet = React.useMemo(() => new Set(videoUris), [videoUris]);
-  const isVideo = React.useCallback(
-    (uri: string) => videoUriSet.has(uri) || isVideoUri(uri),
-    [videoUriSet],
-  );
+  const listRef = useRef<FlatList<ProductMediaItem>>(null);
+  const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 50 });
+  const mediaItems = useMemo<ProductMediaItem[]>(() => {
+    if (media) return media.filter((item) => !!item.uri);
+    const videoUriSet = new Set(videoUris);
+    return images
+      .filter(Boolean)
+      .map((uri) => ({
+        uri,
+        kind: videoUriSet.has(uri) || isVideoUri(uri) ? 'video' : 'image',
+        fit: 'contain',
+      }));
+  }, [images, media, videoUris]);
+  const safeInitialIndex = mediaItems.length > 0
+    ? Math.min(Math.max(initialIndex, 0), mediaItems.length - 1)
+    : 0;
+  const [activeIndex, setActiveIndex] = useState(safeInitialIndex);
+
+  useEffect(() => {
+    if (!visible) return;
+    setActiveIndex(safeInitialIndex);
+    requestAnimationFrame(() => {
+      listRef.current?.scrollToIndex({
+        index: safeInitialIndex,
+        animated: false,
+      });
+    });
+  }, [safeInitialIndex, visible]);
 
   const onViewableItemsChanged = useCallback(({ viewableItems }: any) => {
     if (viewableItems.length > 0) {
-      setActiveIndex(viewableItems[0].index ?? 0);
+      const nextIndex = viewableItems[0].index ?? 0;
+      setActiveIndex(nextIndex);
+      onActiveIndexChange?.(nextIndex);
     }
-  }, []);
+  }, [onActiveIndexChange]);
 
   if (!visible) return null;
 
   return (
-    <Reanimated.View style={styles.overlay} entering={FadeIn.duration(200)} exiting={FadeOut.duration(200)}>
-      <StatusBar barStyle="light-content" />
+    <Reanimated.View
+      style={styles.overlay}
+      entering={FadeIn.duration(200)}
+      exiting={FadeOut.duration(200)}
+      accessibilityViewIsModal
+      importantForAccessibility="yes"
+    >
+      <StatusBar barStyle="light-content" backgroundColor="#000" translucent />
 
       <FlatList
-        data={images}
-        keyExtractor={(_, i) => String(i)}
+        ref={listRef}
+        data={mediaItems}
+        keyExtractor={(item, i) => item.id ?? `${item.uri}-${i}`}
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
-        initialScrollIndex={initialIndex}
+        initialScrollIndex={safeInitialIndex}
+        getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
         onViewableItemsChanged={onViewableItemsChanged}
-        viewabilityConfig={{ viewAreaCoveragePercentThreshold: 50 }}
+        viewabilityConfig={viewabilityConfig.current}
         renderItem={({ item, index }) =>
-          isVideo(item) ? (
-            <View style={[styles.page, { width, height }]}>
+          item.kind === 'video' ? (
+            <View
+              style={[styles.page, { width, height }]}
+              accessible
+              accessibilityLabel={item.altText ?? 'Product video'}
+            >
               <Video
-                source={{ uri: item }}
+                source={{ uri: item.uri }}
                 style={styles.image}
                 resizeMode={ResizeMode.CONTAIN}
-                shouldPlay={index === activeIndex}
+                shouldPlay={false}
                 isMuted
-                isLooping
+                isLooping={false}
                 useNativeControls
+                usePoster={!!item.posterUri}
+                posterSource={item.posterUri ? { uri: item.posterUri } : undefined}
               />
             </View>
           ) : (
             <FullscreenImagePage
-              uri={item}
+              item={item}
               width={width}
               height={height}
               onClose={onClose}
+              onZoomStart={onZoomStart}
             />
           )
         }
         onScrollToIndexFailed={({ index }) => {
-          setTimeout(() => {
-            // best effort
-          }, 100);
+          listRef.current?.scrollToOffset({ offset: width * index, animated: false });
         }}
       />
 
@@ -227,10 +281,14 @@ export function FullscreenMediaViewer({
       </View>
 
       {/* Index indicator */}
-      {images.length > 1 && (
-        <View style={styles.indicatorContainer}>
+      {mediaItems.length > 1 && (
+        <View
+          style={styles.indicatorContainer}
+          accessible
+          accessibilityLabel={`${mediaItems[activeIndex]?.kind === 'video' ? 'Video' : 'Image'} ${activeIndex + 1} of ${mediaItems.length}`}
+        >
           <Text style={styles.indicatorText}>
-            {activeIndex + 1} / {images.length}
+            {activeIndex + 1} / {mediaItems.length}
           </Text>
         </View>
       )}
@@ -263,6 +321,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'flex-end',
     paddingHorizontal: Space.md,
+    zIndex: 10,
+    elevation: 10,
   },
   closeButton: {
     width: 44,
@@ -278,6 +338,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignItems: 'center',
+    zIndex: 10,
+    elevation: 10,
   },
   indicatorText: {
     color: '#fff',

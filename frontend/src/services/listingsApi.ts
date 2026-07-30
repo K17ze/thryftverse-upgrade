@@ -1,5 +1,10 @@
 import { fetchJson } from '../lib/apiClient';
-import { mapBackendListingToListing, friendlyBackendError } from './listingMapper';
+import {
+  mapBackendListingToListing,
+  mapBackendListings,
+  friendlyBackendError,
+} from './listingMapper';
+import type { DisplayReadyListing } from './listingMapper';
 import type { SupportedCurrencyCode } from '../constants/currencies';
 
 export interface ListingSeller {
@@ -22,13 +27,29 @@ export interface ListingEngagementSummaryApi {
   generatedAt: string;
 }
 
+export type ListingCondition =
+  | 'New with tags'
+  | 'Very good'
+  | 'Good'
+  | 'Satisfactory';
+
+export type ListingLifecycleStatus =
+  | 'draft'
+  | 'active'
+  | 'paused'
+  | 'reserved'
+  | 'sold'
+  | 'deleted'
+  | 'removed'
+  | 'unknown';
+
 export interface Listing {
   id: string;
-  title: string;
-  brand: string;
-  size: string;
-  condition: 'New with tags' | 'Very good' | 'Good' | 'Satisfactory';
-  price: number;
+  title: string | null;
+  brand: string | null;
+  size: string | null;
+  condition: ListingCondition | null;
+  price: number | null;
   originalPrice?: number;
   priceWithProtection?: number;
   images: string[];
@@ -39,12 +60,13 @@ export interface Listing {
   views?: number;
   isBumped?: boolean;
   isSold?: boolean;
-  sellerId: string;
+  sellerId: string | null;
   seller?: ListingSeller | null;
-  category: string;
-  subcategory: string;
-  description: string;
-  createdAt?: string;
+  category: string | null;
+  subcategory?: string | null;
+  description: string | null;
+  createdAt?: string | null;
+  status?: ListingLifecycleStatus;
   shippingMethod?: string | null;
   shippingPayer?: string | null;
   engagement?: ListingEngagementSummaryApi | null;
@@ -77,7 +99,7 @@ interface ApiListingsResponse {
 }
 
 export interface ListingsSyncResult {
-  listings: Listing[];
+  listings: DisplayReadyListing[];
   source: 'api' | 'mock';
   error?: string;
   nextCursor?: string;
@@ -90,7 +112,7 @@ export async function fetchListingsFromApi(cursor?: string): Promise<ListingsSyn
     const rows = Array.isArray(payload.items) ? payload.items : [];
 
     return {
-      listings: rows.map((row) => mapBackendListingToListing(row)),
+      listings: mapBackendListings(rows),
       source: 'api',
       error: rows.length === 0 ? 'API returned zero listings.' : undefined,
       nextCursor: payload.nextCursor,
@@ -159,7 +181,7 @@ export async function fetchFilteredListings(options?: {
     const rows = Array.isArray(payload.items) ? payload.items : [];
 
     return {
-      listings: rows.map((row) => mapBackendListingToListing(row)),
+      listings: mapBackendListings(rows),
       source: 'api',
       error: rows.length === 0 ? 'No listings match your filters.' : undefined,
       nextCursor: payload.nextCursor,
@@ -174,7 +196,7 @@ export async function fetchFilteredListings(options?: {
 }
 
 export interface VisualSearchResult {
-  listings: Listing[];
+  listings: DisplayReadyListing[];
   source: 'api' | 'fallback';
   visualMatching: boolean;
   note?: string;
@@ -226,7 +248,7 @@ export async function visualSearch(params: {
 
     const rows = Array.isArray(payload.items) ? payload.items : [];
     return {
-      listings: rows.map((row) => mapBackendListingToListing(row)),
+      listings: mapBackendListings(rows),
       source: 'api',
       visualMatching: payload.visualMatching === true,
       note: payload.note,
@@ -501,13 +523,13 @@ export async function createListingImageOnApi(body: {
   });
 }
 
-export async function fetchRelatedListings(listingId: string): Promise<{ ok: boolean; items?: Listing[]; error?: string }> {
+export async function fetchRelatedListings(listingId: string): Promise<{ ok: boolean; items?: DisplayReadyListing[]; error?: string }> {
   try {
     const payload = await fetchJson<{ ok: boolean; items: ApiListingRow[] }>(`/listings/${listingId}/related`);
     if (!payload.ok) return { ok: false, error: 'Related listings request failed' };
     return {
       ok: true,
-      items: payload.items.map((row) => mapBackendListingToListing(row)),
+      items: mapBackendListings(payload.items),
     };
   } catch (error) {
     return { ok: false, error: friendlyBackendError(error) };

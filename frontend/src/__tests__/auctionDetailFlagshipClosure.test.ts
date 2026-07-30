@@ -127,8 +127,10 @@ describe('auction-detail flagship closure (spec 02_AUCTION)', () => {
   describe('multi-media support', () => {
     it('uses auctionMediaItems derived from the canonical image/video array', () => {
       expect(src).toContain('auctionMediaItems');
-      expect(src).toContain('auctionVideoUris');
       expect(src).toContain('mediaItems');
+      expect(src).toContain('posterUri');
+      expect(src).toContain('focalPoint');
+      expect(src).toContain('fullscreenMediaIndex');
       expect(src).not.toContain(".filter((m) => m.type === 'image')");
     });
 

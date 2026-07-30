@@ -41,6 +41,8 @@ export interface CommerceDetailTransactionSurfaceProps {
   statusRow?: React.ReactNode;
   /** Optional viewer-state line (e.g. "You're leading" / "5 units owned"). */
   viewerState?: React.ReactNode;
+  /** Family-authored content sharing the primary value's optical axis. */
+  headlineAside?: React.ReactNode;
   /** Family-specific children (countdown, top-of-book rows, etc.). */
   children?: React.ReactNode;
   /** When true, the surface uses the elevated surface fill. Useful for
@@ -49,6 +51,10 @@ export interface CommerceDetailTransactionSurfaceProps {
   /** Family variant — controls rhythm and numeric composition weight.
    * Defaults to `direct` for backward compatibility. */
   family?: CommerceDetailFamily;
+  /** Removes page margins when the parent owns the full-bleed chapter. */
+  flush?: boolean;
+  /** Optional family surface colour; geometry remains flat/full-width. */
+  surfaceColor?: string;
 }
 
 export function CommerceDetailTransactionSurface({
@@ -58,9 +64,12 @@ export function CommerceDetailTransactionSurface({
   secondaryLabel,
   statusRow,
   viewerState,
+  headlineAside,
   children,
   elevated = false,
   family = 'direct',
+  flush = false,
+  surfaceColor,
 }: CommerceDetailTransactionSurfaceProps) {
   const { colors } = useAppTheme();
 
@@ -120,17 +129,21 @@ export function CommerceDetailTransactionSurface({
     <View
       style={[
         styles.container,
+        flush && styles.containerFlush,
         familyContainerStyle,
         {
-          backgroundColor: elevated ? colors.surfaceElevated : colors.background,
+          backgroundColor: surfaceColor
+            ?? (elevated
+              ? colors.surfaceElevated
+              : colors.background),
         },
       ]}
       accessibilityRole="summary"
     >
-      {family === 'auction' && secondaryContent ? (
+      {family === 'auction' && (headlineAside || secondaryContent) ? (
         <View style={styles.auctionHeadline}>
           {primaryContent}
-          {secondaryContent}
+          {headlineAside ? <View style={styles.auctionHeadlineAside}>{headlineAside}</View> : secondaryContent}
         </View>
       ) : (
         <>
@@ -163,6 +176,10 @@ const styles = StyleSheet.create({
     marginHorizontal: Space.md,
     marginTop: Space.md,
     paddingHorizontal: 0,
+  },
+  containerFlush: {
+    marginHorizontal: 0,
+    paddingHorizontal: Space.md,
   },
   // Direct uses a quiet, near-flat price rhythm.
   containerDirect: {
@@ -220,6 +237,12 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     justifyContent: 'space-between',
     gap: Space.md,
+  },
+  auctionHeadlineAside: {
+    flexShrink: 0,
+    alignItems: 'flex-end',
+    justifyContent: 'flex-end',
+    paddingBottom: 3,
   },
   secondaryRow: {
     flexDirection: 'row',

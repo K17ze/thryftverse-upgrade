@@ -1,4 +1,10 @@
-import type { Listing, ListingEngagementSummaryApi, ListingSeller } from './listingsApi';
+import type {
+  Listing,
+  ListingCondition,
+  ListingEngagementSummaryApi,
+  ListingLifecycleStatus,
+  ListingSeller,
+} from './listingsApi';
 
 /**
  * Canonical backend listing → frontend Listing view-model mapper.
@@ -7,15 +13,9 @@ import type { Listing, ListingEngagementSummaryApi, ListingSeller } from './list
  * is normalized through `mapBackendListingToListing` so that the UI always receives
  * a stable visual contract — regardless of which endpoint produced the row.
  *
- * Contract guarantees for every returned Listing:
- *  - at least one safe visual media entry (never `[]`, never `['']`)
- *  - safe title, brand, size, condition
- *  - safe seller display model (never `undefined`; `null` only when truly absent)
- *  - safe category/subcategory
- *  - safe description
- *  - safe createdAt
- *  - safe price (finite number >= 0)
- *  - stable likes/social metadata fallback (>= 0)
+ * Missing commercial facts stay missing. Rendering layers may explain or
+ * omit absent data, but this mapper must never manufacture a product title,
+ * brand, size, condition, category, seller, price or timestamp.
  *
  * This is additive hardening. It does not remove any existing field.
  */
@@ -47,43 +47,35 @@ export interface BackendListingRow {
   engagement?: ListingEngagementSummaryApi | null;
 }
 
-const VALID_CONDITIONS: readonly Listing['condition'][] = [
+/**
+ * Discovery tiles cannot communicate absent commercial facts with the same
+ * care as a detail screen. Keep incomplete records available to detail routes,
+ * but exclude them from compact feeds instead of filling them with invented
+ * values.
+ */
+export type DisplayReadyListing = Listing & {
+  title: string;
+  brand: string;
+  size: string;
+  condition: ListingCondition;
+  price: number;
+  sellerId: string;
+  category: string;
+  description: string;
+  createdAt?: string;
+};
+
+const VALID_CONDITIONS: readonly ListingCondition[] = [
   'New with tags',
   'Very good',
   'Good',
   'Satisfactory',
 ];
 
-const SAFE_SELLER_ID = 'thryftverse_seller';
-const SAFE_TITLE = 'Untitled listing';
-const SAFE_BRAND = 'Thryftverse';
-const SAFE_SIZE = 'One size';
-const SAFE_CONDITION: Listing['condition'] = 'Very good';
-const SAFE_CATEGORY = 'women';
-const SAFE_SUBCATEGORY = 'Clothing';
-const SAFE_DESCRIPTION = 'No description provided.';
-const SAFE_CREATED_AT = '2026-01-01T00:00:00.000Z';
-
-/**
- * A non-empty, non-blank placeholder URI is intentionally NOT used here.
- * Empty string `''` is the sentinel that `CachedImage` already turns into a
- * premium `ImageEmptyGraphic`. We keep `['']` (not `[]`) so that
- * `ProductMediaGallery`/`CommerceMediaStage` always receive at least one entry
- * and never collapse to the bare gray-icon empty hero.
- */
-const SAFE_MEDIA_FALLBACK: string[] = [''];
-
-function deriveBrand(title: string): string {
-  const normalized = title.trim();
-  if (!normalized) return SAFE_BRAND;
-  const parts = normalized.split(/\s+/);
-  if (parts.length === 1) return parts[0];
-  return `${parts[0]} ${parts[1]}`;
-}
-
-function toFinitePrice(value: unknown): number {
-  const n = typeof value === 'string' ? Number(value) : Number(value ?? 0);
-  return Number.isFinite(n) && n >= 0 ? n : 0;
+function toFinitePrice(value: unknown): number | null {
+  if (value == null || value === '') return null;
+  const n = typeof value === 'string' ? Number(value) : Number(value);
+  return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
 function toFiniteOriginalPrice(value: unknown): number | undefined {
@@ -92,31 +84,29 @@ function toFiniteOriginalPrice(value: unknown): number | undefined {
   return Number.isFinite(n) && n >= 0 ? n : undefined;
 }
 
-function normalizeCondition(value: unknown): Listing['condition'] {
+function normalizeCondition(value: unknown): ListingCondition | null {
   if (typeof value === 'string' && value.length > 0) {
     const match = VALID_CONDITIONS.find(
       (c) => c.toLowerCase() === value.toLowerCase()
     );
     if (match) return match;
   }
-  return SAFE_CONDITION;
+  return null;
 }
 
-function normalizeCategory(value: unknown): string {
-  if (typeof value === 'string' && value.trim().length > 0) {
-    return value.trim();
+function normalizeStatus(value: unknown): ListingLifecycleStatus {
+  switch (value) {
+    case 'draft':
+    case 'active':
+    case 'paused':
+    case 'reserved':
+    case 'sold':
+    case 'deleted':
+    case 'removed':
+      return value;
+    default:
+      return 'unknown';
   }
-  return SAFE_CATEGORY;
-}
-
-function normalizeSubcategory(value: unknown, category: string): string {
-  if (typeof value === 'string' && value.trim().length > 0) {
-    return value.trim();
-  }
-  // Reasonable default derived from category — never blank.
-  if (category && category.toLowerCase() === 'men') return 'Clothing';
-  if (category && category.toLowerCase() === 'women') return 'Clothing';
-  return SAFE_SUBCATEGORY;
 }
 
 function collectMedia(row: BackendListingRow): string[] {
@@ -131,7 +121,7 @@ function collectMedia(row: BackendListingRow): string[] {
       : '';
   if (fromSingle) return [fromSingle];
 
-  return SAFE_MEDIA_FALLBACK;
+  return [];
 }
 
 function nonBlank(v: unknown): string | null {
@@ -154,22 +144,17 @@ function normalizeSeller(row: BackendListingRow): ListingSeller | null {
 }
 
 export function mapBackendListingToListing(row: BackendListingRow): Listing {
-  const id = typeof row.id === 'string' && row.id ? row.id : `listing_${Math.random().toString(36).slice(2)}`;
-  const title = typeof row.title === 'string' && row.title.trim() ? row.title.trim() : SAFE_TITLE;
-  const category = normalizeCategory(row.category);
-  const subcategory = normalizeSubcategory(row.subcategory, category);
+  const id = nonBlank(row.id);
+  if (!id) {
+    throw new Error('Listing response is missing a stable id');
+  }
+  const status = normalizeStatus(row.status);
 
   return {
     id,
-    title,
-    brand:
-      typeof row.brand === 'string' && row.brand.trim()
-        ? row.brand.trim()
-        : deriveBrand(title),
-    size:
-      typeof row.size === 'string' && row.size.trim()
-        ? row.size.trim()
-        : SAFE_SIZE,
+    title: nonBlank(row.title),
+    brand: nonBlank(row.brand),
+    size: nonBlank(row.size),
     condition: normalizeCondition(row.condition),
     price: toFinitePrice(row.priceGbp),
     originalPrice: toFiniteOriginalPrice(row.originalPriceGbp),
@@ -188,33 +173,47 @@ export function mapBackendListingToListing(row: BackendListingRow): Listing {
         : null,
     likes: typeof row.likes === 'number' && row.likes > 0 ? row.likes : 0,
     views: typeof row.views === 'number' && row.views > 0 ? row.views : 0,
-    isSold: row.status === 'sold',
-    sellerId:
-      typeof row.sellerId === 'string' && row.sellerId
-        ? row.sellerId
-        : SAFE_SELLER_ID,
+    isSold: status === 'sold',
+    sellerId: nonBlank(row.sellerId),
     seller: normalizeSeller(row),
-    category,
-    subcategory,
-    description:
-      typeof row.description === 'string' && row.description.trim()
-        ? row.description.trim()
-        : SAFE_DESCRIPTION,
-    createdAt:
-      typeof row.createdAt === 'string' && row.createdAt
-        ? row.createdAt
-        : SAFE_CREATED_AT,
+    category: nonBlank(row.category),
+    subcategory: nonBlank(row.subcategory),
+    description: nonBlank(row.description),
+    createdAt: nonBlank(row.createdAt),
+    status,
     shippingMethod: row.shippingMethod ?? null,
     shippingPayer: row.shippingPayer ?? null,
     engagement: row.engagement ?? null,
   };
 }
 
-export function mapBackendListings(rows: unknown[] | null | undefined): Listing[] {
+export function isDisplayReadyListing(listing: Listing): listing is DisplayReadyListing {
+  return listing.title !== null
+    && listing.brand !== null
+    && listing.size !== null
+    && listing.condition !== null
+    && listing.price !== null
+    && listing.sellerId !== null
+    && listing.category !== null
+    && listing.description !== null
+    && listing.createdAt !== null;
+}
+
+export function mapBackendListings(
+  rows: unknown[] | null | undefined
+): DisplayReadyListing[] {
   if (!Array.isArray(rows)) return [];
-  return rows
-    .filter((r): r is BackendListingRow => r != null && typeof r === 'object')
-    .map(mapBackendListingToListing);
+  const mapped: Listing[] = [];
+  for (const row of rows) {
+    if (row == null || typeof row !== 'object') continue;
+    try {
+      mapped.push(mapBackendListingToListing(row as BackendListingRow));
+    } catch {
+      // A feed cannot render an item without a stable identity. Detail fetches
+      // still surface this contract violation through the single-row mapper.
+    }
+  }
+  return mapped.filter(isDisplayReadyListing);
 }
 
 /**

@@ -1,6 +1,8 @@
-import type { Listing } from '../../services/listingsApi';
 import { fetchJson } from '../../lib/apiClient';
-import { mapBackendListingToListing } from '../../services/listingMapper';
+import {
+  isDisplayReadyListing,
+  mapBackendListingToListing,
+} from '../../services/listingMapper';
 import type {
   RecommendationResponse,
   RecommendationRequest,
@@ -29,11 +31,12 @@ function mapApiLookToRecommendationLook(row: ApiLookRow): RecommendationLook {
   };
 }
 
-function mapApiItemToRecommendationItem(item: any): RecommendationItem {
+function mapApiItemToRecommendationItem(item: any): RecommendationItem | null {
   if (item && item.type === 'look') {
     return mapApiLookToRecommendationLook(item as ApiLookRow);
   }
-  return mapBackendListingToListing(item);
+  const listing = mapBackendListingToListing(item);
+  return isDisplayReadyListing(listing) ? listing : null;
 }
 
 export async function fetchRecommendations(
@@ -74,7 +77,9 @@ export async function fetchRecommendations(
       subtitle: s.subtitle,
       reason: s.reason,
       personalised: s.personalised,
-      items: (s.items ?? []).map(mapApiItemToRecommendationItem),
+      items: (s.items ?? [])
+        .map(mapApiItemToRecommendationItem)
+        .filter((item): item is RecommendationItem => item !== null),
       nextCursor: s.nextCursor,
     })),
   };

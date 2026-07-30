@@ -69,10 +69,11 @@ export interface Listing {
   views?: number;
   isBumped?: boolean;
   isSold?: boolean;
+  status?: 'draft' | 'active' | 'paused' | 'reserved' | 'sold' | 'deleted' | 'removed' | 'unknown';
   sellerId: string;
   seller?: ListingSeller | null;
   category: string;
-  subcategory: string;
+  subcategory?: string | null;
   description: string;
   createdAt?: string;
   shippingMethod?: string | null;

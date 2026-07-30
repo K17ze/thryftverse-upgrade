@@ -20,6 +20,7 @@ function makeListing(overrides: Partial<Listing> = {}): Listing {
     images: ['https://example.com/img1.jpg'],
     likes: 10,
     isSold: false,
+    status: 'active',
     sellerId: 'seller-1',
     seller: {
       id: 'seller-1',
@@ -183,7 +184,7 @@ describe('listingDetailContract', () => {
     });
 
     it('returns correct capabilities for sold item', () => {
-      const listing = makeListing({ sellerId: 'seller-1', isSold: true });
+      const listing = makeListing({ sellerId: 'seller-1', isSold: true, status: 'sold' });
       const caps = buildCapabilities(listing, 'user-1');
       expect(caps.isSold).toBe(true);
       expect(caps.isAvailable).toBe(false);
@@ -196,6 +197,15 @@ describe('listingDetailContract', () => {
       const caps = buildCapabilities(listing);
       expect(caps.isOwner).toBe(false);
       expect(caps.canBuy).toBe(true);
+    });
+
+    it('fails closed when lifecycle truth is missing', () => {
+      const listing = makeListing({ status: undefined, isSold: false });
+      const caps = buildCapabilities(listing, 'user-1');
+      expect(caps.canBuy).toBe(false);
+      expect(caps.canOffer).toBe(false);
+      expect(caps.isAvailable).toBe(false);
+      expect(caps.unavailableReason).toBe('status_unknown');
     });
   });
 

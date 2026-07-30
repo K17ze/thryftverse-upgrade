@@ -25,6 +25,8 @@ interface Props {
   stage?: CountdownStage;
   /** Show a thin progress bar below the countdown text */
   showProgress?: boolean;
+  /** Larger time lock-up when paired with the current bid. */
+  prominent?: boolean;
 }
 
 function resolveStage(urgent: boolean | undefined, text: string): CountdownStage {
@@ -43,12 +45,12 @@ const STAGE_COLORS: Record<CountdownStage, { text: string; icon: string; bar: st
   ended: { text: Colors.textMuted, icon: Colors.textMuted, bar: Colors.border },
 };
 
-export function AuctionCountdown({ text, urgent, compact, progress, stage, showProgress }: Props) {
+export function AuctionCountdown({ text, urgent, compact, progress, stage, showProgress, prominent }: Props) {
   const resolvedStage = stage ?? resolveStage(urgent, text);
   const colors = STAGE_COLORS[resolvedStage];
   const stageLabel = STAGE_LABELS[resolvedStage];
-  const iconSize = compact ? 11 : 13;
-  const fontSize = compact ? 12 : 14;
+  const iconSize = prominent ? 16 : compact ? 11 : 13;
+  const fontSize = prominent ? 20 : compact ? 12 : 14;
   const isFinalOrUrgent = resolvedStage === 'final' || resolvedStage === 'urgent';
 
   return (
@@ -63,6 +65,7 @@ export function AuctionCountdown({ text, urgent, compact, progress, stage, showP
           style={[
             styles.text,
             { color: colors.text, fontSize },
+            prominent && styles.textProminent,
             isFinalOrUrgent && styles.textUrgent,
           ]}
           numberOfLines={1}
@@ -117,6 +120,10 @@ const styles = StyleSheet.create({
   },
   textUrgent: {
     fontFamily: Typography.family.bold,
+  },
+  textProminent: {
+    lineHeight: 24,
+    letterSpacing: -0.5,
   },
   progressBar: {
     height: 2,

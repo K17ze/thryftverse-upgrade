@@ -20,6 +20,7 @@ import { useRoute, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { Listing } from '../services/listingsApi';
+import type { DisplayReadyListing } from '../services/listingMapper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
@@ -153,8 +154,8 @@ export default function ItemDetailScreen() {
     return () => { cancelled = true; };
   }, [item?.id]);
 
-  const { data: sellerTrustData } = useSellerTrust(item?.sellerId);
-  const sellerFollowMutation = useSellerFollow(item?.sellerId);
+  const { data: sellerTrustData } = useSellerTrust(item?.sellerId ?? undefined);
+  const sellerFollowMutation = useSellerFollow(item?.sellerId ?? undefined);
 
   useEffect(() => {
     setProductAnalyticsHandler((event) => {
@@ -324,19 +325,25 @@ export default function ItemDetailScreen() {
     );
   }
 
-  const hasDiscount = item.originalPrice !== undefined && item.originalPrice > item.price;
-  const formattedPrice = formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' });
+  const displayTitle = item.title ?? 'Listing details';
+  const hasPrice = item.price !== null;
+  const hasDiscount = hasPrice
+    && item.originalPrice !== undefined
+    && item.originalPrice > item.price!;
+  const formattedPrice = hasPrice
+    ? formatFromFiat(item.price!, 'GBP', { displayMode: 'fiat' })
+    : 'Price unavailable';
   const formattedOriginal = hasDiscount
     ? formatFromFiat(item.originalPrice!, 'GBP', { displayMode: 'fiat' })
     : null;
   const discountPercent = hasDiscount && item.originalPrice
-    ? ((item.originalPrice - item.price) / item.originalPrice) * 100
+    ? ((item.originalPrice - item.price!) / item.originalPrice) * 100
     : null;
   const formattedProtectionTotal = serverCommerce?.estimatedTotal != null
     ? formatFromFiat(serverCommerce.estimatedTotal, 'GBP', { displayMode: 'fiat' })
     : null;
-  const priceIzeText = goldRates && displayMode !== 'fiat'
-    ? formatIzeAmount(toIze(item.price, 'GBP', goldRates))
+  const priceIzeText = hasPrice && goldRates && displayMode !== 'fiat'
+    ? formatIzeAmount(toIze(item.price!, 'GBP', goldRates))
     : null;
 
   const capabilities = buildCapabilities(item, currentUser?.id);
@@ -361,8 +368,10 @@ export default function ItemDetailScreen() {
 
   // Bundle upsell: items from the same seller (more_from_seller section)
   const moreFromSellerSection = recommendationSections.find((s) => s.key === 'more_from_seller');
-  const bundleItems: Listing[] = moreFromSellerSection
-    ? moreFromSellerSection.items.filter((i): i is Listing => !isRecommendationLook(i))
+  const bundleItems: DisplayReadyListing[] = moreFromSellerSection
+    ? moreFromSellerSection.items.filter(
+        (i): i is DisplayReadyListing => !isRecommendationLook(i)
+      )
     : [];
 
   const handlePressRecommendation = (recItem: Listing) => {
@@ -469,7 +478,7 @@ export default function ItemDetailScreen() {
           Spec 02 shape system: separate hit area from visible shape. */}
       <CommerceDetailHeader
         scrollY={scrollY}
-        title={item.title}
+        title={displayTitle}
         onBack={() => navigation.goBack()}
       />
 
@@ -499,7 +508,9 @@ export default function ItemDetailScreen() {
           onDoubleTap={handleDoubleTap}
           onZoomStart={() => { if (item) ProductAnalytics.mediaZoom(item.id); }}
           onOpenFullscreen={handleOpenFullscreen}
-          heightFraction={isCompactScreen ? 0.5 : 0.56}
+          heightFraction={isCompactScreen ? 0.54 : 0.58}
+          initialIndex={fullscreenIndex}
+          onActiveIndexChange={setFullscreenIndex}
           bigHeartOpacity={bigHeartOpacity}
           bigHeartScale={bigHeartScale}
           showDefaultControls={false}
@@ -511,18 +522,6 @@ export default function ItemDetailScreen() {
                 compact
               />
             </View>
-          }
-          overlayBottomContent={
-            <CommerceDetailIdentity
-              family="direct"
-              tone="media"
-              density={isCompactScreen ? 'compact' : 'standard'}
-              eyebrow={item.brand ?? item.category ?? 'Direct listing'}
-              title={item.title}
-              primaryValue={formattedPrice}
-              secondaryLine={secondaryLine}
-              interestSignal={interestSignal}
-            />
           }
         />
         <CommerceDetailMediaRail
@@ -547,37 +546,49 @@ export default function ItemDetailScreen() {
         <CommerceDetailOfflineBanner isOffline={isOffline} />
 
         {/* ── Zone B — Identity seam ──
-            One compact identity composition: brand eyebrow + title +
-            dominant price + discount/protection secondary line +
-            interest signal. The family badge lives on the media stage
-            above; the price is NOT repeated elsewhere except the dock.
-            Spec 02 §B + spec 05 §2. */}
-        {attributeLine ? (
-          <View style={styles.attributeRow}>
-            <Text style={[styles.attributeText, { color: colors.textMuted }]} numberOfLines={2}>
-              {attributeLine}
-            </Text>
-            {item.size && (
-              <Pressable
-                onPress={() => { haptic.light(); setSizeGuideVisible(true); }}
-                hitSlop={8}
-                style={styles.quietTextTarget}
-                accessibilityLabel="View size guide"
-                accessibilityRole="button"
-              >
-                <Text style={[styles.sizeGuideLink, { color: colors.brand }]}>
-                  Size guide
-                </Text>
-              </Pressable>
-            )}
-          </View>
-        ) : null}
+            Direct keeps critical copy off arbitrary seller photography.
+            Media establishes desire first; the stable editorial canvas
+            then owns brand, identity and price. The dock is the only
+            actionable repetition of that price. */}
+        <View style={styles.editorialIdentityChapter}>
+          <CommerceDetailIdentity
+            family="direct"
+            tone="canvas"
+            density={isCompactScreen ? 'compact' : 'standard'}
+            eyebrow={item.brand ?? item.category ?? 'Direct listing'}
+            title={displayTitle}
+            primaryValue={formattedPrice}
+            secondaryLine={secondaryLine}
+            interestSignal={interestSignal}
+          />
 
-        {priceIzeText ? (
-          <Text style={[styles.izeText, { color: colors.textSecondary }]} numberOfLines={1}>
-            {priceIzeText}
-          </Text>
-        ) : null}
+          {attributeLine ? (
+            <View style={styles.attributeRow}>
+              <Text style={[styles.attributeText, { color: colors.textMuted }]} numberOfLines={2}>
+                {attributeLine}
+              </Text>
+              {item.size && (
+                <Pressable
+                  onPress={() => { haptic.light(); setSizeGuideVisible(true); }}
+                  hitSlop={8}
+                  style={styles.quietTextTarget}
+                  accessibilityLabel="View size guide"
+                  accessibilityRole="button"
+                >
+                  <Text style={[styles.sizeGuideLink, { color: colors.brand }]}>
+                    Size guide
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+          ) : null}
+
+          {priceIzeText ? (
+            <Text style={[styles.izeText, { color: colors.textSecondary }]} numberOfLines={1}>
+              {priceIzeText}
+            </Text>
+          ) : null}
+        </View>
 
         {seller && (
           <View style={styles.sellerRowWrap}>
@@ -894,14 +905,32 @@ export default function ItemDetailScreen() {
         }
 
         if (!capabilities.isAvailable) {
+          const unavailableCopy = (() => {
+            switch (capabilities.unavailableReason) {
+              case 'reserved':
+                return { label: 'Reserved', subtitle: 'This item is currently held for another buyer' };
+              case 'paused':
+                return { label: 'Paused', subtitle: 'The seller has paused this listing' };
+              case 'draft':
+                return { label: 'Not published', subtitle: 'This listing is not available to buy' };
+              case 'missing_price':
+                return { label: 'Price unavailable', subtitle: 'The seller has not supplied a valid price' };
+              case 'missing_seller':
+                return { label: 'Seller unavailable', subtitle: 'Seller details could not be verified' };
+              case 'status_unknown':
+                return { label: 'Status unavailable', subtitle: 'Purchase availability could not be verified' };
+              default:
+                return { label: 'Unavailable', subtitle: 'This listing is no longer available' };
+            }
+          })();
           return (
             <CommerceDetailStateDock
               stateBadge={
                 <Text style={[styles.dockStateBadge, { color: colors.textSecondary }]}>
-                  Unavailable
+                  {unavailableCopy.label}
                 </Text>
               }
-              subtitle="This listing is no longer available"
+              subtitle={unavailableCopy.subtitle}
               primaryAction={{
                 label: 'Browse similar',
                 onPress: () => navigation.navigate('MainTabs', { screen: 'Explore' }),
@@ -926,7 +955,11 @@ export default function ItemDetailScreen() {
                     label: 'Make offer',
                     onPress: () => {
                       if (item) ProductAnalytics.offerStart(item.id);
-                      navigation.navigate('MakeOffer', { itemId: item.id, price: item.price, title: item.title });
+                      navigation.navigate('MakeOffer', {
+                        itemId: item.id,
+                        price: item.price!,
+                        title: displayTitle,
+                      });
                     },
                   }
                 : undefined
@@ -939,6 +972,7 @@ export default function ItemDetailScreen() {
         images={item.images}
         initialIndex={fullscreenIndex}
         visible={fullscreenVisible}
+        onActiveIndexChange={setFullscreenIndex}
         onClose={() => setFullscreenVisible(false)}
       />
 
@@ -952,7 +986,7 @@ export default function ItemDetailScreen() {
         visible={shareVisible}
         onDismiss={() => setShareVisible(false)}
         url={`https://thryftverse.com/item/${item.id}`}
-        title={item.title}
+        title={displayTitle}
         subtitle={item.brand ? `${item.brand} · ${formattedPrice}` : formattedPrice}
         imageUri={item.images?.[0]}
       />
@@ -1108,6 +1142,10 @@ const styles = StyleSheet.create({
   familyBadgeOverlay: {
     alignSelf: 'flex-start',
   },
+  editorialIdentityChapter: {
+    paddingTop: Space.xs,
+    paddingBottom: Space.xs,
+  },
   // ── Attribute row ──
   // Rendered inside the identity's padding rhythm — no separate
   // horizontal padding. The negative top margin pulls it closer to
@@ -1118,7 +1156,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: Space.sm,
     paddingHorizontal: Space.md,
-    marginTop: -Space.xs,
+    marginTop: 0,
     paddingBottom: Space.sm,
   },
   attributeText: {

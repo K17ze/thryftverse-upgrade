@@ -134,6 +134,7 @@ export default function AuctionDetailScreen() {
   const [bidHistorySheetVisible, setBidHistorySheetVisible] = React.useState(false);
   const [rulesSheetVisible, setRulesSheetVisible] = React.useState(false);
   const [mediaViewerVisible, setMediaViewerVisible] = React.useState(false);
+  const [fullscreenMediaIndex, setFullscreenMediaIndex] = React.useState(0);
   const [overflowVisible, setOverflowVisible] = React.useState(false);
   const [relatedAuctions, setRelatedAuctions] = React.useState<MarketAuction[]>([]);
   const [relatedLoading, setRelatedLoading] = React.useState(false);
@@ -473,20 +474,34 @@ export default function AuctionDetailScreen() {
   // CommerceMediaStage. Maintain imageUrl as a temporary compatibility
   // field.
   const auctionMediaItems = React.useMemo(() => {
-    if (!auction) return [] as string[];
+    if (!auction) return [];
     if (auction.mediaItems && auction.mediaItems.length > 0) {
       return auction.mediaItems
         .slice()
         .sort((a, b) => a.order - b.order)
-        .map((m) => m.url);
+        .map((item) => ({
+          id: item.id,
+          uri: item.url,
+          kind: item.type,
+          posterUri: item.posterUrl,
+          width: item.width,
+          height: item.height,
+          focalPoint: item.focalX != null && item.focalY != null
+            ? { x: item.focalX, y: item.focalY }
+            : null,
+          fit: item.focalX != null && item.focalY != null ? 'cover' as const : 'contain' as const,
+          altText: `${auction.title} ${item.type}`,
+        }));
     }
-    return auction.imageUrl ? [auction.imageUrl] : [];
+    return auction.imageUrl
+      ? [{
+          uri: auction.imageUrl,
+          kind: 'image' as const,
+          fit: 'contain' as const,
+          altText: auction.title,
+        }]
+      : [];
   }, [auction]);
-
-  const auctionVideoUris = React.useMemo(
-    () => auction?.mediaItems?.filter((item) => item.type === 'video').map((item) => item.url) ?? [],
-    [auction?.mediaItems],
-  );
 
   // ── Fulfilment summary ──
   // Per spec 02_AUCTION §8: backend-backed result/fulfilment contract.
@@ -593,8 +608,7 @@ export default function AuctionDetailScreen() {
             §1: "Watch is the auction participation state. Save-to-
             collection may remain in overflow." */}
         <CommerceMediaStage
-          images={auctionMediaItems}
-          videoUris={auctionVideoUris}
+          media={auctionMediaItems}
           objectId={auction.id}
           topInset={insets.top}
           scrollY={scrollY}
@@ -606,7 +620,12 @@ export default function AuctionDetailScreen() {
           isSaved={social.isSavedToCollection}
           showDefaultControls={false}
           heightFraction={isCompact ? 0.5 : 0.56}
-          onOpenFullscreen={() => setMediaViewerVisible(true)}
+          initialIndex={fullscreenMediaIndex}
+          onActiveIndexChange={setFullscreenMediaIndex}
+          onOpenFullscreen={(index) => {
+            setFullscreenMediaIndex(index);
+            setMediaViewerVisible(true);
+          }}
           overlayTopContent={
             <View style={styles.stateBadgeOverlay}>
               <AuctionStateBadge
@@ -672,10 +691,20 @@ export default function AuctionDetailScreen() {
         {!isTerminal && (
           <CommerceDetailTransactionSurface
             family="auction"
+            flush
+            surfaceColor={colors.surface}
             primaryLabel={priceLabel}
             primaryValue={priceText}
-            secondaryLabel="Bid activity"
-            secondaryValue={`${auction.bidCount} ${auction.bidCount === 1 ? 'bid' : 'bids'}`}
+            headlineAside={
+              <AuctionCountdown
+                text={countdown.text}
+                urgent={countdown.isFinalMinutes}
+                stage={countdown.stage}
+                progress={isLive ? countdownProgress : undefined}
+                showProgress={isLive}
+                prominent
+              />
+            }
             viewerState={
               viewerContext ? (
                 <Text
@@ -693,28 +722,27 @@ export default function AuctionDetailScreen() {
                 </Text>
               ) : undefined
             }
-            statusRow={
+            statusRow={reserveStatus !== 'none' ? (
               <View style={styles.transactionStatusRow}>
-                {reserveStatus !== 'none' && (
-                  <View style={styles.transactionReserveRow}>
-                    <ReserveStatusBadge status={reserveStatus} showExplanation />
-                    {reserveStatus === 'not-met' && isLive && (
-                      <Text style={[styles.transactionReserveHint, { color: colors.textSecondary }]} numberOfLines={1}>
-                        Bidding continues until reserve is met
-                      </Text>
-                    )}
-                  </View>
-                )}
-                <AuctionCountdown
-                  text={countdown.text}
-                  urgent={countdown.isFinalMinutes}
-                  stage={countdown.stage}
-                  progress={isLive ? countdownProgress : undefined}
-                  showProgress={isLive}
-                />
+                <View style={styles.transactionReserveRow}>
+                  <ReserveStatusBadge status={reserveStatus} showExplanation />
+                  {reserveStatus === 'not-met' && isLive && (
+                    <Text style={[styles.transactionReserveHint, { color: colors.textSecondary }]} numberOfLines={1}>
+                      Bidding continues until reserve is met
+                    </Text>
+                  )}
+                </View>
               </View>
-            }
+            ) : undefined}
           >
+            <View style={[styles.transactionBidActivityRow, { borderTopColor: colors.border }]}>
+              <Text style={[styles.transactionBidActivityLabel, { color: colors.textSecondary }]}>
+                Bid activity
+              </Text>
+              <Text style={[styles.transactionBidActivityValue, { color: colors.textPrimary }]}>
+                {auction.bidCount} {auction.bidCount === 1 ? 'bid' : 'bids'}
+              </Text>
+            </View>
             {/* Minimum to lead (outbid) — actionable emphasis inside the
                 surface. The dock carries the "Bid again" action. */}
             {isLive && viewerState === 'outbid' && auction.minimumNextBidGbp > 0 && (
@@ -1408,10 +1436,10 @@ export default function AuctionDetailScreen() {
 
       {/* ── Fullscreen media viewer ── */}
       <FullscreenMediaViewer
-        images={auctionMediaItems}
-        videoUris={auctionVideoUris}
-        initialIndex={0}
+        media={auctionMediaItems}
+        initialIndex={fullscreenMediaIndex}
         visible={mediaViewerVisible}
+        onActiveIndexChange={setFullscreenMediaIndex}
         onClose={() => setMediaViewerVisible(false)}
       />
 
@@ -1597,6 +1625,28 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
   },
   // ── Transaction surface internal rows ──
+  transactionBidActivityRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: Space.sm,
+    marginTop: Space.md,
+    paddingTop: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  transactionBidActivityLabel: {
+    fontSize: Type.metaElevated.size,
+    lineHeight: Type.metaElevated.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.metaElevated.letterSpacing,
+    textTransform: 'uppercase',
+  },
+  transactionBidActivityValue: {
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontFamily: Typography.family.semibold,
+    fontVariant: ['tabular-nums'],
+  },
   transactionMinRow: {
     flexDirection: 'row',
     alignItems: 'baseline',

@@ -51,6 +51,7 @@ export type OrderStatus =
   | 'accepted'
   | 'open'
   | 'partial'
+  | 'partially_filled'
   | 'filled'
   | 'cancel_pending'
   | 'cancelled'
