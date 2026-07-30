@@ -31,6 +31,7 @@ export { CommerceDetailUnavailableInline } from './CommerceDetailUnavailableInli
 export { CommerceDetailStateDock } from './CommerceDetailStateDock';
 export { CommerceDetailMediaRail } from './CommerceDetailMediaRail';
 export { CommerceDetailOfflineBanner } from './CommerceDetailOfflineBanner';
+export { CommerceDetailFreshnessBanner } from './CommerceDetailFreshnessBanner';
 export type {
   CommerceDetailFamily,
   CommerceDetailSectionVariant,

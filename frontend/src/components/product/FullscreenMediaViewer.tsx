@@ -6,6 +6,7 @@ import {
   Pressable,
   useWindowDimensions,
   AccessibilityInfo,
+  AppState,
   StatusBar,
 } from 'react-native';
 import Reanimated, {
@@ -150,6 +151,50 @@ function FullscreenImagePage({
   );
 }
 
+function FullscreenVideoPage({
+  item,
+  width,
+  height,
+  isActive,
+}: {
+  item: ProductMediaItem;
+  width: number;
+  height: number;
+  isActive: boolean;
+}) {
+  // Pause when the app is backgrounded to prevent audio bleed.
+  const [appIsActive, setAppIsActive] = useState(true);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      setAppIsActive(state === 'active');
+    });
+    return () => subscription.remove();
+  }, []);
+
+  const shouldPlay = isActive && appIsActive;
+
+  return (
+    <View
+      style={[styles.page, { width, height }]}
+      accessible
+      accessibilityLabel={item.altText ?? 'Product video'}
+    >
+      <Video
+        source={{ uri: item.uri }}
+        style={styles.image}
+        resizeMode={ResizeMode.CONTAIN}
+        shouldPlay={shouldPlay}
+        isMuted
+        isLooping={false}
+        useNativeControls
+        usePoster={!!item.posterUri}
+        posterSource={item.posterUri ? { uri: item.posterUri } : undefined}
+      />
+    </View>
+  );
+}
+
 export interface FullscreenMediaViewerProps {
   images?: string[];
   media?: readonly ProductMediaItem[];
@@ -236,23 +281,12 @@ export function FullscreenMediaViewer({
         viewabilityConfig={viewabilityConfig.current}
         renderItem={({ item, index }) =>
           item.kind === 'video' ? (
-            <View
-              style={[styles.page, { width, height }]}
-              accessible
-              accessibilityLabel={item.altText ?? 'Product video'}
-            >
-              <Video
-                source={{ uri: item.uri }}
-                style={styles.image}
-                resizeMode={ResizeMode.CONTAIN}
-                shouldPlay={false}
-                isMuted
-                isLooping={false}
-                useNativeControls
-                usePoster={!!item.posterUri}
-                posterSource={item.posterUri ? { uri: item.posterUri } : undefined}
-              />
-            </View>
+            <FullscreenVideoPage
+              item={item}
+              width={width}
+              height={height}
+              isActive={index === activeIndex}
+            />
           ) : (
             <FullscreenImagePage
               item={item}

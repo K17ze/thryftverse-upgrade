@@ -48,7 +48,7 @@ export function CommerceDetailOfflineBanner({
         </Text>
         <Text
           style={[styles.subtitle, { color: colors.textSecondary }]}
-          numberOfLines={1}
+          numberOfLines={2}
         >
           {lastSyncedLabel
             ? `Showing cached data · last synced ${lastSyncedLabel}`

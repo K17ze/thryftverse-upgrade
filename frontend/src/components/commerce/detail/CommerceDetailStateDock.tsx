@@ -188,7 +188,6 @@ export function CommerceDetailStateDock({
                       : colors.textPrimary,
                   },
                 ]}
-                numberOfLines={1}
               >
                 {secondaryAction.label}
               </Text>
@@ -229,7 +228,6 @@ export function CommerceDetailStateDock({
                         : colors.textPrimary,
                   },
                 ]}
-                numberOfLines={1}
               >
                 {primaryAction.loading ? '…' : primaryAction.label}
               </Text>
@@ -317,7 +315,7 @@ const styles = StyleSheet.create({
   // Per spec 05 §5: restrained radii — medium radius (Radius.md = 8)
   // for primary commerce action, not radius 24.
   primaryAction: {
-    height: 44,
+    minHeight: 44,
     paddingHorizontal: Space.md,
     borderRadius: Radius.md,
     alignItems: 'center',
@@ -327,7 +325,7 @@ const styles = StyleSheet.create({
   // Stacked primary: flexes to consume available width so the label
   // never truncates on compact widths.
   primaryActionStacked: {
-    height: 44,
+    minHeight: 44,
     paddingHorizontal: Space.md,
     borderRadius: Radius.md,
     alignItems: 'center',
@@ -343,7 +341,7 @@ const styles = StyleSheet.create({
   // Per spec 05 §5: secondary is a quiet outlined control with medium
   // radius, not a giant pill.
   secondaryAction: {
-    height: 44,
+    minHeight: 44,
     paddingHorizontal: Space.md,
     borderRadius: Radius.md,
     alignItems: 'center',
@@ -351,7 +349,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   secondaryActionStacked: {
-    height: 44,
+    minHeight: 44,
     paddingHorizontal: Space.md,
     borderRadius: Radius.md,
     alignItems: 'center',

@@ -2,7 +2,7 @@
 
 Status values: `OPEN`, `PASS`, `N/A`, `EXCEPTION`. Every `PASS` needs links to code, test output and visual evidence where applicable.
 
-Updated: 2026-07-30 — frontend contract/media/art-direction closure pass on `feat/product-detail-contract-media-device-closure`.
+Updated: 2026-07-30 — Phase 5 frontend closure pass (M09 video background pause, R02 freshness UI, A02 large-text reflow source fixes) on `feat/product-detail-contract-media-device-closure`.
 
 ## Truth and security
 
@@ -30,7 +30,7 @@ Updated: 2026-07-30 — frontend contract/media/art-direction closure pass on `f
 | M06 | Media ordering is unique and atomic | OPEN | Backend unique-ordering constraint not in this pass; frontend sorts by `order`. |
 | M07 | Live lot/offering media is frozen or versioned | OPEN | Backend freeze/version not in this pass. |
 | M08 | Object-safe fit/focal crop is implemented | PASS | `MediaPage` uses `CachedImage` with `focalPoint` + `contentFit` when focal data present; falls back to `SharedTransitionImage` with `resizeMode` otherwise. |
-| M09 | Video loading/error/background states are complete | PARTIAL | `VideoPage` renders poster via `usePoster`; `shouldPlay` set to `false` (user-initiated via native controls). Offscreen/background pause not yet wired. |
+| M09 | Video loading/error/background states are complete | PASS | `VideoPage` in `CommerceMediaStage` and `FullscreenVideoPage` in `FullscreenMediaViewer` track `AppState`; `shouldPlay` is true only when the page is the active index AND the app is in the foreground. Offscreen pages pause automatically; backgrounding pauses all video. Poster still renders via `usePoster` when paused. |
 | M10 | Media accessibility semantics and navigation pass | PASS | `MediaPage` has `accessibilityRole="imagebutton"`, `accessibilityLabel`, `onAccessibilityTap`; `FullscreenMediaViewer` has `accessibilityViewIsModal`; index badge announces "Image/Video X of Y". |
 
 ## Realtime and transaction lifecycle
@@ -38,7 +38,7 @@ Updated: 2026-07-30 — frontend contract/media/art-direction closure pass on `f
 | ID | Requirement | Status | Evidence |
 |---|---|---|---|
 | R01 | Auction events are versioned and resumable | OPEN | Backend event versioning not in this pass. |
-| R02 | Auction shows connection/stale/recovery state | OPEN | Realtime connection health UI not in this pass. |
+| R02 | Auction shows connection/stale/recovery state | PASS | `CommerceDetailFreshnessBanner` wired into `AuctionDetailScreen` below the offline banner. Surfaces three states: `isRefreshing` (lifecycle transition or manual refresh), `isStale` (server clock detected background gap via `needsResync`), `refreshFailed` (last fetch failed via `resyncFailed`). Failed state includes tap-to-retry. Uses the same quiet visual language as `CommerceDetailOfflineBanner`. |
 | R03 | Two auction clients converge under concurrent bids | OPEN | Backend convergence test not in this pass. |
 | R04 | Auction terminal state links to fulfilment/order | PASS | `AuctionDetailScreen` terminal dock: won → `OrderDetail` when `auctionFulfilment.orderId` present, else `MyOrders`; seller-with-bids → `OrderDetail`/`SellerAuctionCentre`; lost/no-bids → `AuctionHome`. `productDetailFlagshipReconstruction.test.ts` terminal dock tests pass. |
 | R05 | Co-Own book and sequence are atomic | OPEN | Backend atomic book not in this pass. |
@@ -65,7 +65,7 @@ Updated: 2026-07-30 — frontend contract/media/art-direction closure pass on `f
 | ID | Requirement | Status | Evidence |
 |---|---|---|---|
 | A01 | 320/360/390/430 widths pass | PASS | `COMMERCE_DETAIL_COMPACT_WIDTH` shared constant; `isCompactScreen`/`isVeryCompact` branches in all three screens. `productDetailFlagshipReconstruction.test.ts` compact-width tests pass. |
-| A02 | Largest supported text reflows | OPEN | Native large-text reflow not device-verified in this pass. |
+| A02 | Largest supported text reflows | PARTIAL | Source-level reflow fixes applied: `CommerceDetailStateDock` button heights changed from fixed `height: 44` to `minHeight: 44` (4 buttons); `numberOfLines` removed from primary/secondary action labels; `auctionHeadlineAside` `flexShrink` changed from 0 to 1; `AuctionDetailScreen` viewer context relaxed to 2 lines; `CommerceDetailOfflineBanner` and `CommerceDetailFreshnessBanner` subtitles relaxed to 2 lines. Native device verification at largest accessibility text size still pending. |
 | A03 | VoiceOver and TalkBack pass core flows | OPEN | Native screen-reader not device-verified in this pass. |
 | A04 | Reduced motion pass | PASS | `useReducedMotion` consumed in `CommerceMediaStage` and `FullscreenMediaViewer`. |
 | A05 | Touch targets and focus restoration pass | PASS | Media pages have 44pt+ targets; `onAccessibilityTap` wired; fullscreen `accessibilityViewIsModal`. |

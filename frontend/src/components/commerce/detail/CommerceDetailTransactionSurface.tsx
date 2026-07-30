@@ -239,7 +239,7 @@ const styles = StyleSheet.create({
     gap: Space.md,
   },
   auctionHeadlineAside: {
-    flexShrink: 0,
+    flexShrink: 1,
     alignItems: 'flex-end',
     justifyContent: 'flex-end',
     paddingBottom: 3,

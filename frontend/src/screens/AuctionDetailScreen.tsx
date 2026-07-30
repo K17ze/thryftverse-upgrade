@@ -56,6 +56,7 @@ import {
   CommerceDetailStateDock,
   CommerceDetailMediaRail,
   CommerceDetailOfflineBanner,
+  CommerceDetailFreshnessBanner,
   CommerceDetailUnavailableInline,
   COMMERCE_DETAIL_COMPACT_WIDTH,
 } from '../components/commerce/detail';
@@ -676,6 +677,17 @@ export default function AuctionDetailScreen() {
             screen. Cached auction data may still be visible. */}
         <CommerceDetailOfflineBanner isOffline={isOffline} />
 
+        {/* ── Freshness indicator ──
+            Surfaces stale, reconnecting, and refresh-failed states so the
+            user never sees a live countdown that is silently disconnected.
+            R02: realtime screens expose freshness, not just data. */}
+        <CommerceDetailFreshnessBanner
+          isRefreshing={isTransitionRefreshing || refreshing}
+          isStale={needsResync && !isTransitionRefreshing}
+          refreshFailed={resyncFailed}
+          onRetry={handleRefresh}
+        />
+
         {/* ── Zone B — Identity seam ──
             One compact identity composition: eyebrow + title + condition.
             Per spec 02 §B + spec 05 §3: auction identity must NOT show
@@ -715,7 +727,7 @@ export default function AuctionDetailScreen() {
                     viewerContext.treatment === 'seller' && { color: colors.brand },
                     viewerContext.treatment === 'restrained' && { color: colors.textSecondary },
                   ]}
-                  numberOfLines={1}
+                  numberOfLines={2}
                 >
                   {viewerContext.title}
                   {viewerContext.subtitle ? `  ·  ${viewerContext.subtitle}` : ''}

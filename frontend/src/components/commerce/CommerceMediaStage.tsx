@@ -6,6 +6,7 @@ import {
   Pressable,
   useWindowDimensions,
   AccessibilityInfo,
+  AppState,
 } from 'react-native';
 import Reanimated, {
   useSharedValue,
@@ -201,11 +202,26 @@ function VideoPage({
   item,
   width,
   height,
+  isActive,
 }: {
   item: ProductMediaItem;
   width: number;
   height: number;
+  isActive: boolean;
 }) {
+  // Pause video when the page is offscreen (scrolled away) or the app
+  // is backgrounded. This prevents audio bleed and saves resources.
+  const [appIsActive, setAppIsActive] = useState(true);
+
+  React.useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      setAppIsActive(state === 'active');
+    });
+    return () => subscription.remove();
+  }, []);
+
+  const shouldPlay = isActive && appIsActive;
+
   return (
     <View
       style={[styles.page, { width, height }]}
@@ -216,7 +232,7 @@ function VideoPage({
         source={{ uri: item.uri }}
         style={styles.image}
         resizeMode={item.fit === 'cover' ? ResizeMode.COVER : ResizeMode.CONTAIN}
-        shouldPlay={false}
+        shouldPlay={shouldPlay}
         isMuted
         isLooping={false}
         useNativeControls
@@ -405,7 +421,7 @@ export function CommerceMediaStage({
         viewabilityConfig={viewabilityConfig.current}
         renderItem={({ item, index }) =>
           item.kind === 'video' ? (
-            <VideoPage item={item} width={screenWidth} height={heroHeight} />
+            <VideoPage item={item} width={screenWidth} height={heroHeight} isActive={index === activeIndex} />
           ) : (
             <MediaPage
               item={item}
