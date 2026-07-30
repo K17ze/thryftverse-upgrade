@@ -280,7 +280,7 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
@@ -302,10 +302,10 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: Typography.family.bold,
-    fontSize: 24,
-    color: '#FFFFFF',
-    letterSpacing: -0.6,
-    lineHeight: 28,
+    fontSize: 20,
+    color: Colors.textInverse,
+    letterSpacing: -0.5,
+    lineHeight: 24,
     marginBottom: 4,
   },
   metaRow: {
@@ -316,7 +316,7 @@ const styles = StyleSheet.create({
   },
   bidCount: {
     fontFamily: Typography.family.medium,
-    fontSize: 12,
+    fontSize: 11,
     color: 'rgba(255,255,255,0.65)',
   },
 
@@ -334,10 +334,10 @@ const styles = StyleSheet.create({
   },
   belowTitle: {
     fontFamily: Typography.family.bold,
-    fontSize: 24,
+    fontSize: 20,
     color: Colors.textPrimary,
-    letterSpacing: -0.6,
-    lineHeight: 28,
+    letterSpacing: -0.5,
+    lineHeight: 24,
     marginBottom: 2,
   },
   belowMetaRow: {
@@ -348,7 +348,7 @@ const styles = StyleSheet.create({
   },
   belowBidCount: {
     fontFamily: Typography.family.medium,
-    fontSize: 12,
+    fontSize: 11,
     color: Colors.textMuted,
   },
   personalActionBtn: {

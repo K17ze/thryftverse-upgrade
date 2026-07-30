@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, useWindowDimensions, Platform } from 'react-native';
 import { Colors } from '../../constants/colors';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { Space, Radius, Typography, Stroke } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AuctionCountdown } from './AuctionCountdown';
@@ -105,17 +105,17 @@ export function AuctionGridCard({
 
 const styles = StyleSheet.create({
   card: {
-    marginBottom: Space.md - 2,
+    marginBottom: Space.sm,
   },
   imageWrap: {
     position: 'relative',
     aspectRatio: 4 / 5,
-    borderRadius: Radius.md,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
     backgroundColor: Colors.surfaceAlt,
   },
   imageContainer: {
-    borderRadius: Radius.md,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
   },
   image: {
@@ -130,7 +130,7 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: Radius.full,
     backgroundColor: Colors.danger,
-    borderWidth: 1.5,
+    borderWidth: Stroke.standard,
     borderColor: 'rgba(0,0,0,0.35)',
   },
   personalMarker: {
@@ -151,8 +151,8 @@ const styles = StyleSheet.create({
   },
   personalMarkerText: {
     fontFamily: Typography.family.semibold,
-    fontSize: 10,
-    color: '#FFFFFF',
+    fontSize: 11,
+    color: Colors.textInverse,
     letterSpacing: 0.4,
   },
   body: {
@@ -161,7 +161,7 @@ const styles = StyleSheet.create({
   },
   brand: {
     fontFamily: Typography.family.medium,
-    fontSize: 10,
+    fontSize: 11,
     color: Colors.textMuted,
     letterSpacing: 0.2,
   },
@@ -180,7 +180,7 @@ const styles = StyleSheet.create({
   },
   bidCount: {
     fontFamily: Typography.family.medium,
-    fontSize: 10,
+    fontSize: 11,
     color: Colors.textMuted,
   },
 });

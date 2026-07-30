@@ -77,18 +77,18 @@ export function AuctionSupportingTile({
 const styles = StyleSheet.create({
   card: {
     flex: 1,
-    borderRadius: Radius.md,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
     backgroundColor: 'transparent',
   },
   imageWrap: {
     position: 'relative',
     aspectRatio: 4 / 3,
-    borderRadius: Radius.md,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
   },
   imageContainer: {
-    borderRadius: Radius.md,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
   },
   image: {
@@ -101,7 +101,7 @@ const styles = StyleSheet.create({
     left: Space.xs,
     width: 7,
     height: 7,
-    borderRadius: 999,
+    borderRadius: Radius.full,
     backgroundColor: Colors.danger,
   },
   outbidDot: {
@@ -110,7 +110,7 @@ const styles = StyleSheet.create({
     right: Space.xs,
     width: 7,
     height: 7,
-    borderRadius: 999,
+    borderRadius: Radius.full,
     backgroundColor: Colors.danger,
   },
   body: {
