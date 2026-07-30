@@ -134,6 +134,7 @@ interface Message {
   systemTitle?: string;
 
   offer?: {
+    offerId?: string;
     price: number;
     originalPrice: number;
     status?: "pending" | "declined" | "countered" | "accepted" | "expired";
@@ -747,7 +748,7 @@ export default function ChatScreen({ navigation, route }: Props) {
   offerPayloadRef.current = routeOfferPayload;
   useEffect(() => {
     if (!routeOfferPayload || !conversationId) return;
-    const { price, originalPrice, expiresAt, counterRound } = routeOfferPayload;
+    const { offerId, price, originalPrice, expiresAt, counterRound } = routeOfferPayload;
     const localId = `offer_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     const offerMsg: Message = {
       id: localId,
@@ -758,6 +759,7 @@ export default function ChatScreen({ navigation, route }: Props) {
         ? `Counter-offer: ${formatFromFiat(price, "GBP")}`
         : `Offer: ${formatFromFiat(price, "GBP")}`,
       offer: {
+        offerId,
         price,
         originalPrice,
         status: "pending",
@@ -791,7 +793,7 @@ export default function ChatScreen({ navigation, route }: Props) {
     (async () => {
       try {
         const state = await fetchComposerStateFromApi(conversationId);
-        if (cancelled || !hydratedComposerRef.current) return;
+        if (cancelled) return;
         hydratedComposerRef.current = conversationId;
         if (state.draftText && !input) {
           setInput(state.draftText);
@@ -1131,6 +1133,7 @@ export default function ChatScreen({ navigation, route }: Props) {
       counterOffer: true,
       previousOffer: offerPrice ?? 0,
       counterRound: currentRound + 1,
+      parentOfferId: currentMsg?.offer?.offerId,
     });
   };
 

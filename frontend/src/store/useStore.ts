@@ -70,6 +70,7 @@ export interface ListingPublicationRecovery {
     | 'failed_recoverable';
   listingId?: string;
   uploadedMediaByAssetId: Record<string, string>;
+  uploadedFinalizationByAssetId?: Record<string, string>;
   attachedAssetIds: string[];
   lastError?: string;
 }
@@ -1785,11 +1786,11 @@ export const useStore = create<StoreState>()(
     {
       name: 'thryftverse-store',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 2,
+      version: 3,
       migrate: (persistedState, version) => {
-        const state = persistedState as Partial<StoreState>;
+        let state = { ...(persistedState as Partial<StoreState>) };
         if (version < 2 && ENABLE_RUNTIME_MOCKS && state.conversations) {
-          return {
+          state = {
             ...state,
             conversations: state.conversations.map((conversation) => {
               if (conversation.participantProfiles?.length) return conversation;
@@ -1799,6 +1800,9 @@ export const useStore = create<StoreState>()(
                 : conversation;
             }),
           };
+        }
+        if (version < 3) {
+          delete state.savedPaymentMethod;
         }
         return state;
       },
@@ -1812,7 +1816,8 @@ export const useStore = create<StoreState>()(
         conversations: state.conversations,
         savedSearches: state.savedSearches,
         savedAddress: state.savedAddress,
-        savedPaymentMethod: state.savedPaymentMethod,
+        // Provider-backed payment methods are rehydrated after authentication.
+        // Persisting this projection could resurrect a detached legacy card.
         twoFactorEnabled: state.twoFactorEnabled,
         notificationCount: state.notificationCount,
         userAvatar: state.userAvatar,

@@ -95,7 +95,7 @@ export type RootStackParamList = {
   SavedAddresses: undefined;
   Payments: undefined;
   // Phase 16 new screens
-  MakeOffer: { itemId: string; price: number; title: string; counterOffer?: boolean; previousOffer?: number; counterRound?: number };
+  MakeOffer: { itemId: string; price: number; title: string; counterOffer?: boolean; previousOffer?: number; counterRound?: number; parentOfferId?: string };
   PushNotifications: undefined;
   Postage: undefined;
   InviteFriends: undefined;

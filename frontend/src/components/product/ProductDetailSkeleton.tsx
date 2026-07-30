@@ -6,49 +6,37 @@ import { Space, Radius } from '../../theme/designTokens';
 export function ProductDetailSkeleton() {
   const { colors } = useAppTheme();
   const { width, height } = useWindowDimensions();
-  const isCompact = width < 390;
-  const heroHeight = Math.min(height * (isCompact ? 0.5 : 0.62), width * 1.35);
+  const heroHeight = Math.min(height * (width < 390 ? 0.5 : 0.56), width * 1.35);
+  const block = { backgroundColor: colors.surfaceAlt };
 
   return (
-    <View style={styles.container}>
-      {/* Hero skeleton — matches CommerceMediaStage height */}
-      <View style={[styles.heroSkeleton, { height: heroHeight, backgroundColor: colors.surfaceAlt }]} />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.hero, { height: heroHeight }, block]} />
 
-      {/* Identity skeleton — matches ProductIdentitySummary */}
-      <View style={styles.identitySection}>
-        <View style={[styles.skeletonLine, { backgroundColor: colors.surfaceAlt }]} />
-        <View style={[styles.skeletonLine, { width: '70%', backgroundColor: colors.surfaceAlt }]} />
-        <View style={[styles.skeletonLine, { width: '40%', height: 28, backgroundColor: colors.surfaceAlt }]} />
+      <View style={styles.identity}>
+        <View style={[styles.line, styles.brand, block]} />
+        <View style={[styles.line, styles.title, block]} />
+        <View style={[styles.line, styles.price, block]} />
+        <View style={[styles.line, styles.meta, block]} />
       </View>
 
-      {/* Chips skeleton */}
-      <View style={styles.chipsRow}>
-        <View style={[styles.chipSkeleton, { backgroundColor: colors.surfaceAlt }]} />
-        <View style={[styles.chipSkeleton, { backgroundColor: colors.surfaceAlt }]} />
-        <View style={[styles.chipSkeleton, { backgroundColor: colors.surfaceAlt }]} />
-      </View>
+      <View style={[styles.hairline, { backgroundColor: colors.borderSubtle }]} />
 
-      {/* Commerce skeleton */}
-      <View style={[styles.commerceSkeleton, { backgroundColor: colors.surface }]}>
-        <View style={[styles.skeletonLine, { backgroundColor: colors.surfaceAlt }]} />
-        <View style={[styles.skeletonLine, { width: '90%', backgroundColor: colors.surfaceAlt }]} />
-        <View style={[styles.skeletonLine, { width: '80%', backgroundColor: colors.surfaceAlt }]} />
-      </View>
-
-      {/* Seller skeleton */}
-      <View style={[styles.sellerSkeleton, { backgroundColor: colors.surface }]}>
-        <View style={[styles.skeletonLine, { backgroundColor: colors.surfaceAlt }]} />
-        <View style={[styles.skeletonLine, { width: '60%', backgroundColor: colors.surfaceAlt }]} />
-      </View>
-
-      {/* Rail skeleton */}
-      <View style={styles.railSkeleton}>
-        <View style={[styles.skeletonLine, { width: '50%', backgroundColor: colors.surfaceAlt }]} />
-        <View style={styles.railCardsRow}>
-          <View style={[styles.railCardSkeleton, { backgroundColor: colors.surfaceAlt }]} />
-          <View style={[styles.railCardSkeleton, { backgroundColor: colors.surfaceAlt }]} />
-          <View style={[styles.railCardSkeleton, { backgroundColor: colors.surfaceAlt }]} />
+      <View style={styles.seller}>
+        <View style={[styles.avatar, block]} />
+        <View style={styles.sellerCopy}>
+          <View style={[styles.line, styles.sellerName, block]} />
+          <View style={[styles.line, styles.sellerMeta, block]} />
         </View>
+        <View style={[styles.line, styles.sellerAction, block]} />
+      </View>
+
+      <View style={[styles.hairline, { backgroundColor: colors.borderSubtle }]} />
+
+      <View style={styles.section}>
+        <View style={[styles.line, styles.sectionTitle, block]} />
+        <View style={[styles.line, styles.bodyLine, block]} />
+        <View style={[styles.line, styles.bodyLineShort, block]} />
       </View>
     </View>
   );
@@ -58,55 +46,81 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  heroSkeleton: {
+  hero: {
     width: '100%',
   },
-  identitySection: {
+  identity: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
+    paddingBottom: Space.lg,
     gap: Space.sm,
   },
-  skeletonLine: {
-    height: 16,
+  line: {
     borderRadius: Radius.sm,
   },
-  chipsRow: {
-    flexDirection: 'row',
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    gap: Space.sm,
+  brand: {
+    width: 84,
+    height: 11,
   },
-  chipSkeleton: {
-    width: 80,
-    height: 48,
-    borderRadius: Radius.md,
+  title: {
+    width: '84%',
+    height: 28,
   },
-  commerceSkeleton: {
+  price: {
+    width: 112,
+    height: 25,
+  },
+  meta: {
+    width: '58%',
+    height: 13,
+  },
+  hairline: {
+    height: StyleSheet.hairlineWidth,
     marginHorizontal: Space.md,
-    borderRadius: Radius.lg,
-    padding: Space.md,
-    gap: Space.sm,
-    marginTop: Space.sm,
   },
-  sellerSkeleton: {
-    marginHorizontal: Space.md,
-    borderRadius: Radius.lg,
-    padding: Space.md,
-    gap: Space.sm,
-    marginTop: Space.sm,
-  },
-  railSkeleton: {
-    marginTop: Space.lg,
+  seller: {
+    minHeight: 76,
     paddingHorizontal: Space.md,
-    gap: Space.sm,
-  },
-  railCardsRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: Space.sm,
   },
-  railCardSkeleton: {
-    width: 140,
-    height: 175,
-    borderRadius: Radius.md,
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.full,
+  },
+  sellerCopy: {
+    flex: 1,
+    gap: Space.xs,
+  },
+  sellerName: {
+    width: '52%',
+    height: 14,
+  },
+  sellerMeta: {
+    width: '68%',
+    height: 11,
+  },
+  sellerAction: {
+    width: 48,
+    height: 12,
+  },
+  section: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.lg,
+    gap: Space.sm,
+  },
+  sectionTitle: {
+    width: 128,
+    height: 17,
+  },
+  bodyLine: {
+    width: '100%',
+    height: 13,
+  },
+  bodyLineShort: {
+    width: '78%',
+    height: 13,
   },
 });

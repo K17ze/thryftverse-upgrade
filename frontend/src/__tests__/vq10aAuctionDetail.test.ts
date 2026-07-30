@@ -662,9 +662,8 @@ describe('PASS 4.12: Static guardrails (source inspection)', () => {
   it('does not describe Buy Now as maximum bid or instant bid', () => {
     expect(screenSrc).not.toMatch(/maximum bid/i);
     expect(screenSrc).not.toMatch(/instant bid/i);
-    // "Winning bid" is valid in terminal result-state context (lost viewer)
-    // but must not appear in BuyNowSheet description
-    expect(buyNowSheetSrc).not.toMatch(/winning bid/i);
+    expect(buyNowSheetSrc).toContain('fixed-price winning bid');
+    expect(buyNowSheetSrc).toContain('Payment and fulfilment are not completed in this step');
   });
 
   it('does not expose Edit, Cancel or Relist for seller', () => {
@@ -1078,7 +1077,7 @@ describe('PASS 4.1: Loading and state continuity', () => {
   });
 
   it('has Buy Now loading state', () => {
-    expect(screenSrc).toContain('Processing...');
+    expect(buyNowSheetSrc).toContain('Confirming Buy Now...');
   });
 
   it('has watch loading state', () => {
@@ -1724,7 +1723,7 @@ describe('PASS 5: BuyNowSheet static guardrails', () => {
 
   it('has success stage', () => {
     expect(buyNowSheetSrc).toContain('success');
-    expect(buyNowSheetSrc).toContain('Purchase confirmed');
+    expect(buyNowSheetSrc).toContain('Auction won with Buy Now');
   });
 
   it('has error stage', () => {
@@ -1741,13 +1740,13 @@ describe('PASS 5: BuyNowSheet static guardrails', () => {
     expect(buyNowSheetSrc).toContain('itemTitle');
   });
 
-  it('states this is a fixed-price purchase, not a bid', () => {
-    expect(buyNowSheetSrc).toContain('fixed-price purchase');
-    expect(buyNowSheetSrc).toContain('not a bid');
+  it('states that Buy Now ends the auction without claiming payment or fulfilment', () => {
+    expect(buyNowSheetSrc).toContain('fixed-price winning bid');
+    expect(buyNowSheetSrc).toContain('Payment and fulfilment are not completed in this step');
   });
 
-  it('states auction will end immediately', () => {
-    expect(buyNowSheetSrc).toContain('ends the auction immediately');
+  it('states that the fixed-price winning bid ends the auction', () => {
+    expect(buyNowSheetSrc).toContain('ends the auction');
   });
 
   it('has lifecycle guard', () => {
@@ -1987,7 +1986,7 @@ describe('PASS 5.1: Idempotency state machine — ambiguous vs definitive', () =
 describe('PASS 5.1: Buy Now response verification', () => {
   it('BuyNowSheet verifies isBuyNow in response (source inspection)', () => {
     expect(buyNowSheetSrc).toContain('result.isBuyNow');
-    expect(buyNowSheetSrc).toContain('Buy Now response did not confirm purchase');
+    expect(buyNowSheetSrc).toContain('did not confirm the Buy Now winning bid');
   });
 
   it('BuyNowSheet verifies price match in preflight (source inspection)', () => {

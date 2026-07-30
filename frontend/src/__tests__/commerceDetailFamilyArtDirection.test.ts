@@ -28,10 +28,11 @@ describe('commerce-detail family art direction (spec 05)', () => {
       expect(src).toContain('containerCoOwn');
     });
 
-    it('uses reduced radius for direct (near-flat) vs contained for auction/co_own', () => {
+    it('keeps family transaction compositions flat rather than forcing a generic card', () => {
       const src = readDetailComponent('CommerceDetailTransactionSurface');
-      expect(src).toContain('familyRadius');
-      expect(src).toMatch(/family === 'direct' \? Radius\.lg : Radius\.xl/);
+      expect(src).not.toContain('familyRadius');
+      expect(src).not.toContain('borderRadius:');
+      expect(src).not.toContain('borderColor:');
     });
 
     it('does not create three separate transaction components', () => {

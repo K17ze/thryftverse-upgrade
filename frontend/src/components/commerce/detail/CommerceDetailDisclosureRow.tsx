@@ -53,7 +53,11 @@ export function CommerceDetailDisclosureRow({
   return (
     <Pressable
       onPress={handlePress}
-      style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+      style={({ pressed }) => [
+        styles.row,
+        { borderTopColor: colors.borderSubtle },
+        pressed && styles.pressed,
+      ]}
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityRole="button"
     >
@@ -112,6 +116,7 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     paddingVertical: Space.sm + 2,
     minHeight: 44,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   pressed: {
     opacity: 0.7,
@@ -121,6 +126,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
+    flex: 1,
+    minWidth: 0,
     flexShrink: 1,
   },
   leadingIcon: {
@@ -136,12 +143,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    flexShrink: 0,
+    maxWidth: '52%',
+    minWidth: 18,
   },
   summary: {
     fontSize: Type.caption.size,
     lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
+    flexShrink: 1,
+    textAlign: 'right',
   },
   countBadge: {
     minWidth: 22,

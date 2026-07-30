@@ -48,6 +48,12 @@ export async function fetchRecommendations(
 
   const payload = await fetchJson<{
     listingId: string;
+    decision?: {
+      policyVersion: string;
+      capabilityLevel: 'heuristic_baseline';
+      trainedModel: false;
+      generatedAt: string;
+    };
     sections: Array<{
       key: string;
       title: string;
@@ -61,6 +67,7 @@ export async function fetchRecommendations(
 
   return {
     listingId: payload.listingId,
+    decision: payload.decision,
     sections: (payload.sections ?? []).map((s) => ({
       key: s.key as RecommendationSection['key'],
       title: s.title,

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Modal, Pressable, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Modal, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../../theme/ThemeContext';
@@ -20,6 +20,7 @@ import { useHaptic } from '../../hooks/useHaptic';
 export interface CoOwnOverflowSheetProps {
   visible: boolean;
   onClose: () => void;
+  onShare?: () => void;
   onToggleFav: () => void;
   isFav: boolean;
   onWatch: () => void;
@@ -30,6 +31,7 @@ export interface CoOwnOverflowSheetProps {
 export function CoOwnOverflowSheet({
   visible,
   onClose,
+  onShare,
   onToggleFav,
   isFav,
   onWatch,
@@ -47,6 +49,14 @@ export function CoOwnOverflowSheet({
   };
 
   const actions = [
+    ...(onShare ? [{
+      icon: 'share-outline' as keyof typeof Ionicons.glyphMap,
+      label: 'Share asset',
+      onPress: () => handleAction(() => {
+        onClose();
+        onShare();
+      }),
+    }] : []),
     {
       icon: (isFav ? 'heart' : 'heart-outline') as keyof typeof Ionicons.glyphMap,
       label: isFav ? 'Favourited' : 'Favourite',
@@ -75,7 +85,7 @@ export function CoOwnOverflowSheet({
     <Modal
       visible={visible}
       transparent
-      animationType="slide"
+      animationType={reducedMotion ? 'none' : 'slide'}
       onRequestClose={onClose}
       accessibilityViewIsModal
     >
@@ -105,11 +115,7 @@ export function CoOwnOverflowSheet({
               <Ionicons name="close" size={22} color={colors.textSecondary} />
             </Pressable>
           </View>
-          <ScrollView
-            style={styles.scroll}
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
-          >
+          <View style={styles.actionList}>
             {actions.map((action) => (
               <Pressable
                 key={action.label}
@@ -124,7 +130,7 @@ export function CoOwnOverflowSheet({
                 </Text>
               </Pressable>
             ))}
-          </ScrollView>
+          </View>
         </View>
       </View>
     </Modal>
@@ -135,6 +141,7 @@ const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
     justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.4)',
   },
   backdropPress: {
     flex: 1,
@@ -169,10 +176,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
+  actionList: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.lg,
   },

@@ -123,6 +123,7 @@ Run the command once for each of the following — every value must be unique:
 | `KEY_SERVICE_CLIENT_TOKEN` | Shared secret: api → key-service runtime calls |
 | `KEY_SERVICE_ADMIN_TOKEN` | Shared secret: api → key-service admin actions |
 | `API_SECURITY_ADMIN_TOKEN` | Admin header for maintenance routes |
+| `API_INTERNAL_SERVICE_TOKEN` | Dedicated scheduler/worker identity for internal mutation routes |
 | `ONEZE_ATTESTATION_SIGNING_SECRET` | Signs daily 1ze attestation artifacts |
 
 > **Important:** Store these in a password manager (1Password, Bitwarden) or a secrets manager (AWS Secrets Manager, Doppler) before putting them into Railway. Do not paste them into Slack, email, or documents.
@@ -248,6 +249,8 @@ S3_ACCESS_KEY=<Access Key ID from step 6.3>
 S3_SECRET_KEY=<Secret Access Key from step 6.3>
 S3_BUCKET=thryftverse-media
 S3_FORCE_PATH_STYLE=false
+MEDIA_PROCESSING_ENABLED=true
+MEDIA_PUBLICATION_GATE_ENABLED=true
 ```
 
 > **Key difference from local dev:** `S3_FORCE_PATH_STYLE` must be `false` for R2 (it was `true` for local MinIO). No code changes needed — this is only an env var.
@@ -427,6 +430,7 @@ APPLE_OAUTH_AUDIENCE=com.thryftverse.app
 
 # ── API Security ─────────────────────────────────────────
 API_SECURITY_ADMIN_TOKEN=<generated>
+API_INTERNAL_SERVICE_TOKEN=<generated-independent-token>
 API_ENABLE_MOCK_WEBHOOKS=false
 API_RATE_LIMIT_MAX=140
 API_RATE_LIMIT_WINDOW=1 minute
@@ -437,7 +441,11 @@ KYC_VERIFICATION_BASE_URL=https://verify.thryftverse.app/session
 
 # ── Payments ─────────────────────────────────────────────
 STRIPE_SECRET_KEY=sk_live_<key>
+STRIPE_PUBLISHABLE_KEY=pk_live_<key>
 STRIPE_WEBHOOK_SECRET=whsec_<secret>
+PAYMENT_METADATA_HMAC_SECRET=<dedicated-random-secret>
+STRIPE_APPLE_PAY_MERCHANT_IDENTIFIER=             # optional; required to expose Apple Pay
+STRIPE_GOOGLE_PAY_ENABLED=false                    # enable only after Google Pay approval/build configuration
 RAZORPAY_KEY_ID=                               # optional
 RAZORPAY_KEY_SECRET=                           # optional
 RAZORPAY_WEBHOOK_SECRET=                       # optional

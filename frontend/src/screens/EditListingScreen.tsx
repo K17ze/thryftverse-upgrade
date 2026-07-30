@@ -347,6 +347,7 @@ export default function EditListingScreen() {
     setIsSaving(true);
 
     try {
+      let coverFinalizationId: string | undefined;
       const existingRemotePhotos = mediaItems.filter((m) => m.source === 'remote').map((m) => m.publicUrl || m.uri);
       const newLocalItems = mediaItems.filter((m) => m.source === 'local');
 
@@ -388,7 +389,13 @@ export default function EditListingScreen() {
         }
 
         // 2. Attach uploaded images with deterministic IDs
-        const uploadedItems = queueItems.filter((q) => q.state === 'uploaded' && q.publicUrl);
+        const uploadedItems = queueItems.filter(
+          (q) => q.state === 'uploaded' && q.publicUrl && q.finalizationId,
+        );
+        const firstMedia = mediaItems[0];
+        if (firstMedia?.source === 'local') {
+          coverFinalizationId = queueItems.find((item) => item.id === firstMedia.id)?.finalizationId ?? undefined;
+        }
         for (let i = 0; i < uploadedItems.length; i++) {
           const qi = uploadedItems[i];
           const attachmentId = `${itemId}_media_${qi.id}`;
@@ -399,6 +406,7 @@ export default function EditListingScreen() {
             sortOrder: existingRemotePhotos.length + i,
             mediaWidth: qi.asset.width,
             mediaHeight: qi.asset.height,
+            finalizationId: qi.finalizationId!,
           });
         }
       }
@@ -418,6 +426,7 @@ export default function EditListingScreen() {
         shippingMethod: shippingMethod || undefined,
         shippingPayer: shippingPayer || undefined,
         imageUrl: coverUri,
+        coverFinalizationId,
       });
 
       setSaveStage('completed');

@@ -127,6 +127,22 @@ const remixBodySchema = z.object({
   newDocumentId: z.string().min(2).max(120),
 });
 
+const publishBodySchema = z.object({
+  idempotencyKey: z.string().trim().min(8).max(160).optional(),
+});
+
+function parseIfMatchVersion(request: FastifyRequest): number | null {
+  const raw = Array.isArray(request.headers['if-match'])
+    ? request.headers['if-match'][0]
+    : request.headers['if-match'];
+  if (!raw) {
+    return null;
+  }
+  const normalized = raw.trim().replace(/^W\//, '').replace(/^"|"$/g, '');
+  const value = Number(normalized);
+  return Number.isInteger(value) && value > 0 ? value : null;
+}
+
 const LOCAL_URI_PREFIXES = ['file://', 'ph://', 'asset://', 'data:', 'content://', 'assets-library://'];
 
 function isLocalUri(uri: string): boolean {
@@ -203,8 +219,16 @@ export const registerCreatorDocumentRoutes = ({
     try {
       await client.query('BEGIN');
 
-      const existing = await client.query<{ creator_id: string }>(
-        `SELECT creator_id FROM creator_documents WHERE id = $1 LIMIT 1`,
+      const existing = await client.query<{
+        creator_id: string;
+        status: string;
+        lock_version: number;
+      }>(
+        `SELECT creator_id, status, lock_version
+         FROM creator_documents
+         WHERE id = $1
+         LIMIT 1
+         FOR UPDATE`,
         [payload.id]
       );
 
@@ -214,20 +238,78 @@ export const registerCreatorDocumentRoutes = ({
         return { ok: false, error: 'Document belongs to another user' };
       }
 
-      await client.query(
-        `INSERT INTO creator_documents (id, creator_id, type, version, document_json, updated_at)
-         VALUES ($1, $2, $3, $4, $5, NOW())
-         ON CONFLICT (id) DO UPDATE
-         SET type = EXCLUDED.type,
-             version = EXCLUDED.version,
-             document_json = EXCLUDED.document_json,
-             updated_at = NOW()
-         WHERE creator_documents.creator_id = $2`,
-        [payload.id, actorUserId, payload.type, payload.version, JSON.stringify(payload)]
-      );
+      let serverVersion = 1;
+      if (existing.rowCount) {
+        if (existing.rows[0].status !== 'draft') {
+          await client.query('ROLLBACK');
+          reply.code(409);
+          return {
+            ok: false,
+            error: 'Published or archived documents are immutable; create a new draft',
+            code: 'CREATOR_DOCUMENT_IMMUTABLE',
+          };
+        }
+        const expectedVersion = parseIfMatchVersion(request);
+        if (expectedVersion === null) {
+          await client.query('ROLLBACK');
+          reply.code(428);
+          return {
+            ok: false,
+            error: 'If-Match with the current server version is required',
+            code: 'CREATOR_DOCUMENT_VERSION_REQUIRED',
+            serverVersion: existing.rows[0].lock_version,
+          };
+        }
+        if (expectedVersion !== existing.rows[0].lock_version) {
+          await client.query('ROLLBACK');
+          reply.code(409);
+          return {
+            ok: false,
+            error: 'The document changed on another device',
+            code: 'CREATOR_DOCUMENT_VERSION_CONFLICT',
+            serverVersion: existing.rows[0].lock_version,
+          };
+        }
+        const updated = await client.query<{ lock_version: number }>(
+          `UPDATE creator_documents
+           SET type = $3,
+               version = $4,
+               document_json = $5,
+               lock_version = lock_version + 1,
+               updated_at = NOW()
+           WHERE id = $1 AND creator_id = $2 AND status = 'draft' AND lock_version = $6
+           RETURNING lock_version`,
+          [
+            payload.id,
+            actorUserId,
+            payload.type,
+            payload.version,
+            JSON.stringify(payload),
+            expectedVersion,
+          ],
+        );
+        if (!updated.rowCount) {
+          await client.query('ROLLBACK');
+          reply.code(409);
+          return {
+            ok: false,
+            error: 'The document changed while it was being saved',
+            code: 'CREATOR_DOCUMENT_VERSION_CONFLICT',
+          };
+        }
+        serverVersion = updated.rows[0].lock_version;
+      } else {
+        await client.query(
+          `INSERT INTO creator_documents (
+             id, creator_id, type, version, document_json, lock_version, updated_at
+           )
+           VALUES ($1, $2, $3, $4, $5, 1, NOW())`,
+          [payload.id, actorUserId, payload.type, payload.version, JSON.stringify(payload)],
+        );
+      }
 
       await client.query('COMMIT');
-      return { ok: true, documentId: payload.id };
+      return { ok: true, documentId: payload.id, serverVersion };
     } catch (error) {
       await client.query('ROLLBACK');
       app.log.error({ err: error }, 'Failed to save creator document');
@@ -246,9 +328,10 @@ export const registerCreatorDocumentRoutes = ({
       type: string;
       document_json: string;
       status: string;
+      lock_version: number;
       updated_at: string;
     }>(
-      `SELECT id, type, document_json, status, updated_at
+      `SELECT id, type, document_json, status, lock_version, updated_at
        FROM creator_documents
        WHERE creator_id = $1
        ORDER BY updated_at DESC
@@ -259,6 +342,7 @@ export const registerCreatorDocumentRoutes = ({
     const documents = result.rows.map((row) => ({
       ...JSON.parse(row.document_json),
       status: row.status,
+      serverVersion: row.lock_version,
       serverUpdatedAt: row.updated_at,
     }));
 
@@ -274,9 +358,10 @@ export const registerCreatorDocumentRoutes = ({
       creator_id: string;
       document_json: string;
       status: string;
+      lock_version: number;
       updated_at: string;
     }>(
-      `SELECT id, creator_id, document_json, status, updated_at
+      `SELECT id, creator_id, document_json, status, lock_version, updated_at
        FROM creator_documents
        WHERE id = $1 LIMIT 1`,
       [documentId]
@@ -297,6 +382,7 @@ export const registerCreatorDocumentRoutes = ({
       document: {
         ...JSON.parse(result.rows[0].document_json),
         status: result.rows[0].status,
+        serverVersion: result.rows[0].lock_version,
         serverUpdatedAt: result.rows[0].updated_at,
       },
     };
@@ -306,8 +392,8 @@ export const registerCreatorDocumentRoutes = ({
     const actorUserId = resolveAuthenticatedUserId(request);
     const { documentId } = documentIdParamsSchema.parse(request.params);
 
-    const result = await db.query<{ creator_id: string }>(
-      `SELECT creator_id FROM creator_documents WHERE id = $1 LIMIT 1`,
+    const result = await db.query<{ creator_id: string; status: string }>(
+      `SELECT creator_id, status FROM creator_documents WHERE id = $1 LIMIT 1`,
       [documentId]
     );
 
@@ -319,6 +405,14 @@ export const registerCreatorDocumentRoutes = ({
     if (result.rows[0].creator_id !== actorUserId) {
       reply.code(403);
       return { ok: false, error: 'Access denied' };
+    }
+    if (result.rows[0].status !== 'draft') {
+      reply.code(409);
+      return {
+        ok: false,
+        error: 'Published or archived documents cannot be deleted',
+        code: 'CREATOR_DOCUMENT_IMMUTABLE',
+      };
     }
 
     await db.query(`DELETE FROM creator_documents WHERE id = $1`, [documentId]);
@@ -328,54 +422,108 @@ export const registerCreatorDocumentRoutes = ({
   app.post('/creator/documents/:documentId/publish', async (request, reply) => {
     const actorUserId = resolveAuthenticatedUserId(request);
     const { documentId } = documentIdParamsSchema.parse(request.params);
-
-    const result = await db.query<{
-      creator_id: string;
-      document_json: string;
-      status: string;
-    }>(
-      `SELECT creator_id, document_json, status FROM creator_documents WHERE id = $1 LIMIT 1`,
-      [documentId]
-    );
-
-    if (!result.rowCount) {
-      reply.code(404);
-      return { ok: false, error: 'Document not found' };
-    }
-
-    if (result.rows[0].creator_id !== actorUserId) {
-      reply.code(403);
-      return { ok: false, error: 'Access denied' };
-    }
-
-    const doc = creatorDocumentBodySchema.parse(JSON.parse(result.rows[0].document_json));
-    const publishErrors = validateForPublish(doc);
-
-    if (publishErrors.length > 0) {
-      reply.code(422);
-      return { ok: false, error: 'Publish validation failed', details: publishErrors };
-    }
+    const body = publishBodySchema.parse(request.body ?? {});
+    const rawHeaderKey = Array.isArray(request.headers['idempotency-key'])
+      ? request.headers['idempotency-key'][0]
+      : request.headers['idempotency-key'];
+    const headerKey = rawHeaderKey
+      ? z.string().trim().min(8).max(160).parse(rawHeaderKey)
+      : undefined;
 
     const client = await db.connect();
     try {
       await client.query('BEGIN');
 
-      const revisionCount = await client.query<{ count: string }>(
-        `SELECT COUNT(*)::text AS count FROM creator_document_revisions WHERE document_id = $1`,
+      // Lock the owner row before validation and revision allocation. This
+      // serializes concurrent publish attempts for the same document.
+      const result = await client.query<{
+        creator_id: string;
+        document_json: string;
+        lock_version: number;
+      }>(
+        `SELECT creator_id, document_json, lock_version
+         FROM creator_documents
+         WHERE id = $1
+         LIMIT 1
+         FOR UPDATE`,
         [documentId]
       );
-      const nextRevision = parseInt(revisionCount.rows[0].count, 10) + 1;
+
+      if (!result.rowCount) {
+        await client.query('ROLLBACK');
+        reply.code(404);
+        return { ok: false, error: 'Document not found' };
+      }
+      if (result.rows[0].creator_id !== actorUserId) {
+        await client.query('ROLLBACK');
+        reply.code(403);
+        return { ok: false, error: 'Access denied' };
+      }
+
+      const doc = creatorDocumentBodySchema.parse(JSON.parse(result.rows[0].document_json));
+      const publishErrors = validateForPublish(doc);
+      if (publishErrors.length > 0) {
+        await client.query('ROLLBACK');
+        reply.code(422);
+        return { ok: false, error: 'Publish validation failed', details: publishErrors };
+      }
+
+      const documentJson = JSON.stringify(doc);
+      const documentHash = crypto.createHash('sha256').update(documentJson).digest('hex');
+      const publishKey = body.idempotencyKey ?? headerKey ?? `content:${documentHash}`;
+
+      const existingRevision = await client.query<{
+        id: string;
+        revision_number: number;
+      }>(
+        `SELECT id, revision_number
+         FROM creator_document_revisions
+         WHERE document_id = $1 AND publish_key = $2
+         LIMIT 1`,
+        [documentId, publishKey],
+      );
+      if (existingRevision.rowCount) {
+        await client.query('COMMIT');
+        return {
+          ok: true,
+          documentId,
+          status: 'published',
+          revisionNumber: existingRevision.rows[0].revision_number,
+          idempotentReplay: true,
+        };
+      }
+
+      const allocation = await client.query<{ revision_number: number }>(
+        `UPDATE creator_documents
+         SET next_revision_number = next_revision_number + 1,
+             status = 'published',
+             lock_version = lock_version + 1,
+             published_at = COALESCE(published_at, NOW()),
+             updated_at = NOW()
+         WHERE id = $1
+         RETURNING
+           next_revision_number - 1 AS revision_number,
+           lock_version`,
+        [documentId],
+      );
+      const nextRevision = allocation.rows[0].revision_number;
       const revisionId = `rev_${crypto.randomUUID()}`;
 
       await client.query(
-        `INSERT INTO creator_document_revisions (id, document_id, creator_id, revision_number, document_json)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [revisionId, documentId, actorUserId, nextRevision, JSON.stringify(doc)]
-      );
-
-      await client.query(
-        `UPDATE creator_documents SET status = 'published', published_at = NOW(), updated_at = NOW() WHERE id = $1`,
-        [documentId]
+        `INSERT INTO creator_document_revisions (
+           id, document_id, creator_id, revision_number,
+           document_json, publish_key, document_hash
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [
+          revisionId,
+          documentId,
+          actorUserId,
+          nextRevision,
+          documentJson,
+          publishKey,
+          documentHash,
+        ],
       );
 
       await client.query('COMMIT');
@@ -385,6 +533,7 @@ export const registerCreatorDocumentRoutes = ({
         documentId,
         status: 'published',
         revisionNumber: nextRevision,
+        idempotentReplay: false,
       };
     } catch (error) {
       await client.query('ROLLBACK');

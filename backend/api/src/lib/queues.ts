@@ -35,11 +35,16 @@ export interface ReconciliationJobData {
   runDate?: string;
 }
 
+export interface OutboxDrainJobData {
+  reason: 'scheduled' | 'after_commit' | 'manual';
+}
+
 type InfraJobData =
   | AuctionSweepJobData
   | OnezeWithdrawalExecuteJobData
   | OnezeMintReserveJobData
-  | ReconciliationJobData;
+  | ReconciliationJobData
+  | OutboxDrainJobData;
 
 interface QueueHandlers {
   handlePushJob: (job: PushJobData) => Promise<void>;
@@ -47,6 +52,7 @@ interface QueueHandlers {
   handleOnezeWithdrawalExecuteJob: (job: OnezeWithdrawalExecuteJobData) => Promise<void>;
   handleOnezeMintReserveJob: (job: OnezeMintReserveJobData) => Promise<void>;
   handleReconciliationJob: (job: ReconciliationJobData) => Promise<void>;
+  handleOutboxDrainJob: (job: OutboxDrainJobData) => Promise<void>;
 }
 
 const queueConnection = new IORedis(config.redisUrl, {
@@ -114,6 +120,8 @@ export function startBackgroundWorkers(handlers: QueueHandlers): void {
             await handlers.handleOnezeMintReserveJob(job.data as OnezeMintReserveJobData);
           } else if (job.name === 'reconciliation_run') {
             await handlers.handleReconciliationJob(job.data as ReconciliationJobData);
+          } else if (job.name === 'domain_outbox_drain') {
+            await handlers.handleOutboxDrainJob(job.data as OutboxDrainJobData);
           }
 
           recordBackgroundJob({
@@ -140,6 +148,7 @@ export function startBackgroundWorkers(handlers: QueueHandlers): void {
 
 export async function enqueuePushNotificationJob(input: PushJobData): Promise<void> {
   await pushQueue.add('push_send', input, {
+    jobId: `push_${input.eventId}`,
     attempts: 4,
     backoff: {
       type: 'exponential',
@@ -212,6 +221,26 @@ export async function enqueueReconciliationJob(input: ReconciliationJobData): Pr
       removeOnComplete: true,
       removeOnFail: 100,
     }
+  );
+}
+
+export async function enqueueOutboxDrainJob(
+  reason: OutboxDrainJobData['reason'] = 'scheduled',
+): Promise<void> {
+  const timeBucket = Math.floor(Date.now() / 2_000);
+  await infraQueue.add(
+    'domain_outbox_drain',
+    { reason },
+    {
+      jobId: `domain_outbox_drain_${timeBucket}`,
+      attempts: 5,
+      backoff: {
+        type: 'exponential',
+        delay: 1_000,
+      },
+      removeOnComplete: true,
+      removeOnFail: 200,
+    },
   );
 }
 

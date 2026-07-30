@@ -69,6 +69,27 @@ import {
   verifyAndNormalizeWebhook,
 } from './lib/paymentProviders.js';
 import {
+  MONEY_REGISTRY_VERSION,
+  allocateMoneyByBasisPoints,
+  assetAmountFromOneze,
+  currencyExponent,
+  moneyFromMajorDecimal,
+  moneyFromMinor,
+  moneyToMajorDecimal,
+  moneyToSafeInteger,
+  toProviderMoney,
+  type Money,
+  type MoneyConversionTrace,
+  type MoneyProvider,
+  type ProviderAmountUnit,
+} from './lib/money.js';
+import {
+  createMobileCustomerSession,
+  getOrCreateStripeCustomer,
+  resolveActiveStripeMethod,
+  syncStripePaymentMethodProjections,
+} from './lib/stripePaymentMethods.js';
+import {
   assertKeyServiceConnectivity,
   decryptJsonPayload,
   encryptJsonPayload,
@@ -79,6 +100,7 @@ import {
   closeBackgroundQueues,
   enqueueAuctionSweepJob,
   enqueueOnezeMintReserveJob,
+  enqueueOutboxDrainJob,
   enqueueReconciliationJob,
   enqueueOnezeWithdrawalExecuteJob,
   enqueuePushNotificationJob,
@@ -175,12 +197,30 @@ import { registerNotificationRoutes } from './routes/notifications.js';
 import { registerRealtimeRoutes } from './routes/realtime.js';
 import { registerSupportReviewRoutes } from './routes/supportReviews.js';
 import { registerUploadRoutes } from './routes/uploads.js';
-import { registerPriceAlertRoutes } from './routes/priceAlerts.js';
+import { registerMediaAssetRoutes } from './routes/mediaAssets.js';
+import {
+  evaluatePriceAlertsForListing,
+  registerPriceAlertRoutes,
+} from './routes/priceAlerts.js';
 import { registerListingOfferRoutes } from './routes/listingOffers.js';
 import { registerChatComposerStateRoutes } from './routes/chatComposerState.js';
 import { registerAiTruthRoutes } from './routes/aiTruth.js';
+import { registerRecommendationRoutes } from './routes/recommendations.js';
+import {
+  PRODUCT_RECOMMENDATION_POLICY_VERSION,
+  scoreProductRecommendation,
+} from './lib/productRecommendationPolicy.js';
 import { validateAiDeployReadiness } from './lib/aiTruth.js';
 import { createStripeConnectPayoutTransfer } from './lib/stripePayouts.js';
+import { COOWN_POLICY } from './lib/commercePolicies.js';
+import { compensateTerminalCommercePayment } from './lib/commerceCheckoutLifecycle.js';
+import {
+  appendDomainEvent,
+  claimDomainOutboxBatch,
+  completeDomainOutboxEvent,
+  failDomainOutboxEvent,
+  type DomainOutboxEvent,
+} from './lib/domainOutbox.js';
 
 const app = Fastify({
   logger: true,
@@ -311,6 +351,41 @@ function ensureSecurityAdmin(headerToken: string | undefined) {
   }
 }
 
+function resolveSingleHeader(
+  value: string | string[] | undefined,
+): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function secureTokenMatches(
+  candidate: string | undefined,
+  expected: string,
+): boolean {
+  if (!candidate) {
+    return false;
+  }
+
+  const candidateBuffer = Buffer.from(candidate);
+  const expectedBuffer = Buffer.from(expected);
+  return candidateBuffer.length === expectedBuffer.length
+    && crypto.timingSafeEqual(candidateBuffer, expectedBuffer);
+}
+
+function authorizeInternalServiceRequest(request: FastifyRequest): boolean {
+  return secureTokenMatches(
+    resolveSingleHeader(request.headers['x-internal-service-token']),
+    config.apiInternalServiceToken,
+  );
+}
+
+function authorizeSecurityAdminRequest(request: FastifyRequest): boolean {
+  return request.authUser?.role === 'admin'
+    && secureTokenMatches(
+      resolveSingleHeader(request.headers['x-security-admin-token']),
+      config.apiSecurityAdminToken,
+    );
+}
+
 function ensureSecurityAdminAccess(
   request: {
     headers: Record<string, string | string[] | undefined>;
@@ -370,7 +445,6 @@ const COMMERCE_PLATFORM_CHARGE_RATE = 0.05;
 const COMMERCE_PLATFORM_CHARGE_FIXED_GBP = 0.7;
 const COMMERCE_PLATFORM_CHARGE_MIN_RATE = 0.02;
 const CO_OWN_TRADE_FEE_RATE = 0.01;
-const CO_OWN_MAX_ORDER_UNITS = 1_000_000;
 const AUCTION_PLATFORM_FEE_RATE = 0.03;
 const WALLET_TOPUP_PLATFORM_FEE_RATE = 0.01;
 const ONEZE_MG_PER_IZE = 1_000;
@@ -417,25 +491,6 @@ const MINT_OPERATION_TERMINAL_STATES = new Set<string>([
   'RESERVE_UNKNOWN',
 ]);
 
-const FIAT_MINOR_DIGITS: Record<string, number> = {
-  BIF: 0,
-  CLP: 0,
-  DJF: 0,
-  GNF: 0,
-  JPY: 0,
-  KMF: 0,
-  KRW: 0,
-  MGA: 1,
-  PYG: 0,
-  RWF: 0,
-  UGX: 0,
-  VND: 0,
-  VUV: 0,
-  XAF: 0,
-  XOF: 0,
-  XPF: 0,
-};
-
 function onezeAmountToMg(amount: number): number {
   const mg = Math.round(amount * ONEZE_MG_PER_IZE);
   if (!Number.isSafeInteger(mg) || mg <= 0) {
@@ -450,7 +505,7 @@ function mgToOnezeAmount(amountMg: number): number {
 }
 
 function getFiatMinorDigits(currency: string): number {
-  return FIAT_MINOR_DIGITS[currency.toUpperCase()] ?? 2;
+  return currencyExponent(currency);
 }
 
 function toFiatMinor(amountMajor: number, currency: string): number {
@@ -830,6 +885,8 @@ function isPublicRoute(method: string, path: string) {
     'POST /auth/password-reset/confirm',
     'POST /compliance/kyc/webhook',
     'POST /compliance/kyc/webhooks/stripe',
+    // Authenticated by the dedicated service-token check in the route module.
+    'POST /offers/sweep-expired',
   ]);
 
   if (fixedPublicRoutes.has(signature)) {
@@ -1254,6 +1311,13 @@ interface PaymentIntentRow {
   instrument_id: number | null;
   amount_gbp: number | string;
   amount_currency: string;
+  amount_minor?: number | string | null;
+  currency_exponent?: number | null;
+  money_registry_version?: string | null;
+  provider_amount?: string | null;
+  provider_amount_unit?: ProviderAmountUnit | null;
+  money_conversion_trace?: MoneyConversionTrace | null;
+  money_quarantined?: boolean;
   status: PaymentIntentStatus;
   provider_intent_ref: string | null;
   client_secret: string | null;
@@ -1263,6 +1327,7 @@ interface PaymentIntentRow {
   settled_at: string | null;
   failure_code: string | null;
   failure_message: string | null;
+  request_hash?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -1275,6 +1340,12 @@ interface PayoutRequestRow {
   payout_account_id: number;
   amount_gbp: number | string;
   amount_currency: string;
+  amount_minor?: number | string | null;
+  currency_exponent?: number | null;
+  money_registry_version?: string | null;
+  money_conversion_trace?: MoneyConversionTrace | null;
+  money_quarantined?: boolean;
+  request_hash?: string | null;
   status: PayoutRequestStatus;
   provider_payout_ref: string | null;
   failure_reason: string | null;
@@ -1604,6 +1675,18 @@ async function appendSystemChatMessage(
 }
 
 function toPaymentIntentPayload(row: PaymentIntentRow) {
+  const canonicalMoney =
+    row.amount_minor !== undefined
+    && row.amount_minor !== null
+    && row.currency_exponent !== undefined
+    && row.currency_exponent !== null
+      ? {
+          currency: row.amount_currency,
+          minorAmount: String(row.amount_minor),
+          exponent: row.currency_exponent,
+          registryVersion: row.money_registry_version ?? MONEY_REGISTRY_VERSION,
+        }
+      : null;
   return {
     id: row.id,
     userId: row.user_id,
@@ -1614,6 +1697,16 @@ function toPaymentIntentPayload(row: PaymentIntentRow) {
     instrumentId: row.instrument_id,
     amountGbp: Number(row.amount_gbp),
     amountCurrency: row.amount_currency,
+    money: canonicalMoney,
+    providerConversion:
+      row.provider_amount && row.provider_amount_unit
+        ? {
+            amount: row.provider_amount,
+            unit: row.provider_amount_unit,
+            trace: row.money_conversion_trace ?? null,
+          }
+        : null,
+    moneyQuarantined: row.money_quarantined ?? false,
     status: row.status,
     providerIntentRef: row.provider_intent_ref,
     clientSecret: row.client_secret,
@@ -1635,6 +1728,19 @@ function toPayoutRequestPayload(row: PayoutRequestRow) {
     payoutAccountId: row.payout_account_id,
     amountGbp: Number(row.amount_gbp),
     amountCurrency: row.amount_currency,
+    money:
+      row.amount_minor !== undefined
+      && row.amount_minor !== null
+      && row.currency_exponent !== undefined
+      && row.currency_exponent !== null
+        ? {
+            currency: row.amount_currency,
+            minorAmount: String(row.amount_minor),
+            exponent: row.currency_exponent,
+            registryVersion: row.money_registry_version ?? MONEY_REGISTRY_VERSION,
+          }
+        : null,
+    moneyQuarantined: row.money_quarantined ?? false,
     status: row.status,
     providerPayoutRef: row.provider_payout_ref,
     failureReason: row.failure_reason,
@@ -4078,6 +4184,26 @@ async function appendLedgerEntry(
       : normalizedCurrency === 'GBP'
         ? normalizedAmount
         : null;
+  const canonicalAsset =
+    normalizedCurrency === 'IZE'
+      ? (() => {
+          const assetAmount = assetAmountFromOneze(String(normalizedAmount));
+          return {
+            assetCode: assetAmount.asset,
+            amountBaseUnits: assetAmount.baseUnitAmount,
+            scale: assetAmount.scale,
+            registryVersion: 'oneze-base-units-v1',
+          };
+        })()
+      : (() => {
+          const money = moneyFromMajorDecimal(normalizedCurrency, String(normalizedAmount));
+          return {
+            assetCode: money.currency,
+            amountBaseUnits: money.minorAmount,
+            scale: money.exponent,
+            registryVersion: money.registryVersion,
+          };
+        })();
 
   await client.query(
     `
@@ -4088,12 +4214,16 @@ async function appendLedgerEntry(
         amount_gbp,
         amount,
         currency,
+        amount_base_units,
+        asset_code,
+        asset_scale,
+        asset_registry_version,
         source_type,
         source_id,
         line_type,
         metadata
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb)
     `,
     [
       input.accountId,
@@ -4102,10 +4232,17 @@ async function appendLedgerEntry(
       normalizedAmountGbp,
       normalizedAmount,
       normalizedCurrency,
+      canonicalAsset.amountBaseUnits,
+      canonicalAsset.assetCode,
+      canonicalAsset.scale,
+      canonicalAsset.registryVersion,
       input.sourceType,
       input.sourceId,
       input.lineType,
-      toJsonString(input.metadata ?? {}),
+      toJsonString({
+        ...(input.metadata ?? {}),
+        canonicalAssetAmount: canonicalAsset,
+      }),
     ]
   );
 }
@@ -5627,9 +5764,10 @@ async function createGatewayPaymentIntent(input: {
   gatewayId: string;
   intentId: string;
   channel: PaymentIntentChannel;
-  amountGbp: number;
-  amountCurrency: string;
+  money: Money;
   metadata: Record<string, unknown>;
+  stripeCustomerId?: string | null;
+  stripePaymentMethodId?: string | null;
   returnUrl?: string;
   webhookUrl?: string;
   // Platform fee for commerce (stored in metadata, not Stripe Connect)
@@ -5641,12 +5779,39 @@ async function createGatewayPaymentIntent(input: {
   providerStatus?: string | null;
   nextActionUrl?: string | null;
   scaExpiresAt?: string | null;
+  providerAmount: string;
+  providerAmountUnit: ProviderAmountUnit;
+  conversionTrace: MoneyConversionTrace;
 }> {
-  const normalizedCurrency = input.amountCurrency.toUpperCase();
+  const normalizedCurrency = input.money.currency;
+  const moneyProvider: MoneyProvider =
+    input.gatewayId === 'stripe_americas'
+      ? 'stripe'
+      : input.gatewayId === 'razorpay_in'
+        ? 'razorpay'
+        : input.gatewayId === 'mollie_eu'
+          ? 'mollie'
+          : input.gatewayId === 'flutterwave_africa'
+            ? 'flutterwave'
+            : input.gatewayId === 'tap_gulf'
+              ? 'tap'
+              : input.gatewayId === 'wise_global'
+                ? 'wise'
+                : 'mock';
+  const providerMoney = toProviderMoney(moneyProvider, input.money);
+  const providerBoundary = {
+    providerAmount: providerMoney.value,
+    providerAmountUnit: providerMoney.unit,
+    conversionTrace: providerMoney.trace,
+  };
   const baseMetadata = {
     ...input.metadata,
     intentId: input.intentId,
     channel: input.channel,
+    canonicalCurrency: input.money.currency,
+    canonicalMinorAmount: input.money.minorAmount,
+    moneyRegistryVersion: input.money.registryVersion,
+    moneyConversionVersion: providerMoney.trace.conversionVersion,
   };
 
   if (input.gatewayId === 'stripe_americas' && config.stripeSecretKey) {
@@ -5658,9 +5823,11 @@ async function createGatewayPaymentIntent(input: {
     // Note: Using platform Stripe account (Vinted/Depop model)
     // Funds go to platform account, ledger tracks seller payable
     const paymentIntentParams: Stripe.PaymentIntentCreateParams = {
-      amount: Math.max(1, Math.round(input.amountGbp * 100)),
+      amount: moneyToSafeInteger(input.money),
       currency: normalizedCurrency.toLowerCase(),
       automatic_payment_methods: { enabled: true },
+      customer: input.stripeCustomerId ?? undefined,
+      payment_method: input.stripePaymentMethodId ?? undefined,
       metadata: toStripeMetadata(baseMetadata),
     };
 
@@ -5679,6 +5846,7 @@ async function createGatewayPaymentIntent(input: {
         created.next_action && created.next_action.type === 'redirect_to_url'
           ? new Date(Date.now() + 15 * 60 * 1000).toISOString()
           : null,
+      ...providerBoundary,
     };
   }
 
@@ -5689,7 +5857,7 @@ async function createGatewayPaymentIntent(input: {
     });
 
     const order = await razorpay.orders.create({
-      amount: Math.max(1, Math.round(input.amountGbp * 100)),
+      amount: moneyToSafeInteger(input.money),
       currency: normalizedCurrency,
       receipt: input.intentId.slice(0, 40),
       notes: toStripeMetadata(baseMetadata),
@@ -5711,6 +5879,7 @@ async function createGatewayPaymentIntent(input: {
       providerStatus: String((order as { status?: unknown }).status ?? 'created'),
       nextActionUrl: null,
       scaExpiresAt: null,
+      ...providerBoundary,
     };
   }
 
@@ -5720,7 +5889,7 @@ async function createGatewayPaymentIntent(input: {
     const created = await mollie.payments.create({
       amount: {
         currency: normalizedCurrency,
-        value: input.amountGbp.toFixed(2),
+        value: providerMoney.value,
       },
       description: `Thryftverse ${input.channel} ${input.intentId}`,
       redirectUrl: input.returnUrl ?? 'https://thryftverse.app/payments/return',
@@ -5740,6 +5909,7 @@ async function createGatewayPaymentIntent(input: {
       providerStatus: created.status,
       nextActionUrl: checkoutUrl,
       scaExpiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+      ...providerBoundary,
     };
   }
 
@@ -5753,7 +5923,7 @@ async function createGatewayPaymentIntent(input: {
       },
       body: toJsonString({
         tx_ref: txRef,
-        amount: Number(input.amountGbp.toFixed(2)),
+        amount: providerMoney.value,
         currency: normalizedCurrency,
         redirect_url: input.returnUrl ?? 'https://thryftverse.app/payments/return',
         customer: {
@@ -5784,6 +5954,7 @@ async function createGatewayPaymentIntent(input: {
       providerStatus: 'created',
       nextActionUrl: checkoutUrl,
       scaExpiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+      ...providerBoundary,
     };
   }
 
@@ -5795,7 +5966,7 @@ async function createGatewayPaymentIntent(input: {
         'Content-Type': 'application/json',
       },
       body: toJsonString({
-        amount: Number(input.amountGbp.toFixed(2)),
+        amount: providerMoney.value,
         currency: normalizedCurrency,
         source: {
           id: 'src_all',
@@ -5833,6 +6004,7 @@ async function createGatewayPaymentIntent(input: {
       providerStatus: String(payload.status ?? 'initiated'),
       nextActionUrl: checkoutUrl,
       scaExpiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+      ...providerBoundary,
     };
   }
 
@@ -5844,6 +6016,7 @@ async function createGatewayPaymentIntent(input: {
       providerStatus: 'mock_created',
       nextActionUrl: null,
       scaExpiresAt: null,
+      ...providerBoundary,
     };
   }
 
@@ -5899,6 +6072,13 @@ async function settlePaymentIntent(
         instrument_id,
         amount_gbp,
         amount_currency,
+        amount_minor,
+        currency_exponent,
+        money_registry_version,
+        provider_amount,
+        provider_amount_unit,
+        money_conversion_trace,
+        money_quarantined,
         status,
         provider_intent_ref,
         client_secret,
@@ -5945,10 +6125,16 @@ async function settlePaymentIntent(
         status,
         amount_gbp,
         provider_fee_gbp,
+        amount_minor,
+        currency_code,
+        currency_exponent,
+        provider_fee_minor,
+        money_registry_version,
+        money_conversion_trace,
         provider_attempt_ref,
         raw_payload
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13::jsonb)
       ON CONFLICT (gateway_id, provider_attempt_ref)
       DO NOTHING
     `,
@@ -5958,8 +6144,30 @@ async function settlePaymentIntent(
       attemptStatus,
       Number(currentIntent.amount_gbp),
       providerFeeGbp,
+      currentIntent.amount_minor ?? null,
+      currentIntent.amount_currency,
+      currentIntent.currency_exponent ?? null,
+      currentIntent.amount_currency === 'GBP' ? Math.round(providerFeeGbp * 100) : 0,
+      currentIntent.money_registry_version ?? MONEY_REGISTRY_VERSION,
+      toJsonString({
+        source: 'payment_intent_settlement',
+        canonicalMinorAmount: currentIntent.amount_minor ?? null,
+        currency: currentIntent.amount_currency,
+        exponent: currentIntent.currency_exponent ?? null,
+      }),
       attemptRef,
-      toJsonString(input.rawPayload ?? {}),
+      toJsonString({
+        ...(asObject(input.rawPayload)),
+        canonicalMoney:
+          currentIntent.amount_minor !== undefined && currentIntent.amount_minor !== null
+            ? {
+                currency: currentIntent.amount_currency,
+                minorAmount: String(currentIntent.amount_minor),
+                exponent: currentIntent.currency_exponent,
+                registryVersion: currentIntent.money_registry_version,
+              }
+            : null,
+      }),
     ]
   );
 
@@ -5982,6 +6190,13 @@ async function settlePaymentIntent(
         instrument_id,
         amount_gbp,
         amount_currency,
+        amount_minor,
+        currency_exponent,
+        money_registry_version,
+        provider_amount,
+        provider_amount_unit,
+        money_conversion_trace,
+        money_quarantined,
         status,
         provider_intent_ref,
         client_secret,
@@ -6035,6 +6250,37 @@ async function settlePaymentIntent(
       }
     | undefined;
 
+  if (
+    (nextStatus === 'failed' || nextStatus === 'cancelled')
+    && updatedIntent.channel === 'commerce'
+    && updatedIntent.order_id
+  ) {
+    const compensation = await compensateTerminalCommercePayment(client, {
+      orderId: updatedIntent.order_id,
+      intentId: updatedIntent.id,
+      actorUserId: updatedIntent.user_id,
+      status: nextStatus,
+      failureCode: updatedIntent.failure_code,
+    });
+    if (compensation.orderCancelled) {
+      await appendDomainEvent(client, {
+        aggregateType: 'payment',
+        aggregateId: updatedIntent.id,
+        eventType: 'payment.failed',
+        actorId: updatedIntent.user_id,
+        idempotencyKey: updatedIntent.id,
+        deduplicationKey: `payment.${nextStatus}:${updatedIntent.id}`,
+        payload: {
+          intentId: updatedIntent.id,
+          orderId: updatedIntent.order_id,
+          buyerId: updatedIntent.user_id,
+          status: nextStatus,
+          failureCode: updatedIntent.failure_code,
+        },
+      });
+    }
+  }
+
   if (nextStatus === 'succeeded' && updatedIntent.channel === 'commerce' && updatedIntent.order_id) {
     const paidOrderResult = await client.query<{
       id: string;
@@ -6069,6 +6315,24 @@ async function settlePaymentIntent(
 
     const paidOrder = paidOrderResult.rows[0];
     if (paidOrder) {
+      await client.query(
+        `INSERT INTO order_events (
+           order_id, event_type, actor_id, source, deduplication_key, metadata
+         )
+         VALUES ($1, 'order.paid', $2, 'payment_settlement', $3, $4::jsonb)
+         ON CONFLICT (order_id, deduplication_key)
+           WHERE deduplication_key IS NOT NULL
+         DO NOTHING`,
+        [
+          paidOrder.id,
+          updatedIntent.user_id,
+          `order.paid:${updatedIntent.id}`,
+          toJsonString({
+            intentId: updatedIntent.id,
+            gatewayId: updatedIntent.gateway_id,
+          }),
+        ]
+      );
       if (await ledgerTablesAvailable(client)) {
         await postCommerceOrderLedgerEntries(client, {
           orderId: paidOrder.id,
@@ -6185,6 +6449,13 @@ async function transitionPaymentIntentStatus(
         instrument_id,
         amount_gbp,
         amount_currency,
+        amount_minor,
+        currency_exponent,
+        money_registry_version,
+        provider_amount,
+        provider_amount_unit,
+        money_conversion_trace,
+        money_quarantined,
         status,
         provider_intent_ref,
         client_secret,
@@ -6270,6 +6541,13 @@ async function transitionPaymentIntentStatus(
         instrument_id,
         amount_gbp,
         amount_currency,
+        amount_minor,
+        currency_exponent,
+        money_registry_version,
+        provider_amount,
+        provider_amount_unit,
+        money_conversion_trace,
+        money_quarantined,
         status,
         provider_intent_ref,
         client_secret,
@@ -6325,6 +6603,13 @@ async function findPaymentIntentByProviderRef(
         instrument_id,
         amount_gbp,
         amount_currency,
+        amount_minor,
+        currency_exponent,
+        money_registry_version,
+        provider_amount,
+        provider_amount_unit,
+        money_conversion_trace,
+        money_quarantined,
         status,
         provider_intent_ref,
         client_secret,
@@ -6354,6 +6639,10 @@ async function upsertPaymentRefund(
     gatewayId: string;
     providerRefundRef: string;
     status: 'pending' | 'succeeded' | 'failed' | 'cancelled';
+    money?: Money;
+    rawProviderAmount?: string;
+    providerAmountUnit?: ProviderAmountUnit;
+    conversionTrace?: MoneyConversionTrace;
     amount?: number;
     currency?: string;
     reason?: string;
@@ -6361,6 +6650,12 @@ async function upsertPaymentRefund(
   }
 ): Promise<void> {
   const id = `rf_${input.gatewayId}_${input.providerRefundRef}`;
+  const legacyAmount = input.money
+    ? Number(moneyToMajorDecimal(input.money))
+    : input.amount;
+  if (!legacyAmount || legacyAmount <= 0) {
+    throw createApiError('REFUND_AMOUNT_INVALID', 'Provider refund did not include a positive canonical amount');
+  }
   await client.query(
     `
       INSERT INTO payment_refunds (
@@ -6369,17 +6664,31 @@ async function upsertPaymentRefund(
         gateway_id,
         amount,
         currency,
+        amount_minor,
+        currency_exponent,
+        raw_provider_amount,
+        provider_amount_unit,
+        money_registry_version,
+        money_conversion_trace,
         status,
         provider_refund_ref,
         reason,
         metadata,
         updated_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, NOW())
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, $14, $15::jsonb, NOW())
       ON CONFLICT (gateway_id, provider_refund_ref)
       DO UPDATE
         SET
           status = EXCLUDED.status,
+          amount = EXCLUDED.amount,
+          currency = EXCLUDED.currency,
+          amount_minor = EXCLUDED.amount_minor,
+          currency_exponent = EXCLUDED.currency_exponent,
+          raw_provider_amount = EXCLUDED.raw_provider_amount,
+          provider_amount_unit = EXCLUDED.provider_amount_unit,
+          money_registry_version = EXCLUDED.money_registry_version,
+          money_conversion_trace = EXCLUDED.money_conversion_trace,
           reason = EXCLUDED.reason,
           metadata = payment_refunds.metadata || EXCLUDED.metadata,
           updated_at = NOW()
@@ -6388,12 +6697,21 @@ async function upsertPaymentRefund(
       id,
       input.intentId,
       input.gatewayId,
-      input.amount ?? 0,
-      (input.currency ?? 'GBP').toUpperCase(),
+      legacyAmount,
+      input.money?.currency ?? (input.currency ?? 'GBP').toUpperCase(),
+      input.money?.minorAmount ?? null,
+      input.money?.exponent ?? null,
+      input.rawProviderAmount ?? null,
+      input.providerAmountUnit ?? null,
+      input.money?.registryVersion ?? null,
+      input.conversionTrace ? toJsonString(input.conversionTrace) : null,
       input.status,
       input.providerRefundRef,
       input.reason ?? null,
-      toJsonString(input.metadata ?? {}),
+      toJsonString({
+        ...(input.metadata ?? {}),
+        canonicalMoney: input.money ?? null,
+      }),
     ]
   );
 }
@@ -6405,6 +6723,10 @@ async function upsertPaymentDispute(
     gatewayId: string;
     providerDisputeRef: string;
     status: 'open' | 'warning' | 'needs_response' | 'won' | 'lost' | 'closed';
+    money?: Money;
+    rawProviderAmount?: string;
+    providerAmountUnit?: ProviderAmountUnit;
+    conversionTrace?: MoneyConversionTrace;
     amount?: number;
     currency?: string;
     reason?: string;
@@ -6412,6 +6734,9 @@ async function upsertPaymentDispute(
   }
 ): Promise<void> {
   const id = `dp_${input.gatewayId}_${input.providerDisputeRef}`;
+  const legacyAmount = input.money
+    ? Number(moneyToMajorDecimal(input.money))
+    : input.amount ?? 0;
   await client.query(
     `
       INSERT INTO payment_disputes (
@@ -6422,17 +6747,29 @@ async function upsertPaymentDispute(
         status,
         amount,
         currency,
+        amount_minor,
+        currency_exponent,
+        raw_provider_amount,
+        provider_amount_unit,
+        money_registry_version,
+        money_conversion_trace,
         reason,
         metadata,
         updated_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, NOW())
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, $14, $15::jsonb, NOW())
       ON CONFLICT (gateway_id, provider_dispute_ref)
       DO UPDATE
         SET
           status = EXCLUDED.status,
           amount = EXCLUDED.amount,
           currency = EXCLUDED.currency,
+          amount_minor = EXCLUDED.amount_minor,
+          currency_exponent = EXCLUDED.currency_exponent,
+          raw_provider_amount = EXCLUDED.raw_provider_amount,
+          provider_amount_unit = EXCLUDED.provider_amount_unit,
+          money_registry_version = EXCLUDED.money_registry_version,
+          money_conversion_trace = EXCLUDED.money_conversion_trace,
           reason = EXCLUDED.reason,
           metadata = payment_disputes.metadata || EXCLUDED.metadata,
           updated_at = NOW()
@@ -6443,10 +6780,19 @@ async function upsertPaymentDispute(
       input.gatewayId,
       input.providerDisputeRef,
       input.status,
-      input.amount ?? 0,
-      (input.currency ?? 'GBP').toUpperCase(),
+      legacyAmount,
+      input.money?.currency ?? (input.currency ?? 'GBP').toUpperCase(),
+      input.money?.minorAmount ?? null,
+      input.money?.exponent ?? null,
+      input.rawProviderAmount ?? null,
+      input.providerAmountUnit ?? null,
+      input.money?.registryVersion ?? null,
+      input.conversionTrace ? toJsonString(input.conversionTrace) : null,
       input.reason ?? null,
-      toJsonString(input.metadata ?? {}),
+      toJsonString({
+        ...(input.metadata ?? {}),
+        canonicalMoney: input.money ?? null,
+      }),
     ]
   );
 }
@@ -6475,6 +6821,11 @@ async function settlePayoutRequest(
         payout_account_id,
         amount_gbp,
         amount_currency,
+        amount_minor,
+        currency_exponent,
+        money_registry_version,
+        money_conversion_trace,
+        money_quarantined,
         status,
         provider_payout_ref,
         failure_reason,
@@ -6831,6 +7182,11 @@ async function settlePayoutRequest(
         payout_account_id,
         amount_gbp,
         amount_currency,
+        amount_minor,
+        currency_exponent,
+        money_registry_version,
+        money_conversion_trace,
+        money_quarantined,
         status,
         provider_payout_ref,
         failure_reason,
@@ -6987,23 +7343,12 @@ async function rewrapDomainRows(
   return { rowsScanned, rowsRewrapped };
 }
 
-const recommendationPayloadSchema = z.object({
-  recommendations: z.array(
-    z.object({
-      listing_id: z.string(),
-      score: z.number(),
-      model: z.string(),
-      reason: z.string().optional(),
-      policy: z.enum(['exploit', 'explore']).optional(),
-    })
-  ),
-});
-
 const NOTIFICATION_EVENT_TYPES = [
   'order_created', 'order_paid', 'order_cancelled', 'order_dispatched',
   'order_in_transit', 'order_out_for_delivery', 'order_delivered',
   'order_refunded', 'resolution_opened', 'resolution_status_changed',
   'review_received', 'chat_message', 'payout_processed', 'refund_completed',
+  'price_drop', 'offer_accepted',
   'generic',
 ] as const;
 type NotificationEventType = typeof NOTIFICATION_EVENT_TYPES[number];
@@ -7015,10 +7360,12 @@ type NotificationPushCategory = typeof NOTIFICATION_PUSH_CATEGORIES[number];
 
 function mapEventToPushCategory(eventType: string): NotificationPushCategory | null {
   if (eventType === 'chat_message') return 'messages';
+  if (eventType === 'offer_accepted') return 'offers';
   if (eventType.startsWith('order_')) return 'orderUpdates';
   if (eventType === 'review_received') return 'orderUpdates';
   if (eventType === 'resolution_opened' || eventType === 'resolution_status_changed') return 'orderUpdates';
   if (eventType === 'payout_processed' || eventType === 'refund_completed') return 'orderUpdates';
+  if (eventType === 'price_drop') return 'priceDrops';
   return null;
 }
 
@@ -7071,11 +7418,41 @@ async function queueUserNotification(input: {
   // Return the existing event ID without enqueuing push or publishing realtime.
   if (!insertResult.rowCount) {
     if (idempotencyKey) {
-      const existing = await db.query<{ id: string }>(
-        `SELECT id FROM notification_events WHERE user_id = $1 AND idempotency_key = $2 LIMIT 1`,
+      const existing = await db.query<{
+        id: string;
+        user_id: string;
+        title: string;
+        body: string;
+        payload: Record<string, unknown>;
+        event_type: string;
+        actor_user_id: string | null;
+        route: Record<string, unknown> | null;
+        status: string;
+      }>(
+        `SELECT id, user_id, title, body, payload, event_type,
+                actor_user_id, route, status
+         FROM notification_events
+         WHERE user_id = $1 AND idempotency_key = $2
+         LIMIT 1`,
         [input.userId, idempotencyKey]
       );
-      return existing.rows[0]?.id ?? null;
+      const existingEvent = existing.rows[0];
+      // A durable event may have been inserted just before Redis became
+      // unavailable. Retrying the producer repairs that boundary. BullMQ's
+      // event-based job ID prevents duplicate queued jobs.
+      if (existingEvent?.status === 'queued') {
+        await enqueuePushNotificationJob({
+          eventId: existingEvent.id,
+          userId: existingEvent.user_id,
+          title: existingEvent.title,
+          body: existingEvent.body,
+          payload: existingEvent.payload,
+          eventType: existingEvent.event_type,
+          actorUserId: existingEvent.actor_user_id,
+          route: existingEvent.route,
+        });
+      }
+      return existingEvent?.id ?? null;
     }
     return null;
   }
@@ -7495,6 +7872,213 @@ async function processPushQueueJob(job: {
   });
 }
 
+async function processDomainOutboxEvent(event: DomainOutboxEvent): Promise<void> {
+  if (event.eventType === 'listing.price_changed') {
+    const payload = z.object({
+      listingId: z.string().min(2),
+      priceEventId: z.number().int().positive(),
+      previousPriceGbp: z.number().nonnegative(),
+      newPriceGbp: z.number().nonnegative(),
+    }).parse(event.payload);
+    await evaluatePriceAlertsForListing({
+      db,
+      listingId: payload.listingId,
+      priceEventId: payload.priceEventId,
+      previousPriceGbp: payload.previousPriceGbp,
+      newPriceGbp: payload.newPriceGbp,
+      queueNotification: queueUserNotification,
+    });
+    return;
+  }
+
+  if (event.eventType === 'offer.accepted') {
+    const payload = z.object({
+      offerId: z.string().min(2),
+      listingId: z.string().min(2),
+      orderId: z.string().min(2),
+      reservationId: z.string().min(2),
+      buyerId: z.string().min(2),
+      sellerId: z.string().min(2),
+      subtotalGbp: z.number().positive(),
+      platformChargeGbp: z.number().nonnegative(),
+      totalGbp: z.number().positive(),
+      reservationExpiresAt: z.string().datetime(),
+    }).parse(event.payload);
+
+    await queueUserNotification({
+      userId: payload.buyerId,
+      title: 'Offer accepted',
+      body: 'Your offer was accepted. Complete checkout before the reservation expires.',
+      eventType: 'offer_accepted',
+      payload: {
+        event: 'offer_accepted',
+        offerId: payload.offerId,
+        listingId: payload.listingId,
+        orderId: payload.orderId,
+        reservationId: payload.reservationId,
+        expiresAt: payload.reservationExpiresAt,
+      },
+      route: { screen: 'OrderDetail', params: { orderId: payload.orderId } },
+      idempotencyKey: `offer_accepted_buyer_${payload.offerId}`,
+      metadata: { outboxEventId: event.id },
+    });
+    await queueUserNotification({
+      userId: payload.sellerId,
+      title: 'Offer accepted',
+      body: 'The item is reserved while the buyer completes checkout.',
+      eventType: 'offer_accepted',
+      payload: {
+        event: 'offer_accepted',
+        offerId: payload.offerId,
+        listingId: payload.listingId,
+        orderId: payload.orderId,
+        reservationId: payload.reservationId,
+        expiresAt: payload.reservationExpiresAt,
+      },
+      route: { screen: 'OrderDetail', params: { orderId: payload.orderId } },
+      idempotencyKey: `offer_accepted_seller_${payload.offerId}`,
+      metadata: { outboxEventId: event.id },
+    });
+    publishRealtimeEvent({
+      topic: `listing:${payload.listingId}`,
+      type: 'offer.accepted',
+      payload: {
+        offerId: payload.offerId,
+        listingId: payload.listingId,
+        orderId: payload.orderId,
+        reservationId: payload.reservationId,
+        reservationExpiresAt: payload.reservationExpiresAt,
+      },
+    });
+    return;
+  }
+
+  if (event.eventType === 'offer.countered') {
+    const payload = z.object({
+      offerId: z.string().min(2),
+      parentOfferId: z.string().min(2),
+      listingId: z.string().min(2),
+      buyerId: z.string().min(2),
+      sellerId: z.string().min(2),
+      offeredByUserId: z.string().min(2),
+      counterRound: z.number().int().positive(),
+      offerPriceGbp: z.number().positive(),
+      expiresAt: z.string().datetime(),
+    }).parse(event.payload);
+    const recipientId = payload.offeredByUserId === payload.buyerId
+      ? payload.sellerId
+      : payload.buyerId;
+    await queueUserNotification({
+      userId: recipientId,
+      title: 'New counter-offer',
+      body: `${formatGbpAmount(payload.offerPriceGbp)} · round ${payload.counterRound}`,
+      eventType: 'offer_countered',
+      payload: {
+        event: 'offer_countered',
+        offerId: payload.offerId,
+        parentOfferId: payload.parentOfferId,
+        listingId: payload.listingId,
+        expiresAt: payload.expiresAt,
+      },
+      route: { screen: 'ItemDetail', params: { itemId: payload.listingId } },
+      idempotencyKey: `offer_countered_${payload.offerId}_${recipientId}`,
+      metadata: { outboxEventId: event.id },
+    });
+    publishRealtimeEvent({
+      topic: `listing:${payload.listingId}`,
+      type: 'offer.countered',
+      payload,
+    });
+    return;
+  }
+
+  if (event.eventType === 'order.created') {
+    const payload = z.object({
+      orderId: z.string().min(2),
+      listingId: z.string().min(2),
+      reservationId: z.string().min(2),
+      buyerId: z.string().min(2),
+      sellerId: z.string().min(2),
+      source: z.literal('direct'),
+      expiresAt: z.string().datetime(),
+      totalGbp: z.number().positive(),
+    }).parse(event.payload);
+    await queueUserNotification({
+      userId: payload.sellerId,
+      title: 'Item reserved',
+      body: 'A buyer has started checkout. The listing is temporarily reserved.',
+      eventType: 'order_created',
+      payload: {
+        event: 'order_created',
+        orderId: payload.orderId,
+        listingId: payload.listingId,
+        reservationId: payload.reservationId,
+        expiresAt: payload.expiresAt,
+      },
+      route: { screen: 'OrderDetail', params: { orderId: payload.orderId } },
+      idempotencyKey: `order_created_seller_${payload.orderId}`,
+      metadata: { outboxEventId: event.id },
+    });
+    publishRealtimeEvent({
+      topic: `listing:${payload.listingId}`,
+      type: 'listing.reserved',
+      payload: {
+        orderId: payload.orderId,
+        listingId: payload.listingId,
+        reservationId: payload.reservationId,
+        expiresAt: payload.expiresAt,
+      },
+    });
+    return;
+  }
+
+  if (event.eventType === 'payment.failed') {
+    const payload = z.object({
+      intentId: z.string().min(2),
+      orderId: z.string().min(2),
+      buyerId: z.string().min(2),
+      status: z.enum(['failed', 'cancelled']),
+      failureCode: z.string().nullable().optional(),
+    }).parse(event.payload);
+    await queueUserNotification({
+      userId: payload.buyerId,
+      title: payload.status === 'failed' ? 'Payment failed' : 'Payment cancelled',
+      body: 'The reservation was released and no completed payment was recorded. A temporary bank authorization may still take time to disappear.',
+      eventType: 'payment_failed',
+      payload: {
+        event: 'payment_failed',
+        intentId: payload.intentId,
+        orderId: payload.orderId,
+        status: payload.status,
+        failureCode: payload.failureCode ?? null,
+      },
+      route: { screen: 'OrderDetail', params: { orderId: payload.orderId } },
+      idempotencyKey: `payment_failed_${payload.intentId}`,
+      metadata: { outboxEventId: event.id },
+    });
+    return;
+  }
+
+  throw new Error(`Unsupported domain outbox event: ${event.eventType}`);
+}
+
+async function processDomainOutboxBatch(): Promise<number> {
+  const events = await claimDomainOutboxBatch(db, 50);
+  for (const event of events) {
+    try {
+      await processDomainOutboxEvent(event);
+      await completeDomainOutboxEvent(db, event.id);
+    } catch (error) {
+      await failDomainOutboxEvent(db, event.id, error);
+      app.log.error(
+        { err: error, outboxEventId: event.id, eventType: event.eventType },
+        'Domain outbox delivery failed',
+      );
+    }
+  }
+  return events.length;
+}
+
 async function sweepExpiredAuctions(reason: 'interval' | 'manual'): Promise<number> {
   const client = await db.connect();
 
@@ -7630,6 +8214,31 @@ async function sweepExpiredAuctions(reason: 'interval' | 'manual'): Promise<numb
 }
 
 let auctionSweepTimer: NodeJS.Timeout | null = null;
+let domainOutboxTimer: NodeJS.Timeout | null = null;
+
+function startDomainOutboxScheduler(): void {
+  if (domainOutboxTimer) {
+    return;
+  }
+
+  const enqueueDrain = () => {
+    void enqueueOutboxDrainJob('scheduled').catch((error) => {
+      app.log.error({ err: error }, 'Failed scheduling domain outbox drain');
+    });
+  };
+
+  enqueueDrain();
+  domainOutboxTimer = setInterval(enqueueDrain, config.outboxDrainIntervalMs);
+  domainOutboxTimer.unref?.();
+}
+
+function stopDomainOutboxScheduler(): void {
+  if (!domainOutboxTimer) {
+    return;
+  }
+  clearInterval(domainOutboxTimer);
+  domainOutboxTimer = null;
+}
 
 function startAuctionSweepScheduler(): void {
   if (auctionSweepTimer) {
@@ -7684,6 +8293,7 @@ interface PlatformRevenueSweepExternalTransfer {
   reason: string | null;
   providerTransferRef: string | null;
   providerQuoteRef: string | null;
+  conversionTrace?: MoneyConversionTrace;
 }
 
 function stringValue(value: unknown): string | null {
@@ -7713,10 +8323,17 @@ function resolvePlatformRevenueSweepGateway(): PlatformRevenueSweepGateway | nul
 }
 
 async function executeWisePlatformRevenueSweepTransfer(input: {
-  amountGbp: number;
+  money: Money;
   sourceId: string;
   reason: PlatformRevenueSweepReason;
 }): Promise<PlatformRevenueSweepExternalTransfer> {
+  if (input.money.currency !== 'GBP') {
+    throw createApiError(
+      'PLATFORM_SWEEP_CURRENCY_INVALID',
+      'Platform revenue sweeps currently require canonical GBP money'
+    );
+  }
+  const wiseAmount = toProviderMoney('wise', input.money);
   if (!config.wiseApiKey) {
     return {
       attempted: false,
@@ -7754,7 +8371,9 @@ async function executeWisePlatformRevenueSweepTransfer(input: {
       profile: Math.round(profileId),
       sourceCurrency: 'GBP',
       targetCurrency: 'GBP',
-      sourceAmount: roundTo(input.amountGbp, 2),
+      // Wise v3 declares sourceAmount as a JSON number. Conversion to Number is
+      // deliberately delayed until this provider transport boundary.
+      sourceAmount: Number(wiseAmount.value),
       targetAccount: Math.round(recipientAccountId),
       payOut: 'BANK_TRANSFER',
     }),
@@ -7843,6 +8462,7 @@ async function executeWisePlatformRevenueSweepTransfer(input: {
     reason: null,
     providerTransferRef,
     providerQuoteRef: quoteId,
+    conversionTrace: wiseAmount.trace,
   };
 }
 
@@ -9440,7 +10060,7 @@ async function runPlatformRevenueSweep(
 
       if (sweepGateway === 'wise' || sweepGateway === 'wise_global') {
         externalTransfer = await executeWisePlatformRevenueSweepTransfer({
-          amountGbp: sweepAmountGbp,
+          money: moneyFromMajorDecimal('GBP', roundTo(sweepAmountGbp, 2).toFixed(2)),
           sourceId,
           reason,
         });
@@ -14622,6 +15242,7 @@ app.get('/users/me/export', async (request, reply) => {
       profile,
       kycCases,
       amlAlerts,
+      aiUsageEvents,
       gdprHistory,
     ] = await Promise.all([
       client.query('SELECT * FROM user_addresses WHERE user_id = $1 ORDER BY updated_at DESC', [userId]),
@@ -14636,6 +15257,17 @@ app.get('/users/me/export', async (request, reply) => {
       client.query('SELECT * FROM user_compliance_profiles WHERE user_id = $1 LIMIT 1', [userId]),
       client.query('SELECT * FROM kyc_cases WHERE user_id = $1 ORDER BY created_at DESC LIMIT 500', [userId]),
       client.query('SELECT * FROM aml_alerts WHERE user_id = $1 ORDER BY created_at DESC LIMIT 500', [userId]),
+      client.query(
+        `SELECT
+           id, conversation_id, bot_id, provider, model, status,
+           input_tokens, output_tokens, total_tokens,
+           estimated_cost_microusd, pricing_version, created_at
+         FROM ai_usage_events
+         WHERE user_id = $1
+         ORDER BY created_at DESC
+         LIMIT 1000`,
+        [userId],
+      ),
       client.query('SELECT id, request_type, status, requested_at, completed_at FROM gdpr_requests WHERE user_id = $1 ORDER BY requested_at DESC LIMIT 100', [userId]),
     ]);
 
@@ -14653,6 +15285,7 @@ app.get('/users/me/export', async (request, reply) => {
       complianceProfile: profile.rows[0] ?? null,
       kycCases: kycCases.rows,
       amlAlerts: amlAlerts.rows,
+      aiUsageEvents: aiUsageEvents.rows,
       gdprHistory: gdprHistory.rows,
       exportedAt: new Date().toISOString(),
     };
@@ -14682,6 +15315,7 @@ app.get('/users/me/export', async (request, reply) => {
             consents: consents.rowCount ?? 0,
             kycCases: kycCases.rowCount ?? 0,
             amlAlerts: amlAlerts.rowCount ?? 0,
+            aiUsageEvents: aiUsageEvents.rowCount ?? 0,
           },
         }),
       ]
@@ -15077,7 +15711,7 @@ app.get('/search/listings', async (request) => {
   });
 
   const { q, limit } = querySchema.parse(request.query);
-  const pattern = `%${q}%`;
+  const searchPolicyVersion = 'listing-search-postgres-v2.0';
 
   const result = await readDb.query<{
     id: string;
@@ -15103,23 +15737,29 @@ app.get('/search/listings', async (request) => {
         u.username AS seller_username
       FROM listings l
       LEFT JOIN users u ON u.id = l.seller_id
-      WHERE (
-        l.search_vector @@ websearch_to_tsquery('simple', $1)
-        OR l.brand ILIKE $3
-        OR l.category ILIKE $3
-        OR l.size ILIKE $3
-        OR l.condition ILIKE $3
-      )
-      ORDER BY rank_score::numeric DESC, l.created_at DESC
+      WHERE l.status = 'active'
+        AND (
+          l.search_vector @@ websearch_to_tsquery('simple', $1)
+          OR POSITION(lower($1) IN lower(COALESCE(l.brand, ''))) > 0
+          OR POSITION(lower($1) IN lower(COALESCE(l.category, ''))) > 0
+          OR POSITION(lower($1) IN lower(COALESCE(l.size, ''))) > 0
+          OR POSITION(lower($1) IN lower(COALESCE(l.condition, ''))) > 0
+        )
+      ORDER BY rank_score::numeric DESC, l.created_at DESC, l.id DESC
       LIMIT $2
     `,
-    [q, limit, pattern]
+    [q, limit]
   );
 
   if (result.rowCount && result.rowCount > 0) {
     return {
       ok: true,
       query: q,
+      decision: {
+        policyVersion: searchPolicyVersion,
+        capabilityLevel: 'postgres_lexical',
+        fallback: false,
+      },
       items: result.rows.map((row) => ({
         id: row.id,
         sellerId: row.seller_id,
@@ -15158,19 +15798,30 @@ app.get('/search/listings', async (request) => {
         u.username AS seller_username
       FROM listings l
       LEFT JOIN users u ON u.id = l.seller_id
-      WHERE l.title ILIKE $1 OR l.description ILIKE $1
-         OR l.brand ILIKE $1 OR l.category ILIKE $1
-         OR l.size ILIKE $1 OR l.condition ILIKE $1
-      ORDER BY l.created_at DESC
+      WHERE l.status = 'active'
+        AND (
+          POSITION(lower($1) IN lower(l.title)) > 0
+          OR POSITION(lower($1) IN lower(l.description)) > 0
+          OR POSITION(lower($1) IN lower(COALESCE(l.brand, ''))) > 0
+          OR POSITION(lower($1) IN lower(COALESCE(l.category, ''))) > 0
+          OR POSITION(lower($1) IN lower(COALESCE(l.size, ''))) > 0
+          OR POSITION(lower($1) IN lower(COALESCE(l.condition, ''))) > 0
+        )
+      ORDER BY l.created_at DESC, l.id DESC
       LIMIT $2
     `,
-    [pattern, limit]
+    [q, limit]
   );
 
   return {
     ok: true,
     query: q,
     fallback: true,
+    decision: {
+      policyVersion: searchPolicyVersion,
+      capabilityLevel: 'postgres_lexical',
+      fallback: true,
+    },
     items: fallback.rows.map((row) => ({
       id: row.id,
       sellerId: row.seller_id,
@@ -16303,6 +16954,7 @@ app.delete('/looks/:lookId/comments/:commentId', async (request, reply) => {
 
 // ── Listings API ───────────────────────────────────────────────────
 app.post('/listings', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
   const bodySchema = z.object({
     id: z.string().min(2),
     sellerId: z.string().min(2),
@@ -16310,6 +16962,7 @@ app.post('/listings', async (request, reply) => {
     description: z.string().min(10),
     priceGbp: z.number().nonnegative(),
     imageUrl: z.string().url().optional(),
+    coverFinalizationId: z.string().min(2).max(120).optional(),
     status: z.enum(['draft', 'active', 'paused', 'sold', 'deleted']).optional(),
     category: z.string().min(1).optional(),
     brand: z.string().min(1).optional(),
@@ -16321,51 +16974,253 @@ app.post('/listings', async (request, reply) => {
   });
 
   const payload = bodySchema.parse(request.body);
+  if (payload.sellerId !== actorUserId) {
+    reply.code(403);
+    return { ok: false, error: 'Seller identity must match the authenticated user' };
+  }
+  if (payload.imageUrl && !payload.coverFinalizationId) {
+    reply.code(422);
+    return { ok: false, error: 'A verified cover upload is required' };
+  }
 
-  await db.query(
-    `
-      INSERT INTO listings (
-        id, seller_id, title, description, price_gbp, image_url,
-        status, category, brand, size, condition,
-        original_price_gbp, shipping_method, shipping_payer
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-      ON CONFLICT (id) DO UPDATE
-      SET seller_id = EXCLUDED.seller_id,
-          title = EXCLUDED.title,
-          description = EXCLUDED.description,
-          price_gbp = EXCLUDED.price_gbp,
-          image_url = EXCLUDED.image_url,
-          status = EXCLUDED.status,
-          category = EXCLUDED.category,
-          brand = EXCLUDED.brand,
-          size = EXCLUDED.size,
-          condition = EXCLUDED.condition,
-          original_price_gbp = EXCLUDED.original_price_gbp,
-          shipping_method = EXCLUDED.shipping_method,
-          shipping_payer = EXCLUDED.shipping_payer,
-          updated_at = NOW()
-    `,
-    [
-      payload.id,
-      payload.sellerId,
-      payload.title,
-      payload.description,
-      payload.priceGbp,
-      payload.imageUrl ?? null,
-      payload.status ?? 'active',
-      payload.category ?? null,
-      payload.brand ?? null,
-      payload.size ?? null,
-      payload.condition ?? null,
-      payload.originalPriceGbp ?? null,
-      payload.shippingMethod ?? null,
-      payload.shippingPayer ?? null,
-    ]
-  );
+  let resolvedCoverImageUrl = payload.imageUrl ?? null;
+  let coverMediaAssetId: string | null = null;
+  let upsertPriceEvent:
+    | { id: number; previousPriceGbp: number; newPriceGbp: number }
+    | null = null;
+  let upsertPriceOutboxEventId: string | null = null;
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+    const existingListing = await client.query<{
+      seller_id: string;
+      price_gbp: string;
+    }>(
+      `SELECT seller_id, price_gbp::text
+       FROM listings
+       WHERE id = $1
+       LIMIT 1
+       FOR UPDATE`,
+      [payload.id],
+    );
+    if (
+      existingListing.rowCount
+      && existingListing.rows[0].seller_id !== actorUserId
+    ) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: 'Listing ID belongs to another seller' };
+    }
+    if (payload.imageUrl && payload.coverFinalizationId) {
+      const cover = await client.query<{
+        owner_id: string;
+        public_url: string;
+        content_type: string;
+        status: string;
+        media_asset_id: string | null;
+        media_asset_status: string | null;
+        canonical_url: string | null;
+      }>(
+        `SELECT finalization.owner_id, finalization.public_url,
+                finalization.content_type, finalization.status,
+                finalization.media_asset_id,
+                asset.status AS media_asset_status,
+                asset.canonical_url
+         FROM upload_finalizations finalization
+         LEFT JOIN media_assets asset
+           ON asset.id = finalization.media_asset_id
+         WHERE finalization.id = $1
+         LIMIT 1
+         FOR UPDATE`,
+        [payload.coverFinalizationId],
+      );
+      const verifiedCover = cover.rows[0];
+      if (
+        !verifiedCover
+        || verifiedCover.owner_id !== actorUserId
+        || verifiedCover.status !== 'finalized'
+        || (
+          verifiedCover.public_url !== payload.imageUrl
+          && verifiedCover.canonical_url !== payload.imageUrl
+        )
+        || !verifiedCover.content_type.startsWith('image/')
+      ) {
+        await client.query('ROLLBACK');
+        reply.code(422);
+        return { ok: false, error: 'Cover image does not match the verified upload' };
+      }
+      if (
+        config.mediaPublicationGateEnabled
+        && (
+          verifiedCover.media_asset_status !== 'published'
+          || !verifiedCover.canonical_url
+        )
+      ) {
+        await client.query('ROLLBACK');
+        reply.code(409);
+        return {
+          ok: false,
+          error: 'Cover media is still being processed or moderated',
+          code: 'MEDIA_NOT_PUBLISHED',
+          mediaStatus: verifiedCover.media_asset_status ?? 'missing',
+        };
+      }
+      resolvedCoverImageUrl = config.mediaPublicationGateEnabled
+        ? verifiedCover.canonical_url
+        : verifiedCover.public_url;
+      coverMediaAssetId = verifiedCover.media_asset_status === 'published'
+        ? verifiedCover.media_asset_id
+        : null;
+    }
 
-  reply.code(201);
-  return { ok: true, listingId: payload.id };
+    const inserted = await client.query<{ id: string }>(
+      `
+        INSERT INTO listings (
+          id, seller_id, title, description, price_gbp, image_url,
+          status, category, brand, size, condition,
+          original_price_gbp, shipping_method, shipping_payer
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        ON CONFLICT (id) DO UPDATE
+        SET title = EXCLUDED.title,
+            description = EXCLUDED.description,
+            price_gbp = EXCLUDED.price_gbp,
+            image_url = EXCLUDED.image_url,
+            status = EXCLUDED.status,
+            category = EXCLUDED.category,
+            brand = EXCLUDED.brand,
+            size = EXCLUDED.size,
+            condition = EXCLUDED.condition,
+            original_price_gbp = EXCLUDED.original_price_gbp,
+            shipping_method = EXCLUDED.shipping_method,
+            shipping_payer = EXCLUDED.shipping_payer,
+            updated_at = NOW()
+        WHERE listings.seller_id = EXCLUDED.seller_id
+        RETURNING id
+      `,
+      [
+        payload.id,
+        actorUserId,
+        payload.title,
+        payload.description,
+        payload.priceGbp,
+        resolvedCoverImageUrl,
+        payload.status ?? 'active',
+        payload.category ?? null,
+        payload.brand ?? null,
+        payload.size ?? null,
+        payload.condition ?? null,
+        payload.originalPriceGbp ?? null,
+        payload.shippingMethod ?? null,
+        payload.shippingPayer ?? null,
+      ],
+    );
+    if (!inserted.rowCount) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: 'Listing ID belongs to another seller' };
+    }
+
+    const previousPriceGbp = existingListing.rowCount
+      ? Number(existingListing.rows[0].price_gbp)
+      : null;
+    if (
+      previousPriceGbp !== null
+      && previousPriceGbp !== payload.priceGbp
+    ) {
+      const eventResult = await client.query<{ id: number }>(
+        `INSERT INTO listing_price_events (
+           listing_id, previous_price_gbp, new_price_gbp
+         )
+         VALUES ($1, $2, $3)
+         RETURNING id`,
+        [payload.id, previousPriceGbp, payload.priceGbp],
+      );
+      upsertPriceEvent = {
+        id: eventResult.rows[0].id,
+        previousPriceGbp,
+        newPriceGbp: payload.priceGbp,
+      };
+      upsertPriceOutboxEventId = await appendDomainEvent(client, {
+        aggregateType: 'listing',
+        aggregateId: payload.id,
+        eventType: 'listing.price_changed',
+        actorId: actorUserId,
+        correlationId: request.id,
+        deduplicationKey: `listing.price_changed:${eventResult.rows[0].id}`,
+        payload: {
+          listingId: payload.id,
+          priceEventId: eventResult.rows[0].id,
+          previousPriceGbp,
+          newPriceGbp: payload.priceGbp,
+          mutationPath: 'listing_upsert',
+        },
+      });
+    }
+
+    if (payload.coverFinalizationId) {
+      await client.query(
+        `UPDATE upload_finalizations
+         SET scope = 'listing_media', scope_ref_id = $2, updated_at = NOW()
+         WHERE id = $1`,
+        [payload.coverFinalizationId, payload.id],
+      );
+    }
+    if (coverMediaAssetId) {
+      await client.query(
+        `INSERT INTO media_bindings (
+           id, media_asset_id, owner_id, target_type,
+           target_ref_id, role, sort_order
+         )
+         VALUES ($1, $2, $3, 'listing', $4, 'cover', 0)
+         ON CONFLICT (media_asset_id, target_type, target_ref_id, role)
+         DO UPDATE SET removed_at = NULL, sort_order = 0`,
+        [
+          `mbind_${crypto.randomUUID()}`,
+          coverMediaAssetId,
+          actorUserId,
+          payload.id,
+        ],
+      );
+    }
+    await client.query('COMMIT');
+
+    if (upsertPriceEvent) {
+      try {
+        await evaluatePriceAlertsForListing({
+          db,
+          listingId: payload.id,
+          priceEventId: upsertPriceEvent.id,
+          previousPriceGbp: upsertPriceEvent.previousPriceGbp,
+          newPriceGbp: upsertPriceEvent.newPriceGbp,
+          queueNotification: queueUserNotification,
+        });
+      } catch (error) {
+        request.log.error(
+          { err: error, listingId: payload.id, priceEventId: upsertPriceEvent.id },
+          'Failed to evaluate price alerts after listing upsert',
+        );
+      }
+      if (upsertPriceOutboxEventId) {
+        enqueueOutboxDrainJob('after_commit').catch((error) => {
+          request.log.error(
+            { err: error, outboxEventId: upsertPriceOutboxEventId },
+            'Failed to enqueue outbox drain after listing upsert',
+          );
+        });
+      }
+    }
+
+    reply.code(201);
+    return { ok: true, listingId: payload.id };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    app.log.error({ err: error }, 'Failed to create listing');
+    reply.code(500);
+    return { ok: false, error: 'Failed to create listing' };
+  } finally {
+    client.release();
+  }
 });
 
 app.get('/listings/:listingId', async (request, reply) => {
@@ -16548,15 +17403,16 @@ app.get('/listings/:listingId/sold-comparables', async (request, reply) => {
 
   const comparableResult = source.category
     ? await readDb.query<{ price_gbp: number | string; sold_at: string }>(
-        `SELECT o.subtotal_gbp AS price_gbp, o.created_at AS sold_at
+        `SELECT o.subtotal_gbp AS price_gbp, o.paid_at AS sold_at
          FROM orders o
          INNER JOIN listings l ON l.id = o.listing_id
          WHERE o.listing_id <> $1
            AND o.status IN ('paid', 'shipped', 'delivered')
+           AND o.paid_at IS NOT NULL
            AND l.status = 'sold'
            AND LOWER(l.category) = LOWER($2)
            AND ($3::text IS NULL OR LOWER(l.brand) = LOWER($3))
-         ORDER BY o.created_at DESC
+         ORDER BY o.paid_at DESC
          LIMIT 100`,
         [listingId, source.category, source.brand]
       )
@@ -16963,44 +17819,6 @@ function getComplementaryCategories(category: string | null): string[] {
   return COMPLEMENTARY_CATEGORY_MAP[category.toLowerCase().trim()] ?? [];
 }
 
-function scoreListing(
-  candidate: {
-    id: string;
-    category: string | null;
-    brand: string | null;
-    size: string | null;
-    condition: string | null;
-    price_gbp: number | string;
-    seller_id: string;
-    created_at: string;
-  },
-  source: {
-    category: string | null;
-    brand: string | null;
-    size: string | null;
-    condition: string | null;
-    price_gbp: number | string;
-    seller_id: string;
-  }
-): number {
-  let score = 0;
-  if (candidate.category && source.category && candidate.category === source.category) score += 30;
-  if (candidate.brand && source.brand && candidate.brand.toLowerCase() === source.brand.toLowerCase()) score += 25;
-  if (candidate.size && source.size && candidate.size.toLowerCase() === source.size.toLowerCase()) score += 20;
-  if (candidate.condition && source.condition && candidate.condition.toLowerCase() === source.condition.toLowerCase()) score += 15;
-  const candidatePrice = Number(candidate.price_gbp);
-  const sourcePrice = Number(source.price_gbp);
-  if (sourcePrice > 0) {
-    const priceDiff = Math.abs(candidatePrice - sourcePrice) / sourcePrice;
-    if (priceDiff < 0.2) score += 15;
-    else if (priceDiff < 0.5) score += 8;
-  }
-  const ageDays = (Date.now() - new Date(candidate.created_at).getTime()) / (1000 * 60 * 60 * 24);
-  if (ageDays < 7) score += 5;
-  else if (ageDays < 30) score += 2;
-  return score;
-}
-
 app.get('/listings/:listingId/recommendations', async (request, reply) => {
   const paramsSchema = z.object({ listingId: z.string().min(2) });
   const querySchema = z.object({
@@ -17011,6 +17829,7 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
   });
   const { listingId } = paramsSchema.parse(request.params);
   const { sections: sectionsParam, limit, cursor } = querySchema.parse(request.query ?? {});
+  const recommendationAsOf = new Date().toISOString();
 
   const viewerUserId = request.authUser?.userId ?? null;
 
@@ -17142,6 +17961,12 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
   const shouldInclude = (key: string) => !requestedSections || requestedSections.includes(key);
 
   const usedListingIds = new Set<string>();
+  const scoreCandidate = (candidate: CandidateRow): number =>
+    scoreProductRecommendation({
+      candidate,
+      source,
+      asOf: recommendationAsOf,
+    }).score;
 
   const dedupeAndMap = (
     candidates: Array<{ row: CandidateRow; images: string[] }>,
@@ -17149,7 +17974,11 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
   ) => {
     const filtered = candidates.filter((c) => !usedListingIds.has(c.row.id));
     if (opts?.scoreBy) {
-      filtered.sort((a, b) => (opts.scoreBy!(b) ?? 0) - (opts.scoreBy!(a) ?? 0));
+      filtered.sort(
+        (a, b) =>
+          (opts.scoreBy!(b) ?? 0) - (opts.scoreBy!(a) ?? 0)
+          || a.row.id.localeCompare(b.row.id),
+      );
     }
     for (const c of filtered) usedListingIds.add(c.row.id);
     return filtered.map(mapToListingItem);
@@ -17163,8 +17992,8 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
       limit + 4
     );
     const scored = candidates
-      .map((c) => ({ c, score: scoreListing(c.row, source) }))
-      .sort((a, b) => b.score - a.score)
+      .map((c) => ({ c, score: scoreCandidate(c.row) }))
+      .sort((a, b) => b.score - a.score || a.c.row.id.localeCompare(b.c.row.id))
       .slice(0, limit)
       .map((x) => x.c);
     if (scored.length > 0) {
@@ -17190,7 +18019,7 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
       limit
     );
     const items = dedupeAndMap(candidates, {
-      scoreBy: (c) => scoreListing(c.row, source),
+      scoreBy: (c) => scoreCandidate(c.row),
     });
     if (items.length > 0) {
       sections.push({
@@ -17211,7 +18040,7 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
       limit
     );
     const items = dedupeAndMap(candidates, {
-      scoreBy: (c) => scoreListing(c.row, source),
+      scoreBy: (c) => scoreCandidate(c.row),
     });
     if (items.length > 0) {
       sections.push({
@@ -17261,7 +18090,7 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
       limit
     );
     const items = dedupeAndMap(candidates, {
-      scoreBy: (c) => scoreListing(c.row, source),
+      scoreBy: (c) => scoreCandidate(c.row),
     });
     if (items.length > 0) {
       sections.push({
@@ -17286,7 +18115,7 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
         limit
       );
       const items = dedupeAndMap(candidates, {
-        scoreBy: (c) => scoreListing(c.row, source),
+        scoreBy: (c) => scoreCandidate(c.row),
       });
       if (items.length > 0) {
         sections.push({
@@ -17364,7 +18193,7 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
           limit
         );
         const items = dedupeAndMap(candidates, {
-          scoreBy: (c) => scoreListing(c.row, source),
+          scoreBy: (c) => scoreCandidate(c.row),
         });
         if (items.length > 0) {
           sections.push({
@@ -17460,11 +18289,18 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
 
   return {
     listingId,
+    decision: {
+      policyVersion: PRODUCT_RECOMMENDATION_POLICY_VERSION,
+      capabilityLevel: 'heuristic_baseline',
+      trainedModel: false,
+      generatedAt: recommendationAsOf,
+    },
     sections,
   };
 });
 
 app.patch('/listings/:listingId', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
   const paramsSchema = z.object({ listingId: z.string().min(2) });
   const { listingId } = paramsSchema.parse(request.params);
 
@@ -17473,6 +18309,7 @@ app.patch('/listings/:listingId', async (request, reply) => {
     description: z.string().min(10).optional(),
     priceGbp: z.number().nonnegative().optional(),
     imageUrl: z.string().url().optional(),
+    coverFinalizationId: z.string().min(2).max(120).optional(),
     status: z.enum(['draft', 'active', 'paused', 'sold', 'deleted']).optional(),
     category: z.string().min(1).optional(),
     brand: z.string().min(1).optional(),
@@ -17485,16 +18322,6 @@ app.patch('/listings/:listingId', async (request, reply) => {
 
   const payload = bodySchema.parse(request.body);
 
-  const existing = await db.query<{ id: string; price_gbp: number | string }>(
-    'SELECT id, price_gbp FROM listings WHERE id = $1 LIMIT 1',
-    [listingId]
-  );
-  if (!existing.rowCount) {
-    reply.code(404);
-    return { ok: false, error: 'Listing not found' };
-  }
-
-  const previousPriceGbp = Number(existing.rows[0].price_gbp);
   const sets: string[] = [];
   const values: unknown[] = [];
   let idx = 1;
@@ -17515,6 +18342,7 @@ app.patch('/listings/:listingId', async (request, reply) => {
   add('original_price_gbp', payload.originalPriceGbp);
   add('shipping_method', payload.shippingMethod);
   add('shipping_payer', payload.shippingPayer);
+  const imageSetIndex = sets.findIndex((entry) => entry.startsWith('image_url ='));
 
   if (sets.length === 0) {
     return { ok: true, listingId };
@@ -17523,34 +18351,248 @@ app.patch('/listings/:listingId', async (request, reply) => {
   sets.push('updated_at = NOW()');
   values.push(listingId);
 
-  await db.query(
-    `UPDATE listings SET ${sets.join(', ')} WHERE id = $${idx}`,
-    values
-  );
-
-  if (payload.priceGbp !== undefined && payload.priceGbp !== previousPriceGbp) {
-    await db.query(
-      `INSERT INTO listing_price_events (listing_id, previous_price_gbp, new_price_gbp)
-       VALUES ($1, $2, $3)`,
-      [listingId, previousPriceGbp, payload.priceGbp]
+  const client = await db.connect();
+  let priceEvent:
+    | { id: number; previousPriceGbp: number; newPriceGbp: number }
+    | null = null;
+  let priceOutboxEventId: string | null = null;
+  let coverMediaAssetId: string | null = null;
+  try {
+    await client.query('BEGIN');
+    const existing = await client.query<{
+      id: string;
+      seller_id: string;
+      price_gbp: number | string;
+      image_url: string | null;
+    }>(
+      `SELECT id, seller_id, price_gbp, image_url
+       FROM listings
+       WHERE id = $1
+       LIMIT 1
+       FOR UPDATE`,
+      [listingId],
     );
+    if (!existing.rowCount) {
+      await client.query('ROLLBACK');
+      reply.code(404);
+      return { ok: false, error: 'Listing not found' };
+    }
+    if (existing.rows[0].seller_id !== actorUserId) {
+      await client.query('ROLLBACK');
+      reply.code(403);
+      return { ok: false, error: 'Only the seller can update this listing' };
+    }
+
+    const previousPriceGbp = Number(existing.rows[0].price_gbp);
+    const coverChanged =
+      payload.imageUrl !== undefined
+      && payload.imageUrl !== existing.rows[0].image_url;
+    if (coverChanged) {
+      if (!payload.coverFinalizationId) {
+        await client.query('ROLLBACK');
+        reply.code(422);
+        return { ok: false, error: 'A verified cover upload is required' };
+      }
+      const cover = await client.query<{
+        owner_id: string;
+        public_url: string;
+        content_type: string;
+        status: string;
+        media_asset_id: string | null;
+        media_asset_status: string | null;
+        canonical_url: string | null;
+      }>(
+        `SELECT finalization.owner_id, finalization.public_url,
+                finalization.content_type, finalization.status,
+                finalization.media_asset_id,
+                asset.status AS media_asset_status,
+                asset.canonical_url
+         FROM upload_finalizations finalization
+         LEFT JOIN media_assets asset
+           ON asset.id = finalization.media_asset_id
+         WHERE finalization.id = $1
+         LIMIT 1
+         FOR UPDATE`,
+        [payload.coverFinalizationId],
+      );
+      const verifiedCover = cover.rows[0];
+      if (
+        !verifiedCover
+        || verifiedCover.owner_id !== actorUserId
+        || verifiedCover.status !== 'finalized'
+        || (
+          verifiedCover.public_url !== payload.imageUrl
+          && verifiedCover.canonical_url !== payload.imageUrl
+        )
+        || !verifiedCover.content_type.startsWith('image/')
+      ) {
+        await client.query('ROLLBACK');
+        reply.code(422);
+        return { ok: false, error: 'Cover image does not match the verified upload' };
+      }
+      if (
+        config.mediaPublicationGateEnabled
+        && (
+          verifiedCover.media_asset_status !== 'published'
+          || !verifiedCover.canonical_url
+        )
+      ) {
+        await client.query('ROLLBACK');
+        reply.code(409);
+        return {
+          ok: false,
+          error: 'Cover media is still being processed or moderated',
+          code: 'MEDIA_NOT_PUBLISHED',
+          mediaStatus: verifiedCover.media_asset_status ?? 'missing',
+        };
+      }
+      if (imageSetIndex >= 0) {
+        values[imageSetIndex] = config.mediaPublicationGateEnabled
+          ? verifiedCover.canonical_url
+          : verifiedCover.public_url;
+      }
+      coverMediaAssetId = verifiedCover.media_asset_status === 'published'
+        ? verifiedCover.media_asset_id
+        : null;
+    }
+    await client.query(
+      `UPDATE listings SET ${sets.join(', ')} WHERE id = $${idx}`,
+      values,
+    );
+
+    if (payload.priceGbp !== undefined && payload.priceGbp !== previousPriceGbp) {
+      const insertedEvent = await client.query<{ id: number }>(
+        `INSERT INTO listing_price_events (listing_id, previous_price_gbp, new_price_gbp)
+         VALUES ($1, $2, $3)
+         RETURNING id`,
+        [listingId, previousPriceGbp, payload.priceGbp],
+      );
+      priceEvent = {
+        id: insertedEvent.rows[0].id,
+        previousPriceGbp,
+        newPriceGbp: payload.priceGbp,
+      };
+      priceOutboxEventId = await appendDomainEvent(client, {
+        aggregateType: 'listing',
+        aggregateId: listingId,
+        eventType: 'listing.price_changed',
+        actorId: actorUserId,
+        correlationId: request.id,
+        deduplicationKey: `listing.price_changed:${insertedEvent.rows[0].id}`,
+        payload: {
+          listingId,
+          priceEventId: insertedEvent.rows[0].id,
+          previousPriceGbp,
+          newPriceGbp: payload.priceGbp,
+        },
+      });
+    }
+    if (coverChanged && payload.coverFinalizationId) {
+      await client.query(
+        `UPDATE upload_finalizations
+         SET scope = 'listing_media', scope_ref_id = $2, updated_at = NOW()
+         WHERE id = $1`,
+        [payload.coverFinalizationId, listingId],
+      );
+    }
+    if (coverChanged && coverMediaAssetId) {
+      await client.query(
+        `UPDATE media_bindings
+         SET removed_at = NOW()
+         WHERE target_type = 'listing'
+           AND target_ref_id = $1
+           AND role = 'cover'
+           AND media_asset_id <> $2
+           AND removed_at IS NULL`,
+        [listingId, coverMediaAssetId],
+      );
+      await client.query(
+        `INSERT INTO media_bindings (
+           id, media_asset_id, owner_id, target_type,
+           target_ref_id, role, sort_order
+         )
+         VALUES ($1, $2, $3, 'listing', $4, 'cover', 0)
+         ON CONFLICT (media_asset_id, target_type, target_ref_id, role)
+         DO UPDATE SET removed_at = NULL, sort_order = 0`,
+        [
+          `mbind_${crypto.randomUUID()}`,
+          coverMediaAssetId,
+          actorUserId,
+          listingId,
+        ],
+      );
+    }
+
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    app.log.error({ err: error, listingId }, 'Failed to update listing');
+    reply.code(500);
+    return { ok: false, error: 'Failed to update listing' };
+  } finally {
+    client.release();
   }
 
-  return { ok: true, listingId };
+  let alertEvaluation: { evaluated: number; triggered: number } | undefined;
+  if (priceEvent) {
+    try {
+      alertEvaluation = await evaluatePriceAlertsForListing({
+        db,
+        listingId,
+        priceEventId: priceEvent.id,
+        previousPriceGbp: priceEvent.previousPriceGbp,
+        newPriceGbp: priceEvent.newPriceGbp,
+        queueNotification: queueUserNotification,
+      });
+      if (priceOutboxEventId) {
+        await completeDomainOutboxEvent(db, priceOutboxEventId);
+      }
+    } catch (error) {
+      // The price event is durable and can be retried through the evaluator
+      // endpoint; never roll back the seller's valid listing update because
+      // a delivery provider is temporarily unavailable.
+      app.log.error({ err: error, listingId, priceEventId: priceEvent.id }, 'Price-alert evaluation failed');
+      void enqueueOutboxDrainJob('after_commit').catch((enqueueError) => {
+        app.log.error(
+          { err: enqueueError, listingId, priceEventId: priceEvent.id },
+          'Failed enqueueing price-alert outbox retry',
+        );
+      });
+    }
+  }
+
+  return { ok: true, listingId, alertEvaluation };
 });
 
 app.delete('/listings/:listingId', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
   const paramsSchema = z.object({ listingId: z.string().min(2) });
   const { listingId } = paramsSchema.parse(request.params);
 
-  const existing = await db.query('SELECT id FROM listings WHERE id = $1 LIMIT 1', [listingId]);
+  const existing = await db.query<{ seller_id: string; status: string }>(
+    `SELECT seller_id, status FROM listings WHERE id = $1 LIMIT 1`,
+    [listingId],
+  );
   if (!existing.rowCount) {
     reply.code(404);
     return { ok: false, error: 'Listing not found' };
   }
+  if (existing.rows[0].seller_id !== actorUserId) {
+    reply.code(403);
+    return { ok: false, error: 'Only the seller can delete this listing' };
+  }
+  if (existing.rows[0].status === 'sold') {
+    reply.code(409);
+    return { ok: false, error: 'Sold listings are retained for order history' };
+  }
 
-  await db.query(`DELETE FROM listing_images WHERE listing_id = $1`, [listingId]);
-  await db.query(`DELETE FROM listings WHERE id = $1`, [listingId]);
+  // Soft-delete preserves offers, moderation evidence, analytics and any
+  // historical references. Media objects can be garbage-collected only after
+  // their retention window and reference count reach zero.
+  await db.query(
+    `UPDATE listings SET status = 'deleted', updated_at = NOW() WHERE id = $1`,
+    [listingId],
+  );
 
   return { ok: true };
 });
@@ -17681,6 +18723,7 @@ app.get('/users/:userId/listings', async (request) => {
 });
 
 app.post('/listing-images', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
   const bodySchema = z.object({
     id: z.string().min(2),
     listingId: z.string().min(2),
@@ -17688,35 +18731,187 @@ app.post('/listing-images', async (request, reply) => {
     sortOrder: z.number().int().min(0).default(0),
     mediaWidth: z.number().int().positive().optional(),
     mediaHeight: z.number().int().positive().optional(),
+    mediaType: z.enum(['image', 'video']).default('image'),
+    finalizationId: z.string().min(2).max(120),
+    posterUrl: z.string().url().nullable().optional(),
+    blurhash: z.string().min(1).max(200).nullable().optional(),
+    focalX: z.number().min(0).max(1).nullable().optional(),
+    focalY: z.number().min(0).max(1).nullable().optional(),
   });
 
   const payload = bodySchema.parse(request.body);
 
-  await db.query(
-    `
-      INSERT INTO listing_images (
-        id, listing_id, image_url, sort_order, media_width, media_height
-      )
-      VALUES ($1, $2, $3, $4, $5, $6)
-      ON CONFLICT (id) DO UPDATE
-      SET listing_id = EXCLUDED.listing_id,
-          image_url = EXCLUDED.image_url,
-          sort_order = EXCLUDED.sort_order,
-          media_width = EXCLUDED.media_width,
-          media_height = EXCLUDED.media_height
-    `,
-    [
-      payload.id,
-      payload.listingId,
-      payload.imageUrl,
-      payload.sortOrder,
-      payload.mediaWidth ?? null,
-      payload.mediaHeight ?? null,
-    ]
-  );
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+    const listing = await client.query<{ seller_id: string; status: string }>(
+      `SELECT seller_id, status
+       FROM listings
+       WHERE id = $1
+       LIMIT 1
+       FOR UPDATE`,
+      [payload.listingId],
+    );
+    if (!listing.rowCount) {
+      await client.query('ROLLBACK');
+      reply.code(404);
+      return { ok: false, error: 'Listing not found' };
+    }
+    if (listing.rows[0].seller_id !== actorUserId) {
+      await client.query('ROLLBACK');
+      reply.code(403);
+      return { ok: false, error: 'Only the seller can attach listing media' };
+    }
+    if (!['draft', 'active'].includes(listing.rows[0].status)) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: 'Media cannot be changed in the current listing state' };
+    }
 
-  reply.code(201);
-  return { ok: true };
+    const finalization = await client.query<{
+      public_url: string;
+      content_type: string;
+      status: string;
+      owner_id: string;
+      media_asset_id: string | null;
+      media_asset_status: string | null;
+      canonical_url: string | null;
+    }>(
+      `SELECT finalization.public_url, finalization.content_type,
+              finalization.status, finalization.owner_id,
+              finalization.media_asset_id,
+              asset.status AS media_asset_status,
+              asset.canonical_url
+       FROM upload_finalizations finalization
+       LEFT JOIN media_assets asset
+         ON asset.id = finalization.media_asset_id
+       WHERE finalization.id = $1
+       LIMIT 1
+       FOR UPDATE`,
+      [payload.finalizationId],
+    );
+    if (!finalization.rowCount) {
+      await client.query('ROLLBACK');
+      reply.code(422);
+      return { ok: false, error: 'Verified upload finalization not found' };
+    }
+    const verifiedUpload = finalization.rows[0];
+    const mediaPrefix = payload.mediaType === 'video' ? 'video/' : 'image/';
+    if (
+      verifiedUpload.owner_id !== actorUserId
+      || verifiedUpload.status !== 'finalized'
+      || (
+        verifiedUpload.public_url !== payload.imageUrl
+        && verifiedUpload.canonical_url !== payload.imageUrl
+      )
+      || !verifiedUpload.content_type.startsWith(mediaPrefix)
+    ) {
+      await client.query('ROLLBACK');
+      reply.code(422);
+      return { ok: false, error: 'Listing media does not match the verified upload' };
+    }
+    if (
+      config.mediaPublicationGateEnabled
+      && (
+        verifiedUpload.media_asset_status !== 'published'
+        || !verifiedUpload.canonical_url
+      )
+    ) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return {
+        ok: false,
+        error: 'Listing media is still being processed or moderated',
+        code: 'MEDIA_NOT_PUBLISHED',
+        mediaStatus: verifiedUpload.media_asset_status ?? 'missing',
+      };
+    }
+    const resolvedMediaUrl = config.mediaPublicationGateEnabled
+      ? verifiedUpload.canonical_url
+      : verifiedUpload.public_url;
+
+    const attached = await client.query<{ id: string }>(
+      `
+        INSERT INTO listing_images (
+          id, listing_id, image_url, sort_order, media_width, media_height,
+          media_type, poster_url, blurhash, focal_x, focal_y
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        ON CONFLICT (id) DO UPDATE
+        SET image_url = EXCLUDED.image_url,
+            sort_order = EXCLUDED.sort_order,
+            media_width = EXCLUDED.media_width,
+            media_height = EXCLUDED.media_height,
+            media_type = EXCLUDED.media_type,
+            poster_url = EXCLUDED.poster_url,
+            blurhash = EXCLUDED.blurhash,
+            focal_x = EXCLUDED.focal_x,
+            focal_y = EXCLUDED.focal_y
+        WHERE listing_images.listing_id = EXCLUDED.listing_id
+        RETURNING id
+      `,
+      [
+        payload.id,
+        payload.listingId,
+        resolvedMediaUrl,
+        payload.sortOrder,
+        payload.mediaWidth ?? null,
+        payload.mediaHeight ?? null,
+        payload.mediaType,
+        payload.posterUrl ?? null,
+        payload.blurhash ?? null,
+        payload.focalX ?? null,
+        payload.focalY ?? null,
+      ],
+    );
+    if (!attached.rowCount) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: 'Media attachment ID belongs to another listing' };
+    }
+
+    await client.query(
+      `UPDATE upload_finalizations
+       SET scope = 'listing_media',
+           scope_ref_id = $2,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [payload.finalizationId, payload.listingId],
+    );
+    if (
+      verifiedUpload.media_asset_id
+      && verifiedUpload.media_asset_status === 'published'
+    ) {
+      await client.query(
+        `INSERT INTO media_bindings (
+           id, media_asset_id, owner_id, target_type,
+           target_ref_id, role, sort_order
+         )
+         VALUES ($1, $2, $3, 'listing', $4, $5, $6)
+         ON CONFLICT (media_asset_id, target_type, target_ref_id, role)
+         DO UPDATE SET removed_at = NULL, sort_order = EXCLUDED.sort_order`,
+        [
+          `mbind_${crypto.randomUUID()}`,
+          verifiedUpload.media_asset_id,
+          actorUserId,
+          payload.listingId,
+          payload.mediaType,
+          payload.sortOrder,
+        ],
+      );
+    }
+    await client.query('COMMIT');
+
+    reply.code(201);
+    return { ok: true };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    app.log.error({ err: error, listingId: payload.listingId }, 'Failed to attach listing media');
+    reply.code(500);
+    return { ok: false, error: 'Failed to attach listing media' };
+  } finally {
+    client.release();
+  }
 });
 
 app.post('/secure-profiles', async (request, reply) => {
@@ -17982,6 +19177,12 @@ app.post('/chat/dm', async (request, reply) => {
   }
 
   await ensureUserExists(payload.recipientUserId);
+  const participantIds = [actorUserId, payload.recipientUserId].sort();
+  const dmPairKey = [
+    participantIds[0],
+    participantIds[1],
+    payload.itemId ?? '',
+  ].join('\u001f');
 
   if (payload.itemId) {
     const listingResult = await db.query<{ id: string }>(
@@ -17998,27 +19199,61 @@ app.post('/chat/dm', async (request, reply) => {
   const client = await db.connect();
   try {
     await client.query('BEGIN');
+    await client.query(
+      `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
+      [dmPairKey],
+    );
+
+    const blockResult = await client.query(
+      `SELECT 1
+       FROM user_blocks
+       WHERE (blocker_id = $1 AND blocked_id = $2)
+          OR (blocker_id = $2 AND blocked_id = $1)
+       LIMIT 1`,
+      [actorUserId, payload.recipientUserId],
+    );
+    if (blockResult.rowCount) {
+      await client.query('ROLLBACK');
+      reply.code(403);
+      return {
+        ok: false,
+        error: 'A direct conversation is unavailable for these participants',
+        code: 'DM_BLOCKED',
+      };
+    }
 
     const existingResult = await client.query<{ id: string }>(
       `
         SELECT c.id
         FROM chat_conversations c
         WHERE c.type = 'dm'
-          AND c.item_id IS NOT DISTINCT FROM $1
-          AND EXISTS (
-            SELECT 1 FROM chat_members cm1
-            WHERE cm1.conversation_id = c.id AND cm1.user_id = $2
+          AND (
+            c.dm_pair_key = $4
+            OR (
+              c.item_id IS NOT DISTINCT FROM $1
+              AND EXISTS (
+                SELECT 1 FROM chat_members cm1
+                WHERE cm1.conversation_id = c.id AND cm1.user_id = $2
+              )
+              AND EXISTS (
+                SELECT 1 FROM chat_members cm2
+                WHERE cm2.conversation_id = c.id AND cm2.user_id = $3
+              )
+            )
           )
-          AND EXISTS (
-            SELECT 1 FROM chat_members cm2
-            WHERE cm2.conversation_id = c.id AND cm2.user_id = $3
-          )
+        ORDER BY (c.dm_pair_key = $4) DESC, c.created_at, c.id
         LIMIT 1
       `,
-      [payload.itemId ?? null, actorUserId, payload.recipientUserId]
+      [payload.itemId ?? null, actorUserId, payload.recipientUserId, dmPairKey]
     );
 
     if (existingResult.rowCount) {
+      await client.query(
+        `UPDATE chat_conversations
+         SET dm_pair_key = COALESCE(dm_pair_key, $2)
+         WHERE id = $1`,
+        [existingResult.rows[0].id, dmPairKey],
+      );
       await client.query('COMMIT');
       const conversationId = existingResult.rows[0].id;
       reply.code(200);
@@ -18039,14 +19274,17 @@ app.post('/chat/dm', async (request, reply) => {
 
     await client.query(
       `
-        INSERT INTO chat_conversations (id, type, title, owner_id, item_id, metadata)
-        VALUES ($1, 'dm', NULL, $2, $3, $4::jsonb)
+        INSERT INTO chat_conversations (
+          id, type, title, owner_id, item_id, metadata, dm_pair_key
+        )
+        VALUES ($1, 'dm', NULL, $2, $3, $4::jsonb, $5)
       `,
       [
         conversationId,
         actorUserId,
         payload.itemId ?? null,
         toJsonString({ createdVia: 'chat_dm_api' }),
+        dmPairKey,
       ]
     );
 
@@ -20708,6 +21946,13 @@ app.get('/wallet/1ze/quote', async (request, reply) => {
         buyPrice: countryQuote.buyPrice,
         sellPrice: countryQuote.sellPrice,
         crossBorderPrice: countryQuote.crossBorderSellPrice,
+        money: moneyFromMinor(fiatCurrency, String(toFiatMinor(fiatAmount, fiatCurrency))),
+        assetAmount: {
+          asset: '1ZE',
+          baseUnitAmount: String(onezeAmountToMg(izeAmount)),
+          baseUnit: 'mg',
+          scale: 3,
+        },
       },
     };
   } catch (error) {
@@ -21397,7 +22642,19 @@ app.post('/wallet/1ze/mint/quote', async (request, reply) => {
     await ensureUserExists(actorUserId);
 
     const fiatCurrency = payload.fiatCurrency.toUpperCase();
-    const feeBreakdown = calculateWalletTopupFeeBreakdown(payload.fiatAmount);
+    const topupMoney = moneyFromMinor(
+      fiatCurrency,
+      String(toFiatMinor(payload.fiatAmount, fiatCurrency))
+    );
+    const feeAllocation = allocateMoneyByBasisPoints(topupMoney, 100);
+    const feeBreakdown = {
+      grossFiatAmount: Number(moneyToMajorDecimal(feeAllocation.gross)),
+      platformFeeRate: WALLET_TOPUP_PLATFORM_FEE_RATE,
+      platformFeeAmount: feeAllocation.fee
+        ? Number(moneyToMajorDecimal(feeAllocation.fee))
+        : 0,
+      netFiatAmount: Number(moneyToMajorDecimal(feeAllocation.net)),
+    };
     if (feeBreakdown.netFiatAmount <= 0) {
       throw createApiError('IZE_MINT_INVALID', 'Top-up amount is too low after platform fee');
     }
@@ -21465,6 +22722,22 @@ app.post('/wallet/1ze/mint/quote', async (request, reply) => {
     const mintOperationId = createRuntimeId('mintop');
     const rateLockedAt = new Date();
     const rateExpiresAt = new Date(rateLockedAt.getTime() + config.onezeMintQuoteTtlSeconds * 1_000);
+    const quoteHash = computeRequestHash({
+      version: 'wallet-topup-quote-v1',
+      userId: actorUserId,
+      sourceMoney: topupMoney,
+      platformFeeMinor: feeAllocation.fee?.minorAmount ?? '0',
+      netFiatMinor: feeAllocation.net.minorAmount,
+      targetAsset: '1ZE',
+      targetBaseUnit: 'mg',
+      targetBaseUnitAmount: String(amountMg),
+      ratePerGram: String(mintUnitPrice),
+      rateSource:
+        fiatCurrency === 'GBP'
+          ? 'fixed_par:GBP:1ZE'
+          : `internal_pricing:${pricingQuote.countryCode}:buy`,
+      expiresAt: rateExpiresAt.toISOString(),
+    });
 
     await client.query(
       `
@@ -21520,23 +22793,64 @@ app.post('/wallet/1ze/mint/quote', async (request, reply) => {
           pricingCountry: pricingQuote.countryCode,
           pricingCurrency: pricingQuote.currency,
           pricingModel: 'controlled_anchor',
+          quoteHash,
+          sourceMoney: topupMoney,
+          targetAssetAmount: {
+            asset: '1ZE',
+            baseUnitAmount: String(amountMg),
+            baseUnit: 'mg',
+            scale: 3,
+          },
           ...(payload.metadata ?? {}),
         }),
       ]
     );
+
+    let stripeCustomerId: string | null = null;
+    let stripePaymentMethodId: string | null = null;
+    if (gatewayId === 'stripe_americas') {
+      if (!stripe) {
+        throw createApiError(
+          'PAYMENT_PROVIDER_UNAVAILABLE',
+          'Stripe payment collection is not configured'
+        );
+      }
+      const customer = await getOrCreateStripeCustomer({
+        db: client,
+        stripe,
+        userId: actorUserId,
+      });
+      stripeCustomerId = customer.customerId;
+      if (payload.instrumentId) {
+        const selectedMethod = await resolveActiveStripeMethod({
+          db: client,
+          userId: actorUserId,
+          projectionId: payload.instrumentId,
+        });
+        if (!selectedMethod || selectedMethod.customerId !== stripeCustomerId) {
+          throw createApiError(
+            'PAYMENT_METHOD_RECOLLECTION_REQUIRED',
+            'The selected payment method must be added again before top-up'
+          );
+        }
+        stripePaymentMethodId = selectedMethod.paymentMethodId;
+      }
+    }
 
     const paymentIntentId = createRuntimeId('pi');
     const gatewayIntent = await createGatewayPaymentIntent({
       gatewayId,
       intentId: paymentIntentId,
       channel: 'wallet_topup',
-      amountGbp: roundTo(feeBreakdown.grossFiatAmount, 2),
-      amountCurrency: fiatCurrency,
+      money: topupMoney,
+      stripeCustomerId,
+      stripePaymentMethodId,
       returnUrl: payload.returnUrl,
       webhookUrl: payload.webhookUrl,
       metadata: {
         userId: actorUserId,
         mintOperationId,
+        quoteHash,
         ...(payload.metadata ?? {}),
       },
     });
@@ -21553,6 +22867,12 @@ app.post('/wallet/1ze/mint/quote', async (request, reply) => {
           instrument_id,
           amount_gbp,
           amount_currency,
+          amount_minor,
+          currency_exponent,
+          money_registry_version,
+          provider_amount,
+          provider_amount_unit,
+          money_conversion_trace,
           status,
           provider_intent_ref,
           client_secret,
@@ -21560,9 +22880,14 @@ app.post('/wallet/1ze/mint/quote', async (request, reply) => {
           next_action_url,
           sca_expires_at,
           idempotency_key,
+          request_hash,
           metadata
         )
-        VALUES ($1, $2, $3, 'wallet_topup', NULL, NULL, $4, $5, $6, $7, $8, $9, $10, $11, $12, NULL, $13::jsonb)
+        VALUES (
+          $1, $2, $3, 'wallet_topup', NULL, NULL, $4, $5, $6,
+          $7, $8, $9, $10, $11, $12::jsonb, $13, $14, $15, $16, $17, $18,
+          $19, $20, $21::jsonb
+        )
         RETURNING
           id,
           user_id,
@@ -21573,6 +22898,13 @@ app.post('/wallet/1ze/mint/quote', async (request, reply) => {
           instrument_id,
           amount_gbp,
           amount_currency,
+          amount_minor,
+          currency_exponent,
+          money_registry_version,
+          provider_amount,
+          provider_amount_unit,
+          money_conversion_trace,
+          money_quarantined,
           status,
           provider_intent_ref,
           client_secret,
@@ -21590,16 +22922,34 @@ app.post('/wallet/1ze/mint/quote', async (request, reply) => {
         actorUserId,
         gatewayId,
         payload.instrumentId ?? null,
-        roundTo(feeBreakdown.grossFiatAmount, 2),
-        fiatCurrency,
+        moneyToMajorDecimal(topupMoney),
+        topupMoney.currency,
+        topupMoney.minorAmount,
+        topupMoney.exponent,
+        topupMoney.registryVersion,
+        gatewayIntent.providerAmount,
+        gatewayIntent.providerAmountUnit,
+        toJsonString(gatewayIntent.conversionTrace),
         gatewayIntent.initialStatus,
         gatewayIntent.providerIntentRef,
         gatewayIntent.clientSecret,
         gatewayIntent.providerStatus ?? null,
         gatewayIntent.nextActionUrl ?? null,
         gatewayIntent.scaExpiresAt ?? null,
+        payload.idempotencyKey
+          ? `wallet_mint:${actorUserId}:${payload.idempotencyKey}`
+          : null,
+        idempotencyRequestHash ?? quoteHash,
         toJsonString({
           mintOperationId,
+          quoteHash,
+          canonicalMoney: topupMoney,
+          targetAssetAmount: {
+            asset: '1ZE',
+            baseUnitAmount: String(amountMg),
+            baseUnit: 'mg',
+            scale: 3,
+          },
           quoteRateSource: `internal_pricing:${pricingQuote.countryCode}:buy`,
           ...(payload.metadata ?? {}),
         }),
@@ -21660,6 +23010,14 @@ app.post('/wallet/1ze/mint/quote', async (request, reply) => {
       quote: {
         validForSeconds: config.onezeMintQuoteTtlSeconds,
         expiresAt: operation.rateExpiresAt,
+        quoteHash,
+        sourceMoney: topupMoney,
+        targetAssetAmount: {
+          asset: '1ZE',
+          baseUnitAmount: String(amountMg),
+          baseUnit: 'mg',
+          scale: 3,
+        },
       },
     };
 
@@ -21778,6 +23136,13 @@ app.get('/wallet/1ze/mint/:operationId', async (request, reply) => {
           instrument_id,
           amount_gbp,
           amount_currency,
+          amount_minor,
+          currency_exponent,
+          money_registry_version,
+          provider_amount,
+          provider_amount_unit,
+          money_conversion_trace,
+          money_quarantined,
           status,
           provider_intent_ref,
           client_secret,
@@ -24437,199 +25802,20 @@ app.get('/wallet/1ze/attestations', async (request, reply) => {
 });
 
 registerUploadRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
-
-app.post('/interactions', async (request, reply) => {
-  const bodySchema = z.object({
-    userId: z.string().min(2),
-    listingId: z.string().min(2),
-    action: z.enum(['view', 'wishlist', 'purchase']),
-    strength: z.number().positive().default(1),
-    servedScore: z.number().min(0).max(1).optional(),
-    servedPolicy: z.enum(['exploit', 'explore']).optional(),
-    surface: z.string().min(2).max(60).optional(),
-  });
-
-  const payload = bodySchema.parse(request.body);
-
-  await db.query(
-    'INSERT INTO interactions (user_id, listing_id, action, strength) VALUES ($1, $2, $3, $4)',
-    [payload.userId, payload.listingId, payload.action, payload.strength]
-  );
-
-  await redis.lpush(
-    `events:user:${payload.userId}`,
-    JSON.stringify({
-      listingId: payload.listingId,
-      action: payload.action,
-      strength: payload.strength,
-      servedScore: payload.servedScore,
-      servedPolicy: payload.servedPolicy,
-      surface: payload.surface,
-      ts: new Date().toISOString(),
-    })
-  );
-
-  await redis.ltrim(`events:user:${payload.userId}`, 0, 199);
-
-  if (payload.servedScore !== undefined || payload.servedPolicy || payload.surface) {
-    await db.query(
-      `
-        INSERT INTO recommendation_feedback (
-          user_id,
-          listing_id,
-          action,
-          served_score,
-          served_policy,
-          surface
-        )
-        VALUES ($1, $2, $3, $4, $5, $6)
-      `,
-      [
-        payload.userId,
-        payload.listingId,
-        payload.action,
-        payload.servedScore ?? null,
-        payload.servedPolicy ?? null,
-        payload.surface ?? null,
-      ]
-    );
-  }
-
-  reply.code(201);
-  return { ok: true };
+registerMediaAssetRoutes({
+  app,
+  db,
+  resolveAuthenticatedUserId,
+  authorizeInternalServiceRequest,
 });
-
-app.post('/analytics/events', async (request, reply) => {
-  const bodySchema = z.object({
-    event: z.string().min(1).max(100),
-    listingId: z.string().optional(),
-    sectionKey: z.string().optional(),
-    position: z.number().int().optional(),
-    reasonCode: z.string().optional(),
-    personalised: z.boolean().optional(),
-    sessionId: z.string().optional(),
-  });
-
-  const payload = bodySchema.parse(request.body);
-  const userId = request.authUser?.userId ?? null;
-
-  const eventKey = `analytics:${payload.event}`;
-  await redis.lpush(
-    eventKey,
-    JSON.stringify({
-      ...payload,
-      userId,
-      ts: new Date().toISOString(),
-    })
-  );
-  await redis.ltrim(eventKey, 0, 999);
-
-  reply.code(202);
-  return { ok: true };
-});
-
-app.get('/recommendations/:userId', async (request, reply) => {
-  const paramsSchema = z.object({ userId: z.string().min(2) });
-  const { userId } = paramsSchema.parse(request.params);
-
-  const cacheKey = `recommendations:${userId}`;
-  const cached = await redis.get(cacheKey);
-  if (cached) {
-    return { source: 'cache', items: JSON.parse(cached) };
-  }
-
-  const listingsResult = await db.query<{
-    id: string;
-    seller_id: string;
-    title: string;
-    description: string;
-    price_gbp: number | string;
-    image_url: string | null;
-    created_at: string;
-  }>(
-    `
-      SELECT id, seller_id, title, description, price_gbp, image_url, created_at
-      FROM listings
-      ORDER BY created_at DESC
-      LIMIT 500
-    `
-  );
-
-  const interactionsResult = await db.query<{
-    listing_id: string;
-    action: 'view' | 'wishlist' | 'purchase';
-    strength: number | string;
-    created_at: string;
-  }>(
-    `
-      SELECT listing_id, action, strength, created_at
-      FROM interactions
-      WHERE user_id = $1
-      ORDER BY created_at DESC
-      LIMIT 200
-    `,
-    [userId]
-  );
-
-  const decisionResponse = await fetch(`${config.decisionServiceUrl}/recommendations`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: toJsonString({
-      user_id: userId,
-      result_limit: 24,
-      candidates: listingsResult.rows.map((row) => ({
-        listing_id: row.id,
-        title: row.title,
-        description: row.description,
-        price_gbp: Number(row.price_gbp),
-        created_at: row.created_at,
-      })),
-      recent_interactions: interactionsResult.rows.map((row) => ({
-        listing_id: row.listing_id,
-        action: row.action,
-        strength: Number(row.strength),
-        created_at: row.created_at,
-      })),
-    }),
-  });
-
-  if (!decisionResponse.ok) {
-    const fallback = listingsResult.rows.slice(0, 24).map((row, index) => ({
-      score: Number((1 - index * 0.02).toFixed(6)),
-      model: 'fallback_recent',
-      policy: 'exploit',
-      reason: 'decision_service_unavailable',
-      listing: row,
-    }));
-
-    await redis.set(cacheKey, toJsonString(fallback), 'EX', 30);
-    return {
-      source: 'fallback',
-      items: fallback,
-    };
-  }
-
-  const decisionPayload = recommendationPayloadSchema.parse(await decisionResponse.json());
-
-  const listingIds = decisionPayload.recommendations.map((item) => item.listing_id);
-  if (listingIds.length === 0) {
-    return { source: 'decision_service', items: [] };
-  }
-
-  const listingById = new Map(listingsResult.rows.map((row) => [row.id, row]));
-  const merged = decisionPayload.recommendations
-    .map((item) => ({
-      score: item.score,
-      model: item.model,
-      reason: item.reason,
-      policy: item.policy,
-      listing: listingById.get(item.listing_id),
-    }))
-    .filter((item) => Boolean(item.listing));
-
-  await redis.set(cacheKey, toJsonString(merged), 'EX', 60);
-
-  return { source: 'decision_service', items: merged };
+registerRecommendationRoutes({
+  app,
+  db,
+  redis,
+  decisionServiceUrl: config.decisionServiceUrl,
+  decisionServiceTimeoutMs: config.decisionServiceTimeoutMs,
+  decisionServiceToken: config.decisionServiceToken,
+  resolveAuthenticatedUserId,
 });
 
 app.get('/users/:userId/addresses', async (request) => {
@@ -24787,6 +25973,490 @@ app.delete('/users/:userId/addresses/:addressId', async (request, reply) => {
   return { ok: true };
 });
 
+function requireStripeMobilePaymentConfiguration(reply: FastifyReply): {
+  stripeClient: Stripe;
+  publishableKey: string;
+} | null {
+  if (!stripe || !config.stripePublishableKey) {
+    reply.code(503);
+    return null;
+  }
+
+  return {
+    stripeClient: stripe,
+    publishableKey: config.stripePublishableKey,
+  };
+}
+
+app.post('/v2/payments/customers/session', async (request, reply) => {
+  z.object({}).strict().parse(request.body ?? {});
+  const userId = resolveAuthenticatedUserId(request);
+  const configured = requireStripeMobilePaymentConfiguration(reply);
+  if (!configured) {
+    return {
+      ok: false,
+      error: 'Tokenised card collection is not configured',
+      code: 'PAYMENT_PROVIDER_UNAVAILABLE',
+    };
+  }
+
+  await ensureUserExists(userId);
+  const customer = await getOrCreateStripeCustomer({
+    db,
+    stripe: configured.stripeClient,
+    userId,
+  });
+  const customerSession = await createMobileCustomerSession(
+    configured.stripeClient,
+    customer.customerId
+  );
+
+  return {
+    ok: true,
+    provider: 'stripe',
+    customerId: customer.customerId,
+    customerSessionClientSecret: customerSession.client_secret,
+    publishableKey: configured.publishableKey,
+  };
+});
+
+app.post('/v2/payments/setup-intents', async (request, reply) => {
+  const bodySchema = z.object({
+    idempotencyKey: z.string().min(12).max(180),
+  }).strict();
+  const payload = bodySchema.parse(request.body ?? {});
+  const userId = resolveAuthenticatedUserId(request);
+  const configured = requireStripeMobilePaymentConfiguration(reply);
+  if (!configured) {
+    return {
+      ok: false,
+      error: 'Tokenised card collection is not configured',
+      code: 'PAYMENT_PROVIDER_UNAVAILABLE',
+    };
+  }
+
+  await ensureUserExists(userId);
+  const customer = await getOrCreateStripeCustomer({
+    db,
+    stripe: configured.stripeClient,
+    userId,
+  });
+  const [setupIntent, customerSession] = await Promise.all([
+    configured.stripeClient.setupIntents.create(
+      {
+        customer: customer.customerId,
+        payment_method_types: ['card'],
+        usage: 'off_session',
+        metadata: {
+          thryftverse_user_id: userId,
+          purpose: 'saved_payment_method',
+        },
+      },
+      {
+        idempotencyKey: `setup:${userId}:${payload.idempotencyKey}`,
+      }
+    ),
+    createMobileCustomerSession(configured.stripeClient, customer.customerId),
+  ]);
+
+  if (!setupIntent.client_secret) {
+    reply.code(502);
+    return {
+      ok: false,
+      error: 'Payment provider did not return a SetupIntent client secret',
+      code: 'PAYMENT_PROVIDER_INVALID_RESPONSE',
+    };
+  }
+
+  reply.code(201);
+  return {
+    ok: true,
+    provider: 'stripe',
+    setupIntentId: setupIntent.id,
+    setupIntentClientSecret: setupIntent.client_secret,
+    customerId: customer.customerId,
+    customerSessionClientSecret: customerSession.client_secret,
+    publishableKey: configured.publishableKey,
+    merchantDisplayName: 'Thryftverse',
+    returnUrl: 'thryftverse://payments/return',
+  };
+});
+
+app.get('/v2/payments/methods', async (request, reply) => {
+  const userId = resolveAuthenticatedUserId(request);
+  const configured = requireStripeMobilePaymentConfiguration(reply);
+  if (!configured) {
+    return {
+      ok: false,
+      error: 'Tokenised card collection is not configured',
+      code: 'PAYMENT_PROVIDER_UNAVAILABLE',
+    };
+  }
+
+  await ensureUserExists(userId);
+  const binding = await db.query<{ provider_customer_ref: string }>(
+    `SELECT provider_customer_ref
+     FROM stripe_payment_customers
+     WHERE user_id = $1
+     LIMIT 1`,
+    [userId]
+  );
+  if (!binding.rowCount) {
+    return {
+      ok: true,
+      provider: 'stripe',
+      items: [],
+    };
+  }
+  const methods = await syncStripePaymentMethodProjections({
+    db,
+    stripe: configured.stripeClient,
+    userId,
+    customerId: binding.rows[0].provider_customer_ref,
+    hmacSecret: config.paymentMetadataHmacSecret,
+  });
+
+  return {
+    ok: true,
+    provider: 'stripe',
+    items: methods,
+  };
+});
+
+app.delete('/v2/payments/methods/:providerMethodId', async (request, reply) => {
+  const paramsSchema = z.object({
+    providerMethodId: z.string().regex(/^pm_[A-Za-z0-9_]+$/).max(255),
+  });
+  const { providerMethodId } = paramsSchema.parse(request.params);
+  const userId = resolveAuthenticatedUserId(request);
+  const configured = requireStripeMobilePaymentConfiguration(reply);
+  if (!configured) {
+    return {
+      ok: false,
+      error: 'Tokenised card collection is not configured',
+      code: 'PAYMENT_PROVIDER_UNAVAILABLE',
+    };
+  }
+
+  const customer = await getOrCreateStripeCustomer({
+    db,
+    stripe: configured.stripeClient,
+    userId,
+  });
+  const local = await db.query<{ status: string }>(
+    `SELECT status
+     FROM user_payment_methods
+     WHERE user_id = $1
+       AND provider = 'stripe'
+       AND provider_customer_ref = $2
+       AND provider_payment_method_ref = $3
+     LIMIT 1`,
+    [userId, customer.customerId, providerMethodId]
+  );
+  if (!local.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Payment method not found' };
+  }
+  if (local.rows[0].status === 'detached') {
+    return { ok: true, idempotent: true };
+  }
+
+  const providerMethod = await configured.stripeClient.paymentMethods.retrieve(providerMethodId);
+  const providerCustomerId =
+    typeof providerMethod.customer === 'string'
+      ? providerMethod.customer
+      : providerMethod.customer?.id ?? null;
+  if (providerCustomerId && providerCustomerId !== customer.customerId) {
+    reply.code(404);
+    return { ok: false, error: 'Payment method not found' };
+  }
+  if (providerCustomerId === customer.customerId) {
+    await configured.stripeClient.paymentMethods.detach(providerMethodId);
+  }
+
+  await db.query(
+    `UPDATE user_payment_methods
+     SET status = 'detached', is_default = FALSE, detached_at = NOW(), updated_at = NOW()
+     WHERE user_id = $1
+       AND provider = 'stripe'
+       AND provider_payment_method_ref = $2`,
+    [userId, providerMethodId]
+  );
+  await syncStripePaymentMethodProjections({
+    db,
+    stripe: configured.stripeClient,
+    userId,
+    customerId: customer.customerId,
+    hmacSecret: config.paymentMetadataHmacSecret,
+  });
+
+  return { ok: true, idempotent: false };
+});
+
+app.patch('/v2/payments/methods/:providerMethodId/default', async (request, reply) => {
+  const paramsSchema = z.object({
+    providerMethodId: z.string().regex(/^pm_[A-Za-z0-9_]+$/).max(255),
+  });
+  z.object({}).strict().parse(request.body ?? {});
+  const { providerMethodId } = paramsSchema.parse(request.params);
+  const userId = resolveAuthenticatedUserId(request);
+  const configured = requireStripeMobilePaymentConfiguration(reply);
+  if (!configured) {
+    return {
+      ok: false,
+      error: 'Tokenised card collection is not configured',
+      code: 'PAYMENT_PROVIDER_UNAVAILABLE',
+    };
+  }
+
+  const customer = await getOrCreateStripeCustomer({
+    db,
+    stripe: configured.stripeClient,
+    userId,
+  });
+  const ownedMethod = await db.query<{ is_default: boolean }>(
+    `SELECT is_default
+     FROM user_payment_methods
+     WHERE user_id = $1
+       AND provider = 'stripe'
+       AND provider_customer_ref = $2
+       AND provider_payment_method_ref = $3
+       AND status = 'active'
+     LIMIT 1`,
+    [userId, customer.customerId, providerMethodId]
+  );
+  if (!ownedMethod.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Payment method not found' };
+  }
+
+  const alreadyDefault = ownedMethod.rows[0].is_default;
+  if (!alreadyDefault) {
+    await configured.stripeClient.customers.update(customer.customerId, {
+      invoice_settings: {
+        default_payment_method: providerMethodId,
+      },
+    });
+  }
+  const methods = await syncStripePaymentMethodProjections({
+    db,
+    stripe: configured.stripeClient,
+    userId,
+    customerId: customer.customerId,
+    hmacSecret: config.paymentMetadataHmacSecret,
+  });
+
+  return {
+    ok: true,
+    idempotent: alreadyDefault,
+    items: methods,
+  };
+});
+
+app.post('/v2/payments/orders/:orderId/sheet', async (request, reply) => {
+  const paramsSchema = z.object({
+    orderId: z.string().min(4).max(64),
+  });
+  z.object({}).strict().parse(request.body ?? {});
+  const { orderId } = paramsSchema.parse(request.params);
+  const userId = resolveAuthenticatedUserId(request);
+  const configured = requireStripeMobilePaymentConfiguration(reply);
+  if (!configured) {
+    return {
+      ok: false,
+      error: 'Tokenised card collection is not configured',
+      code: 'PAYMENT_PROVIDER_UNAVAILABLE',
+    };
+  }
+
+  const result = await db.query<{
+    buyer_id: string;
+    amount_currency: string;
+    provider_intent_ref: string;
+    client_secret: string | null;
+    gateway_id: string;
+    status: string;
+  }>(
+    `SELECT
+       o.buyer_id,
+       payment.amount_currency,
+       payment.provider_intent_ref,
+       payment.client_secret,
+       payment.gateway_id,
+       payment.status
+     FROM orders o
+     JOIN payment_intents payment ON payment.id = o.payment_intent_id
+     WHERE o.id = $1
+     LIMIT 1`,
+    [orderId]
+  );
+  const row = result.rows[0];
+  if (!row || row.buyer_id !== userId) {
+    reply.code(404);
+    return { ok: false, error: 'Order payment intent not found' };
+  }
+  if (row.gateway_id !== 'stripe_americas' || !row.client_secret) {
+    reply.code(409);
+    return {
+      ok: false,
+      error: 'This order is not eligible for Stripe PaymentSheet',
+      code: 'PAYMENT_SHEET_UNAVAILABLE',
+    };
+  }
+  if (['succeeded', 'failed', 'cancelled'].includes(row.status)) {
+    reply.code(409);
+    return {
+      ok: false,
+      error: `PaymentSheet cannot open from payment status '${row.status}'`,
+      code: 'PAYMENT_INTENT_FINAL',
+    };
+  }
+
+  const customer = await getOrCreateStripeCustomer({
+    db,
+    stripe: configured.stripeClient,
+    userId,
+  });
+  const providerIntent = await configured.stripeClient.paymentIntents.retrieve(
+    row.provider_intent_ref
+  );
+  const providerCustomerId =
+    typeof providerIntent.customer === 'string'
+      ? providerIntent.customer
+      : providerIntent.customer?.id ?? null;
+  if (providerCustomerId !== customer.customerId) {
+    reply.code(409);
+    return {
+      ok: false,
+      error: 'The payment intent is not bound to the authenticated customer',
+      code: 'PAYMENT_CUSTOMER_MISMATCH',
+    };
+  }
+
+  const customerSession = await createMobileCustomerSession(
+    configured.stripeClient,
+    customer.customerId
+  );
+
+  return {
+    ok: true,
+    provider: 'stripe',
+    orderId,
+    paymentIntentClientSecret: row.client_secret,
+    customerId: customer.customerId,
+    customerSessionClientSecret: customerSession.client_secret,
+    publishableKey: configured.publishableKey,
+    merchantDisplayName: 'Thryftverse',
+    merchantCountryCode: 'GB',
+    currency: row.amount_currency.toUpperCase(),
+    returnUrl: 'thryftverse://payments/return',
+    applePayEnabled: Boolean(config.stripeApplePayMerchantIdentifier),
+    googlePayEnabled: config.stripeGooglePayEnabled,
+  };
+});
+
+app.post('/v2/payments/intents/:intentId/sheet', async (request, reply) => {
+  const { intentId } = z.object({
+    intentId: z.string().min(4).max(140),
+  }).parse(request.params);
+  z.object({}).strict().parse(request.body ?? {});
+  const userId = resolveAuthenticatedUserId(request);
+  const configured = requireStripeMobilePaymentConfiguration(reply);
+  if (!configured) {
+    return {
+      ok: false,
+      error: 'Tokenised payment collection is not configured',
+      code: 'PAYMENT_PROVIDER_UNAVAILABLE',
+    };
+  }
+
+  const result = await db.query<{
+    user_id: string;
+    channel: PaymentIntentChannel;
+    amount_currency: string;
+    provider_intent_ref: string | null;
+    client_secret: string | null;
+    gateway_id: string;
+    status: PaymentIntentStatus;
+  }>(
+    `SELECT
+       user_id,
+       channel,
+       amount_currency,
+       provider_intent_ref,
+       client_secret,
+       gateway_id,
+       status
+     FROM payment_intents
+     WHERE id = $1
+     LIMIT 1`,
+    [intentId]
+  );
+  const row = result.rows[0];
+  if (!row || row.user_id !== userId) {
+    reply.code(404);
+    return { ok: false, error: 'Payment intent not found' };
+  }
+  if (row.gateway_id !== 'stripe_americas' || !row.client_secret || !row.provider_intent_ref) {
+    reply.code(409);
+    return {
+      ok: false,
+      error: 'This payment intent is not eligible for Stripe PaymentSheet',
+      code: 'PAYMENT_SHEET_UNAVAILABLE',
+    };
+  }
+  if (['succeeded', 'failed', 'cancelled'].includes(row.status)) {
+    reply.code(409);
+    return {
+      ok: false,
+      error: `PaymentSheet cannot open from payment status '${row.status}'`,
+      code: 'PAYMENT_INTENT_FINAL',
+    };
+  }
+
+  const customer = await getOrCreateStripeCustomer({
+    db,
+    stripe: configured.stripeClient,
+    userId,
+  });
+  const providerIntent = await configured.stripeClient.paymentIntents.retrieve(
+    row.provider_intent_ref
+  );
+  const providerCustomerId =
+    typeof providerIntent.customer === 'string'
+      ? providerIntent.customer
+      : providerIntent.customer?.id ?? null;
+  if (providerCustomerId !== customer.customerId) {
+    reply.code(409);
+    return {
+      ok: false,
+      error: 'The payment intent is not bound to the authenticated customer',
+      code: 'PAYMENT_CUSTOMER_MISMATCH',
+    };
+  }
+
+  const customerSession = await createMobileCustomerSession(
+    configured.stripeClient,
+    customer.customerId
+  );
+  return {
+    ok: true,
+    provider: 'stripe',
+    intentId,
+    channel: row.channel,
+    paymentIntentClientSecret: row.client_secret,
+    customerId: customer.customerId,
+    customerSessionClientSecret: customerSession.client_secret,
+    publishableKey: configured.publishableKey,
+    merchantDisplayName: 'Thryftverse',
+    merchantCountryCode: 'GB',
+    currency: row.amount_currency.toUpperCase(),
+    returnUrl: 'thryftverse://payments/return',
+    applePayEnabled: Boolean(config.stripeApplePayMerchantIdentifier),
+    googlePayEnabled: config.stripeGooglePayEnabled,
+  };
+});
+
 app.get('/users/:userId/payment-methods', async (request) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
   const { userId } = paramsSchema.parse(request.params);
@@ -24806,6 +26476,8 @@ app.get('/users/:userId/payment-methods', async (request) => {
       SELECT id, user_id, method_type, label, details, is_default, created_at, updated_at
       FROM user_payment_methods
       WHERE user_id = $1
+        AND provider <> 'legacy_local'
+        AND status = 'active'
       ORDER BY is_default DESC, updated_at DESC
     `,
     [userId]
@@ -24837,6 +26509,14 @@ app.post('/users/:userId/payment-methods', async (request, reply) => {
 
   const { userId } = paramsSchema.parse(request.params);
   resolveAuthenticatedUserId(request, userId);
+  reply.code(410);
+  return {
+    ok: false,
+    error: 'Legacy payment method creation is disabled. Use provider-hosted tokenisation.',
+    code: 'TOKENISED_PAYMENT_METHOD_REQUIRED',
+  };
+
+  // Unreachable migration-era implementation retained until old clients age out.
   const payload = bodySchema.parse(request.body);
 
   await ensureUserExists(userId);
@@ -24914,6 +26594,14 @@ app.patch('/users/:userId/payment-methods/:paymentMethodId', async (request, rep
 
   const { userId, paymentMethodId } = paramsSchema.parse(request.params);
   resolveAuthenticatedUserId(request, userId);
+  reply.code(410);
+  return {
+    ok: false,
+    error: 'Legacy payment method updates are disabled. Use the provider-bound v2 endpoints.',
+    code: 'TOKENISED_PAYMENT_METHOD_REQUIRED',
+  };
+
+  // Unreachable migration-era implementation retained until old clients age out.
   const payload = bodySchema.parse(request.body ?? {});
 
   const allowed: Record<string, unknown> = {};
@@ -24995,7 +26683,14 @@ app.delete('/users/:userId/payment-methods/:paymentMethodId', async (request, re
 
   const { userId, paymentMethodId } = paramsSchema.parse(request.params);
   resolveAuthenticatedUserId(request, userId);
+  reply.code(410);
+  return {
+    ok: false,
+    error: 'Legacy payment method deletion is disabled. Detach the provider method through v2.',
+    code: 'TOKENISED_PAYMENT_METHOD_REQUIRED',
+  };
 
+  // Unreachable migration-era implementation retained until old clients age out.
   const deleted = await db.query(
     `
       DELETE FROM user_payment_methods
@@ -25794,6 +27489,11 @@ app.get('/users/:userId/payout-requests', async (request, reply) => {
         payout_account_id,
         amount_gbp,
         amount_currency,
+        amount_minor,
+        currency_exponent,
+        money_registry_version,
+        money_conversion_trace,
+        money_quarantined,
         status,
         provider_payout_ref,
         failure_reason,
@@ -25839,6 +27539,11 @@ app.get('/users/:userId/payout-requests/:requestId', async (request, reply) => {
         payout_account_id,
         amount_gbp,
         amount_currency,
+        amount_minor,
+        currency_exponent,
+        money_registry_version,
+        money_conversion_trace,
+        money_quarantined,
         status,
         provider_payout_ref,
         failure_reason,
@@ -25882,6 +27587,15 @@ app.post('/users/:userId/payout-requests', async (request, reply) => {
   const { userId } = paramsSchema.parse(request.params);
   resolveAuthenticatedUserId(request, userId);
   const payload = bodySchema.parse(request.body);
+  const payoutRequestHash = computeRequestHash({
+    version: 'payout-request-v1',
+    userId,
+    payoutAccountId: payload.payoutAccountId,
+    amountGbp: payload.amountGbp ?? null,
+    amount: payload.amount ?? null,
+    amountCurrency: payload.amountCurrency?.toUpperCase() ?? null,
+    metadata: payload.metadata ?? {},
+  });
 
   if (!(await paymentTablesAvailable(db))) {
     reply.code(503);
@@ -25921,6 +27635,12 @@ app.post('/users/:userId/payout-requests', async (request, reply) => {
             payout_account_id,
             amount_gbp,
             amount_currency,
+            request_hash,
+            amount_minor,
+            currency_exponent,
+            money_registry_version,
+            money_conversion_trace,
+            money_quarantined,
             status,
             provider_payout_ref,
             failure_reason,
@@ -25936,6 +27656,18 @@ app.post('/users/:userId/payout-requests', async (request, reply) => {
       );
 
       if (existing.rows[0]) {
+        if (
+          existing.rows[0].request_hash
+          && existing.rows[0].request_hash !== payoutRequestHash
+        ) {
+          await client.query('ROLLBACK');
+          reply.code(409);
+          return {
+            ok: false,
+            error: 'Idempotency key was already used with a different payout payload',
+            code: 'IDEMPOTENCY_PAYLOAD_MISMATCH',
+          };
+        }
         await client.query('ROLLBACK');
         reply.code(200);
         return {
@@ -25992,6 +27724,15 @@ app.post('/users/:userId/payout-requests', async (request, reply) => {
         error: 'Payout request currency must match payout account currency',
       };
     }
+    if (payload.amountGbp !== undefined && payoutCurrency !== 'GBP') {
+      await client.query('ROLLBACK');
+      reply.code(400);
+      return {
+        ok: false,
+        error: 'amountGbp can only fund a GBP payout; use amount in the payout account currency',
+        code: 'LEGACY_CURRENCY_MISMATCH',
+      };
+    }
 
     const usingAmountGbp = payload.amountGbp !== undefined;
     const usingAmount = payload.amount !== undefined;
@@ -26035,6 +27776,10 @@ app.post('/users/:userId/payout-requests', async (request, reply) => {
         error: 'Unable to derive a valid GBP amount for payout request',
       };
     }
+    const payoutMoney = moneyFromMinor(
+      payoutCurrency,
+      String(toFiatMinor(requestedAmount, payoutCurrency))
+    );
 
     const todayVelocityResult = await client.query<{ total: string }>(
       `
@@ -26153,17 +27898,28 @@ app.post('/users/:userId/payout-requests', async (request, reply) => {
           payout_account_id,
           amount_gbp,
           amount_currency,
+          amount_minor,
+          currency_exponent,
+          money_registry_version,
+          money_conversion_trace,
           status,
           idempotency_key,
+          request_hash,
           metadata
         )
-        VALUES ($1, $2, $3, $4, $5, 'requested', $6, $7::jsonb)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, 'requested', $10, $11, $12::jsonb)
         RETURNING
           id,
           user_id,
           payout_account_id,
           amount_gbp,
           amount_currency,
+          amount_minor,
+          currency_exponent,
+          money_registry_version,
+          money_conversion_trace,
+          money_quarantined,
+          request_hash,
           status,
           provider_payout_ref,
           failure_reason,
@@ -26176,9 +27932,22 @@ app.post('/users/:userId/payout-requests', async (request, reply) => {
         userId,
         payload.payoutAccountId,
         amountGbp,
-        payoutCurrency,
+        payoutMoney.currency,
+        payoutMoney.minorAmount,
+        payoutMoney.exponent,
+        payoutMoney.registryVersion,
+        toJsonString({
+          direction: 'request_to_canonical',
+          canonicalMoney: payoutMoney,
+          legacyGbpValuation: amountGbp,
+          fxRate: conversionFxRate,
+        }),
         payload.idempotencyKey ?? null,
-        toJsonString(payoutRequestMetadata),
+        payoutRequestHash,
+        toJsonString({
+          ...payoutRequestMetadata,
+          canonicalMoney: payoutMoney,
+        }),
       ]
     );
 
@@ -27372,8 +29141,12 @@ app.post('/payments/intents', async (request, reply) => {
     orderId: z.string().min(4).max(64).optional(),
     coOwnOrderId: z.coerce.number().int().positive().optional(),
     channel: z.enum(['commerce', 'co-own', 'wallet_topup', 'wallet_withdrawal']).optional(),
+    money: z.object({
+      currency: z.string().length(3),
+      minorAmount: z.string().regex(/^\d+$/),
+    }).optional(),
     amountGbp: z.number().positive().optional(),
-    amountCurrency: z.string().length(3).default('GBP'),
+    amountCurrency: z.string().length(3).optional(),
     idempotencyKey: z.string().min(6).max(140).optional(),
     returnUrl: z.string().url().optional(),
     webhookUrl: z.string().url().optional(),
@@ -27382,6 +29155,48 @@ app.post('/payments/intents', async (request, reply) => {
 
   const payload = bodySchema.parse(request.body);
   const actorUserId = resolveAuthenticatedUserId(request, payload.userId);
+  let requestedMoney: Money | null = null;
+  try {
+    requestedMoney = payload.money
+      ? moneyFromMinor(payload.money.currency, payload.money.minorAmount)
+      : null;
+  } catch (error) {
+    reply.code(400);
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : 'Invalid canonical money payload',
+      code: 'MONEY_INVALID',
+    };
+  }
+  const legacyCurrency = (payload.amountCurrency ?? 'GBP').toUpperCase();
+  if (payload.money && payload.amountGbp !== undefined) {
+    reply.code(400);
+    return {
+      ok: false,
+      error: 'Provide canonical money or legacy amountGbp, not both',
+      code: 'AMBIGUOUS_MONEY_INPUT',
+    };
+  }
+  if (!payload.money && payload.amountGbp !== undefined && legacyCurrency !== 'GBP') {
+    reply.code(400);
+    return {
+      ok: false,
+      error: 'Legacy amountGbp can only be used with GBP; send money.minorAmount for other currencies',
+      code: 'LEGACY_CURRENCY_MISMATCH',
+    };
+  }
+  const paymentRequestHash = computeRequestHash({
+    userId: actorUserId,
+    gatewayId: payload.gatewayId ?? null,
+    instrumentId: payload.instrumentId ?? null,
+    orderId: payload.orderId ?? null,
+    coOwnOrderId: payload.coOwnOrderId ?? null,
+    channel: payload.channel ?? null,
+    amountGbp: payload.amountGbp ?? null,
+    money: requestedMoney,
+    amountCurrency: legacyCurrency,
+    returnUrl: payload.returnUrl ?? null,
+  });
 
   if (!(await paymentTablesAvailable(db))) {
     reply.code(503);
@@ -27406,6 +29221,34 @@ app.post('/payments/intents', async (request, reply) => {
       error: 'A payment intent source is required (orderId, coOwnOrderId, or channel)',
     };
   }
+  if (
+    (payload.orderId || payload.coOwnOrderId)
+    && (
+      payload.money
+      || payload.amountGbp !== undefined
+      || payload.amountCurrency !== undefined
+    )
+  ) {
+    reply.code(400);
+    return {
+      ok: false,
+      error: 'Order payment amount and currency are derived by the server',
+      code: 'SERVER_DERIVED_MONEY_REQUIRED',
+    };
+  }
+  if (
+    request.apiVersion === 'v1'
+    && !payload.orderId
+    && !payload.coOwnOrderId
+    && !payload.money
+  ) {
+    reply.code(400);
+    return {
+      ok: false,
+      error: 'Versioned wallet payment intents require money.currency and money.minorAmount',
+      code: 'CANONICAL_MONEY_REQUIRED',
+    };
+  }
 
   if (payload.idempotencyKey) {
     const existing = await db.query<PaymentIntentRow>(
@@ -27420,6 +29263,13 @@ app.post('/payments/intents', async (request, reply) => {
           instrument_id,
           amount_gbp,
           amount_currency,
+          amount_minor,
+          currency_exponent,
+          money_registry_version,
+          provider_amount,
+          provider_amount_unit,
+          money_conversion_trace,
+          money_quarantined,
           status,
           provider_intent_ref,
           client_secret,
@@ -27429,6 +29279,7 @@ app.post('/payments/intents', async (request, reply) => {
           settled_at,
           failure_code,
           failure_message,
+          request_hash,
           created_at,
           updated_at
         FROM payment_intents
@@ -27440,6 +29291,17 @@ app.post('/payments/intents', async (request, reply) => {
     );
 
     if (existing.rowCount) {
+      if (
+        existing.rows[0].request_hash
+        && existing.rows[0].request_hash !== paymentRequestHash
+      ) {
+        reply.code(409);
+        return {
+          ok: false,
+          error: 'Idempotency key was already used with a different payment payload',
+          code: 'IDEMPOTENCY_PAYLOAD_MISMATCH',
+        };
+      }
       return {
         ok: true,
         idempotent: true,
@@ -27469,11 +29331,13 @@ app.post('/payments/intents', async (request, reply) => {
     );
 
     let channel: PaymentIntentChannel;
+    let paymentMoney: Money;
     let amountGbp: number;
     let gatewayId = defaultGatewayForChannel('commerce', payload.gatewayId);
     let orderId: string | null = null;
     let coOwnOrderId: number | null = null;
     let platformFeeAmountGbp: number | null = null;
+    let selectedPaymentMethodProjectionId: number | null = null;
 
     if (payload.orderId) {
       // Fetch order with seller info
@@ -27485,6 +29349,13 @@ app.post('/payments/intents', async (request, reply) => {
         seller_id: string;
         total_gbp: number | string;
         status: string;
+        payment_intent_id: string | null;
+        payment_method_id: number | string | null;
+        address_id: number | string | null;
+        shipping_quote_id: string | null;
+        checkout_expires_at: string | null;
+        reservation_status: string | null;
+        reservation_expires_at: string | null;
       }>(
         `
           SELECT
@@ -27492,8 +29363,17 @@ app.post('/payments/intents', async (request, reply) => {
             o.buyer_id,
             o.seller_id,
             o.total_gbp,
-            o.status
+            o.status,
+            o.payment_intent_id,
+            o.payment_method_id,
+            o.address_id,
+            o.shipping_quote_id,
+            o.checkout_expires_at::text,
+            reservation.status AS reservation_status,
+            reservation.expires_at::text AS reservation_expires_at
           FROM orders o
+          LEFT JOIN listing_checkout_reservations reservation
+            ON reservation.order_id = o.id
           WHERE o.id = $1
           LIMIT 1
           FOR UPDATE
@@ -27528,10 +29408,85 @@ app.post('/payments/intents', async (request, reply) => {
           error: `Order cannot create a payment intent from status '${orderRow.status}'`,
         };
       }
+      if (!orderRow.address_id || !orderRow.shipping_quote_id) {
+        await client.query('ROLLBACK');
+        reply.code(409);
+        return {
+          ok: false,
+          error: 'Delivery address and a current shipping quote are required before payment',
+          code: 'CHECKOUT_DETAILS_REQUIRED',
+        };
+      }
+
+      const checkoutExpiry = orderRow.reservation_expires_at
+        ?? orderRow.checkout_expires_at;
+      if (
+        checkoutExpiry
+        && (
+          orderRow.reservation_status !== 'active'
+          || Date.parse(checkoutExpiry) <= Date.now()
+        )
+      ) {
+        await client.query(
+          `UPDATE orders
+           SET status = 'cancelled', updated_at = NOW()
+           WHERE id = $1 AND status = 'created'`,
+          [orderRow.id]
+        );
+        await client.query(
+          `INSERT INTO order_events (
+             order_id, event_type, actor_id, source, deduplication_key, metadata
+           )
+           VALUES ($1, 'reservation.expired', $2, 'payment_intent', $3, $4::jsonb)
+           ON CONFLICT (order_id, deduplication_key)
+             WHERE deduplication_key IS NOT NULL
+           DO NOTHING`,
+          [
+            orderRow.id,
+            actorUserId,
+            `reservation.expired:${orderRow.id}`,
+            toJsonString({ expiresAt: checkoutExpiry }),
+          ]
+        );
+        await client.query('COMMIT');
+        reply.code(410);
+        return {
+          ok: false,
+          error: 'Checkout reservation has expired',
+          code: 'CHECKOUT_RESERVATION_EXPIRED',
+        };
+      }
+
+      if (orderRow.payment_intent_id) {
+        const boundIntent = await client.query<PaymentIntentRow>(
+          `SELECT
+             id, user_id, gateway_id, channel, order_id, coOwn_order_id,
+             instrument_id, amount_gbp, amount_currency, status,
+             provider_intent_ref, client_secret, provider_status,
+             next_action_url, sca_expires_at, settled_at,
+             failure_code, failure_message, created_at, updated_at
+           FROM payment_intents
+           WHERE id = $1
+           LIMIT 1`,
+          [orderRow.payment_intent_id]
+        );
+        if (boundIntent.rowCount) {
+          await client.query('COMMIT');
+          return {
+            ok: true,
+            idempotent: true,
+            intent: toPaymentIntentPayload(boundIntent.rows[0]),
+          };
+        }
+      }
 
       channel = 'commerce';
       amountGbp = Number(orderRow.total_gbp);
+      paymentMoney = moneyFromMajorDecimal('GBP', String(orderRow.total_gbp));
       orderId = orderRow.id;
+      selectedPaymentMethodProjectionId = orderRow.payment_method_id
+        ? Number(orderRow.payment_method_id)
+        : null;
       gatewayId = defaultGatewayForChannel(channel, payload.gatewayId);
 
       // Calculate platform fee (5% + £0.70 fixed)
@@ -27571,20 +29526,25 @@ app.post('/payments/intents', async (request, reply) => {
 
       channel = 'co-own';
       amountGbp = Number(coOwnOrderRow.total_gbp);
+      paymentMoney = moneyFromMajorDecimal('GBP', String(coOwnOrderRow.total_gbp));
       coOwnOrderId = coOwnOrderRow.id;
       gatewayId = defaultGatewayForChannel(channel, payload.gatewayId);
     } else {
       channel = payload.channel as PaymentIntentChannel;
-      if (!payload.amountGbp || !Number.isFinite(payload.amountGbp) || payload.amountGbp <= 0) {
+      if (!requestedMoney && (!payload.amountGbp || !Number.isFinite(payload.amountGbp) || payload.amountGbp <= 0)) {
         await client.query('ROLLBACK');
         reply.code(400);
         return {
           ok: false,
-          error: 'amountGbp is required for wallet payment intents',
+          error: 'money.minorAmount is required for wallet payment intents',
         };
       }
 
-      amountGbp = roundTo(payload.amountGbp, 2);
+      paymentMoney = requestedMoney
+        ?? moneyFromMajorDecimal('GBP', roundTo(payload.amountGbp ?? 0, 2).toFixed(2));
+      amountGbp = paymentMoney.currency === 'GBP'
+        ? Number(moneyToMajorDecimal(paymentMoney))
+        : 0;
       gatewayId = defaultGatewayForChannel(channel, payload.gatewayId);
     }
 
@@ -27642,13 +29602,53 @@ app.post('/payments/intents', async (request, reply) => {
       }
     }
 
+    let stripeCustomerId: string | null = null;
+    let stripePaymentMethodId: string | null = null;
+    if (gatewayId === 'stripe_americas') {
+      if (!stripe) {
+        await client.query('ROLLBACK');
+        reply.code(503);
+        return {
+          ok: false,
+          error: 'Stripe payment collection is not configured',
+          code: 'PAYMENT_PROVIDER_UNAVAILABLE',
+        };
+      }
+
+      const customer = await getOrCreateStripeCustomer({
+        db: client,
+        stripe,
+        userId: actorUserId,
+      });
+      stripeCustomerId = customer.customerId;
+
+      if (selectedPaymentMethodProjectionId) {
+        const selectedMethod = await resolveActiveStripeMethod({
+          db: client,
+          userId: actorUserId,
+          projectionId: selectedPaymentMethodProjectionId,
+        });
+        if (!selectedMethod || selectedMethod.customerId !== stripeCustomerId) {
+          await client.query('ROLLBACK');
+          reply.code(409);
+          return {
+            ok: false,
+            error: 'The selected payment method must be added again before checkout',
+            code: 'PAYMENT_METHOD_RECOLLECTION_REQUIRED',
+          };
+        }
+        stripePaymentMethodId = selectedMethod.paymentMethodId;
+      }
+    }
+
     const intentId = createRuntimeId('pi');
     const gatewayIntent = await createGatewayPaymentIntent({
       gatewayId,
       intentId,
       channel,
-      amountGbp,
-      amountCurrency: payload.amountCurrency,
+      money: paymentMoney,
+      stripeCustomerId,
+      stripePaymentMethodId,
       returnUrl: payload.returnUrl,
       webhookUrl: payload.webhookUrl,
       platformFeeAmountGbp,
@@ -27673,6 +29673,12 @@ app.post('/payments/intents', async (request, reply) => {
           instrument_id,
           amount_gbp,
           amount_currency,
+          amount_minor,
+          currency_exponent,
+          money_registry_version,
+          provider_amount,
+          provider_amount_unit,
+          money_conversion_trace,
           status,
           provider_intent_ref,
           client_secret,
@@ -27680,9 +29686,14 @@ app.post('/payments/intents', async (request, reply) => {
           next_action_url,
           sca_expires_at,
           idempotency_key,
+          request_hash,
           metadata
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17::jsonb)
+        VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9,
+          $10, $11, $12, $13, $14, $15::jsonb,
+          $16, $17, $18, $19, $20, $21, $22, $23, $24::jsonb
+        )
         RETURNING
           id,
           user_id,
@@ -27693,6 +29704,13 @@ app.post('/payments/intents', async (request, reply) => {
           instrument_id,
           amount_gbp,
           amount_currency,
+          amount_minor,
+          currency_exponent,
+          money_registry_version,
+          provider_amount,
+          provider_amount_unit,
+          money_conversion_trace,
+          money_quarantined,
           status,
           provider_intent_ref,
           client_secret,
@@ -27713,8 +29731,14 @@ app.post('/payments/intents', async (request, reply) => {
         orderId,
         coOwnOrderId,
         payload.instrumentId ?? null,
-        amountGbp,
-        payload.amountCurrency.toUpperCase(),
+        moneyToMajorDecimal(paymentMoney),
+        paymentMoney.currency,
+        paymentMoney.minorAmount,
+        paymentMoney.exponent,
+        paymentMoney.registryVersion,
+        gatewayIntent.providerAmount,
+        gatewayIntent.providerAmountUnit,
+        toJsonString(gatewayIntent.conversionTrace),
         gatewayIntent.initialStatus,
         gatewayIntent.providerIntentRef,
         gatewayIntent.clientSecret,
@@ -27722,9 +29746,46 @@ app.post('/payments/intents', async (request, reply) => {
         gatewayIntent.nextActionUrl ?? null,
         gatewayIntent.scaExpiresAt ?? null,
         payload.idempotencyKey ?? null,
-        toJsonString(payload.metadata ?? {}),
+        paymentRequestHash,
+        toJsonString({
+          ...(payload.metadata ?? {}),
+          canonicalMoney: paymentMoney,
+          providerConversion: gatewayIntent.conversionTrace,
+        }),
       ]
     );
+
+    if (orderId) {
+      const bound = await client.query(
+        `UPDATE orders
+         SET payment_intent_id = $2, updated_at = NOW()
+         WHERE id = $1
+           AND status = 'created'
+           AND (payment_intent_id IS NULL OR payment_intent_id = $2)`,
+        [orderId, intentId]
+      );
+      if (!bound.rowCount) {
+        throw createApiError(
+          'ORDER_PAYMENT_INTENT_CONFLICT',
+          'Order already has a different payment attempt'
+        );
+      }
+      await client.query(
+        `INSERT INTO order_events (
+           order_id, event_type, actor_id, source, deduplication_key, metadata
+         )
+         VALUES ($1, 'payment.required', $2, 'payment_intent', $3, $4::jsonb)
+         ON CONFLICT (order_id, deduplication_key)
+           WHERE deduplication_key IS NOT NULL
+         DO NOTHING`,
+        [
+          orderId,
+          actorUserId,
+          `payment.required:${intentId}`,
+          toJsonString({ intentId, gatewayId, amountGbp }),
+        ]
+      );
+    }
 
     await client.query('COMMIT');
     reply.code(201);
@@ -27774,6 +29835,13 @@ app.get('/payments/intents/:intentId', async (request, reply) => {
         instrument_id,
         amount_gbp,
         amount_currency,
+        amount_minor,
+        currency_exponent,
+        money_registry_version,
+        provider_amount,
+        provider_amount_unit,
+        money_conversion_trace,
+        money_quarantined,
         status,
         provider_intent_ref,
         client_secret,
@@ -28012,6 +30080,13 @@ app.post('/payments/intents/:intentId/refunds', async (request, reply) => {
           instrument_id,
           amount_gbp,
           amount_currency,
+          amount_minor,
+          currency_exponent,
+          money_registry_version,
+          provider_amount,
+          provider_amount_unit,
+          money_conversion_trace,
+          money_quarantined,
           status,
           provider_intent_ref,
           client_secret,
@@ -28715,6 +30790,13 @@ app.post('/webhooks/:provider', async (request, reply) => {
             instrument_id,
             amount_gbp,
             amount_currency,
+            amount_minor,
+            currency_exponent,
+            money_registry_version,
+            provider_amount,
+            provider_amount_unit,
+            money_conversion_trace,
+            money_quarantined,
             status,
             provider_intent_ref,
             client_secret,
@@ -28739,6 +30821,19 @@ app.post('/webhooks/:provider', async (request, reply) => {
       intentRow = await findPaymentIntentByProviderRef(client, expectedGateway, event.providerIntentRef);
     }
 
+    const webhookMoney = event.money ?? event.refund?.money ?? event.dispute?.money;
+    const webhookRawAmount =
+      event.rawProviderAmount
+      ?? event.refund?.rawProviderAmount
+      ?? event.dispute?.rawProviderAmount;
+    const webhookAmountUnit =
+      event.providerAmountUnit
+      ?? event.refund?.providerAmountUnit
+      ?? event.dispute?.providerAmountUnit;
+    const webhookConversionTrace =
+      event.conversionTrace
+      ?? event.refund?.conversionTrace
+      ?? event.dispute?.conversionTrace;
     const webhookInsert = await client.query<{ id: number }>(
       `
         INSERT INTO payment_webhook_events (
@@ -28746,9 +30841,16 @@ app.post('/webhooks/:provider', async (request, reply) => {
           provider_event_id,
           event_type,
           intent_id,
+          canonical_amount_minor,
+          canonical_currency,
+          currency_exponent,
+          raw_provider_amount,
+          provider_amount_unit,
+          money_registry_version,
+          money_conversion_trace,
           payload
         )
-        VALUES ($1, $2, $3, $4, $5::jsonb)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb)
         ON CONFLICT (gateway_id, provider_event_id)
         DO NOTHING
         RETURNING id
@@ -28758,7 +30860,18 @@ app.post('/webhooks/:provider', async (request, reply) => {
         event.providerEventId,
         event.eventType,
         intentRow?.id ?? null,
-        toJsonString(event.rawPayload),
+        webhookMoney?.minorAmount ?? null,
+        webhookMoney?.currency ?? null,
+        webhookMoney?.exponent ?? null,
+        webhookRawAmount ?? null,
+        webhookAmountUnit ?? null,
+        webhookMoney?.registryVersion ?? null,
+        webhookConversionTrace ? toJsonString(webhookConversionTrace) : null,
+        toJsonString({
+          raw: event.rawPayload,
+          normalizedMoney: webhookMoney ?? null,
+          conversionTrace: webhookConversionTrace ?? null,
+        }),
       ]
     );
 
@@ -28781,6 +30894,28 @@ app.post('/webhooks/:provider', async (request, reply) => {
     let mintReserveEnqueueOperationId: string | null = null;
 
     if (event.paymentStatus && intentRow) {
+      if (
+        event.money
+        && intentRow.amount_minor !== undefined
+        && intentRow.amount_minor !== null
+        && (
+          event.money.currency !== intentRow.amount_currency
+          || event.money.minorAmount !== String(intentRow.amount_minor)
+        )
+      ) {
+        throw createApiError(
+          'PAYMENT_AMOUNT_MISMATCH',
+          'Provider amount does not equal the canonical payment intent amount',
+          {
+            intentId: intentRow.id,
+            expectedCurrency: intentRow.amount_currency,
+            expectedMinorAmount: String(intentRow.amount_minor),
+            providerCurrency: event.money.currency,
+            providerMinorAmount: event.money.minorAmount,
+            conversionTrace: event.conversionTrace ?? null,
+          }
+        );
+      }
       if (['succeeded', 'failed', 'cancelled'].includes(event.paymentStatus)) {
         const settled = await settlePaymentIntent(client, {
           intentId: intentRow.id,
@@ -28832,17 +30967,32 @@ app.post('/webhooks/:provider', async (request, reply) => {
     }
 
     if (event.refund && intentRow) {
+      const refundMoney =
+        event.refund.money
+        ?? (
+          intentRow.amount_minor !== undefined
+          && intentRow.amount_minor !== null
+            ? moneyFromMinor(intentRow.amount_currency, String(intentRow.amount_minor))
+            : intentRow.amount_currency === 'GBP'
+              ? moneyFromMajorDecimal('GBP', String(intentRow.amount_gbp))
+              : undefined
+        );
       await upsertPaymentRefund(client, {
         intentId: intentRow.id,
         gatewayId: expectedGateway,
         providerRefundRef: event.refund.providerRefundRef,
         status: event.refund.status,
+        money: refundMoney,
+        rawProviderAmount: event.refund.rawProviderAmount,
+        providerAmountUnit: event.refund.providerAmountUnit,
+        conversionTrace: event.refund.conversionTrace,
         amount: event.refund.amount,
         currency: event.refund.currency,
         reason: event.refund.reason,
         metadata: {
           provider,
           eventType: event.eventType,
+          conversionTrace: event.refund.conversionTrace ?? null,
         },
       });
 
@@ -28851,18 +31001,19 @@ app.post('/webhooks/:provider', async (request, reply) => {
           client,
           intentRow.order_id,
           intentRow.user_id,
-          Number(intentRow.amount_gbp)
+          refundMoney?.currency === 'GBP'
+            ? Number(moneyToMajorDecimal(refundMoney))
+            : Number(intentRow.amount_gbp)
         );
       }
 
       if (event.refund.status === 'succeeded') {
         refundCompletedUserId = intentRow.user_id;
         refundCompletedOrderId = intentRow.order_id;
-        const refundCurrency = (event.refund.currency ?? '').toUpperCase();
-        const refundAmount =
-          typeof event.refund.amount === 'number'
-            ? event.refund.amount
-            : Number(intentRow.amount_gbp);
+        const refundCurrency = refundMoney?.currency ?? (event.refund.currency ?? '').toUpperCase();
+        const refundAmount = refundMoney
+          ? Number(moneyToMajorDecimal(refundMoney))
+          : Number(intentRow.amount_gbp);
         if (refundCurrency === 'GBP') {
           refundCompletedAmountGbp = roundTo(refundAmount, 2);
         } else {
@@ -28872,17 +31023,32 @@ app.post('/webhooks/:provider', async (request, reply) => {
     }
 
     if (event.dispute) {
+      const disputeMoney =
+        event.dispute.money
+        ?? (
+          intentRow?.amount_minor !== undefined
+          && intentRow.amount_minor !== null
+            ? moneyFromMinor(intentRow.amount_currency, String(intentRow.amount_minor))
+            : intentRow?.amount_currency === 'GBP'
+              ? moneyFromMajorDecimal('GBP', String(intentRow.amount_gbp))
+              : undefined
+        );
       await upsertPaymentDispute(client, {
         intentId: intentRow?.id,
         gatewayId: expectedGateway,
         providerDisputeRef: event.dispute.providerDisputeRef,
         status: event.dispute.status,
+        money: disputeMoney,
+        rawProviderAmount: event.dispute.rawProviderAmount,
+        providerAmountUnit: event.dispute.providerAmountUnit,
+        conversionTrace: event.dispute.conversionTrace,
         amount: event.dispute.amount,
         currency: event.dispute.currency,
         reason: event.dispute.reason,
         metadata: {
           provider,
           eventType: event.eventType,
+          conversionTrace: event.dispute.conversionTrace ?? null,
         },
       });
 
@@ -28891,7 +31057,9 @@ app.post('/webhooks/:provider', async (request, reply) => {
           client,
           intentRow.order_id,
           intentRow.user_id,
-          Number(intentRow.amount_gbp)
+          disputeMoney?.currency === 'GBP'
+            ? Number(moneyToMajorDecimal(disputeMoney))
+            : Number(intentRow.amount_gbp)
         );
 
         await client.query(
@@ -28920,12 +31088,42 @@ app.post('/webhooks/:provider', async (request, reply) => {
     }
 
     if (event.payoutRequestId && event.payoutStatus) {
-      const payoutRow = await client.query<{ id: string; user_id: string }>(
-        'SELECT id, user_id FROM payout_requests WHERE id = $1 LIMIT 1',
+      const payoutRow = await client.query<{
+        id: string;
+        user_id: string;
+        amount_currency: string;
+        amount_minor: number | string | null;
+      }>(
+        `SELECT id, user_id, amount_currency, amount_minor
+         FROM payout_requests
+         WHERE id = $1
+         LIMIT 1`,
         [event.payoutRequestId]
       );
 
       if (payoutRow.rowCount) {
+        const canonicalPayout = payoutRow.rows[0];
+        if (
+          event.money
+          && canonicalPayout.amount_minor !== null
+          && (
+            event.money.currency !== canonicalPayout.amount_currency
+            || event.money.minorAmount !== String(canonicalPayout.amount_minor)
+          )
+        ) {
+          throw createApiError(
+            'PAYOUT_AMOUNT_MISMATCH',
+            'Provider payout amount does not equal the canonical payout request',
+            {
+              payoutRequestId: canonicalPayout.id,
+              expectedCurrency: canonicalPayout.amount_currency,
+              expectedMinorAmount: String(canonicalPayout.amount_minor),
+              providerCurrency: event.money.currency,
+              providerMinorAmount: event.money.minorAmount,
+              conversionTrace: event.conversionTrace ?? null,
+            }
+          );
+        }
         const payoutSettled = await settlePayoutRequest(client, {
           userId: payoutRow.rows[0].user_id,
           requestId: payoutRow.rows[0].id,
@@ -29279,16 +31477,71 @@ app.post('/shipping/quote', async (request, reply) => {
     declaredValueGbp: payload.declaredValueGbp,
   });
 
-  const quotes = quoteResult.quotes.map((quote) => ({
-    carrierId: quote.carrierId,
-    label: quote.carrierLabel,
-    priceFromGbp: quote.priceGbp,
-    etaMinDays: quote.etaMinDays,
-    etaMaxDays: quote.etaMaxDays,
-    tracking: quote.tracking,
-    live: quote.live,
-    source: quote.source,
-    metadata: quote.metadata,
+  const quoteExpiresAt = new Date(Date.now() + 15 * 60_000).toISOString();
+  const quotes = await Promise.all(quoteResult.quotes.map(async (quote) => {
+    const quoteId = createRuntimeId('shipq');
+    const quoteSnapshot = {
+      quoteId,
+      buyerId: actorUserId,
+      sellerId,
+      listingId: payload.listingId ?? null,
+      addressId: payload.addressId ?? null,
+      carrierId: quote.carrierId,
+      priceGbp: quote.priceGbp,
+      currency: 'GBP',
+      source: quote.source,
+      expiresAt: quoteExpiresAt,
+    };
+    const quoteHash = crypto
+      .createHash('sha256')
+      .update(JSON.stringify(quoteSnapshot))
+      .digest('hex');
+    if (payload.listingId && sellerId) {
+      await db.query(
+        `INSERT INTO commerce_shipping_quotes (
+           id, buyer_id, seller_id, listing_id, address_id,
+           carrier_id, carrier_label, price_gbp, currency, source,
+           quote_hash, provider_reference, metadata, expires_at
+         )
+         VALUES (
+           $1, $2, $3, $4, $5,
+           $6, $7, $8, 'GBP', $9,
+           $10, $11, $12::jsonb, $13
+         )`,
+        [
+          quoteId,
+          actorUserId,
+          sellerId,
+          payload.listingId,
+          payload.addressId ?? null,
+          quote.carrierId,
+          quote.carrierLabel,
+          quote.priceGbp,
+          quote.source,
+          quoteHash,
+          typeof quote.metadata.quoteRef === 'string'
+            ? quote.metadata.quoteRef
+            : null,
+          toJsonString(quote.metadata),
+          quoteExpiresAt,
+        ]
+      );
+    }
+
+    return {
+      quoteId: payload.listingId && sellerId ? quoteId : null,
+      quoteHash: payload.listingId && sellerId ? quoteHash : null,
+      expiresAt: payload.listingId && sellerId ? quoteExpiresAt : null,
+      carrierId: quote.carrierId,
+      label: quote.carrierLabel,
+      priceFromGbp: quote.priceGbp,
+      etaMinDays: quote.etaMinDays,
+      etaMaxDays: quote.etaMaxDays,
+      tracking: quote.tracking,
+      live: quote.live,
+      source: quote.source,
+      metadata: quote.metadata,
+    };
   }));
 
   const recommendedQuote = quotes[0] ?? null;
@@ -29469,6 +31722,10 @@ app.post('/orders', async (request, reply) => {
     listingId: z.string().min(2),
     addressId: z.coerce.number().int().positive().optional(),
     paymentMethodId: z.coerce.number().int().positive().optional(),
+    idempotencyKey: z.string().min(8).max(140).optional(),
+    shippingQuoteId: z.string().min(8).max(160).optional(),
+    // Retained for backwards-compatible parsing only. Commerce charges are
+    // always derived from the locked listing price on the server.
     platformChargeGbp: z.number().min(0).optional(),
     buyerProtectionFeeGbp: z.number().min(0).optional(),
     postageFeeGbp: z.number().min(0).optional(),
@@ -29476,198 +31733,726 @@ app.post('/orders', async (request, reply) => {
   });
 
   const payload = bodySchema.parse(request.body);
-  await ensureUserExists(payload.buyerId);
+  const actorUserId = resolveAuthenticatedUserId(request, payload.buyerId);
+  const requestHash = computeRequestHash({
+    buyerId: actorUserId,
+    listingId: payload.listingId,
+    addressId: payload.addressId ?? null,
+    paymentMethodId: payload.paymentMethodId ?? null,
+    shippingCarrierId: payload.shippingCarrierId ?? null,
+    shippingQuoteId: payload.shippingQuoteId ?? null,
+  });
+  const checkoutExpiresAt = new Date(Date.now() + 30 * 60_000).toISOString();
+  const quoteVersion = 'commerce-gbp-2026-07-28.1';
+  const client = await db.connect();
 
-  const listingResult = await db.query<{
-    id: string;
-    seller_id: string;
-    price_gbp: number | string;
-  }>(
-    'SELECT id, seller_id, price_gbp FROM listings WHERE id = $1 LIMIT 1',
-    [payload.listingId]
-  );
+  try {
+    await client.query('BEGIN');
+    await ensureUserExists(actorUserId);
 
-  const listing = listingResult.rows[0];
-  if (!listing) {
-    reply.code(404);
-    return { ok: false, error: 'Listing not found' };
-  }
+    if (payload.idempotencyKey) {
+      const replay = await client.query<{
+        id: string;
+        request_hash: string | null;
+      }>(
+        `SELECT id, request_hash
+         FROM orders
+         WHERE buyer_id = $1 AND idempotency_key = $2
+         LIMIT 1
+         FOR UPDATE`,
+        [actorUserId, payload.idempotencyKey]
+      );
+      if (replay.rowCount) {
+        if (replay.rows[0].request_hash !== requestHash) {
+          await client.query('ROLLBACK');
+          reply.code(409);
+          return {
+            ok: false,
+            error: 'Idempotency key was already used with a different checkout payload',
+            code: 'IDEMPOTENCY_PAYLOAD_MISMATCH',
+          };
+        }
+        const existingOrderResult = await client.query<{
+          id: string;
+          buyer_id: string;
+          seller_id: string;
+          listing_id: string;
+          subtotal_gbp: number | string;
+          buyer_protection_fee_gbp: number | string;
+          postage_fee_gbp: number | string;
+          total_gbp: number | string;
+          status: string;
+          address_id: number | null;
+          payment_method_id: number | null;
+          shipping_carrier_id: string | null;
+          shipping_provider: string | null;
+          tracking_number: string | null;
+          shipping_label_url: string | null;
+          shipping_quote_gbp: number | string | null;
+          shipped_at: string | null;
+          delivered_at: string | null;
+          created_at: string;
+          updated_at: string;
+        }>(
+          `SELECT
+             id, buyer_id, seller_id, listing_id,
+             subtotal_gbp, buyer_protection_fee_gbp, postage_fee_gbp, total_gbp,
+             status, address_id, payment_method_id, shipping_carrier_id,
+             shipping_provider, tracking_number, shipping_label_url,
+             shipping_quote_gbp, shipped_at::text, delivered_at::text,
+             created_at::text, updated_at::text
+           FROM orders
+           WHERE id = $1
+           LIMIT 1`,
+          [replay.rows[0].id]
+        );
+        const existing = existingOrderResult.rows[0];
+        await client.query('COMMIT');
+        return {
+          ok: true,
+          idempotent: true,
+          order: {
+            id: existing.id,
+            buyerId: existing.buyer_id,
+            sellerId: existing.seller_id,
+            listingId: existing.listing_id,
+            subtotalGbp: Number(existing.subtotal_gbp),
+            buyerProtectionFeeGbp: Number(existing.buyer_protection_fee_gbp),
+            platformChargeGbp: Number(existing.buyer_protection_fee_gbp),
+            postageFeeGbp: Number(existing.postage_fee_gbp),
+            totalGbp: Number(existing.total_gbp),
+            status: existing.status,
+            addressId: existing.address_id,
+            paymentMethodId: existing.payment_method_id,
+            shippingCarrierId: existing.shipping_carrier_id,
+            shippingProvider: existing.shipping_provider,
+            trackingNumber: existing.tracking_number,
+            shippingLabelUrl: existing.shipping_label_url,
+            shippingQuoteGbp: existing.shipping_quote_gbp === null
+              ? null
+              : Number(existing.shipping_quote_gbp),
+            shippedAt: existing.shipped_at,
+            deliveredAt: existing.delivered_at,
+            createdAt: existing.created_at,
+            updatedAt: existing.updated_at,
+          },
+        };
+      }
+    }
 
-  if (await listingsStatusColumnAvailable(db)) {
-    const listingStatusResult = await db.query<{ status: string | null }>(
-      'SELECT status FROM listings WHERE id = $1 LIMIT 1',
+    const listingResult = await client.query<{
+      id: string;
+      seller_id: string;
+      price_gbp: number | string;
+      status: string;
+    }>(
+      `SELECT id, seller_id, price_gbp, status
+       FROM listings
+       WHERE id = $1
+       LIMIT 1
+       FOR UPDATE`,
       [payload.listingId]
     );
-    const listingStatus = (listingStatusResult.rows[0]?.status ?? '').toLowerCase();
-    if (['sold', 'cancelled', 'draft'].includes(listingStatus)) {
+    const listing = listingResult.rows[0];
+    if (!listing) {
+      await client.query('ROLLBACK');
+      reply.code(404);
+      return { ok: false, error: 'Listing not found' };
+    }
+
+    // Reconcile an expired reservation while holding the same listing lock.
+    const expiredReservation = await client.query<{ order_id: string }>(
+      `SELECT order_id
+       FROM listing_checkout_reservations
+       WHERE listing_id = $1
+         AND status = 'active'
+         AND expires_at <= NOW()
+       LIMIT 1
+       FOR UPDATE`,
+      [payload.listingId]
+    );
+    if (expiredReservation.rowCount) {
+      await client.query(
+        `UPDATE orders
+         SET status = 'cancelled', updated_at = NOW()
+         WHERE id = $1 AND status = 'created'`,
+        [expiredReservation.rows[0].order_id]
+      );
+      listing.status = 'active';
+    }
+
+    if (listing.status !== 'active') {
+      await client.query('ROLLBACK');
       reply.code(409);
       return {
         ok: false,
-        error: `Listing cannot be purchased from status '${listingStatus}'`,
+        error: `Listing cannot be purchased from status '${listing.status}'`,
       };
     }
-  }
-
-  const existingOrderForListing = await db.query<{ id: string }>(
-    `
-      SELECT id
-      FROM orders
-      WHERE listing_id = $1
-        AND status NOT IN ('cancelled')
-      LIMIT 1
-    `,
-    [payload.listingId]
-  );
-
-  if (existingOrderForListing.rowCount) {
-    reply.code(409);
-    return {
-      ok: false,
-      error: 'This listing has already been purchased',
-    };
-  }
-
-  if (listing.seller_id === payload.buyerId) {
-    reply.code(400);
-    return { ok: false, error: 'Buyer cannot purchase their own listing' };
-  }
-
-  if (payload.addressId) {
-    const addressOwner = await db.query(
-      'SELECT id FROM user_addresses WHERE id = $1 AND user_id = $2 LIMIT 1',
-      [payload.addressId, payload.buyerId]
-    );
-    if (!addressOwner.rowCount) {
+    if (listing.seller_id === actorUserId) {
+      await client.query('ROLLBACK');
       reply.code(400);
-      return { ok: false, error: 'Address does not belong to buyer' };
+      return { ok: false, error: 'Buyer cannot purchase their own listing' };
     }
-  }
 
-  if (payload.paymentMethodId) {
-    const methodOwner = await db.query(
-      'SELECT id FROM user_payment_methods WHERE id = $1 AND user_id = $2 LIMIT 1',
-      [payload.paymentMethodId, payload.buyerId]
+    const conflictingReservation = await client.query<{ id: string }>(
+      `SELECT id
+       FROM listing_checkout_reservations
+       WHERE listing_id = $1
+         AND status = 'active'
+         AND expires_at > NOW()
+       LIMIT 1`,
+      [payload.listingId]
     );
-    if (!methodOwner.rowCount) {
-      reply.code(400);
-      return { ok: false, error: 'Payment method does not belong to buyer' };
+    if (conflictingReservation.rowCount) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return {
+        ok: false,
+        error: 'This listing is currently reserved for another checkout',
+        code: 'LISTING_CHECKOUT_RESERVED',
+      };
     }
-  }
 
-  const subtotalGbp = roundTo(Number(listing.price_gbp), 2);
-  const platformChargeGbp =
-    payload.platformChargeGbp !== undefined
-      ? roundTo(payload.platformChargeGbp, 2)
-      : payload.buyerProtectionFeeGbp !== undefined
-        ? roundTo(payload.buyerProtectionFeeGbp, 2)
-        : calculateCommercePlatformChargeGbp(subtotalGbp);
-  const postageFeeGbp = roundTo(Math.max(0, payload.postageFeeGbp ?? 0), 2);
-  const totalGbp = roundTo(subtotalGbp + platformChargeGbp + postageFeeGbp, 2);
+    if (payload.addressId) {
+      const addressOwner = await client.query(
+        'SELECT id FROM user_addresses WHERE id = $1 AND user_id = $2 LIMIT 1',
+        [payload.addressId, actorUserId]
+      );
+      if (!addressOwner.rowCount) {
+        await client.query('ROLLBACK');
+        reply.code(400);
+        return { ok: false, error: 'Address does not belong to buyer' };
+      }
+    }
+    if (payload.paymentMethodId) {
+      const methodOwner = await client.query(
+        `SELECT id
+         FROM user_payment_methods
+         WHERE id = $1
+           AND user_id = $2
+           AND provider = 'stripe'
+           AND status = 'active'
+           AND provider_payment_method_ref IS NOT NULL
+         LIMIT 1`,
+        [payload.paymentMethodId, actorUserId]
+      );
+      if (!methodOwner.rowCount) {
+        await client.query('ROLLBACK');
+        reply.code(400);
+        return { ok: false, error: 'Payment method does not belong to buyer' };
+      }
+    }
 
-  const orderId = payload.orderId ?? `ord_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-
-  const insertResult = await db.query<{
-    id: string;
-    buyer_id: string;
-    seller_id: string;
-    listing_id: string;
-    subtotal_gbp: number | string;
-    buyer_protection_fee_gbp: number | string;
-    postage_fee_gbp: number | string;
-    total_gbp: number | string;
-    status: string;
-    address_id: number | null;
-    payment_method_id: number | null;
-    shipping_carrier_id: string | null;
-    shipping_provider: string | null;
-    tracking_number: string | null;
-    shipping_label_url: string | null;
-    shipping_quote_gbp: number | string | null;
-    shipped_at: string | null;
-    delivered_at: string | null;
-    created_at: string;
-    updated_at: string;
-  }>(
-    `
-      INSERT INTO orders (
-        id,
-        buyer_id,
-        seller_id,
-        listing_id,
-        subtotal_gbp,
-        buyer_protection_fee_gbp,
-        postage_fee_gbp,
-        total_gbp,
-        status,
-        address_id,
-        payment_method_id,
-        shipping_carrier_id
+    if (!payload.shippingQuoteId) {
+      await client.query('ROLLBACK');
+      reply.code(422);
+      return {
+        ok: false,
+        error: 'A current server-issued shipping quote is required',
+        code: 'SHIPPING_QUOTE_REQUIRED',
+      };
+    }
+    const shippingQuoteResult = await client.query<{
+      id: string;
+      buyer_id: string;
+      seller_id: string;
+      listing_id: string;
+      address_id: number | string | null;
+      carrier_id: string;
+      price_gbp: number | string;
+      quote_hash: string;
+      expires_at: string;
+      used_order_id: string | null;
+    }>(
+      `SELECT
+         id, buyer_id, seller_id, listing_id, address_id,
+         carrier_id, price_gbp, quote_hash, expires_at::text, used_order_id
+       FROM commerce_shipping_quotes
+       WHERE id = $1
+       LIMIT 1
+       FOR UPDATE`,
+      [payload.shippingQuoteId]
+    );
+    const shippingQuote = shippingQuoteResult.rows[0];
+    const quoteMismatch = !shippingQuote
+      || shippingQuote.buyer_id !== actorUserId
+      || shippingQuote.seller_id !== listing.seller_id
+      || shippingQuote.listing_id !== listing.id
+      || (
+        shippingQuote.address_id === null
+          ? payload.addressId !== undefined
+          : Number(shippingQuote.address_id) !== payload.addressId
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'created', $9, $10, $11)
-      RETURNING
-        id,
-        buyer_id,
-        seller_id,
-        listing_id,
-        subtotal_gbp,
-        buyer_protection_fee_gbp,
-        postage_fee_gbp,
-        total_gbp,
-        status,
-        address_id,
-        payment_method_id,
-        shipping_carrier_id,
-        shipping_provider,
-        tracking_number,
-        shipping_label_url,
-        shipping_quote_gbp,
-        shipped_at::text,
-        delivered_at::text,
-        created_at::text,
-        updated_at::text
-    `,
-    [
-      orderId,
-      payload.buyerId,
-      listing.seller_id,
-      payload.listingId,
+      || shippingQuote.carrier_id !== payload.shippingCarrierId
+      || Boolean(shippingQuote.used_order_id)
+      || Date.parse(shippingQuote.expires_at) <= Date.now();
+    if (quoteMismatch) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return {
+        ok: false,
+        error: 'Shipping quote is expired, already used, or does not match this checkout',
+        code: 'SHIPPING_QUOTE_INVALID',
+      };
+    }
+
+    const subtotalGbp = roundTo(Number(listing.price_gbp), 2);
+    const platformChargeGbp = calculateCommercePlatformChargeGbp(subtotalGbp);
+    const postageFeeGbp = roundTo(Number(shippingQuote.price_gbp), 2);
+    const totalGbp = roundTo(subtotalGbp + platformChargeGbp + postageFeeGbp, 2);
+    const orderId = request.authUser?.role === 'admin' && payload.orderId
+      ? payload.orderId
+      : createRuntimeId('ord');
+    const reservationId = createRuntimeId('lres');
+    const quoteSnapshot = {
+      source: 'direct',
+      listingId: listing.id,
       subtotalGbp,
       platformChargeGbp,
       postageFeeGbp,
       totalGbp,
-      payload.addressId ?? null,
-      payload.paymentMethodId ?? null,
-      payload.shippingCarrierId ?? null,
-    ]
-  );
+      currency: 'GBP',
+      expiresAt: checkoutExpiresAt,
+      policyVersion: quoteVersion,
+    };
+    const quoteHash = crypto
+      .createHash('sha256')
+      .update(JSON.stringify(quoteSnapshot))
+      .digest('hex');
 
-  reply.code(201);
-  return {
-    ok: true,
-    order: {
-      id: insertResult.rows[0].id,
-      buyerId: insertResult.rows[0].buyer_id,
-      sellerId: insertResult.rows[0].seller_id,
-      listingId: insertResult.rows[0].listing_id,
-      subtotalGbp: Number(insertResult.rows[0].subtotal_gbp),
-      buyerProtectionFeeGbp: Number(insertResult.rows[0].buyer_protection_fee_gbp),
-      platformChargeGbp: Number(insertResult.rows[0].buyer_protection_fee_gbp),
-      postageFeeGbp: Number(insertResult.rows[0].postage_fee_gbp),
-      totalGbp: Number(insertResult.rows[0].total_gbp),
-      status: insertResult.rows[0].status,
-      addressId: insertResult.rows[0].address_id,
-      paymentMethodId: insertResult.rows[0].payment_method_id,
-      shippingCarrierId: insertResult.rows[0].shipping_carrier_id,
-      shippingProvider: insertResult.rows[0].shipping_provider,
-      trackingNumber: insertResult.rows[0].tracking_number,
-      shippingLabelUrl: insertResult.rows[0].shipping_label_url,
-      shippingQuoteGbp: insertResult.rows[0].shipping_quote_gbp === null ? null : Number(insertResult.rows[0].shipping_quote_gbp),
-      shippedAt: insertResult.rows[0].shipped_at,
-      deliveredAt: insertResult.rows[0].delivered_at,
-      createdAt: insertResult.rows[0].created_at,
-      updatedAt: insertResult.rows[0].updated_at,
-    },
-  };
+    const insertResult = await client.query<{
+      id: string;
+      buyer_id: string;
+      seller_id: string;
+      listing_id: string;
+      subtotal_gbp: number | string;
+      buyer_protection_fee_gbp: number | string;
+      postage_fee_gbp: number | string;
+      total_gbp: number | string;
+      status: string;
+      address_id: number | null;
+      payment_method_id: number | null;
+      shipping_carrier_id: string | null;
+      shipping_provider: string | null;
+      tracking_number: string | null;
+      shipping_label_url: string | null;
+      shipping_quote_gbp: number | string | null;
+      shipped_at: string | null;
+      delivered_at: string | null;
+      created_at: string;
+      updated_at: string;
+    }>(
+      `INSERT INTO orders (
+         id, buyer_id, seller_id, listing_id,
+         subtotal_gbp, buyer_protection_fee_gbp, postage_fee_gbp, total_gbp,
+         status, address_id, payment_method_id, shipping_carrier_id,
+         idempotency_key, request_hash, checkout_expires_at,
+         quote_version, quote_hash, quote_snapshot, shipping_quote_id
+       )
+       VALUES (
+         $1, $2, $3, $4, $5, $6, $7, $8,
+         'created', $9, $10, $11, $12, $13, $14, $15, $16, $17::jsonb, $18
+       )
+       RETURNING
+         id, buyer_id, seller_id, listing_id,
+         subtotal_gbp, buyer_protection_fee_gbp, postage_fee_gbp, total_gbp,
+         status, address_id, payment_method_id, shipping_carrier_id,
+         shipping_provider, tracking_number, shipping_label_url,
+         shipping_quote_gbp, shipped_at::text, delivered_at::text,
+         created_at::text, updated_at::text`,
+      [
+        orderId,
+        actorUserId,
+        listing.seller_id,
+        listing.id,
+        subtotalGbp,
+        platformChargeGbp,
+        postageFeeGbp,
+        totalGbp,
+        payload.addressId ?? null,
+        payload.paymentMethodId ?? null,
+        payload.shippingCarrierId ?? null,
+        payload.idempotencyKey ?? null,
+        requestHash,
+        checkoutExpiresAt,
+        quoteVersion,
+        quoteHash,
+        toJsonString(quoteSnapshot),
+        shippingQuote.id,
+      ]
+    );
+
+    await client.query(
+      `UPDATE commerce_shipping_quotes
+       SET used_order_id = $2
+       WHERE id = $1 AND used_order_id IS NULL`,
+      [shippingQuote.id, orderId]
+    );
+
+    await client.query(
+      `INSERT INTO listing_checkout_reservations (
+         id, offer_id, listing_id, buyer_id, seller_id,
+         order_id, source, status, expires_at
+       )
+       VALUES ($1, NULL, $2, $3, $4, $5, 'direct', 'active', $6)`,
+      [
+        reservationId,
+        listing.id,
+        actorUserId,
+        listing.seller_id,
+        orderId,
+        checkoutExpiresAt,
+      ]
+    );
+    await client.query(
+      `UPDATE listings
+       SET status = 'paused', updated_at = NOW()
+       WHERE id = $1`,
+      [listing.id]
+    );
+    await client.query(
+      `INSERT INTO order_events (
+         order_id, event_type, actor_id, source, deduplication_key, metadata
+       )
+       VALUES
+         ($1, 'order.created', $2, 'direct_checkout', $3, $4::jsonb),
+         ($1, 'listing.reserved', $2, 'direct_checkout', $5, $6::jsonb)
+       ON CONFLICT (order_id, deduplication_key)
+         WHERE deduplication_key IS NOT NULL
+       DO NOTHING`,
+      [
+        orderId,
+        actorUserId,
+        `order.created:${orderId}`,
+        toJsonString({ quoteHash }),
+        `listing.reserved:${reservationId}`,
+        toJsonString({ reservationId, expiresAt: checkoutExpiresAt }),
+      ]
+    );
+    await appendDomainEvent(client, {
+      aggregateType: 'order',
+      aggregateId: orderId,
+      eventType: 'order.created',
+      actorId: actorUserId,
+      correlationId: request.id,
+      idempotencyKey: payload.idempotencyKey ?? orderId,
+      deduplicationKey: `order.created:${orderId}`,
+      payload: {
+        orderId,
+        listingId: listing.id,
+        reservationId,
+        buyerId: actorUserId,
+        sellerId: listing.seller_id,
+        source: 'direct',
+        expiresAt: checkoutExpiresAt,
+        totalGbp,
+      },
+    });
+    await client.query('COMMIT');
+    try {
+      await enqueueOutboxDrainJob();
+    } catch (error) {
+      request.log.error(
+        { err: error, orderId },
+        'Failed to enqueue direct-checkout outbox drain'
+      );
+    }
+
+    const row = insertResult.rows[0];
+    reply.code(201);
+    return {
+      ok: true,
+      idempotent: false,
+      checkout: {
+        reservationId,
+        expiresAt: checkoutExpiresAt,
+        quoteVersion,
+        quoteHash,
+      },
+      order: {
+        id: row.id,
+        buyerId: row.buyer_id,
+        sellerId: row.seller_id,
+        listingId: row.listing_id,
+        subtotalGbp: Number(row.subtotal_gbp),
+        buyerProtectionFeeGbp: Number(row.buyer_protection_fee_gbp),
+        platformChargeGbp: Number(row.buyer_protection_fee_gbp),
+        postageFeeGbp: Number(row.postage_fee_gbp),
+        totalGbp: Number(row.total_gbp),
+        status: row.status,
+        addressId: row.address_id,
+        paymentMethodId: row.payment_method_id,
+        shippingCarrierId: row.shipping_carrier_id,
+        shippingProvider: row.shipping_provider,
+        trackingNumber: row.tracking_number,
+        shippingLabelUrl: row.shipping_label_url,
+        shippingQuoteGbp: row.shipping_quote_gbp === null ? null : Number(row.shipping_quote_gbp),
+        shippedAt: row.shipped_at,
+        deliveredAt: row.delivered_at,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      },
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    const apiError = getApiError(error);
+    if (apiError) {
+      throw apiError;
+    }
+    request.log.error({ err: error, listingId: payload.listingId }, 'Failed to create checkout order');
+    reply.code(500);
+    return { ok: false, error: 'Unable to create checkout order' };
+  } finally {
+    client.release();
+  }
+
+});
+
+app.patch('/orders/:orderId/checkout', async (request, reply) => {
+  const { orderId } = z.object({
+    orderId: z.string().min(4).max(64),
+  }).parse(request.params);
+  const payload = z.object({
+    addressId: z.coerce.number().int().positive(),
+    paymentMethodId: z.coerce.number().int().positive().optional(),
+    shippingQuoteId: z.string().min(8).max(160),
+    shippingCarrierId: z.string().min(2).max(80),
+  }).parse(request.body);
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+    const orderResult = await client.query<{
+      id: string;
+      buyer_id: string;
+      seller_id: string;
+      listing_id: string;
+      subtotal_gbp: number | string;
+      status: string;
+      payment_intent_id: string | null;
+      checkout_expires_at: string | null;
+    }>(
+      `SELECT
+         id, buyer_id, seller_id, listing_id, subtotal_gbp,
+         status, payment_intent_id, checkout_expires_at::text
+       FROM orders
+       WHERE id = $1
+       LIMIT 1
+       FOR UPDATE`,
+      [orderId]
+    );
+    const order = orderResult.rows[0];
+    if (!order) {
+      await client.query('ROLLBACK');
+      reply.code(404);
+      return { ok: false, error: 'Order not found' };
+    }
+    if (order.buyer_id !== actorUserId) {
+      await client.query('ROLLBACK');
+      reply.code(403);
+      return { ok: false, error: 'Only the buyer can complete checkout details' };
+    }
+    if (order.status !== 'created' || order.payment_intent_id) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return {
+        ok: false,
+        error: order.payment_intent_id
+          ? 'Checkout details cannot change after payment has started'
+          : `Checkout details cannot change from order status '${order.status}'`,
+      };
+    }
+    if (
+      order.checkout_expires_at
+      && Date.parse(order.checkout_expires_at) <= Date.now()
+    ) {
+      await client.query(
+        `UPDATE orders SET status = 'cancelled', updated_at = NOW()
+         WHERE id = $1 AND status = 'created'`,
+        [orderId]
+      );
+      await client.query('COMMIT');
+      reply.code(410);
+      return {
+        ok: false,
+        error: 'Checkout reservation has expired',
+        code: 'CHECKOUT_RESERVATION_EXPIRED',
+      };
+    }
+
+    const address = await client.query(
+      `SELECT id FROM user_addresses
+       WHERE id = $1 AND user_id = $2
+       LIMIT 1`,
+      [payload.addressId, actorUserId]
+    );
+    if (!address.rowCount) {
+      await client.query('ROLLBACK');
+      reply.code(400);
+      return { ok: false, error: 'Address does not belong to buyer' };
+    }
+    if (payload.paymentMethodId) {
+      const paymentMethod = await client.query(
+        `SELECT id FROM user_payment_methods
+         WHERE id = $1
+           AND user_id = $2
+           AND provider = 'stripe'
+           AND status = 'active'
+           AND provider_payment_method_ref IS NOT NULL
+         LIMIT 1`,
+        [payload.paymentMethodId, actorUserId]
+      );
+      if (!paymentMethod.rowCount) {
+        await client.query('ROLLBACK');
+        reply.code(400);
+        return { ok: false, error: 'Payment method does not belong to buyer' };
+      }
+    }
+
+    const shippingQuoteResult = await client.query<{
+      id: string;
+      buyer_id: string;
+      seller_id: string;
+      listing_id: string;
+      address_id: number | string | null;
+      carrier_id: string;
+      price_gbp: number | string;
+      quote_hash: string;
+      expires_at: string;
+      used_order_id: string | null;
+    }>(
+      `SELECT
+         id, buyer_id, seller_id, listing_id, address_id,
+         carrier_id, price_gbp, quote_hash, expires_at::text, used_order_id
+       FROM commerce_shipping_quotes
+       WHERE id = $1
+       LIMIT 1
+       FOR UPDATE`,
+      [payload.shippingQuoteId]
+    );
+    const shippingQuote = shippingQuoteResult.rows[0];
+    const quoteMismatch = !shippingQuote
+      || shippingQuote.buyer_id !== actorUserId
+      || shippingQuote.seller_id !== order.seller_id
+      || shippingQuote.listing_id !== order.listing_id
+      || Number(shippingQuote.address_id) !== payload.addressId
+      || shippingQuote.carrier_id !== payload.shippingCarrierId
+      || (
+        shippingQuote.used_order_id !== null
+        && shippingQuote.used_order_id !== orderId
+      )
+      || (
+        shippingQuote.used_order_id === null
+        && Date.parse(shippingQuote.expires_at) <= Date.now()
+      );
+    if (quoteMismatch) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return {
+        ok: false,
+        error: 'Shipping quote is expired, already used, or does not match this checkout',
+        code: 'SHIPPING_QUOTE_INVALID',
+      };
+    }
+
+    const subtotalGbp = roundTo(Number(order.subtotal_gbp), 2);
+    const platformChargeGbp = calculateCommercePlatformChargeGbp(subtotalGbp);
+    const postageFeeGbp = roundTo(Number(shippingQuote.price_gbp), 2);
+    const totalGbp = roundTo(subtotalGbp + platformChargeGbp + postageFeeGbp, 2);
+    const quoteVersion = 'commerce-gbp-2026-07-28.1';
+    const quoteSnapshot = {
+      source: 'checkout_completion',
+      orderId,
+      listingId: order.listing_id,
+      subtotalGbp,
+      platformChargeGbp,
+      postageFeeGbp,
+      totalGbp,
+      currency: 'GBP',
+      shippingQuoteId: shippingQuote.id,
+      shippingQuoteHash: shippingQuote.quote_hash,
+      policyVersion: quoteVersion,
+    };
+    const quoteHash = crypto
+      .createHash('sha256')
+      .update(JSON.stringify(quoteSnapshot))
+      .digest('hex');
+    await client.query(
+      `UPDATE orders
+       SET address_id = $2,
+           payment_method_id = $3,
+           shipping_carrier_id = $4,
+           shipping_quote_id = $5,
+           postage_fee_gbp = $6,
+           buyer_protection_fee_gbp = $7,
+           total_gbp = $8,
+           quote_version = $9,
+           quote_hash = $10,
+           quote_snapshot = $11::jsonb,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [
+        orderId,
+        payload.addressId,
+        payload.paymentMethodId ?? null,
+        payload.shippingCarrierId,
+        shippingQuote.id,
+        postageFeeGbp,
+        platformChargeGbp,
+        totalGbp,
+        quoteVersion,
+        quoteHash,
+        toJsonString(quoteSnapshot),
+      ]
+    );
+    await client.query(
+      `UPDATE commerce_shipping_quotes
+       SET used_order_id = $2
+       WHERE id = $1
+         AND (used_order_id IS NULL OR used_order_id = $2)`,
+      [shippingQuote.id, orderId]
+    );
+    await client.query(
+      `INSERT INTO order_events (
+         order_id, event_type, actor_id, source, deduplication_key, metadata
+       )
+       VALUES ($1, 'checkout.completed', $2, 'buyer', $3, $4::jsonb)
+       ON CONFLICT (order_id, deduplication_key)
+         WHERE deduplication_key IS NOT NULL
+       DO NOTHING`,
+      [
+        orderId,
+        actorUserId,
+        `checkout.completed:${quoteHash}`,
+        toJsonString({ quoteHash, shippingQuoteId: shippingQuote.id }),
+      ]
+    );
+    await client.query('COMMIT');
+    return {
+      ok: true,
+      orderId,
+      checkout: {
+        addressId: payload.addressId,
+        paymentMethodId: payload.paymentMethodId ?? null,
+        shippingCarrierId: payload.shippingCarrierId,
+        shippingQuoteId: shippingQuote.id,
+        subtotalGbp,
+        platformChargeGbp,
+        postageFeeGbp,
+        totalGbp,
+        quoteVersion,
+        quoteHash,
+      },
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    request.log.error({ err: error, orderId }, 'Failed to complete order checkout details');
+    reply.code(500);
+    return { ok: false, error: 'Unable to complete checkout details' };
+  } finally {
+    client.release();
+  }
 });
 
 app.post('/orders/:orderId/pay', async (request, reply) => {
@@ -30063,6 +32848,58 @@ app.get('/orders/:orderId/parcel/events', async (request, reply) => {
       occurredAt: row.occurred_at,
       receivedAt: row.received_at,
       payload: row.payload,
+    })),
+  };
+});
+
+app.get('/orders/:orderId/events', async (request, reply) => {
+  const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
+  const { orderId } = paramsSchema.parse(request.params);
+  const order = await db.query<{ buyer_id: string; seller_id: string }>(
+    `SELECT buyer_id, seller_id
+     FROM orders
+     WHERE id = $1
+     LIMIT 1`,
+    [orderId]
+  );
+  if (!order.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Order not found' };
+  }
+  const actor = request.authUser;
+  const canRead = actor?.role === 'admin'
+    || actor?.userId === order.rows[0].buyer_id
+    || actor?.userId === order.rows[0].seller_id;
+  if (!canRead) {
+    reply.code(403);
+    return { ok: false, error: 'Forbidden: order timeline access denied' };
+  }
+
+  const events = await db.query<{
+    id: number;
+    event_type: string;
+    actor_id: string | null;
+    source: string;
+    metadata: Record<string, unknown>;
+    created_at: string;
+  }>(
+    `SELECT id, event_type, actor_id, source, metadata, created_at::text
+     FROM order_events
+     WHERE order_id = $1
+     ORDER BY created_at ASC, id ASC`,
+    [orderId]
+  );
+
+  return {
+    ok: true,
+    orderId,
+    items: events.rows.map((event) => ({
+      id: event.id,
+      eventType: event.event_type,
+      actorId: event.actor_id,
+      source: event.source,
+      metadata: event.metadata,
+      createdAt: event.created_at,
     })),
   };
 });
@@ -30472,25 +33309,48 @@ app.post('/orders/:orderId/cancel', async (request, reply) => {
 
     const order = orderResult.rows[0];
     if (!order) {
+      await client.query('ROLLBACK');
       reply.code(404);
       return { ok: false, error: 'Order not found' };
     }
 
     if (order.buyer_id !== userId) {
+      await client.query('ROLLBACK');
       reply.code(403);
       return { ok: false, error: 'Only the buyer can cancel this order' };
     }
 
-    if (order.status === 'shipped' || order.status === 'delivered' || order.status === 'cancelled') {
+    if (order.status !== 'created') {
+      await client.query('ROLLBACK');
       reply.code(409);
-      return { ok: false, error: `Cannot cancel an order that is already ${order.status}` };
+      return {
+        ok: false,
+        error: order.status === 'paid'
+          ? 'Paid orders must use the refund or return workflow'
+          : `Cannot cancel an order that is already ${order.status}`,
+      };
+    }
+    if (order.payment_intent_id) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return {
+        ok: false,
+        error: 'A payment attempt is already attached to this order',
+        code: 'ORDER_PAYMENT_IN_PROGRESS',
+      };
     }
 
     await client.query(`UPDATE orders SET status = 'cancelled', updated_at = NOW() WHERE id = $1`, [orderId]);
-
-    if (order.payment_intent_id && order.status === 'paid') {
-      await postCommerceOrderRefundLedgerReversal(client, orderId, userId, Number(order.total_gbp));
-    }
+    await client.query(
+      `INSERT INTO order_events (
+         order_id, event_type, actor_id, source, deduplication_key, metadata
+       )
+       VALUES ($1, 'order.cancelled', $2, 'buyer', $3, '{}'::jsonb)
+       ON CONFLICT (order_id, deduplication_key)
+         WHERE deduplication_key IS NOT NULL
+       DO NOTHING`,
+      [orderId, userId, `order.cancelled:${orderId}`]
+    );
 
     await client.query('COMMIT');
     return { ok: true, orderId, status: 'cancelled' };
@@ -32652,6 +35512,65 @@ app.get('/auctions/:auctionId', async (request, reply) => {
     [auctionId]
   );
 
+  const mediaResult = await db.query<{
+    id: string;
+    image_url: string;
+    sort_order: number;
+    media_width: number | null;
+    media_height: number | null;
+    media_type: 'image' | 'video' | null;
+    poster_url: string | null;
+    blurhash: string | null;
+    focal_x: string | number | null;
+    focal_y: string | number | null;
+  }>(
+    `
+      SELECT
+        id,
+        image_url,
+        sort_order,
+        NULLIF(to_jsonb(listing_images) ->> 'media_width', '')::integer AS media_width,
+        NULLIF(to_jsonb(listing_images) ->> 'media_height', '')::integer AS media_height,
+        COALESCE(NULLIF(to_jsonb(listing_images) ->> 'media_type', ''), 'image') AS media_type,
+        NULLIF(to_jsonb(listing_images) ->> 'poster_url', '') AS poster_url,
+        NULLIF(to_jsonb(listing_images) ->> 'blurhash', '') AS blurhash,
+        NULLIF(to_jsonb(listing_images) ->> 'focal_x', '') AS focal_x,
+        NULLIF(to_jsonb(listing_images) ->> 'focal_y', '') AS focal_y
+      FROM listing_images
+      WHERE listing_id = $1
+      ORDER BY sort_order, created_at, id
+    `,
+    [row.listing_id]
+  );
+
+  const mediaItems = mediaResult.rows.map((media) => ({
+    id: media.id,
+    type: media.media_type === 'video' ? 'video' as const : 'image' as const,
+    url: media.image_url,
+    width: media.media_width,
+    height: media.media_height,
+    blurhash: media.blurhash,
+    focalX: media.focal_x == null ? null : Number(media.focal_x),
+    focalY: media.focal_y == null ? null : Number(media.focal_y),
+    posterUrl: media.poster_url,
+    order: media.sort_order,
+  }));
+
+  if (mediaItems.length === 0 && row.image_url) {
+    mediaItems.push({
+      id: `${row.listing_id}:primary`,
+      type: 'image',
+      url: row.image_url,
+      width: null,
+      height: null,
+      blurhash: null,
+      focalX: null,
+      focalY: null,
+      posterUrl: null,
+      order: 0,
+    });
+  }
+
   return {
     ok: true,
     auction: {
@@ -32668,7 +35587,7 @@ app.get('/auctions/:auctionId', async (request, reply) => {
       // Per spec 02_AUCTION §7: canonical media array. Empty until
       // the listing_media table is populated. imageUrl remains as a
       // compatibility field.
-      mediaItems: [],
+      mediaItems,
       brand: row.brand ?? null,
       category: row.category ?? null,
       conditionLabel: row.condition_label ?? null,
@@ -33065,6 +35984,11 @@ app.get('/users/me/auction-bids', async (request, reply) => {
   return { ok: true, items: filtered, nextCursor };
 });
 
+app.get('/co-own/policy', async () => ({
+  ok: true,
+  policy: COOWN_POLICY,
+}));
+
 app.get('/co-own/assets', async (request) => {
   const querySchema = z.object({
     openOnly: z.union([z.string(), z.boolean()]).optional(),
@@ -33168,7 +36092,7 @@ app.post('/co-own/assets', async (request, reply) => {
     issuerId: z.string().min(2),
     title: z.string().min(3).max(180).optional(),
     imageUrl: z.string().url().optional(),
-    totalUnits: z.number().int().min(1).max(20),
+    totalUnits: z.number().int().min(1).max(COOWN_POLICY.maxIssuanceUnits),
     unitPriceGbp: z.number().positive(),
     unitPriceStable: z.number().positive(),
     settlementMode: z.enum(['GBP', 'TVUSD', 'HYBRID', 'ONEZE']).default('ONEZE'),
@@ -33980,7 +36904,7 @@ app.post('/co-own/assets/:assetId/orders/preview', async (request, reply) => {
   const bodySchema = z.object({
     userId: z.string().min(2),
     side: z.enum(['buy', 'sell']),
-    units: z.number().int().min(1).max(CO_OWN_MAX_ORDER_UNITS),
+    units: z.number().int().min(1).max(COOWN_POLICY.maxOrderUnits),
     orderType: z.enum(['market', 'limit']).default('market'),
     limitPriceGbp: z.number().positive().optional(),
   });
@@ -34151,7 +37075,7 @@ app.post('/co-own/assets/:assetId/orders/reserve', async (request, reply) => {
   const bodySchema = z.object({
     userId: z.string().min(2),
     side: z.enum(['buy', 'sell']),
-    units: z.number().int().min(1).max(CO_OWN_MAX_ORDER_UNITS),
+    units: z.number().int().min(1).max(COOWN_POLICY.maxOrderUnits),
     orderType: z.enum(['market', 'limit']).default('market'),
     limitPriceGbp: z.number().positive().optional(),
     idempotencyKey: z.string().min(8).max(140).optional(),
@@ -34372,7 +37296,7 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
   const bodySchema = z.object({
     userId: z.string().min(2),
     side: z.enum(['buy', 'sell']),
-    units: z.number().int().min(1).max(CO_OWN_MAX_ORDER_UNITS),
+    units: z.number().int().min(1).max(COOWN_POLICY.maxOrderUnits),
     orderType: z.enum(['market', 'limit']).default('market'),
     limitPriceGbp: z.number().positive().optional(),
     reservationId: z.string().min(8).max(160),
@@ -35266,7 +38190,7 @@ app.post('/co-own/assets/:assetId/buyout-offers', async (request, reply) => {
   const bodySchema = z.object({
     bidderUserId: z.string().min(2),
     offerPriceGbp: z.number().positive(),
-    targetUnits: z.number().int().min(1).max(20).optional(),
+    targetUnits: z.number().int().min(1).max(COOWN_POLICY.maxBuyoutUnits).optional(),
     expiresInHours: z.number().int().min(1).max(168).default(24),
     metadata: z.record(z.unknown()).optional(),
   });
@@ -35523,7 +38447,7 @@ app.post('/co-own/buyout-offers/:offerId/accept', async (request, reply) => {
   const paramsSchema = z.object({ offerId: z.string().min(4) });
   const bodySchema = z.object({
     holderUserId: z.string().min(2),
-    units: z.number().int().min(1).max(CO_OWN_MAX_ORDER_UNITS),
+    units: z.number().int().min(1).max(COOWN_POLICY.maxBuyoutUnits),
     metadata: z.record(z.unknown()).optional(),
   });
 
@@ -35943,8 +38867,23 @@ app.get('/co-own/assets/:assetId', async (request, reply) => {
     is_open: boolean;
     created_at: string;
     updated_at: string;
+    issuer_username: string | null;
+    issuer_display_name: string | null;
+    issuer_avatar: string | null;
+    issuer_location: string | null;
   }>(
-    `SELECT * FROM coOwn_assets WHERE id = $1 LIMIT 1`,
+    `
+      SELECT
+        sa.*,
+        u.username AS issuer_username,
+        u.display_name AS issuer_display_name,
+        u.avatar AS issuer_avatar,
+        u.location AS issuer_location
+      FROM coOwn_assets sa
+      LEFT JOIN users u ON u.id = sa.issuer_id
+      WHERE sa.id = $1
+      LIMIT 1
+    `,
     [assetId]
   );
 
@@ -36028,6 +38967,8 @@ app.get('/co-own/assets/:assetId', async (request, reply) => {
   }
 
   const marketSnapshot = {
+    version: 1,
+    asOf: new Date().toISOString(),
     lastExecutionPriceGbp,
     lastExecutionAt: snap?.last_execution_at ?? null,
     volume24hGbp: volume24h > 0 ? volume24h : null,
@@ -36081,6 +39022,14 @@ app.get('/co-own/assets/:assetId', async (request, reply) => {
       id: row.id,
       listingId: row.listing_id,
       issuerId: row.issuer_id,
+      issuer: row.issuer_username
+        ? {
+            username: row.issuer_username,
+            displayName: row.issuer_display_name,
+            avatar: row.issuer_avatar,
+            location: row.issuer_location,
+          }
+        : null,
       title: row.title,
       imageUrl: row.image_url,
       totalUnits: row.total_units,
@@ -36157,6 +39106,9 @@ const start = async () => {
       handleReconciliationJob: async ({ reason, runDate }) => {
         await runPlatformReconciliation(reason, runDate);
       },
+      handleOutboxDrainJob: async () => {
+        await processDomainOutboxBatch();
+      },
       handleOnezeMintReserveJob: async ({ mintOperationId, initiatedBy, reason }) => {
         await processQueuedOnezeMintReserveAllocation({
           mintOperationId,
@@ -36174,6 +39126,7 @@ const start = async () => {
     });
 
     startAuctionSweepScheduler();
+    startDomainOutboxScheduler();
     startPlatformReconciliationScheduler();
     startPlatformRevenueSweepScheduler();
     startOpsAlertingScheduler();
@@ -36187,7 +39140,7 @@ const start = async () => {
     // honestly claim AI capability. Does not block startup — heuristic
     // baselines are valid.
     try {
-      const readiness = await validateAiDeployReadiness();
+      const readiness = await validateAiDeployReadiness({ probeProviders: false });
       if (readiness.blockingErrors.length > 0) {
         app.log.error(
           { blockingErrors: readiness.blockingErrors },
@@ -37552,13 +40505,28 @@ app.delete('/poster-highlights/:highlightId/frames/:frameId', async (request, re
 
 registerCreatorDocumentRoutes({ app, db, resolveAuthenticatedUserId });
 
-registerPriceAlertRoutes({ app, db, resolveAuthenticatedUserId });
+registerPriceAlertRoutes({
+  app,
+  db,
+  resolveAuthenticatedUserId,
+  queueNotification: queueUserNotification,
+});
 
-registerListingOfferRoutes({ app, db, resolveAuthenticatedUserId });
+registerListingOfferRoutes({
+  app,
+  db,
+  resolveAuthenticatedUserId,
+  calculatePlatformChargeGbp: calculateCommercePlatformChargeGbp,
+  authorizeInternalServiceRequest,
+  enqueueOutboxDrain: () => enqueueOutboxDrainJob('after_commit'),
+});
 
 registerChatComposerStateRoutes({ app, db, resolveAuthenticatedUserId });
 
-registerAiTruthRoutes({ app });
+registerAiTruthRoutes({
+  app,
+  authorizeAdminRequest: authorizeSecurityAdminRequest,
+});
 
 // POST /creator/documents — create or replace a draft document
 
@@ -37582,6 +40550,7 @@ const shutdown = async () => {
   isShuttingDown = true;
 
   stopAuctionSweepScheduler();
+  stopDomainOutboxScheduler();
   stopPlatformReconciliationScheduler();
   stopPlatformRevenueSweepScheduler();
   stopOpsAlertingScheduler();

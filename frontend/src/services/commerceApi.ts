@@ -53,12 +53,47 @@ function mapBackendAddress(row: BackendAddressRow): CommerceAddress {
 export interface CommercePaymentMethod {
   id: number;
   userId: string;
-  type: 'card' | 'bank_account' | 'apple_pay' | 'google_pay';
+  provider: 'stripe';
+  providerCustomerId: string;
+  providerPaymentMethodId: string;
+  type: 'card';
+  brand: string;
+  last4: string;
+  expiryMonth: number;
+  expiryYear: number;
   label: string;
-  details: string | null;
+  details: string;
   isDefault: boolean;
+  status: 'active';
+  redisplayConsent: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface StripeSetupSheetConfiguration {
+  provider: 'stripe';
+  setupIntentId: string;
+  setupIntentClientSecret: string;
+  customerId: string;
+  customerSessionClientSecret: string;
+  publishableKey: string;
+  merchantDisplayName: string;
+  returnUrl: string;
+}
+
+export interface StripeOrderSheetConfiguration {
+  provider: 'stripe';
+  orderId: string;
+  paymentIntentClientSecret: string;
+  customerId: string;
+  customerSessionClientSecret: string;
+  publishableKey: string;
+  merchantDisplayName: string;
+  merchantCountryCode: string;
+  currency: string;
+  returnUrl: string;
+  applePayEnabled: boolean;
+  googlePayEnabled: boolean;
 }
 
 export interface CommerceOrder {
@@ -90,6 +125,9 @@ export interface CommerceOrder {
 }
 
 export interface ShippingQuoteItem {
+  quoteId: string | null;
+  quoteHash: string | null;
+  expiresAt: string | null;
   carrierId: string;
   label: string;
   priceFromGbp: number;
@@ -276,6 +314,8 @@ export interface CreatePaymentMethodInput {
 export interface CreateOrderInput {
   buyerId: string;
   listingId: string;
+  idempotencyKey: string;
+  shippingQuoteId: string;
   addressId?: number;
   paymentMethodId?: number;
   platformChargeGbp?: number;
@@ -341,10 +381,37 @@ export async function deleteUserAddress(userId: string, addressId: number): Prom
 }
 
 export async function listUserPaymentMethods(userId: string): Promise<CommercePaymentMethod[]> {
+  void userId;
   const payload = await fetchJson<ListPaymentMethodsResponse>(
-    `/users/${encodeURIComponent(userId)}/payment-methods`
+    '/v2/payments/methods'
   );
   return payload.items;
+}
+
+export async function createStripeSetupSheet(
+  idempotencyKey: string
+): Promise<StripeSetupSheetConfiguration> {
+  return fetchJson<StripeSetupSheetConfiguration & { ok: true }>(
+    '/v2/payments/setup-intents',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idempotencyKey }),
+    }
+  );
+}
+
+export async function createStripeOrderSheet(
+  orderId: string
+): Promise<StripeOrderSheetConfiguration> {
+  return fetchJson<StripeOrderSheetConfiguration & { ok: true }>(
+    `/v2/payments/orders/${encodeURIComponent(orderId)}/sheet`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    }
+  );
 }
 
 export async function createUserPaymentMethod(
@@ -363,29 +430,28 @@ export async function createUserPaymentMethod(
   return payload.item;
 }
 
-export async function updateUserPaymentMethod(
-  userId: string,
-  paymentMethodId: number,
-  input: Partial<CreatePaymentMethodInput>
-): Promise<CommercePaymentMethod> {
-  const payload = await fetchJson<CreatePaymentMethodResponse>(
-    `/users/${encodeURIComponent(userId)}/payment-methods/${paymentMethodId}`,
+export async function setDefaultUserPaymentMethod(providerPaymentMethodId: string): Promise<CommercePaymentMethod[]> {
+  const payload = await fetchJson<ListPaymentMethodsResponse>(
+    `/v2/payments/methods/${encodeURIComponent(providerPaymentMethodId)}/default`,
     {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(input),
+      body: JSON.stringify({}),
     }
   );
-  return payload.item;
+  return payload.items;
 }
 
-export async function deleteUserPaymentMethod(userId: string, paymentMethodId: number): Promise<void> {
+export async function deleteUserPaymentMethod(
+  userId: string,
+  providerPaymentMethodId: string
+): Promise<void> {
+  void userId;
   await fetchJson<{ ok: true }>(
-    `/users/${encodeURIComponent(userId)}/payment-methods/${paymentMethodId}`,
+    `/v2/payments/methods/${encodeURIComponent(providerPaymentMethodId)}`,
     { method: 'DELETE' }
   );
 }
-
 export async function createOrder(input: CreateOrderInput): Promise<CommerceOrder> {
   const payload = await fetchJson<CreateOrderResponse>('/orders', {
     method: 'POST',
@@ -394,6 +460,47 @@ export async function createOrder(input: CreateOrderInput): Promise<CommerceOrde
   });
 
   return payload.order;
+}
+
+export async function completeOrderCheckout(
+  orderId: string,
+  input: {
+    addressId: number;
+    paymentMethodId?: number;
+    shippingQuoteId: string;
+    shippingCarrierId: string;
+  }
+): Promise<{
+  orderId: string;
+  checkout: {
+    subtotalGbp: number;
+    platformChargeGbp: number;
+    postageFeeGbp: number;
+    totalGbp: number;
+    quoteVersion: string;
+    quoteHash: string;
+  };
+}> {
+  const payload = await fetchJson<{
+    ok: true;
+    orderId: string;
+    checkout: {
+      subtotalGbp: number;
+      platformChargeGbp: number;
+      postageFeeGbp: number;
+      totalGbp: number;
+      quoteVersion: string;
+      quoteHash: string;
+    };
+  }>(`/orders/${encodeURIComponent(orderId)}/checkout`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  return {
+    orderId: payload.orderId,
+    checkout: payload.checkout,
+  };
 }
 
 export async function getOrder(orderId: string): Promise<CommerceOrder> {
@@ -427,7 +534,7 @@ export async function checkShippingServiceability(
 }
 
 export async function createCommercePaymentIntent(
-  input: { orderId: string }
+  input: { orderId: string; idempotencyKey: string }
 ): Promise<PaymentIntentStatusResponse> {
   const payload = await fetchJson<{ ok: true; intent: PaymentIntentStatusResponse }>(
     '/payments/intents',
@@ -437,6 +544,7 @@ export async function createCommercePaymentIntent(
       body: JSON.stringify({
         channel: 'commerce',
         orderId: input.orderId,
+        idempotencyKey: input.idempotencyKey,
       }),
     }
   );

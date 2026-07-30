@@ -69,7 +69,20 @@ export function CommerceDetailSellerRow({
     cb();
   };
 
-  const subtitle = [ratingLine, locationLine].filter(Boolean).join(' · ');
+  const subtitle = [
+    institutional && verified ? 'Verified issuer' : undefined,
+    ratingLine,
+    locationLine,
+  ].filter(Boolean).join(' · ');
+  const isFallbackIdentity =
+    !avatarUri
+    && !verified
+    && !ratingLine
+    && !locationLine
+    && (name.trim().toLowerCase() === 'issuer' || name.trim().toLowerCase() === 'seller');
+  const displayedName = isFallbackIdentity
+    ? `${roleLabel ?? (institutional ? 'Issuer' : 'Seller')} profile`
+    : name;
 
   return (
     <View style={styles.container}>
@@ -80,7 +93,7 @@ export function CommerceDetailSellerRow({
           styles.identity,
           onPress && pressed && styles.pressed,
         ]}
-        accessibilityLabel={`${roleLabel ?? 'Seller'} ${name}`}
+        accessibilityLabel={`${roleLabel ?? 'Seller'} ${displayedName}`}
         accessibilityRole={onPress ? 'button' : undefined}
       >
         {avatarUri ? (
@@ -92,28 +105,23 @@ export function CommerceDetailSellerRow({
               emptyIcon="person-outline"
             />
           </View>
-        ) : (
+        ) : !isFallbackIdentity ? (
           <View style={[styles.avatar, institutional && styles.avatarInstitutional, { backgroundColor: colors.surfaceAlt }]}>
             <Text style={[styles.avatarInitial, { color: colors.textSecondary }]}>
               {name.charAt(0).toUpperCase()}
             </Text>
           </View>
-        )}
+        ) : null}
         <View style={styles.identityText}>
           <View style={styles.nameRow}>
             <Text
               style={[styles.name, { color: colors.textPrimary }]}
               numberOfLines={1}
             >
-              {name}
+              {displayedName}
             </Text>
-            {institutional ? (
-              <View style={[styles.issuerBadge, { backgroundColor: `${colors.brand}18` }]}>
-                <Ionicons name="shield-checkmark" size={10} color={colors.brand} />
-                <Text style={[styles.issuerBadgeText, { color: colors.brand }]}>
-                  Verified issuer
-                </Text>
-              </View>
+            {institutional && verified ? (
+              <Ionicons name="shield-checkmark" size={15} color={colors.brand} />
             ) : verified ? (
               <Ionicons name="checkmark-circle" size={14} color={colors.success} />
             ) : null}
@@ -135,6 +143,7 @@ export function CommerceDetailSellerRow({
             <Pressable
               onPress={() => handleAction(secondaryAction.onPress)}
               hitSlop={8}
+              style={styles.actionHitTarget}
               accessibilityLabel={secondaryAction.label}
               accessibilityRole="button"
             >
@@ -147,6 +156,7 @@ export function CommerceDetailSellerRow({
             <Pressable
               onPress={() => handleAction(primaryAction.onPress)}
               hitSlop={8}
+              style={styles.actionHitTarget}
               accessibilityLabel={primaryAction.label}
               accessibilityRole="button"
             >
@@ -200,19 +210,6 @@ const styles = StyleSheet.create({
   // "Verified issuer" badge — subtle brand-tinted pill with a shield
   // glyph. Distinguishes institutional custodians from individual
   // sellers per spec 03_COOWN §2.
-  issuerBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: Radius.sm,
-  },
-  issuerBadgeText: {
-    fontSize: 10,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 0.2,
-  },
   avatarInitial: {
     fontSize: 16,
     fontFamily: Typography.family.semibold,
@@ -246,5 +243,9 @@ const styles = StyleSheet.create({
     fontSize: Type.body.size,
     lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.semibold,
+  },
+  actionHitTarget: {
+    minHeight: 44,
+    justifyContent: 'center',
   },
 });

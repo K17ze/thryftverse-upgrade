@@ -15,6 +15,11 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
+import {
+  initPaymentSheet,
+  PaymentSheetError,
+  presentPaymentSheet,
+} from '@stripe/stripe-react-native';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -31,12 +36,15 @@ import { parseApiError } from '../lib/apiClient';
 import {
   getIzePosition,
   getWalletSnapshot,
-  getIzeQuote,
-  createPaymentIntent,
-  mintIze,
+  createIzeMintQuote,
+  createStripeIntentSheet,
   buyIze,
   convertIzeToFiat,
 } from '../services/walletApi';
+import {
+  configureStripeMobile,
+  getStripeReturnUrl,
+} from '../platform/payments/stripeMobile';
 import {
   CoOwnMarketHeader,
   CoOwnWalletBreakdown,
@@ -97,6 +105,7 @@ export default function WalletScreen({ navigation }: Props) {
   const [buyFiatInput, setBuyFiatInput] = useState('');
   const [convertIzeInput, setConvertIzeInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const topupIdempotencyRef = useRef<{ fingerprint: string; key: string } | null>(null);
 
   const scrollRef = useRef<ScrollView>(null);
   const loadInputRef = useRef<TextInput>(null);
@@ -219,34 +228,65 @@ export default function WalletScreen({ navigation }: Props) {
 
     setIsProcessing(true);
     try {
-      const quote = await getIzeQuote({ fiatCurrency: 'GBP', fiatAmount: loadAmountGbp });
-      const quoteFeeRate = quote.quote.platformFeeRate ?? LOAD_IZE_FEE_RATE;
-      const quoteFeeAmount =
-        quote.quote.platformFeeAmount ?? Number((quote.quote.fiatAmount * quoteFeeRate).toFixed(2));
-      const quoteNetFiatAmount =
-        quote.quote.netFiatAmount ?? Number((quote.quote.fiatAmount - quoteFeeAmount).toFixed(2));
-
-      const intentResponse = await createPaymentIntent({
+      const topupFingerprint = `${currentUser.id}:GBP:${loadAmountGbp.toFixed(2)}`;
+      if (topupIdempotencyRef.current?.fingerprint !== topupFingerprint) {
+        topupIdempotencyRef.current = {
+          fingerprint: topupFingerprint,
+          key: `wallet_topup_${currentUser.id}_${Date.now()}`,
+        };
+      }
+      const quoteResponse = await createIzeMintQuote({
         userId: currentUser.id,
-        channel: 'wallet_topup',
-        amountGbp: quote.quote.fiatAmount,
-        amountCurrency: 'GBP',
-        idempotencyKey: `wallet_topup_${currentUser.id}_${Date.now()}`,
+        fiatAmount: loadAmountGbp,
+        fiatCurrency: 'GBP',
+        idempotencyKey: topupIdempotencyRef.current.key,
         metadata: {
-          source: 'wallet_screen_topup_intent',
+          source: 'wallet_screen_topup_quote',
           displayCurrency: currencyCode,
           enteredDisplayAmount: loadFiatValue,
           enteredGbpAmount: loadAmountGbp,
-          platformFeeRate: quoteFeeRate,
-          platformFeeAmount: quoteFeeAmount,
-          netCreditedAmountGbp: quoteNetFiatAmount,
         },
       });
 
-      const settledIntent = intentResponse.intent;
-      if (settledIntent.status !== 'succeeded') {
-        if (settledIntent.nextActionUrl && await Linking.canOpenURL(settledIntent.nextActionUrl)) {
-          await Linking.openURL(settledIntent.nextActionUrl);
+      const intent = quoteResponse.intent;
+      if (intent.clientSecret && intent.gatewayId === 'stripe_americas') {
+        const sheet = await createStripeIntentSheet(intent.id);
+        await configureStripeMobile(sheet.publishableKey);
+        const { error: initializationError } = await initPaymentSheet({
+          merchantDisplayName: sheet.merchantDisplayName,
+          customerId: sheet.customerId,
+          customerSessionClientSecret: sheet.customerSessionClientSecret,
+          paymentIntentClientSecret: sheet.paymentIntentClientSecret,
+          returnURL: getStripeReturnUrl(),
+          allowsDelayedPaymentMethods: false,
+          applePay:
+            sheet.applePayEnabled && Platform.OS === 'ios'
+              ? { merchantCountryCode: sheet.merchantCountryCode }
+              : undefined,
+          googlePay:
+            sheet.googlePayEnabled && Platform.OS === 'android'
+              ? {
+                  merchantCountryCode: sheet.merchantCountryCode,
+                  currencyCode: sheet.currency,
+                  testEnv: sheet.publishableKey.startsWith('pk_test_'),
+                }
+              : undefined,
+        });
+        if (initializationError) {
+          throw new Error(initializationError.message);
+        }
+
+        const { error: presentationError } = await presentPaymentSheet();
+        if (presentationError?.code === PaymentSheetError.Canceled) {
+          show('Top-up cancelled. No funds were added.', 'info');
+          return;
+        }
+        if (presentationError) {
+          throw new Error(presentationError.message);
+        }
+      } else if (intent.status !== 'succeeded') {
+        if (intent.nextActionUrl && await Linking.canOpenURL(intent.nextActionUrl)) {
+          await Linking.openURL(intent.nextActionUrl);
           setLoadFiatInput('');
           show('Payment is pending. 1ZE is credited only after provider confirmation.', 'info');
         } else {
@@ -255,26 +295,12 @@ export default function WalletScreen({ navigation }: Props) {
         return;
       }
 
-      const mintResult = await mintIze({
-        userId: currentUser.id,
-        fiatAmount: quote.quote.fiatAmount,
-        fiatCurrency: 'GBP',
-        paymentIntentId: settledIntent.id,
-        metadata: {
-          source: 'wallet_screen_load',
-          displayCurrency: currencyCode,
-          enteredDisplayAmount: loadFiatValue,
-          enteredGbpAmount: loadAmountGbp,
-          platformFeeRate: quoteFeeRate,
-          platformFeeAmount: quoteFeeAmount,
-          netCreditedAmountGbp: quoteNetFiatAmount,
-          paymentIntentId: settledIntent.id,
-        },
-      });
-
       setLoadFiatInput('');
-      show(`Loaded ${formatIzeAmount(mintResult.operation.izeAmount)} into your wallet.`, 'success');
-      // Refresh the canonical balance so the spendable hero updates.
+      topupIdempotencyRef.current = null;
+      show(
+        `${formatIzeAmount(quoteResponse.operation.izeAmount)} is pending provider confirmation.`,
+        'success'
+      );
       loadBalance();
     } catch (error) {
       const parsed = parseApiError(error, 'Unable to load 1ZE right now. Please try again shortly.');

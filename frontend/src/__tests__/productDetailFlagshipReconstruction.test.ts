@@ -196,8 +196,8 @@ describe('product-detail-flagship-reconstruction: Co-Own market snapshot fronten
     expect(src).not.toContain('(asset as any).candles');
   });
 
-  it('staleness computation prefers marketSnapshot.lastExecutionAt', () => {
-    expect(src).toContain('asset.marketSnapshot?.lastExecutionAt');
+  it('staleness computation prefers the versioned market snapshot timestamp', () => {
+    expect(src).toContain('asset.marketSnapshot?.asOf');
   });
 });
 
@@ -243,11 +243,14 @@ describe('product-detail-flagship-reconstruction: Auction terminal dock', () => 
   it('terminal dock carries only the next valid action (no state badge)', () => {
     // The terminal branch should return CommerceDetailStateDock with
     // primaryAction only — no stateBadge.
-    const terminalMatch = src.match(/if\s*\(\s*isTerminal\s*\)\s*{[\s\S]*?return\s*\(\s*<CommerceDetailStateDock[\s\S]*?\/>/);
-    expect(terminalMatch).toBeTruthy();
-    expect(terminalMatch![0]).toContain('primaryAction');
-    expect(terminalMatch![0]).not.toContain('stateBadge');
-    expect(terminalMatch![0]).not.toContain('Seller view');
+    const terminalStart = src.indexOf('if (isTerminal)');
+    const terminalEnd = src.indexOf('// Seller view', terminalStart);
+    const terminalBranch = src.slice(terminalStart, terminalEnd);
+    expect(terminalStart).toBeGreaterThan(-1);
+    expect(terminalEnd).toBeGreaterThan(terminalStart);
+    expect(terminalBranch).toContain('primaryAction={terminalAction}');
+    expect(terminalBranch).not.toContain('stateBadge');
+    expect(terminalBranch).not.toContain('Seller view');
   });
 
   it('every terminal viewer state has a next valid action', () => {

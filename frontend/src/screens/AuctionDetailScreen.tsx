@@ -56,6 +56,7 @@ import {
   CommerceDetailStateDock,
   CommerceDetailMediaRail,
   CommerceDetailOfflineBanner,
+  CommerceDetailUnavailableInline,
   COMMERCE_DETAIL_COMPACT_WIDTH,
 } from '../components/commerce/detail';
 import { resolveEvidenceGroups } from '../platform/commerce/categoryEvidence';
@@ -101,7 +102,11 @@ type RouteT = RouteProp<RootStackParamList, 'AuctionDetail'>;
 export default function AuctionDetailScreen() {
   const navigation = useNavigation<NavT>();
   const route = useRoute<RouteT>();
-  const { auctionId, openBidSheet, initialBidAmount } = route.params;
+  const {
+    auctionId,
+    openBidSheet: shouldOpenBidSheet,
+    initialBidAmount,
+  } = route.params;
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
   const { currencyCode, goldRates, displayMode } = useCurrencyContext();
@@ -246,7 +251,7 @@ export default function AuctionDetailScreen() {
     return fetchDetail();
   }, [fetchDetail]);
 
-  const handleOpenBidSheet = () => {
+  const openBidSheet = () => {
     if (!auction) return;
     setBidSheetVisible(true);
   };
@@ -257,7 +262,7 @@ export default function AuctionDetailScreen() {
 
   // Auto-open BidSheet when arriving from an outbid notification
   React.useEffect(() => {
-    if (openBidSheet && auction && !loading && !bidSheetVisible) {
+    if (shouldOpenBidSheet && auction && !loading && !bidSheetVisible) {
       // Only auto-open if the auction is still live (bidding is possible)
       const effectiveState = auction.lifecycle;
       if (effectiveState === 'live') {
@@ -265,7 +270,7 @@ export default function AuctionDetailScreen() {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openBidSheet, auction, loading]);
+  }, [shouldOpenBidSheet, auction, loading]);
 
   // PASS 6: Sheet owns transaction feedback. Parent only calls API and returns typed result.
   // No duplicate toast — sheet handles inline error/success presentation.
@@ -307,7 +312,7 @@ export default function AuctionDetailScreen() {
       });
       // Verify the response explicitly confirms Buy Now
       if (!result.isBuyNow) {
-        throw new Error('Buy Now response did not confirm purchase. Please try again.');
+        throw new Error('The response did not confirm the Buy Now winning bid. Please try again.');
       }
       // Post-success refresh — do not convert to error if refresh fails
       try {
@@ -397,15 +402,22 @@ export default function AuctionDetailScreen() {
     return Math.max(0, Math.min(1, elapsedMs / totalMs));
   }, [auction, timing, minuteClock]);
 
+  const accessibilityLabel = React.useMemo(() => {
+    if (!detailInput || !timing) return '';
+    return buildDetailAccessibilityLabel(
+      detailInput,
+      timing,
+      priceLabel,
+      priceText,
+      countdown.text,
+      detailInput.viewerState,
+    );
+  }, [detailInput, timing, priceLabel, priceText, countdown.text]);
+
   const viewerContext = React.useMemo(() => {
     if (!detailInput || !timing) return null;
     return resolveViewerContextMessage(timing.effectiveState, detailInput.viewerState, detailInput, formatFromFiat);
   }, [detailInput, timing, formatFromFiat]);
-
-  const accessibilityLabel = React.useMemo(() => {
-    if (!detailInput || !timing) return '';
-    return buildDetailAccessibilityLabel(detailInput, timing, priceLabel, priceText, countdown.text, detailInput.viewerState);
-  }, [detailInput, timing, priceLabel, priceText, countdown]);
 
   const isLive = effectiveState === 'live';
   const isUpcoming = effectiveState === 'upcoming';
@@ -439,9 +451,11 @@ export default function AuctionDetailScreen() {
   );
   const recommendationSections = recommendationsData?.sections ?? [];
   const railSections = recommendationSections.filter(
-    (s) => s.key !== 'seen_in_looks' && s.key !== 'continue_exploring'
+    (section) => section.key !== 'seen_in_looks' && section.key !== 'continue_exploring',
   );
   const seenInLooksSection = recommendationSections.find((s) => s.key === 'seen_in_looks');
+  void recsLoading;
+  void railSections;
 
   const handlePressRecommendation = (recItem: Listing) => {
     navigation.push('ItemDetail', { itemId: recItem.id });
@@ -458,21 +472,34 @@ export default function AuctionDetailScreen() {
   // Per spec 02_AUCTION §7: render the canonical media array through
   // CommerceMediaStage. Maintain imageUrl as a temporary compatibility
   // field.
-  const auctionMediaImages = React.useMemo(() => {
+  const auctionMediaItems = React.useMemo(() => {
     if (!auction) return [] as string[];
     if (auction.mediaItems && auction.mediaItems.length > 0) {
       return auction.mediaItems
-        .filter((m) => m.type === 'image')
+        .slice()
         .sort((a, b) => a.order - b.order)
         .map((m) => m.url);
     }
     return auction.imageUrl ? [auction.imageUrl] : [];
   }, [auction]);
 
+  const auctionVideoUris = React.useMemo(
+    () => auction?.mediaItems?.filter((item) => item.type === 'video').map((item) => item.url) ?? [],
+    [auction?.mediaItems],
+  );
+
   // ── Fulfilment summary ──
   // Per spec 02_AUCTION §8: backend-backed result/fulfilment contract.
   // The frontend must not invent next steps.
   const auctionFulfilment = auction?.fulfilment ?? null;
+  const terminalAmountGbp =
+    auction && auction.bidCount > 0 && Number.isFinite(auction.currentBidGbp)
+      ? auction.currentBidGbp
+      : null;
+  const terminalAmountText =
+    terminalAmountGbp != null
+      ? formatFromFiat(terminalAmountGbp, 'GBP')
+      : 'Amount unavailable';
 
   // Compute scroll bottom padding from dock geometry + safe area so the
   // sticky dock never covers the last content row.
@@ -490,14 +517,36 @@ export default function AuctionDetailScreen() {
     );
   }
 
-  if (error || !auction) {
+  if (error) {
     return (
       <View style={styles.container}>
         <CommerceStateCanvas
           state="error"
-          title={error ?? 'Auction not found'}
-          onRetry={() => navigation.goBack()}
-          retryLabel="Go Back"
+          family="auction"
+          title="Unable to load auction"
+          message={error}
+          onRetry={() => {
+            setLoading(true);
+            void fetchDetail();
+          }}
+          retryLabel="Try again"
+          secondaryActionLabel="Go Back"
+          onSecondaryAction={() => navigation.goBack()}
+        />
+      </View>
+    );
+  }
+
+  if (!auction) {
+    return (
+      <View style={styles.container}>
+        <CommerceStateCanvas
+          state="unavailable"
+          family="auction"
+          title="Auction not found"
+          message="This auction may have ended, been removed, or is no longer available."
+          onRetry={() => navigation.navigate('AuctionHome')}
+          retryLabel="Back to auctions"
         />
       </View>
     );
@@ -525,8 +574,6 @@ export default function AuctionDetailScreen() {
         showsVerticalScrollIndicator={false}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
-        accessible
-        accessibilityLabel={accessibilityLabel}
         contentContainerStyle={{ paddingBottom: scrollBottomPadding }}
         refreshControl={
           <RefreshControl
@@ -546,7 +593,8 @@ export default function AuctionDetailScreen() {
             §1: "Watch is the auction participation state. Save-to-
             collection may remain in overflow." */}
         <CommerceMediaStage
-          images={auctionMediaImages}
+          images={auctionMediaItems}
+          videoUris={auctionVideoUris}
           objectId={auction.id}
           topInset={insets.top}
           scrollY={scrollY}
@@ -566,16 +614,23 @@ export default function AuctionDetailScreen() {
               />
             </View>
           }
+          overlayBottomContent={
+            <View accessible accessibilityLabel={accessibilityLabel}>
+              <CommerceDetailIdentity
+                family="auction"
+                tone="media"
+                density={isCompact ? 'compact' : 'standard'}
+                eyebrow={auction.brand ?? auction.category ?? 'Auction lot'}
+                title={auction.title}
+                secondaryLine={auction.conditionLabel ?? undefined}
+              />
+            </View>
+          }
         />
         <CommerceDetailMediaRail
           onBack={() => navigation.goBack()}
           topInset={insets.top}
           rightActions={[
-            {
-              icon: 'share-outline',
-              label: 'Share auction',
-              onPress: social.openShare,
-            },
             {
               icon: auction.isWatched ? 'eye' : 'eye-outline',
               activeIcon: 'eye',
@@ -585,6 +640,7 @@ export default function AuctionDetailScreen() {
             },
           ]}
           onOverflow={() => setOverflowVisible(true)}
+          showOverflow
         />
 
         {resyncFailed && !error && (
@@ -607,18 +663,151 @@ export default function AuctionDetailScreen() {
             price (the transaction surface owns the current bid) and
             must NOT show a second family/state chip (the media overlay
             already carries AuctionStateBadge). */}
-        <CommerceDetailIdentity
-          family="auction"
-          density={isCompact ? 'compact' : 'standard'}
-          eyebrow={auction.brand ?? undefined}
-          title={auction.title}
-          secondaryLine={auction.conditionLabel ?? undefined}
-        />
+        {/* ── Zone C — Auction transaction surface ──
+            One strong contained module: current bid + bid count + reserve
+            + countdown + viewer state. Replaces the stacked
+            transactionModule + outbid/leading/watching blocks. Spec 02 §C
+            + spec 04 §3/§4: "Integrate viewer state into the transaction
+            surface rather than adding another full-width block." */}
+        {!isTerminal && (
+          <CommerceDetailTransactionSurface
+            family="auction"
+            primaryLabel={priceLabel}
+            primaryValue={priceText}
+            secondaryLabel="Bid activity"
+            secondaryValue={`${auction.bidCount} ${auction.bidCount === 1 ? 'bid' : 'bids'}`}
+            viewerState={
+              viewerContext ? (
+                <Text
+                  style={[
+                    styles.viewerStateLine,
+                    viewerContext.treatment === 'warning' && { color: colors.danger },
+                    viewerContext.treatment === 'calm' && { color: colors.success },
+                    viewerContext.treatment === 'seller' && { color: colors.brand },
+                    viewerContext.treatment === 'restrained' && { color: colors.textSecondary },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {viewerContext.title}
+                  {viewerContext.subtitle ? `  ·  ${viewerContext.subtitle}` : ''}
+                </Text>
+              ) : undefined
+            }
+            statusRow={
+              <View style={styles.transactionStatusRow}>
+                {reserveStatus !== 'none' && (
+                  <View style={styles.transactionReserveRow}>
+                    <ReserveStatusBadge status={reserveStatus} showExplanation />
+                    {reserveStatus === 'not-met' && isLive && (
+                      <Text style={[styles.transactionReserveHint, { color: colors.textSecondary }]} numberOfLines={1}>
+                        Bidding continues until reserve is met
+                      </Text>
+                    )}
+                  </View>
+                )}
+                <AuctionCountdown
+                  text={countdown.text}
+                  urgent={countdown.isFinalMinutes}
+                  stage={countdown.stage}
+                  progress={isLive ? countdownProgress : undefined}
+                  showProgress={isLive}
+                />
+              </View>
+            }
+          >
+            {/* Minimum to lead (outbid) — actionable emphasis inside the
+                surface. The dock carries the "Bid again" action. */}
+            {isLive && viewerState === 'outbid' && auction.minimumNextBidGbp > 0 && (
+              <View style={[styles.transactionMinRow, { borderTopColor: colors.border }]}>
+                <Text style={[styles.transactionMinLabel, { color: colors.textSecondary }]}>
+                  Minimum to lead
+                </Text>
+                <Text style={[styles.transactionMinValue, { color: colors.textPrimary }]}>
+                  {formatFromFiat(auction.minimumNextBidGbp, 'GBP')}
+                </Text>
+              </View>
+            )}
+          </CommerceDetailTransactionSurface>
+        )}
 
-        {/* Slim seller confidence row — the primary seller presentation.
-            Carries Follow/Message and navigates to the full profile on
-            tap. Spec 02 §B + spec 04: "choose either the slim seller row
-            or the full seller card; do not show both by default." */}
+        {/* ── Terminal result — one compact module, no duplicate title/brand ──
+            Spec 04 §7: "Terminal: one result state, one next valid
+            action." The result state lives here; the dock carries the
+            next valid action. */}
+        {isTerminal && !isCancelled && (
+          <View style={[styles.terminalResultModule, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
+            {viewerState === 'won' && (
+              <>
+                <Text style={[styles.terminalResultTitleWon, { color: colors.success }]}>You won</Text>
+                <Text style={[styles.terminalResultValue, { color: colors.textPrimary }]}>
+                  {terminalAmountText}
+                </Text>
+                <Text style={[styles.terminalResultNote, { color: colors.textSecondary }]}>
+                  {auctionFulfilment?.buyerNextAction
+                    ? auctionFulfilment.buyerNextAction
+                    : auctionFulfilment?.fulfilmentStatus
+                      ? `Fulfilment · ${auctionFulfilment.fulfilmentStatus.replace(/_/g, ' ')}`
+                      : 'Fulfilment details are not available yet.'}
+                </Text>
+              </>
+            )}
+            {viewerState === 'lost' && (
+              <>
+                <Text style={[styles.terminalResultTitleLost, { color: colors.textPrimary }]}>Auction closed</Text>
+                <Text style={[styles.terminalResultValue, { color: colors.textPrimary }]}>
+                  {terminalAmountText}
+                </Text>
+                <Pressable
+                  style={styles.discoverLinkInline}
+                  onPress={() => navigation.navigate('AuctionHome')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Discover similar auctions"
+                >
+                  <Ionicons name="search-outline" size={14} color={colors.brand} />
+                  <Text style={[styles.discoverLinkInlineText, { color: colors.brand }]}>Discover similar</Text>
+                  <Ionicons name="chevron-forward" size={12} color={colors.brand} />
+                </Pressable>
+              </>
+            )}
+            {viewerState === 'seller' && auction.bidCount > 0 && (
+              <>
+                <Text style={[styles.terminalResultTitleSold, { color: colors.success }]}>Sold</Text>
+                <Text style={[styles.terminalResultValue, { color: colors.textPrimary }]}>
+                  {terminalAmountText}
+                </Text>
+                <Text style={[styles.terminalResultNote, { color: colors.textSecondary }]}>
+                  {auctionFulfilment?.sellerNextAction
+                    ? auctionFulfilment.sellerNextAction
+                    : auctionFulfilment?.fulfilmentStatus
+                      ? `Fulfilment · ${auctionFulfilment.fulfilmentStatus.replace(/_/g, ' ')}`
+                      : 'Fulfilment details are not available yet.'}
+                </Text>
+              </>
+            )}
+            {viewerState === 'seller' && auction.bidCount === 0 && (
+              <Text style={[styles.terminalResultTitleLost, { color: colors.textPrimary }]}>Ended without bids</Text>
+            )}
+            {viewerState === 'not_participating' && (
+              <>
+                <Text style={[styles.terminalResultTitleLost, { color: colors.textPrimary }]}>Auction closed</Text>
+                <Text style={[styles.terminalResultValue, { color: colors.textPrimary }]}>
+                  {terminalAmountText}
+                </Text>
+              </>
+            )}
+          </View>
+        )}
+
+        {/* ── Cancelled terminal module ── */}
+        {isCancelled && (
+          <View style={[styles.terminalResultModule, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
+            <Text style={[styles.terminalResultTitleLost, { color: colors.textPrimary }]}>Auction cancelled</Text>
+            <Text style={[styles.terminalResultNote, { color: colors.textSecondary }]}>
+              Cancelled by the seller or platform. Any payment or release status appears in your orders.
+            </Text>
+          </View>
+        )}
+
         <View style={styles.identityExtension}>
           <CommerceDetailSellerRow
             name={auction.seller.displayName ?? auction.seller.username}
@@ -651,149 +840,6 @@ export default function AuctionDetailScreen() {
             }
           />
         </View>
-
-        {/* ── Zone C — Auction transaction surface ──
-            One strong contained module: current bid + bid count + reserve
-            + countdown + viewer state. Replaces the stacked
-            transactionModule + outbid/leading/watching blocks. Spec 02 §C
-            + spec 04 §3/§4: "Integrate viewer state into the transaction
-            surface rather than adding another full-width block." */}
-        <CommerceDetailTransactionSurface
-          family="auction"
-          primaryLabel={priceLabel}
-          primaryValue={priceText}
-          secondaryLabel={auction.bidCount > 0 ? 'Bids' : undefined}
-          secondaryValue={`${auction.bidCount} ${auction.bidCount === 1 ? 'bid' : 'bids'}`}
-          viewerState={
-            viewerContext && !isTerminal ? (
-              <Text
-                style={[
-                  styles.viewerStateLine,
-                  viewerContext.treatment === 'warning' && { color: colors.danger },
-                  viewerContext.treatment === 'calm' && { color: colors.success },
-                  viewerContext.treatment === 'seller' && { color: colors.brand },
-                  viewerContext.treatment === 'restrained' && { color: colors.textSecondary },
-                ]}
-                numberOfLines={1}
-              >
-                {viewerContext.title}
-                {viewerContext.subtitle ? `  ·  ${viewerContext.subtitle}` : ''}
-              </Text>
-            ) : undefined
-          }
-          statusRow={
-            <View style={styles.transactionStatusRow}>
-              {reserveStatus !== 'none' && !isTerminal && (
-                <View style={styles.transactionReserveRow}>
-                  <ReserveStatusBadge status={reserveStatus} showExplanation />
-                  {reserveStatus === 'not-met' && isLive && (
-                    <Text style={[styles.transactionReserveHint, { color: colors.textSecondary }]} numberOfLines={1}>
-                      Bidding continues until reserve is met
-                    </Text>
-                  )}
-                </View>
-              )}
-              <AuctionCountdown
-                text={countdown.text}
-                urgent={countdown.isFinalMinutes}
-                stage={countdown.stage}
-                progress={isLive ? countdownProgress : undefined}
-                showProgress={isLive}
-              />
-            </View>
-          }
-        >
-          {/* Minimum to lead (outbid) — actionable emphasis inside the
-              surface. The dock carries the "Bid again" action. */}
-          {isLive && viewerState === 'outbid' && auction.minimumNextBidGbp > 0 && (
-            <View style={[styles.transactionMinRow, { borderTopColor: colors.border }]}>
-              <Text style={[styles.transactionMinLabel, { color: colors.textSecondary }]}>
-                Minimum to lead
-              </Text>
-              <Text style={[styles.transactionMinValue, { color: colors.textPrimary }]}>
-                {formatIzeAmount(toIze(auction.minimumNextBidGbp, 'GBP', goldRates), 2)}
-              </Text>
-            </View>
-          )}
-        </CommerceDetailTransactionSurface>
-
-        {/* ── Terminal result — one compact module, no duplicate title/brand ──
-            Spec 04 §7: "Terminal: one result state, one next valid
-            action." The result state lives here; the dock carries the
-            next valid action. */}
-        {isTerminal && !isCancelled && (
-          <View style={[styles.terminalResultModule, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
-            {viewerState === 'won' && (
-              <>
-                <Text style={[styles.terminalResultTitleWon, { color: colors.success }]}>You won</Text>
-                <Text style={[styles.terminalResultValue, { color: colors.textPrimary }]}>
-                  {formatIzeAmount(toIze(auction.currentBidGbp || auction.buyNowPriceGbp || 0, 'GBP', goldRates), 2)}
-                </Text>
-                <Text style={[styles.terminalResultNote, { color: colors.textSecondary }]}>
-                  {auctionFulfilment?.buyerNextAction
-                    ? auctionFulfilment.buyerNextAction
-                    : auctionFulfilment?.fulfilmentStatus
-                      ? `Fulfilment · ${auctionFulfilment.fulfilmentStatus.replace(/_/g, ' ')}`
-                      : 'Next step required — view result for fulfilment details.'}
-                </Text>
-              </>
-            )}
-            {viewerState === 'lost' && (
-              <>
-                <Text style={[styles.terminalResultTitleLost, { color: colors.textPrimary }]}>Auction closed</Text>
-                <Text style={[styles.terminalResultValue, { color: colors.textPrimary }]}>
-                  {formatIzeAmount(toIze(auction.currentBidGbp, 'GBP', goldRates), 2)}
-                </Text>
-                <Pressable
-                  style={styles.discoverLinkInline}
-                  onPress={() => navigation.navigate('AuctionHome')}
-                  accessibilityRole="button"
-                  accessibilityLabel="Discover similar auctions"
-                >
-                  <Ionicons name="search-outline" size={14} color={colors.brand} />
-                  <Text style={[styles.discoverLinkInlineText, { color: colors.brand }]}>Discover similar</Text>
-                  <Ionicons name="chevron-forward" size={12} color={colors.brand} />
-                </Pressable>
-              </>
-            )}
-            {viewerState === 'seller' && auction.bidCount > 0 && (
-              <>
-                <Text style={[styles.terminalResultTitleSold, { color: colors.success }]}>Sold</Text>
-                <Text style={[styles.terminalResultValue, { color: colors.textPrimary }]}>
-                  {formatIzeAmount(toIze(auction.currentBidGbp || auction.buyNowPriceGbp || 0, 'GBP', goldRates), 2)}
-                </Text>
-                <Text style={[styles.terminalResultNote, { color: colors.textSecondary }]}>
-                  {auctionFulfilment?.sellerNextAction
-                    ? auctionFulfilment.sellerNextAction
-                    : auctionFulfilment?.fulfilmentStatus
-                      ? `Fulfilment · ${auctionFulfilment.fulfilmentStatus.replace(/_/g, ' ')}`
-                      : 'Next step required — view result for fulfilment details.'}
-                </Text>
-              </>
-            )}
-            {viewerState === 'seller' && auction.bidCount === 0 && (
-              <Text style={[styles.terminalResultTitleLost, { color: colors.textPrimary }]}>Ended without bids</Text>
-            )}
-            {viewerState === 'not_participating' && (
-              <>
-                <Text style={[styles.terminalResultTitleLost, { color: colors.textPrimary }]}>Auction closed</Text>
-                <Text style={[styles.terminalResultValue, { color: colors.textPrimary }]}>
-                  {formatIzeAmount(toIze(auction.currentBidGbp, 'GBP', goldRates), 2)}
-                </Text>
-              </>
-            )}
-          </View>
-        )}
-
-        {/* ── Cancelled terminal module ── */}
-        {isCancelled && (
-          <View style={[styles.terminalResultModule, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
-            <Text style={[styles.terminalResultTitleLost, { color: colors.textPrimary }]}>Auction cancelled</Text>
-            <Text style={[styles.terminalResultNote, { color: colors.textSecondary }]}>
-              Cancelled by the seller or platform. No bids were charged.
-            </Text>
-          </View>
-        )}
 
         {/* ── Zone E — Item details ──
             Per spec 02_AUCTION §5: wrap description, category evidence,
@@ -838,8 +884,14 @@ export default function AuctionDetailScreen() {
             presentation. Section label "Bid activity", latest bid row,
             bid count, one "View all bids" action. Do not show both a
             disclosure row and a three-row preview. */}
-        <CommerceDetailSection label="Bid activity" divider variant="editorial">
-          {auction.bidCount > 0 && bidActivity.length > 0 ? (
+        {(auction.bidCount > 0 || bidActivityError) && (
+          <CommerceDetailSection label="Bid activity" divider variant="editorial">
+          {bidActivityError ? (
+            <CommerceDetailUnavailableInline
+              title="Bid activity unavailable"
+              body="Pull to refresh and try again."
+            />
+          ) : auction.bidCount > 0 && bidActivity.length > 0 ? (
             (() => {
               const topBid = formatBidActivityRow(bidActivity[0], 0, formatFromFiat, serverNowRef.current);
               return (
@@ -859,25 +911,22 @@ export default function AuctionDetailScreen() {
                 </View>
               );
             })()
-          ) : (
-            <Text style={[styles.bidActivityEmpty, { color: colors.textMuted }]}>
-              No bids yet
-            </Text>
+          ) : null}
+          {!bidActivityError && auction.bidCount > 0 && (
+            <Pressable
+              style={styles.bidActivityViewAll}
+              onPress={() => setBidHistorySheetVisible(true)}
+              accessibilityRole="button"
+              accessibilityLabel={`View all ${auction.bidCount} bids`}
+            >
+              <Text style={[styles.bidActivityViewAllText, { color: colors.brand }]}>
+                {`View all ${auction.bidCount} ${auction.bidCount === 1 ? 'bid' : 'bids'}`}
+              </Text>
+              <Ionicons name="chevron-forward" size={14} color={colors.brand} />
+            </Pressable>
           )}
-          <Pressable
-            style={styles.bidActivityViewAll}
-            onPress={() => setBidHistorySheetVisible(true)}
-            accessibilityRole="button"
-            accessibilityLabel={`View all ${auction.bidCount} bids`}
-          >
-            <Text style={[styles.bidActivityViewAllText, { color: colors.brand }]}>
-              {auction.bidCount > 0
-                ? `View all ${auction.bidCount} ${auction.bidCount === 1 ? 'bid' : 'bids'}`
-                : 'View bid history'}
-            </Text>
-            <Ionicons name="chevron-forward" size={14} color={colors.brand} />
-          </Pressable>
-        </CommerceDetailSection>
+          </CommerceDetailSection>
+        )}
 
         {/* Auction rules — disclosure row, not a large card. Spec 04 §6. */}
         <CommerceDetailSection label="Auction rules" divider>
@@ -965,17 +1014,20 @@ export default function AuctionDetailScreen() {
           let terminalAction: { label: string; onPress: () => void; accessibilityLabel: string } | undefined;
 
           if (viewerState === 'won') {
-            // Winner — fulfilment next step (backend-backed when
-            // available, otherwise a truthful "View result" action).
-            terminalAction = {
-              label: auctionFulfilment?.buyerNextAction ?? 'View result',
-              onPress: () => {
-                if (auctionFulfilment?.orderId) {
-                  navigation.navigate('OrderDetail', { orderId: auctionFulfilment.orderId });
+            // Winner — only expose the backend-backed fulfilment action.
+            terminalAction = auctionFulfilment?.orderId
+              ? {
+                  label: auctionFulfilment.buyerNextAction ?? 'View order',
+                  onPress: () => {
+                    navigation.navigate('OrderDetail', { orderId: auctionFulfilment.orderId! });
+                  },
+                  accessibilityLabel: auctionFulfilment.buyerNextAction ?? 'View auction order',
                 }
-              },
-              accessibilityLabel: auctionFulfilment?.buyerNextAction ?? 'View auction result',
-            };
+              : {
+                  label: 'View purchases',
+                  onPress: () => navigation.navigate('MyOrders'),
+                  accessibilityLabel: 'View your purchases',
+                };
           } else if (viewerState === 'lost' || (isSeller && auction.bidCount === 0)) {
             terminalAction = {
               label: 'Discover similar',
@@ -984,15 +1036,19 @@ export default function AuctionDetailScreen() {
             };
           } else if (isSeller && auction.bidCount > 0) {
             // Seller with a sale — fulfilment next step.
-            terminalAction = {
-              label: auctionFulfilment?.sellerNextAction ?? 'View result',
-              onPress: () => {
-                if (auctionFulfilment?.orderId) {
-                  navigation.navigate('OrderDetail', { orderId: auctionFulfilment.orderId });
+            terminalAction = auctionFulfilment?.orderId
+              ? {
+                  label: auctionFulfilment.sellerNextAction ?? 'View order',
+                  onPress: () => {
+                    navigation.navigate('OrderDetail', { orderId: auctionFulfilment.orderId! });
+                  },
+                  accessibilityLabel: auctionFulfilment.sellerNextAction ?? 'View sale order',
                 }
-              },
-              accessibilityLabel: auctionFulfilment?.sellerNextAction ?? 'View sale result',
-            };
+              : {
+                  label: 'Seller centre',
+                  onPress: () => navigation.navigate('SellerAuctionCentre'),
+                  accessibilityLabel: 'Open seller auction centre',
+                };
           } else {
             // Not participating (or any other terminal state) — offer
             // discovery as the next valid step so the dock is never
@@ -1004,11 +1060,11 @@ export default function AuctionDetailScreen() {
             };
           }
 
-          return (
+          return terminalAction ? (
             <CommerceDetailStateDock
               primaryAction={terminalAction}
             />
-          );
+          ) : null;
         }
 
         // Seller view — calm state, no primary action.
@@ -1025,6 +1081,11 @@ export default function AuctionDetailScreen() {
                   ? 'Your auction is scheduled'
                   : `${auction.bidCount} ${auction.bidCount === 1 ? 'bid' : 'bids'} so far`
               }
+              primaryAction={{
+                label: 'Manage auction',
+                onPress: () => navigation.navigate('SellerAuctionCentre'),
+                accessibilityLabel: 'Manage auction in seller centre',
+              }}
             />
           );
         }
@@ -1046,7 +1107,7 @@ export default function AuctionDetailScreen() {
                 label: stateAction.primary.label,
                 onPress: () => {
                   if (primaryType === 'placeBid' || primaryType === 'increaseBid' || primaryType === 'bidAgain') {
-                    handleOpenBidSheet();
+                    openBidSheet();
                   } else if (primaryType === 'watchAuction') {
                     void handleToggleWatch();
                   } else if (primaryType === 'viewSimilar') {
@@ -1089,6 +1150,18 @@ export default function AuctionDetailScreen() {
         <View style={styles.sheetHeader}>
           <Headline style={styles.sheetTitle}>More actions</Headline>
         </View>
+        <Pressable
+          style={[styles.overflowRow, { borderColor: colors.borderSubtle }]}
+          onPress={() => {
+            setOverflowVisible(false);
+            social.openShare();
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Share auction"
+        >
+          <Ionicons name="share-outline" size={20} color={colors.textPrimary} />
+          <Text style={[styles.overflowRowText, { color: colors.textPrimary }]}>Share auction</Text>
+        </Pressable>
         <Pressable
           style={[styles.overflowRow, { borderColor: colors.borderSubtle }]}
           onPress={() => {
@@ -1287,7 +1360,7 @@ export default function AuctionDetailScreen() {
               <View style={styles.ruleContent}>
                 <BodyEmphasis style={styles.ruleTitle}>Winning the auction</BodyEmphasis>
                 <Text style={[styles.ruleDescription, { color: colors.textSecondary }]}>
-                  When the auction ends, the highest bidder wins. You'll be prompted to complete checkout and arrange delivery.
+                  When the auction ends, the highest eligible bidder wins. Payment and fulfilment actions appear only when the auction provides them.
                 </Text>
               </View>
             </View>
@@ -1299,7 +1372,7 @@ export default function AuctionDetailScreen() {
               <View style={styles.ruleContent}>
                 <BodyEmphasis style={styles.ruleTitle}>Buy Now option</BodyEmphasis>
                 <Text style={[styles.ruleDescription, { color: colors.textSecondary }]}>
-                  Some auctions include a Buy Now price. Use it to skip bidding and purchase the item instantly before the auction ends.
+                  Some auctions include a Buy Now price. Confirming it records the fixed-price winning bid and ends the auction immediately.
                 </Text>
               </View>
             </View>
@@ -1335,7 +1408,8 @@ export default function AuctionDetailScreen() {
 
       {/* ── Fullscreen media viewer ── */}
       <FullscreenMediaViewer
-        images={auction.imageUrl ? [auction.imageUrl] : []}
+        images={auctionMediaItems}
+        videoUris={auctionVideoUris}
         initialIndex={0}
         visible={mediaViewerVisible}
         onClose={() => setMediaViewerVisible(false)}

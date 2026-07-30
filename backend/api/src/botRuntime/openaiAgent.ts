@@ -38,6 +38,34 @@ function extractResponseText(payload: unknown): string {
     .trim();
 }
 
+function asNonNegativeInteger(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : 0;
+}
+
+function extractProviderUsage(payload: unknown): {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+} {
+  if (!payload || typeof payload !== 'object') {
+    return { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+  }
+  const usage = (payload as Record<string, unknown>).usage;
+  if (!usage || typeof usage !== 'object') {
+    return { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+  }
+  const record = usage as Record<string, unknown>;
+  const inputTokens = asNonNegativeInteger(record.input_tokens);
+  const outputTokens = asNonNegativeInteger(record.output_tokens);
+  const reportedTotal = asNonNegativeInteger(record.total_tokens);
+  return {
+    inputTokens,
+    outputTokens,
+    totalTokens: Math.max(reportedTotal, inputTokens + outputTokens),
+  };
+}
+
 export function isAgentRuntimeReady(): boolean {
   return Boolean(runtimeConfig.apiKey);
 }
@@ -103,6 +131,7 @@ export async function executeOpenAiAgent(ctx: BotRuntimeContext): Promise<BotHan
   });
 
   let lastError: Error | null = null;
+  const startedAtMs = Date.now();
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), runtimeConfig.timeoutMs);
@@ -123,12 +152,22 @@ export async function executeOpenAiAgent(ctx: BotRuntimeContext): Promise<BotHan
         if (!text) {
           throw new Error('AI provider returned an empty response');
         }
+        const responseRecord = payload && typeof payload === 'object'
+          ? payload as Record<string, unknown>
+          : {};
         return {
           text,
           shouldReply: true,
           metadata: {
             agentRuntime: 'openai-responses',
-            model: ctx.agentConfig.model,
+            model: typeof responseRecord.model === 'string'
+              ? responseRecord.model
+              : ctx.agentConfig.model,
+            providerRequestId: typeof responseRecord.id === 'string'
+              ? responseRecord.id
+              : null,
+            providerUsage: extractProviderUsage(payload),
+            providerLatencyMs: Date.now() - startedAtMs,
             attempt,
           },
         };

@@ -376,15 +376,15 @@ export function BidSheet({
             {/* Minimum and current â€” stacked, not columns */}
             <View style={styles.bidContextStack}>
               <View style={styles.bidContextRow}>
-                <Text style={styles.bidContextLabel}>MINIMUM TO LEAD</Text>
+                <Text style={styles.bidContextLabel}>Minimum to lead</Text>
                 <Text style={styles.bidContextValue}>{formatFromFiat(currentMinimum, 'GBP')}</Text>
               </View>
               <View style={styles.bidContextRow}>
-                <Text style={styles.bidContextLabel}>CURRENT VALUE</Text>
+                <Text style={styles.bidContextLabel}>Current value</Text>
                 <Text style={styles.bidContextValueSecondary}>{formatFromFiat(auction.currentBidGbp, 'GBP')}</Text>
               </View>
               <View style={styles.bidContextRow}>
-                <Text style={styles.bidContextLabel}>TIME REMAINING</Text>
+                <Text style={styles.bidContextLabel}>Time remaining</Text>
                 <Text style={[styles.bidContextValueSecondary, auction.effectiveState === 'live' && { color: Colors.danger }]}>
                   {auction.countdownText}
                 </Text>
@@ -480,19 +480,19 @@ export function BidSheet({
             {/* Receipt details */}
             <View style={styles.reviewReceipt}>
               <View style={styles.reviewReceiptRow}>
-                <Text style={styles.reviewReceiptLabel}>CURRENT VALUE</Text>
+                <Text style={styles.reviewReceiptLabel}>Current value</Text>
                 <Text style={styles.reviewReceiptValue}>{formatFromFiat(auction.currentBidGbp, 'GBP')}</Text>
               </View>
               <View style={styles.reviewReceiptRow}>
-                <Text style={styles.reviewReceiptLabel}>MINIMUM</Text>
+                <Text style={styles.reviewReceiptLabel}>Minimum to lead</Text>
                 <Text style={styles.reviewReceiptValue}>{formatFromFiat(currentMinimum, 'GBP')}</Text>
               </View>
               <View style={styles.reviewReceiptRow}>
-                <Text style={styles.reviewReceiptLabel}>TIME REMAINING</Text>
+                <Text style={styles.reviewReceiptLabel}>Time remaining</Text>
                 <Text style={styles.reviewReceiptValue}>{auction.countdownText}</Text>
               </View>
               <View style={styles.reviewReceiptRow}>
-                <Text style={styles.reviewReceiptLabel}>SELLER</Text>
+                <Text style={styles.reviewReceiptLabel}>Seller</Text>
                 <Text style={styles.reviewReceiptValue}>{auction.sellerName}</Text>
               </View>
             </View>

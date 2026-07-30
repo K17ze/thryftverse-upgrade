@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   StatusBar,
-  Linking,
   Platform,
   Pressable,
   AppState,
@@ -15,6 +14,11 @@ import {
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import {
+  initPaymentSheet,
+  PaymentSheetError,
+  presentPaymentSheet,
+} from '@stripe/stripe-react-native';
 import { useAppTheme } from '../theme/ThemeContext';
 import { EmptyState } from '../components/EmptyState';
 import { RootStackParamList } from '../navigation/types';
@@ -30,6 +34,7 @@ import { CheckoutSelectionRow } from '../components/checkout/CheckoutSelectionRo
 import { CheckoutPaymentSelector } from '../components/checkout/CheckoutPaymentSelector';
 import {
   createCommercePaymentIntent,
+  createStripeOrderSheet,
   createOrder,
   cancelOrder,
   getPaymentIntentStatus,
@@ -46,6 +51,11 @@ import { getIzePosition } from '../services/walletApi';
 import { haptics } from '../utils/haptics';
 import { getListingCoverUri } from '../utils/media';
 import { Space, Typography } from '../theme/designTokens';
+import { createStableId } from '../utils/createStableId';
+import {
+  configureStripeMobile,
+  getStripeReturnUrl,
+} from '../platform/payments/stripeMobile';
 
 type RouteT = RouteProp<RootStackParamList, 'Checkout'>;
 
@@ -58,6 +68,7 @@ type CheckoutStage =
   | 'payment_failed';
 
 interface CheckoutPostageOption {
+  quoteId: string | null;
   carrierId: string | null;
   label: string;
   etaLabel: string;
@@ -67,6 +78,7 @@ interface CheckoutPostageOption {
 }
 
 const DEFAULT_POSTAGE_OPTION: CheckoutPostageOption = {
+  quoteId: null,
   carrierId: null,
   label: 'Standard shipping',
   etaLabel: '2-3 working days',
@@ -76,6 +88,7 @@ const DEFAULT_POSTAGE_OPTION: CheckoutPostageOption = {
 };
 
 const UNAVAILABLE_REGION_POSTAGE_OPTION: CheckoutPostageOption = {
+  quoteId: null,
   carrierId: null,
   label: 'Shipping not available for your region',
   etaLabel: 'Unavailable',
@@ -167,7 +180,7 @@ function buildOrderSignature(params: {
 const STAGE_LABELS: Record<CheckoutStage, string> = {
   idle: '',
   creating_order: 'Creating your order…',
-  opening_payment: 'Opening secure payment…',
+  opening_payment: 'Opening Stripe PaymentSheet…',
   awaiting_payment: 'Waiting for payment confirmation…',
   payment_pending: 'Payment is still pending.',
   payment_failed: 'Payment failed. Try again.',
@@ -268,6 +281,7 @@ export default function CheckoutScreen() {
 
   const createdOrderIdRef = useRef<string | null>(null);
   const createdOrderSignatureRef = useRef<string | null>(null);
+  const orderIdempotencyKeyRef = useRef<string | null>(null);
   const pendingIntentIdRef = useRef<string | null>(null);
   const isSubmittingRef = useRef(false);
   const appStateRef = useRef(AppState.currentState);
@@ -285,7 +299,7 @@ export default function CheckoutScreen() {
     if (!currentUser?.id || !item) return false;
     if (isHydrating || isInteractionLocked) return false;
     if (!savedAddress?.id) return false;
-    if (!postageOption.carrierId) return false;
+    if (!postageOption.carrierId || !postageOption.quoteId) return false;
     // If balance covers the full total, payment method is not required
     const grossTotal = item.price + calculatePlatformChargeGbp(item.price) + postageOption.priceFromGbp;
     const balanceCoversFull = useBalance && walletBalance >= grossTotal;
@@ -294,7 +308,7 @@ export default function CheckoutScreen() {
       if (!isPaymentMethodAllowed(checkoutCapabilities, savedPaymentMethod.type)) return false;
     }
     return true;
-  }, [currentUser?.id, item, isHydrating, isInteractionLocked, savedAddress?.id, savedPaymentMethod?.id, postageOption.carrierId, checkoutCapabilities, savedPaymentMethod?.type, useBalance, walletBalance, postageOption.priceFromGbp]);
+  }, [currentUser?.id, item, isHydrating, isInteractionLocked, savedAddress?.id, savedPaymentMethod?.id, postageOption.carrierId, postageOption.quoteId, checkoutCapabilities, savedPaymentMethod?.type, useBalance, walletBalance, postageOption.priceFromGbp]);
 
   // --- Mount / unmount ---
   useEffect(() => {
@@ -445,6 +459,7 @@ export default function CheckoutScreen() {
           setPostageOption(UNAVAILABLE_REGION_POSTAGE_OPTION);
         } else {
           const fallbackOption: CheckoutPostageOption = {
+            quoteId: null,
             carrierId: primaryCarrier.id,
             label: primaryCarrier.label,
             etaLabel: toEtaLabel(primaryCarrier),
@@ -472,6 +487,7 @@ export default function CheckoutScreen() {
               const selectedQuote = quoteResponse.recommendedQuote ?? quoteResponse.quotes[0];
               if (selectedQuote) {
                 setPostageOption({
+                  quoteId: selectedQuote.quoteId,
                   carrierId: selectedQuote.carrierId,
                   label: selectedQuote.label,
                   etaLabel: toEtaLabelFromRange(selectedQuote.etaMinDays, selectedQuote.etaMaxDays),
@@ -481,7 +497,7 @@ export default function CheckoutScreen() {
                 });
               }
             } catch {
-              setShippingError('Could not get a live shipping quote. Showing estimated pricing.');
+              setShippingError('A current shipping quote is unavailable. Refresh before paying.');
             }
           }
         }
@@ -526,6 +542,7 @@ export default function CheckoutScreen() {
 
       createdOrderIdRef.current = null;
       createdOrderSignatureRef.current = null;
+      orderIdempotencyKeyRef.current = null;
       pendingIntentIdRef.current = null;
 
       return true;
@@ -602,9 +619,14 @@ export default function CheckoutScreen() {
         }
 
         setStage('creating_order');
+        if (!orderIdempotencyKeyRef.current) {
+          orderIdempotencyKeyRef.current = createStableId('order');
+        }
         const order = await createOrder({
           buyerId: userId,
           listingId: item.id,
+          idempotencyKey: orderIdempotencyKeyRef.current,
+          shippingQuoteId: postageOption.quoteId!,
           addressId: savedAddress?.id,
           paymentMethodId: savedPaymentMethod?.id,
           platformChargeGbp: PLATFORM_CHARGE,
@@ -629,7 +651,10 @@ export default function CheckoutScreen() {
 
       // Create payment intent
       setStage('opening_payment');
-      const intent = await createCommercePaymentIntent({ orderId });
+      const intent = await createCommercePaymentIntent({
+        orderId,
+        idempotencyKey: `payment_${orderId}`,
+      });
 
       if (
         !isMountedRef.current
@@ -640,25 +665,42 @@ export default function CheckoutScreen() {
 
       pendingIntentIdRef.current = intent.intentId;
 
-      if (intent.nextActionUrl) {
-        try {
-          const supported = await Linking.canOpenURL(intent.nextActionUrl);
-          if (!supported) {
-            setStage('payment_failed');
-            setOrderError('Unable to open payment page. Please try again.');
-            show('Unable to open payment action URL.', 'error');
-            isSubmittingRef.current = false;
-            return;
-          }
-          await Linking.openURL(intent.nextActionUrl);
-          show('Complete authentication in browser, then return.', 'info');
-        } catch {
-          setStage('payment_failed');
-          setOrderError('Could not open payment page. Please try again.');
-          show('Could not open payment page. Please try again.', 'error');
-          isSubmittingRef.current = false;
-          return;
-        }
+      const sheet = await createStripeOrderSheet(orderId);
+      await configureStripeMobile(sheet.publishableKey);
+      const { error: sheetInitializationError } = await initPaymentSheet({
+        merchantDisplayName: sheet.merchantDisplayName,
+        customerId: sheet.customerId,
+        customerSessionClientSecret: sheet.customerSessionClientSecret,
+        paymentIntentClientSecret: sheet.paymentIntentClientSecret,
+        returnURL: getStripeReturnUrl(),
+        allowsDelayedPaymentMethods: false,
+        applePay:
+          sheet.applePayEnabled && Platform.OS === 'ios'
+            ? { merchantCountryCode: sheet.merchantCountryCode }
+            : undefined,
+        googlePay:
+          sheet.googlePayEnabled && Platform.OS === 'android'
+            ? {
+                merchantCountryCode: sheet.merchantCountryCode,
+                currencyCode: sheet.currency,
+                testEnv: sheet.publishableKey.startsWith('pk_test_'),
+              }
+            : undefined,
+      });
+      if (sheetInitializationError) {
+        throw new Error(sheetInitializationError.message);
+      }
+
+      const { error: sheetPresentationError } = await presentPaymentSheet();
+      if (sheetPresentationError?.code === PaymentSheetError.Canceled) {
+        setStage('idle');
+        setOrderError(null);
+        pendingIntentIdRef.current = null;
+        isSubmittingRef.current = false;
+        return;
+      }
+      if (sheetPresentationError) {
+        throw new Error(sheetPresentationError.message);
       }
 
       if (
@@ -1053,7 +1095,7 @@ export default function CheckoutScreen() {
       ? 'Retry payment'
       : stage === 'payment_pending'
         ? 'Waiting for confirmation…'
-        : 'Pay securely';
+        : 'Review and pay';
 
   return (
     <SafeAreaView style={[styles.container, t.container]} edges={['top']}>
@@ -1302,7 +1344,7 @@ export default function CheckoutScreen() {
           onPress={() => { haptics.press(); handlePay(); }}
           disabled={!checkoutEligible || isInteractionLocked}
           accessibilityRole="button"
-          accessibilityLabel={`Pay ${formatFromFiat(TOTAL, 'GBP')} securely`}
+          accessibilityLabel={`Review and pay ${formatFromFiat(TOTAL, 'GBP')} with Stripe`}
           accessibilityState={{
             disabled: !checkoutEligible || isInteractionLocked,
             busy: isSubmitting,
@@ -1332,11 +1374,6 @@ export default function CheckoutScreen() {
         isSelecting={isSelectingPayment}
         onAddCard={() => {
           setPaymentSelectorVisible(false);
-          setAddCardSheetVisible(true);
-        }}
-        onExpressPay={(type) => {
-          setPaymentSelectorVisible(false);
-          show(`${type === 'apple_pay' ? 'Apple Pay' : 'Google Pay'} setup required — add a card first to enable express checkout.`, 'info');
           setAddCardSheetVisible(true);
         }}
       />

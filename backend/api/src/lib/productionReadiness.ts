@@ -13,6 +13,14 @@ const DEVELOPMENT_DEFAULTS: Readonly<Record<string, readonly string[]>> = {
     "local-security-admin-token",
     "replace_with_long_random_token",
   ],
+  API_INTERNAL_SERVICE_TOKEN: [
+    "local-internal-service-token",
+    "replace_with_long_random_token",
+  ],
+  DECISION_SERVICE_TOKEN: [
+    "local-decision-service-token",
+    "replace-with-a-long-random-service-secret",
+  ],
   KEY_SERVICE_CLIENT_TOKEN: [
     "local-key-client-token",
     "replace_with_long_random_token",
@@ -46,6 +54,8 @@ const REQUIRED_PRODUCTION_VALUES = [
   "AUTH_ACCESS_TOKEN_SECRET",
   "AUTH_REFRESH_TOKEN_SECRET",
   "API_SECURITY_ADMIN_TOKEN",
+  "API_INTERNAL_SERVICE_TOKEN",
+  "DECISION_SERVICE_TOKEN",
   "ONEZE_ATTESTATION_SIGNING_SECRET",
   "ONEZE_FX_PROVIDER_URL",
   "ONEZE_FX_PROVIDER_API_KEY",
@@ -58,6 +68,8 @@ const MINIMUM_SECRET_LENGTHS: Readonly<Record<string, number>> = {
   AUTH_ACCESS_TOKEN_SECRET: 32,
   AUTH_REFRESH_TOKEN_SECRET: 32,
   API_SECURITY_ADMIN_TOKEN: 32,
+  API_INTERNAL_SERVICE_TOKEN: 32,
+  DECISION_SERVICE_TOKEN: 32,
   KEY_SERVICE_CLIENT_TOKEN: 32,
   KEY_SERVICE_ADMIN_TOKEN: 32,
   ONEZE_ATTESTATION_SIGNING_SECRET: 32,
@@ -216,6 +228,54 @@ export function collectProductionReadinessErrors(
     errors.push(
       "At least one complete payment provider credential set is required in production",
     );
+  }
+  if (valueOf(environment, "STRIPE_SECRET_KEY")) {
+    if (!valueOf(environment, "STRIPE_PUBLISHABLE_KEY")) {
+      errors.push(
+        "STRIPE_PUBLISHABLE_KEY is required when Stripe payment collection is configured",
+      );
+    }
+    if (!valueOf(environment, "PAYMENT_METADATA_HMAC_SECRET")) {
+      errors.push(
+        "PAYMENT_METADATA_HMAC_SECRET is required when Stripe payment collection is configured",
+      );
+    }
+  }
+
+  if (!isTruthy(valueOf(environment, "MEDIA_PROCESSING_ENABLED"))) {
+    errors.push(
+      "MEDIA_PROCESSING_ENABLED must be true in production",
+    );
+  }
+  if (!isTruthy(valueOf(environment, "MEDIA_PUBLICATION_GATE_ENABLED"))) {
+    errors.push(
+      "MEDIA_PUBLICATION_GATE_ENABLED must be true in production",
+    );
+  }
+
+  if (valueOf(environment, "OPENAI_API_KEY")) {
+    if (!valueOf(environment, "OPENAI_AGENT_DEFAULT_MODEL")) {
+      errors.push(
+        "OPENAI_AGENT_DEFAULT_MODEL is required when OPENAI_API_KEY is configured",
+      );
+    }
+    if (
+      !valueOf(environment, "AI_USAGE_PRICING_VERSION")
+      || valueOf(environment, "AI_USAGE_PRICING_VERSION") === "unconfigured"
+    ) {
+      errors.push(
+        "AI_USAGE_PRICING_VERSION is required when OPENAI_API_KEY is configured",
+      );
+    }
+    for (const key of [
+      "OPENAI_INPUT_COST_MICROUSD_PER_MILLION_TOKENS",
+      "OPENAI_OUTPUT_COST_MICROUSD_PER_MILLION_TOKENS",
+    ] as const) {
+      const value = Number(valueOf(environment, key));
+      if (!Number.isFinite(value) || value <= 0) {
+        errors.push(`${key} must be greater than zero when OPENAI_API_KEY is configured`);
+      }
+    }
   }
 
   const hasShippingProvider = [

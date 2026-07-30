@@ -54,23 +54,36 @@ export function CoOwnHubSkeleton() {
 // ── Asset detail skeleton ──
 
 export function CoOwnAssetDetailSkeleton() {
+  const { colors } = useAppTheme();
   const { width, height } = useWindowDimensions();
   const isCompact = width < 390;
-  const heroHeight = Math.min(height * (isCompact ? 0.52 : 0.65), width * 1.35);
+  const heroFraction = width < 340 ? 0.48 : isCompact ? 0.5 : 0.56;
+  const heroHeight = Math.min(height * heroFraction, width * 1.35);
 
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.detailSkeleton, { backgroundColor: colors.background }]}>
       <SkeletonBlock width={width} height={heroHeight} radius={0} />
-      <View style={styles.contentPad}>
-        <SkeletonBlock width="60%" height={28} />
-        <View style={styles.itemGap} />
-        <SkeletonBlock width="40%" height={22} />
-        <View style={styles.itemGap} />
-        <SkeletonBlock width="100%" height={80} radius={Radius.lg} />
-        <View style={styles.itemGap} />
-        <SkeletonBlock width="100%" height={120} radius={Radius.lg} />
-        <View style={styles.itemGap} />
-        <SkeletonBlock width="100%" height={200} radius={Radius.lg} />
+      <View style={styles.detailIdentity}>
+        <SkeletonBlock width={82} height={11} radius={Radius.sm} />
+        <SkeletonBlock width="82%" height={28} radius={Radius.sm} />
+        <SkeletonBlock width="52%" height={13} radius={Radius.sm} />
+      </View>
+      <View style={[styles.detailHairline, { backgroundColor: colors.borderSubtle }]} />
+      <View style={styles.detailIssuer}>
+        <SkeletonBlock width={44} height={44} radius={Radius.full} />
+        <View style={styles.detailIssuerCopy}>
+          <SkeletonBlock width="52%" height={14} radius={Radius.sm} />
+          <SkeletonBlock width="70%" height={11} radius={Radius.sm} />
+        </View>
+        <SkeletonBlock width={48} height={12} radius={Radius.sm} />
+      </View>
+      <View style={[styles.detailTransaction, { backgroundColor: colors.surface }]}>
+        <SkeletonBlock width="38%" height={11} radius={Radius.sm} />
+        <SkeletonBlock width="58%" height={29} radius={Radius.sm} />
+        <View style={styles.detailMetricRow}>
+          <SkeletonBlock width="42%" height={13} radius={Radius.sm} />
+          <SkeletonBlock width={74} height={13} radius={Radius.sm} />
+        </View>
       </View>
     </View>
   );
@@ -322,6 +335,41 @@ export function CoOwnCandleChartSkeleton() {
 }
 
 const styles = StyleSheet.create({
+  detailSkeleton: {
+    flex: 1,
+  },
+  detailIdentity: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.md,
+    paddingBottom: Space.lg,
+    gap: Space.sm,
+  },
+  detailHairline: {
+    height: StyleSheet.hairlineWidth,
+    marginHorizontal: Space.md,
+  },
+  detailIssuer: {
+    minHeight: 76,
+    paddingHorizontal: Space.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+  },
+  detailIssuerCopy: {
+    flex: 1,
+    gap: Space.xs,
+  },
+  detailTransaction: {
+    marginHorizontal: Space.md,
+    padding: Space.md,
+    borderRadius: Radius.lg,
+    gap: Space.sm,
+  },
+  detailMetricRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   hubSkeleton: {
     paddingTop: Space.sm,
     alignItems: 'center',

@@ -26,6 +26,7 @@ import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useConnectivity } from '../hooks/useConnectivity';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { enablePriceAlert, disablePriceAlert, getPriceAlertStatus } from '../services/priceAlertsApi';
 import { toIze, formatIzeAmount } from '../utils/currency';
 import { Motion } from '../constants/motion';
@@ -67,8 +68,6 @@ import {
   COMMERCE_DETAIL_COMPACT_WIDTH,
 } from '../components/commerce/detail';
 import { resolveEvidenceGroups } from '../platform/commerce/categoryEvidence';
-import { FlagshipEmptyGraphic } from '../components/flagship';
-
 import {
   useListingDetail,
   useListingPriceHistory,
@@ -95,9 +94,10 @@ export default function ItemDetailScreen() {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
-  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const { width: screenWidth } = useWindowDimensions();
   const isCompactScreen = screenWidth < COMMERCE_DETAIL_COMPACT_WIDTH;
   const { isOffline } = useConnectivity();
+  const reducedMotion = useReducedMotion();
   const [collectionModalVisible, setCollectionModalVisible] = useState(false);
   const [shareVisible, setShareVisible] = useState(false);
   const [priceAlertEnabled, setPriceAlertEnabled] = useState(false);
@@ -105,10 +105,11 @@ export default function ItemDetailScreen() {
   const [fullscreenIndex, setFullscreenIndex] = useState(0);
   const [fullscreenVisible, setFullscreenVisible] = useState(false);
   const [sizeGuideVisible, setSizeGuideVisible] = useState(false);
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   // Per spec 04_DIRECT §3: Q&A opens in a canonical BottomSheet.
   const [qaSheetVisible, setQaSheetVisible] = useState(false);
+  const [purchaseDetailsVisible, setPurchaseDetailsVisible] = useState(false);
   const [overflowVisible, setOverflowVisible] = useState(false);
-  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
 
   const isItemSavedAnywhere = useStore((state) => state.isItemSavedAnywhere);
   const isFav = useStore((state) => state.isWishlisted(route.params?.itemId));
@@ -218,6 +219,11 @@ export default function ItemDetailScreen() {
       toggleFav(item.id);
       show('Added to wishlist', 'success');
     }
+    if (reducedMotion) {
+      bigHeartOpacity.value = 0;
+      bigHeartScale.value = 0;
+      return;
+    }
     bigHeartOpacity.value = 1;
     bigHeartScale.value = withSequence(
       withSpring(1.5, Motion.spring.flagshipPop),
@@ -246,6 +252,29 @@ export default function ItemDetailScreen() {
     if (item) ProductAnalytics.mediaZoom(item.id);
   };
 
+  // Prefetch the next discovery surface even though the current detail page
+  // intentionally stays within its three-module content budget. Keeping this
+  // data warm preserves the planned continuation flow without adding another
+  // competing rail to the page today.
+  const exploreItems: Listing[] = useMemo(() => {
+    const items: Listing[] = [];
+    for (const page of exploreData?.pages ?? []) {
+      const section = page.sections.find((candidate) => candidate.key === 'continue_exploring');
+      if (!section) continue;
+      for (const recommendation of section.items) {
+        if (!isRecommendationLook(recommendation)) items.push(recommendation);
+      }
+    }
+    return items;
+  }, [exploreData]);
+
+  // These values are consumed by the planned continuation surface. Retaining
+  // them here ensures pagination state remains available when that route lands.
+  void exploreItems;
+  void exploreNextPage;
+  void exploreHasNextPage;
+  void exploreFetching;
+
   // NOTE: exploreItems useMemo must run BEFORE any conditional return so the
   // hook count stays stable across loading → loaded (Rules of Hooks).
   // Per spec 04_DIRECT §4: "Continue exploring" items are prefetched via
@@ -253,20 +282,6 @@ export default function ItemDetailScreen() {
   // module — the three-module budget (Bundle upsell → Seen in Looks →
   // More like this) is the canonical order. The prefetched data is
   // available for downstream navigation surfaces.
-  const exploreItems: Listing[] = useMemo(() => {
-    const allPages = exploreData?.pages ?? [];
-    const items: Listing[] = [];
-    for (const page of allPages) {
-      const section = page.sections.find((s) => s.key === 'continue_exploring');
-      if (section) {
-        for (const recItem of section.items) {
-          if (!isRecommendationLook(recItem)) items.push(recItem);
-        }
-      }
-    }
-    return items;
-  }, [exploreData]);
-
   // ── Listing engagement summary ──
   // Per spec 04_DIRECT §5: backend-backed engagement summary. The
   // frontend must not fabricate question counts. listingEngagement is
@@ -298,13 +313,13 @@ export default function ItemDetailScreen() {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <StatusBar translucent backgroundColor="transparent" barStyle={isDark ? 'light-content' : 'dark-content'} />
-        <View style={styles.unavailableContainer}>
-          <FlagshipEmptyGraphic variant="box" size={160} />
-          <Text style={[styles.unavailableTitle, { color: colors.textPrimary }]}>Item not found</Text>
-          <Text style={[styles.unavailableBody, { color: colors.textSecondary }]}>
-            This listing may have been removed or is no longer available.
-          </Text>
-        </View>
+        <CommerceStateCanvas
+          state="unavailable"
+          title="Item not found"
+          message="This listing may have been removed or is no longer available."
+          onRetry={() => navigation.navigate('MainTabs', { screen: 'Explore' })}
+          retryLabel="Browse similar"
+        />
       </View>
     );
   }
@@ -484,7 +499,7 @@ export default function ItemDetailScreen() {
           onDoubleTap={handleDoubleTap}
           onZoomStart={() => { if (item) ProductAnalytics.mediaZoom(item.id); }}
           onOpenFullscreen={handleOpenFullscreen}
-          heightFraction={isCompactScreen ? 0.5 : 0.62}
+          heightFraction={isCompactScreen ? 0.5 : 0.56}
           bigHeartOpacity={bigHeartOpacity}
           bigHeartScale={bigHeartScale}
           showDefaultControls={false}
@@ -497,16 +512,23 @@ export default function ItemDetailScreen() {
               />
             </View>
           }
+          overlayBottomContent={
+            <CommerceDetailIdentity
+              family="direct"
+              tone="media"
+              density={isCompactScreen ? 'compact' : 'standard'}
+              eyebrow={item.brand ?? item.category ?? 'Direct listing'}
+              title={item.title}
+              primaryValue={formattedPrice}
+              secondaryLine={secondaryLine}
+              interestSignal={interestSignal}
+            />
+          }
         />
         <CommerceDetailMediaRail
           onBack={() => navigation.goBack()}
           topInset={insets.top}
           rightActions={[
-            {
-              icon: 'share-outline',
-              label: 'Share',
-              onPress: handleShare,
-            },
             {
               icon: isItemSavedAnywhere(item.id) ? 'bookmark' : 'bookmark-outline',
               activeIcon: 'bookmark',
@@ -530,20 +552,6 @@ export default function ItemDetailScreen() {
             interest signal. The family badge lives on the media stage
             above; the price is NOT repeated elsewhere except the dock.
             Spec 02 §B + spec 05 §2. */}
-        <CommerceDetailIdentity
-          family="direct"
-          density={isCompactScreen ? 'compact' : 'standard'}
-          eyebrow={item.brand ?? undefined}
-          title={item.title}
-          primaryValue={formattedPrice}
-          secondaryLine={secondaryLine}
-          interestSignal={interestSignal}
-        />
-
-        {/* Key attributes — one quiet row, not filled pills.
-            Rendered inside the identity's padding rhythm so it reads as
-            part of the identity composition, not a disconnected block.
-            Spec 05 §2: "Do not make every attribute a filled pill." */}
         {attributeLine ? (
           <View style={styles.attributeRow}>
             <Text style={[styles.attributeText, { color: colors.textMuted }]} numberOfLines={2}>
@@ -553,6 +561,7 @@ export default function ItemDetailScreen() {
               <Pressable
                 onPress={() => { haptic.light(); setSizeGuideVisible(true); }}
                 hitSlop={8}
+                style={styles.quietTextTarget}
                 accessibilityLabel="View size guide"
                 accessibilityRole="button"
               >
@@ -564,18 +573,12 @@ export default function ItemDetailScreen() {
           </View>
         ) : null}
 
-        {/* 1ZE equivalent — quiet secondary line when gold rates exist */}
         {priceIzeText ? (
           <Text style={[styles.izeText, { color: colors.textSecondary }]} numberOfLines={1}>
             {priceIzeText}
           </Text>
         ) : null}
 
-        {/* ── Zone C — Seller confidence ──
-            Slim seller row — the primary seller presentation. Carries
-            Follow/Message and navigates to the full profile on tap.
-            Spec 05 §3: "Move seller identity closer to the purchase
-            decision. Compact row." */}
         {seller && (
           <View style={styles.sellerRowWrap}>
             <CommerceDetailSellerRow
@@ -624,62 +627,15 @@ export default function ItemDetailScreen() {
             Spec 05 §4: "Use a compact summary plus disclosure sheet.
             Do not render a separate bordered strip for every policy." */}
         {purchaseSummary ? (
-          <CommerceDetailSection label="Purchase details" divider>
-            <Text style={[styles.purchaseSummary, { color: colors.textSecondary }]}>
-              {purchaseSummary}
-            </Text>
+          <CommerceDetailSection label="Buying this item" variant="continuation">
             <CommerceDetailDisclosureRow
-              label="Shipping & delivery"
-              summary={commerce.shippingMethod ?? undefined}
+              label="Delivery & protection"
+              summary={purchaseSummary}
               onPress={() => {
                 haptic.light();
-                show(
-                  commerce.estimatedDeliveryStart && commerce.estimatedDeliveryEnd
-                    ? `${commerce.shippingMethod ?? 'Standard shipping'} · ${commerce.estimatedDeliveryStart}–${commerce.estimatedDeliveryEnd}`
-                    : commerce.shippingMethod ?? 'Shipping confirmed at checkout',
-                  'info'
-                );
-              }}
-              leadingIcon="cube-outline"
-            />
-            <CommerceDetailDisclosureRow
-              label="Buyer protection"
-              summary={commerce.protectionPolicy?.available ? commerce.protectionPolicy.label : 'Not included'}
-              onPress={() => {
-                haptic.light();
-                show(
-                  commerce.protectionPolicy?.summary ?? 'Your money is held safely until you confirm receipt.',
-                  'info'
-                );
+                setPurchaseDetailsVisible(true);
               }}
               leadingIcon="shield-checkmark-outline"
-            />
-            <CommerceDetailDisclosureRow
-              label="Returns"
-              summary={
-                commerce.returnPolicy
-                  ? commerce.returnPolicy.accepted
-                    ? commerce.returnPolicy.windowDays
-                      ? `${commerce.returnPolicy.windowDays} days`
-                      : 'Accepted'
-                    : 'Not accepted'
-                  : undefined
-              }
-              onPress={() => {
-                haptic.light();
-                show(
-                  commerce.returnPolicy?.accepted
-                    ? `Returns accepted${commerce.returnPolicy?.windowDays ? ` within ${commerce.returnPolicy.windowDays} days` : ''}.`
-                    : 'This seller does not accept returns.',
-                  'info'
-                );
-              }}
-              leadingIcon="return-up-back-outline"
-            />
-            <CommerceDetailMetricRow
-              label="Secure payment"
-              value="Thryftverse checkout"
-              muted
             />
           </CommerceDetailSection>
         ) : null}
@@ -700,6 +656,7 @@ export default function ItemDetailScreen() {
                 <Pressable
                   onPress={() => setDescriptionExpanded((prev) => !prev)}
                   hitSlop={8}
+                  style={styles.quietTextTarget}
                   accessibilityLabel={descriptionExpanded ? 'Show less' : 'Read more'}
                   accessibilityRole="button"
                 >
@@ -748,9 +705,14 @@ export default function ItemDetailScreen() {
             {hasDiscount && discountPercent && discountPercent > 0 ? (
               <Pressable
                 onPress={handleTogglePriceAlert}
+                disabled={priceAlertLoading}
                 style={({ pressed }) => [styles.alertRow, pressed && styles.pressed]}
                 accessibilityRole="switch"
-                accessibilityState={{ checked: priceAlertEnabled }}
+                accessibilityState={{
+                  checked: priceAlertEnabled,
+                  disabled: priceAlertLoading,
+                  busy: priceAlertLoading,
+                }}
                 accessibilityLabel={priceAlertEnabled ? 'Disable price drop alert' : 'Enable price drop alert'}
               >
                 <View style={styles.alertRowLeft}>
@@ -788,17 +750,7 @@ export default function ItemDetailScreen() {
             Do not render the full Q&A inline by default — it adds
             vertical length without aiding the purchase decision. The
             disclosure opens a canonical BottomSheet with the full Q&A. */}
-        <CommerceDetailSection label="Questions & answers" divider>
-          {qaSummary?.latestAnsweredQuestion && qaSummary.latestAnswer ? (
-            <View style={styles.qaPreview}>
-              <Text style={[styles.qaPreviewQuestion, { color: colors.textPrimary }]} numberOfLines={2}>
-                {qaSummary.latestAnsweredQuestion}
-              </Text>
-              <Text style={[styles.qaPreviewAnswer, { color: colors.textSecondary }]} numberOfLines={2}>
-                {qaSummary.latestAnswer}
-              </Text>
-            </View>
-          ) : null}
+        <CommerceDetailSection label="Questions" variant="compact" divider>
           <CommerceDetailDisclosureRow
             label={qaSummary?.questionCount ? 'View all questions' : 'Ask a question'}
             summary={qaSummary?.questionCount ? undefined : 'No questions yet'}
@@ -814,7 +766,7 @@ export default function ItemDetailScreen() {
             Order: Bundle upsell → Seen in Looks → More like this.
             Removed generic recommendation rail mapping and DiscoveryGrid
             to stay within the three-module budget. */}
-        <Reanimated.View entering={FadeInDown.duration(350).delay(120)}>
+        <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(220).delay(80)}>
           <BundleUpsellRow
             items={bundleItems}
             currentListingId={item.id}
@@ -825,6 +777,15 @@ export default function ItemDetailScreen() {
             onOpenBundleBag={(sellerId, sellerName) => navigation.navigate('BundleBag', { sellerId, sellerName })}
           />
         </Reanimated.View>
+
+        {seenInLooksSection && seenInLooksSection.items.length > 0 && (
+          <View style={styles.recommendationSection}>
+            <SeenInLooksRail
+              items={seenInLooksSection.items.filter(isRecommendationLook) as RecommendationLook[]}
+              onPressItem={handlePressLook}
+            />
+          </View>
+        )}
 
         {/* More like this — visual-similar grid by category/brand.
             Contextual heading: prefer brand when available, fall back
@@ -837,7 +798,7 @@ export default function ItemDetailScreen() {
               !l.isSold &&
               (l.category === item.category || l.brand === item.brand)
             )
-            .slice(0, 6);
+            .slice(0, 4);
           if (visualSimilar.length < 2) return null;
           const discoveryLabel = item.brand
             ? `More from ${item.brand}`
@@ -845,7 +806,7 @@ export default function ItemDetailScreen() {
             ? `More ${item.category.toLowerCase()}`
             : 'More like this';
           return (
-            <Reanimated.View entering={FadeInDown.duration(350).delay(180)}>
+            <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(220).delay(120)}>
               <CommerceDetailSection label={discoveryLabel} divider variant="discovery">
                 <View style={styles.moreLikeThisGrid}>
                   {visualSimilar.map((simItem) => (
@@ -867,6 +828,14 @@ export default function ItemDetailScreen() {
                           <Ionicons name="shirt-outline" size={20} color={colors.textMuted} />
                         </View>
                       )}
+                      <Text style={[styles.moreLikeThisTitle, { color: colors.textPrimary }]} numberOfLines={2}>
+                        {simItem.title}
+                      </Text>
+                      {(simItem.brand || simItem.condition) && (
+                        <Text style={[styles.moreLikeThisMeta, { color: colors.textMuted }]} numberOfLines={1}>
+                          {[simItem.brand, simItem.condition].filter(Boolean).join(' · ')}
+                        </Text>
+                      )}
                       <Text style={[styles.moreLikeThisPrice, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
                         {formatFromFiat(simItem.price, 'GBP', { displayMode: 'fiat' })}
                       </Text>
@@ -877,15 +846,6 @@ export default function ItemDetailScreen() {
             </Reanimated.View>
           );
         })()}
-
-        {seenInLooksSection && seenInLooksSection.items.length > 0 && (
-          <View style={styles.recommendationSection}>
-            <SeenInLooksRail
-              items={seenInLooksSection.items.filter(isRecommendationLook) as RecommendationLook[]}
-              onPressItem={handlePressLook}
-            />
-          </View>
-        )}
 
         {recsError && recommendationSections.length === 0 && (
           <View style={styles.recErrorRow}>
@@ -927,7 +887,7 @@ export default function ItemDetailScreen() {
               subtitle="This item has been sold"
               primaryAction={{
                 label: 'More like this',
-                onPress: () => navigation.navigate('Home'),
+                onPress: () => navigation.navigate('MainTabs', { screen: 'Explore' }),
               }}
             />
           );
@@ -942,6 +902,10 @@ export default function ItemDetailScreen() {
                 </Text>
               }
               subtitle="This listing is no longer available"
+              primaryAction={{
+                label: 'Browse similar',
+                onPress: () => navigation.navigate('MainTabs', { screen: 'Explore' }),
+              }}
             />
           );
         }
@@ -1000,6 +964,64 @@ export default function ItemDetailScreen() {
         onClose={() => setSizeGuideVisible(false)}
       />
 
+      <BottomSheet
+        visible={purchaseDetailsVisible}
+        onDismiss={() => setPurchaseDetailsVisible(false)}
+        snapPoint={0.58}
+      >
+        <View style={[styles.purchaseSheetHeader, { borderBottomColor: colors.borderSubtle }]}>
+          <View>
+            <Text style={[styles.purchaseSheetTitle, { color: colors.textPrimary }]}>
+              Delivery & protection
+            </Text>
+            <Text style={[styles.purchaseSheetSubtitle, { color: colors.textMuted }]}>
+              Confirmed terms for this listing
+            </Text>
+          </View>
+          <Pressable
+            onPress={() => setPurchaseDetailsVisible(false)}
+            style={styles.sheetCloseTarget}
+            accessibilityLabel="Close delivery and protection"
+            accessibilityRole="button"
+          >
+            <Ionicons name="close" size={22} color={colors.textSecondary} />
+          </Pressable>
+        </View>
+        <View style={styles.purchaseSheetBody}>
+          <CommerceDetailMetricRow
+            label="Shipping"
+            value={commerce.shippingMethod ?? 'Confirmed at checkout'}
+            subLabel={
+              commerce.estimatedDeliveryStart && commerce.estimatedDeliveryEnd
+                ? `${commerce.estimatedDeliveryStart}–${commerce.estimatedDeliveryEnd}`
+                : undefined
+            }
+          />
+          <CommerceDetailMetricRow
+            label="Buyer protection"
+            value={commerce.protectionPolicy?.available ? commerce.protectionPolicy.label : 'Not included'}
+            subLabel={commerce.protectionPolicy?.summary ?? undefined}
+          />
+          <CommerceDetailMetricRow
+            label="Returns"
+            value={
+              commerce.returnPolicy?.accepted
+                ? commerce.returnPolicy.windowDays
+                  ? `${commerce.returnPolicy.windowDays} days`
+                  : 'Accepted'
+                : 'Not accepted'
+            }
+          />
+          {commerce.authenticity && commerce.authenticity.status !== 'not_offered' && (
+            <CommerceDetailMetricRow
+              label="Authenticity"
+              value={commerce.authenticity.label ?? 'Eligible'}
+            />
+          )}
+          <CommerceDetailMetricRow label="Payment" value="Thryftverse checkout" muted />
+        </View>
+      </BottomSheet>
+
       {/* ── Q&A BottomSheet ──
           Per spec 04_DIRECT §3: canonical BottomSheet for Q&A. Opens
           from the "View questions & answers" disclosure row. */}
@@ -1015,6 +1037,7 @@ export default function ItemDetailScreen() {
           <Pressable
             onPress={() => setQaSheetVisible(false)}
             hitSlop={12}
+            style={styles.sheetCloseTarget}
             accessibilityLabel="Close questions and answers"
             accessibilityRole="button"
           >
@@ -1037,6 +1060,18 @@ export default function ItemDetailScreen() {
         <View style={[styles.overflowHeader, { borderColor: colors.border }]}>
           <Text style={[styles.overflowTitle, { color: colors.textPrimary }]}>More actions</Text>
         </View>
+        <Pressable
+          style={({ pressed }) => [styles.overflowRow, pressed && styles.pressed]}
+          onPress={() => {
+            setOverflowVisible(false);
+            handleShare();
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Share listing"
+        >
+          <Ionicons name="share-outline" size={20} color={colors.textPrimary} />
+          <Text style={[styles.overflowRowText, { color: colors.textPrimary }]}>Share listing</Text>
+        </Pressable>
         <Pressable
           style={({ pressed }) => [styles.overflowRow, pressed && styles.pressed]}
           onPress={() => {
@@ -1070,24 +1105,6 @@ export default function ItemDetailScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  unavailableContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: Space.xl,
-    gap: Space.md,
-  },
-  unavailableTitle: {
-    fontSize: 18,
-    fontFamily: Typography.family.semibold,
-    textAlign: 'center',
-  },
-  unavailableBody: {
-    fontSize: 14,
-    fontFamily: Typography.family.regular,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
   familyBadgeOverlay: {
     alignSelf: 'flex-start',
   },
@@ -1114,6 +1131,10 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
     flexShrink: 0,
   },
+  quietTextTarget: {
+    minHeight: 44,
+    justifyContent: 'center',
+  },
   izeText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
@@ -1132,6 +1153,38 @@ const styles = StyleSheet.create({
     fontSize: Type.body.size,
     lineHeight: Type.body.lineHeight + 2,
     paddingBottom: Space.sm,
+  },
+  purchaseSheetHeader: {
+    minHeight: 64,
+    paddingLeft: Space.md,
+    paddingRight: Space.xs,
+    paddingVertical: Space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Space.sm,
+  },
+  purchaseSheetTitle: {
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
+    fontFamily: Typography.family.semibold,
+  },
+  purchaseSheetSubtitle: {
+    marginTop: 2,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.regular,
+  },
+  purchaseSheetBody: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
+  },
+  sheetCloseTarget: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   // ── Description ──
   descriptionWrap: {
@@ -1197,13 +1250,13 @@ const styles = StyleSheet.create({
   },
   moreLikeThisCard: {
     flex: 1,
-    minWidth: '31%',
-    maxWidth: '33%',
-    gap: Space.xs,
+    minWidth: '47%',
+    maxWidth: '49%',
+    gap: 3,
   },
   moreLikeThisImage: {
     width: '100%',
-    aspectRatio: 1,
+    aspectRatio: 0.86,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1213,6 +1266,17 @@ const styles = StyleSheet.create({
     lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.semibold,
     fontVariant: ['tabular-nums'],
+    marginTop: 2,
+  },
+  moreLikeThisTitle: {
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.medium,
+  },
+  moreLikeThisMeta: {
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.regular,
   },
   // ── Discovery ──
   recommendationSection: {
@@ -1246,21 +1310,6 @@ const styles = StyleSheet.create({
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
     lineHeight: Type.subtitle.lineHeight,
-  },
-  // ── Q&A preview (latest answered question, above disclosure) ──
-  qaPreview: {
-    gap: Space.xs,
-    paddingBottom: Space.sm,
-  },
-  qaPreviewQuestion: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    lineHeight: Type.body.lineHeight,
-  },
-  qaPreviewAnswer: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight,
   },
   // ── Dock state badge ──
   dockStateBadge: {

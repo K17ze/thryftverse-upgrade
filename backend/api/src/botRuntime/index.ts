@@ -12,11 +12,9 @@
  */
 
 import type { PoolClient } from 'pg';
-import { publishRealtimeEvent } from '../lib/realtime.js';
 import type { BotRuntimeContext, BotInstallInfo, BotHandlerResult } from './types.js';
 import { resolveBotHandler } from './handlers.js';
 import { normalizeAgentConfig } from './agentConfig.js';
-import { executeOpenAiAgent } from './openaiAgent.js';
 
 interface DbQueryable {
   query: PoolClient['query'];
@@ -370,7 +368,7 @@ export async function executeBotCommand(
       install.permissionsSnapshot.includes('reply_in_chat');
 
     const handler = install.runtimeMode === 'ai'
-      ? executeOpenAiAgent
+      ? (await import('./openaiAgent.js')).executeOpenAiAgent
       : resolveBotHandler(install.botCategory);
     if (!handler) continue;
 
@@ -414,8 +412,36 @@ export async function executeBotCommand(
     };
 
     let result: BotHandlerResult;
+    let aiQuota: {
+      allowed: boolean;
+      userRemaining: number;
+      conversationRemaining: number;
+      resetsAt: string;
+    } | null = null;
     try {
-      result = await handler(ctx);
+      if (install.runtimeMode === 'ai') {
+        const { reserveAiUsageQuota } = await import('../lib/aiUsage.js');
+        const { redis } = await import('../lib/redis.js');
+        aiQuota = await reserveAiUsageQuota({
+          userId: input.actorUserId,
+          conversationId: input.conversationId,
+        }, redis);
+      }
+
+      if (aiQuota && !aiQuota.allowed) {
+        result = {
+          text: `${install.botName} has reached its hourly usage limit for this account or conversation. Try again at the start of the next hour.`,
+          shouldReply: true,
+          metadata: {
+            agentQuotaBlocked: true,
+            userRemaining: aiQuota.userRemaining,
+            conversationRemaining: aiQuota.conversationRemaining,
+            resetsAt: aiQuota.resetsAt,
+          },
+        };
+      } else {
+        result = await handler(ctx);
+      }
     } catch (error) {
       await logBotAuditEvent(client, {
         botId: install.botId,
@@ -432,6 +458,57 @@ export async function executeBotCommand(
         shouldReply: true,
         metadata: { agentError: true },
       };
+    }
+
+    if (install.runtimeMode === 'ai') {
+      const providerUsage = result.metadata?.providerUsage;
+      const normalizedUsage = providerUsage && typeof providerUsage === 'object'
+        ? {
+          inputTokens: Number((providerUsage as Record<string, unknown>).inputTokens) || 0,
+          outputTokens: Number((providerUsage as Record<string, unknown>).outputTokens) || 0,
+          totalTokens: Number((providerUsage as Record<string, unknown>).totalTokens) || 0,
+        }
+        : undefined;
+      const quotaBlocked = result.metadata?.agentQuotaBlocked === true;
+      const failed = result.metadata?.agentError === true;
+      try {
+        const { recordAiUsageEvent } = await import('../lib/aiUsage.js');
+        await recordAiUsageEvent(client, {
+          id: createRuntimeId('aiuse'),
+          userId: input.actorUserId,
+          conversationId: input.conversationId,
+          botId: install.botId,
+          model: typeof result.metadata?.model === 'string'
+            ? result.metadata.model
+            : install.agentConfig?.model ?? 'unconfigured',
+          providerRequestId: typeof result.metadata?.providerRequestId === 'string'
+            ? result.metadata.providerRequestId
+            : null,
+          status: quotaBlocked ? 'quota_blocked' : failed ? 'failed' : 'succeeded',
+          usage: normalizedUsage,
+          errorCode: quotaBlocked ? 'AI_HOURLY_QUOTA_EXCEEDED' : failed ? 'AI_EXECUTION_FAILED' : null,
+          metadata: {
+            userRemaining: aiQuota?.userRemaining ?? null,
+            conversationRemaining: aiQuota?.conversationRemaining ?? null,
+            resetsAt: aiQuota?.resetsAt ?? null,
+            providerLatencyMs: result.metadata?.providerLatencyMs ?? null,
+            attempt: result.metadata?.attempt ?? null,
+          },
+        });
+      } catch (usageError) {
+        await logBotAuditEvent(client, {
+          botId: install.botId,
+          conversationId: input.conversationId,
+          actorUserId: input.actorUserId,
+          eventType: 'execution_failed',
+          metadata: {
+            stage: 'usage_accounting',
+            reason: usageError instanceof Error
+              ? usageError.message.slice(0, 240)
+              : 'unknown',
+          },
+        });
+      }
     }
 
     if (!result.shouldReply || !canReply) {
@@ -488,6 +565,10 @@ export async function executeBotCommand(
       },
     });
 
+    // Load the realtime boundary only for an execution that produced a
+    // message. Pure command matching and handler tests no longer require
+    // Redis/database configuration merely by importing BotRuntime.
+    const { publishRealtimeEvent } = await import('../lib/realtime.js');
     publishRealtimeEvent({
       topic: `chat.conversation:${input.conversationId}`,
       type: 'chat.message.created',

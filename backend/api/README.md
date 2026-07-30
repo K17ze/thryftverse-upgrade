@@ -26,10 +26,16 @@ S3_ACCESS_KEY=minioadmin
 S3_SECRET_KEY=minioadmin
 S3_BUCKET=thryftverse-media
 S3_FORCE_PATH_STYLE=true
+MEDIA_PROCESSING_ENABLED=false
+MEDIA_PUBLICATION_GATE_ENABLED=false
 KEY_SERVICE_URL=http://localhost:4100
 KEY_SERVICE_CLIENT_TOKEN=local-key-client-token
 KEY_SERVICE_ADMIN_TOKEN=local-key-admin-token
 API_SECURITY_ADMIN_TOKEN=local-security-admin-token
+API_INTERNAL_SERVICE_TOKEN=local-internal-service-token
+AI_USAGE_PRICING_VERSION=unconfigured
+OPENAI_INPUT_COST_MICROUSD_PER_MILLION_TOKENS=0
+OPENAI_OUTPUT_COST_MICROUSD_PER_MILLION_TOKENS=0
 ```
 
 > **Never commit `.env` to version control.** It is already ignored in `.gitignore`.

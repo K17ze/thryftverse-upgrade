@@ -1,0 +1,102 @@
+{
+  "policy_version": "recommendation-heuristic-v2.0",
+  "as_of": "2026-07-28T12:00:00Z",
+  "thresholds": {
+    "ndcg_at_k": 0.7,
+    "mrr": 0.75,
+    "recall_at_k": 0.65,
+    "catalog_coverage": 0.45,
+    "maximum_seller_concentration": 0.5
+  },
+  "cases": [
+    {
+      "name": "personalised_outerwear",
+      "user_id": "evaluation_user_1",
+      "result_limit": 4,
+      "relevant_ids": ["jacket_2", "coat_1"],
+      "interactions": [
+        {
+          "listing_id": "history_jacket",
+          "action": "wishlist",
+          "strength": 1.0,
+          "created_at": "2026-07-27T12:00:00Z",
+          "title": "Vintage wool jacket",
+          "category": "outerwear",
+          "brand": "Acme",
+          "price_gbp": 80
+        },
+        {
+          "listing_id": "history_coat",
+          "action": "view",
+          "strength": 1.0,
+          "created_at": "2026-07-26T12:00:00Z",
+          "title": "Long wool coat",
+          "category": "outerwear",
+          "price_gbp": 95
+        },
+        {
+          "listing_id": "history_jacket_2",
+          "action": "view",
+          "strength": 1.0,
+          "created_at": "2026-07-25T12:00:00Z",
+          "title": "Tailored jacket",
+          "category": "outerwear",
+          "price_gbp": 75
+        }
+      ]
+    },
+    {
+      "name": "personalised_bags",
+      "user_id": "evaluation_user_2",
+      "result_limit": 4,
+      "relevant_ids": ["bag_1", "bag_2"],
+      "interactions": [
+        {
+          "listing_id": "history_bag",
+          "action": "purchase",
+          "strength": 1.0,
+          "created_at": "2026-07-20T12:00:00Z",
+          "title": "Leather shoulder bag",
+          "category": "bags",
+          "brand": "Nova",
+          "price_gbp": 60
+        },
+        {
+          "listing_id": "history_bag_2",
+          "action": "wishlist",
+          "strength": 1.0,
+          "created_at": "2026-07-26T12:00:00Z",
+          "title": "Crossbody bag",
+          "category": "bags",
+          "price_gbp": 55
+        },
+        {
+          "listing_id": "history_bag_3",
+          "action": "view",
+          "strength": 1.0,
+          "created_at": "2026-07-27T12:00:00Z",
+          "title": "Mini handbag",
+          "category": "bags",
+          "price_gbp": 50
+        }
+      ]
+    },
+    {
+      "name": "cold_start_quality",
+      "user_id": "evaluation_user_3",
+      "result_limit": 4,
+      "relevant_ids": ["jacket_2", "bag_1"],
+      "interactions": []
+    }
+  ],
+  "candidates": [
+    {"listing_id": "jacket_1", "seller_id": "seller_a", "title": "Denim jacket", "category": "outerwear", "brand": "Acme", "price_gbp": 70, "created_at": "2026-07-25T12:00:00Z", "quality_score": 0.75, "popularity_score": 0.7, "seller_trust_score": 0.8},
+    {"listing_id": "jacket_2", "seller_id": "seller_a", "title": "Vintage wool jacket", "category": "outerwear", "brand": "Acme", "price_gbp": 82, "created_at": "2026-07-27T12:00:00Z", "quality_score": 0.96, "popularity_score": 0.9, "seller_trust_score": 0.9},
+    {"listing_id": "coat_1", "seller_id": "seller_b", "title": "Long tailored wool coat", "category": "outerwear", "brand": "Atelier", "price_gbp": 96, "created_at": "2026-07-24T12:00:00Z", "quality_score": 0.84, "popularity_score": 0.72, "seller_trust_score": 0.92},
+    {"listing_id": "bag_1", "seller_id": "seller_c", "title": "Leather shoulder bag", "category": "bags", "brand": "Nova", "price_gbp": 62, "created_at": "2026-07-26T12:00:00Z", "quality_score": 0.95, "popularity_score": 0.92, "seller_trust_score": 0.88},
+    {"listing_id": "bag_2", "seller_id": "seller_d", "title": "Compact crossbody bag", "category": "bags", "brand": "Nova", "price_gbp": 54, "created_at": "2026-07-27T12:00:00Z", "quality_score": 0.82, "popularity_score": 0.76, "seller_trust_score": 0.86},
+    {"listing_id": "shoe_1", "seller_id": "seller_e", "title": "Leather trainers", "category": "shoes", "brand": "Run", "price_gbp": 52, "created_at": "2026-07-23T12:00:00Z", "quality_score": 0.7, "popularity_score": 0.62, "seller_trust_score": 0.84},
+    {"listing_id": "dress_1", "seller_id": "seller_f", "title": "Silk occasion dress", "category": "dresses", "brand": "Muse", "price_gbp": 90, "created_at": "2026-07-22T12:00:00Z", "quality_score": 0.8, "popularity_score": 0.64, "seller_trust_score": 0.9},
+    {"listing_id": "watch_1", "seller_id": "seller_g", "title": "Stainless steel watch", "category": "accessories", "brand": "Time", "price_gbp": 120, "created_at": "2026-07-21T12:00:00Z", "quality_score": 0.72, "popularity_score": 0.58, "seller_trust_score": 0.82}
+  ]
+}

@@ -183,6 +183,12 @@ export interface MarketCoOwnAsset {
   id: string;
   listingId: string;
   issuerId: string;
+  issuer?: {
+    username: string;
+    displayName: string | null;
+    avatar: string | null;
+    location: string | null;
+  } | null;
   title: string;
   imageUrl: string | null;
   totalUnits: number;
@@ -209,6 +215,10 @@ export interface MarketCoOwnAsset {
 
 /** Co-Own market snapshot. Per spec 03_COOWN §2. */
 export interface CoOwnMarketSnapshot {
+  /** Schema version for forward-compatible market snapshot parsing. */
+  version: number;
+  /** Server time at which the snapshot was assembled. */
+  asOf: string;
   /** Last settled execution price in GBP. Null when no settled trades
    * exist. The frontend uses this to distinguish "Reference unit
    * price" from "Last settled trade". */

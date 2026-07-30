@@ -458,9 +458,8 @@ export async function joinGroupByInviteOnApi(inviteToken: string): Promise<{
 
 export interface ComposerPendingAttachment {
   kind: 'image' | 'video' | 'file' | 'audio';
-  objectKey?: string;
-  finalizationId?: string;
-  localUri?: string;
+  objectKey: string;
+  finalizationId: string;
   fileName?: string;
   contentType?: string;
   sizeBytes?: number;

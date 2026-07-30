@@ -39,7 +39,7 @@ export function CommerceDetailMetricRow({
     <View style={styles.row}>
       <Text
         style={[styles.label, { color: colors.textSecondary }]}
-        numberOfLines={1}
+        numberOfLines={2}
       >
         {label}
       </Text>
@@ -50,7 +50,7 @@ export function CommerceDetailMetricRow({
               styles.value,
               { color: muted ? colors.textMuted : colors.textPrimary },
             ]}
-            numberOfLines={1}
+            numberOfLines={2}
           >
             {value}
           </Text>
@@ -78,19 +78,24 @@ const styles = StyleSheet.create({
     fontSize: Type.body.size,
     lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.regular,
+    flex: 1,
     flexShrink: 1,
   },
   valueCluster: {
     flexDirection: 'row',
     alignItems: 'baseline',
     gap: Space.xs,
-    flexShrink: 0,
+    maxWidth: '56%',
+    flexShrink: 1,
+    justifyContent: 'flex-end',
   },
   value: {
     fontSize: Type.bodyEmphasis.size,
     lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.semibold,
     fontVariant: ['tabular-nums'],
+    flexShrink: 1,
+    textAlign: 'right',
   },
   subLabel: {
     fontSize: Type.caption.size,

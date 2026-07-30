@@ -272,13 +272,17 @@ export function computeRetryDelayMs(attempt: number): number {
  * This does NOT block startup — the API can still run with heuristic
  * baselines. It only blocks the `ai.provider_backed` capability claim.
  */
-export async function validateAiDeployReadiness(): Promise<{
+export async function validateAiDeployReadiness(
+  options: { probeProviders?: boolean } = {},
+): Promise<{
   ok: boolean;
   blockingErrors: string[];
   warnings: string[];
   health: AiHealthCheck;
 }> {
-  const health = await buildAiHealth(true);
+  // The admin/deploy endpoint probes providers. Startup can opt out so a
+  // provider outage never adds several seconds to API boot.
+  const health = await buildAiHealth(options.probeProviders === false);
   const blockingErrors: string[] = [];
   const warnings: string[] = [];
 
@@ -294,6 +298,27 @@ export async function validateAiDeployReadiness(): Promise<{
     if (config.openAiApiKey && config.openAiAgentMaxOutputTokens > AI_RATE_LIMITS.hardMaxOutputTokens) {
       blockingErrors.push(
         `OPENAI_AGENT_MAX_OUTPUT_TOKENS exceeds the hard ceiling of ${AI_RATE_LIMITS.hardMaxOutputTokens}.`,
+      );
+    }
+    if (
+      options.probeProviders !== false
+      && config.openAiApiKey
+      && !health.providerConfigured
+    ) {
+      blockingErrors.push(
+        `The configured AI provider is not reachable${health.error ? `: ${health.error}` : '.'}`,
+      );
+    }
+    if (
+      config.openAiApiKey
+      && (
+        config.aiUsagePricingVersion === 'unconfigured'
+        || config.openAiInputCostMicrousdPerMillionTokens <= 0
+        || config.openAiOutputCostMicrousdPerMillionTokens <= 0
+      )
+    ) {
+      blockingErrors.push(
+        'AI usage pricing must be versioned and contain positive input/output rates before provider-backed AI can be deployment-ready.',
       );
     }
   }

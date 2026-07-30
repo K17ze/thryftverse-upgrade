@@ -48,14 +48,14 @@ describe('direct-listing-detail flagship closure (spec 04_DIRECT)', () => {
     it('uses a disclosure row, not inline ListingQA', () => {
       // The Q&A section should use CommerceDetailDisclosureRow, not
       // inline ListingQA in the section body.
-      const qaSection = src.match(/CommerceDetailSection label="Questions & answers"[\s\S]*?<\/CommerceDetailSection>/);
+      const qaSection = src.match(/CommerceDetailSection label="Questions"[\s\S]*?<\/CommerceDetailSection>/);
       expect(qaSection).toBeTruthy();
       expect(qaSection![0]).toContain('CommerceDetailDisclosureRow');
       expect(qaSection![0]).toContain('View all questions');
     });
 
     it('does not render ListingQA inline in the section', () => {
-      const qaSection = src.match(/CommerceDetailSection label="Questions & answers"[\s\S]*?<\/CommerceDetailSection>/);
+      const qaSection = src.match(/CommerceDetailSection label="Questions"[\s\S]*?<\/CommerceDetailSection>/);
       expect(qaSection).toBeTruthy();
       expect(qaSection![0]).not.toContain('<ListingQA');
     });

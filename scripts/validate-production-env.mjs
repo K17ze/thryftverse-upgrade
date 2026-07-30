@@ -56,6 +56,8 @@ function checkEnv() {
     'KEY_SERVICE_CLIENT_TOKEN',
     'KEY_SERVICE_ADMIN_TOKEN',
     'API_SECURITY_ADMIN_TOKEN',
+    'API_INTERNAL_SERVICE_TOKEN',
+    'DECISION_SERVICE_TOKEN',
     'AUTH_ACCESS_TOKEN_SECRET',
     'AUTH_REFRESH_TOKEN_SECRET',
     'AUTH_EMAIL_FROM',
@@ -70,6 +72,8 @@ function checkEnv() {
     'ONEZE_ATTESTATION_SIGNING_SECRET',
     'ONEZE_FX_PROVIDER_URL',
     'ONEZE_FX_PROVIDER_API_KEY',
+    'MEDIA_PROCESSING_ENABLED',
+    'MEDIA_PUBLICATION_GATE_ENABLED',
   ];
 
   for (const key of required) {
@@ -89,6 +93,8 @@ function checkEnv() {
     KEY_SERVICE_CLIENT_TOKEN: 'local-key-client-token',
     KEY_SERVICE_ADMIN_TOKEN: 'local-key-admin-token',
     API_SECURITY_ADMIN_TOKEN: 'local-security-admin-token',
+    API_INTERNAL_SERVICE_TOKEN: 'local-internal-service-token',
+    DECISION_SERVICE_TOKEN: 'local-decision-service-token',
     AUTH_ACCESS_TOKEN_SECRET: 'dev-only-access-secret-change-me',
     AUTH_REFRESH_TOKEN_SECRET: 'dev-only-refresh-secret-change-me',
     ONEZE_ATTESTATION_SIGNING_SECRET: 'dev-only-oneze-attestation-signing-secret',
@@ -114,6 +120,14 @@ function checkEnv() {
     errors.push('ONEZE_FX_SYNC_ENABLED must be true in production.');
   }
 
+  if ((process.env.MEDIA_PROCESSING_ENABLED ?? '').trim().toLowerCase() !== 'true') {
+    errors.push('MEDIA_PROCESSING_ENABLED must be true in production.');
+  }
+
+  if ((process.env.MEDIA_PUBLICATION_GATE_ENABLED ?? '').trim().toLowerCase() !== 'true') {
+    errors.push('MEDIA_PUBLICATION_GATE_ENABLED must be true in production.');
+  }
+
   const fxProviderUrl = (process.env.ONEZE_FX_PROVIDER_URL ?? '').trim();
   if (fxProviderUrl && !fxProviderUrl.startsWith('https://')) {
     errors.push('ONEZE_FX_PROVIDER_URL must use https:// in production.');
@@ -134,7 +148,11 @@ function checkEnv() {
     errors.push('KYC_DEFAULT_VENDOR must be stripe_identity until another signed provider adapter is installed.');
   }
 
-  const hasStripe = !isMissing(process.env.STRIPE_SECRET_KEY) && !isMissing(process.env.STRIPE_WEBHOOK_SECRET);
+  const hasStripe =
+    !isMissing(process.env.STRIPE_SECRET_KEY)
+    && !isMissing(process.env.STRIPE_PUBLISHABLE_KEY)
+    && !isMissing(process.env.STRIPE_WEBHOOK_SECRET)
+    && !isMissing(process.env.PAYMENT_METADATA_HMAC_SECRET);
   const hasWise = !isMissing(process.env.WISE_API_KEY) && !isMissing(process.env.WISE_WEBHOOK_SECRET);
   const hasRazorpay =
     !isMissing(process.env.RAZORPAY_KEY_ID)
@@ -143,6 +161,27 @@ function checkEnv() {
 
   if (!hasStripe && !hasWise && !hasRazorpay) {
     errors.push('Configure at least one payment provider set (Stripe, Wise, or Razorpay).');
+  }
+
+  if (!isMissing(process.env.OPENAI_API_KEY)) {
+    if (isMissing(process.env.OPENAI_AGENT_DEFAULT_MODEL)) {
+      errors.push('OPENAI_AGENT_DEFAULT_MODEL is required when OPENAI_API_KEY is configured.');
+    }
+    if (
+      isMissing(process.env.AI_USAGE_PRICING_VERSION)
+      || process.env.AI_USAGE_PRICING_VERSION.trim() === 'unconfigured'
+    ) {
+      errors.push('AI_USAGE_PRICING_VERSION must identify the configured model rates.');
+    }
+    for (const key of [
+      'OPENAI_INPUT_COST_MICROUSD_PER_MILLION_TOKENS',
+      'OPENAI_OUTPUT_COST_MICROUSD_PER_MILLION_TOKENS',
+    ]) {
+      const value = Number(process.env[key]);
+      if (!Number.isFinite(value) || value <= 0) {
+        errors.push(`${key} must be greater than zero when OPENAI_API_KEY is configured.`);
+      }
+    }
   }
 
   if (isMissing(process.env.OTEL_EXPORTER_OTLP_HTTP_URL)) {

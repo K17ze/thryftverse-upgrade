@@ -27,8 +27,8 @@ export interface CoOwnSupplySheetProps {
   totalUnits: number;
   availableUnits: number;
   allocatedPct: number;
-  viewerUnits: number;
-  viewerPct: number;
+  viewerUnits: number | null;
+  viewerPct: number | null;
   settlementMode: CoOwnSettlementMode;
   feePct: number;
   holderCount: number;

@@ -12,17 +12,19 @@ import { Space, Radius, Type } from '../theme/designTokens';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
-import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { formatCountryPolicyScope, isPaymentMethodAllowed } from '../utils/capabilityPolicy';
 import { AddCardSheet } from '../components/checkout/AddCardSheet';
-import { CommercePaymentMethod, listUserPaymentMethods, updateUserPaymentMethod, deleteUserPaymentMethod } from '../services/commerceApi';
+import {
+  CommercePaymentMethod,
+  deleteUserPaymentMethod,
+  listUserPaymentMethods,
+  setDefaultUserPaymentMethod,
+} from '../services/commerceApi';
 import { getUserCountryCapabilities, UserCountryCapabilities } from '../services/capabilitiesApi';
 import { useToast } from '../context/ToastContext';
 import { AppButton } from '../components/ui/AppButton';
 import { SettingsCell } from '../components/SettingsCell';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { SkeletonLoader } from '../components/SkeletonLoader';
-import { useHaptic } from '../hooks/useHaptic';
 import { Typography } from '../theme/designTokens';
 import { PremiumListSection } from '../components/ui/PremiumListSection';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
@@ -41,10 +43,9 @@ export default function PaymentsScreen({ navigation }: Props) {
   const [countryCapabilities, setCountryCapabilities] = useState<UserCountryCapabilities | null>(null);
   const [isUpdatingDefault, setIsUpdatingDefault] = useState(false);
   const currentUser = useStore((state) => state.currentUser);
-  const savedPaymentMethod = useStore((state) => state.savedPaymentMethod);
-  const { formatFromFiat } = useFormattedPrice();
+  const savePaymentMethod = useStore((state) => state.savePaymentMethod);
+  const clearSavedPaymentMethod = useStore((state) => state.clearSavedPaymentMethod);
   const { show } = useToast();
-  const haptic = useHaptic();
 
   const getCardBrand = (label: string) => {
     const lower = label.toLowerCase();
@@ -69,7 +70,20 @@ export default function PaymentsScreen({ navigation }: Props) {
           getUserCountryCapabilities(userId),
         ]);
         if (isCancelled?.()) return;
-        setBackendPaymentMethods(methodsResult.status === 'fulfilled' ? methodsResult.value : []);
+        const methods = methodsResult.status === 'fulfilled' ? methodsResult.value : [];
+        setBackendPaymentMethods(methods);
+        const preferredMethod = methods.find((method) => method.isDefault) ?? methods[0];
+        if (preferredMethod) {
+          savePaymentMethod({
+            id: preferredMethod.id,
+            type: preferredMethod.type,
+            label: preferredMethod.label,
+            details: preferredMethod.details,
+            isDefault: preferredMethod.isDefault,
+          });
+        } else {
+          clearSavedPaymentMethod();
+        }
         setCountryCapabilities(capabilitiesResult.status === 'fulfilled' ? capabilitiesResult.value : null);
       } catch {
         if (isCancelled?.()) return;
@@ -79,7 +93,7 @@ export default function PaymentsScreen({ navigation }: Props) {
         if (!isCancelled?.()) setIsSyncing(false);
       }
     },
-    [currentUser?.id]
+    [clearSavedPaymentMethod, currentUser?.id, savePaymentMethod]
   );
 
   useEffect(() => {
@@ -94,76 +108,35 @@ export default function PaymentsScreen({ navigation }: Props) {
     () => backendPaymentMethods.filter((method) => method.type === 'card'),
     [backendPaymentMethods]
   );
-  const bankMethods = useMemo(
-    () => backendPaymentMethods.filter((method) => method.type === 'bank_account'),
+  const defaultMethod = useMemo(
+    () => backendPaymentMethods.find((method) => method.isDefault) ?? backendPaymentMethods[0] ?? null,
     [backendPaymentMethods]
   );
 
-  const fallbackCard = savedPaymentMethod?.type === 'card' ? savedPaymentMethod : null;
-  const fallbackBank = savedPaymentMethod?.type === 'bank_account' ? savedPaymentMethod : null;
-
-  const defaultMethod = useMemo(
-    () => backendPaymentMethods.find((m) => m.isDefault) ?? (backendPaymentMethods[0] || fallbackCard || fallbackBank || null),
-    [backendPaymentMethods, fallbackCard, fallbackBank]
-  );
-
   const allowCards = isPaymentMethodAllowed(countryCapabilities, 'card');
-  const allowBankAccounts = isPaymentMethodAllowed(countryCapabilities, 'bank_account');
   const policyLabel = formatCountryPolicyScope(countryCapabilities);
 
-  const handleSetDefault = async (methodId: number) => {
+  const handleSetDefault = async (method: CommercePaymentMethod) => {
     if (isUpdatingDefault) return;
     setIsUpdatingDefault(true);
     const previous = [...backendPaymentMethods];
     setBackendPaymentMethods((prev) =>
-      prev.map((m) => (m.id === methodId ? { ...m, isDefault: true } : { ...m, isDefault: false }))
+      prev.map((item) => (
+        item.id === method.id
+          ? { ...item, isDefault: true }
+          : { ...item, isDefault: false }
+      ))
     );
-    const userId = currentUser?.id;
-    if (!userId) {
-      setIsUpdatingDefault(false);
-      return;
-    }
     try {
-      await updateUserPaymentMethod(userId, methodId, { isDefault: true });
+      const methods = await setDefaultUserPaymentMethod(method.providerPaymentMethodId);
+      setBackendPaymentMethods(methods);
       show('Default payment method updated', 'success');
     } catch {
-      show('Failed to update default on server. Reverting...', 'error');
+      show('Default could not be updated. Your previous choice is unchanged.', 'error');
       setBackendPaymentMethods(previous);
     } finally {
       setIsUpdatingDefault(false);
     }
-  };
-
-  const handleEditLabel = (method: CommercePaymentMethod) => {
-    Alert.prompt(
-      'Edit Nickname',
-      'Enter a new nickname for this payment method.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Save',
-          onPress: async (value?: string) => {
-            const trimmed = value?.trim();
-            if (!trimmed) return;
-            const previous = [...backendPaymentMethods];
-            setBackendPaymentMethods((prev) =>
-              prev.map((m) => (m.id === method.id ? { ...m, label: trimmed } : m))
-            );
-            const userId = currentUser?.id;
-            if (!userId) return;
-            try {
-              await updateUserPaymentMethod(userId, method.id, { label: trimmed });
-              show('Nickname updated', 'success');
-            } catch {
-              show('Failed to update nickname on server. Reverting...', 'error');
-              setBackendPaymentMethods(previous);
-            }
-          },
-        },
-      ],
-      'plain-text',
-      method.label
-    );
   };
 
   const handleRemovePaymentMethod = (method: CommercePaymentMethod) => {
@@ -182,9 +155,12 @@ export default function PaymentsScreen({ navigation }: Props) {
             const userId = currentUser?.id;
             if (!userId) return;
             try {
-              await deleteUserPaymentMethod(userId, method.id);
+              await deleteUserPaymentMethod(userId, method.providerPaymentMethodId);
+              if (method.id === defaultMethod?.id) {
+                clearSavedPaymentMethod();
+              }
             } catch {
-              show('Failed to remove on server. Restoring...', 'error');
+              show('Payment method could not be detached. It has been restored.', 'error');
               setBackendPaymentMethods(previous);
             }
           },
@@ -200,8 +176,7 @@ export default function PaymentsScreen({ navigation }: Props) {
       [
         ...(method.isDefault
           ? []
-          : [{ text: 'Set as default', onPress: () => handleSetDefault(method.id) }]),
-        { text: 'Edit nickname', onPress: () => handleEditLabel(method) },
+          : [{ text: 'Set as default', onPress: () => void handleSetDefault(method) }]),
         { text: 'Remove', style: 'destructive', onPress: () => handleRemovePaymentMethod(method) },
         { text: 'Cancel', style: 'cancel' },
       ]
@@ -210,13 +185,11 @@ export default function PaymentsScreen({ navigation }: Props) {
 
   const renderPaymentMethodRows = (
     methods: CommercePaymentMethod[],
-    fallback: CommercePaymentMethod | null,
     allow: boolean,
     emptyTitle: string,
     emptySub: string,
     unavailableTitle: string,
     unavailableSub: string,
-    iconName: string,
     iconOutline: string
   ) => {
     if (!allow) {
@@ -236,7 +209,7 @@ export default function PaymentsScreen({ navigation }: Props) {
     }
     if (methods.length > 0) {
       return methods.map((method, idx) => {
-        const brand = method.type === 'card' ? getCardBrand(method.label) : { name: 'Bank', icon: 'business' as const, color: colors.textPrimary };
+        const brand = getCardBrand(method.brand);
         return (
           <AnimatedPressable
             key={method.id}
@@ -251,7 +224,7 @@ export default function PaymentsScreen({ navigation }: Props) {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.paymentTitle}>{method.label}</Text>
-              <Text style={styles.paymentSub}>{method.details ?? (method.type === 'card' ? 'Saved card' : 'Bank account')}</Text>
+              <Text style={styles.paymentSub}>{method.details}</Text>
             </View>
             {method.isDefault ? (
               <View style={[styles.defaultBadge, { backgroundColor: `${colors.success}12` }]}>
@@ -262,26 +235,6 @@ export default function PaymentsScreen({ navigation }: Props) {
           </AnimatedPressable>
         );
       });
-    }
-    if (fallback) {
-      const fbBrand = fallback.type === 'card' ? getCardBrand(fallback.label) : { name: 'Bank', icon: 'business' as const, color: colors.textPrimary };
-      return (
-        <AnimatedPressable
-          style={styles.paymentRow}
-          onPress={() => handlePaymentMethodPress(fallback)}
-          scaleValue={0.98}
-          hapticFeedback="light"
-          activeOpacity={0.8}
-        >
-          <View style={[styles.iconCircle, { backgroundColor: `${fbBrand.color}12` }]}>
-            <Ionicons name={fbBrand.icon as any} size={20} color={fbBrand.color} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.paymentTitle}>{fallback.label}</Text>
-            <Text style={styles.paymentSub}>{fallback.details ?? (fallback.type === 'card' ? 'Saved card' : 'Bank account')}</Text>
-          </View>
-        </AnimatedPressable>
-      );
     }
     return (
       <View style={styles.emptyState}>
@@ -303,11 +256,13 @@ export default function PaymentsScreen({ navigation }: Props) {
           onBack={() => navigation.goBack()}
           rightAction={
             <AnimatedPressable
-              onPress={() => navigation.navigate('AddBankAccount')}
+              onPress={() => setAddCardSheetVisible(true)}
               scaleValue={0.92}
               hapticFeedback="light"
+              accessibilityRole="button"
+              accessibilityLabel="Add payment method"
             >
-              <Ionicons name="add-circle" size={28} color={colors.brand} />
+              <Ionicons name="add" size={23} color={colors.brand} />
             </AnimatedPressable>
           }
         />
@@ -321,7 +276,7 @@ export default function PaymentsScreen({ navigation }: Props) {
         <View style={[styles.trustBanner, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Ionicons name="shield-checkmark-outline" size={18} color={colors.success} />
           <Text style={[styles.trustBannerText, { color: colors.textSecondary }]}>
-            Your payment details are protected by industry-standard encryption.
+            Card entry and authentication are handled in Stripe's payment sheet.
           </Text>
         </View>
       </Reanimated.View>
@@ -352,11 +307,11 @@ export default function PaymentsScreen({ navigation }: Props) {
                   </View>
                 </View>
                 <View style={styles.primaryCardBody}>
-                  <View style={[styles.brandIconCircle, { backgroundColor: `${getCardBrand(defaultMethod.label).color}15` }]}>
+                  <View style={[styles.brandIconCircle, { backgroundColor: `${getCardBrand(defaultMethod.brand).color}15` }]}>
                     <Ionicons
-                      name={defaultMethod.type === 'card' ? 'card' : 'business'}
+                      name="card"
                       size={22}
-                      color={defaultMethod.type === 'card' ? getCardBrand(defaultMethod.label).color : colors.textPrimary}
+                      color={getCardBrand(defaultMethod.brand).color}
                     />
                   </View>
                   <View style={{ flex: 1 }}>
@@ -380,7 +335,7 @@ export default function PaymentsScreen({ navigation }: Props) {
                   <Ionicons name="card-outline" size={24} color={colors.textMuted} />
                 </View>
                 <Text style={styles.primaryCardTitle}>No payment method</Text>
-                <Text style={styles.primaryCardSub}>Add a card or bank account to checkout faster</Text>
+                <Text style={styles.primaryCardSub}>Add a card through Stripe to use it at checkout</Text>
                 <AnimatedPressable
                   style={[styles.primaryCardCta, { backgroundColor: colors.brand }]}
                   onPress={() => setAddCardSheetVisible(true)}
@@ -416,13 +371,11 @@ export default function PaymentsScreen({ navigation }: Props) {
             <PremiumListSection title="Cards">
               {renderPaymentMethodRows(
                 cardMethods,
-                fallbackCard as CommercePaymentMethod | null,
                 allowCards,
                 'No cards saved yet',
                 'Add your first card to checkout faster',
                 'Cards unavailable in your region',
                 'Switching compliance country will refresh payment rails.',
-                'card',
                 'card-outline'
               )}
               {allowCards ? (
@@ -448,42 +401,11 @@ export default function PaymentsScreen({ navigation }: Props) {
             <View style={[styles.trustNote, { backgroundColor: colors.surfaceAlt }]}>
               <Ionicons name="shield-checkmark-outline" size={16} color={colors.success} />
               <Text style={styles.trustNoteText}>
-                Your payment details are protected by industry-standard encryption.
+                Thryftverse stores provider references and limited display details, not card numbers or security codes.
               </Text>
             </View>
           </Reanimated.View>
 
-          {/* Bank Accounts */}
-          <Reanimated.View entering={FadeIn.duration(300)}>
-            <PremiumListSection title="Bank Accounts">
-              {renderPaymentMethodRows(
-                bankMethods,
-                fallbackBank as CommercePaymentMethod | null,
-                allowBankAccounts,
-                'No linked bank accounts',
-                'Add one for withdrawals and payouts',
-                'Bank payouts unavailable in your region',
-                'Supported rails will appear when available for your country.',
-                'business',
-                'business-outline'
-              )}
-              {allowBankAccounts ? (
-                <AppButton
-                  title="Add new bank account"
-                  icon={<Ionicons name="add" size={18} color={colors.textPrimary} />}
-                  style={styles.addBtn}
-                  variant="secondary"
-                  size="sm"
-                  titleStyle={styles.addText}
-                  contentStyle={styles.addBtnContent}
-                  iconContainerStyle={styles.addIconWrap}
-                  onPress={() => navigation.navigate('AddBankAccount')}
-                  accessibilityLabel="Add new bank account"
-                  accessibilityHint="Opens bank account setup"
-                />
-              ) : null}
-            </PremiumListSection>
-          </Reanimated.View>
         </>
       )}
 

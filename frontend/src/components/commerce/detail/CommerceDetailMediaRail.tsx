@@ -1,7 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAppTheme } from '../../../theme/ThemeContext';
 import { Space } from '../../../theme/designTokens';
 
 /**
@@ -30,8 +29,9 @@ export interface CommerceDetailMediaAction {
 
 export interface CommerceDetailMediaRailProps {
   onBack: () => void;
-  /** Right-side actions. Only the first two are rendered visibly; the
-   * rest are surfaced via the overflow callback. */
+  /** Right-side actions. Two may render when there is no overflow. When
+   * overflow is present, it reserves a slot and only the first action
+   * remains visible so the total never exceeds three controls. */
   rightActions?: CommerceDetailMediaAction[];
   /** Called when the user taps the overflow affordance. The screen
    * opens its overflow sheet (save-to-collection, report, etc.). */
@@ -49,11 +49,10 @@ export function CommerceDetailMediaRail({
   showOverflow = false,
   topInset,
 }: CommerceDetailMediaRailProps) {
-  const { colors } = useAppTheme();
-  // Spec: maximum three visible controls (back + two right actions).
-  // Additional actions go to overflow.
-  const visibleRight = rightActions.slice(0, 2);
   const hasOverflow = showOverflow || rightActions.length > 2;
+  // Maximum three visible controls in total. Back consumes one slot;
+  // overflow consumes another, leaving one family-defining state action.
+  const visibleRight = rightActions.slice(0, hasOverflow ? 1 : 2);
 
   return (
     <View
@@ -86,7 +85,7 @@ export function CommerceDetailMediaRail({
               <Ionicons
                 name={icon}
                 size={24}
-                color={action.isActive ? colors.brand : '#fff'}
+                color="#fff"
                 style={styles.scrimIcon}
               />
             </Pressable>

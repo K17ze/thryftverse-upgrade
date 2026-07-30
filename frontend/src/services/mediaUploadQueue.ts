@@ -1,5 +1,5 @@
 import { MediaUploadAsset } from '../utils/mediaUploadAsset';
-import { presignUpload, uploadToPresignedUrl } from './mediaUpload';
+import { finalizeUpload, presignUpload, uploadToPresignedUrl } from './mediaUpload';
 
 export type UploadQueueItemState =
   | 'pending'
@@ -16,6 +16,7 @@ export interface UploadQueueItem {
   state: UploadQueueItemState;
   attemptCount: number;
   publicUrl: string | null;
+  finalizationId: string | null;
   error: string | null;
   retryable: boolean;
 }
@@ -31,6 +32,7 @@ export interface UploadQueueState {
 export interface UploadQueueResult {
   state: UploadQueueItemState;
   publicUrl: string | null;
+  finalizationId: string | null;
   error: string | null;
 }
 
@@ -87,6 +89,7 @@ export class MediaUploadQueue {
         state: 'pending',
         attemptCount: 0,
         publicUrl: null,
+        finalizationId: null,
         error: null,
         retryable: true,
       };
@@ -231,6 +234,7 @@ export class MediaUploadQueue {
       map.set(item.id, {
         state: item.state,
         publicUrl: item.publicUrl,
+        finalizationId: item.finalizationId,
         error: item.error,
       });
     }
@@ -356,8 +360,21 @@ export class MediaUploadQueue {
         return;
       }
 
+      const finalization = await finalizeUpload({
+        objectKey: presign.key,
+        bucket: presign.bucket,
+        fileName: asset.fileName,
+        contentType: presign.contentType,
+        sizeBytes: presign.sizeBytes,
+        publicUrl: presign.publicUrl,
+        folder: 'listings',
+        scope: 'listing_media',
+        verifyObject: true,
+      });
+
       item.state = 'uploaded';
-      item.publicUrl = presign.publicUrl;
+      item.publicUrl = finalization.publicUrl;
+      item.finalizationId = finalization.id;
       item.error = null;
       item.retryable = false;
     } catch (err: unknown) {

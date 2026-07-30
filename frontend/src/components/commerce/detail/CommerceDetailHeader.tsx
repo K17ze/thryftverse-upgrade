@@ -3,13 +3,15 @@ import { View, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, {
   useAnimatedStyle,
+  useAnimatedReaction,
   interpolate,
   Extrapolation,
+  runOnJS,
   type SharedValue,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../../../theme/ThemeContext';
-import { Space } from '../../../theme/designTokens';
+import { Space, Typography } from '../../../theme/designTokens';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 
 /**
@@ -44,14 +46,33 @@ export function CommerceDetailHeader({
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
+  const [interactive, setInteractive] = React.useState(false);
+
+  useAnimatedReaction(
+    () => scrollY.value >= fadeThreshold * 0.6,
+    (next, previous) => {
+      if (next !== previous) {
+        runOnJS(setInteractive)(next);
+      }
+    },
+    [fadeThreshold],
+  );
 
   const containerStyle = useAnimatedStyle(() => {
-    const opacity = interpolate(scrollY.value, [0, fadeThreshold], [0, 1], Extrapolation.CLAMP);
+    // Establish the solid navigation surface before its compact title enters.
+    // This cleanly masks hero badges as they scroll beneath the status bar.
+    const opacity = interpolate(
+      scrollY.value,
+      [fadeThreshold * 0.12, fadeThreshold * 0.6],
+      [0, 1],
+      Extrapolation.CLAMP,
+    );
     // Subtle translate so the header settles into place rather than
     // appearing abruptly. Per spec 05 §7: native motion is restrained.
     const translateY = interpolate(scrollY.value, [0, fadeThreshold], [8, 0], Extrapolation.CLAMP);
+    const revealedOpacity = reducedMotion ? 1 : opacity;
     return {
-      opacity: reducedMotion ? 1 : opacity,
+      opacity: reducedMotion && scrollY.value < fadeThreshold ? 0 : revealedOpacity,
       transform: [{ translateY: reducedMotion ? 0 : translateY }],
     };
   });
@@ -61,15 +82,20 @@ export function CommerceDetailHeader({
     // floats over a transparent header.
     const opacity = interpolate(
       scrollY.value,
-      [fadeThreshold * 0.6, fadeThreshold],
+      [fadeThreshold * 0.72, fadeThreshold],
       [0, 1],
       Extrapolation.CLAMP,
     );
-    return { opacity: reducedMotion ? 1 : opacity };
+    return {
+      opacity: reducedMotion ? (scrollY.value >= fadeThreshold ? 1 : 0) : opacity,
+    };
   });
 
   return (
     <Reanimated.View
+      pointerEvents={interactive ? 'auto' : 'none'}
+      accessibilityElementsHidden={!interactive}
+      importantForAccessibility={interactive ? 'auto' : 'no-hide-descendants'}
       style={[
         styles.container,
         { paddingTop: Math.max(insets.top, Space.sm), backgroundColor: colors.header },
@@ -144,7 +170,7 @@ const styles = StyleSheet.create({
   title: {
     flex: 1,
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: Typography.family.semibold,
     letterSpacing: -0.2,
     marginHorizontal: Space.xs,
   },

@@ -22,10 +22,13 @@ import {
 
 type AiTruthRouteDependencies = {
   app: FastifyInstance;
-  resolveAuthenticatedUserId?: (request: FastifyRequest) => string;
+  authorizeAdminRequest: (request: FastifyRequest) => boolean;
 };
 
-export const registerAiTruthRoutes = ({ app }: AiTruthRouteDependencies) => {
+export const registerAiTruthRoutes = ({
+  app,
+  authorizeAdminRequest,
+}: AiTruthRouteDependencies) => {
   /**
    * GET /ai/health
    *
@@ -64,7 +67,15 @@ export const registerAiTruthRoutes = ({ app }: AiTruthRouteDependencies) => {
    * that prevent the deployment from claiming AI capability. Intended
    * for the deploy pipeline and for ops dashboards.
    */
-  app.get('/ai/deploy-readiness', async () => {
+  app.get('/ai/deploy-readiness', async (request, reply) => {
+    if (!authorizeAdminRequest(request)) {
+      reply.code(403);
+      return {
+        ok: false,
+        error: 'Administrator and security-token authorization are required',
+        code: 'AI_DEPLOY_READINESS_FORBIDDEN',
+      };
+    }
     const result = await validateAiDeployReadiness();
     return result;
   });

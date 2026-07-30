@@ -177,10 +177,29 @@ export const config = {
     60,
     60 * 60
   ),
+  mediaProcessingEnabled: asBoolean(
+    process.env.MEDIA_PROCESSING_ENABLED,
+    false,
+  ),
+  mediaPublicationGateEnabled: asBoolean(
+    process.env.MEDIA_PUBLICATION_GATE_ENABLED,
+    nodeEnv === 'production',
+  ),
   decisionServiceUrl:
     process.env.DECISION_SERVICE_URL?.trim()
     || process.env.ML_SERVICE_URL?.trim()
     || 'http://localhost:8000',
+  decisionServiceTimeoutMs: asIntegerInRange(
+    'DECISION_SERVICE_TIMEOUT_MS',
+    process.env.DECISION_SERVICE_TIMEOUT_MS,
+    2_500,
+    100,
+    30_000
+  ),
+  decisionServiceToken: requiredSecret(
+    'DECISION_SERVICE_TOKEN',
+    'local-decision-service-token'
+  ),
   authAccessTokenSecret: requiredSecret('AUTH_ACCESS_TOKEN_SECRET', 'dev-only-access-secret-change-me'),
   authRefreshTokenSecret: requiredSecret('AUTH_REFRESH_TOKEN_SECRET', 'dev-only-refresh-secret-change-me'),
   authAccessTokenTtlSeconds: asNumber(process.env.AUTH_ACCESS_TOKEN_TTL_SECONDS, 15 * 60),
@@ -203,7 +222,17 @@ export const config = {
   openAiAgentDefaultModel: process.env.OPENAI_AGENT_DEFAULT_MODEL?.trim() || 'gpt-5.6-terra',
   openAiAgentMaxOutputTokens: asNumber(process.env.OPENAI_AGENT_MAX_OUTPUT_TOKENS, 900),
   openAiAgentTimeoutMs: asNumber(process.env.OPENAI_AGENT_TIMEOUT_MS, 30_000),
+  aiUsagePricingVersion: process.env.AI_USAGE_PRICING_VERSION?.trim() || 'unconfigured',
+  openAiInputCostMicrousdPerMillionTokens: asNumber(
+    process.env.OPENAI_INPUT_COST_MICROUSD_PER_MILLION_TOKENS,
+    0
+  ),
+  openAiOutputCostMicrousdPerMillionTokens: asNumber(
+    process.env.OPENAI_OUTPUT_COST_MICROUSD_PER_MILLION_TOKENS,
+    0
+  ),
   apiSecurityAdminToken: requiredSecret('API_SECURITY_ADMIN_TOKEN', 'local-security-admin-token'),
+  apiInternalServiceToken: requiredSecret('API_INTERNAL_SERVICE_TOKEN', 'local-internal-service-token'),
   apiEnableMockWebhooks: asBoolean(process.env.API_ENABLE_MOCK_WEBHOOKS, false),
   apiRateLimitMax: asIntegerInRange(
     'API_RATE_LIMIT_MAX',
@@ -213,6 +242,13 @@ export const config = {
     100_000
   ),
   apiRateLimitWindow: asRateLimitWindow(process.env.API_RATE_LIMIT_WINDOW),
+  outboxDrainIntervalMs: asIntegerInRange(
+    'OUTBOX_DRAIN_INTERVAL_MS',
+    process.env.OUTBOX_DRAIN_INTERVAL_MS,
+    5_000,
+    1_000,
+    60_000
+  ),
   kycDefaultVendor: required('KYC_DEFAULT_VENDOR', 'stripe_identity'),
   kycVerificationBaseUrl:
     process.env.KYC_VERIFICATION_BASE_URL?.trim()
@@ -225,7 +261,15 @@ export const config = {
   googleOAuthClientIds: asCsvList(process.env.GOOGLE_OAUTH_CLIENT_IDS),
   appleOAuthAudience: process.env.APPLE_OAUTH_AUDIENCE?.trim() || null,
   stripeSecretKey: process.env.STRIPE_SECRET_KEY,
+  stripePublishableKey: process.env.STRIPE_PUBLISHABLE_KEY?.trim() || null,
   stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+  stripeApplePayMerchantIdentifier:
+    process.env.STRIPE_APPLE_PAY_MERCHANT_IDENTIFIER?.trim() || null,
+  stripeGooglePayEnabled: asBoolean(process.env.STRIPE_GOOGLE_PAY_ENABLED, false),
+  paymentMetadataHmacSecret: requiredSecret(
+    'PAYMENT_METADATA_HMAC_SECRET',
+    'dev-only-payment-metadata-hmac-secret'
+  ),
   razorpayKeyId: process.env.RAZORPAY_KEY_ID,
   razorpayKeySecret: process.env.RAZORPAY_KEY_SECRET,
   razorpayWebhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET,

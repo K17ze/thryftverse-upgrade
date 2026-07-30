@@ -50,6 +50,29 @@ const backgroundJobsTotal = new Counter({
   registers: [registry],
 });
 
+const recommendationServesTotal = new Counter({
+  name: 'thryftverse_recommendation_serves_total',
+  help: 'Recommendation serves grouped by source, policy, and cold-start status',
+  labelNames: ['source', 'policy_version', 'cold_start'] as const,
+  registers: [registry],
+});
+
+const recommendationServeDurationSeconds = new Histogram({
+  name: 'thryftverse_recommendation_serve_duration_seconds',
+  help: 'Decision-service or fallback recommendation latency',
+  labelNames: ['source', 'policy_version'] as const,
+  buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5],
+  registers: [registry],
+});
+
+const recommendationResults = new Histogram({
+  name: 'thryftverse_recommendation_results',
+  help: 'Number of recommendation results returned per serve',
+  labelNames: ['source', 'policy_version'] as const,
+  buckets: [0, 1, 4, 8, 12, 18, 24, 50, 100],
+  registers: [registry],
+});
+
 const databasePoolConnections = new Gauge({
   name: 'thryftverse_database_pool_connections',
   help: 'Postgres pool connections grouped by pool and state',
@@ -132,6 +155,28 @@ export function recordBackgroundJob(input: {
     },
     1
   );
+}
+
+export function recordRecommendationServe(input: {
+  source: 'decision_service' | 'fallback';
+  policyVersion: string;
+  coldStart: boolean;
+  durationSeconds: number;
+  resultCount: number;
+}): void {
+  const labels = {
+    source: input.source,
+    policy_version: input.policyVersion,
+  };
+  recommendationServesTotal.inc(
+    { ...labels, cold_start: String(input.coldStart) },
+    1,
+  );
+  recommendationServeDurationSeconds.observe(
+    labels,
+    Math.max(0, input.durationSeconds),
+  );
+  recommendationResults.observe(labels, Math.max(0, input.resultCount));
 }
 
 export function observeDatabasePool(input: {

@@ -1,6 +1,12 @@
 import crypto from 'node:crypto';
 import Stripe from 'stripe';
 import { config } from '../config.js';
+import {
+  moneyFromProviderAmount,
+  type Money,
+  type MoneyConversionTrace,
+  type ProviderAmountUnit,
+} from './money.js';
 
 export type ProviderSlug = 'stripe' | 'razorpay' | 'mollie' | 'flutterwave' | 'tap' | 'wise';
 
@@ -32,11 +38,20 @@ export interface NormalizedWebhookEvent {
   intentId?: string;
   providerIntentRef?: string;
   paymentStatus?: ProviderPaymentStatus;
+  money?: Money;
+  rawProviderAmount?: string;
+  providerAmountUnit?: ProviderAmountUnit;
+  conversionTrace?: MoneyConversionTrace;
   payoutRequestId?: string;
   payoutStatus?: ProviderPayoutStatus;
   refund?: {
     providerRefundRef: string;
     status: ProviderRefundStatus;
+    money?: Money;
+    rawProviderAmount?: string;
+    providerAmountUnit?: ProviderAmountUnit;
+    conversionTrace?: MoneyConversionTrace;
+    /** @deprecated Read money.minorAmount at canonical boundaries. */
     amount?: number;
     currency?: string;
     reason?: string;
@@ -44,6 +59,11 @@ export interface NormalizedWebhookEvent {
   dispute?: {
     providerDisputeRef: string;
     status: ProviderDisputeStatus;
+    money?: Money;
+    rawProviderAmount?: string;
+    providerAmountUnit?: ProviderAmountUnit;
+    conversionTrace?: MoneyConversionTrace;
+    /** @deprecated Read money.minorAmount at canonical boundaries. */
     amount?: number;
     currency?: string;
     reason?: string;
@@ -150,6 +170,38 @@ function asNumber(value: unknown): number | undefined {
   }
 
   return undefined;
+}
+
+function asProviderAmount(value: unknown): string | number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string' && value.trim().length > 0) {
+    return value.trim();
+  }
+  return undefined;
+}
+
+function normalizeEventMoney(
+  provider: ProviderSlug,
+  currency: string | undefined,
+  rawAmount: string | number | undefined
+): {
+  money?: Money;
+  rawProviderAmount?: string;
+  providerAmountUnit?: ProviderAmountUnit;
+  conversionTrace?: MoneyConversionTrace;
+} {
+  if (!currency || rawAmount === undefined) {
+    return {};
+  }
+  const normalized = moneyFromProviderAmount(provider, currency, rawAmount);
+  return {
+    money: normalized.money,
+    rawProviderAmount: normalized.value,
+    providerAmountUnit: normalized.unit,
+    conversionTrace: normalized.trace,
+  };
 }
 
 function asString(value: unknown): string | undefined {
@@ -340,6 +392,8 @@ function normalizeStripeEvent(event: Stripe.Event, rawBody: string): NormalizedW
 
   const eventType: string = event.type;
   const providerEventId = asString(event.id) ?? derivedEventId('stripe', eventType, rawBody);
+  const paymentCurrency = asString(dataObject.currency)?.toUpperCase();
+  const paymentRawAmount = asProviderAmount(dataObject.amount);
 
   const normalized: NormalizedWebhookEvent = {
     gatewayId: 'stripe_americas',
@@ -348,17 +402,25 @@ function normalizeStripeEvent(event: Stripe.Event, rawBody: string): NormalizedW
     providerIntentRef: maybePaymentIntent,
     intentId,
     paymentStatus: statusFromStripeEvent(eventType),
+    ...normalizeEventMoney('stripe', paymentCurrency, paymentRawAmount),
     metadata,
     rawPayload: asRecord(event as unknown),
   };
 
   if (eventType.startsWith('refund.') || eventType === 'charge.refunded') {
     const refundRef = asString(dataObject.id) ?? asString(dataObject.latest_refund) ?? providerEventId;
+    const currency = asString(dataObject.currency)?.toUpperCase();
+    const rawAmount = asProviderAmount(
+      eventType === 'charge.refunded' ? dataObject.amount_refunded : dataObject.amount
+    );
     normalized.refund = {
       providerRefundRef: refundRef,
       status: eventType === 'refund.failed' ? 'failed' : eventType === 'refund.canceled' ? 'cancelled' : 'succeeded',
-      amount: asNumber(dataObject.amount),
-      currency: asString(dataObject.currency)?.toUpperCase(),
+      amount: asNumber(
+        eventType === 'charge.refunded' ? dataObject.amount_refunded : dataObject.amount
+      ),
+      currency,
+      ...normalizeEventMoney('stripe', currency, rawAmount),
       reason: asString(dataObject.reason),
     };
   }
@@ -373,11 +435,14 @@ function normalizeStripeEvent(event: Stripe.Event, rawBody: string): NormalizedW
             ? 'won'
             : 'open';
 
+    const currency = asString(dataObject.currency)?.toUpperCase();
+    const rawAmount = asProviderAmount(dataObject.amount);
     normalized.dispute = {
       providerDisputeRef: asString(dataObject.id) ?? providerEventId,
       status: disputeStatus,
       amount: asNumber(dataObject.amount),
-      currency: asString(dataObject.currency)?.toUpperCase(),
+      currency,
+      ...normalizeEventMoney('stripe', currency, rawAmount),
       reason: asString(dataObject.reason),
     };
   }
@@ -400,6 +465,8 @@ function normalizeRazorpayEvent(payload: Record<string, unknown>, rawBody: strin
 
   const notes = asRecord(activeEntity.notes);
   const providerEntityId = asString(activeEntity.id);
+  const paymentCurrency = asString(activeEntity.currency)?.toUpperCase();
+  const paymentRawAmount = asProviderAmount(activeEntity.amount);
 
   const normalized: NormalizedWebhookEvent = {
     gatewayId: 'razorpay_in',
@@ -408,26 +475,33 @@ function normalizeRazorpayEvent(payload: Record<string, unknown>, rawBody: strin
     providerIntentRef: asString(activeEntity.order_id) ?? providerEntityId,
     intentId: asString(notes.intentId) ?? asString(notes.intent_id),
     paymentStatus: statusFromRazorpayEvent(eventType),
+    ...normalizeEventMoney('razorpay', paymentCurrency, paymentRawAmount),
     metadata: notes,
     rawPayload: payload,
   };
 
   if (eventType.startsWith('refund.')) {
+    const currency = asString(activeEntity.currency)?.toUpperCase();
+    const rawAmount = asProviderAmount(activeEntity.amount);
     normalized.refund = {
       providerRefundRef: providerEntityId ?? normalized.providerEventId,
       status: eventType === 'refund.failed' ? 'failed' : 'succeeded',
       amount: asNumber(activeEntity.amount),
-      currency: asString(activeEntity.currency)?.toUpperCase(),
+      currency,
+      ...normalizeEventMoney('razorpay', currency, rawAmount),
       reason: asString(activeEntity.notes),
     };
   }
 
   if (eventType.startsWith('dispute.')) {
+    const currency = asString(activeEntity.currency)?.toUpperCase();
+    const rawAmount = asProviderAmount(activeEntity.amount);
     normalized.dispute = {
       providerDisputeRef: providerEntityId ?? normalized.providerEventId,
       status: eventType === 'dispute.won' ? 'won' : eventType === 'dispute.lost' ? 'lost' : 'open',
       amount: asNumber(activeEntity.amount),
-      currency: asString(activeEntity.currency)?.toUpperCase(),
+      currency,
+      ...normalizeEventMoney('razorpay', currency, rawAmount),
       reason: asString(activeEntity.reason),
     };
   }
@@ -455,8 +529,8 @@ async function normalizeMollieEvent(
   let eventType = asString(payload.event) ?? 'payment.updated';
   let providerStatus = asString(payload.status);
   let metadata = asRecord(payload.metadata);
-  let amount: number | undefined;
-  let currency: string | undefined;
+  let amount: string | number | undefined = asProviderAmount(asRecord(payload.amount).value);
+  let currency: string | undefined = asString(asRecord(payload.amount).currency);
 
   if (paymentRef && config.mollieApiKey) {
     try {
@@ -465,7 +539,7 @@ async function normalizeMollieEvent(
       const payment = await mollie.payments.get(paymentRef);
       providerStatus = asString((payment as unknown as { status?: unknown }).status) ?? providerStatus;
       metadata = asRecord((payment as unknown as { metadata?: unknown }).metadata) || metadata;
-      amount = asNumber((payment as unknown as { amount?: { value?: unknown } }).amount?.value);
+      amount = asProviderAmount((payment as unknown as { amount?: { value?: unknown } }).amount?.value);
       currency = asString((payment as unknown as { amount?: { currency?: unknown } }).amount?.currency);
       eventType = `payment.${providerStatus ?? 'updated'}`;
     } catch {
@@ -480,6 +554,7 @@ async function normalizeMollieEvent(
     providerIntentRef: paymentRef,
     intentId: asString(metadata.intentId) ?? asString(metadata.intent_id),
     paymentStatus: statusFromMollieState(providerStatus),
+    ...normalizeEventMoney('mollie', currency?.toUpperCase(), amount),
     metadata,
     rawPayload: payload,
     ...(eventType.startsWith('refund.')
@@ -487,8 +562,9 @@ async function normalizeMollieEvent(
           refund: {
             providerRefundRef: paymentRef ?? derivedEventId('mollie-refund', eventType, rawBody),
             status: providerStatus === 'failed' ? 'failed' : providerStatus === 'canceled' ? 'cancelled' : 'succeeded',
-            amount,
+            amount: asNumber(amount),
             currency: currency?.toUpperCase(),
+            ...normalizeEventMoney('mollie', currency?.toUpperCase(), amount),
             reason: asString(payload.reason),
           },
         }
@@ -501,6 +577,8 @@ function normalizeFlutterwaveEvent(payload: Record<string, unknown>, rawBody: st
   const data = asRecord(payload.data);
   const metadata = asRecord(data.meta);
   const txRef = asString(data.tx_ref) ?? asString(data.flw_ref) ?? asString(data.id);
+  const paymentCurrency = asString(data.currency)?.toUpperCase();
+  const paymentRawAmount = asProviderAmount(data.amount);
 
   const normalized: NormalizedWebhookEvent = {
     gatewayId: 'flutterwave_africa',
@@ -509,26 +587,33 @@ function normalizeFlutterwaveEvent(payload: Record<string, unknown>, rawBody: st
     providerIntentRef: txRef,
     intentId: asString(metadata.intentId) ?? asString(metadata.intent_id),
     paymentStatus: statusFromFlutterwaveState(asString(data.status)),
+    ...normalizeEventMoney('flutterwave', paymentCurrency, paymentRawAmount),
     metadata,
     rawPayload: payload,
   };
 
   if (eventType.toLowerCase().includes('refund')) {
+    const currency = asString(data.currency)?.toUpperCase();
+    const rawAmount = asProviderAmount(data.amount);
     normalized.refund = {
       providerRefundRef: asString(data.id) ?? normalized.providerEventId,
       status: asString(data.status)?.toLowerCase() === 'failed' ? 'failed' : 'succeeded',
       amount: asNumber(data.amount),
-      currency: asString(data.currency)?.toUpperCase(),
+      currency,
+      ...normalizeEventMoney('flutterwave', currency, rawAmount),
       reason: asString(data.reason),
     };
   }
 
   if (eventType.toLowerCase().includes('dispute')) {
+    const currency = asString(data.currency)?.toUpperCase();
+    const rawAmount = asProviderAmount(data.amount);
     normalized.dispute = {
       providerDisputeRef: asString(data.id) ?? normalized.providerEventId,
       status: asString(data.status)?.toLowerCase() === 'lost' ? 'lost' : 'open',
       amount: asNumber(data.amount),
-      currency: asString(data.currency)?.toUpperCase(),
+      currency,
+      ...normalizeEventMoney('flutterwave', currency, rawAmount),
       reason: asString(data.reason),
     };
   }
@@ -545,6 +630,10 @@ function normalizeTapEvent(payload: Record<string, unknown>, rawBody: string): N
     ?? asString(asRecord(payload.reference).payment)
     ?? asString(data.id)
     ?? undefined;
+  const paymentCurrency = asString(asRecord(payload.amount).currency)?.toUpperCase()
+    ?? asString(payload.currency)?.toUpperCase();
+  const paymentRawAmount = asProviderAmount(asRecord(payload.amount).value)
+    ?? asProviderAmount(payload.amount);
 
   const normalized: NormalizedWebhookEvent = {
     gatewayId: 'tap_gulf',
@@ -555,26 +644,33 @@ function normalizeTapEvent(payload: Record<string, unknown>, rawBody: string): N
     providerIntentRef,
     intentId: asString(metadata.intentId) ?? asString(metadata.intent_id),
     paymentStatus: statusFromTapState(asString(payload.status)),
+    ...normalizeEventMoney('tap', paymentCurrency, paymentRawAmount),
     metadata,
     rawPayload: payload,
   };
 
   if (eventType.toLowerCase().includes('refund')) {
+    const currency = asString(asRecord(payload.amount).currency)?.toUpperCase();
+    const rawAmount = asProviderAmount(asRecord(payload.amount).value);
     normalized.refund = {
       providerRefundRef: providerIntentRef ?? normalized.providerEventId,
       status: asString(payload.status)?.toLowerCase() === 'failed' ? 'failed' : 'succeeded',
       amount: asNumber(asRecord(payload.amount).value),
-      currency: asString(asRecord(payload.amount).currency)?.toUpperCase(),
+      currency,
+      ...normalizeEventMoney('tap', currency, rawAmount),
       reason: asString(payload.description),
     };
   }
 
   if (eventType.toLowerCase().includes('dispute')) {
+    const currency = asString(asRecord(payload.amount).currency)?.toUpperCase();
+    const rawAmount = asProviderAmount(asRecord(payload.amount).value);
     normalized.dispute = {
       providerDisputeRef: providerIntentRef ?? normalized.providerEventId,
       status: asString(payload.status)?.toLowerCase() === 'closed' ? 'closed' : 'open',
       amount: asNumber(asRecord(payload.amount).value),
-      currency: asString(asRecord(payload.amount).currency)?.toUpperCase(),
+      currency,
+      ...normalizeEventMoney('tap', currency, rawAmount),
       reason: asString(payload.description),
     };
   }
@@ -610,6 +706,16 @@ function normalizeWiseEvent(payload: Record<string, unknown>, rawBody: string): 
     ?? asString(asRecord(data.current_state).status)
     ?? asString(data.status)
     ?? undefined;
+  const payoutCurrency =
+    asString(resource.sourceCurrency)
+    ?? asString(resource.currency)
+    ?? asString(data.sourceCurrency)
+    ?? asString(data.currency);
+  const payoutRawAmount =
+    asProviderAmount(resource.sourceAmount)
+    ?? asProviderAmount(resource.amount)
+    ?? asProviderAmount(data.sourceAmount)
+    ?? asProviderAmount(data.amount);
 
   const providerEventId =
     asString(payload.id)
@@ -623,6 +729,7 @@ function normalizeWiseEvent(payload: Record<string, unknown>, rawBody: string): 
     providerIntentRef: providerPayoutRef,
     payoutRequestId,
     payoutStatus: statusFromWisePayoutState(state, eventType),
+    ...normalizeEventMoney('wise', payoutCurrency?.toUpperCase(), payoutRawAmount),
     metadata,
     rawPayload: payload,
   };

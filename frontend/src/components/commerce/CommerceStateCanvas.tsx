@@ -3,8 +3,7 @@ import { View, Text, StyleSheet, Pressable, useWindowDimensions } from 'react-na
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Typography, Type } from '../../theme/designTokens';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { Space, Radius, Typography } from '../../theme/designTokens';
 
 export type CommerceStateType = 'loading' | 'error' | 'unavailable';
 
@@ -14,6 +13,8 @@ export interface CommerceStateCanvasProps {
   message?: string;
   onRetry?: () => void;
   retryLabel?: string;
+  secondaryActionLabel?: string;
+  onSecondaryAction?: () => void;
   /**
    * Optional family hint to tune the loading skeleton's hero height and
    * composition. Defaults to "direct" which mirrors the direct-listing
@@ -38,12 +39,12 @@ export function CommerceStateCanvas({
   message,
   onRetry,
   retryLabel = 'Try again',
+  secondaryActionLabel,
+  onSecondaryAction,
   family = 'direct',
 }: CommerceStateCanvasProps) {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
-  const reducedMotion = useReducedMotion();
-  const { width, height } = useWindowDimensions();
 
   if (state === 'loading') {
     return <CommerceDetailSkeleton family={family} />;
@@ -98,6 +99,21 @@ export function CommerceStateCanvas({
           </Text>
         </Pressable>
       )}
+      {secondaryActionLabel && onSecondaryAction ? (
+        <Pressable
+          style={({ pressed }) => [
+            styles.secondaryBtn,
+            pressed && { opacity: 0.7 },
+          ]}
+          onPress={onSecondaryAction}
+          accessibilityRole="button"
+          accessibilityLabel={secondaryActionLabel}
+        >
+          <Text style={[styles.secondaryText, { color: colors.textSecondary }]}>
+            {secondaryActionLabel}
+          </Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -114,7 +130,9 @@ function CommerceDetailSkeleton({ family }: { family: 'direct' | 'auction' | 'co
   const { colors } = useAppTheme();
   const { width, height } = useWindowDimensions();
   const isCompact = width < 390;
-  const heroFraction = family === 'coown' ? (isCompact ? 0.52 : 0.65) : (isCompact ? 0.5 : 0.62);
+  const heroFraction = family === 'coown'
+    ? (width < 340 ? 0.48 : isCompact ? 0.5 : 0.56)
+    : (isCompact ? 0.5 : 0.56);
   const heroHeight = Math.min(height * heroFraction, width * 1.35);
 
   return (
@@ -208,6 +226,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   retryText: {
+    fontSize: 14,
+    fontFamily: Typography.family.semibold,
+  },
+  secondaryBtn: {
+    minHeight: 44,
+    marginTop: Space.sm,
+    paddingHorizontal: Space.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  secondaryText: {
     fontSize: 14,
     fontFamily: Typography.family.semibold,
   },

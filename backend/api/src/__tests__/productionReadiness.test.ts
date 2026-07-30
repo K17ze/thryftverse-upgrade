@@ -25,16 +25,22 @@ function productionEnvironment(
     AUTH_ACCESS_TOKEN_SECRET: "x".repeat(48),
     AUTH_REFRESH_TOKEN_SECRET: "y".repeat(48),
     API_SECURITY_ADMIN_TOKEN: "z".repeat(48),
+    API_INTERNAL_SERVICE_TOKEN: "i".repeat(48),
+    DECISION_SERVICE_TOKEN: "d".repeat(48),
     ONEZE_ATTESTATION_SIGNING_SECRET: "o".repeat(48),
     API_ENABLE_MOCK_WEBHOOKS: "false",
     AUTH_EXPOSE_DEVELOPMENT_ARTIFACTS: "false",
+    MEDIA_PROCESSING_ENABLED: "true",
+    MEDIA_PUBLICATION_GATE_ENABLED: "true",
     API_RATE_LIMIT_MAX: "140",
     API_RATE_LIMIT_WINDOW: "1 minute",
     ONEZE_FX_SYNC_ENABLED: "true",
     ONEZE_FX_PROVIDER_URL: "https://fx.thryftverse.test/latest",
     ONEZE_FX_PROVIDER_API_KEY: "fx_provider_key_test",
     STRIPE_SECRET_KEY: "sk_live_test",
+    STRIPE_PUBLISHABLE_KEY: "pk_live_test",
     STRIPE_WEBHOOK_SECRET: "whsec_test",
+    PAYMENT_METADATA_HMAC_SECRET: "m".repeat(48),
     KYC_DEFAULT_VENDOR: "stripe_identity",
     KYC_RETURN_URL: "https://thryftverse.test/compliance/kyc-complete",
     KYC_WEBHOOK_SECRET: `whsec_${"k".repeat(32)}`,
@@ -67,6 +73,7 @@ test("production readiness rejects weak defaults, equal auth secrets, and mock r
       AUTH_ACCESS_TOKEN_SECRET: "dev-only-access-secret-change-me",
       AUTH_REFRESH_TOKEN_SECRET: "dev-only-access-secret-change-me",
       API_SECURITY_ADMIN_TOKEN: "local-security-admin-token",
+      API_INTERNAL_SERVICE_TOKEN: "local-internal-service-token",
       API_ENABLE_MOCK_WEBHOOKS: "true",
     }),
   );
@@ -79,6 +86,11 @@ test("production readiness rejects weak defaults, equal auth secrets, and mock r
   assert.ok(
     errors.some((error) =>
       error.includes("API_SECURITY_ADMIN_TOKEN still uses"),
+    ),
+  );
+  assert.ok(
+    errors.some((error) =>
+      error.includes("API_INTERNAL_SERVICE_TOKEN still uses"),
     ),
   );
   assert.ok(errors.some((error) => error.includes("must be different")));
@@ -115,5 +127,50 @@ test("production readiness rejects missing provider, alert, and public URL bound
   assert.ok(errors.some((error) => error.includes("ONEZE_FX_SYNC_ENABLED")));
   assert.ok(
     errors.some((error) => error.startsWith("ONEZE_FX_PROVIDER_URL must be")),
+  );
+});
+
+test("production readiness rejects unversioned or zero AI usage pricing", () => {
+  const errors = collectProductionReadinessErrors(
+    productionEnvironment({
+      OPENAI_API_KEY: "sk-live-ai-test",
+      OPENAI_AGENT_DEFAULT_MODEL: "",
+      AI_USAGE_PRICING_VERSION: "unconfigured",
+      OPENAI_INPUT_COST_MICROUSD_PER_MILLION_TOKENS: "0",
+      OPENAI_OUTPUT_COST_MICROUSD_PER_MILLION_TOKENS: "-1",
+    }),
+  );
+
+  assert.ok(
+    errors.some((error) => error.includes("OPENAI_AGENT_DEFAULT_MODEL")),
+  );
+  assert.ok(
+    errors.some((error) => error.includes("AI_USAGE_PRICING_VERSION")),
+  );
+  assert.ok(
+    errors.some((error) =>
+      error.includes("OPENAI_INPUT_COST_MICROUSD_PER_MILLION_TOKENS"),
+    ),
+  );
+  assert.ok(
+    errors.some((error) =>
+      error.includes("OPENAI_OUTPUT_COST_MICROUSD_PER_MILLION_TOKENS"),
+    ),
+  );
+});
+
+test("production readiness rejects disabled media processing or publication gates", () => {
+  const errors = collectProductionReadinessErrors(
+    productionEnvironment({
+      MEDIA_PROCESSING_ENABLED: "false",
+      MEDIA_PUBLICATION_GATE_ENABLED: "false",
+    }),
+  );
+
+  assert.ok(
+    errors.some((error) => error.includes("MEDIA_PROCESSING_ENABLED")),
+  );
+  assert.ok(
+    errors.some((error) => error.includes("MEDIA_PUBLICATION_GATE_ENABLED")),
   );
 });

@@ -543,7 +543,7 @@ export function buildCoOwnViewModel(input: CoOwnAdapterInput): ProductDetailView
   const isHolder = viewerUnits > 0;
   const availability = resolveCoOwnAvailability(asset);
   const media = mediaFromUris(asset.imageUrl ? [asset.imageUrl] : []);
-  const totalUnits = asset.totalUnits > 0 ? asset.totalUnits : 0;
+  const totalUnits = asset.totalUnits;
   const viewerOwnershipPct = totalUnits > 0 ? (viewerUnits / totalUnits) * 100 : 0;
 
   const common: ProductDetailCommon = {
@@ -596,7 +596,7 @@ export function buildCoOwnViewModel(input: CoOwnAdapterInput): ProductDetailView
     assetId: asset.id,
     unitPriceGbp: asset.unitPriceGbp,
     unitPriceStable: asset.unitPriceStable ?? null,
-    availableUnits: Math.max(0, asset.availableUnits),
+    availableUnits: asset.availableUnits,
     totalUnits,
     viewerUnits,
     viewerOwnershipPct,

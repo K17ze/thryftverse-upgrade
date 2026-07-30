@@ -17,6 +17,8 @@ const required = [
   'AUTH_ACCESS_TOKEN_SECRET',
   'AUTH_REFRESH_TOKEN_SECRET',
   'API_SECURITY_ADMIN_TOKEN',
+  'API_INTERNAL_SERVICE_TOKEN',
+  'DECISION_SERVICE_TOKEN',
   'S3_ENDPOINT',
   'S3_PUBLIC_ENDPOINT',
   'S3_ACCESS_KEY',
@@ -30,6 +32,8 @@ const required = [
         'KYC_RETURN_URL',
         'KYC_WEBHOOK_SECRET',
         'ALERTING_WEBHOOK_URLS',
+        'MEDIA_PROCESSING_ENABLED',
+        'MEDIA_PUBLICATION_GATE_ENABLED',
         'ONEZE_FX_PROVIDER_URL',
         'ONEZE_FX_PROVIDER_API_KEY',
       ]
@@ -50,6 +54,8 @@ const bannedDefaults = new Map([
   ['AUTH_ACCESS_TOKEN_SECRET', 'dev-only-access-secret-change-me'],
   ['AUTH_REFRESH_TOKEN_SECRET', 'dev-only-refresh-secret-change-me'],
   ['API_SECURITY_ADMIN_TOKEN', 'local-security-admin-token'],
+  ['API_INTERNAL_SERVICE_TOKEN', 'local-internal-service-token'],
+  ['DECISION_SERVICE_TOKEN', 'local-decision-service-token'],
   ['S3_ACCESS_KEY', 'minioadmin'],
   ['S3_SECRET_KEY', 'minioadmin'],
   ['ONEZE_ATTESTATION_SIGNING_SECRET', 'dev-only-oneze-attestation-signing-secret'],
@@ -89,13 +95,46 @@ if (production) {
     errors.push('ONEZE_FX_SYNC_ENABLED must be true in production');
   }
 
+  if ((process.env.MEDIA_PROCESSING_ENABLED ?? '').trim().toLowerCase() !== 'true') {
+    errors.push('MEDIA_PROCESSING_ENABLED must be true in production');
+  }
+  if ((process.env.MEDIA_PUBLICATION_GATE_ENABLED ?? '').trim().toLowerCase() !== 'true') {
+    errors.push('MEDIA_PUBLICATION_GATE_ENABLED must be true in production');
+  }
+
+  if (process.env.OPENAI_API_KEY?.trim()) {
+    if (!process.env.OPENAI_AGENT_DEFAULT_MODEL?.trim()) {
+      errors.push('OPENAI_AGENT_DEFAULT_MODEL is required when OPENAI_API_KEY is configured');
+    }
+    if (
+      !process.env.AI_USAGE_PRICING_VERSION?.trim()
+      || process.env.AI_USAGE_PRICING_VERSION.trim() === 'unconfigured'
+    ) {
+      errors.push('AI_USAGE_PRICING_VERSION must identify the configured model rates');
+    }
+    for (const key of [
+      'OPENAI_INPUT_COST_MICROUSD_PER_MILLION_TOKENS',
+      'OPENAI_OUTPUT_COST_MICROUSD_PER_MILLION_TOKENS',
+    ]) {
+      const value = Number(process.env[key]);
+      if (!Number.isFinite(value) || value <= 0) {
+        errors.push(`${key} must be greater than zero when OPENAI_API_KEY is configured`);
+      }
+    }
+  }
+
   const fxProviderUrl = process.env.ONEZE_FX_PROVIDER_URL?.trim() ?? '';
   if (fxProviderUrl && !fxProviderUrl.startsWith('https://')) {
     errors.push('ONEZE_FX_PROVIDER_URL must use https:// in production');
   }
 
   const paymentReady = [
-    ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET'],
+    [
+      'STRIPE_SECRET_KEY',
+      'STRIPE_PUBLISHABLE_KEY',
+      'STRIPE_WEBHOOK_SECRET',
+      'PAYMENT_METADATA_HMAC_SECRET',
+    ],
     ['RAZORPAY_KEY_ID', 'RAZORPAY_KEY_SECRET', 'RAZORPAY_WEBHOOK_SECRET'],
     ['MOLLIE_API_KEY', 'MOLLIE_WEBHOOK_SECRET'],
     ['FLUTTERWAVE_SECRET_KEY', 'FLUTTERWAVE_WEBHOOK_SECRET'],

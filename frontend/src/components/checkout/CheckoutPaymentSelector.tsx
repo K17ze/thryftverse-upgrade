@@ -14,7 +14,6 @@ interface Props {
   onSelect: (method: CommercePaymentMethod) => void | Promise<void>;
   isSelecting?: boolean;
   onAddCard?: () => void;
-  onExpressPay?: (type: 'apple_pay' | 'google_pay') => void;
 }
 
 export function CheckoutPaymentSelector({
@@ -25,7 +24,6 @@ export function CheckoutPaymentSelector({
   onSelect,
   isSelecting,
   onAddCard,
-  onExpressPay,
 }: Props) {
   return (
     <BottomSheet visible={visible} onDismiss={onDismiss} snapPoint={0.55}>
@@ -34,32 +32,6 @@ export function CheckoutPaymentSelector({
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Express wallet payment options */}
-        {onExpressPay && (
-          <View style={styles.expressRow}>
-            <Pressable
-              onPress={() => onExpressPay('apple_pay')}
-              disabled={isSelecting}
-              style={({ pressed }) => [styles.expressBtn, styles.applePayBtn, pressed && styles.rowPressed]}
-              accessibilityRole="button"
-              accessibilityLabel="Pay with Apple Pay"
-            >
-              <Ionicons name="logo-apple" size={18} color={Colors.textPrimary} />
-              <Text style={styles.expressBtnText}>Apple Pay</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => onExpressPay('google_pay')}
-              disabled={isSelecting}
-              style={({ pressed }) => [styles.expressBtn, styles.googlePayBtn, pressed && styles.rowPressed]}
-              accessibilityRole="button"
-              accessibilityLabel="Pay with Google Pay"
-            >
-              <Ionicons name="logo-google" size={16} color={Colors.textPrimary} />
-              <Text style={styles.expressBtnText}>Google Pay</Text>
-            </Pressable>
-          </View>
-        )}
-
         {methods.map((method) => {
           const isSelected = method.id === selectedId;
           return (
@@ -84,7 +56,7 @@ export function CheckoutPaymentSelector({
               <View style={styles.rowLeft}>
                 <View style={[styles.cardIconWrap, isSelected && styles.cardIconWrapSelected]}>
                   <Ionicons
-                    name={method.type === 'card' ? 'card' : method.type === 'apple_pay' ? 'logo-apple' : method.type === 'google_pay' ? 'logo-google' : 'business'}
+                    name="card"
                     size={18}
                     color={isSelected ? Colors.brand : Colors.textSecondary}
                   />
@@ -134,8 +106,8 @@ export function CheckoutPaymentSelector({
 
       {/* Secure payment trust indicator */}
       <View style={styles.trustFooter}>
-        <Ionicons name="lock-closed" size={11} color={Colors.textMuted} />
-        <Text style={styles.trustText}>Payments are encrypted & secured</Text>
+        <Ionicons name="shield-checkmark-outline" size={12} color={Colors.textMuted} />
+        <Text style={styles.trustText}>Card confirmation opens in Stripe PaymentSheet</Text>
       </View>
     </BottomSheet>
   );
@@ -152,34 +124,6 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.xl,
-  },
-  expressRow: {
-    flexDirection: 'row',
-    gap: Space.sm,
-    marginBottom: Space.md,
-  },
-  expressBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: Space.sm + 2,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-  },
-  applePayBtn: {
-    backgroundColor: '#00000008',
-  },
-  googlePayBtn: {
-    backgroundColor: '#4285F408',
-  },
-  expressBtnText: {
-    fontSize: 14,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   row: {
     flexDirection: 'row',

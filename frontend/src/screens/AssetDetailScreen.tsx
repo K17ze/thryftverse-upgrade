@@ -12,7 +12,6 @@ import Reanimated, {
   useAnimatedStyle,
   interpolate,
   Extrapolation,
-  FadeInDown,
 } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
@@ -20,7 +19,12 @@ import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { Space, Type, Typography, Radius, DockConstants } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { fetchCoOwnAssetById, fetchCoOwnOrderBook, fetchCoOwnHoldings } from '../services/marketApi';
+import {
+  fetchCoOwnAssetById,
+  fetchCoOwnOrderBook,
+  fetchCoOwnHoldings,
+  type CoOwnOrderBookSnapshot,
+} from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
 import { useToast } from '../context/ToastContext';
 import { CO_OWN_FEE_RATE } from '../utils/tradeFlow';
@@ -68,12 +72,10 @@ import {
   CoOwnOrderBook,
   CoOwnCandleChart,
   CoOwnOfflineBanner,
-  CoOwnReconciliationBanner,
   CoOwnSupplySheet,
   CoOwnOverflowSheet,
   CANONICAL_RIGHTS_LABELS,
   type CoOwnRightsRow,
-  type CoOwnBookLevel,
   type CoOwnCandleRange,
 } from '../components/coown';
 import { useConnectivity } from '../hooks/useConnectivity';
@@ -122,14 +124,17 @@ export default function AssetDetailScreen() {
   const assetId = route.params?.assetId;
 
   const [asset, setAsset] = React.useState<any>(null);
-  const [orderBook, setOrderBook] = React.useState<{ bids: any[]; asks: any[] }>({ bids: [], asks: [] });
-  const [yourUnits, setYourUnits] = React.useState(0);
+  const [orderBook, setOrderBook] = React.useState<CoOwnOrderBookSnapshot | null>(null);
+  const [orderBookError, setOrderBookError] = React.useState(false);
+  const [yourUnits, setYourUnits] = React.useState<number | null>(currentUser?.id ? null : 0);
+  const [holdingsError, setHoldingsError] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isError, setIsError] = React.useState(false);
   const [isResolvingConversation, setIsResolvingConversation] = React.useState(false);
   const [fullscreenIndex, setFullscreenIndex] = React.useState(0);
   const [fullscreenVisible, setFullscreenVisible] = React.useState(false);
   const [orderBookExpanded, setOrderBookExpanded] = React.useState(false);
+  const [fundamentalsExpanded, setFundamentalsExpanded] = React.useState(false);
   const [guideVisible, setGuideVisible] = React.useState(false);
   const [pendingTradeSide, setPendingTradeSide] = React.useState<'buy' | 'sell' | null>(null);
   const [rightsSheetVisible, setRightsSheetVisible] = React.useState(false);
@@ -162,32 +167,70 @@ export default function AssetDetailScreen() {
     let cancelled = false;
     setIsLoading(true);
     setIsError(false);
+    setOrderBookError(false);
+    setHoldingsError(false);
+    setOrderBook(null);
+    setYourUnits(currentUser?.id ? null : 0);
 
-    Promise.all([
+    void Promise.allSettled([
       fetchCoOwnAssetById(assetId),
-      fetchCoOwnOrderBook(assetId, { limit: 40 }).catch(() => ({ bids: [], asks: [] })),
-      currentUser?.id ? fetchCoOwnHoldings(currentUser.id).catch(() => []) : Promise.resolve([]),
-    ])
-      .then(([fetchedAsset, fetchedBook, holdings]) => {
-        if (cancelled) return;
-        setAsset(fetchedAsset);
-        setOrderBook(fetchedBook);
-        setDataLoadedAt(Date.now());
-        const holding = holdings.find((h) => h.assetId === assetId);
-        setYourUnits(holding?.unitsOwned ?? 0);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        const parsed = parseApiError(err, 'Unable to load asset');
+      fetchCoOwnOrderBook(assetId, { limit: 40 }),
+      currentUser?.id ? fetchCoOwnHoldings(currentUser.id) : Promise.resolve([]),
+    ]).then(([assetResult, bookResult, holdingsResult]) => {
+      if (cancelled) return;
+
+      if (assetResult.status === 'rejected') {
+        const parsed = parseApiError(assetResult.reason, 'Unable to load asset');
         show(parsed.message, 'error');
         setIsError(true);
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
+        setIsLoading(false);
+        return;
+      }
+
+      setAsset(assetResult.value);
+      setDataLoadedAt(Date.now());
+
+      if (bookResult.status === 'fulfilled') {
+        setOrderBook(bookResult.value);
+      } else {
+        setOrderBookError(true);
+      }
+
+      if (holdingsResult.status === 'fulfilled') {
+        const holding = holdingsResult.value.find((entry) => entry.assetId === assetId);
+        setYourUnits(holding?.unitsOwned ?? 0);
+      } else {
+        setHoldingsError(true);
+        setYourUnits(null);
+      }
+
+      setIsLoading(false);
+    });
 
     return () => { cancelled = true; };
   }, [assetId, currentUser?.id, show]);
+
+  const retryOrderBook = React.useCallback(() => {
+    if (!assetId) return;
+    setOrderBookError(false);
+    void fetchCoOwnOrderBook(assetId, { limit: 40 })
+      .then(setOrderBook)
+      .catch(() => setOrderBookError(true));
+  }, [assetId]);
+
+  const retryHoldings = React.useCallback(() => {
+    if (!assetId || !currentUser?.id) return;
+    setHoldingsError(false);
+    void fetchCoOwnHoldings(currentUser.id)
+      .then((holdings) => {
+        const holding = holdings.find((entry) => entry.assetId === assetId);
+        setYourUnits(holding?.unitsOwned ?? 0);
+      })
+      .catch(() => {
+        setYourUnits(null);
+        setHoldingsError(true);
+      });
+  }, [assetId, currentUser?.id]);
 
   // ── Hooks must run before conditional returns (Rules of Hooks) ──
 
@@ -198,7 +241,7 @@ export default function AssetDetailScreen() {
   const STALENESS_THRESHOLD_SECONDS = 24 * 60 * 60;
   const { dataStale, dataStaleAgeLabel } = React.useMemo(() => {
     if (!asset || !dataLoadedAt) return { dataStale: false, dataStaleAgeLabel: undefined };
-    const snapshotTimestamp = asset.marketSnapshot?.lastExecutionAt;
+    const snapshotTimestamp = asset.marketSnapshot?.asOf;
     const sourceTimestamp = snapshotTimestamp
       ? new Date(snapshotTimestamp).getTime()
       : asset.updatedAt
@@ -215,15 +258,26 @@ export default function AssetDetailScreen() {
     return { dataStale: true, dataStaleAgeLabel: ageLabel };
   }, [asset, dataLoadedAt]);
 
+  const supplyIsValid = React.useMemo(() => {
+    if (!asset) return false;
+    return (
+      Number.isInteger(asset.totalUnits)
+      && asset.totalUnits > 0
+      && Number.isInteger(asset.availableUnits)
+      && asset.availableUnits >= 0
+      && asset.availableUnits <= asset.totalUnits
+    );
+  }, [asset]);
+
   const viewModel = React.useMemo(() => {
-    if (!asset) return null;
+    if (!asset || !supplyIsValid) return null;
     return buildCoOwnViewModel({
       asset,
-      viewerUnits: yourUnits,
+      viewerUnits: yourUnits ?? 0,
       orderBook,
       currentUserId: currentUser?.id,
     });
-  }, [asset, yourUnits, orderBook, currentUser?.id]);
+  }, [asset, supplyIsValid, yourUnits, orderBook, currentUser?.id]);
 
   const social = useProductSocialState(viewModel);
 
@@ -257,30 +311,66 @@ export default function AssetDetailScreen() {
     );
   }
 
+  if (!supplyIsValid) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
+        <CoOwnStateCanvas
+          variant="error"
+          title="Supply data unavailable"
+          subtitle="This market returned an invalid supply snapshot. Trading is disabled until it is corrected."
+          actionLabel="Back to Co-Own"
+          onAction={() => navigation.navigate('CoOwnHub')}
+        />
+      </View>
+    );
+  }
+
   const isIssuer = currentUser?.id === asset.issuerId;
-  const isHolder = yourUnits > 0;
+  const isHolder = yourUnits != null && yourUnits > 0;
   const isWatched = isCoOwnWatched(asset.id);
-  const issuerUsername = issuerTrust?.username || 'Issuer';
+  const issuerUsername =
+    asset.issuer?.displayName
+    || asset.issuer?.username
+    || issuerTrust?.username
+    || 'Issuer';
   const canMessageIssuer = currentUser?.id !== asset.issuerId;
 
-  const availableUnits = Math.max(0, asset.availableUnits);
+  const availableUnits = asset.availableUnits;
   const totalUnits = asset.totalUnits;
+  const navPerUnitGbp = asset.appraisalValue && totalUnits > 0
+    ? asset.appraisalValue / totalUnits
+    : null;
+  const referenceVsNavPct = navPerUnitGbp && navPerUnitGbp > 0
+    ? ((asset.unitPriceGbp - navPerUnitGbp) / navPerUnitGbp) * 100
+    : null;
   const allocatedPct = totalUnits > 0 ? Math.round(((totalUnits - availableUnits) / totalUnits) * 100) : 0;
-  const viewerPct = totalUnits > 0 ? Math.round((yourUnits / totalUnits) * 100 * 10) / 10 : 0;
+  const viewerPct = yourUnits != null && totalUnits > 0
+    ? Math.round((yourUnits / totalUnits) * 100 * 10) / 10
+    : null;
   const feePct = Math.round(CO_OWN_FEE_RATE * 100);
 
-  const bestBid = orderBook.bids.length > 0 ? orderBook.bids[0] : null;
-  const bestAsk = orderBook.asks.length > 0 ? orderBook.asks[0] : null;
+  const bestBid = orderBook && orderBook.bids.length > 0 ? orderBook.bids[0] : null;
+  const bestAsk = orderBook && orderBook.asks.length > 0 ? orderBook.asks[0] : null;
   const spreadGbp = bestBid?.unitPriceGbp != null && bestAsk?.unitPriceGbp != null
     ? Math.max(0, bestAsk.unitPriceGbp - bestBid.unitPriceGbp)
     : null;
-
+  const reconciliationActive =
+    orderBook != null && orderBook.reconciliationState !== 'reconciled';
   // ── Market snapshot ──
   // Per spec 03_COOWN §2: backend-backed market snapshot. The frontend
   // must not label reference price as "Last trade" without settled-
   // execution proof. marketSnapshot is null until the backend exposes
   // lastExecutionPriceGbp.
   const marketSnapshot = asset.marketSnapshot ?? null;
+  const marketSnapshotLabel = marketSnapshot?.asOf
+    ? `Snapshot v${marketSnapshot.version} · ${new Date(marketSnapshot.asOf).toLocaleTimeString('en-GB', {
+        hour: '2-digit',
+        minute: '2-digit',
+      })}${dataStale && dataStaleAgeLabel ? ` · stale ${dataStaleAgeLabel}` : ''}`
+    : dataStale && dataStaleAgeLabel
+      ? `Last update ${dataStaleAgeLabel}`
+      : undefined;
 
   // ── Candle data gating ──
   // Per spec 03_COOWN §4: only expose the candle toggle when real OHLC
@@ -289,12 +379,34 @@ export default function AssetDetailScreen() {
   const hasCandleData = candleData.length > 0;
 
   const images = asset.imageUrl ? [asset.imageUrl] : [];
+  const dossierEvidenceGroups = resolveEvidenceGroups({
+    category: asset.category,
+    condition: asset.conditionLabel,
+    description: asset.description,
+  });
+  const hasTrustDetails = Boolean(
+    asset.authenticityStatus
+    || asset.buyerProtection
+    || asset.storageInfo
+    || asset.possessionInfo,
+  );
+  const hasStructuredDossier = Boolean(
+    asset.provenance?.length
+    || asset.conditionGrade
+    || asset.custodyLocation
+    || asset.appraisalValue,
+  );
+  const hasExpandedDossier = dossierEvidenceGroups.length > 0
+    || hasTrustDetails
+    || hasStructuredDossier;
 
   const recommendationSections = recommendationsData?.sections ?? [];
   const railSections = recommendationSections.filter(
-    (s) => s.key !== 'seen_in_looks' && s.key !== 'continue_exploring'
+    (section) => section.key !== 'seen_in_looks' && section.key !== 'continue_exploring',
   );
   const seenInLooksSection = recommendationSections.find((s) => s.key === 'seen_in_looks');
+  void recsLoading;
+  void railSections;
 
   const handlePressRecommendation = (recItem: RecommendationItem) => {
     navigation.push('ItemDetail', { itemId: recItem.id });
@@ -306,13 +418,27 @@ export default function AssetDetailScreen() {
   const familyStateAccent = !asset.isOpen ? 'Closed' : availableUnits <= 0 ? 'Unavailable' : 'Open';
 
   // Compute scroll bottom padding from dock geometry + safe area.
-  const isDualActionDock = isHolder && asset.isOpen && availableUnits > 0;
+  const isDualActionDock =
+    isHolder
+    && asset.isOpen
+    && availableUnits > 0
+    && !holdingsError
+    && !orderBookError
+    && !reconciliationActive;
   const dockHeight = isDualActionDock
     ? DockConstants.dualActionHeight
     : DockConstants.singleActionHeight;
   const scrollBottomPadding = Math.max(insets.bottom, Space.md) + dockHeight + Space.md;
 
   const handleTradePress = (side: 'buy' | 'sell') => {
+    if (holdingsError || yourUnits == null) {
+      show('Your position is unavailable. Refresh it before trading.', 'error');
+      return;
+    }
+    if (orderBookError || reconciliationActive) {
+      show('The live market is unavailable while balances are reconciled.', 'error');
+      return;
+    }
     if (!coOwnCompliance.educationCompleted) {
       setPendingTradeSide(side);
       setGuideVisible(true);
@@ -371,7 +497,6 @@ export default function AssetDetailScreen() {
       />
 
       <CoOwnOfflineBanner isOffline={isOffline} />
-      <CoOwnReconciliationBanner isActive={false} />
 
       <Reanimated.ScrollView
         showsVerticalScrollIndicator={false}
@@ -403,16 +528,22 @@ export default function AssetDetailScreen() {
               <ProductFamilyBadge family="co_own" stateAccent={familyStateAccent} compact />
             </View>
           }
+          overlayBottomContent={
+            <CommerceDetailIdentity
+              family="co_own"
+              tone="media"
+              density={isVeryCompact ? 'compact' : 'standard'}
+              eyebrow={asset.category ?? asset.subcategory ?? 'Luxury asset'}
+              title={asset.title}
+              secondaryLine={`${availableUnits} of ${totalUnits} units available`}
+              interestSignal={asset.holders != null ? `${asset.holders} holders` : undefined}
+            />
+          }
         />
         <CommerceDetailMediaRail
           onBack={() => navigation.goBack()}
           topInset={insets.top}
           rightActions={[
-            {
-              icon: 'share-outline',
-              label: 'Share',
-              onPress: social.openShare,
-            },
             {
               icon: social.isSavedToCollection ? 'bookmark' : 'bookmark-outline',
               activeIcon: 'bookmark',
@@ -422,6 +553,7 @@ export default function AssetDetailScreen() {
             },
           ]}
           onOverflow={() => setOverflowVisible(true)}
+          showOverflow
         />
 
         {/* ── Zone B — Identity seam ──
@@ -430,22 +562,11 @@ export default function AssetDetailScreen() {
             the dominant price lives in the transaction surface below.
             Spec 02 §B + spec 03 §2: no repeated family labels, no
             repeated price. */}
-        <CommerceDetailIdentity
-          family="co_own"
-          density={isVeryCompact ? 'compact' : 'standard'}
-          eyebrow={asset.category ?? undefined}
-          title={asset.title}
-          secondaryLine={dataStale && dataStaleAgeLabel ? `Last update ${dataStaleAgeLabel}` : undefined}
-          interestSignal={asset.holders ? `${asset.holders} holders` : undefined}
-        />
-
-        {/* Slim issuer confidence row — replaces the large CoOwnIssuerCard.
-            Spec 03 §2: "Do not render a second large issuer card when the
-            slim row is present." */}
         <View style={styles.identityExtension}>
           <CommerceDetailSellerRow
             roleLabel="Issuer"
             institutional
+            avatarUri={asset.issuer?.avatar ?? undefined}
             name={issuerUsername}
             verified={issuerTrust?.verified}
             ratingLine={
@@ -453,7 +574,7 @@ export default function AssetDetailScreen() {
                 ? `${issuerTrust.rating.toFixed(1)}${issuerTrust?.reviewCount != null ? ` · ${issuerTrust.reviewCount} reviews` : ''}`
                 : undefined
             }
-            locationLine={issuerTrust?.location ?? undefined}
+            locationLine={issuerTrust?.location ?? asset.issuer?.location ?? undefined}
             onPress={() => navigation.navigate('UserProfile', { userId: asset.issuerId })}
             primaryAction={
               canMessageIssuer
@@ -505,8 +626,19 @@ export default function AssetDetailScreen() {
           statusRow={
             <View style={styles.marketStatusRow}>
               <View style={styles.marketStatusCluster}>
-                <Text style={[styles.marketStatusText, { color: asset.isOpen ? colors.success : colors.textSecondary }]}>
-                  {asset.isOpen ? 'Continuous · Open' : 'Closed'}
+                <Text
+                  style={[
+                    styles.marketStatusText,
+                    {
+                      color: reconciliationActive
+                        ? colors.textSecondary
+                        : asset.isOpen
+                          ? colors.textPrimary
+                          : colors.textSecondary,
+                    },
+                  ]}
+                >
+                  {reconciliationActive ? 'Orders paused · settling' : asset.isOpen ? 'Continuous · Open' : 'Closed'}
                 </Text>
                 {dataStale && dataStaleAgeLabel && (
                   <Text style={[styles.marketStatusStale, { color: colors.warning }]}>Stale {dataStaleAgeLabel}</Text>
@@ -514,7 +646,9 @@ export default function AssetDetailScreen() {
               </View>
               <View style={styles.marketStatusCluster}>
                 <Text style={[styles.marketStatusRights, { color: colors.textSecondary }]}>
-                  Spread {spreadGbp != null ? formatCoOwnIze(spreadGbp) : 'Not available'}
+                  {orderBookError
+                    ? 'Market depth unavailable'
+                    : `Spread ${spreadGbp != null ? formatCoOwnIze(spreadGbp) : 'Not available'}`}
                 </Text>
                 {asset.rightsVersion && (
                   <Pressable
@@ -527,10 +661,22 @@ export default function AssetDetailScreen() {
                     </Text>
                   </Pressable>
                 )}
+                {marketSnapshotLabel && (
+                  <Text style={[styles.marketStatusRights, { color: colors.textMuted }]} numberOfLines={1}>
+                    {marketSnapshotLabel}
+                  </Text>
+                )}
               </View>
             </View>
           }
         >
+          {orderBookError ? (
+            <CommerceDetailUnavailableInline
+              title="Live market unavailable"
+              body="Reference pricing remains visible, but bid and ask depth could not be loaded."
+              onRetry={retryOrderBook}
+            />
+          ) : (
           <View style={[styles.marketBookRow, { borderTopColor: colors.borderSubtle }]}>
             <View style={styles.marketBookSide}>
               <Text style={[styles.marketBookLabel, { color: colors.textMuted }]}>Bid</Text>
@@ -546,97 +692,105 @@ export default function AssetDetailScreen() {
               </Text>
             </View>
           </View>
-        </CommerceDetailTransactionSurface>
-
-        {/* ── Fundamentals — stacked layout, not three columns ──
-            Per spec 03_COOWN §1: replace the compact-phone three-column
-            fundamentals strip with a stacked layout. Three equal columns
-            feel cramped on phones.
-            Real values use textPrimary + tabular nums; unavailable values
-            use textMuted to distinguish data presence at a glance. */}
-        <View style={[styles.fundamentalsStacked, { borderBottomColor: colors.borderSubtle }]}>
-          {(() => {
-            const navAvailable = asset.appraisalValue && totalUnits > 0;
-            const navValue = navAvailable ? formatFromFiat(asset.appraisalValue / totalUnits, 'GBP') : 'Not available';
-            return (
+          )}
+          {!orderBookError && orderBook ? (
+            <>
+              <CommerceDetailDisclosureRow
+                label="Market depth"
+                summary={`${orderBook.bids.length + orderBook.asks.length} offers`}
+                onPress={() => setOrderBookExpanded((prev) => !prev)}
+                leadingIcon="bar-chart-outline"
+              />
+              {orderBookExpanded ? (
+                <CoOwnOrderBook
+                  bids={orderBook.bids.map((level) => ({
+                    price: level.unitPriceGbp,
+                    size: level.units,
+                    orderCount: level.orderCount,
+                  }))}
+                  asks={orderBook.asks.map((level) => ({
+                    price: level.unitPriceGbp,
+                    size: level.units,
+                    orderCount: level.orderCount,
+                  }))}
+                  visibleLevels={5}
+                  lastPrice={asset.unitPriceGbp}
+                  lastAgeSeconds={undefined}
+                  mode={asset.isOpen ? 'continuous' : 'closed'}
+                  onSelectLevel={handleSelectOrderBookLevel}
+                />
+              ) : null}
+            </>
+          ) : null}
+          <CommerceDetailDisclosureRow
+            label="Key facts"
+            summary={
+              navPerUnitGbp != null
+                ? `${formatFromFiat(navPerUnitGbp, 'GBP')} NAV / unit`
+                : 'Valuation · reporting'
+            }
+            onPress={() => setFundamentalsExpanded((prev) => !prev)}
+            leadingIcon="analytics-outline"
+          />
+          {fundamentalsExpanded ? (
+            <View style={[styles.fundamentalsStacked, { borderTopColor: colors.borderSubtle }]}>
+              <View style={styles.fundamentalsRow}>
+                <Text style={[styles.fundamentalsLabel, { color: colors.textMuted }]}>Reference vs NAV</Text>
+                <Text style={[styles.fundamentalsValue, { color: colors.textPrimary }]}>
+                  {referenceVsNavPct != null
+                    ? `${referenceVsNavPct >= 0 ? '+' : ''}${referenceVsNavPct.toFixed(1)}%`
+                    : 'Not available'}
+                </Text>
+              </View>
               <View style={styles.fundamentalsRow}>
                 <Text style={[styles.fundamentalsLabel, { color: colors.textMuted }]}>NAV / unit</Text>
-                <Text
-                  style={[
-                    styles.fundamentalsValue,
-                    { color: navAvailable ? colors.textPrimary : colors.textMuted },
-                    !navAvailable && styles.fundamentalsValueUnavailable,
-                  ]}
-                  numberOfLines={2}
-                >
-                  {navValue}
+                <Text style={[styles.fundamentalsValue, { color: colors.textPrimary }]}>
+                  {navPerUnitGbp != null
+                    ? formatFromFiat(navPerUnitGbp, 'GBP')
+                    : 'Not available'}
                 </Text>
               </View>
-            );
-          })()}
-          {(() => {
-            const reportingAvailable = !!asset.appraisalNextScheduled;
-            const reportingValue = reportingAvailable ? `Next report · ${asset.appraisalNextScheduled}` : 'Next report · Not scheduled';
-            return (
               <View style={styles.fundamentalsRow}>
-                <Text style={[styles.fundamentalsLabel, { color: colors.textMuted }]}>Reporting</Text>
-                <Text
-                  style={[
-                    styles.fundamentalsValue,
-                    { color: reportingAvailable ? colors.textPrimary : colors.textMuted },
-                    !reportingAvailable && styles.fundamentalsValueUnavailable,
-                  ]}
-                  numberOfLines={2}
-                >
-                  {reportingValue}
+                <Text style={[styles.fundamentalsLabel, { color: colors.textMuted }]}>Next report</Text>
+                <Text style={[styles.fundamentalsValue, { color: colors.textPrimary }]}>
+                  {asset.appraisalNextScheduled ?? 'Not scheduled'}
                 </Text>
               </View>
-            );
-          })()}
-          <View style={styles.fundamentalsRow}>
-            <Text style={[styles.fundamentalsLabel, { color: colors.textMuted }]}>Distribution</Text>
-            <Text
-              style={[
-                styles.fundamentalsValue,
-                { color: colors.textMuted },
-                styles.fundamentalsValueUnavailable,
-              ]}
-              numberOfLines={2}
-            >
-              Not scheduled
-            </Text>
-          </View>
-        </View>
-
-        {/* ── Zone D — Viewer context ──
-            Compact personalised surface — only when the viewer owns units.
-            Spec 03 §4: "Use a compact personalised surface." Appears before
-            generic supply. */}
-        {isHolder && (
-          <CommerceDetailSection label="Your position" divider variant="editorial">
-            <View style={styles.viewerPositionHeader}>
-              <Text style={[styles.viewerPositionValue, { color: colors.textPrimary }]}>
-                {yourUnits} units · {viewerPct.toFixed(1)}% ownership
-              </Text>
-              <Text style={[styles.viewerPositionMarketValue, { color: colors.textPrimary }]}>
-                {formatCoOwnIze(asset.unitPriceGbp * yourUnits)}
-              </Text>
+              <View style={styles.fundamentalsRow}>
+                <Text style={[styles.fundamentalsLabel, { color: colors.textMuted }]}>Distribution</Text>
+                <Text style={[styles.fundamentalsValue, { color: colors.textPrimary }]}>Not scheduled</Text>
+              </View>
             </View>
-            <Text style={[styles.viewerPositionMeta, { color: colors.textMuted }]}>
-              Settlement {asset.settlementMode === 'ONEZE' ? '1ZE'
-                : asset.settlementMode === 'TVUSD' ? 'TVUSD'
-                : asset.settlementMode === 'GBP' ? 'GBP'
-                : 'GBP + TVUSD'}
-            </Text>
-          </CommerceDetailSection>
-        )}
+          ) : null}
+        </CommerceDetailTransactionSurface>
 
-        {/* ── Zone E — Availability and supply ──
-            Default view: units available + allocated bar + holder count.
-            Full ledger moved to "View supply structure" disclosure.
-            Spec 03 §5: "Do not keep the full five-row accounting ledger
-            expanded by default." */}
-        <CommerceDetailSection label="Availability" divider>
+        <CommerceDetailSection label={isHolder ? 'Your position' : 'Availability'} divider variant="editorial">
+          {holdingsError ? (
+            <CommerceDetailUnavailableInline
+              title="Position unavailable"
+              body="We could not verify your settled units. Trading is disabled until this refreshes."
+              onRetry={retryHoldings}
+            />
+          ) : isHolder && yourUnits != null && viewerPct != null ? (
+            <View style={styles.viewerPositionHeader}>
+              <View style={styles.viewerPositionCopy}>
+                <Text style={[styles.viewerPositionValue, { color: colors.textPrimary }]}>
+                  {yourUnits} units · {viewerPct.toFixed(1)}%
+                </Text>
+                <Text style={[styles.viewerPositionMeta, { color: colors.textMuted }]}>
+                  Your settled position
+                </Text>
+              </View>
+              <View style={styles.viewerPositionCopy}>
+                <Text style={[styles.viewerPositionMarketValue, { color: colors.textPrimary }]}>
+                  {formatCoOwnIze(asset.unitPriceGbp * yourUnits)}
+                </Text>
+                <Text style={[styles.viewerPositionMeta, { color: colors.textMuted, textAlign: 'right' }]}>
+                  Reference value
+                </Text>
+              </View>
+            </View>
+          ) : null}
           <View style={styles.supplySummary}>
             <Text style={[styles.supplyUnits, { color: colors.textPrimary }]}>
               {availableUnits} units available
@@ -703,29 +857,6 @@ export default function AssetDetailScreen() {
           />
         </CommerceDetailSection>
 
-        {/* ── Order book ──
-            Collapsed by default on phone. Summary is in the transaction
-            surface above. Spec 03 §7: "Keep collapsed by default." */}
-        <CommerceDetailSection label="Live market" divider>
-          <CommerceDetailDisclosureRow
-            label="Order book"
-            summary={`${orderBook.bids.length + orderBook.asks.length} offers`}
-            onPress={() => setOrderBookExpanded((prev) => !prev)}
-            leadingIcon="bar-chart-outline"
-          />
-          {orderBookExpanded && (
-            <CoOwnOrderBook
-              bids={orderBook.bids as CoOwnBookLevel[]}
-              asks={orderBook.asks as CoOwnBookLevel[]}
-              visibleLevels={5}
-              lastPrice={asset.unitPriceGbp}
-              lastAgeSeconds={undefined}
-              mode={asset.isOpen ? 'continuous' : 'closed'}
-              onSelectLevel={handleSelectOrderBookLevel}
-            />
-          )}
-        </CommerceDetailSection>
-
         {/* ── Asset evidence ──
             Combined category evidence + trust panel + dossier into one
             "Asset dossier" section. Spec 03 §8: "Combine category evidence,
@@ -736,110 +867,78 @@ export default function AssetDetailScreen() {
             decision facts (Authenticity, Condition, Storage, Insurance,
             Latest appraisal). Full dossier opens via "View full asset
             dossier" disclosure. Do not render — rows; omit missing. */}
-        <CommerceDetailSection label="Asset dossier" divider variant="editorial">
-          {/* Summary facts — maximum five decision facts */}
-          {asset.authenticityStatus && (
-            <CommerceDetailMetricRow
-              label="Authenticity"
-              value={asset.authenticityStatus}
-            />
-          )}
-          {asset.conditionGrade && (
-            <CommerceDetailMetricRow
-              label="Condition"
-              value={asset.conditionGrade}
-            />
-          )}
-          {asset.custodyLocation && (
-            <CommerceDetailMetricRow
-              label="Storage"
-              value={asset.custodyLocation}
-            />
-          )}
-          {asset.custodyInsured != null && (
-            <CommerceDetailMetricRow
-              label="Insurance"
-              value={asset.custodyInsured ? 'Covered' : 'Not covered'}
-            />
-          )}
-          {asset.appraisalValue != null && (
-            <CommerceDetailMetricRow
-              label="Latest appraisal"
-              value={formatFromFiat(asset.appraisalValue, asset.appraisalCurrency ?? 'GBP')}
-              subLabel={asset.appraisalValuedAt ?? undefined}
-            />
-          )}
-
-          {/* NAV vs reference price — one compact metric row */}
-          {asset.appraisalValue && totalUnits > 0 && (
-            <CommerceDetailMetricRow
-              label="Reference vs NAV"
-              value={`${(() => {
-                const navPerUnit = asset.appraisalValue / totalUnits;
-                const pct = ((asset.unitPriceGbp - navPerUnit) / navPerUnit) * 100;
-                return `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`;
-              })()}`}
-              subLabel="NAV is an appraisal, not an executable price"
-            />
-          )}
-
-          <CommerceDetailDisclosureRow
-            label="View full asset dossier"
-            onPress={() => setDossierExpanded((prev) => !prev)}
-            leadingIcon="document-text-outline"
-            accessibilityLabel="View full asset dossier"
-          />
-
-          {/* Full dossier — expanded on demand */}
-          {dossierExpanded && (
-            <>
-              {(() => {
-                const evidenceGroups = resolveEvidenceGroups({
-                  category: asset.category,
-                  condition: asset.conditionLabel,
-                  description: asset.description,
-                });
-                return evidenceGroups.length > 0 ? (
-                  <CategoryEvidence groups={evidenceGroups} />
-                ) : null;
-              })()}
-
-              <CoOwnTrustPanel
-                authenticityStatus={asset.authenticityStatus ?? null}
-                buyerProtection={asset.buyerProtection ?? false}
-                storageInfo={asset.storageInfo ?? null}
-                possessionInfo={asset.possessionInfo ?? null}
+        {hasExpandedDossier ? (
+          <CommerceDetailSection label="Asset dossier" divider variant="editorial">
+            {/* Summary facts — maximum five decision facts */}
+            {asset.authenticityStatus && (
+              <CommerceDetailMetricRow
+                label="Authenticity"
+                value={asset.authenticityStatus}
               />
+            )}
+            {asset.conditionGrade && (
+              <CommerceDetailMetricRow
+                label="Condition"
+                value={asset.conditionGrade}
+              />
+            )}
+            {asset.custodyLocation && (
+              <CommerceDetailMetricRow
+                label="Storage"
+                value={asset.custodyLocation}
+              />
+            )}
+            <CommerceDetailDisclosureRow
+              label={dossierExpanded ? 'Hide full asset dossier' : 'View full asset dossier'}
+              onPress={() => setDossierExpanded((prev) => !prev)}
+              leadingIcon="document-text-outline"
+              accessibilityLabel={dossierExpanded ? 'Hide full asset dossier' : 'View full asset dossier'}
+            />
 
-              {(asset.provenance || asset.conditionGrade || asset.custodyLocation || asset.appraisalValue) && (
-                <CoOwnAssetDossier
-                  provenance={asset.provenance}
-                  condition={asset.conditionGrade ? {
-                    grade: asset.conditionGrade,
-                    reportUri: asset.conditionReportUri,
-                    inspectedAt: asset.conditionInspectedAt,
-                  } : undefined}
-                  storage={asset.custodyLocation ? {
-                    location: asset.custodyLocation,
-                    custodian: asset.custodyCustodian,
-                    insured: asset.custodyInsured ?? false,
-                    policyRef: asset.custodyPolicyRef,
-                  } : undefined}
-                  appraisal={asset.appraisalValue ? {
-                    value: asset.appraisalValue,
-                    currency: asset.appraisalCurrency ?? 'GBP',
-                    valuedAt: asset.appraisalValuedAt,
-                    method: asset.appraisalMethod,
-                    valuer: asset.appraisalValuer,
-                    rangeLow: asset.appraisalRangeLow,
-                    rangeHigh: asset.appraisalRangeHigh,
-                    nextScheduled: asset.appraisalNextScheduled,
-                  } : undefined}
+            {/* Full dossier — expanded on demand */}
+            {dossierExpanded && (
+              <>
+                {dossierEvidenceGroups.length > 0 ? (
+                  <CategoryEvidence groups={dossierEvidenceGroups} />
+                ) : null}
+
+                <CoOwnTrustPanel
+                  authenticityStatus={asset.authenticityStatus ?? null}
+                  buyerProtection={asset.buyerProtection ?? false}
+                  storageInfo={asset.storageInfo ?? null}
+                  possessionInfo={asset.possessionInfo ?? null}
                 />
-              )}
-            </>
-          )}
-        </CommerceDetailSection>
+
+                {(asset.provenance || asset.conditionGrade || asset.custodyLocation || asset.appraisalValue) && (
+                  <CoOwnAssetDossier
+                    provenance={asset.provenance}
+                    condition={asset.conditionGrade ? {
+                      grade: asset.conditionGrade,
+                      reportUri: asset.conditionReportUri,
+                      inspectedAt: asset.conditionInspectedAt,
+                    } : undefined}
+                    storage={asset.custodyLocation ? {
+                      location: asset.custodyLocation,
+                      custodian: asset.custodyCustodian,
+                      insured: asset.custodyInsured ?? false,
+                      policyRef: asset.custodyPolicyRef,
+                    } : undefined}
+                    appraisal={asset.appraisalValue ? {
+                      value: asset.appraisalValue,
+                      currency: asset.appraisalCurrency ?? 'GBP',
+                      valuedAt: asset.appraisalValuedAt,
+                      method: asset.appraisalMethod,
+                      valuer: asset.appraisalValuer,
+                      rangeLow: asset.appraisalRangeLow,
+                      rangeHigh: asset.appraisalRangeHigh,
+                      nextScheduled: asset.appraisalNextScheduled,
+                    } : undefined}
+                  />
+                )}
+              </>
+            )}
+          </CommerceDetailSection>
+        ) : null}
 
         {/* ── Rights and risk ──
             Default summary: completion state + one critical plain-language
@@ -856,6 +955,11 @@ export default function AssetDetailScreen() {
               You own units in the asset, not the physical item.
             </Text>
           </View>
+          <CommerceDetailMetricRow
+            label="Full-asset buyout"
+            value="Not available"
+            muted
+          />
           <CommerceDetailDisclosureRow
             label="Review rights"
             count={CANONICAL_RIGHTS_LABELS.length}
@@ -870,39 +974,6 @@ export default function AssetDetailScreen() {
             accessibilityLabel="View risk disclosure"
           />
         </CommerceDetailSection>
-
-        {/* ── Exit language ──
-            Spec 03 §10: "Do not show Buyout options when the only
-            available route is not full-asset buyout." The Buyout row is
-            rendered as a truthful unavailable state — it does not
-            navigate to a Buyout flow that does not exist. */}
-        {isHolder && !isIssuer && (
-          <CommerceDetailSection label="Exit options" divider>
-            <CommerceDetailDisclosureRow
-              label="Sell units"
-              summary="Secondary market"
-              onPress={() => handleTradePress('sell')}
-              leadingIcon="arrow-down-circle-outline"
-            />
-            <CommerceDetailDisclosureRow
-              label="Transfer restrictions"
-              summary="Units are transferable on the secondary market"
-              onPress={() => setRightsSheetVisible(true)}
-              leadingIcon="lock-closed-outline"
-            />
-            <View style={styles.unavailableRow}>
-              <View style={styles.unavailableRowLabelCluster}>
-                <Ionicons name="swap-horizontal-outline" size={18} color={colors.textMuted} />
-                <Text style={[styles.unavailableRowLabel, { color: colors.textMuted }]} numberOfLines={1}>
-                  Full-asset buyout
-                </Text>
-              </View>
-              <Text style={[styles.unavailableRowSummary, { color: colors.textMuted }]} numberOfLines={1}>
-                Not available
-              </Text>
-            </View>
-          </CommerceDetailSection>
-        )}
 
         {/* ── Zone F — Discovery ──
             Per spec 03_COOWN §9: maximum one discovery rail. Do not
@@ -929,12 +1000,47 @@ export default function AssetDetailScreen() {
           holder, rights incomplete, paused/closed. Blocked state includes
           a valid next step. No large passive warning card. */}
       {(() => {
+        if (!isIssuer && (holdingsError || yourUnits == null)) {
+          return (
+            <CommerceDetailStateDock
+              stateBadge={
+                <Text style={[styles.dockStateBadge, { color: colors.textPrimary }]}>
+                  Position unavailable
+                </Text>
+              }
+              subtitle="Trading is disabled until your holdings are verified"
+              primaryAction={{
+                label: 'Retry position',
+                onPress: retryHoldings,
+              }}
+            />
+          );
+        }
+
+        if (!isIssuer && (orderBookError || reconciliationActive)) {
+          return (
+            <CommerceDetailStateDock
+              stateBadge={
+                <Text style={[styles.dockStateBadge, { color: colors.textPrimary }]}>
+                  {reconciliationActive ? 'Market updating' : 'Market unavailable'}
+                </Text>
+              }
+              subtitle={reconciliationActive ? 'Orders are paused while balances settle' : 'Live orders could not be verified'}
+              primaryAction={{
+                label: reconciliationActive ? 'Check status' : 'Try again',
+                onPress: retryOrderBook,
+                primary: false,
+              }}
+            />
+          );
+        }
+
         if (hasIncompleteRights && !isIssuer && asset.isOpen) {
           // Rights incomplete — open the rights sheet, not a passive warning.
           return (
             <CommerceDetailStateDock
               stateBadge={
-                <Text style={[styles.dockStateBadge, { color: colors.warning }]}>
+                <Text style={[styles.dockStateBadge, { color: colors.textPrimary }]}>
                   Trading unavailable
                 </Text>
               }
@@ -955,7 +1061,12 @@ export default function AssetDetailScreen() {
                   Issuer view
                 </Text>
               }
-              subtitle={`${availableUnits} units in treasury`}
+              subtitle={`${availableUnits} units available`}
+              primaryAction={{
+                label: 'View orders',
+                onPress: () => navigation.navigate('CoOwnOrderHistory'),
+                accessibilityLabel: 'View co-own order history',
+              }}
             />
           );
         }
@@ -1067,18 +1178,28 @@ export default function AssetDetailScreen() {
       <Modal
         visible={riskDisclosureVisible}
         transparent
-        animationType="slide"
+        animationType={reducedMotionEnabled ? 'none' : 'slide'}
         onRequestClose={() => setRiskDisclosureVisible(false)}
       >
         <View style={styles.riskDisclosureModalOverlay}>
-          <View style={[styles.riskDisclosureModalSheet, { backgroundColor: colors.background }]}>
-            <View style={styles.riskDisclosureModalHeader}>
+          <View
+            style={[
+              styles.riskDisclosureModalSheet,
+              {
+                backgroundColor: colors.background,
+                paddingBottom: Math.max(insets.bottom, Space.md),
+              },
+              isTablet && styles.riskDisclosureModalSheetTablet,
+            ]}
+          >
+            <View style={[styles.riskDisclosureModalHeader, { borderBottomColor: colors.borderSubtle }]}>
               <Text style={[styles.riskDisclosureModalTitle, { color: colors.textPrimary }]}>
                 Risk disclosure
               </Text>
               <Pressable
                 onPress={() => setRiskDisclosureVisible(false)}
                 hitSlop={12}
+                style={styles.modalCloseTarget}
                 accessibilityLabel="Close risk disclosure"
                 accessibilityRole="button"
               >
@@ -1127,6 +1248,7 @@ export default function AssetDetailScreen() {
       <CoOwnOverflowSheet
         visible={overflowVisible}
         onClose={() => setOverflowVisible(false)}
+        onShare={social.openShare}
         onToggleFav={social.toggleLike}
         isFav={social.isLiked}
         onWatch={() => {
@@ -1234,9 +1356,9 @@ const styles = StyleSheet.create({
   },
   // ── Fundamentals — stacked layout (per spec 03_COOWN §1) ──
   fundamentalsStacked: {
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginTop: Space.xs,
+    paddingTop: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
     gap: Space.sm,
   },
   fundamentalsRow: {
@@ -1274,8 +1396,13 @@ const styles = StyleSheet.create({
   riskDisclosureModalSheet: {
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
+    height: '80%',
     maxHeight: '80%',
-    paddingBottom: 40,
+  },
+  riskDisclosureModalSheetTablet: {
+    width: '100%',
+    maxWidth: 640,
+    alignSelf: 'center',
   },
   riskDisclosureModalHeader: {
     flexDirection: 'row',
@@ -1284,7 +1411,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(0,0,0,0.08)',
+  },
+  modalCloseTarget: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   riskDisclosureModalTitle: {
     fontSize: Type.subtitle.size,
@@ -1304,6 +1436,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: Space.sm,
     marginBottom: Space.xs,
+  },
+  viewerPositionCopy: {
+    gap: 2,
+    flexShrink: 1,
   },
   viewerPositionValue: {
     fontSize: Type.bodyEmphasis.size,

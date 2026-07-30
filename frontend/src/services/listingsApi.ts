@@ -251,6 +251,7 @@ export interface ListingCreateBody {
   description: string;
   priceGbp: number;
   imageUrl?: string;
+  coverFinalizationId?: string;
   status?: 'draft' | 'active' | 'paused' | 'sold' | 'deleted';
   category?: string;
   brand?: string;
@@ -486,6 +487,12 @@ export async function createListingImageOnApi(body: {
   sortOrder: number;
   mediaWidth?: number;
   mediaHeight?: number;
+  mediaType?: 'image' | 'video';
+  finalizationId: string;
+  posterUrl?: string | null;
+  blurhash?: string | null;
+  focalX?: number | null;
+  focalY?: number | null;
 }): Promise<{ ok: boolean }> {
   return fetchJson<{ ok: boolean }>('/listing-images', {
     method: 'POST',

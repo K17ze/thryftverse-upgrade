@@ -23,6 +23,7 @@ import {
   FlatList,
 } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../../constants/colors';
 import { Typography, Space, Radius } from '../../theme/designTokens';
 import { isVideoUri } from '../../utils/media';
@@ -178,6 +179,9 @@ function VideoPage({ uri, width, height, shouldPlay }: { uri: string; width: num
 
 export interface CommerceMediaStageProps {
   images: string[];
+  /** Canonical video URLs supplied by the API. URL-suffix detection remains
+   * as a compatibility fallback for older callers. */
+  videoUris?: readonly string[];
   objectId: string;
   topInset: number;
   scrollY: SharedValue<number>;
@@ -203,10 +207,16 @@ export interface CommerceMediaStageProps {
   bigHeartScale?: SharedValue<number>;
   overlayTopContent?: React.ReactNode;
   overlayBottomContent?: React.ReactNode;
+  /**
+   * Opt-in media picker for future media-heavy experiences. Flagship detail
+   * pages default to swipe pagination so the hero is not duplicated by chrome.
+   */
+  showThumbnailStrip?: boolean;
 }
 
 export function CommerceMediaStage({
   images,
+  videoUris = [],
   objectId,
   topInset,
   scrollY,
@@ -228,25 +238,58 @@ export function CommerceMediaStage({
   bigHeartScale,
   overlayTopContent,
   overlayBottomContent,
+  showThumbnailStrip = false,
 }: CommerceMediaStageProps) {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const reducedMotion = useReducedMotion();
   const [activeIndex, setActiveIndex] = useState(0);
   const listRef = useRef<FlatList<any>>(null);
+  const videoUriSet = React.useMemo(() => new Set(videoUris), [videoUris]);
+  const isVideo = React.useCallback(
+    (uri: string) => videoUriSet.has(uri) || isVideoUri(uri),
+    [videoUriSet],
+  );
 
   const heroHeight = Math.min(screenHeight * heightFraction, screenWidth * 1.35);
 
   const heroStyle = useAnimatedStyle(() => {
+    if (reducedMotion) {
+      return { transform: [{ translateY: 0 }, { scale: 1 }] };
+    }
     const overscroll = Math.min(scrollY.value, 0);
     const pullDown = interpolate(overscroll, [-120, 0], [-56, 0], Extrapolation.CLAMP);
-    const parallax = interpolate(scrollY.value, [0, heroHeight], [0, heroHeight * 0.15], Extrapolation.CLAMP);
     const scale = interpolate(overscroll, [-120, 0], [1.16, 1], Extrapolation.CLAMP);
-    return { transform: [{ translateY: pullDown + parallax }, { scale }] };
+    // Only the pull-to-expand state moves the stage. Translating the
+    // container during positive scroll lets it overlap the identity seam;
+    // any future parallax must animate media inside this clipped stage.
+    return { transform: [{ translateY: pullDown }, { scale }] };
   });
 
   const bigHeartStyle = useAnimatedStyle(() => ({
     opacity: bigHeartOpacity?.value ?? 0,
     transform: [{ scale: bigHeartScale?.value ?? 0 }],
   }));
+  const bottomScrimStyle = useAnimatedStyle(() => {
+    // Clear the editorial caption before the collapsed navigation title
+    // begins to appear. Overlapping two copies of a long product title makes
+    // the transition read as visual noise rather than a deliberate hand-off.
+    const opacity = interpolate(scrollY.value, [24, 128], [1, 0], Extrapolation.CLAMP);
+    const hidden = scrollY.value >= 128;
+    return {
+      opacity: reducedMotion ? (scrollY.value < 112 ? 1 : 0) : opacity,
+      display: hidden ? 'none' : 'flex',
+    };
+  });
+  // Reanimated styles are view-bound; the scrim and caption need separate
+  // animated style instances even though they follow the same curve.
+  const bottomContentStyle = useAnimatedStyle(() => {
+    const opacity = interpolate(scrollY.value, [24, 128], [1, 0], Extrapolation.CLAMP);
+    const hidden = scrollY.value >= 128;
+    return {
+      opacity: reducedMotion ? (scrollY.value < 112 ? 1 : 0) : opacity,
+      display: hidden ? 'none' : 'flex',
+    };
+  });
 
   const onViewableItemsChanged = useCallback(({ viewableItems }: any) => {
     if (viewableItems.length > 0) {
@@ -262,7 +305,7 @@ export function CommerceMediaStage({
 
   const announceMedia = (index: number) => {
     AccessibilityInfo.announceForAccessibility(
-      `Image ${index + 1} of ${images.length}`
+      `${isVideo(images[index]) ? 'Video' : 'Image'} ${index + 1} of ${images.length}`,
     );
   };
 
@@ -286,7 +329,7 @@ export function CommerceMediaStage({
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig.current}
         renderItem={({ item, index }) =>
-          isVideoUri(item) ? (
+          isVideo(item) ? (
             <VideoPage uri={item} width={screenWidth} height={heroHeight} shouldPlay={index === activeIndex} />
           ) : (
             <MediaPage
@@ -305,7 +348,22 @@ export function CommerceMediaStage({
       />
       )}
 
-      <View style={styles.topScrim} />
+      <LinearGradient
+        colors={['rgba(0,0,0,0.32)', 'rgba(0,0,0,0)']}
+        locations={[0, 1]}
+        style={styles.topScrim}
+        pointerEvents="none"
+      />
+
+      {overlayBottomContent ? (
+        <Reanimated.View style={[styles.bottomScrim, bottomScrimStyle]} pointerEvents="none">
+          <LinearGradient
+            colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.72)']}
+            locations={[0, 1]}
+            style={StyleSheet.absoluteFill}
+          />
+        </Reanimated.View>
+      ) : null}
 
       {bigHeartOpacity && bigHeartScale && (
         <Reanimated.View
@@ -380,9 +438,9 @@ export function CommerceMediaStage({
       )}
 
       {overlayBottomContent && (
-        <View style={styles.overlayBottomZone}>
+        <Reanimated.View style={[styles.overlayBottomZone, bottomContentStyle]}>
           {overlayBottomContent}
-        </View>
+        </Reanimated.View>
       )}
 
       {images.length > 1 && (
@@ -397,14 +455,14 @@ export function CommerceMediaStage({
         </Pressable>
       )}
 
-      {images.length > 0 && isVideoUri(images[activeIndex]) && (
+      {images.length > 0 && isVideo(images[activeIndex]) && (
         <View style={styles.videoBadge}>
           <Ionicons name="play-circle" size={16} color="#fff" />
           <Text style={styles.videoBadgeText}>Video</Text>
         </View>
       )}
 
-      {images.length > 1 && (
+      {showThumbnailStrip && images.length > 1 && (
         <View style={styles.thumbnailStrip}>
           <FlatList
             data={images}
@@ -414,7 +472,7 @@ export function CommerceMediaStage({
             contentContainerStyle={styles.thumbnailContent}
             renderItem={({ item, index }) => {
               const isActive = index === activeIndex;
-              const isVid = isVideoUri(item);
+              const isVid = isVideo(item);
               return (
                 <Pressable
                   onPress={() => {
@@ -422,6 +480,8 @@ export function CommerceMediaStage({
                     announceMedia(index);
                   }}
                   accessibilityLabel={`View ${isVid ? 'video' : 'image'} ${index + 1}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isActive }}
                   style={[styles.thumbnail, isActive && styles.thumbnailActive]}
                 >
                   {isVid ? (
@@ -447,6 +507,7 @@ export function CommerceMediaStage({
           />
         </View>
       )}
+
     </Reanimated.View>
   );
 }
@@ -475,8 +536,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 120,
-    backgroundColor: 'rgba(0,0,0,0.12)',
+    height: 132,
   },
   bigHeartWrap: {
     alignItems: 'center',
@@ -575,6 +635,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: Typography.family.medium,
   },
+  bottomScrim: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: '48%',
+  },
   thumbnailStrip: {
     position: 'absolute',
     bottom: 40,
@@ -591,11 +658,12 @@ const styles = StyleSheet.create({
     borderRadius: Radius.sm,
     overflow: 'hidden',
     opacity: 0.5,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: 'transparent',
   },
   thumbnailActive: {
     opacity: 1,
+    borderWidth: 2,
     borderColor: '#fff',
   },
   thumbnailImage: {

@@ -10,8 +10,8 @@ import { BottomSheet } from '../BottomSheet';
 import { AppButton } from './AppButton';
 import { CachedImage } from '../CachedImage';
 import { Meta, Body, Headline } from './Text';
-import { Colors } from '../../constants/colors';
 import { Space, Radius, Typography } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
 import {
   isBuyNowValid,
   mapApiErrorToTransactionError,
@@ -21,7 +21,7 @@ import {
 } from '../../utils/transactionSheetLogic';
 import { parseApiError } from '../../lib/apiClient';
 import { createStableId } from '../../utils/createStableId';
-import { toIze, formatIzeAmount } from '../../utils/currency';
+import { toIze, formatAuctionIze } from '../../utils/currency';
 import type { SupportedCurrencyCode } from '../../constants/currencies';
 import type { AuctionDetailResponse, BuyNowResult } from '../../services/marketApi';
 
@@ -56,6 +56,8 @@ export function BuyNowSheet({
   onSubmitBuyNow,
   onRefreshDetail,
 }: BuyNowSheetProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [stage, setStage] = React.useState<BuyNowStage>('review');
   const [error, setError] = React.useState<TransactionError | null>(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -177,14 +179,14 @@ export function BuyNowSheet({
       const result = await onSubmitBuyNow(transactionAmount, idempotencyKeyRef.current);
       // PASS 4: Verify the response explicitly confirms Buy Now
       if (!result.isBuyNow) {
-        throw new Error('Buy Now response did not confirm purchase. Please try again.');
+        throw new Error('The response did not confirm the Buy Now winning bid. Please try again.');
       }
       setStage('success');
     } catch (err) {
-      const parsed = parseApiError(err, 'Unable to complete Buy Now');
+      const parsed = parseApiError(err, 'Unable to confirm Buy Now');
       const txError = mapApiErrorToTransactionError(
         err,
-        'Unable to complete Buy Now',
+        'Unable to confirm Buy Now',
         parsed.code,
         parsed.status,
         parsed.message,
@@ -272,7 +274,7 @@ export function BuyNowSheet({
             />
           ) : (
             <View style={styles.itemThumbPlaceholder}>
-              <Ionicons name="image-outline" size={20} color={Colors.textMuted} />
+              <Ionicons name="image-outline" size={20} color={colors.textMuted} />
             </View>
           )}
           <View style={styles.itemHeaderText}>
@@ -293,7 +295,7 @@ export function BuyNowSheet({
               <Text style={styles.fixedPriceValue} numberOfLines={1}>{priceText}</Text>
               {displayPriceGbp && (
                 <Text style={styles.fixedPriceIze}>
-                  {formatIzeAmount(toIze(displayPriceGbp, 'GBP'), 2)}
+                  {formatAuctionIze(toIze(displayPriceGbp, 'GBP'))}
                 </Text>
               )}
               {displayPriceText && (
@@ -305,13 +307,13 @@ export function BuyNowSheet({
 
             {/* Calm fixed-price context — not form rows */}
             <Text style={styles.fixedPriceContext}>
-              This is a fixed-price purchase, not a bid.{'\n'}
-              It ends the auction immediately.
+              This records the fixed-price winning bid and ends the auction.{'\n'}
+              Payment and fulfilment are not completed in this step.
             </Text>
 
             {error && (
               <View style={styles.errorRow}>
-                <Ionicons name="alert-circle-outline" size={14} color={Colors.danger} />
+                <Ionicons name="alert-circle-outline" size={14} color={colors.danger} />
                 <Text style={styles.errorText}>{error.message}</Text>
               </View>
             )}
@@ -324,8 +326,8 @@ export function BuyNowSheet({
               variant="primary"
               size="md"
               align="center"
-              title={isPreflighting ? 'Checking...' : 'Review purchase'}
-              accessibilityLabel="Review Buy Now purchase"
+              title={isPreflighting ? 'Checking...' : 'Confirm Buy Now'}
+              accessibilityLabel="Confirm Buy Now winning bid"
             />
             <Pressable
               style={styles.dismissLink}
@@ -343,9 +345,9 @@ export function BuyNowSheet({
         {stage === 'submitting' && (
           <View style={styles.centerStage}>
             <View style={styles.submittingSpinnerWrap}>
-              <Ionicons name="hourglass-outline" size={40} color={Colors.brand} />
+              <Ionicons name="hourglass-outline" size={40} color={colors.brand} />
             </View>
-            <Text style={styles.submittingText}>Processing your purchase...</Text>
+            <Text style={styles.submittingText}>Confirming Buy Now...</Text>
             <Text style={styles.submittingDetail}>This may take a moment.</Text>
           </View>
         )}
@@ -354,11 +356,11 @@ export function BuyNowSheet({
         {stage === 'success' && (
           <View style={styles.centerStage}>
             <View style={styles.successIcon}>
-              <Ionicons name="checkmark-circle" size={56} color={Colors.success} />
+              <Ionicons name="checkmark-circle" size={56} color={colors.success} />
             </View>
-            <Text style={styles.successTitle}>Purchase confirmed</Text>
+            <Text style={styles.successTitle}>Auction won with Buy Now</Text>
             <Text style={styles.successDetail}>
-              You bought this item for {priceText}.{'\n'}The auction has ended and is being refreshed.
+              Your winning price is {priceText}.{'\n'}Payment and fulfilment details will appear when available.
             </Text>
             <AppButton
               style={styles.doneBtn}
@@ -376,7 +378,7 @@ export function BuyNowSheet({
         {stage === 'error' && error && (
           <View style={styles.stageContent}>
             <View style={styles.errorIconSmall}>
-              <Ionicons name="alert-circle-outline" size={24} color={Colors.danger} />
+              <Ionicons name="alert-circle-outline" size={24} color={colors.danger} />
             </View>
             <Text style={styles.errorTitle}>{error.message}</Text>
             <View style={styles.actions}>
@@ -408,7 +410,8 @@ export function BuyNowSheet({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
+  return StyleSheet.create({
   container: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.md,
@@ -433,7 +436,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -443,16 +446,16 @@ const styles = StyleSheet.create({
   itemTitle: {
     fontSize: 16,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   itemSeller: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginTop: 2,
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
     marginBottom: Space.sm,
   },
   stageContent: {
@@ -461,7 +464,7 @@ const styles = StyleSheet.create({
   // ── Fixed-price experience ──
   fixedPriceLabel: {
     fontSize: 11,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontFamily: Typography.family.semibold,
     textAlign: 'center',
     marginTop: Space.xs,
@@ -478,25 +481,25 @@ const styles = StyleSheet.create({
     lineHeight: 42,
     fontWeight: '700',
     letterSpacing: -0.5,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.bold,
     fontVariant: ['tabular-nums'],
   },
   fixedPriceIze: {
     fontSize: 14,
-    color: Colors.brand,
+    color: colors.brand,
     fontFamily: Typography.family.medium,
     fontVariant: ['tabular-nums'],
   },
   fixedPriceEquivalent: {
     fontSize: 13,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontFamily: Typography.family.regular,
     fontVariant: ['tabular-nums'],
   },
   fixedPriceContext: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontFamily: Typography.family.regular,
     textAlign: 'center',
     lineHeight: 20,
@@ -513,7 +516,7 @@ const styles = StyleSheet.create({
   },
   dismissLinkText: {
     fontSize: 14,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontFamily: Typography.family.regular,
   },
   errorRow: {
@@ -529,7 +532,7 @@ const styles = StyleSheet.create({
   errorText: {
     flex: 1,
     fontSize: 13,
-    color: Colors.danger,
+    color: colors.danger,
     fontFamily: Typography.family.medium,
     lineHeight: 18,
   },
@@ -550,14 +553,14 @@ const styles = StyleSheet.create({
   submittingText: {
     fontSize: 16,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   submittingSpinnerWrap: {
     marginBottom: Space.xs,
   },
   submittingDetail: {
     fontSize: 13,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontFamily: Typography.family.regular,
   },
   successIcon: {
@@ -566,11 +569,11 @@ const styles = StyleSheet.create({
   successTitle: {
     fontSize: 20,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   successDetail: {
     fontSize: 15,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontFamily: Typography.family.regular,
     textAlign: 'center',
     paddingHorizontal: Space.md,
@@ -588,8 +591,9 @@ const styles = StyleSheet.create({
   errorTitle: {
     fontSize: 16,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     textAlign: 'center',
     paddingHorizontal: Space.md,
   },
-});
+  });
+}

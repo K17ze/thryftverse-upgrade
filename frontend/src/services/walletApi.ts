@@ -15,6 +15,13 @@ export type PaymentIntentStatus =
   | 'failed'
   | 'cancelled';
 
+export interface MoneyPayload {
+  currency: string;
+  minorAmount: string;
+  exponent: number;
+  registryVersion: string;
+}
+
 export interface PaymentIntentPayload {
   id: string;
   userId: string;
@@ -25,6 +32,7 @@ export interface PaymentIntentPayload {
   instrumentId: number | null;
   amountGbp: number;
   amountCurrency: string;
+  money: MoneyPayload | null;
   status: PaymentIntentStatus;
   providerIntentRef: string | null;
   clientSecret: string | null;
@@ -57,6 +65,7 @@ export interface PayoutRequestPayload {
   payoutAccountId: number;
   amountGbp: number;
   amountCurrency: string;
+  money: MoneyPayload | null;
   status: 'requested' | 'processing' | 'paid' | 'failed' | 'cancelled';
   providerPayoutRef: string | null;
   failureReason: string | null;
@@ -86,6 +95,13 @@ export interface IzeQuotePayload {
   platformFeeAmount?: number;
   ratePerGram: number;
   rateSource: string;
+  money: MoneyPayload;
+  assetAmount: {
+    asset: '1ZE';
+    baseUnitAmount: string;
+    baseUnit: 'mg';
+    scale: 3;
+  };
 }
 
 export interface IzeFxQuotePayload {
@@ -131,6 +147,48 @@ interface CreatePaymentIntentResponse {
   ok: true;
   idempotent: boolean;
   intent: PaymentIntentPayload;
+}
+
+interface CreateIzeMintQuoteResponse {
+  ok: true;
+  operation: {
+    id: string;
+    state: string;
+    fiatCurrency: string;
+    fiatAmountMinor: number;
+    fiatAmount: number;
+    netFiatAmountMinor: number;
+    netFiatAmount: number;
+    platformFeeMinor: number;
+    platformFeeAmount: number;
+    izeAmountMg: number;
+    izeAmount: number;
+    ratePerGram: number;
+    rateSource: string;
+    rateExpiresAt: string;
+    paymentIntentId: string;
+  };
+  intent: PaymentIntentPayload;
+  quote: {
+    validForSeconds: number;
+    expiresAt: string;
+  };
+}
+
+export interface StripeIntentSheetConfiguration {
+  provider: 'stripe';
+  intentId: string;
+  channel: PaymentIntentChannel;
+  paymentIntentClientSecret: string;
+  customerId: string;
+  customerSessionClientSecret: string;
+  publishableKey: string;
+  merchantDisplayName: string;
+  merchantCountryCode: string;
+  currency: string;
+  returnUrl: string;
+  applePayEnabled: boolean;
+  googlePayEnabled: boolean;
 }
 
 interface ConfirmPaymentIntentResponse {
@@ -300,8 +358,7 @@ export async function createPaymentIntent(input: {
   gatewayId?: string;
   instrumentId?: number;
   channel: Extract<PaymentIntentChannel, 'wallet_topup' | 'wallet_withdrawal'>;
-  amountGbp: number;
-  amountCurrency?: string;
+  money: Pick<MoneyPayload, 'currency' | 'minorAmount'>;
   idempotencyKey?: string;
   metadata?: Record<string, unknown>;
 }) {
@@ -313,12 +370,38 @@ export async function createPaymentIntent(input: {
       gatewayId: input.gatewayId,
       instrumentId: input.instrumentId,
       channel: input.channel,
-      amountGbp: input.amountGbp,
-      amountCurrency: input.amountCurrency ?? 'GBP',
+      money: input.money,
       idempotencyKey: input.idempotencyKey,
       metadata: input.metadata,
     }),
   });
+}
+
+export async function createIzeMintQuote(input: {
+  userId?: string;
+  fiatAmount: number;
+  fiatCurrency: string;
+  gatewayId?: string;
+  instrumentId?: number;
+  idempotencyKey?: string;
+  metadata?: Record<string, unknown>;
+}) {
+  return fetchJson<CreateIzeMintQuoteResponse>('/wallet/1ze/mint/quote', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function createStripeIntentSheet(intentId: string) {
+  return fetchJson<StripeIntentSheetConfiguration & { ok: true }>(
+    `/v2/payments/intents/${encodeURIComponent(intentId)}/sheet`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    }
+  );
 }
 
 export async function confirmPaymentIntent(

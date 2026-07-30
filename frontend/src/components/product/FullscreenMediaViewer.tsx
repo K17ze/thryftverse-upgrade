@@ -139,6 +139,9 @@ function FullscreenImagePage({ uri, width, height, onClose }: FullscreenImagePag
 
 export interface FullscreenMediaViewerProps {
   images: string[];
+  /** Canonical video URLs supplied by the API. URL-suffix detection remains
+   * as a compatibility fallback for older callers. */
+  videoUris?: readonly string[];
   initialIndex: number;
   visible: boolean;
   onClose: () => void;
@@ -147,6 +150,7 @@ export interface FullscreenMediaViewerProps {
 
 export function FullscreenMediaViewer({
   images,
+  videoUris = [],
   initialIndex,
   visible,
   onClose,
@@ -154,6 +158,11 @@ export function FullscreenMediaViewer({
 }: FullscreenMediaViewerProps) {
   const { width, height } = useWindowDimensions();
   const [activeIndex, setActiveIndex] = useState(initialIndex);
+  const videoUriSet = React.useMemo(() => new Set(videoUris), [videoUris]);
+  const isVideo = React.useCallback(
+    (uri: string) => videoUriSet.has(uri) || isVideoUri(uri),
+    [videoUriSet],
+  );
 
   const onViewableItemsChanged = useCallback(({ viewableItems }: any) => {
     if (viewableItems.length > 0) {
@@ -177,7 +186,7 @@ export function FullscreenMediaViewer({
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={{ viewAreaCoveragePercentThreshold: 50 }}
         renderItem={({ item, index }) =>
-          isVideoUri(item) ? (
+          isVideo(item) ? (
             <View style={[styles.page, { width, height }]}>
               <Video
                 source={{ uri: item }}

@@ -229,13 +229,13 @@ export function CoOwnPriceChart({
     return (
       <View style={styles.inlineState}>
         <View style={styles.inlineStateTextCluster}>
-          <Ionicons name="cloud-offline-outline" size={18} color={colors.danger} style={styles.inlineStateIcon} />
+          <Ionicons name="cloud-offline-outline" size={18} color={colors.textMuted} style={styles.inlineStateIcon} />
           <View style={styles.inlineStateCopy}>
-            <Text style={[styles.inlineStateTitle, { color: colors.danger }]} numberOfLines={2}>
+            <Text style={[styles.inlineStateTitle, { color: colors.textSecondary }]} numberOfLines={1}>
               Price history unavailable
             </Text>
-            <Text style={[styles.inlineStateBody, { color: colors.textMuted }]} numberOfLines={3}>
-              We couldn't load settled trade data. Check your connection and try again.
+            <Text style={[styles.inlineStateBody, { color: colors.textMuted }]} numberOfLines={2}>
+              Settled trade data could not be loaded.
             </Text>
           </View>
         </View>
@@ -260,10 +260,10 @@ export function CoOwnPriceChart({
         <View style={styles.inlineStateTextCluster}>
           <Ionicons name="bar-chart-outline" size={18} color={colors.textMuted} style={styles.inlineStateIcon} />
           <View style={styles.inlineStateCopy}>
-            <Text style={[styles.inlineStateTitle, { color: colors.textSecondary }]} numberOfLines={2}>
+            <Text style={[styles.inlineStateTitle, { color: colors.textSecondary }]} numberOfLines={1}>
               No settled trade history yet
             </Text>
-            <Text style={[styles.inlineStateBody, { color: colors.textMuted }]} numberOfLines={3}>
+            <Text style={[styles.inlineStateBody, { color: colors.textMuted }]} numberOfLines={2}>
               The last price will update after a settled execution.
             </Text>
           </View>
@@ -688,7 +688,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Space.sm,
-    paddingVertical: Space.md,
+    paddingVertical: Space.sm,
   },
   inlineStateTextCluster: {
     flexDirection: 'row',
@@ -715,7 +715,7 @@ const styles = StyleSheet.create({
   retryBtn: {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs + 2,
-    minHeight: 36,
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },

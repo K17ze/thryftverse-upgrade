@@ -80,8 +80,8 @@ export function CoOwnRiskDisclosure({ risks = DEFAULT_RISKS, onReportIssue }: Co
           accessibilityLabel="Report an issue with this Co-Own asset"
           hitSlop={8}
         >
-          <Ionicons name="flag-outline" size={14} color={colors.textMuted} />
-          <Text style={[styles.reportText, { color: colors.textMuted }]}>Report an issue</Text>
+          <Ionicons name="flag-outline" size={14} color={colors.textSecondary} />
+          <Text style={[styles.reportText, { color: colors.textSecondary }]}>Report an issue</Text>
         </Pressable>
       ) : null}
     </View>
@@ -128,6 +128,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     paddingVertical: Space.xs,
+    minHeight: 44,
+    justifyContent: 'center',
     alignSelf: 'flex-start',
   },
   pressed: {
@@ -142,6 +144,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     paddingVertical: Space.xs,
+    minHeight: 44,
+    justifyContent: 'center',
     alignSelf: 'flex-start',
   },
   reportText: {

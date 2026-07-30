@@ -562,7 +562,17 @@ export default function SellScreen() {
         }
         const uploadedMedia = resolvePublishedMedia(mediaDraftItems, queue);
         const uploadedUrls = uploadedMedia.map((item) => item.url);
-        const coverImage = uploadedUrls[0] ?? '';
+        const verifiedQueueItems = queue.getItems();
+        const coverUpload = verifiedQueueItems.find(
+          (item) => item.state === 'uploaded'
+            && item.asset.kind === 'image'
+            && item.publicUrl
+            && item.finalizationId,
+        );
+        if (!coverUpload) {
+          throw new Error('A verified cover image is required before creating an auction.');
+        }
+        const coverImage = coverUpload.publicUrl!;
         const listingId = `listing_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
         await createListingOnApi({
           id: listingId,
@@ -571,6 +581,7 @@ export default function SellScreen() {
           description: trimmedDescription,
           priceGbp: numericPrice,
           imageUrl: coverImage,
+          coverFinalizationId: coverUpload.finalizationId!,
           status: 'active',
           category,
           brand: brand || undefined,
@@ -581,6 +592,12 @@ export default function SellScreen() {
           shippingPayer: shippingPayer || undefined,
         });
         for (let i = 0; i < uploadedUrls.length; i++) {
+          const verifiedUpload = verifiedQueueItems.find(
+            (item) => item.publicUrl === uploadedUrls[i] && item.finalizationId,
+          );
+          if (!verifiedUpload) {
+            throw new Error('Every auction media item must be verified before attachment.');
+          }
           await createListingImageOnApi({
             id: `${listingId}_img_${i}`,
             listingId,
@@ -588,6 +605,7 @@ export default function SellScreen() {
             sortOrder: i,
             mediaWidth: uploadedMedia[i]?.width,
             mediaHeight: uploadedMedia[i]?.height,
+            finalizationId: verifiedUpload.finalizationId!,
           });
         }
         clearSellDraft();
@@ -648,7 +666,17 @@ export default function SellScreen() {
 
       const uploadedMedia = resolvePublishedMedia(mediaDraftItems, queue);
       const uploadedUrls = uploadedMedia.map((item) => item.url);
-      const coverImage = uploadedUrls[0] ?? '';
+      const verifiedQueueItems = queue.getItems();
+      const coverUpload = verifiedQueueItems.find(
+        (item) => item.state === 'uploaded'
+          && item.asset.kind === 'image'
+          && item.publicUrl
+          && item.finalizationId,
+      );
+      if (!coverUpload) {
+        throw new Error('A verified cover image is required before publishing.');
+      }
+      const coverImage = coverUpload.publicUrl!;
       let listingId = publishedListingIdRef.current;
 
       if (!listingId) {
@@ -661,6 +689,7 @@ export default function SellScreen() {
           description: trimmedDescription,
           priceGbp: numericPrice,
           imageUrl: coverImage,
+          coverFinalizationId: coverUpload.finalizationId!,
           status: 'active',
           category,
           brand: brand || undefined,
@@ -675,6 +704,12 @@ export default function SellScreen() {
 
       setPublicationStage('attaching_media');
       for (let i = 0; i < uploadedUrls.length; i++) {
+        const verifiedUpload = verifiedQueueItems.find(
+          (item) => item.publicUrl === uploadedUrls[i] && item.finalizationId,
+        );
+        if (!verifiedUpload) {
+          throw new Error('Every listing media item must be verified before attachment.');
+        }
         await createListingImageOnApi({
           id: `${listingId}_img_${i}`,
           listingId,
@@ -682,6 +717,7 @@ export default function SellScreen() {
           sortOrder: i,
           mediaWidth: uploadedMedia[i]?.width,
           mediaHeight: uploadedMedia[i]?.height,
+          finalizationId: verifiedUpload.finalizationId!,
         });
       }
 

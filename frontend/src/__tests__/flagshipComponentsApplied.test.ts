@@ -226,10 +226,11 @@ describe('UI-22B settings reconstruction architecture guardrails', () => {
     expect(src).toContain('variant="error"');
   });
 
-  it('PaymentsScreen has security trust note', () => {
+  it('PaymentsScreen states the provider tokenisation boundary precisely', () => {
     const src = readSrc('screens/PaymentsScreen.tsx');
     expect(src).toContain('trustNote');
-    expect(src).toContain('Your payment details are protected by industry-standard encryption');
+    expect(src).toContain('Thryftverse stores provider references and limited display details');
+    expect(src).toContain("Card entry and authentication are handled in Stripe's payment sheet");
   });
 
   // SKIPPED: Obsolete static guardrail — PostageScreen already uses FlagshipScreen/Header/State

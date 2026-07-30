@@ -54,6 +54,9 @@ export interface CommerceDetailIdentityProps {
   family?: CommerceDetailFamily;
   /** Density — compact uses 26pt title, standard uses 28pt. */
   density?: CommerceDetailIdentityDensity;
+  /** Media treatment mirrors the editorial captions used by the auction
+   * and Co-Own discovery surfaces. */
+  tone?: 'canvas' | 'media';
 }
 
 export function CommerceDetailIdentity({
@@ -65,8 +68,10 @@ export function CommerceDetailIdentity({
   familyChip,
   family = 'direct',
   density = 'standard',
+  tone = 'canvas',
 }: CommerceDetailIdentityProps) {
   const { colors } = useAppTheme();
+  const isMedia = tone === 'media';
 
   // Per spec 05 §3: only Direct may show price in identity.
   // Auction and Co-Own own their dominant value in the transaction
@@ -76,16 +81,34 @@ export function CommerceDetailIdentity({
 
   const titleStyle = [
     styles.title,
+    family === 'direct' && styles.titleDirect,
+    family === 'auction' && styles.titleAuction,
+    family === 'co_own' && styles.titleCoOwn,
     density === 'compact' && styles.titleCompact,
-    { color: colors.textPrimary },
+    isMedia && styles.titleMedia,
+    { color: isMedia ? '#FFFFFF' : colors.textPrimary },
   ];
 
   return (
-    <View style={styles.container}>
+    <View
+      style={[
+        styles.container,
+        family === 'auction' && styles.containerAuction,
+        family === 'co_own' && styles.containerCoOwn,
+        isMedia && styles.containerMedia,
+      ]}
+    >
       {(eyebrow || familyChip) && (
         <View style={styles.eyebrowRow}>
           {eyebrow ? (
-            <Text style={[styles.eyebrow, { color: colors.textSecondary }]} numberOfLines={1}>
+            <Text
+              style={[
+                styles.eyebrow,
+                isMedia && styles.eyebrowMedia,
+                { color: isMedia ? 'rgba(255,255,255,0.76)' : colors.textSecondary },
+              ]}
+              numberOfLines={1}
+            >
               {eyebrow}
             </Text>
           ) : null}
@@ -105,7 +128,11 @@ export function CommerceDetailIdentity({
         <View style={styles.valueRow}>
           {showPrimaryValue ? (
             <Text
-              style={[styles.primaryValue, { color: colors.textPrimary }]}
+              style={[
+                styles.primaryValue,
+                isMedia && styles.primaryValueMedia,
+                { color: isMedia ? '#FFFFFF' : colors.textPrimary },
+              ]}
               accessibilityRole="text"
             >
               {showPrimaryValue}
@@ -113,7 +140,11 @@ export function CommerceDetailIdentity({
           ) : null}
           {secondaryLine ? (
             <Text
-              style={[styles.secondaryLine, { color: colors.textSecondary }]}
+              style={[
+                styles.secondaryLine,
+                isMedia && styles.secondaryLineMedia,
+                { color: isMedia ? 'rgba(255,255,255,0.8)' : colors.textSecondary },
+              ]}
               numberOfLines={1}
             >
               {secondaryLine}
@@ -124,7 +155,11 @@ export function CommerceDetailIdentity({
 
       {interestSignal ? (
         <Text
-          style={[styles.interest, { color: colors.textMuted }]}
+          style={[
+            styles.interest,
+            isMedia && styles.interestMedia,
+            { color: isMedia ? 'rgba(255,255,255,0.72)' : colors.textMuted },
+          ]}
           numberOfLines={1}
         >
           {interestSignal}
@@ -140,6 +175,12 @@ const styles = StyleSheet.create({
     paddingTop: Space.md,
     paddingBottom: Space.sm,
   },
+  containerMedia: {
+    maxWidth: '88%',
+    paddingHorizontal: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
+  },
   eyebrowRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -152,11 +193,46 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
     letterSpacing: Type.metaElevated.letterSpacing,
   },
+  eyebrowMedia: {
+    fontSize: 10,
+    lineHeight: 14,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
   title: {
     fontSize: 28,
     lineHeight: 34,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.5,
+  },
+  titleDirect: {
+    fontSize: 30,
+    lineHeight: 35,
+    letterSpacing: -0.65,
+  },
+  titleAuction: {
+    fontSize: 26,
+    lineHeight: 31,
+    letterSpacing: -0.4,
+  },
+  titleCoOwn: {
+    fontSize: 25,
+    lineHeight: 30,
+    letterSpacing: -0.3,
+  },
+  titleMedia: {
+    fontSize: 27,
+    lineHeight: 31,
+    letterSpacing: -0.6,
+    textShadowColor: 'rgba(0,0,0,0.28)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 8,
+  },
+  containerAuction: {
+    paddingBottom: Space.xs,
+  },
+  containerCoOwn: {
+    paddingBottom: Space.xs,
   },
   // Per spec 05 §3: compact width uses 26pt title with tighter line
   // height so long titles do not crowd the first viewport.
@@ -180,11 +256,19 @@ const styles = StyleSheet.create({
     letterSpacing: Type.priceLarge.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
+  primaryValueMedia: {
+    fontSize: 22,
+    lineHeight: 27,
+    letterSpacing: -0.3,
+  },
   secondaryLine: {
     fontSize: Type.body.size,
     lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.regular,
     flexShrink: 1,
+  },
+  secondaryLineMedia: {
+    fontFamily: Typography.family.medium,
   },
   // Interest signal sits on its own line below the value row — a
   // quiet metadata line, not a third member of the value cluster.
@@ -193,5 +277,8 @@ const styles = StyleSheet.create({
     lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
     marginTop: Space.xs,
+  },
+  interestMedia: {
+    fontFamily: Typography.family.medium,
   },
 });

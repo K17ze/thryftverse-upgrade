@@ -59,7 +59,12 @@ export function CommerceDetailSection({
     styles.label,
     variant === 'editorial' && styles.labelEditorial,
     variant === 'legal' && styles.labelLegal,
-    { color: colors.textSecondary },
+    {
+      color:
+        variant === 'editorial' || variant === 'discovery'
+          ? colors.textPrimary
+          : colors.textSecondary,
+    },
   ];
 
   // continuation: no heading or divider — children render directly.
@@ -93,12 +98,12 @@ export function CommerceDetailSection({
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.lg,
+    paddingTop: Space.md + 4,
     paddingBottom: Space.sm,
   },
   // editorial: stronger heading, more breathing room, no divider.
   containerEditorial: {
-    paddingTop: Space.xl,
+    paddingTop: Space.lg,
     paddingBottom: Space.sm,
   },
   // compact: disclosure row with minimal vertical spacing.
@@ -135,11 +140,11 @@ const styles = StyleSheet.create({
     marginBottom: Space.sm,
   },
   label: {
-    fontSize: Type.metaElevated.size,
-    lineHeight: Type.metaElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.metaElevated.letterSpacing,
-    textTransform: 'uppercase',
+    letterSpacing: Type.caption.letterSpacing,
+    textTransform: 'none',
   },
   // editorial: stronger heading — slightly larger, tighter tracking.
   labelEditorial: {

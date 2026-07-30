@@ -29,8 +29,12 @@ import { AppButton } from '../components/ui/AppButton';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { CachedImage } from '../components/CachedImage';
 import { fetchListingByIdFromApi } from '../services/listingsApi';
-import { createListingOfferOnApi } from '../services/listingOffersApi';
+import {
+  counterListingOfferOnApi,
+  createListingOfferOnApi,
+} from '../services/listingOffersApi';
 import { haptics } from '../utils/haptics';
+import { createStableId } from '../utils/createStableId';
 
 type Props = StackScreenProps<RootStackParamList, 'MakeOffer'>;
 
@@ -251,6 +255,8 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
   const isCounterOffer = route.params.counterOffer ?? false;
   const previousOffer = route.params.previousOffer;
   const counterRound = route.params.counterRound ?? 0;
+  const parentOfferId = route.params.parentOfferId;
+  const idempotencyKeyRef = React.useRef<string | null>(null);
 
   React.useEffect(() => {
     let mounted = true;
@@ -309,16 +315,28 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
       // Persist the offer server-side so expiry, accept/decline and counter
       // chains are authoritative across devices. The server computes
       // expires_at — the frontend only suggests an expiryHours window.
-      const offer = await createListingOfferOnApi({
-        listingId: itemId,
-        offerPriceGbp: numericOfferGbp,
-        expiryHours,
-        counterRound,
-        metadata: {
-          originalPriceGbp: price,
-          source: isCounterOffer ? 'counter' : 'initial',
-        },
-      });
+      if (!idempotencyKeyRef.current) {
+        idempotencyKeyRef.current = createStableId(isCounterOffer ? 'counter' : 'offer');
+      }
+      if (isCounterOffer && !parentOfferId) {
+        throw new Error('The original offer is unavailable. Refresh the conversation and try again.');
+      }
+      const offer = isCounterOffer
+        ? await counterListingOfferOnApi(parentOfferId!, {
+          offerPriceGbp: numericOfferGbp,
+          expiryHours,
+          idempotencyKey: idempotencyKeyRef.current,
+        })
+        : await createListingOfferOnApi({
+          listingId: itemId,
+          offerPriceGbp: numericOfferGbp,
+          expiryHours,
+          idempotencyKey: idempotencyKeyRef.current,
+          metadata: {
+            originalPriceGbp: price,
+            source: 'initial',
+          },
+        });
 
       const offerText = isCounterOffer
         ? `Counter-offer: ${formatFromFiat(numericOfferGbp, 'GBP')} (was ${formatFromFiat(previousOffer ?? 0, 'GBP')}). Valid for ${expiryHours}h.`
@@ -333,7 +351,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
           price: numericOfferGbp,
           originalPrice: price,
           expiresAt: offer.expiresAt,
-          counterRound,
+          counterRound: offer.counterRound,
         },
       });
       show('Opening chat to send your offer.', 'info');

@@ -79,10 +79,14 @@ describe('auction-detail flagship closure (spec 02_AUCTION)', () => {
     it('dock does not repeat terminal result message', () => {
       // The dock should not have a stateBadge with the terminal message
       // (the body owns the result). The dock carries the action only.
-      const dockSection = src.match(/if \(isTerminal\)[\s\S]*?return \(\s*<CommerceDetailStateDock[\s\S]*?\/>\s*\)/);
-      expect(dockSection).toBeTruthy();
-      expect(dockSection![0]).not.toContain('terminalMessage');
-      expect(dockSection![0]).not.toContain('stateBadge');
+      const terminalStart = src.indexOf('if (isTerminal)');
+      const terminalEnd = src.indexOf('// Seller view', terminalStart);
+      const dockSection = src.slice(terminalStart, terminalEnd);
+      expect(terminalStart).toBeGreaterThan(-1);
+      expect(terminalEnd).toBeGreaterThan(terminalStart);
+      expect(dockSection).toContain('primaryAction={terminalAction}');
+      expect(dockSection).not.toContain('terminalMessage');
+      expect(dockSection).not.toContain('stateBadge');
     });
 
     it('body owns detailed terminal result', () => {
@@ -121,9 +125,11 @@ describe('auction-detail flagship closure (spec 02_AUCTION)', () => {
 
   // ── §7 Multi-media support ──
   describe('multi-media support', () => {
-    it('uses auctionMediaImages derived from canonical media array', () => {
-      expect(src).toContain('auctionMediaImages');
+    it('uses auctionMediaItems derived from the canonical image/video array', () => {
+      expect(src).toContain('auctionMediaItems');
+      expect(src).toContain('auctionVideoUris');
       expect(src).toContain('mediaItems');
+      expect(src).not.toContain(".filter((m) => m.type === 'image')");
     });
 
     it('falls back to imageUrl for compatibility', () => {

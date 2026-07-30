@@ -33,6 +33,7 @@ export interface ListingOffer {
   cancelledAt: string | null;
   conversationId: string | null;
   parentOfferId: string | null;
+  offeredByUserId: string;
   metadata: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
@@ -43,9 +44,24 @@ export interface CreateListingOfferInput {
   offerPriceGbp: number;
   expiryHours?: number;
   conversationId?: string;
-  parentOfferId?: string;
-  counterRound?: number;
+  idempotencyKey: string;
   metadata?: Record<string, unknown>;
+}
+
+export interface AcceptedOfferCheckout {
+  orderId: string;
+  reservationId: string;
+  reservationStatus: 'active' | 'converted' | 'expired' | 'cancelled';
+  expiresAt: string | null;
+  subtotalGbp?: number;
+  platformChargeGbp?: number;
+  totalGbp?: number;
+}
+
+export interface AcceptListingOfferResult {
+  status: 'accepted';
+  idempotentReplay: boolean;
+  checkout: AcceptedOfferCheckout;
 }
 
 export async function createListingOfferOnApi(
@@ -61,9 +77,33 @@ export async function createListingOfferOnApi(
         offerPriceGbp: input.offerPriceGbp,
         expiryHours: input.expiryHours ?? 48,
         conversationId: input.conversationId,
-        parentOfferId: input.parentOfferId,
-        counterRound: input.counterRound ?? 0,
+        idempotencyKey: input.idempotencyKey,
         metadata: input.metadata ?? {},
+      }),
+    }
+  );
+  return payload.offer;
+}
+
+export async function counterListingOfferOnApi(
+  parentOfferId: string,
+  input: {
+    offerPriceGbp: number;
+    expiryHours?: number;
+    conversationId?: string;
+    idempotencyKey: string;
+  }
+): Promise<ListingOffer> {
+  const payload = await fetchJson<{ ok: true; offer: ListingOffer }>(
+    `/offers/${encodeURIComponent(parentOfferId)}/counter`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        offerPriceGbp: input.offerPriceGbp,
+        expiryHours: input.expiryHours ?? 48,
+        conversationId: input.conversationId,
+        idempotencyKey: input.idempotencyKey,
       }),
     }
   );
@@ -97,12 +137,16 @@ export async function fetchMyOffersFromApi(
   return payload.offers;
 }
 
-export async function acceptListingOfferOnApi(offerId: string): Promise<{ status: string }> {
-  const payload = await fetchJson<{ ok: true; status: string }>(
+export async function acceptListingOfferOnApi(offerId: string): Promise<AcceptListingOfferResult> {
+  const payload = await fetchJson<{ ok: true } & AcceptListingOfferResult>(
     `/offers/${encodeURIComponent(offerId)}/accept`,
     { method: 'POST' }
   );
-  return { status: payload.status };
+  return {
+    status: payload.status,
+    idempotentReplay: payload.idempotentReplay,
+    checkout: payload.checkout,
+  };
 }
 
 export async function declineListingOfferOnApi(offerId: string): Promise<{ status: string }> {

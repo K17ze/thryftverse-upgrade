@@ -38,6 +38,12 @@ export interface RecommendationSection {
 
 export interface RecommendationResponse {
   listingId: string;
+  decision?: {
+    policyVersion: string;
+    capabilityLevel: 'heuristic_baseline';
+    trainedModel: false;
+    generatedAt: string;
+  };
   sections: RecommendationSection[];
 }
 

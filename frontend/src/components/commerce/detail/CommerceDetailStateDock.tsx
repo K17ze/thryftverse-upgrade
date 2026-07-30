@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Reanimated from 'react-native-reanimated';
 import { FadeIn } from 'react-native-reanimated';
 import { useAppTheme } from '../../../theme/ThemeContext';
-import { Space, Elevation, Type, Radius, Typography } from '../../../theme/designTokens';
+import { Space, Type, Radius, Typography } from '../../../theme/designTokens';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useHaptic } from '../../../hooks/useHaptic';
 import type { CommerceDetailDockLayout } from './types';
@@ -111,6 +111,7 @@ export function CommerceDetailStateDock({
   // Per spec 05 §4: auto stacks on compact widths to prevent label
   // truncation and giant pill overflow.
   const hasSecondary = !!secondaryAction;
+  const primaryIsEmphasized = primaryAction?.primary !== false;
   const shouldStack =
     layout === 'stacked' ||
     (layout === 'auto' && hasSecondary && screenWidth < COMPACT_STACK_THRESHOLD);
@@ -127,7 +128,7 @@ export function CommerceDetailStateDock({
         styles.container,
         {
           backgroundColor: elevated ? colors.surfaceElevated : colors.background,
-          paddingBottom: Math.max(safeBottom + Space.sm, Space.md),
+          paddingBottom: Math.max(safeBottom + Space.xs, Space.sm),
           borderTopColor: colors.border,
         },
       ]}
@@ -149,6 +150,14 @@ export function CommerceDetailStateDock({
               numberOfLines={1}
             >
               {valueLabel}
+            </Text>
+          ) : null}
+          {subtitle ? (
+            <Text
+              style={[styles.subtitle, { color: colors.textSecondary }]}
+              numberOfLines={2}
+            >
+              {subtitle}
             </Text>
           ) : null}
         </View>
@@ -194,7 +203,11 @@ export function CommerceDetailStateDock({
                 {
                   backgroundColor: primaryAction.disabled
                     ? colors.surfaceAlt
-                    : colors.brand,
+                    : primaryIsEmphasized
+                      ? colors.brand
+                      : colors.background,
+                  borderColor: colors.border,
+                  borderWidth: primaryIsEmphasized ? 0 : 1,
                 },
                 pressed && !primaryAction.disabled && styles.pressed,
               ]}
@@ -211,7 +224,9 @@ export function CommerceDetailStateDock({
                   {
                     color: primaryAction.disabled
                       ? colors.textMuted
-                      : colors.textInverse,
+                      : primaryIsEmphasized
+                        ? colors.textInverse
+                        : colors.textPrimary,
                   },
                 ]}
                 numberOfLines={1}
@@ -222,14 +237,6 @@ export function CommerceDetailStateDock({
           ) : null}
         </View>
       </View>
-      {subtitle ? (
-        <Text
-          style={[styles.subtitle, { color: colors.textSecondary }]}
-          numberOfLines={2}
-        >
-          {subtitle}
-        </Text>
-      ) : null}
     </View>
   );
 
@@ -256,16 +263,15 @@ const styles = StyleSheet.create({
     width: '100%',
     minWidth: 0,
     paddingHorizontal: Space.md,
-    paddingTop: Space.sm + 2,
+    paddingTop: Space.xs,
     borderTopWidth: StyleSheet.hairlineWidth,
-    ...Elevation.floating,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Space.md,
-    minHeight: 48,
+    minHeight: 44,
   },
   // Per spec 05 §4: stacked layout — value cluster on top, actions
   // below in a full-width row. Prevents label truncation on compact
@@ -274,7 +280,7 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     alignItems: 'stretch',
     gap: Space.sm,
-    minHeight: 48,
+    minHeight: 44,
   },
   valueCluster: {
     flexDirection: 'column',
@@ -311,18 +317,18 @@ const styles = StyleSheet.create({
   // Per spec 05 §5: restrained radii — medium radius (Radius.md = 8)
   // for primary commerce action, not radius 24.
   primaryAction: {
-    height: 48,
-    paddingHorizontal: Space.lg,
+    height: 44,
+    paddingHorizontal: Space.md,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 120,
+    minWidth: 112,
   },
   // Stacked primary: flexes to consume available width so the label
   // never truncates on compact widths.
   primaryActionStacked: {
-    height: 48,
-    paddingHorizontal: Space.lg,
+    height: 44,
+    paddingHorizontal: Space.md,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -337,7 +343,7 @@ const styles = StyleSheet.create({
   // Per spec 05 §5: secondary is a quiet outlined control with medium
   // radius, not a giant pill.
   secondaryAction: {
-    height: 48,
+    height: 44,
     paddingHorizontal: Space.md,
     borderRadius: Radius.md,
     alignItems: 'center',
@@ -345,7 +351,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   secondaryActionStacked: {
-    height: 48,
+    height: 44,
     paddingHorizontal: Space.md,
     borderRadius: Radius.md,
     alignItems: 'center',
@@ -366,6 +372,5 @@ const styles = StyleSheet.create({
     fontSize: Type.caption.size,
     lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
-    marginTop: Space.xs,
   },
 });

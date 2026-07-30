@@ -1,12 +1,12 @@
 import React from 'react';
 import { View, StyleSheet, Text } from 'react-native';
 import { useAppTheme } from '../../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../../theme/designTokens';
+import { Space, Type, Typography } from '../../../theme/designTokens';
 import type { CommerceDetailFamily } from './types';
 
 /**
- * Family transaction surface — the one strongly contained module near
- * the top of the page.
+ * Family transaction composition — one coherent market/action module
+ * near the top of the page.
  *
  * Per spec 02:
  *   - Direct: price + protection + availability.
@@ -23,10 +23,10 @@ import type { CommerceDetailFamily } from './types';
  *   - Co-Own: structured market grid, tabular bid/ask, precise status
  *     row, no crypto visual gimmicks.
  *
- * This is the only place a strong card radius is justified near the
- * top of the page. The surface is a single composed block, not several
- * adjacent cards. Family screens populate it via children + the
- * structured props so the visual grammar stays shared.
+ * The composition stays flat on the page canvas. Hairlines and spacing,
+ * rather than a generic rounded panel, express the relationships between
+ * price, market depth and status. Family screens populate it via children
+ * plus the structured props so the visual grammar stays shared.
  */
 export interface CommerceDetailTransactionSurfaceProps {
   /** Optional dominant value (current bid / last trade / price). */
@@ -46,8 +46,8 @@ export interface CommerceDetailTransactionSurfaceProps {
   /** When true, the surface uses the elevated surface fill. Useful for
    * dark-mode parity on critical state. */
   elevated?: boolean;
-  /** Family variant — controls containment, radius and numeric
-   * composition weight. Defaults to `direct` for backward compatibility. */
+  /** Family variant — controls rhythm and numeric composition weight.
+   * Defaults to `direct` for backward compatibility. */
   family?: CommerceDetailFamily;
 }
 
@@ -64,10 +64,10 @@ export function CommerceDetailTransactionSurface({
 }: CommerceDetailTransactionSurfaceProps) {
   const { colors } = useAppTheme();
 
-  // Per spec 05 §1: family-aware containment.
-  //   - direct: near-flat, minimal radius, subtle surface contrast.
-  //   - auction: contained, medium radius, stronger numeric weight.
-  //   - co_own: contained, medium radius, structured market grid.
+  // Per spec 05 §1: family-aware composition.
+  //   - direct: quiet price rhythm.
+  //   - auction: stronger numeric weight.
+  //   - co_own: structured market grid.
   const familyContainerStyle =
     family === 'direct'
       ? styles.containerDirect
@@ -75,8 +75,46 @@ export function CommerceDetailTransactionSurface({
         ? styles.containerAuction
         : styles.containerCoOwn;
 
-  const familyRadius =
-    family === 'direct' ? Radius.lg : Radius.xl;
+  const primaryContent = (primaryLabel || primaryValue) ? (
+    <View style={[styles.primaryRow, family === 'co_own' && styles.primaryRowCoOwn]}>
+      {primaryLabel ? (
+        <Text style={[styles.label, { color: colors.textSecondary }]} numberOfLines={1}>
+          {primaryLabel}
+        </Text>
+      ) : null}
+      {primaryValue ? (
+        <Text
+          style={[
+            styles.primaryValue,
+            family === 'auction' && styles.primaryValueAuction,
+            family === 'co_own' && styles.primaryValueCoOwn,
+            { color: colors.textPrimary },
+          ]}
+          accessibilityRole="text"
+          adjustsFontSizeToFit
+          minimumFontScale={0.78}
+          numberOfLines={1}
+        >
+          {primaryValue}
+        </Text>
+      ) : null}
+    </View>
+  ) : null;
+
+  const secondaryContent = (secondaryLabel || secondaryValue) ? (
+    <View style={[styles.secondaryRow, family === 'auction' && styles.secondaryRowAuction]}>
+      {secondaryLabel ? (
+        <Text style={[styles.secondaryLabel, { color: colors.textSecondary }]} numberOfLines={1}>
+          {secondaryLabel}
+        </Text>
+      ) : null}
+      {secondaryValue ? (
+        <Text style={[styles.secondaryValue, { color: colors.textPrimary }]} numberOfLines={1}>
+          {secondaryValue}
+        </Text>
+      ) : null}
+    </View>
+  ) : null;
 
   return (
     <View
@@ -84,46 +122,21 @@ export function CommerceDetailTransactionSurface({
         styles.container,
         familyContainerStyle,
         {
-          backgroundColor: elevated ? colors.surfaceElevated : colors.surface,
-          borderRadius: familyRadius,
+          backgroundColor: elevated ? colors.surfaceElevated : colors.background,
         },
       ]}
       accessibilityRole="summary"
     >
-      {(primaryLabel || primaryValue) && (
-        <View style={styles.primaryRow}>
-          {primaryLabel ? (
-            <Text style={[styles.label, { color: colors.textSecondary }]} numberOfLines={1}>
-              {primaryLabel}
-            </Text>
-          ) : null}
-          {primaryValue ? (
-            <Text
-              style={[styles.primaryValue, { color: colors.textPrimary }]}
-              accessibilityRole="text"
-            >
-              {primaryValue}
-            </Text>
-          ) : null}
+      {family === 'auction' && secondaryContent ? (
+        <View style={styles.auctionHeadline}>
+          {primaryContent}
+          {secondaryContent}
         </View>
-      )}
-
-      {(secondaryLabel || secondaryValue) && (
-        <View style={styles.secondaryRow}>
-          {secondaryLabel ? (
-            <Text style={[styles.secondaryLabel, { color: colors.textSecondary }]} numberOfLines={1}>
-              {secondaryLabel}
-            </Text>
-          ) : null}
-          {secondaryValue ? (
-            <Text
-              style={[styles.secondaryValue, { color: colors.textPrimary }]}
-              numberOfLines={1}
-            >
-              {secondaryValue}
-            </Text>
-          ) : null}
-        </View>
+      ) : (
+        <>
+          {primaryContent}
+          {secondaryContent}
+        </>
       )}
 
       {children}
@@ -148,24 +161,25 @@ export function CommerceDetailTransactionSurface({
 const styles = StyleSheet.create({
   container: {
     marginHorizontal: Space.md,
-    marginTop: Space.sm,
-    padding: Space.md,
+    marginTop: Space.md,
+    paddingHorizontal: 0,
   },
-  // Per spec 05 §1: Direct is near-flat — subtle surface contrast and
-  // lighter padding so it reads as a quiet confidence block, not a
-  // dashboard card.
+  // Direct uses a quiet, near-flat price rhythm.
   containerDirect: {
-    padding: Space.sm + 2,
+    paddingHorizontal: 0,
+    paddingVertical: Space.sm,
+    borderWidth: 0,
   },
-  // Auction has stronger numeric composition — standard padding keeps
-  // the current bid dominant with breathing room for the countdown.
+  // Auction gives the current bid breathing room without introducing
+  // another visual surface.
   containerAuction: {
-    padding: Space.md,
+    paddingTop: Space.sm,
+    paddingBottom: 0,
   },
-  // Co-Own uses a structured market grid — standard padding with
-  // slightly more vertical room for the bid/ask row.
+  // Co-Own uses a structured market grid on the same page canvas.
   containerCoOwn: {
-    padding: Space.md,
+    paddingTop: Space.sm,
+    paddingBottom: 0,
   },
   // Primary row: label sits quietly above the dominant value. The
   // value is the hero of this surface — it does not compete with the
@@ -174,12 +188,15 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     gap: 2,
   },
+  primaryRowCoOwn: {
+    gap: 4,
+  },
   label: {
-    fontSize: Type.metaElevated.size,
-    lineHeight: Type.metaElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.metaElevated.letterSpacing,
-    textTransform: 'uppercase',
+    letterSpacing: Type.caption.letterSpacing,
+    textTransform: 'none',
   },
   primaryValue: {
     fontSize: Type.priceLarge.size,
@@ -188,6 +205,22 @@ const styles = StyleSheet.create({
     letterSpacing: Type.priceLarge.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
+  primaryValueAuction: {
+    fontSize: 34,
+    lineHeight: 40,
+    letterSpacing: -0.8,
+  },
+  primaryValueCoOwn: {
+    fontSize: 28,
+    lineHeight: 34,
+    letterSpacing: -0.45,
+  },
+  auctionHeadline: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: Space.md,
+  },
   secondaryRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
@@ -195,6 +228,14 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     marginTop: Space.sm,
     flexWrap: 'wrap',
+  },
+  secondaryRowAuction: {
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    justifyContent: 'flex-end',
+    marginTop: 0,
+    gap: 2,
+    flexShrink: 0,
   },
   secondaryLabel: {
     fontSize: Type.body.size,

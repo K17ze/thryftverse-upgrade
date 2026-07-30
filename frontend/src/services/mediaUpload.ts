@@ -2,6 +2,7 @@ import { fetchJson } from '../lib/apiClient';
 import { MediaUploadAsset } from '../utils/mediaUploadAsset';
 
 export interface PresignResponse {
+  uploadIntentId: string;
   bucket: string;
   key: string;
   url: string;
@@ -10,6 +11,7 @@ export interface PresignResponse {
   sizeBytes: number;
   maxSizeBytes: number;
   expiresInSeconds: number;
+  expiresAt: string;
 }
 
 export interface UploadFinalizationInput {
@@ -44,6 +46,8 @@ export interface UploadFinalization {
   contentType: string;
   sizeBytes: number;
   publicUrl: string;
+  deliveryStatus?: 'unmoderated_source_object';
+  publicationGateRequired?: boolean;
   status: 'pending' | 'finalized' | 'failed';
   scope: string;
   scopeRefId: string | null;
@@ -51,7 +55,31 @@ export interface UploadFinalization {
   failureReason: string | null;
   createdAt: string;
   updatedAt: string;
+  mediaAsset?: MediaAssetReceipt | null;
 }
+
+export type MediaAssetReceipt = {
+  id: string;
+  status:
+    | 'integrity_verified'
+    | 'scan_pending'
+    | 'processing'
+    | 'moderation_pending'
+    | 'publishable'
+    | 'published'
+    | 'upload_expired'
+    | 'integrity_failed'
+    | 'quarantined'
+    | 'rejected'
+    | 'processing_failed'
+    | 'revoked'
+    | 'deleted';
+  mediaKind: 'image' | 'video' | 'document';
+  canonicalUrl: string | null;
+  publishable: boolean;
+  failureReason?: string | null;
+  quarantineReason?: string | null;
+};
 
 export async function presignUpload(
   fileName: string,
@@ -125,8 +153,73 @@ export interface UploadedMedia {
   publicUrl: string;
   objectKey: string;
   finalizationId: string;
+  mediaAssetId?: string;
   sizeBytes: number;
   contentType: string;
+}
+
+const MEDIA_PROCESSING_TIMEOUT_MS = 90_000;
+const MEDIA_PROCESSING_POLL_MS = 1_500;
+
+function waitFor(delayMs: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, delayMs);
+  });
+}
+
+async function fetchMediaAsset(assetId: string): Promise<MediaAssetReceipt> {
+  const payload = await fetchJson<{ ok: true; asset: MediaAssetReceipt }>(
+    `/media/assets/${encodeURIComponent(assetId)}`,
+  );
+  return payload.asset;
+}
+
+async function publishMediaAsset(assetId: string): Promise<MediaAssetReceipt> {
+  const payload = await fetchJson<{ ok: true; asset: MediaAssetReceipt }>(
+    `/media/assets/${encodeURIComponent(assetId)}/publish`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    },
+  );
+  return payload.asset;
+}
+
+async function waitForPublishableMedia(
+  assetId: string,
+): Promise<MediaAssetReceipt> {
+  const deadline = Date.now() + MEDIA_PROCESSING_TIMEOUT_MS;
+  const terminalFailureStatuses = new Set<MediaAssetReceipt['status']>([
+    'upload_expired',
+    'integrity_failed',
+    'quarantined',
+    'rejected',
+    'revoked',
+    'deleted',
+  ]);
+
+  while (Date.now() < deadline) {
+    const asset = await fetchMediaAsset(assetId);
+    if (asset.status === 'published') {
+      return asset;
+    }
+    if (asset.status === 'publishable') {
+      return publishMediaAsset(assetId);
+    }
+    if (terminalFailureStatuses.has(asset.status)) {
+      throw new Error(
+        asset.failureReason
+        ?? asset.quarantineReason
+        ?? `Media processing ended with status ${asset.status}`,
+      );
+    }
+    await waitFor(MEDIA_PROCESSING_POLL_MS);
+  }
+
+  throw new Error(
+    'Media is still being checked. Keep this draft and try publishing again shortly.',
+  );
 }
 
 export async function uploadMedia(fileUri: string, folder?: string): Promise<UploadedMedia>;
@@ -184,10 +277,23 @@ export async function uploadMedia(
     );
   }
 
+  let resolvedPublicUrl = presign.publicUrl;
+  if (finalization.publicationGateRequired) {
+    if (!finalization.mediaAsset?.id) {
+      throw new Error('The media processor did not return a canonical asset reference');
+    }
+    const publishedAsset = await waitForPublishableMedia(finalization.mediaAsset.id);
+    if (!publishedAsset.canonicalUrl) {
+      throw new Error('The published media asset has no canonical delivery URL');
+    }
+    resolvedPublicUrl = publishedAsset.canonicalUrl;
+  }
+
   return {
-    publicUrl: presign.publicUrl,
+    publicUrl: resolvedPublicUrl,
     objectKey: presign.key,
     finalizationId: finalization.id,
+    mediaAssetId: finalization.mediaAsset?.id,
     sizeBytes: blob.size,
     contentType,
   };
