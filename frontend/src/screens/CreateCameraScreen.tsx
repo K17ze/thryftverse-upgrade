@@ -96,8 +96,13 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
   }, [activeIndex, indicatorX, reducedMotion, segmentWidth]);
 
   // ── Swipe gesture to switch modes (Snapchat/TikTok pattern) ──
+  // Use a ref to hold the current mode so the PanResponder doesn't capture
+  // a stale closure of switchMode.
+  const modeRef = useRef(mode);
+  useEffect(() => { modeRef.current = mode; }, [mode]);
+
   const switchMode = useCallback((direction: -1 | 1) => {
-    const currentIndex = MODES.findIndex((m) => m.key === mode);
+    const currentIndex = MODES.findIndex((m) => m.key === modeRef.current);
     const nextIndex = currentIndex + direction;
     if (nextIndex < 0 || nextIndex >= MODES.length) return;
     haptic.selection();
@@ -109,11 +114,14 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
       ]).start();
     }
     setMode(MODES[nextIndex].key);
-  }, [haptic, mode, modeTransition, reducedMotion]);
+  }, [haptic, modeTransition, reducedMotion]);
 
   const panResponder = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_evt, gestureState) => {
+      // Use capture phase to intercept swipes BEFORE the camera's tap-to-focus
+      // Pressable claims the touch responder. This is the key fix — without
+      // capture, the inner Pressable eats all touches and swipe never fires.
+      onMoveShouldSetPanResponderCapture: (_evt, gestureState) => {
         // Only capture horizontal swipes (not vertical, not taps)
         return Math.abs(gestureState.dx) > SWIPE_THRESHOLD &&
                Math.abs(gestureState.dy) < 40 &&
@@ -369,9 +377,9 @@ const s = StyleSheet.create({
     alignSelf: 'center',
     borderRadius: Radius.xl,
     padding: Space.xs,
-    backgroundColor: 'rgba(10,10,10,0.72)',
+    backgroundColor: 'rgba(0,0,0,0.55)',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.18)',
+    borderColor: 'rgba(255,255,255,0.12)',
     overflow: 'hidden',
   },
   contextHeader: {
@@ -394,11 +402,10 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     gap: Space.xs,
   },
+  // Tool buttons — flat, no background (AGENTS.md §4: no card-on-card)
   toolButton: {
     flex: 1,
     minHeight: 40,
-    borderRadius: Radius.md,
-    backgroundColor: 'rgba(255,255,255,0.1)',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -410,13 +417,13 @@ const s = StyleSheet.create({
     fontFamily: Typography.family.medium,
     fontSize: Type.meta.size,
   },
+  // Switcher — flat within the deck, no nested background (AGENTS.md §4)
   switcherContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     height: 48,
     borderRadius: Radius.lg,
     padding: Space.xs,
-    backgroundColor: 'rgba(0,0,0,0.38)',
   },
   activeIndicator: {
     position: 'absolute',
@@ -424,7 +431,7 @@ const s = StyleSheet.create({
     top: Space.xs,
     bottom: Space.xs,
     borderRadius: Radius.md,
-    backgroundColor: 'rgba(255,255,255,0.22)',
+    backgroundColor: 'rgba(255,255,255,0.18)',
   },
   modeButton: {
     height: 40,
@@ -445,7 +452,6 @@ const s = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.3)',
     alignItems: 'center',
     justifyContent: 'center',
   },

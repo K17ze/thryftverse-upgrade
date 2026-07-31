@@ -574,7 +574,7 @@ export default function CreatorCamera({
           <Text style={styles.bottomLabel}>Gallery</Text>
         </Pressable>
 
-        {/* Shutter */}
+        {/* Shutter — the hero control */}
         <Pressable
           onPress={handleShutterPress}
           hitSlop={24}
@@ -587,17 +587,8 @@ export default function CreatorCamera({
           </Animated.View>
         </Pressable>
 
-        {/* Flip (also in rail, but kept here for thumb reach) */}
-        <Pressable
-          style={styles.facingBtn}
-          onPress={toggleFacing}
-          hitSlop={16}
-          accessibilityLabel="Switch camera"
-          accessibilityRole="button"
-        >
-          <Ionicons name="camera-reverse-outline" size={24} color="#fff" />
-          <Text style={styles.bottomLabel}>Flip</Text>
-        </Pressable>
+        {/* Spacer — flip is in the right rail, this keeps the shutter centered */}
+        <View style={styles.bottomSpacer} />
       </View>
 
       {/* Mode indicator (only when no bottom overlay) */}
@@ -894,29 +885,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
   },
+  // Top bar buttons — transparent (AGENTS.md §4: ordinary controls default to transparent)
   topIconBtn: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.3)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // Vertical controls rail (TikTok pattern)
+  // Vertical controls rail — transparent, icon + label only (Snapchat/iOS Camera pattern)
   controlsRail: {
     position: 'absolute',
-    right: 12,
-    gap: 4,
+    right: 8,
+    gap: 16,
     alignItems: 'center',
   },
   railBtn: {
     width: 48,
     height: 56,
-    borderRadius: 24,
-    backgroundColor: 'rgba(0,0,0,0.3)',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 2,
+    gap: 4,
   },
   railLabel: {
     fontFamily: Typography.family.medium,
@@ -946,19 +935,15 @@ const styles = StyleSheet.create({
   recentThumb: {
     width: 56,
     height: 56,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderRadius: 10,
   },
-  // Mode pill
+  // Mode pill — transparent, text only
   modePill: {
     position: 'absolute',
     bottom: 120,
     alignSelf: 'center',
     paddingHorizontal: 16,
     paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: 'rgba(0,0,0,0.4)',
   },
   modeText: {
     fontFamily: Typography.family.medium,
@@ -989,26 +974,21 @@ const styles = StyleSheet.create({
     width: GALLERY_THUMB_SIZE,
     height: GALLERY_THUMB_SIZE,
     borderRadius: GALLERY_THUMB_SIZE / 2,
-    borderWidth: 2.5,
-    borderColor: '#fff',
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.9)',
   },
   galleryThumbPlaceholder: {
     width: GALLERY_THUMB_SIZE,
     height: GALLERY_THUMB_SIZE,
     borderRadius: GALLERY_THUMB_SIZE / 2,
-    borderWidth: 2.5,
+    borderWidth: 2,
     borderColor: 'rgba(255,255,255,0.3)',
-    backgroundColor: 'rgba(0,0,0,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  facingBtn: {
-    alignItems: 'center',
-    gap: 6,
+  bottomSpacer: {
     width: 72,
-    minHeight: 64,
-    justifyContent: 'center',
+    minHeight: 72,
   },
   bottomLabel: {
     fontFamily: Typography.family.medium,
