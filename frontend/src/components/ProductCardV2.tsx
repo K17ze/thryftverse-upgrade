@@ -8,7 +8,7 @@ import { View, StyleSheet, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { Space, Radius, Control } from '../theme/designTokens';
-import { T, Price } from './ui/Text';
+import { T } from './ui/Text';
 import { AnimatedPressable } from './AnimatedPressable';
 import { CachedImage } from './CachedImage';
 import { AnimatedHeart } from './AnimatedHeart';
@@ -163,7 +163,9 @@ export function ProductCardV2({
           </View>
         )}
 
-        {/* Favorite button */}
+        {/* Favorite button — transparent hit targets with text-shadow scrim
+            per AGENTS.md: separate hit area from visible shape. No decorative
+            circular chrome; the glyph legibility comes from the shadow. */}
         <View style={styles.actionButtonsRow}>
           {showSaveButton ? (
             <AnimatedPressable
@@ -175,21 +177,22 @@ export function ProductCardV2({
               accessibilityLabel={isSaved ? 'Remove from saved' : 'Save product'}
               accessibilityHint="Toggles this product in your saved page"
             >
-              <View style={styles.actionChrome}>
-                <Ionicons name={isSaved ? 'bookmark' : 'bookmark-outline'} size={18} color={isSaved ? Colors.brand : Colors.textInverse} />
-              </View>
+              <Ionicons
+                name={isSaved ? 'bookmark' : 'bookmark-outline'}
+                size={20}
+                color={isSaved ? Colors.brand : Colors.textInverse}
+                style={styles.actionGlyph}
+              />
             </AnimatedPressable>
           ) : null}
           <View style={styles.actionHitTarget}>
-            <View style={styles.actionChrome}>
-              <AnimatedHeart
-                isActive={isFav}
-                onToggle={handleToggleFav}
-                size={19}
-                activeColor={Colors.danger}
-                inactiveColor={Colors.textInverse}
-              />
-            </View>
+            <AnimatedHeart
+              isActive={isFav}
+              onToggle={handleToggleFav}
+              size={21}
+              activeColor={Colors.danger}
+              inactiveColor={Colors.textInverse}
+            />
           </View>
         </View>
       </AnimatedPressable>
@@ -200,7 +203,7 @@ export function ProductCardV2({
           <Text style={styles.title} numberOfLines={2}>{item.title}</Text>
           <View style={styles.priceRow}>
             <View style={styles.priceWrap}>
-              <Price amount={item.price} />
+              <Text style={styles.priceHero}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
               {hasPriceDrop && (
                 <Text style={styles.originalPrice}>{formatFromFiat(item.originalPrice!, 'GBP', { displayMode: 'fiat' })}</Text>
               )}
@@ -292,8 +295,8 @@ export function MasonryGrid({ items, onPressItem, numColumns = 2, showSaveButton
   items.forEach((item, index) => {
     const aspect = resolveListingMediaAspectRatio(item);
     const imgHeight = 160 / aspect; // approximate; actual width varies
-    const infoHeight = visualOnly ? 0 : 112;
-    const itemHeight = imgHeight + infoHeight + Space.sm;
+    const infoHeight = visualOnly ? 0 : 108;
+    const itemHeight = imgHeight + infoHeight + 12;
 
     let shortestCol = 0;
     let shortestHeight = heights[0];
@@ -388,28 +391,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  actionChrome: {
-    width: Control.chromeCompact,
-    height: Control.chromeCompact,
-    borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    alignItems: 'center',
-    justifyContent: 'center',
+  // Text-shadow scrim for glyph legibility on media — per AGENTS.md,
+  // visible containment must have meaning. These controls don't need
+  // containment; they need legibility. Shadow replaces circular chrome.
+  actionGlyph: {
+    textShadowColor: 'rgba(0,0,0,0.55)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   actionButtonsRow: {
     position: 'absolute',
-    bottom: Space.sm,
-    right: Space.sm,
+    bottom: Space.xs,
+    right: Space.xs,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 0,
   },
 
-  // Info - Clean hierarchy
+  // Info - Clean hierarchy with breathing room
   info: {
     paddingTop: Space.sm,
-    paddingHorizontal: 2,
-    gap: 2,
+    paddingHorizontal: Space.xs,
+    gap: Space.xs,
   },
   title: {
     fontSize: 14,
@@ -427,6 +430,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+  },
+  // Price elevated to hero — 16pt bold, clearly dominant over 14pt title.
+  // This is the Vestiaire/StockX move: price is the visual anchor.
+  priceHero: {
+    fontSize: 16,
+    lineHeight: 20,
+    fontFamily: Typography.family.bold,
+    color: Colors.textPrimary,
+    letterSpacing: -0.2,
   },
   originalPrice: {
     fontSize: 12,
@@ -446,26 +458,26 @@ const styles = StyleSheet.create({
   sellerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 40,
-    marginTop: 1,
+    minHeight: 32,
+    marginTop: 2,
   },
   sellerIdentity: {
     flex: 1,
     minWidth: 0,
-    minHeight: 40,
+    minHeight: 32,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
   },
   sellerAvatar: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
   },
   sellerAvatarPlaceholder: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
     backgroundColor: Colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
@@ -473,7 +485,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sellerName: {
-    fontSize: 11,
+    fontSize: 12,
     fontFamily: Typography.family.medium,
     color: Colors.textSecondary,
     flex: 1,
@@ -506,15 +518,15 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
 
-  // Grid — Pinterest density with breathable gaps
+  // Grid — breathable gaps for flagship feel (12pt vs 8pt)
   grid: {
     flexDirection: 'row',
     paddingHorizontal: Space.md,
-    gap: Space.sm,
+    gap: 12,
   },
   column: {
     flex: 1,
-    gap: Space.sm,
+    gap: 12,
   },
 });
 

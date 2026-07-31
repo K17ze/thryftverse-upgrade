@@ -815,7 +815,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
               <>
                 {/* ── FOCUS STATE: Clean recent + trending when search is focused ── */}
                 {isSearchFocused ? (
-                  <Reanimated.View entering={FadeInDown.duration(200).springify().damping(20)}>
+                  <Reanimated.View entering={FadeInDown.duration(220)}>
                     {/* Recent searches */}
                     {recentSearches.length > 0 && (
                       <EditorialSection kicker="Your history" title="Recent searches">

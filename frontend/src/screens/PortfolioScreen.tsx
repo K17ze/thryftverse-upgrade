@@ -545,7 +545,7 @@ export default function PortfolioScreen() {
                 Shows the best and worst positions by unrealized P&L without
                 "TOP PERFORMER" / "LAGGING" labels that gamify holding. */}
             {(performers.best || performers.worst) && (
-              <View style={[styles.insightCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={[styles.insightCard, { borderBottomColor: colors.border }]}>
                 {performers.best && performers.best.avgEntryPriceGbp > 0 && (
                   <Pressable
                     style={styles.insightRow}
@@ -600,7 +600,7 @@ export default function PortfolioScreen() {
             {/* Allocation breakdowns — collapsible for progressive disclosure.
                 Collapsed by default to calm the screen; expands on tap. */}
             {allocationBars.length > 0 && (
-              <View style={[styles.allocationCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={[styles.allocationCard, { borderBottomColor: colors.border }]}>
                 <Pressable
                   style={styles.allocationHeader}
                   onPress={() => setAllocationExpanded((prev) => !prev)}
@@ -698,7 +698,7 @@ export default function PortfolioScreen() {
 
             {/* Realised returns — income surface from closed positions */}
             {summary.totalRealizedGbp !== 0 && (
-              <View style={[styles.realisedCard, { backgroundColor: `${summary.totalRealizedGbp >= 0 ? colors.success : colors.danger}08`, borderColor: `${summary.totalRealizedGbp >= 0 ? colors.success : colors.danger}30` }]}>
+              <View style={[styles.realisedCard, { borderBottomColor: colors.border }]}>
                 <View style={styles.realisedHeader}>
                   <View style={[styles.realisedIcon, { backgroundColor: `${summary.totalRealizedGbp >= 0 ? colors.success : colors.danger}15` }]}>
                     <Ionicons
@@ -739,7 +739,7 @@ export default function PortfolioScreen() {
             {/* Watchlist summary */}
             {coOwnWatchlist.length > 0 && (
               <AnimatedPressable
-                style={[styles.watchlistRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                style={[styles.watchlistRow, { borderBottomColor: colors.border }]}
                 onPress={() => navigation.navigate('CoOwnHub', { initialSegment: 'watchlist' })}
                 accessibilityRole="button"
                 accessibilityLabel={`Open watchlist with ${coOwnWatchlist.length} watched assets`}
@@ -760,7 +760,7 @@ export default function PortfolioScreen() {
             )}
 
             {/* Ownership rights — what Co-Own entitles */}
-            <View style={[styles.rightsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={[styles.rightsCard, { borderBottomColor: colors.border }]}>
               <View style={styles.rightsHeader}>
                 <Ionicons name="document-text-outline" size={14} color={colors.textSecondary} />
                 <Text style={[styles.rightsTitle, { color: colors.textPrimary }]}>Rights are instrument-specific</Text>
@@ -857,7 +857,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: Space.xs,
     alignItems: 'center',
-    gap: 3,
+    gap: Space.xs,
   },
   summaryStatLabel: {
     fontSize: Type.meta.size,
@@ -870,11 +870,10 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.bold,
   },
   allocationCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
+    paddingVertical: Space.md,
     gap: Space.sm,
     marginBottom: Space.lg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   // ── Portfolio tab toggle ──
   portfolioTabRow: {
@@ -897,10 +896,9 @@ const styles = StyleSheet.create({
   },
   // ── Position insight (calm replacement for gamification cards) ──
   insightCard: {
-    borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
     marginBottom: Space.lg,
     overflow: 'hidden',
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   insightRow: {
     flexDirection: 'row',
@@ -983,10 +981,9 @@ const styles = StyleSheet.create({
     gap: Space.md,
   },
   realisedCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
+    paddingVertical: Space.md,
     marginBottom: Space.lg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   realisedHeader: {
     flexDirection: 'row',
@@ -1005,7 +1002,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   realisedLabel: {
-    fontSize: 10,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.bold,
     letterSpacing: 0.4,
   },
@@ -1022,10 +1019,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
+    paddingVertical: Space.md,
     marginBottom: Space.lg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   watchlistIcon: {
     width: 32,
@@ -1057,16 +1053,15 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
   },
   rightsCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
+    paddingVertical: Space.md,
     gap: Space.sm,
     marginBottom: Space.lg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   rightsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs,
   },
   rightsTitle: {
     fontSize: Type.bodyEmphasis.size,
@@ -1074,12 +1069,12 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
   rightsList: {
-    gap: 6,
+    gap: Space.xs,
   },
   rightsItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs,
   },
   rightsText: {
     flex: 1,

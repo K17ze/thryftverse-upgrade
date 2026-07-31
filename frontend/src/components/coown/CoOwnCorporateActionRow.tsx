@@ -145,7 +145,7 @@ export function CoOwnCorporateActionRow({
           <Text
             style={[
               styles.amount,
-              { color: amountLabel.startsWith('+') ? colors.success : amountLabel.startsWith('−') ? colors.danger : colors.textPrimary },
+              { color: amountLabel.startsWith('+') ? colors.coownUp : amountLabel.startsWith('−') ? colors.coownDown : colors.textPrimary },
             ]}
             numberOfLines={1}
           >

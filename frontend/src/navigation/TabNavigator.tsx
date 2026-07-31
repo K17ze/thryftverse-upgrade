@@ -2,6 +2,7 @@ import React, { useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
@@ -41,7 +42,7 @@ const TabIcon = ({ name, nameFocused, color, focused, badgeCount }: TabIconProps
 
   return (
     <View style={tabStyles.tabIconWrap}>
-      <Ionicons name={iconName} size={24} color={color} />
+      <Ionicons name={iconName} size={26} color={color} />
       {displayBadge && (
         <View
           style={[tabStyles.badge, { backgroundColor: colors.danger, borderColor: colors.surface }]}
@@ -99,7 +100,7 @@ export default function TabNavigator() {
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
-  const { colors } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
   const conversations = useStore((s) => s.conversations);
   const messageRequests = useStore((s) => s.messageRequests);
   const requestIds = React.useMemo(() => new Set(messageRequests), [messageRequests]);
@@ -123,15 +124,27 @@ export default function TabNavigator() {
           headerShown: false,
           tabBarShowLabel: false,
           tabBarHideOnKeyboard: true,
+          // Instagram pattern: edge-to-edge transparent bar with frosted
+          // glass blur background. Content scrolls behind the bar, and the
+          // BlurView creates the premium frosted effect. No floating pill,
+          // no solid background — the blur IS the background.
           tabBarStyle: {
-            ...tabStyles.floatingTabBar,
-            backgroundColor: colors.surfaceElevated,
-            borderColor: colors.border,
-            shadowColor: colors.shadow,
-            height: NAV_HEIGHT,
-            bottom: Math.max(insets.bottom, Space.sm),
-            paddingBottom: 0,
+            position: 'absolute',
+            borderTopWidth: StyleSheet.hairlineWidth,
+            borderTopColor: colors.border,
+            backgroundColor: 'transparent',
+            height: NAV_HEIGHT + insets.bottom,
+            paddingBottom: insets.bottom,
+            elevation: 0,
+            shadowOpacity: 0,
           },
+          tabBarBackground: () => (
+            <BlurView
+              intensity={isDark ? 70 : 90}
+              tint={isDark ? 'dark' : 'light'}
+              style={StyleSheet.absoluteFill}
+            />
+          ),
           tabBarItemStyle: tabStyles.tabBarItem,
           tabBarActiveTintColor: colors.textPrimary,
           tabBarInactiveTintColor: colors.textMuted,
@@ -224,19 +237,6 @@ export default function TabNavigator() {
 
 // Static layout styles (no theme-dependent colors)
 const tabStyles = StyleSheet.create({
-  floatingTabBar: {
-    position: 'absolute',
-    left: Space.md,
-    right: Space.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: Radius.xxl,
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.12,
-    shadowRadius: 14,
-    elevation: 8,
-    overflow: 'hidden',
-  },
   tabBarItem: {
     alignItems: 'center',
     justifyContent: 'center',

@@ -120,7 +120,7 @@ export function CoOwnAssetTile({
                 <Text
                   style={[
                     styles.marketChange,
-                    { color: marketData.change24hPct >= 0 ? colors.success : colors.danger },
+                    { color: marketData.change24hPct >= 0 ? colors.coownUp : colors.coownDown },
                   ]}
                   numberOfLines={1}
                 >

@@ -111,9 +111,9 @@ export function CoOwnPriceTick({
   }));
 
   const directionColor = direction === 'up'
-    ? colors.success
+    ? colors.coownUp
     : direction === 'down'
-      ? colors.danger
+      ? colors.coownDown
       : colors.textSecondary;
 
   const glyph = direction === 'up' ? '▲' : direction === 'down' ? '▼' : '−';

@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Colors } from '../../constants/colors';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { Space, Typography } from '../../theme/designTokens';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useToast } from '../../context/ToastContext';
 import {
@@ -186,17 +186,17 @@ export function LookSocialActions({
 }
 
 const styles = StyleSheet.create({
+  // Flat bar with hairline separator — per AGENTS.md: no card-on-card.
+  // The social actions are a utility bar, not a contained surface.
   container: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     marginHorizontal: Space.md,
-    marginTop: Space.md,
-    padding: Space.sm,
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    marginTop: Space.lg,
+    paddingVertical: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
   },
   actionBtn: {
     flex: 1,
@@ -204,8 +204,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 10,
-    borderRadius: Radius.md,
+    paddingVertical: Space.xs,
   },
   actionText: {
     fontSize: 14,

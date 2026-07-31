@@ -663,15 +663,6 @@ export default function AuctionDetailScreen() {
           showOverflow
         />
 
-        {resyncFailed && !error && (
-          <View style={[styles.resyncBanner, { borderColor: colors.borderSubtle }]}>
-            <Ionicons name="sync-circle-outline" size={14} color={colors.textMuted} />
-            <Meta style={[styles.resyncText, { color: colors.textMuted }]}>
-              Clock sync failed — pull to refresh
-            </Meta>
-          </View>
-        )}
-
         {/* ── Offline banner ──
             Per spec 05 §14: offline state must be designed, not a blank
             screen. Cached auction data may still be visible. */}
@@ -680,7 +671,9 @@ export default function AuctionDetailScreen() {
         {/* ── Freshness indicator ──
             Surfaces stale, reconnecting, and refresh-failed states so the
             user never sees a live countdown that is silently disconnected.
-            R02: realtime screens expose freshness, not just data. */}
+            R02: realtime screens expose freshness, not just data.
+            Consolidates the former custom resync banner — the freshness
+            banner already renders the refresh-failed state with retry. */}
         <CommerceDetailFreshnessBanner
           isRefreshing={isTransitionRefreshing || refreshing}
           isStale={needsResync && !isTransitionRefreshing}
@@ -775,7 +768,7 @@ export default function AuctionDetailScreen() {
             action." The result state lives here; the dock carries the
             next valid action. */}
         {isTerminal && !isCancelled && (
-          <View style={[styles.terminalResultModule, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
+          <View style={styles.terminalResultModule}>
             {viewerState === 'won' && (
               <>
                 <Text style={[styles.terminalResultTitleWon, { color: colors.success }]}>You won</Text>
@@ -840,7 +833,7 @@ export default function AuctionDetailScreen() {
 
         {/* ── Cancelled terminal module ── */}
         {isCancelled && (
-          <View style={[styles.terminalResultModule, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
+          <View style={styles.terminalResultModule}>
             <Text style={[styles.terminalResultTitleLost, { color: colors.textPrimary }]}>Auction cancelled</Text>
             <Text style={[styles.terminalResultNote, { color: colors.textSecondary }]}>
               Cancelled by the seller or platform. Any payment or release status appears in your orders.
@@ -1138,11 +1131,23 @@ export default function AuctionDetailScreen() {
           const dockValueLabel = isLive && auction.minimumNextBidGbp > 0
             ? 'Min next bid'
             : priceLabel;
+          // Show countdown as subtitle when live so urgency follows the
+          // user as they scroll — they don't need to scroll up to see
+          // time remaining.
+          const dockSubtitle = isLive && countdown.text
+            ? countdown.isFinalMinutes
+              ? `Ends in ${countdown.text}`
+              : countdown.text
+            : isUpcoming && countdown.text
+              ? countdown.text
+              : undefined;
           const primaryType = stateAction.primary.type;
           return (
             <CommerceDetailStateDock
               value={dockValue}
               valueLabel={dockValueLabel}
+              subtitle={dockSubtitle}
+              thumbnailUri={auctionMediaItems[0]?.uri}
               primaryAction={{
                 label: stateAction.primary.label,
                 onPress: () => {
@@ -1520,13 +1525,6 @@ const styles = StyleSheet.create({
   recommendationSection: {
     marginTop: Space.md,
   },
-  resyncBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: Space.sm,
-  },
-  resyncText: {},
   // ── Bid activity (consolidated pattern per spec 02_AUCTION §3) ──
   bidActivityRow: {
     flexDirection: 'row',
@@ -1537,7 +1535,7 @@ const styles = StyleSheet.create({
   },
   bidActivityLeft: {
     flexDirection: 'column',
-    gap: 2,
+    gap: Space.xs,
     flexShrink: 1,
   },
   bidActivityLabel: {
@@ -1601,10 +1599,8 @@ const styles = StyleSheet.create({
   terminalResultModule: {
     marginHorizontal: Space.md,
     marginTop: Space.sm,
-    padding: Space.md + 2,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    gap: Space.xs + 2,
+    paddingVertical: Space.md,
+    gap: Space.xs,
   },
   terminalResultTitleWon: {
     fontSize: Type.subtitle.size,
@@ -1751,7 +1747,7 @@ const styles = StyleSheet.create({
     top: Space.sm,
     left: Space.sm,
     flexDirection: 'row',
-    gap: 6,
+    gap: Space.xs,
   },
   identityExtension: {
     paddingHorizontal: Space.md,
@@ -1800,8 +1796,6 @@ const styles = StyleSheet.create({
   },
   // ── Bid history sheet rows ──
   bidList: {
-    borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
   },
   bidRow: {
@@ -1836,7 +1830,7 @@ const styles = StyleSheet.create({
   },
   bidRowInfo: {
     flexDirection: 'column',
-    gap: 1,
+    gap: Space.xs,
   },
   bidRowNameLine: {
     flexDirection: 'row',

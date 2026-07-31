@@ -14,7 +14,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Typography, DockConstants } from '../theme/designTokens';
+import { Space, Typography, DockConstants, Radius, Stroke } from '../theme/designTokens';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
@@ -1446,14 +1446,14 @@ const styles = StyleSheet.create({
     marginHorizontal: Space.md,
     marginTop: Space.sm,
     padding: Space.md,
-    borderRadius: 12,
-    borderWidth: 1,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   autofillHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 4,
+    gap: Space.xs + 2,
+    marginBottom: Space.xs,
   },
   autofillTitle: {
     flex: 1,
@@ -1468,13 +1468,13 @@ const styles = StyleSheet.create({
   autofillChips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: Space.xs + 2,
     marginBottom: Space.sm,
   },
   autofillChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.xs + 2,
+    borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     minWidth: 80,
     maxWidth: 180,
@@ -1493,10 +1493,10 @@ const styles = StyleSheet.create({
   autofillApplyBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
+    gap: Space.xs + 2,
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.md,
+    borderRadius: Radius.md,
     alignSelf: 'flex-start',
   },
   autofillApplyText: {
@@ -1613,18 +1613,18 @@ const styles = StyleSheet.create({
   /* -- toggles -- */
   toggleRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginTop: 4,
+    gap: Space.sm,
+    marginTop: Space.xs,
   },
   togglePill: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm + 2,
+    borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   togglePillActive: {
   },
@@ -1640,18 +1640,18 @@ const styles = StyleSheet.create({
   tagWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: Space.xs + 2,
     alignItems: 'center',
-    marginTop: 4,
+    marginTop: Space.xs,
   },
   tagChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-    borderWidth: 1,
+    gap: Space.xs,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.xs + 2,
+    borderRadius: Radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   tagText: {
     fontSize: 13,
@@ -1668,13 +1668,13 @@ const styles = StyleSheet.create({
   /* -- co-own auth photos -- */
   authPhotoRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginTop: 8,
+    gap: Space.sm,
+    marginTop: Space.sm,
   },
   authThumb: {
     width: 56,
     height: 56,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     overflow: 'hidden',
   },
   authThumbImage: {
@@ -1684,8 +1684,8 @@ const styles = StyleSheet.create({
   authAddBtn: {
     width: 56,
     height: 56,
-    borderRadius: 8,
-    borderWidth: 1.5,
+    borderRadius: Radius.md,
+    borderWidth: Stroke.standard,
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',

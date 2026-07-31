@@ -441,8 +441,8 @@ export function CommerceMediaStage({
       )}
 
       <LinearGradient
-        colors={['rgba(0,0,0,0.32)', 'rgba(0,0,0,0)']}
-        locations={[0, 1]}
+        colors={['rgba(0,0,0,0.36)', 'rgba(0,0,0,0.12)', 'rgba(0,0,0,0)']}
+        locations={[0, 0.5, 1]}
         style={styles.topScrim}
         pointerEvents="none"
       />
@@ -450,8 +450,8 @@ export function CommerceMediaStage({
       {overlayBottomContent ? (
         <Reanimated.View style={[styles.bottomScrim, bottomScrimStyle]} pointerEvents="none">
           <LinearGradient
-            colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.72)']}
-            locations={[0, 1]}
+            colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.18)', 'rgba(0,0,0,0.52)']}
+            locations={[0, 0.45, 1]}
             style={StyleSheet.absoluteFill}
           />
         </Reanimated.View>
@@ -480,7 +480,7 @@ export function CommerceMediaStage({
             {...PressPresets.iconButton}
             accessibilityLabel="Go back"
           >
-            <Ionicons name="arrow-back" size={24} color="#fff" />
+            <Ionicons name="arrow-back" size={24} color="#fff" style={styles.controlIcon} />
           </AnimatedPressable>
 
           <View style={styles.headerRight}>
@@ -490,7 +490,7 @@ export function CommerceMediaStage({
               {...PressPresets.iconButton}
               accessibilityLabel="Share"
             >
-              <Ionicons name="share-outline" size={24} color="#fff" />
+              <Ionicons name="share-outline" size={24} color="#fff" style={styles.controlIcon} />
             </AnimatedPressable>
 
             {showSaveControl && onSave && (
@@ -504,6 +504,7 @@ export function CommerceMediaStage({
                   name={isSaved ? 'bookmark' : 'bookmark-outline'}
                   size={24}
                   color={isSaved ? Colors.brand : '#fff'}
+                  style={styles.controlIcon}
                 />
               </AnimatedPressable>
             )}
@@ -677,9 +678,15 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.4)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // Subtle media-contrast scrim behind control glyphs. Functional
+  // (legibility over arbitrary imagery), not decorative chrome.
+  controlIcon: {
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   overlayTopZone: {
     position: 'absolute',

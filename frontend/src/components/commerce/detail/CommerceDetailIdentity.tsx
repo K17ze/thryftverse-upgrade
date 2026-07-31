@@ -198,6 +198,9 @@ const styles = StyleSheet.create({
     lineHeight: 14,
     letterSpacing: 1,
     textTransform: 'uppercase',
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 6,
   },
   title: {
     fontSize: 28,
@@ -216,17 +219,17 @@ const styles = StyleSheet.create({
     letterSpacing: -0.4,
   },
   titleCoOwn: {
-    fontSize: 25,
-    lineHeight: 30,
-    letterSpacing: -0.3,
+    fontSize: 28,
+    lineHeight: 33,
+    letterSpacing: -0.45,
   },
   titleMedia: {
     fontSize: 27,
     lineHeight: 31,
     letterSpacing: -0.6,
-    textShadowColor: 'rgba(0,0,0,0.28)',
+    textShadowColor: 'rgba(0,0,0,0.55)',
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 8,
+    textShadowRadius: 12,
   },
   containerAuction: {
     paddingBottom: Space.xs,
@@ -260,6 +263,9 @@ const styles = StyleSheet.create({
     fontSize: 22,
     lineHeight: 27,
     letterSpacing: -0.3,
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 8,
   },
   secondaryLine: {
     fontSize: Type.body.size,
@@ -269,6 +275,9 @@ const styles = StyleSheet.create({
   },
   secondaryLineMedia: {
     fontFamily: Typography.family.medium,
+    textShadowColor: 'rgba(0,0,0,0.45)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 6,
   },
   // Interest signal sits on its own line below the value row — a
   // quiet metadata line, not a third member of the value cluster.
@@ -280,5 +289,8 @@ const styles = StyleSheet.create({
   },
   interestMedia: {
     fontFamily: Typography.family.medium,
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 5,
   },
 });

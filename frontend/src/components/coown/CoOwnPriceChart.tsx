@@ -186,10 +186,12 @@ export function CoOwnPriceChart({
 
   // Movement is only rendered when genuinely derived. Missing movement
   // is never coerced to zero — spec 03 §6: "Do not show +0.0%".
+  // Per Design.md proposed-semantic: use coownUp/coownDown for financial
+  // truth, not generic success/danger.
   const hasMovement = marketMovePct24h != null && !Number.isNaN(marketMovePct24h);
   const isPositive = hasMovement && marketMovePct24h! >= 0;
-  const changeColor = isPositive ? colors.success : colors.danger;
-  const sparklineColor = isPositive ? colors.success : colors.danger;
+  const changeColor = isPositive ? colors.coownUp : colors.coownDown;
+  const sparklineColor = isPositive ? colors.coownUp : colors.coownDown;
   const gradientId = `sparkGradient-${isPositive ? 'up' : 'down'}`;
 
   const linePath = useMemo(

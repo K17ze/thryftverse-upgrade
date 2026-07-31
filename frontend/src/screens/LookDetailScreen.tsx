@@ -126,7 +126,7 @@ export default function LookDetailScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.headerRow}>
-          <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.85}>
+          <AnimatedPressable style={styles.backBtnSolid} onPress={() => navigation.goBack()} activeOpacity={0.85}>
             <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </AnimatedPressable>
         </View>
@@ -141,7 +141,7 @@ export default function LookDetailScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.headerRow}>
-          <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.85}>
+          <AnimatedPressable style={styles.backBtnSolid} onPress={() => navigation.goBack()} activeOpacity={0.85}>
             <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </AnimatedPressable>
         </View>
@@ -158,10 +158,12 @@ export default function LookDetailScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Floating Header */}
+      {/* Floating Header — transparent hit targets with text-shadow scrim.
+          Per AGENTS.md: ordinary Back/Share controls default to transparent
+          44pt targets. No circular chrome; glyph legibility from shadow. */}
       <View style={styles.headerRow}>
         <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.85}>
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color="#fff" style={styles.headerGlyph} />
         </AnimatedPressable>
         <View style={styles.headerActions}>
           <AnimatedPressable
@@ -171,7 +173,7 @@ export default function LookDetailScreen() {
             accessibilityRole="button"
             accessibilityLabel="Share look"
           >
-            <Ionicons name="share-outline" size={20} color={colors.textPrimary} />
+            <Ionicons name="share-outline" size={20} color="#fff" style={styles.headerGlyph} />
           </AnimatedPressable>
         </View>
       </View>
@@ -238,7 +240,11 @@ export default function LookDetailScreen() {
               );
             })}
 
-            <LinearGradient colors={['transparent', 'rgba(0,0,0,0.45)']} style={styles.heroGradient} />
+            <LinearGradient
+              colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.12)', 'rgba(0,0,0,0.42)']}
+              locations={[0, 0.4, 1]}
+              style={styles.heroGradient}
+            />
           </View>
         </Reanimated.View>
 
@@ -358,28 +364,39 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingHorizontal: Space.sm,
+    paddingTop: Space.sm,
     zIndex: 10,
   },
+  // Transparent 44pt hit targets — no circular chrome.
+  // Glyph legibility comes from the text-shadow scrim below.
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerActions: { flexDirection: 'row', gap: 8 },
+  headerActions: { flexDirection: 'row', gap: Space.xs },
   headerBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  scrollContent: { paddingBottom: 24 },
+  // Solid back button for loading/error states (no media behind)
+  backBtnSolid: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Text-shadow scrim for glyph legibility on media
+  headerGlyph: {
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  scrollContent: { paddingBottom: Space.lg },
   heroWrap: {
     width: SCREEN_W,
     height: SCREEN_W * 1.15,
@@ -388,12 +405,13 @@ function createStyles(colors: ThemeColors) {
     overflow: 'hidden',
   },
   heroImage: { width: '100%', height: '100%' },
+  // Extended gradient — 180px with 3-stop falloff for smooth editorial fade
   heroGradient: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: 120,
+    height: 180,
   },
   hotspotWrap: {
     position: 'absolute',
@@ -459,7 +477,7 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     letterSpacing: Type.title.letterSpacing,
-    lineHeight: 26,
+    lineHeight: 30,
   },
   creatorRow: {
     flexDirection: 'row',

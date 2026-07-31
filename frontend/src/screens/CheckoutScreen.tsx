@@ -50,7 +50,7 @@ import { BuyerProtectionStrip } from '../components/product';
 import { getIzePosition } from '../services/walletApi';
 import { haptics } from '../utils/haptics';
 import { getListingCoverUri } from '../utils/media';
-import { Space, Typography } from '../theme/designTokens';
+import { Space, Typography, Radius, Stroke } from '../theme/designTokens';
 import { createStableId } from '../utils/createStableId';
 import {
   configureStripeMobile,
@@ -202,7 +202,7 @@ export default function CheckoutScreen() {
     header: { borderBottomColor: colors.border },
     headerTitle: { color: colors.textPrimary },
     sectionDivider: { backgroundColor: colors.border },
-    priceBreakdownCard: { backgroundColor: colors.surface, borderColor: colors.border },
+    priceBreakdownCard: {},
     priceBreakdownTitle: { color: colors.textMuted },
     priceDivider: { backgroundColor: colors.border },
     savingsBadge: { backgroundColor: `${colors.success}12` },
@@ -1458,14 +1458,12 @@ const styles = StyleSheet.create({
   priceBreakdownCard: {
     paddingVertical: Space.md,
     paddingHorizontal: Space.md,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
     marginTop: Space.sm,
   },
   priceBreakdownHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
     marginBottom: Space.sm + 2,
   },
   priceBreakdownTitle: {
@@ -1481,11 +1479,11 @@ const styles = StyleSheet.create({
   savingsBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Space.xs,
     marginTop: Space.xs,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 6,
+    paddingVertical: Space.xs,
+    paddingHorizontal: Space.sm,
+    borderRadius: Radius.sm,
     alignSelf: 'flex-start',
   },
   savingsText: {
@@ -1513,10 +1511,10 @@ const styles = StyleSheet.create({
   balanceToggle: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 10,
+    gap: Space.sm + 2,
+    paddingVertical: Space.sm + 2,
+    paddingHorizontal: Space.md,
+    borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
   },
   balanceTogglePressed: {
@@ -1525,8 +1523,8 @@ const styles = StyleSheet.create({
   balanceSwitch: {
     width: 40,
     height: 24,
-    borderRadius: 12,
-    borderWidth: 1,
+    borderRadius: Radius.full,
+    borderWidth: Stroke.standard,
     justifyContent: 'center',
     padding: 2,
   },
@@ -1607,9 +1605,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: Space.sm,
     minWidth: 180,
-    paddingVertical: 14,
+    paddingVertical: Space.md + 2,
     paddingHorizontal: Space.lg,
-    borderRadius: 10,
+    borderRadius: Radius.md,
     minHeight: 48,
   },
   payBtnDisabled: {

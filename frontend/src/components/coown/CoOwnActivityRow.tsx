@@ -107,8 +107,8 @@ export function CoOwnActivityRow({
           <Text style={[styles.amount, { color: colors.textPrimary }]}>{amountLabel}</Text>
         </View>
         <View style={styles.metaRow}>
-          <View style={[styles.sidePill, { backgroundColor: isBuy ? colors.success + '18' : colors.danger + '18' }]}>
-            <Text style={[styles.sideText, { color: isBuy ? colors.success : colors.danger }]}>
+          <View style={[styles.sidePill, { backgroundColor: isBuy ? colors.coownUp + '18' : colors.coownDown + '18' }]}>
+            <Text style={[styles.sideText, { color: isBuy ? colors.coownUp : colors.coownDown }]}>
               {isBuy ? 'BUY' : 'SELL'}
             </Text>
           </View>
@@ -117,7 +117,7 @@ export function CoOwnActivityRow({
           </Text>
           {/* Phase 6: filled units for partial fills */}
           {showFilledInfo && (
-            <Text style={[styles.filledText, { color: colors.success }]}>
+            <Text style={[styles.filledText, { color: colors.coownUp }]}>
               ({filledUnits} filled)
             </Text>
           )}

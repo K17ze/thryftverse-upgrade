@@ -461,7 +461,6 @@ export default function CoOwnHubScreen() {
         <View style={styles.highlightsSection}>
           <View style={styles.highlightsHeading}>
             <Text style={[styles.sectionEyebrow, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>MARKET HIGHLIGHTS</Text>
-            <Text style={[styles.highlightsHint, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>{highlights.length > 1 ? 'Swipe to explore' : 'Featured market'}</Text>
           </View>
           <CoOwnMarketHighlightsCarousel items={highlights} onPressItem={handleHighlightPress} />
         </View>
@@ -491,7 +490,7 @@ export default function CoOwnHubScreen() {
             </AnimatedPressable>
           </View>
           {holdingsError ? (
-            <View style={[styles.inlineState, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
+            <View style={[styles.inlineState, { borderBottomColor: colors.border }]}>
               <View style={styles.inlineStateBody}>
                 <Text style={[styles.inlineStateTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.25}>Positions unavailable</Text>
                 <Text style={[styles.inlineStateText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>Your markets are still available. Retry to load portfolio holdings.</Text>
@@ -522,7 +521,7 @@ export default function CoOwnHubScreen() {
               accessibilityLabel="Your positions"
             />
           ) : (
-            <View style={[styles.inlineState, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
+            <View style={[styles.inlineState, { borderBottomColor: colors.border }]}>
               <View style={styles.inlineStateIcon}>
                 <Ionicons name="pie-chart-outline" size={18} color={colors.textMuted} />
               </View>
@@ -565,7 +564,7 @@ export default function CoOwnHubScreen() {
                       accessibilityRole="button"
                       accessibilityLabel="Close market search"
                     >
-                      <Ionicons name="close" size={17} color={colors.textSecondary} />
+                      <Ionicons name="close" size={18} color={colors.textSecondary} />
                     </AnimatedPressable>
                   }
                   autoFocus
@@ -597,7 +596,7 @@ export default function CoOwnHubScreen() {
               accessibilityLabel={`Sort instruments, currently ${SORT_LABELS[sortBy]}`}
               accessibilityState={{ expanded: isSortExpanded }}
             >
-              <Ionicons name="swap-vertical-outline" size={17} color={colors.textSecondary} />
+              <Ionicons name="swap-vertical-outline" size={18} color={colors.textSecondary} />
               <Text style={[styles.controlText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.25}>{SORT_LABELS[sortBy]}</Text>
             </AnimatedPressable>
           </View>
@@ -693,11 +692,11 @@ export default function CoOwnHubScreen() {
             haptics.tap();
             navigation.navigate('CreateCoOwn');
           }}
-          style={[styles.creatorLink, { borderColor: colors.border }]}
+          style={[styles.creatorLink, { borderBottomColor: colors.border }]}
           accessibilityRole="button"
           accessibilityLabel="Issue a new Co-Own item"
         >
-          <View style={[styles.creatorIcon, { backgroundColor: colors.surfaceAlt }]}> 
+          <View style={[styles.creatorIcon, { backgroundColor: colors.surfaceAlt }]}>
             <Ionicons name="add-outline" size={20} color={colors.textSecondary} />
           </View>
           <View style={styles.creatorBody}>
@@ -719,7 +718,7 @@ export default function CoOwnHubScreen() {
           accessibilityRole="button"
           accessibilityLabel="View market ledger"
         >
-          <Ionicons name="receipt-outline" size={17} color={colors.textSecondary} />
+          <Ionicons name="receipt-outline" size={18} color={colors.textSecondary} />
           <Text style={[styles.ledgerLinkText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.25}>Market ledger</Text>
           <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
         </AnimatedPressable>
@@ -825,8 +824,8 @@ const styles = StyleSheet.create({
     paddingBottom: Space.xxl,
   },
   highlightsSection: {
-    paddingTop: Space.xs,
-    paddingBottom: Space.sm,
+    paddingTop: Space.sm,
+    paddingBottom: Space.md,
   },
   highlightsHeading: {
     minHeight: 28,
@@ -834,11 +833,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-  },
-  highlightsHint: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.regular,
   },
   tabsSurface: {
     minHeight: 50,
@@ -875,7 +869,7 @@ const styles = StyleSheet.create({
   },
   majorSection: {
     paddingTop: Space.lg,
-    paddingBottom: Space.xl,
+    paddingBottom: Space.lg,
   },
   sectionHeader: {
     paddingHorizontal: Space.md,
@@ -923,14 +917,13 @@ const styles = StyleSheet.create({
     width: POSITION_CARD_GAP,
   },
   inlineState: {
-    minHeight: 92,
+    minHeight: 72,
     marginHorizontal: Space.md,
-    padding: Space.md,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: Space.md,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   inlineStateIcon: {
     width: 44,
@@ -967,7 +960,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
   },
   instrumentsHeader: {
-    paddingTop: Space.xs,
+    paddingTop: Space.sm,
     paddingBottom: Space.md,
   },
   resultCount: {
@@ -1033,7 +1026,7 @@ const styles = StyleSheet.create({
   },
   instrumentRow: {
     paddingHorizontal: Space.md,
-    paddingBottom: Space.lg,
+    paddingBottom: Space.md,
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Space.sm,
@@ -1047,17 +1040,16 @@ const styles = StyleSheet.create({
   },
   remainingContent: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    gap: Space.lg,
+    paddingTop: Space.lg,
+    gap: Space.md,
   },
   creatorLink: {
-    minHeight: 76,
-    padding: Space.md,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    minHeight: 64,
+    paddingVertical: Space.md,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   creatorIcon: {
     width: 44,

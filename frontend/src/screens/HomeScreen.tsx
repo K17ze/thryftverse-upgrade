@@ -70,7 +70,7 @@ type NavT = StackNavigationProp<RootStackParamList>;
 
 const HEADER_EXPANDED = 58;
 const HEADER_COLLAPSED = 52;
-const GRID_GAP = Space.sm; // 8pt — design contract discovery gutter
+const GRID_GAP = 12; // 12pt — breathable discovery gutter (flagship spacing)
 // Missing media is not photography and should not dominate discovery like it is.
 // Keep the fallback compact while real assets continue to use their API geometry.
 const MISSING_MEDIA_HEIGHT_RATIO = 0.78;
@@ -1783,8 +1783,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   exploreDetails: {
     paddingTop: Space.sm,
-    paddingHorizontal: 2,
-    gap: 2,
+    paddingHorizontal: Space.xs,
+    gap: Space.xs,
   },
   exploreTitle: {
     fontSize: Type.bodyEmphasis.size,
@@ -1793,17 +1793,19 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.textPrimary,
     letterSpacing: -0.2,
   },
+  // Price elevated to hero — 16pt bold, clearly dominant over 14pt title.
   explorePrice: {
     color: colors.textPrimary,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
+    fontSize: 16,
+    lineHeight: 20,
     fontFamily: Typography.family.bold,
     fontVariant: ['tabular-nums'],
+    letterSpacing: -0.2,
   },
   exploreSellerRow: {
-    minHeight: 40,
+    minHeight: 32,
     marginTop: 2,
-    paddingHorizontal: 2,
+    paddingHorizontal: Space.xs,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -1811,7 +1813,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   exploreSellerChip: {
     flex: 1,
-    minHeight: 40,
+    minHeight: 32,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
@@ -1838,13 +1840,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   exploreSellerText: {
     flex: 1,
     color: colors.textSecondary,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: 12,
+    fontFamily: Typography.family.medium,
     letterSpacing: 0.1,
   },
   exploreMessageBtn: {
     minWidth: 44,
-    height: 40,
+    height: 32,
     paddingHorizontal: Space.xs + 2,
     flexDirection: 'row',
     gap: 4,

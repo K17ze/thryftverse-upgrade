@@ -116,7 +116,7 @@ export default function SearchScreen() {
     backgroundColor: 'transparent',
   },
   discoverBtnText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 12,
     fontFamily: Typography.family.semibold,
     letterSpacing: 0.2,

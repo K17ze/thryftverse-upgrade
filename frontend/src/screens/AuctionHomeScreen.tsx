@@ -2071,7 +2071,7 @@ function createStyles(colors: ThemeColors) {
   // ── Zone wrapper ──
   zoneWrap: {
     paddingHorizontal: Space.md,
-    marginTop: Space.lg + 4,
+    marginTop: Space.xl,
   },
 
   // ── Section title (no subtitle) ──
@@ -2082,7 +2082,7 @@ function createStyles(colors: ThemeColors) {
     letterSpacing: -0.4,
     color: colors.textPrimary,
     fontFamily: Typography.family.bold,
-    marginBottom: Space.sm + 2,
+    marginBottom: Space.md,
   },
 
   // ── Attention zone ──
@@ -2094,7 +2094,7 @@ function createStyles(colors: ThemeColors) {
 
   // ── Horizontal discovery rail ──
   railWrap: {
-    marginTop: Space.md + 4,
+    marginTop: Space.lg,
     marginBottom: Space.xs,
   },
   railHeader: {
@@ -2102,7 +2102,7 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    marginBottom: Space.sm + 2,
+    marginBottom: Space.md,
   },
   railTitle: {
     fontSize: 18,
@@ -2125,7 +2125,7 @@ function createStyles(colors: ThemeColors) {
   // ── Composition ──
   compositionWrap: {
     paddingHorizontal: Space.md,
-    marginTop: Space.lg + 4,
+    marginTop: Space.xl,
   },
   compositionEmpty: {
     paddingHorizontal: Space.md,
@@ -2166,19 +2166,19 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    paddingVertical: Space.sm + 2,
+    paddingVertical: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
   endingSoonImageWrap: {
-    width: 76,
-    height: 76,
+    width: 72,
+    height: 72,
     borderRadius: Radius.md,
     overflow: 'hidden',
   },
   endingSoonImage: {
-    width: 76,
-    height: 76,
+    width: 72,
+    height: 72,
   },
   endingSoonBody: {
     flex: 1,
@@ -2245,7 +2245,7 @@ function createStyles(colors: ThemeColors) {
     left: 0,
     right: 0,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 2,
+    paddingVertical: Space.md,
   },
   categoryTileName: {
     fontSize: 15,
@@ -2263,7 +2263,7 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    paddingVertical: Space.sm + 2,
+    paddingVertical: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
@@ -2319,7 +2319,7 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    paddingVertical: Space.sm + 2,
+    paddingVertical: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
@@ -2386,7 +2386,7 @@ function createStyles(colors: ThemeColors) {
   },
   searchOverlayInput: {
     flex: 1,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     borderRadius: Radius.md,
     paddingHorizontal: Space.md,
@@ -2443,10 +2443,10 @@ function createStyles(colors: ThemeColors) {
   },
   filterChip: {
     paddingVertical: 5,
-    paddingHorizontal: Space.sm + 2,
+    paddingHorizontal: Space.md,
     borderRadius: Radius.full,
     backgroundColor: colors.surface,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     marginRight: Space.xs,
   },

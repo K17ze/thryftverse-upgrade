@@ -221,7 +221,9 @@ function BookSide({
   const ordered = reverseOrder ? [...levels].reverse() : levels;
   const barColor = side === 'bid' ? DEPTH_COLORS.bidBar : DEPTH_COLORS.askBar;
   const barEdgeColor = side === 'bid' ? DEPTH_COLORS.bidBarEdge : DEPTH_COLORS.askBarEdge;
-  const priceColor = side === 'bid' ? colors.success : colors.danger;
+  // Per Design.md: use coownUp/coownDown for financial truth (bid=up/buy,
+  // ask=down/sell), not generic success/danger.
+  const priceColor = side === 'bid' ? colors.coownUp : colors.coownDown;
 
   if (levels.length === 0) {
     return (

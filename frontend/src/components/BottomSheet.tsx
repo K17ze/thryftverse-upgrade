@@ -12,7 +12,6 @@ import Reanimated, {
   useAnimatedStyle,
   runOnJS,
   withSpring,
-  withTiming,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -58,9 +57,9 @@ export function BottomSheet({
       translateY.value = 0;
       backdropOpacity.value = 1;
     } else {
-      // Snappy timing instead of spring — no bounce, no flow
-      translateY.value = withTiming(0, { duration: 180 });
-      backdropOpacity.value = withTiming(1, { duration: 180 });
+      // Spring-based open for flagship feel — organic, not mechanical
+      translateY.value = withSpring(0, Motion.spring.flagship);
+      backdropOpacity.value = withSpring(1, { damping: 20, stiffness: 280 });
     }
   }, [translateY, backdropOpacity, reducedMotion]);
 
@@ -70,10 +69,10 @@ export function BottomSheet({
       backdropOpacity.value = 0;
       runOnJS(onDismiss)();
     } else {
-      // Snappy dismiss — no spring bounce
-      translateY.value = withTiming(sheetHeight, { duration: 160 });
-      backdropOpacity.value = withTiming(0, { duration: 160 });
-      const t = setTimeout(() => runOnJS(onDismiss)(), 170);
+      // Spring-based dismiss — no timing, no setTimeout
+      translateY.value = withSpring(sheetHeight, { damping: 22, stiffness: 280 });
+      backdropOpacity.value = withSpring(0, { damping: 20, stiffness: 280 });
+      const t = setTimeout(() => runOnJS(onDismiss)(), 220);
       return () => clearTimeout(t);
     }
   }, [translateY, backdropOpacity, sheetHeight, onDismiss, reducedMotion]);

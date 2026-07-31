@@ -25,6 +25,11 @@ export interface ThemeColors {
   danger: string;
   success: string;
   warning: string;
+  /** Co-Own financial truth — up/down movement only. Per Design.md
+   * proposed-semantic: coown-up #1C5631, coown-down #5F1616.
+   * Used for price deltas, position P/L, and market direction. */
+  coownUp: string;
+  coownDown: string;
   overlay: string;
   input: string;
   inputText: string;
@@ -53,6 +58,8 @@ const DARK_COLORS: ThemeColors = {
   danger: '#DC2626',
   success: '#16A34A',
   warning: '#F59E0B',
+  coownUp: '#1C5631',
+  coownDown: '#5F1616',
   overlay: 'rgba(0,0,0,0.6)',
   input: '#1A1A1A',
   inputText: '#FFFFFF',
@@ -81,6 +88,8 @@ const LIGHT_COLORS: ThemeColors = {
   danger: '#DC2626',
   success: '#16A34A',
   warning: '#F59E0B',
+  coownUp: '#1C5631',
+  coownDown: '#5F1616',
   overlay: 'rgba(0,0,0,0.4)',
   input: '#FFFFFF',
   inputText: '#000000',

@@ -43,9 +43,9 @@ export const CoOwnCompactPositionCard = React.memo(function CoOwnCompactPosition
   const hasGainLoss = gainLossPct != null && Number.isFinite(gainLossPct) && gainLossLabel;
   const gainDirection = (gainLossPct ?? 0) > 0 ? 'up' : (gainLossPct ?? 0) < 0 ? 'down' : 'flat';
   const gainColor = gainDirection === 'up'
-    ? colors.success
+    ? colors.coownUp
     : gainDirection === 'down'
-      ? colors.danger
+      ? colors.coownDown
       : colors.textSecondary;
   const progress = Math.min(100, Math.max(0, portfolioWeightPct ?? ownershipPct));
 

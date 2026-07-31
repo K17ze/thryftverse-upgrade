@@ -135,8 +135,8 @@ export function CoOwnTradeReceipt({
         <View style={styles.productBody}>
           <Text style={[styles.productTitle, { color: colors.textPrimary }]} numberOfLines={2}>{title}</Text>
           <View style={styles.productMeta}>
-            <View style={[styles.sidePill, { backgroundColor: isBuy ? colors.success + '22' : colors.danger + '22' }]}>
-              <Text style={[styles.sideText, { color: isBuy ? colors.success : colors.danger }]} numberOfLines={1}>
+            <View style={[styles.sidePill, { backgroundColor: isBuy ? colors.coownUp + '22' : colors.coownDown + '22' }]}>
+              <Text style={[styles.sideText, { color: isBuy ? colors.coownUp : colors.coownDown }]} numberOfLines={1}>
                 {isBuy ? 'BUY' : 'SELL'}
               </Text>
             </View>

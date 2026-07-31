@@ -244,9 +244,9 @@ export function CoOwnPositionCard({
                       styles.premiumValue,
                       {
                         color: premiumLastNavPct > 0
-                          ? colors.success
+                          ? colors.coownUp
                           : premiumLastNavPct < 0
-                            ? colors.danger
+                            ? colors.coownDown
                             : colors.textSecondary,
                       },
                     ]}

@@ -69,7 +69,7 @@ export const CoOwnInstrumentCard = React.memo(function CoOwnInstrumentCard({
       </AnimatedPressable>
       <AnimatedPressable
         onPress={onToggleWatch}
-        style={[styles.watchButton, { backgroundColor: colors.background + 'E8', borderColor: colors.border }]}
+        style={styles.watchButton}
         scaleValue={0.94}
         activeOpacity={0.82}
         accessibilityRole="button"
@@ -151,8 +151,6 @@ const styles = StyleSheet.create({
     zIndex: 2,
     width: 44,
     height: 44,
-    borderRadius: Radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
   },

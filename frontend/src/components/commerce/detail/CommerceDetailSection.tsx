@@ -98,13 +98,15 @@ export function CommerceDetailSection({
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.md + 4,
+    paddingTop: Space.md + Space.xs,
     paddingBottom: Space.sm,
   },
   // editorial: stronger heading, more breathing room, no divider.
+  // Uses Space.xl for a true chapter-break feel — the editorial variant
+  // marks a new section in the product story, not just a row group.
   containerEditorial: {
-    paddingTop: Space.lg,
-    paddingBottom: Space.sm,
+    paddingTop: Space.xl,
+    paddingBottom: Space.md,
   },
   // compact: disclosure row with minimal vertical spacing.
   containerCompact: {
@@ -124,8 +126,8 @@ const styles = StyleSheet.create({
   },
   // discovery: visual heading and rail spacing.
   containerDiscovery: {
-    paddingTop: Space.lg,
-    paddingBottom: Space.sm,
+    paddingTop: Space.xl,
+    paddingBottom: Space.md,
   },
   divider: {
     height: StyleSheet.hairlineWidth,
@@ -137,13 +139,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Space.sm,
-    marginBottom: Space.sm,
+    marginBottom: Space.md,
   },
   label: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
     textTransform: 'none',
   },
   // editorial: stronger heading — slightly larger, tighter tracking.

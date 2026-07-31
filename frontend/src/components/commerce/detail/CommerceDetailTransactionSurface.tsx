@@ -184,29 +184,29 @@ const styles = StyleSheet.create({
   // Direct uses a quiet, near-flat price rhythm.
   containerDirect: {
     paddingHorizontal: 0,
-    paddingVertical: Space.sm,
+    paddingVertical: Space.md,
     borderWidth: 0,
   },
   // Auction gives the current bid breathing room without introducing
   // another visual surface.
   containerAuction: {
-    paddingTop: Space.sm,
-    paddingBottom: 0,
+    paddingTop: Space.md,
+    paddingBottom: Space.sm,
   },
   // Co-Own uses a structured market grid on the same page canvas.
   containerCoOwn: {
-    paddingTop: Space.sm,
-    paddingBottom: 0,
+    paddingTop: Space.md,
+    paddingBottom: Space.sm,
   },
   // Primary row: label sits quietly above the dominant value. The
   // value is the hero of this surface — it does not compete with the
-  // label for horizontal space.
+  // label for horizontal space. The gap creates clear hierarchy.
   primaryRow: {
     flexDirection: 'column',
-    gap: 2,
+    gap: Space.xs + 2,
   },
   primaryRowCoOwn: {
-    gap: 4,
+    gap: Space.xs + 2,
   },
   label: {
     fontSize: Type.caption.size,
@@ -228,9 +228,9 @@ const styles = StyleSheet.create({
     letterSpacing: -0.8,
   },
   primaryValueCoOwn: {
-    fontSize: 28,
-    lineHeight: 34,
-    letterSpacing: -0.45,
+    fontSize: 32,
+    lineHeight: 38,
+    letterSpacing: -0.55,
   },
   auctionHeadline: {
     flexDirection: 'row',
@@ -242,7 +242,7 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     alignItems: 'flex-end',
     justifyContent: 'flex-end',
-    paddingBottom: 3,
+    paddingBottom: Space.xs,
   },
   secondaryRow: {
     flexDirection: 'row',
@@ -257,7 +257,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     justifyContent: 'flex-end',
     marginTop: 0,
-    gap: 2,
+    gap: Space.xs,
     flexShrink: 0,
   },
   secondaryLabel: {
@@ -275,13 +275,13 @@ const styles = StyleSheet.create({
   // distinct concern from the primary value, but still part of the
   // same surface.
   viewerStateRow: {
-    marginTop: Space.sm,
-    paddingTop: Space.sm,
+    marginTop: Space.md,
+    paddingTop: Space.md,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   statusRow: {
-    marginTop: Space.sm,
-    paddingTop: Space.sm,
+    marginTop: Space.md,
+    paddingTop: Space.md,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
 });

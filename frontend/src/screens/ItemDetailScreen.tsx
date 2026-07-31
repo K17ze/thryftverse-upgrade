@@ -18,6 +18,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { Listing } from '../services/listingsApi';
 import type { DisplayReadyListing } from '../services/listingMapper';
@@ -633,20 +634,67 @@ export default function ItemDetailScreen() {
         )}
 
         {/* ── Zone D — Purchase details ──
-            Compact summary + disclosure. Groups shipping, buyer
-            protection, returns, authenticity, payment context.
+            Visible trust chips (shipping, protection, returns) above the
+            disclosure row. Research: flagship PDPs surface key trust
+            signals without requiring a tap. The disclosure row still
+            opens the full details sheet.
             Spec 05 §4: "Use a compact summary plus disclosure sheet.
             Do not render a separate bordered strip for every policy." */}
         {purchaseSummary ? (
           <CommerceDetailSection label="Buying this item" variant="continuation">
+            {/* Trust chips — flat inline icon+text, no card containers.
+                Per AGENTS.md: "Flat canvas, spacing and hairlines are
+                the default utility structure." */}
+            {(() => {
+              const chips: { icon: keyof typeof Ionicons.glyphMap; label: string }[] = [];
+              if (commerce.shippingMethod) {
+                chips.push({
+                  icon: commerce.shippingPayer === 'seller' ? 'gift-outline' : 'cube-outline',
+                  label: commerce.shippingPayer === 'seller' ? 'Free shipping' : 'Tracked shipping',
+                });
+              }
+              if (commerce.protectionPolicy?.available) {
+                chips.push({
+                  icon: 'shield-checkmark-outline',
+                  label: 'Buyer protection',
+                });
+              }
+              if (commerce.returnPolicy?.accepted) {
+                chips.push({
+                  icon: 'return-up-back-outline',
+                  label: commerce.returnPolicy.windowDays
+                    ? `${commerce.returnPolicy.windowDays}-day returns`
+                    : 'Returns accepted',
+                });
+              }
+              if (commerce.authenticity && commerce.authenticity.status !== 'not_offered') {
+                chips.push({
+                  icon: 'ribbon-outline',
+                  label: commerce.authenticity.label ?? (commerce.authenticity.status === 'verified' ? 'Verified' : 'Authentic'),
+                });
+              }
+              if (chips.length === 0) return null;
+              return (
+                <View style={styles.trustChipsRow}>
+                  {chips.map((chip, i) => (
+                    <View key={i} style={styles.trustChip}>
+                      <Ionicons name={chip.icon} size={15} color={colors.textSecondary} />
+                      <Text style={[styles.trustChipText, { color: colors.textSecondary }]} numberOfLines={1}>
+                        {chip.label}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              );
+            })()}
             <CommerceDetailDisclosureRow
               label="Delivery & protection"
-              summary={purchaseSummary}
+              summary="Full details"
               onPress={() => {
                 haptic.light();
                 setPurchaseDetailsVisible(true);
               }}
-              leadingIcon="shield-checkmark-outline"
+              leadingIcon="information-circle-outline"
             />
           </CommerceDetailSection>
         ) : null}
@@ -657,12 +705,36 @@ export default function ItemDetailScreen() {
         <CommerceDetailSection label="Item details" divider variant="editorial">
           {item.description ? (
             <View style={styles.descriptionWrap}>
-              <Text
-                style={[styles.descriptionText, { color: colors.textPrimary }]}
-                numberOfLines={descriptionExpanded ? undefined : 4}
+              {/* Full-area tap target — the entire collapsed text is
+                  tappable, not just the "Read more" link. Research
+                  (Vestiaire): "buyers very often do not notice that
+                  description can be expanded by clicking 'see more'". */}
+              <Pressable
+                onPress={() => {
+                  if (item.description && item.description.length > 120) {
+                    setDescriptionExpanded((prev) => !prev);
+                  }
+                }}
+                accessibilityLabel={descriptionExpanded ? 'Show less' : 'Read more'}
+                accessibilityRole="button"
+                disabled={descriptionExpanded || (item.description.length <= 120)}
               >
-                {item.description}
-              </Text>
+                <Text
+                  style={[styles.descriptionText, { color: colors.textPrimary }]}
+                  numberOfLines={descriptionExpanded ? undefined : 4}
+                >
+                  {item.description}
+                </Text>
+                {/* Gradient fade at the collapse edge when collapsed.
+                    Visual signal that there's more content below. */}
+                {!descriptionExpanded && item.description.length > 120 && (
+                  <LinearGradient
+                    colors={[`${colors.background}00`, colors.background]}
+                    style={styles.descriptionFade}
+                    pointerEvents="none"
+                  />
+                )}
+              </Pressable>
               {item.description.length > 120 && (
                 <Pressable
                   onPress={() => setDescriptionExpanded((prev) => !prev)}
@@ -879,6 +951,7 @@ export default function ItemDetailScreen() {
             <CommerceDetailStateDock
               value={formattedPrice}
               valueLabel="Your listing"
+              thumbnailUri={item.images?.[0]}
               primaryAction={{
                 label: 'Manage listing',
                 onPress: () => navigation.navigate('ManageListing', { itemId: item.id }),
@@ -942,6 +1015,7 @@ export default function ItemDetailScreen() {
         return (
           <CommerceDetailStateDock
             value={formattedPrice}
+            thumbnailUri={item.images?.[0]}
             primaryAction={{
               label: 'Buy now',
               onPress: () => {
@@ -1143,8 +1217,8 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   editorialIdentityChapter: {
-    paddingTop: Space.xs,
-    paddingBottom: Space.xs,
+    paddingTop: Space.md,
+    paddingBottom: Space.sm,
   },
   // ── Attribute row ──
   // Rendered inside the identity's padding rhythm — no separate
@@ -1183,17 +1257,34 @@ const styles = StyleSheet.create({
   // ── Seller row ──
   sellerRowWrap: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.xs,
+    paddingVertical: Space.sm,
   },
   // ── Purchase details ──
+  // Trust chips — flat inline icon+text pairs. No card, no surface fill,
+  // no border. Just icon + label + gap. Per AGENTS.md surface budget.
+  trustChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Space.sm,
+    paddingBottom: Space.sm,
+  },
+  trustChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  trustChipText: {
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.medium,
+  },
   purchaseSummary: {
     fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight + 2,
+    lineHeight: Type.body.lineHeight + Space.xs,
     paddingBottom: Space.sm,
   },
   purchaseSheetHeader: {
-    minHeight: 64,
+    minHeight: Space.md * 4,
     paddingLeft: Space.md,
     paddingRight: Space.xs,
     paddingVertical: Space.sm,
@@ -1226,12 +1317,22 @@ const styles = StyleSheet.create({
   },
   // ── Description ──
   descriptionWrap: {
-    gap: Space.xs,
+    gap: Space.sm,
     paddingBottom: Space.sm,
+  },
+  // Gradient fade overlay at the bottom of collapsed description text.
+  // Visual signal that there's more content — replaces the bare text
+  // link that users miss (per Vestiaire research).
+  descriptionFade: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 28,
   },
   descriptionText: {
     fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight + 4,
+    lineHeight: Type.body.lineHeight + Space.xs,
     fontFamily: Typography.family.regular,
   },
   descriptionToggle: {
@@ -1360,7 +1461,6 @@ const styles = StyleSheet.create({
     paddingBottom: Space.sm,
     marginBottom: Space.xs,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(0,0,0,0.08)',
   },
   overflowTitle: {
     fontSize: Type.body.size,

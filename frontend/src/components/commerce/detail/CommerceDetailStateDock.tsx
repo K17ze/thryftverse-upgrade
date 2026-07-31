@@ -7,6 +7,7 @@ import { useAppTheme } from '../../../theme/ThemeContext';
 import { Space, Type, Radius, Typography } from '../../../theme/designTokens';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useHaptic } from '../../../hooks/useHaptic';
+import { CachedImage } from '../../CachedImage';
 import type { CommerceDetailDockLayout } from './types';
 import { COMMERCE_DETAIL_COMPACT_WIDTH } from './types';
 
@@ -67,6 +68,11 @@ export interface CommerceDetailStateDockProps {
   /** Optional subtitle under the value/state (e.g. "Complete rights
    * disclosure"). Used for blocked-state explanation. */
   subtitle?: string;
+  /** Optional product thumbnail rendered on the left edge. Anchors the
+   * user to the product when they've scrolled past the hero image.
+   * Research (ecomsdesignpro): "A small thumbnail helps, especially
+   * when users scroll far past the hero image." */
+  thumbnailUri?: string;
   /** Primary action (max 1). Required when no blocked state is shown. */
   primaryAction?: CommerceDetailStateDockAction;
   /** Secondary action (max 1). */
@@ -95,6 +101,7 @@ export function CommerceDetailStateDock({
   valueLabel,
   stateBadge,
   subtitle,
+  thumbnailUri,
   primaryAction,
   secondaryAction,
   elevated = false,
@@ -135,31 +142,44 @@ export function CommerceDetailStateDock({
     >
       <View style={shouldStack ? styles.rowStacked : styles.row}>
         <View style={styles.valueCluster}>
-          {stateBadge}
-          {value ? (
-            <Text
-              style={[styles.value, { color: colors.textPrimary }]}
-              accessibilityRole="text"
-            >
-              {value}
-            </Text>
+          {/* Product thumbnail — anchors the user to the product when
+              they've scrolled past the hero. Small, quiet, no border.
+              Per AGENTS.md: visible containment must have meaning. The
+              thumbnail is informational, not a container. */}
+          {thumbnailUri && !stateBadge ? (
+            <CachedImage
+              uri={thumbnailUri}
+              style={styles.thumbnail}
+              contentFit="cover"
+            />
           ) : null}
-          {valueLabel ? (
-            <Text
-              style={[styles.valueLabel, { color: colors.textSecondary }]}
-              numberOfLines={1}
-            >
-              {valueLabel}
-            </Text>
-          ) : null}
-          {subtitle ? (
-            <Text
-              style={[styles.subtitle, { color: colors.textSecondary }]}
-              numberOfLines={2}
-            >
-              {subtitle}
-            </Text>
-          ) : null}
+          <View style={styles.valueTextCluster}>
+            {stateBadge}
+            {value ? (
+              <Text
+                style={[styles.value, { color: colors.textPrimary }]}
+                accessibilityRole="text"
+              >
+                {value}
+              </Text>
+            ) : null}
+            {valueLabel ? (
+              <Text
+                style={[styles.valueLabel, { color: colors.textSecondary }]}
+                numberOfLines={1}
+              >
+                {valueLabel}
+              </Text>
+            ) : null}
+            {subtitle ? (
+              <Text
+                style={[styles.subtitle, { color: colors.textSecondary }]}
+                numberOfLines={2}
+              >
+                {subtitle}
+              </Text>
+            ) : null}
+          </View>
         </View>
 
         <View style={shouldStack ? styles.actionClusterStacked : styles.actionCluster}>
@@ -261,7 +281,7 @@ const styles = StyleSheet.create({
     width: '100%',
     minWidth: 0,
     paddingHorizontal: Space.md,
-    paddingTop: Space.xs,
+    paddingTop: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   row: {
@@ -281,15 +301,31 @@ const styles = StyleSheet.create({
     minHeight: 44,
   },
   valueCluster: {
-    flexDirection: 'column',
-    gap: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
     flexShrink: 1,
   },
+  // Text cluster inside the value cluster — holds value, label, subtitle.
+  // Needed so the thumbnail sits to the left and text stacks vertically.
+  valueTextCluster: {
+    flexDirection: 'column',
+    gap: Space.xs,
+    flexShrink: 1,
+  },
+  // Product thumbnail — 32x32, small radius. Quiet, no border.
+  // Research: "anchors them back to the product they intended to buy."
+  thumbnail: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.sm,
+    flexShrink: 0,
+  },
   value: {
-    fontSize: Type.priceList.size,
-    lineHeight: Type.priceList.lineHeight,
+    fontSize: Type.priceLarge.size,
+    lineHeight: Type.priceLarge.lineHeight,
     fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceList.letterSpacing,
+    letterSpacing: Type.priceLarge.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   valueLabel: {

@@ -39,7 +39,7 @@ const styles = StyleSheet.create({
   root: {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    paddingBottom: Space.xs,
+    paddingBottom: Space.sm,
   },
 });
 

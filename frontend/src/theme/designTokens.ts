@@ -362,11 +362,11 @@ export const DockConstants = {
   /** Base dock content height (minHeight from dock styles) */
   baseHeight: 72,
   /** Single-action dock (one full-width button) — typical total */
-  singleActionHeight: 96,
+  singleActionHeight: 104,
   /** Two-action dock (cancel + confirm side by side) — typical total */
-  dualActionHeight: 132,
+  dualActionHeight: 140,
   /** Stacked compact dock (buttons stacked vertically) — typical total */
-  stackedActionHeight: 180,
+  stackedActionHeight: 188,
 } as const;
 
 // ============================================================================

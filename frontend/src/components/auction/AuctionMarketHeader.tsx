@@ -179,7 +179,7 @@ export function AuctionMarketHeader({
 
 const styles = StyleSheet.create({
   header: {
-    paddingBottom: Space.sm - 2,
+    paddingBottom: Space.sm,
     paddingHorizontal: Space.md,
   },
   row: {
@@ -188,21 +188,23 @@ const styles = StyleSheet.create({
     gap: Space.xs,
     minHeight: 48,
   },
+  // Standardized 44x44 hit targets — per AGENTS.md: separate hit area
+  // from visible shape. No circular chrome on utility controls.
   iconBtn: {
-    width: 36,
+    width: 44,
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
   },
+  // Create button — transparent hit target, brand-colored icon.
+  // No surfaceAlt circle; the brand color is the visual signal.
   createBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.full,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.surfaceAlt,
-    marginLeft: 4,
+    marginLeft: Space.xs,
   },
   titleWrap: {
     flex: 1,
@@ -213,30 +215,32 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     letterSpacing: -0.6,
   },
+  // Context elevated — 14pt medium with tighter tracking for editorial feel
   context: {
-    fontFamily: Typography.family.regular,
-    fontSize: 13,
+    fontFamily: Typography.family.medium,
+    fontSize: 14,
     color: Colors.textSecondary,
-    marginTop: 0,
-    letterSpacing: -0.1,
+    marginTop: 2,
+    letterSpacing: -0.3,
   },
   actions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 0,
   },
+  // Refined badge — smaller, hairline border, subtle shadow
   badge: {
     position: 'absolute',
-    top: 5,
-    right: 3,
-    minWidth: 16,
-    height: 16,
+    top: 4,
+    right: 4,
+    minWidth: 14,
+    height: 14,
     borderRadius: Radius.full,
     backgroundColor: Colors.danger,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
-    borderWidth: 2,
+    paddingHorizontal: 3,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.background,
   },
   badgeText: {
@@ -246,7 +250,7 @@ const styles = StyleSheet.create({
   },
   overflowBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-start',
     alignItems: 'flex-end',
   },
