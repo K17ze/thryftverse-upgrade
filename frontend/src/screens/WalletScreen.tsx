@@ -36,10 +36,12 @@ import { parseApiError } from '../lib/apiClient';
 import {
   getIzePosition,
   getWalletSnapshot,
+  getSellerWalletBalances,
   createIzeMintQuote,
   createStripeIntentSheet,
   buyIze,
   convertIzeToFiat,
+  type SellerWalletBalanceItem,
 } from '../services/walletApi';
 import {
   configureStripeMobile,
@@ -94,6 +96,14 @@ export default function WalletScreen({ navigation }: Props) {
   });
   // Fiat balance kept in parallel for the "Buy 1ZE with fiat balance" flow.
   const [availableFiatBalance, setAvailableFiatBalance] = useState(0);
+  // Seller wallet: pending vs available balance with per-order breakdown.
+  const [sellerBalances, setSellerBalances] = useState<{
+    availableGbp: number;
+    pendingGbp: number;
+    heldInReserveGbp: number;
+    pendingBreakdown: SellerWalletBalanceItem[];
+  } | null>(null);
+  const [showPendingBreakdown, setShowPendingBreakdown] = useState(false);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isError, setIsError] = React.useState(false);
   const [refreshing, setRefreshing] = React.useState(false);
@@ -124,8 +134,9 @@ export default function WalletScreen({ navigation }: Props) {
     Promise.all([
       getIzePosition(currentUser.id, currencyCode),
       getWalletSnapshot(currentUser.id).catch(() => null),
+      getSellerWalletBalances(currentUser.id).catch(() => null),
     ])
-      .then(([position, fiatWallet]) => {
+      .then(([position, fiatWallet, sellerWallet]) => {
         if (cancelled) return;
         setBalance({
           available: position.balances.availableIze,
@@ -145,6 +156,14 @@ export default function WalletScreen({ navigation }: Props) {
           reconciliationState: position.balances.reconciliationState,
         });
         setAvailableFiatBalance(fiatWallet?.snapshot.availableGbp ?? 0);
+        if (sellerWallet) {
+          setSellerBalances({
+            availableGbp: sellerWallet.balances.availableGbp,
+            pendingGbp: sellerWallet.balances.pendingGbp,
+            heldInReserveGbp: sellerWallet.balances.heldInReserveGbp,
+            pendingBreakdown: sellerWallet.pendingBreakdown,
+          });
+        }
       })
       .catch((err) => {
         if (cancelled) return;
@@ -482,6 +501,102 @@ export default function WalletScreen({ navigation }: Props) {
           localFiatLabel={localFiatLabel}
           localFiatSource={currencyCode}
         />
+
+        {/* ── Seller wallet: pending vs available with release countdown ── */}
+        {sellerBalances !== null && (sellerBalances.pendingGbp > 0 || sellerBalances.availableGbp > 0 || sellerBalances.heldInReserveGbp > 0) && (
+          <View style={[styles.sellerWalletCard, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.sellerWalletTitle, { color: colors.textPrimary }]}>
+              Selling balance
+            </Text>
+
+            <View style={styles.sellerBalanceRow}>
+              <View style={styles.sellerBalanceItem}>
+                <Text style={[styles.sellerBalanceLabel, { color: colors.textSecondary }]}>
+                  Available
+                </Text>
+                <Text style={[styles.sellerBalanceValue, { color: colors.textPrimary }]}>
+                  {formatFromFiat(sellerBalances.availableGbp, currencyCode, { displayMode: 'fiat' })}
+                </Text>
+              </View>
+              <View style={[styles.sellerBalanceDivider, { backgroundColor: colors.border }]} />
+              <View style={styles.sellerBalanceItem}>
+                <Text style={[styles.sellerBalanceLabel, { color: colors.textSecondary }]}>
+                  Pending
+                </Text>
+                <Text style={[styles.sellerBalanceValue, { color: colors.textPrimary }]}>
+                  {formatFromFiat(sellerBalances.pendingGbp, currencyCode, { displayMode: 'fiat' })}
+                </Text>
+              </View>
+              {sellerBalances.heldInReserveGbp > 0 && (
+                <>
+                  <View style={[styles.sellerBalanceDivider, { backgroundColor: colors.border }]} />
+                  <View style={styles.sellerBalanceItem}>
+                    <Text style={[styles.sellerBalanceLabel, { color: colors.textSecondary }]}>
+                      In reserve
+                    </Text>
+                    <Text style={[styles.sellerBalanceValue, { color: colors.textPrimary }]}>
+                      {formatFromFiat(sellerBalances.heldInReserveGbp, currencyCode, { displayMode: 'fiat' })}
+                    </Text>
+                  </View>
+                </>
+              )}
+            </View>
+
+            {sellerBalances.pendingGbp > 0 && (
+              <Pressable
+                onPress={() => {
+                  haptics.selection();
+                  LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                  setShowPendingBreakdown(!showPendingBreakdown);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={showPendingBreakdown ? 'Hide pending breakdown' : 'Show pending breakdown'}
+                style={styles.pendingToggle}
+              >
+                <Text style={[styles.pendingToggleText, { color: colors.textSecondary }]}>
+                  {showPendingBreakdown ? 'Hide' : 'Show'} pending orders ({sellerBalances.pendingBreakdown.length})
+                </Text>
+                <Ionicons
+                  name={showPendingBreakdown ? 'chevron-up' : 'chevron-down'}
+                  size={16}
+                  color={colors.textSecondary}
+                />
+              </Pressable>
+            )}
+
+            {showPendingBreakdown && sellerBalances.pendingBreakdown.length > 0 && (
+              <View style={styles.pendingBreakdownList}>
+                {sellerBalances.pendingBreakdown.map((item) => {
+                  const releaseIn = item.releaseScheduledAt
+                    ? Math.max(0, Math.ceil((new Date(item.releaseScheduledAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+                    : null;
+                  return (
+                    <View key={item.orderId} style={[styles.pendingItem, { borderColor: colors.border }]}>
+                      <View style={styles.pendingItemInfo}>
+                        <Text
+                          style={[styles.pendingItemTitle, { color: colors.textPrimary }]}
+                          numberOfLines={1}
+                        >
+                          {item.listingTitle ?? 'Order'}
+                        </Text>
+                        <Text style={[styles.pendingItemMeta, { color: colors.textMuted }]}>
+                          {item.orderStatus === 'delivered'
+                            ? releaseIn !== null && releaseIn > 0
+                              ? `Releases in ${releaseIn}d`
+                              : 'Releasing soon'
+                            : `Awaiting ${item.orderStatus === 'shipped' ? 'delivery' : 'shipment'}`}
+                        </Text>
+                      </View>
+                      <Text style={[styles.pendingItemAmount, { color: colors.textPrimary }]}>
+                        {formatFromFiat(item.amountGbp, currencyCode, { displayMode: 'fiat' })}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+        )}
 
         {/* ── Add 1ZE / Redeem 1ZE — separate flows, never combined ── */}
         <View style={styles.actionRow}>
@@ -832,6 +947,75 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
+  },
+  sellerWalletCard: {
+    borderRadius: Radius.lg,
+    padding: Space.md,
+    marginTop: Space.md,
+  },
+  sellerWalletTitle: {
+    fontSize: Type.body.size,
+    fontWeight: '600',
+    marginBottom: Space.sm,
+  },
+  sellerBalanceRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+  },
+  sellerBalanceItem: {
+    flex: 1,
+    paddingVertical: Space.xs,
+  },
+  sellerBalanceDivider: {
+    width: 1,
+    marginVertical: Space.xs,
+  },
+  sellerBalanceLabel: {
+    fontSize: Type.caption.size,
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  sellerBalanceValue: {
+    fontSize: Type.heading.size,
+    fontWeight: '700',
+  },
+  pendingToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.xs,
+    paddingVertical: Space.sm,
+    marginTop: Space.xs,
+  },
+  pendingToggleText: {
+    fontSize: Type.caption.size,
+    fontWeight: '500',
+  },
+  pendingBreakdownList: {
+    gap: Space.xs,
+  },
+  pendingItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  pendingItemInfo: {
+    flex: 1,
+    marginRight: Space.sm,
+  },
+  pendingItemTitle: {
+    fontSize: Type.body.size,
+    fontWeight: '500',
+  },
+  pendingItemMeta: {
+    fontSize: Type.caption.size,
+    marginTop: 2,
+  },
+  pendingItemAmount: {
+    fontSize: Type.body.size,
+    fontWeight: '600',
   },
   actionRow: {
     flexDirection: 'row',

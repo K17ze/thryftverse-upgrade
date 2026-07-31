@@ -695,3 +695,29 @@ interface WalletSnapshotResponse {
 export async function getWalletSnapshot(userId: string) {
   return fetchJson<WalletSnapshotResponse>(`/wallets/${encodeURIComponent(userId)}/snapshot`);
 }
+
+// ── Seller wallet: pending vs available balance ───────────────────────
+export interface SellerWalletBalanceItem {
+  orderId: string;
+  listingTitle: string | null;
+  amountGbp: number;
+  orderStatus: string;
+  deliveredAt: string | null;
+  releaseScheduledAt: string | null;
+}
+
+export interface SellerWalletBalancesResponse {
+  ok: true;
+  balances: {
+    availableGbp: number;
+    pendingGbp: number;
+    heldInReserveGbp: number;
+  };
+  pendingBreakdown: SellerWalletBalanceItem[];
+}
+
+export async function getSellerWalletBalances(userId: string) {
+  return fetchJson<SellerWalletBalancesResponse>(
+    `/users/${encodeURIComponent(userId)}/wallet/balances`
+  );
+}

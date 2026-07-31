@@ -244,6 +244,15 @@ export async function syncStripePaymentMethodProjections(input: {
 
     providerIds.push(method.id);
     const display = stripeCardDisplayDetails(method.card);
+
+    // Detect wallet type (Apple Pay / Google Pay) from the card's wallet field.
+    // Stripe attaches card.wallet.type when a card was tokenized via a wallet.
+    const walletType = method.card.wallet?.type;
+    const methodType: 'card' | 'apple_pay' | 'google_pay' =
+      walletType === 'apple_pay' ? 'apple_pay'
+      : walletType === 'google_pay' ? 'google_pay'
+      : 'card';
+
     await input.db.query(
       `INSERT INTO user_payment_methods (
          user_id,
@@ -262,11 +271,12 @@ export async function syncStripePaymentMethodProjections(input: {
          billing_country_hash,
          redisplay_consent,
          provider_created_at,
-         detached_at
+         detached_at,
+         wallet_type
        )
        VALUES (
-         $1, 'card', $2, $3, $4, 'stripe', $5, $6, 'active',
-         $7, $8, $9, $10, $11, $12, TO_TIMESTAMP($13), NULL
+         $1, $14, $2, $3, $4, 'stripe', $5, $6, 'active',
+         $7, $8, $9, $10, $11, $12, TO_TIMESTAMP($13), NULL, $15
        )
        ON CONFLICT (provider, provider_payment_method_ref)
          WHERE provider_payment_method_ref IS NOT NULL
@@ -285,6 +295,7 @@ export async function syncStripePaymentMethodProjections(input: {
          redisplay_consent = EXCLUDED.redisplay_consent,
          provider_created_at = EXCLUDED.provider_created_at,
          detached_at = NULL,
+         wallet_type = EXCLUDED.wallet_type,
          updated_at = NOW()`,
       [
         input.userId,
@@ -300,6 +311,8 @@ export async function syncStripePaymentMethodProjections(input: {
         hashBillingCountry(method.billing_details.address?.country, input.hmacSecret),
         method.allow_redisplay ?? 'unspecified',
         method.created,
+        methodType,
+        walletType ?? null,
       ]
     );
   }

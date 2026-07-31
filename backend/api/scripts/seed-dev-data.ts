@@ -25,7 +25,7 @@ const IMG = {
   amiShirt:      'https://images.unsplash.com/photo-1602810318383-e386cc2a3cc6?w=1200&q=80',
   amiShirt2:     'https://images.unsplash.com/photo-1598033129183-4f895bac41ad?w=1200&q=80',
   ralphHarring:  'https://images.unsplash.com/photo-1591047139825-d91f6f4c0c4e?w=1200&q=80',
-  stussyTee:     'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=1200&q=80',
+  stussyTee:     'https://images.unsplash.com/photo-1583743814966-2fa3b3a4b070?w=1200&q=80',
   stussyTee2:    'https://images.unsplash.com/photo-1556905055-8f358a7a5b1d?w=1200&q=80',
   offwhiteHood:  'https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=1200&q=80',
   nikeAirMax:   'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=1200&q=80',
@@ -33,6 +33,17 @@ const IMG = {
   jacquemusBag: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=1200&q=80',
   representHood:'https://images.unsplash.com/photo-1556821833-cb4bea8d3e8c?w=1200&q=80',
   converseHigh: 'https://images.unsplash.com/photo-1606107557193-32dd8ff4f8e5?w=1200&q=80',
+  // Luxury watches — for the Watches category world
+  rolexDatejust: 'https://images.unsplash.com/photo-1587836374828-4b2a6f0b6b5e?w=1200&q=80',
+  omegaSpeedmaster: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=1200&q=80',
+  patekCalatrava: 'https://images.unsplash.com/photo-1639038278291-12d0e0b5e8b0?w=1200&q=80',
+  // Luxury bags — for the Bags category world
+  hermesBirkin: 'https://images.unsplash.com/photo-1591561954557-2694118b5e1b?w=1200&q=80',
+  chanelFlap: 'https://images.unsplash.com/photo-1584917827109-9c1f5b5e5e5e?w=1200&q=80',
+  // Sneakers — for the Sneakers category world
+  nikeDunkPanda: 'https://images.unsplash.com/photo-1600269453801-1e1a1a1a1a1a?w=1200&q=80',
+  // Cameras — for the Cameras category world
+  leicaM6: 'https://images.unsplash.com/photo-1500634245200-6a6afdb8e1c2?w=1200&q=80',
   // Avatars
   avatar1: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&q=80',
   avatar2: 'https://images.unsplash.com/photo-1500648767731-6c6f9e7e2644?w=200&q=80',
@@ -199,24 +210,146 @@ const LISTINGS: SeedListing[] = [
       { url: IMG.converseHigh, width: 1200, height: 1600, focalX: 0.5, focalY: 0.3 },
     ],
   },
+  // ── Luxury listings for diverse category worlds ──
+  {
+    id: 'seed_l11', sellerId: 'seed_u2',
+    title: 'Vintage Rolex Datejust 36', brand: 'Rolex', size: '36mm',
+    condition: 'Very good', priceGbp: 4200, originalPriceGbp: null,
+    category: 'Watches', subcategory: 'Luxury',
+    description: '1985 Rolex Datejust 36mm in stainless steel with original dial. Recently serviced.',
+    shippingMethod: 'tracked', shippingPayer: 'seller',
+    images: [
+      { url: IMG.rolexDatejust, width: 1200, height: 1600, focalX: 0.5, focalY: 0.4 },
+    ],
+  },
+  {
+    id: 'seed_l12', sellerId: 'seed_u1',
+    title: 'Omega Speedmaster Professional', brand: 'Omega', size: '42mm',
+    condition: 'Very good', priceGbp: 3800, originalPriceGbp: null,
+    category: 'Watches', subcategory: 'Luxury',
+    description: 'Speedmaster Pro Moonwatch with box and papers. Calibre 1861.',
+    shippingMethod: 'tracked', shippingPayer: 'seller',
+    images: [
+      { url: IMG.omegaSpeedmaster, width: 1200, height: 1600, focalX: 0.5, focalY: 0.35 },
+    ],
+  },
+  {
+    id: 'seed_l13', sellerId: 'seed_u2',
+    title: 'Patek Philippe Calatrava 5196', brand: 'Patek Philippe', size: '37mm',
+    condition: 'Mint', priceGbp: 18000, originalPriceGbp: null,
+    category: 'Watches', subcategory: 'Luxury',
+    description: 'Calatrava 5196G in white gold. Full set, purchased 2023.',
+    shippingMethod: 'tracked', shippingPayer: 'seller',
+    images: [
+      { url: IMG.patekCalatrava, width: 1200, height: 1600, focalX: 0.5, focalY: 0.4 },
+    ],
+  },
+  {
+    id: 'seed_l14', sellerId: 'seed_u1',
+    title: 'Hermès Birkin 30 Togo Gold', brand: 'Hermès', size: '30cm',
+    condition: 'Very good', priceGbp: 12000, originalPriceGbp: null,
+    category: 'Bags', subcategory: 'Luxury',
+    description: 'Birkin 30 in Togo leather, gold hardware. Stamp from 2021.',
+    shippingMethod: 'tracked', shippingPayer: 'seller',
+    images: [
+      { url: IMG.hermesBirkin, width: 1200, height: 1600, focalX: 0.5, focalY: 0.4 },
+    ],
+  },
+  {
+    id: 'seed_l15', sellerId: 'seed_u2',
+    title: 'Chanel Classic Flap Medium', brand: 'Chanel', size: 'Medium',
+    condition: 'Very good', priceGbp: 6800, originalPriceGbp: null,
+    category: 'Bags', subcategory: 'Luxury',
+    description: 'Medium Classic Flap in caviar leather with gold hardware. 2022 collection.',
+    shippingMethod: 'tracked', shippingPayer: 'seller',
+    images: [
+      { url: IMG.chanelFlap, width: 1200, height: 1600, focalX: 0.5, focalY: 0.35 },
+    ],
+  },
+  {
+    id: 'seed_l16', sellerId: 'seed_u3',
+    title: 'Nike Dunk Low Panda', brand: 'Nike', size: '10',
+    condition: 'New with tags', priceGbp: 180, originalPriceGbp: null,
+    category: 'Sneakers', subcategory: 'Streetwear',
+    description: 'Deadstock Dunk Low Panda. Never worn, original box.',
+    shippingMethod: 'tracked', shippingPayer: 'buyer',
+    images: [
+      { url: IMG.nikeDunkPanda, width: 1200, height: 1600, focalX: 0.5, focalY: 0.3 },
+    ],
+  },
+  {
+    id: 'seed_l17', sellerId: 'seed_u2',
+    title: 'Leica M6 Black Paint', brand: 'Leica', size: 'Standard',
+    condition: 'Very good', priceGbp: 3200, originalPriceGbp: null,
+    category: 'Cameras', subcategory: 'Film',
+    description: 'Leica M6 classic black paint. Light brassing, fully functional. Includes finder.',
+    shippingMethod: 'tracked', shippingPayer: 'seller',
+    images: [
+      { url: IMG.leicaM6, width: 1200, height: 1600, focalX: 0.5, focalY: 0.4 },
+    ],
+  },
 ];
 
 const AUCTIONS: SeedAuction[] = [
+  // ── Live auctions (already started, ending at various times) ──
+  // Ends in 48h — long-running live auction
   { listingId: 'seed_l1', startingBidGbp: 150, buyNowPriceGbp: 250, reservePriceGbp: 180, startsAtOffsetH: -24, endsAtOffsetH: 48, bids: [
     { bidderId: 'seed_u3', amountGbp: 160 },
     { bidderId: 'seed_u4', amountGbp: 175 },
     { bidderId: 'seed_u3', amountGbp: 190 },
   ]},
+  // Ends in 72h — live with single bid
   { listingId: 'seed_l5', startingBidGbp: 140, buyNowPriceGbp: 220, reservePriceGbp: null, startsAtOffsetH: -12, endsAtOffsetH: 72, bids: [
     { bidderId: 'seed_u4', amountGbp: 150 },
   ]},
+  // Ends in 24h — live with active bidding
   { listingId: 'seed_l8', startingBidGbp: 280, buyNowPriceGbp: 400, reservePriceGbp: 300, startsAtOffsetH: -48, endsAtOffsetH: 24, bids: [
     { bidderId: 'seed_u2', amountGbp: 290 },
     { bidderId: 'seed_u3', amountGbp: 310 },
     { bidderId: 'seed_u2', amountGbp: 325 },
     { bidderId: 'seed_u3', amountGbp: 340 },
   ]},
+  // Ends in 120h — live, no bids yet
   { listingId: 'seed_l6', startingBidGbp: 50, buyNowPriceGbp: 90, reservePriceGbp: null, startsAtOffsetH: -6, endsAtOffsetH: 120, bids: [] },
+
+  // ── Closing soon (ends within 60 minutes) ──
+  // Ends in 8 min — final minutes urgency
+  { listingId: 'seed_l11', startingBidGbp: 3500, buyNowPriceGbp: 4500, reservePriceGbp: 3800, startsAtOffsetH: -72, endsAtOffsetH: 0.13, bids: [
+    { bidderId: 'seed_u3', amountGbp: 3600 },
+    { bidderId: 'seed_u4', amountGbp: 3800 },
+    { bidderId: 'seed_u3', amountGbp: 4100 },
+  ]},
+  // Ends in 22 min — ending soon
+  { listingId: 'seed_l14', startingBidGbp: 9000, buyNowPriceGbp: 14000, reservePriceGbp: 10000, startsAtOffsetH: -96, endsAtOffsetH: 0.37, bids: [
+    { bidderId: 'seed_u3', amountGbp: 9500 },
+    { bidderId: 'seed_u4', amountGbp: 10500 },
+  ]},
+  // Ends in 45 min — ending soon
+  { listingId: 'seed_l16', startingBidGbp: 120, buyNowPriceGbp: 200, reservePriceGbp: null, startsAtOffsetH: -48, endsAtOffsetH: 0.75, bids: [
+    { bidderId: 'seed_u4', amountGbp: 130 },
+    { bidderId: 'seed_u3', amountGbp: 145 },
+  ]},
+
+  // ── Upcoming (starts in the future) ──
+  // Starts in 4h
+  { listingId: 'seed_l12', startingBidGbp: 3200, buyNowPriceGbp: 4200, reservePriceGbp: 3500, startsAtOffsetH: 4, endsAtOffsetH: 52, bids: [] },
+  // Starts in 12h
+  { listingId: 'seed_l15', startingBidGbp: 5500, buyNowPriceGbp: 7500, reservePriceGbp: 6000, startsAtOffsetH: 12, endsAtOffsetH: 84, bids: [] },
+  // Starts in 48h
+  { listingId: 'seed_l13', startingBidGbp: 15000, buyNowPriceGbp: 22000, reservePriceGbp: 16000, startsAtOffsetH: 48, endsAtOffsetH: 144, bids: [] },
+
+  // ── Recently closed (ended) ──
+  // Ended 2h ago — sold with bids
+  { listingId: 'seed_l17', startingBidGbp: 2500, buyNowPriceGbp: 3500, reservePriceGbp: 2800, startsAtOffsetH: -50, endsAtOffsetH: -2, bids: [
+    { bidderId: 'seed_u3', amountGbp: 2600 },
+    { bidderId: 'seed_u4', amountGbp: 2900 },
+    { bidderId: 'seed_u3', amountGbp: 3100 },
+  ]},
+  // Ended 24h ago — sold
+  { listingId: 'seed_l9', startingBidGbp: 80, buyNowPriceGbp: 150, reservePriceGbp: null, startsAtOffsetH: -72, endsAtOffsetH: -24, bids: [
+    { bidderId: 'seed_u4', amountGbp: 90 },
+    { bidderId: 'seed_u3', amountGbp: 110 },
+  ]},
 ];
 
 async function seed() {
@@ -309,7 +442,10 @@ async function seed() {
           ON CONFLICT (id) DO UPDATE SET
             starts_at = EXCLUDED.starts_at,
             ends_at = EXCLUDED.ends_at,
+            starting_bid_gbp = EXCLUDED.starting_bid_gbp,
             current_bid_gbp = EXCLUDED.current_bid_gbp,
+            buy_now_price_gbp = EXCLUDED.buy_now_price_gbp,
+            reserve_price_gbp = EXCLUDED.reserve_price_gbp,
             bid_count = EXCLUDED.bid_count,
             status = 'live'`,
         [auctionId, a.listingId, startsAt, endsAt, a.startingBidGbp, currentBid,
@@ -317,6 +453,11 @@ async function seed() {
       );
 
       // ── Bids ──────────────────────────────────────────────────────────────
+      // Clean up old seed bids first to avoid duplicates on re-run.
+      await client.query(
+        `DELETE FROM auction_bids WHERE auction_id = $1 AND idempotency_key IS NULL`,
+        [auctionId]
+      );
       for (const bid of a.bids) {
         await client.query(
           `INSERT INTO auction_bids (auction_id, bidder_id, amount_gbp)
@@ -528,6 +669,319 @@ async function seed() {
       );
     }
     console.log(`[seed] ${USERS.length} wallets upserted`);
+
+    // ── Looks (shoppable images) with product tags ──────────────────────────
+    const seedLooks = [
+      {
+        id: 'seed_look_1', creatorId: 'seed_u1', title: 'Autumn Layering',
+        caption: 'Vintage YSL sweater styled for crisp autumn days.', mediaUrl: IMG.yslSweater,
+        status: 'published', visibility: 'public',
+        tags: [
+          { id: 't1', listingId: 'seed_l1', label: 'YSL Sweater', x: 0.5, y: 0.4 },
+          { id: 't2', listingId: 'seed_l4', label: 'Stüssy Tee', x: 0.3, y: 0.7 },
+        ],
+      },
+      {
+        id: 'seed_look_2', creatorId: 'seed_u2', title: 'Parisian Stripes',
+        caption: 'AMI striped shirt — effortless Parisian cool.', mediaUrl: IMG.amiShirt,
+        status: 'published', visibility: 'public',
+        tags: [
+          { id: 't1', listingId: 'seed_l2', label: 'AMI Shirt', x: 0.5, y: 0.35 },
+        ],
+      },
+      {
+        id: 'seed_look_3', creatorId: 'seed_u3', title: 'Harrington Season',
+        caption: 'Classic Ralph Lauren Harrington — timeless.', mediaUrl: IMG.ralphHarring,
+        status: 'published', visibility: 'public',
+        tags: [
+          { id: 't1', listingId: 'seed_l3', label: 'RL Harrington', x: 0.5, y: 0.4 },
+          { id: 't2', listingId: 'seed_l6', label: 'Air Max 90', x: 0.5, y: 0.85 },
+        ],
+      },
+      {
+        id: 'seed_look_4', creatorId: 'seed_u1', title: 'Streetwear Drop (Draft)',
+        caption: 'Working on this one — not ready yet.', mediaUrl: IMG.stussyTee,
+        status: 'draft', visibility: 'private',
+        tags: [
+          { id: 't1', listingId: 'seed_l4', label: 'Stüssy Tee', x: 0.5, y: 0.4 },
+        ],
+      },
+      {
+        id: 'seed_look_5', creatorId: 'seed_u2', title: 'Archive Hoodie (Archived)',
+        caption: 'Old look, moved to archive.', mediaUrl: IMG.offwhiteHood,
+        status: 'archived', visibility: 'public',
+        tags: [
+          { id: 't1', listingId: 'seed_l5', label: 'Off-White Hoodie', x: 0.5, y: 0.45 },
+        ],
+      },
+    ];
+
+    for (const look of seedLooks) {
+      await client.query(
+        `INSERT INTO looks (id, creator_id, title, caption, media_url, status, visibility)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (id) DO UPDATE SET
+           title = EXCLUDED.title,
+           caption = EXCLUDED.caption,
+           media_url = EXCLUDED.media_url,
+           status = EXCLUDED.status,
+           visibility = EXCLUDED.visibility`,
+        [look.id, look.creatorId, look.title, look.caption, look.mediaUrl, look.status, look.visibility]
+      );
+
+      for (const tag of look.tags) {
+        const tagId = `${look.id}_${tag.id}`;
+        await client.query(
+          `INSERT INTO look_tags (id, look_id, listing_id, label, x, y)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (id) DO UPDATE SET
+             listing_id = EXCLUDED.listing_id,
+             label = EXCLUDED.label,
+             x = EXCLUDED.x,
+             y = EXCLUDED.y`,
+          [tagId, look.id, tag.listingId, tag.label, tag.x, tag.y]
+        );
+      }
+    }
+    console.log(`[seed] ${seedLooks.length} looks + tags upserted`);
+
+    // ── Look engagement (likes, saves, comments) ───────────────────────────
+    const lookEngagement = [
+      { lookId: 'seed_look_1', likes: ['seed_u2', 'seed_u3', 'seed_u4'], saves: ['seed_u2', 'seed_u4'], comments: [
+        { authorId: 'seed_u3', body: 'Love this layering combo!' },
+        { authorId: 'seed_u4', body: 'Where is the sweater from?' },
+      ]},
+      { lookId: 'seed_look_2', likes: ['seed_u1', 'seed_u3'], saves: ['seed_u3'], comments: [
+        { authorId: 'seed_u1', body: 'Parisian perfection.' },
+      ]},
+      { lookId: 'seed_look_3', likes: ['seed_u1', 'seed_u2', 'seed_u4'], saves: ['seed_u1'], comments: [
+        { authorId: 'seed_u2', body: 'Harrington is a staple.' },
+        { authorId: 'seed_u4', body: 'Air Max completes it.' },
+      ]},
+    ];
+
+    for (const eng of lookEngagement) {
+      for (const userId of eng.likes) {
+        await client.query(
+          `INSERT INTO look_likes (look_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+          [eng.lookId, userId]
+        );
+      }
+      for (const userId of eng.saves) {
+        await client.query(
+          `INSERT INTO look_saves (look_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+          [eng.lookId, userId]
+        );
+      }
+      for (const c of eng.comments) {
+        const commentId = `${eng.lookId}_c_${c.authorId}`;
+        await client.query(
+          `INSERT INTO look_comments (id, look_id, author_id, body)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (id) DO UPDATE SET body = EXCLUDED.body`,
+          [commentId, eng.lookId, c.authorId, c.body]
+        );
+      }
+    }
+    console.log('[seed] look engagement (likes, saves, comments) upserted');
+
+    // ── Poster stories with frames, stickers, views, reactions ────────────
+    const seedPosterStories = [
+      {
+        storyId: 'seed_story_1', creatorId: 'seed_u1', frames: [
+          { frameId: 'seed_poster_1', mediaUrl: IMG.yslSweater, caption: 'New drop — YSL vintage', sortOrder: 0, durationMs: 5000 },
+          { frameId: 'seed_poster_2', mediaUrl: IMG.yslSweater2, caption: 'Detail shot', sortOrder: 1, durationMs: 5000 },
+        ],
+        stickers: [
+          { stickerId: 'seed_sticker_1', frameId: 'seed_poster_1', type: 'text', x: 0.5, y: 0.2, scale: 1, rotation: 0, payload: { text: 'Swipe up!' }, sortOrder: 0 },
+          { stickerId: 'seed_sticker_2', frameId: 'seed_poster_1', type: 'listing', x: 0.5, y: 0.7, scale: 1, rotation: 0, payload: { listingId: 'seed_l1' }, sortOrder: 1 },
+        ],
+        views: ['seed_u2', 'seed_u3', 'seed_u4'],
+        reactions: [
+          { frameId: 'seed_poster_1', userId: 'seed_u2', reaction: 'love' },
+          { frameId: 'seed_poster_1', userId: 'seed_u3', reaction: 'fire' },
+          { frameId: 'seed_poster_2', userId: 'seed_u4', reaction: 'style' },
+        ],
+      },
+      {
+        storyId: 'seed_story_2', creatorId: 'seed_u2', frames: [
+          { frameId: 'seed_poster_3', mediaUrl: IMG.amiShirt, caption: 'AMI Paris — new in', sortOrder: 0, durationMs: 6000 },
+        ],
+        stickers: [
+          { stickerId: 'seed_sticker_3', frameId: 'seed_poster_3', type: 'mention', x: 0.5, y: 0.15, scale: 1, rotation: 0, payload: { userId: 'seed_u2' }, sortOrder: 0 },
+        ],
+        views: ['seed_u1', 'seed_u3'],
+        reactions: [
+          { frameId: 'seed_poster_3', userId: 'seed_u1', reaction: 'want' },
+          { frameId: 'seed_poster_3', userId: 'seed_u3', reaction: 'love' },
+        ],
+      },
+      {
+        storyId: 'seed_story_3', creatorId: 'seed_u3', frames: [
+          { frameId: 'seed_poster_4', mediaUrl: IMG.ralphHarring, caption: 'Harrington season is here', sortOrder: 0, durationMs: 5000 },
+          { frameId: 'seed_poster_5', mediaUrl: IMG.nikeAirMax, caption: 'And the shoes to match', sortOrder: 1, durationMs: 5000 },
+        ],
+        stickers: [
+          { stickerId: 'seed_sticker_4', frameId: 'seed_poster_4', type: 'style_vote', x: 0.5, y: 0.5, scale: 1.2, rotation: 0, payload: { question: 'Which jacket?', options: ['Harrington', 'Bomber'] }, sortOrder: 0 },
+        ],
+        views: ['seed_u1', 'seed_u2', 'seed_u4'],
+        reactions: [
+          { frameId: 'seed_poster_4', userId: 'seed_u1', reaction: 'wow' },
+          { frameId: 'seed_poster_5', userId: 'seed_u2', reaction: 'want' },
+        ],
+      },
+    ];
+
+    for (const story of seedPosterStories) {
+      await client.query(
+        `INSERT INTO poster_stories (id, creator_id, audience, allow_replies, allow_reactions, status, expires_at)
+         VALUES ($1, $2, 'public', true, true, 'active', NOW() + INTERVAL '24 hours')
+         ON CONFLICT (id) DO UPDATE SET
+           status = 'active',
+           expires_at = EXCLUDED.expires_at`,
+        [story.storyId, story.creatorId]
+      );
+
+      for (const frame of story.frames) {
+        await client.query(
+          `INSERT INTO posters (id, creator_id, media_url, caption, layout, status, expiry_hours, story_id, media_type, sort_order, duration_ms, poster_caption)
+           VALUES ($1, $2, $3, '', 'single', 'published', 24, $4, 'image', $5, $6, $7)
+           ON CONFLICT (id) DO UPDATE SET
+             media_url = EXCLUDED.media_url,
+             story_id = EXCLUDED.story_id,
+             sort_order = EXCLUDED.sort_order,
+             duration_ms = EXCLUDED.duration_ms,
+             poster_caption = EXCLUDED.poster_caption`,
+          [frame.frameId, story.creatorId, frame.mediaUrl, story.storyId, frame.sortOrder, frame.durationMs, frame.caption]
+        );
+      }
+
+      for (const sticker of story.stickers) {
+        await client.query(
+          `INSERT INTO poster_stickers (id, frame_id, type, x, y, scale, rotation, payload, sort_order)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+           ON CONFLICT (id) DO UPDATE SET
+             type = EXCLUDED.type,
+             x = EXCLUDED.x,
+             y = EXCLUDED.y,
+             scale = EXCLUDED.scale,
+             rotation = EXCLUDED.rotation,
+             payload = EXCLUDED.payload,
+             sort_order = EXCLUDED.sort_order`,
+          [sticker.stickerId, sticker.frameId, sticker.type, sticker.x, sticker.y, sticker.scale, sticker.rotation, JSON.stringify(sticker.payload), sticker.sortOrder]
+        );
+      }
+
+      for (const viewerId of story.views) {
+        for (const frame of story.frames) {
+          await client.query(
+            `INSERT INTO poster_views (frame_id, viewer_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+            [frame.frameId, viewerId]
+          );
+        }
+      }
+
+      for (const reaction of story.reactions) {
+        await client.query(
+          `INSERT INTO poster_reactions (frame_id, user_id, reaction)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (frame_id, user_id) DO UPDATE SET reaction = EXCLUDED.reaction`,
+          [reaction.frameId, reaction.userId, reaction.reaction]
+        );
+      }
+    }
+    console.log(`[seed] ${seedPosterStories.length} poster stories + frames + stickers + views + reactions upserted`);
+
+    // ── Poster product tags ────────────────────────────────────────────────
+    const seedPosterTags = [
+      { id: 'seed_ptag_1', posterId: 'seed_poster_1', listingId: 'seed_l1', label: 'YSL Sweater', x: 0.5, y: 0.6 },
+      { id: 'seed_ptag_2', posterId: 'seed_poster_3', listingId: 'seed_l2', label: 'AMI Shirt', x: 0.5, y: 0.5 },
+      { id: 'seed_ptag_3', posterId: 'seed_poster_4', listingId: 'seed_l3', label: 'RL Harrington', x: 0.5, y: 0.4 },
+    ];
+    for (const tag of seedPosterTags) {
+      await client.query(
+        `INSERT INTO poster_tags (id, poster_id, listing_id, label, x, y, click_count, last_clicked_at)
+         VALUES ($1, $2, $3, $4, $5, $6, 0, NULL)
+         ON CONFLICT (id) DO UPDATE SET
+           listing_id = EXCLUDED.listing_id,
+           label = EXCLUDED.label,
+           x = EXCLUDED.x,
+           y = EXCLUDED.y`,
+        [tag.id, tag.posterId, tag.listingId, tag.label, tag.x, tag.y]
+      );
+    }
+    console.log(`[seed] ${seedPosterTags.length} poster product tags upserted`);
+
+    // ── Creator analytics events (past 7 days) ──────────────────────────────
+    // Generate views, likes, saves for the seeded looks and posters.
+    const analyticsEvents: Array<{
+      creatorId: string; contentType: string; contentId: string;
+      eventType: string; viewerId: string; daysAgo: number;
+    }> = [];
+
+    // Views on looks — spread across 7 days
+    for (let day = 6; day >= 0; day--) {
+      const baseViews = 8 + Math.floor(Math.random() * 12);
+      for (let v = 0; v < baseViews; v++) {
+        const viewer = `seed_u${(v % 4) + 1}`;
+        analyticsEvents.push({
+          creatorId: 'seed_u1', contentType: 'look', contentId: 'seed_look_1',
+          eventType: 'view', viewerId: viewer, daysAgo: day,
+        });
+      }
+      analyticsEvents.push({
+        creatorId: 'seed_u1', contentType: 'look', contentId: 'seed_look_1',
+        eventType: 'like', viewerId: 'seed_u2', daysAgo: day,
+      });
+      analyticsEvents.push({
+        creatorId: 'seed_u1', contentType: 'look', contentId: 'seed_look_1',
+        eventType: 'save', viewerId: 'seed_u3', daysAgo: day,
+      });
+    }
+
+    // Views on poster frames
+    for (let day = 6; day >= 0; day--) {
+      const baseViews = 5 + Math.floor(Math.random() * 8);
+      for (let v = 0; v < baseViews; v++) {
+        const viewer = `seed_u${(v % 4) + 1}`;
+        analyticsEvents.push({
+          creatorId: 'seed_u1', contentType: 'poster', contentId: 'seed_poster_1',
+          eventType: 'view', viewerId: viewer, daysAgo: day,
+        });
+      }
+      analyticsEvents.push({
+        creatorId: 'seed_u1', contentType: 'poster', contentId: 'seed_poster_1',
+        eventType: 'share', viewerId: 'seed_u2', daysAgo: day,
+      });
+    }
+
+    // Product clicks on look tags
+    for (let day = 6; day >= 0; day--) {
+      if (day % 2 === 0) {
+        analyticsEvents.push({
+          creatorId: 'seed_u1', contentType: 'look', contentId: 'seed_look_1',
+          eventType: 'product_click', viewerId: 'seed_u4', daysAgo: day,
+        });
+      }
+    }
+
+    // Profile visits
+    for (let day = 6; day >= 0; day--) {
+      analyticsEvents.push({
+        creatorId: 'seed_u1', contentType: 'look', contentId: 'seed_look_1',
+        eventType: 'profile_visit', viewerId: 'seed_u2', daysAgo: day,
+      });
+    }
+
+    for (const evt of analyticsEvents) {
+      await client.query(
+        `INSERT INTO creator_analytics_events (creator_id, content_type, content_id, event_type, viewer_id, metadata, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, NOW() - ($7 || ' days')::INTERVAL)
+         ON CONFLICT DO NOTHING`,
+        [evt.creatorId, evt.contentType, evt.contentId, evt.eventType, evt.viewerId, JSON.stringify({}), evt.daysAgo]
+      );
+    }
+    console.log(`[seed] ${analyticsEvents.length} creator analytics events inserted (past 7 days)`);
 
     await client.query('COMMIT');
     console.log('[seed] done — all data committed');

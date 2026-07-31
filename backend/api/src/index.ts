@@ -66,6 +66,7 @@ import {
   expectedGatewayIdForProvider,
   resolveProviderFromPathSegment,
   type ProviderPaymentStatus,
+  type ProviderSlug,
   verifyAndNormalizeWebhook,
 } from './lib/paymentProviders.js';
 import {
@@ -179,7 +180,12 @@ import {
   getLatestReconciliationRun,
   reconciliationTableAvailable,
   runDailyReconciliation,
+  runPerIntentReconciliation,
+  getPerIntentReconciliationItems,
+  perIntentReconciliationTableAvailable,
   type DailyReconciliationRun,
+  type PerIntentReconciliationItem,
+  type PerIntentReconciliationStatus,
 } from './lib/reconciliation.js';
 import {
   collectOperationalAlerts,
@@ -306,6 +312,13 @@ function asObject(value: unknown): Record<string, unknown> {
   }
 
   return value as Record<string, unknown>;
+}
+
+function asString(value: unknown): string | undefined {
+  if (typeof value === 'string' && value.trim().length > 0) {
+    return value.trim();
+  }
+  return undefined;
 }
 
 function asFiniteNumber(value: unknown): number | null {
@@ -967,6 +980,12 @@ function isPublicRoute(method: string, path: string) {
     return true;
   }
 
+  // Poster product tag clicks are public (no auth required) so anonymous
+  // viewers can register engagement on published posters.
+  if (method === 'POST' && /^\/posters\/[^/]+\/tags\/[^/]+\/click$/.test(path)) {
+    return true;
+  }
+
   // T03: Listing detail is publicly viewable for active/sold listings.
   // The route handler calls optionalAuthenticate and gates non-public
   // statuses (draft/paused/deleted) to the seller only.
@@ -1299,7 +1318,8 @@ type LedgerAccountCode =
   | 'ize_wallet'
   | 'ize_pending_redemption'
   | 'ize_outstanding'
-  | 'ize_fiat_received';
+  | 'ize_fiat_received'
+  | 'reserve_hold';
 type PaymentIntentStatus =
   | 'requires_payment_method'
   | 'requires_confirmation'
@@ -4187,6 +4207,8 @@ async function appendLedgerEntry(
       | 'coOwn_trade'
       | 'buyout'
       | 'reserve_reconcile'
+      | 'reserve_hold'
+      | 'reserve_release'
       | 'transfer';
     sourceId: string;
     lineType: string;
@@ -5035,11 +5057,96 @@ async function releaseCommerceOrderEscrowToSeller(
     },
   });
 
+  // ── Rolling reserve for new sellers ─────────────────────────────────
+  // If the seller is below the new-seller threshold and has a reserve
+  // percentage configured, split the credit: most goes to seller_payable,
+  // the reserve portion goes to reserve_hold and is released after the
+  // holding period (Etsy pattern).
+  let creditedToSellerGbp = subtotalGbp;
+  let heldInReserveGbp = 0;
+  const sellerCompletedSales = await client.query<{ total: string }>(
+    `SELECT COUNT(*)::text AS total FROM orders WHERE seller_id = $1 AND status = 'delivered'`,
+    [input.sellerId]
+  );
+  const completedSalesCount = Number(sellerCompletedSales.rows[0]?.total ?? '0');
+  const isNewSeller = completedSalesCount < config.payoutNewSellerThreshold;
+
+  if (isNewSeller && config.payoutNewSellerReservePct > 0) {
+    heldInReserveGbp = roundTo(
+      subtotalGbp * (config.payoutNewSellerReservePct / 100),
+      2
+    );
+    creditedToSellerGbp = roundTo(subtotalGbp - heldInReserveGbp, 2);
+
+    if (heldInReserveGbp > 0) {
+      const reserveAccountId = await ensureLedgerAccount(
+        client,
+        'platform',
+        'platform',
+        'reserve_hold'
+      );
+
+      // Credit reserve portion to reserve_hold instead of seller_payable.
+      await appendLedgerEntry(client, {
+        accountId: sellerPayableAccountId,
+        counterpartyAccountId: reserveAccountId,
+        direction: 'debit',
+        amountGbp: heldInReserveGbp,
+        sourceType: 'reserve_hold',
+        sourceId: input.orderId,
+        lineType: 'reserve_hold',
+        metadata: {
+          sellerId: input.sellerId,
+          orderId: input.orderId,
+          reservePercentage: config.payoutNewSellerReservePct,
+        },
+      });
+      await appendLedgerEntry(client, {
+        accountId: reserveAccountId,
+        counterpartyAccountId: sellerPayableAccountId,
+        direction: 'credit',
+        amountGbp: heldInReserveGbp,
+        sourceType: 'reserve_hold',
+        sourceId: input.orderId,
+        lineType: 'reserve_hold',
+        metadata: {
+          sellerId: input.sellerId,
+          orderId: input.orderId,
+          reservePercentage: config.payoutNewSellerReservePct,
+        },
+      });
+
+      // Record the hold for the release sweep.
+      const releaseEligibleAt = new Date(
+        Date.now() + config.payoutNewSellerReserveReleaseDays * 24 * 60 * 60 * 1000
+      ).toISOString();
+      const payoutAccountResult = await client.query<{ id: number }>(
+        `SELECT id FROM payout_accounts WHERE user_id = $1 AND status = 'active' ORDER BY updated_at DESC LIMIT 1`,
+        [input.sellerId]
+      );
+      if (payoutAccountResult.rowCount) {
+        await client.query(
+          `INSERT INTO payout_reserve_holds (user_id, order_id, payout_account_id, held_amount_gbp, reserve_percentage, release_eligible_at)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (order_id) DO NOTHING`,
+          [
+            input.sellerId,
+            input.orderId,
+            payoutAccountResult.rows[0].id,
+            heldInReserveGbp,
+            config.payoutNewSellerReservePct,
+            releaseEligibleAt,
+          ]
+        );
+      }
+    }
+  }
+
   await appendLedgerEntry(client, {
     accountId: sellerPayableAccountId,
     counterpartyAccountId: escrowAccountId,
     direction: 'credit',
-    amountGbp: subtotalGbp,
+    amountGbp: creditedToSellerGbp,
     sourceType: 'order_delivery',
     sourceId: input.orderId,
     lineType: 'seller_payable_release',
@@ -5050,6 +5157,7 @@ async function releaseCommerceOrderEscrowToSeller(
       trackingId: input.trackingId ?? null,
       providerEventId: input.providerEventId ?? null,
       releasePolicy: 'parcel_delivery_confirmation',
+      heldInReserveGbp: heldInReserveGbp > 0 ? heldInReserveGbp : undefined,
     },
   });
 
@@ -5313,11 +5421,12 @@ async function applyOrderParcelEvent(
     updatedAt: string;
   };
   settlement: {
-    releasePolicy: 'parcel_delivery_confirmation';
+    releasePolicy: 'parcel_delivery_confirmation' | 'buyer_protection_hold';
     sellerEscrowHeldGbp: number;
     sellerPayableReleasedGbp: number;
     sellerCashoutEligible: boolean;
     alreadyReleased: boolean;
+    escrowReleaseScheduledAt: string | null;
   };
 }> {
   const orderResult = await client.query<CommerceOrderDbRow>(
@@ -5499,6 +5608,7 @@ async function applyOrderParcelEvent(
 
   let sellerPayableReleasedGbp = 0;
   let alreadyReleased = false;
+  let escrowReleaseScheduledAt: string | null = null;
   if (PARCEL_DELIVERY_RELEASE_EVENTS.has(input.eventType)) {
     if (order.status !== 'paid' && order.status !== 'shipped' && order.status !== 'delivered') {
       throw createApiError('ORDER_INVALID_STATE', `Order cannot be delivered from status '${order.status}'`, {
@@ -5508,18 +5618,58 @@ async function applyOrderParcelEvent(
     }
 
     if (await ledgerTablesAvailable(client)) {
-      const release = await releaseCommerceOrderEscrowToSeller(client, {
-        orderId: order.id,
-        sellerId: order.seller_id,
-        subtotalGbp: Number(order.subtotal_gbp),
-        parcelProvider: input.provider,
-        parcelEventType: input.eventType,
-        trackingId: input.trackingId,
-        providerEventId: input.providerEventId,
-      });
+      // Buyer-protection hold: schedule the escrow release for
+      // delivered_at + hold_hours instead of releasing immediately.
+      // This gives the buyer time to raise a SNAD claim before the
+      // seller is paid (Vinted: 2 days, Depop: 2 days after delivery).
+      const holdHours = config.buyerProtectionHoldHours;
+      const alreadyReleasedCheck = await hasCommerceOrderSellerEscrowReleased(client, order.id);
+      const existingSchedule = await client.query<{ scheduled_at: string | null; released_at: string | null }>(
+        `SELECT escrow_release_scheduled_at::text AS scheduled_at, escrow_released_at::text AS released_at
+         FROM orders WHERE id = $1 LIMIT 1`,
+        [order.id]
+      );
+      const existingScheduledAt = existingSchedule.rows[0]?.scheduled_at ?? null;
+      const existingReleasedAt = existingSchedule.rows[0]?.released_at ?? null;
 
-      sellerPayableReleasedGbp = release.released ? Number(order.subtotal_gbp) : 0;
-      alreadyReleased = release.alreadyReleased;
+      if (alreadyReleasedCheck || existingReleasedAt) {
+        alreadyReleased = true;
+      } else if (holdHours > 0) {
+        // Schedule release for delivered_at + hold_hours
+        const deliveredTimestamp = deliveredAt ?? new Date().toISOString();
+        const scheduledAt = new Date(
+          new Date(deliveredTimestamp).getTime() + holdHours * 60 * 60 * 1000
+        ).toISOString();
+        escrowReleaseScheduledAt = scheduledAt;
+
+        if (!existingScheduledAt) {
+          await client.query(
+            `UPDATE orders SET escrow_release_scheduled_at = $2, updated_at = NOW() WHERE id = $1`,
+            [order.id, scheduledAt]
+          );
+        }
+        // Escrow is NOT released yet — it will be released by the sweep
+        // when the hold expires and no dispute/claim is open.
+      } else {
+        // No hold configured — release immediately (backward compatible)
+        const release = await releaseCommerceOrderEscrowToSeller(client, {
+          orderId: order.id,
+          sellerId: order.seller_id,
+          subtotalGbp: Number(order.subtotal_gbp),
+          parcelProvider: input.provider,
+          parcelEventType: input.eventType,
+          trackingId: input.trackingId,
+          providerEventId: input.providerEventId,
+        });
+        sellerPayableReleasedGbp = release.released ? Number(order.subtotal_gbp) : 0;
+        alreadyReleased = release.alreadyReleased;
+        if (release.released) {
+          await client.query(
+            `UPDATE orders SET escrow_released_at = NOW(), updated_at = NOW() WHERE id = $1`,
+            [order.id]
+          );
+        }
+      }
     }
   }
 
@@ -5566,11 +5716,12 @@ async function applyOrderParcelEvent(
       updatedAt,
     },
     settlement: {
-      releasePolicy: 'parcel_delivery_confirmation',
+      releasePolicy: config.buyerProtectionHoldHours > 0 ? 'buyer_protection_hold' : 'parcel_delivery_confirmation',
       sellerEscrowHeldGbp,
       sellerPayableReleasedGbp,
-      sellerCashoutEligible: status === 'delivered',
+      sellerCashoutEligible: status === 'delivered' && sellerPayableReleasedGbp > 0,
       alreadyReleased,
+      escrowReleaseScheduledAt,
     },
   };
 }
@@ -6045,6 +6196,311 @@ async function createGatewayPaymentIntent(input: {
   throw createApiError(
     'PAYMENT_PROVIDER_UNAVAILABLE',
     'The selected payment provider is not configured',
+    { gatewayId: input.gatewayId }
+  );
+}
+
+/**
+ * Create a provider-backed refund for a settled payment intent.
+ * Mirrors createGatewayPaymentIntent — one branch per provider.
+ * Returns the provider refund reference and initial status so the caller
+ * can upsert into payment_refunds and queue notifications.
+ *
+ * For providers that do not return a synchronous refund status, we default
+ * to 'pending' and rely on the refund.* webhook to transition to 'succeeded'.
+ */
+async function createGatewayRefund(input: {
+  gatewayId: string;
+  intentId: string;
+  providerIntentRef: string;
+  money: Money;
+  refundAmount: number;
+  reason?: string;
+  metadata: Record<string, unknown>;
+}): Promise<{
+  providerRefundRef: string;
+  refundStatus: 'pending' | 'succeeded' | 'failed' | 'cancelled';
+  rawProviderAmount?: string;
+  providerAmountUnit?: ProviderAmountUnit;
+  conversionTrace?: MoneyConversionTrace;
+}> {
+  const normalizedCurrency = input.money.currency;
+  const moneyProvider: MoneyProvider =
+    input.gatewayId === 'stripe_americas'
+      ? 'stripe'
+      : input.gatewayId === 'razorpay_in'
+        ? 'razorpay'
+        : input.gatewayId === 'mollie_eu'
+          ? 'mollie'
+          : input.gatewayId === 'flutterwave_africa'
+            ? 'flutterwave'
+            : input.gatewayId === 'tap_gulf'
+              ? 'tap'
+              : input.gatewayId === 'wise_global'
+                ? 'wise'
+                : 'mock';
+  const providerMoney = toProviderMoney(moneyProvider, input.money);
+  const refundMetadata = {
+    ...input.metadata,
+    intentId: input.intentId,
+    canonicalCurrency: input.money.currency,
+    canonicalMinorAmount: input.money.minorAmount,
+    moneyRegistryVersion: input.money.registryVersion,
+    moneyConversionVersion: providerMoney.trace.conversionVersion,
+  };
+
+  // ── Stripe ──────────────────────────────────────────────────────────
+  if (input.gatewayId === 'stripe_americas' && config.stripeSecretKey) {
+    const stripe = new Stripe(config.stripeSecretKey, {
+      apiVersion: '2024-06-20',
+    });
+
+    const created = await stripe.refunds.create({
+      payment_intent: input.providerIntentRef,
+      amount: Math.max(1, Math.round(input.refundAmount * 100)),
+      reason: input.reason ? 'requested_by_customer' : undefined,
+      metadata: toStripeMetadata(refundMetadata),
+    });
+
+    return {
+      providerRefundRef: created.id,
+      refundStatus:
+        created.status === 'succeeded'
+          ? 'succeeded'
+          : created.status === 'failed'
+            ? 'failed'
+            : created.status === 'canceled'
+              ? 'cancelled'
+              : 'pending',
+      ...providerMoney,
+    };
+  }
+
+  // ── Razorpay ────────────────────────────────────────────────────────
+  // The stored providerIntentRef is the Razorpay order_id. Razorpay refunds
+  // operate on payments, not orders, so we fetch the captured payment for
+  // the order first, then refund it.
+  if (input.gatewayId === 'razorpay_in' && config.razorpayKeyId && config.razorpayKeySecret) {
+    const razorpay = new Razorpay({
+      key_id: config.razorpayKeyId,
+      key_secret: config.razorpayKeySecret,
+    });
+
+    const payments = await razorpay.payments.all({
+      order_id: input.providerIntentRef,
+      count: 1,
+    } as Record<string, unknown>);
+    const paymentItems = (payments as { items?: Array<{ id: string; status: string }> }).items ?? [];
+    const capturedPayment = paymentItems.find(
+      (p) => p.status === 'captured'
+    );
+    if (!capturedPayment) {
+      throw createApiError(
+        'REFUND_PROVIDER_UNAVAILABLE',
+        'No captured Razorpay payment found for this order',
+        { gatewayId: input.gatewayId, orderId: input.providerIntentRef }
+      );
+    }
+
+    const refund = await razorpay.payments.refund(capturedPayment.id, {
+      amount: moneyToSafeInteger(input.money),
+      notes: toStripeMetadata(refundMetadata) as Record<string, string>,
+    });
+
+    const refundId = (refund as { id?: unknown }).id;
+    if (typeof refundId !== 'string' || refundId.length === 0) {
+      throw createApiError(
+        'REFUND_PROVIDER_UNAVAILABLE',
+        'Razorpay did not return a refund reference',
+        { gatewayId: input.gatewayId }
+      );
+    }
+
+    const refundStatus = String((refund as { status?: unknown }).status ?? 'processed');
+    return {
+      providerRefundRef: String(refundId),
+      refundStatus:
+        refundStatus === 'processed' || refundStatus === 'refunded'
+          ? 'succeeded'
+          : refundStatus === 'failed'
+            ? 'failed'
+            : 'pending',
+      ...providerMoney,
+    };
+  }
+
+  // ── Mollie ──────────────────────────────────────────────────────────
+  // The stored providerIntentRef is the Mollie payment ID. Mollie refunds
+  // are created against the payment.
+  if (input.gatewayId === 'mollie_eu' && config.mollieApiKey) {
+    const { createMollieClient } = await import('@mollie/api-client');
+    const mollie = createMollieClient({ apiKey: config.mollieApiKey });
+
+    const refund = await mollie.paymentRefunds.create({
+      paymentId: input.providerIntentRef,
+      amount: {
+        currency: normalizedCurrency,
+        value: providerMoney.value,
+      },
+      description: `Thryftverse refund ${input.intentId}`,
+      metadata: refundMetadata as Record<string, unknown>,
+    });
+
+    const refundStatus = String((refund as { status?: unknown }).status ?? 'pending');
+    return {
+      providerRefundRef: String(refund.id),
+      refundStatus:
+        refundStatus === 'refunded'
+          ? 'succeeded'
+          : refundStatus === 'failed'
+            ? 'failed'
+            : refundStatus === 'canceled'
+              ? 'cancelled'
+              : 'pending',
+      ...providerMoney,
+    };
+  }
+
+  // ── Flutterwave ─────────────────────────────────────────────────────
+  // The stored providerIntentRef is the tx_ref string. Flutterwave refunds
+  // require the numeric transaction ID, so we look up the transaction by
+  // tx_ref first, then refund.
+  if (input.gatewayId === 'flutterwave_africa' && config.flutterwaveSecretKey) {
+    const lookupResponse = await fetch(
+      `https://api.flutterwave.com/v3/transactions?tx_ref=${encodeURIComponent(input.providerIntentRef)}`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${config.flutterwaveSecretKey}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+    if (!lookupResponse.ok) {
+      throw createApiError(
+        'REFUND_PROVIDER_UNAVAILABLE',
+        'Flutterwave transaction lookup failed',
+        { gatewayId: input.gatewayId, providerStatusCode: lookupResponse.status }
+      );
+    }
+    const lookupPayload = (await lookupResponse.json()) as Record<string, unknown>;
+    const lookupData = asObject(lookupPayload.data);
+    const txRows = Array.isArray(lookupData) ? lookupData : lookupData ? [lookupData] : [];
+    const txRecord = asObject(txRows[0]);
+    const transactionId = asString(txRecord.id);
+    if (!transactionId) {
+      throw createApiError(
+        'REFUND_PROVIDER_UNAVAILABLE',
+        'Flutterwave transaction not found for this tx_ref',
+        { gatewayId: input.gatewayId, txRef: input.providerIntentRef }
+      );
+    }
+
+    const refundResponse = await fetch(
+      `https://api.flutterwave.com/v3/transactions/${encodeURIComponent(transactionId)}/refund`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${config.flutterwaveSecretKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: toJsonString({
+          amount: input.refundAmount,
+          comments: input.reason ?? `Thryftverse refund ${input.intentId}`,
+          meta: toStripeMetadata(refundMetadata),
+        }),
+      }
+    );
+    if (!refundResponse.ok) {
+      throw createApiError(
+        'REFUND_PROVIDER_UNAVAILABLE',
+        'Flutterwave refund request failed',
+        { gatewayId: input.gatewayId, providerStatusCode: refundResponse.status }
+      );
+    }
+    const refundPayload = (await refundResponse.json()) as Record<string, unknown>;
+    const refundData = asObject(refundPayload.data);
+    const refundId = asString(refundData.id) ?? createRuntimeId(`refund_flutterwave`);
+    const refundStatus = String(asString(refundData.status) ?? 'pending');
+
+    return {
+      providerRefundRef: String(refundId),
+      refundStatus:
+        refundStatus === 'successful' || refundStatus === 'completed'
+          ? 'succeeded'
+          : refundStatus === 'failed' || refundStatus === 'error'
+            ? 'failed'
+            : refundStatus === 'cancelled' || refundStatus === 'canceled'
+              ? 'cancelled'
+              : 'pending',
+      ...providerMoney,
+    };
+  }
+
+  // ── Tap ──────────────────────────────────────────────────────────────
+  // The stored providerIntentRef is the Tap charge ID. Tap refunds are
+  // created via POST /v2/refunds with the charge_id.
+  if (input.gatewayId === 'tap_gulf' && config.tapSecretKey) {
+    const refundResponse = await fetch('https://api.tap.company/v2/refunds', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${config.tapSecretKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: toJsonString({
+        charge: {
+          id: input.providerIntentRef,
+        },
+        amount: providerMoney.value,
+        currency: normalizedCurrency,
+        reason: input.reason ?? `Thryftverse refund ${input.intentId}`,
+        metadata: toStripeMetadata(refundMetadata),
+      }),
+    });
+    if (!refundResponse.ok) {
+      throw createApiError(
+        'REFUND_PROVIDER_UNAVAILABLE',
+        'Tap refund request failed',
+        { gatewayId: input.gatewayId, providerStatusCode: refundResponse.status }
+      );
+    }
+    const refundPayload = (await refundResponse.json()) as Record<string, unknown>;
+    const refundId = asString(refundPayload.id);
+    if (!refundId) {
+      throw createApiError(
+        'REFUND_PROVIDER_UNAVAILABLE',
+        'Tap did not return a refund reference',
+        { gatewayId: input.gatewayId }
+      );
+    }
+    const refundStatus = String(asString(refundPayload.status) ?? 'pending');
+
+    return {
+      providerRefundRef: String(refundId),
+      refundStatus:
+        refundStatus === 'captured' || refundStatus === 'paid'
+          ? 'succeeded'
+          : refundStatus === 'failed' || refundStatus === 'declined'
+            ? 'failed'
+            : refundStatus === 'cancelled' || refundStatus === 'canceled' || refundStatus === 'void'
+              ? 'cancelled'
+              : 'pending',
+      ...providerMoney,
+    };
+  }
+
+  // ── Mock (dev only) ──────────────────────────────────────────────────
+  if (config.nodeEnv !== 'production' && config.apiEnableMockWebhooks) {
+    return {
+      providerRefundRef: createRuntimeId(`refund_${input.gatewayId}`),
+      refundStatus: 'succeeded',
+      ...providerMoney,
+    };
+  }
+
+  throw createApiError(
+    'REFUND_PROVIDER_UNAVAILABLE',
+    'The selected payment provider does not support refunds or is not configured',
     { gatewayId: input.gatewayId }
   );
 }
@@ -6738,6 +7194,28 @@ async function upsertPaymentRefund(
   );
 }
 
+/**
+ * Extract the evidence submission deadline from a provider's raw dispute
+ * payload. Stripe exposes `evidence_details.due_by` as a Unix timestamp.
+ * Other providers do not expose this synchronously; we rely on their
+ * dispute notification emails or webhook metadata to set it manually.
+ */
+function extractDisputeEvidenceDeadline(
+  rawPayload: Record<string, unknown>,
+  gatewayId: string
+): string | null {
+  const payload = asObject(rawPayload);
+  if (gatewayId === 'stripe_americas') {
+    const dataObject = asObject(payload.data) ?? payload;
+    const evidenceDetails = asObject(dataObject.evidence_details);
+    const dueBy = evidenceDetails.due_by;
+    if (typeof dueBy === 'number' && dueBy > 0) {
+      return new Date(dueBy * 1000).toISOString();
+    }
+  }
+  return null;
+}
+
 async function upsertPaymentDispute(
   client: PoolClient,
   input: {
@@ -6753,6 +7231,7 @@ async function upsertPaymentDispute(
     currency?: string;
     reason?: string;
     metadata?: Record<string, unknown>;
+    evidenceDueAt?: string | null;
   }
 ): Promise<void> {
   const id = `dp_${input.gatewayId}_${input.providerDisputeRef}`;
@@ -6776,10 +7255,11 @@ async function upsertPaymentDispute(
         money_registry_version,
         money_conversion_trace,
         reason,
+        evidence_due_at,
         metadata,
         updated_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, $14, $15::jsonb, NOW())
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, $14, $16, $15::jsonb, NOW())
       ON CONFLICT (gateway_id, provider_dispute_ref)
       DO UPDATE
         SET
@@ -6793,6 +7273,7 @@ async function upsertPaymentDispute(
           money_registry_version = EXCLUDED.money_registry_version,
           money_conversion_trace = EXCLUDED.money_conversion_trace,
           reason = EXCLUDED.reason,
+          evidence_due_at = COALESCE(EXCLUDED.evidence_due_at, payment_disputes.evidence_due_at),
           metadata = payment_disputes.metadata || EXCLUDED.metadata,
           updated_at = NOW()
     `,
@@ -6815,6 +7296,7 @@ async function upsertPaymentDispute(
         ...(input.metadata ?? {}),
         canonicalMoney: input.money ?? null,
       }),
+      input.evidenceDueAt ?? null,
     ]
   );
 }
@@ -10367,9 +10849,28 @@ app.post('/ops/reconciliation/run', async (request, reply) => {
     const run = await runPlatformReconciliation('manual', payload.runDate);
     const pauseState = await getPayoutPauseState();
 
+    // Per-intent reconciliation: catches compensating errors invisible
+    // to the daily aggregate.
+    let perIntent: { mismatchCount: number } | null = null;
+    try {
+      if (await perIntentReconciliationTableAvailable(db)) {
+        const perIntentResult = await runPerIntentReconciliation(db, {
+          runDate: run.runDate,
+          mismatchThresholdGbp: 0.01,
+        });
+        perIntent = { mismatchCount: perIntentResult.mismatchCount };
+      }
+    } catch (perIntentError) {
+      request.log.error(
+        { err: perIntentError, runDate: run.runDate },
+        'Per-intent reconciliation failed (non-fatal)'
+      );
+    }
+
     return {
       ok: true,
       run,
+      perIntent,
       payouts: {
         paused: pauseState.paused,
         reason: pauseState.reason ?? null,
@@ -10414,6 +10915,149 @@ app.get('/ops/reconciliation/latest', async (request, reply) => {
       mismatchGbp: pauseState.mismatchGbp ?? null,
     },
   };
+});
+
+// ── Per-intent reconciliation items (drill-down) ────────────────────────
+app.get('/ops/reconciliation/per-intent', async (request, reply) => {
+  const securityAdminError = ensureSecurityAdminAccess(request, reply);
+  if (securityAdminError) {
+    return securityAdminError;
+  }
+
+  const querySchema = z.object({
+    runDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    status: z.enum(['matched', 'mismatch', 'missing_ledger', 'missing_intent']).optional(),
+    limit: z.coerce.number().int().min(1).max(500).default(200),
+  });
+  const { runDate, status, limit } = querySchema.parse(request.query);
+
+  if (!(await perIntentReconciliationTableAvailable(db))) {
+    reply.code(503);
+    return {
+      ok: false,
+      error: 'Per-intent reconciliation table is unavailable. Run migration 093 first.',
+    };
+  }
+
+  const items = await getPerIntentReconciliationItems(db, {
+    runDate,
+    status: status as PerIntentReconciliationStatus | undefined,
+    limit,
+  });
+
+  return {
+    ok: true,
+    runDate,
+    items,
+    mismatchCount: items.filter(
+      (i) => i.status === 'mismatch' || i.status === 'missing_ledger'
+    ).length,
+  };
+});
+
+// ── Escrow release sweep ────────────────────────────────────────────────
+// Releases seller escrow for orders whose buyer-protection hold has expired.
+// Called by a cron worker or manually by an admin. Skips orders with open
+// disputes to prevent releasing funds that may need to be reversed.
+app.post('/ops/escrow/release-sweep', async (request, reply) => {
+  const securityAdminError = ensureSecurityAdminAccess(request, reply);
+  if (securityAdminError) {
+    return securityAdminError;
+  }
+
+  if (!(await paymentTablesAvailable(db))) {
+    reply.code(503);
+    return {
+      ok: false,
+      error: 'Payment settlement tables are unavailable. Run migrations first.',
+    };
+  }
+
+  const bodySchema = z.object({
+    batchSize: z.coerce.number().int().min(1).max(500).default(100),
+  });
+  const { batchSize } = bodySchema.parse(request.body ?? {});
+
+  const client = await db.connect();
+  const released: Array<{ orderId: string; sellerId: string; amountGbp: number }> = [];
+  try {
+    await client.query('BEGIN');
+
+    // Find orders whose hold has expired and escrow has not been released.
+    const dueOrders = await client.query<{
+      id: string;
+      seller_id: string;
+      subtotal_gbp: string | number;
+    }>(
+      `
+        SELECT id, seller_id, subtotal_gbp::text
+        FROM orders
+        WHERE escrow_release_scheduled_at IS NOT NULL
+          AND escrow_released_at IS NULL
+          AND escrow_release_scheduled_at <= NOW()
+          AND status = 'delivered'
+        ORDER BY escrow_release_scheduled_at ASC
+        LIMIT $1
+        FOR UPDATE SKIP LOCKED
+      `,
+      [batchSize]
+    );
+
+    for (const order of dueOrders.rows) {
+      // Skip if there's an open dispute on this order's payment intent.
+      const openDispute = await client.query<{ exists: boolean }>(
+        `
+          SELECT EXISTS (
+            SELECT 1 FROM payment_disputes d
+            JOIN payment_intents i ON i.id = d.intent_id
+            WHERE i.order_id = $1
+              AND d.status IN ('open', 'warning', 'needs_response')
+              AND d.evidence_submitted_at IS NULL
+          ) AS exists
+        `,
+        [order.id]
+      );
+      if (openDispute.rows[0]?.exists) {
+        continue;
+      }
+
+      if (await ledgerTablesAvailable(client)) {
+        const release = await releaseCommerceOrderEscrowToSeller(client, {
+          orderId: order.id,
+          sellerId: order.seller_id,
+          subtotalGbp: Number(order.subtotal_gbp),
+          parcelProvider: 'release_sweep',
+          parcelEventType: 'delivered' as ParcelEventType,
+        });
+        if (release.released) {
+          await client.query(
+            `UPDATE orders SET escrow_released_at = NOW(), updated_at = NOW() WHERE id = $1`,
+            [order.id]
+          );
+          released.push({
+            orderId: order.id,
+            sellerId: order.seller_id,
+            amountGbp: Number(order.subtotal_gbp),
+          });
+        }
+      }
+    }
+
+    await client.query('COMMIT');
+
+    return {
+      ok: true,
+      releasedCount: released.length,
+      released,
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    request.log.error({ err: error }, 'Escrow release sweep failed');
+    reply.code(500);
+    return { ok: false, error: 'Escrow release sweep failed' };
+  } finally {
+    client.release();
+  }
 });
 
 app.post('/ops/platform-revenue/sweep', async (request, reply) => {
@@ -16375,6 +17019,142 @@ app.delete('/posters/:posterId', async (request, reply) => {
   return { ok: true };
 });
 
+// ── Poster product tags (shoppable pins) ────────────────────────────────
+
+// POST /posters/:posterId/tags — add a product tag to a poster
+app.post('/posters/:posterId/tags', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ posterId: z.string().min(2).max(120) });
+  const { posterId } = paramsSchema.parse(request.params);
+
+  const bodySchema = z.object({
+    id: z.string().min(2).max(120).optional(),
+    listingId: z.string().max(120).optional(),
+    label: z.string().max(200).default(''),
+    x: z.number().min(0).max(1),
+    y: z.number().min(0).max(1),
+  });
+  const payload = bodySchema.parse(request.body);
+
+  const ownerResult = await db.query<{ creator_id: string }>(
+    `SELECT creator_id FROM posters WHERE id = $1 LIMIT 1`,
+    [posterId]
+  );
+  if (!ownerResult.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Poster not found' };
+  }
+  if (ownerResult.rows[0].creator_id !== actorUserId && request.authUser?.role !== 'admin') {
+    reply.code(403);
+    return { ok: false, error: 'Forbidden' };
+  }
+
+  const tagId = payload.id ?? `${posterId}_tag_${crypto.randomUUID()}`;
+  await db.query(
+    `INSERT INTO poster_tags (id, poster_id, listing_id, label, x, y)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (id) DO UPDATE
+     SET poster_id = EXCLUDED.poster_id,
+         listing_id = EXCLUDED.listing_id,
+         label = EXCLUDED.label,
+         x = EXCLUDED.x,
+         y = EXCLUDED.y`,
+    [tagId, posterId, payload.listingId ?? null, payload.label, payload.x, payload.y]
+  );
+
+  reply.code(201);
+  return { ok: true, tagId };
+});
+
+// GET /posters/:posterId/tags — list product tags for a poster
+app.get('/posters/:posterId/tags', async (request, reply) => {
+  const paramsSchema = z.object({ posterId: z.string().min(2).max(120) });
+  const { posterId } = paramsSchema.parse(request.params);
+
+  const result = await db.query<{
+    id: string;
+    poster_id: string;
+    listing_id: string | null;
+    label: string;
+    x: string;
+    y: string;
+    click_count: number;
+    last_clicked_at: string | null;
+    created_at: string;
+  }>(
+    `SELECT id, poster_id, listing_id, label, x, y, click_count, last_clicked_at, created_at
+     FROM poster_tags
+     WHERE poster_id = $1
+     ORDER BY created_at ASC`,
+    [posterId]
+  );
+
+  return {
+    items: result.rows.map((row) => ({
+      id: row.id,
+      posterId: row.poster_id,
+      listingId: row.listing_id,
+      label: row.label,
+      x: Number(row.x),
+      y: Number(row.y),
+      clickCount: row.click_count,
+      lastClickedAt: row.last_clicked_at,
+      createdAt: row.created_at,
+    })),
+  };
+});
+
+// DELETE /posters/:posterId/tags/:tagId — remove a product tag
+app.delete('/posters/:posterId/tags/:tagId', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({
+    posterId: z.string().min(2).max(120),
+    tagId: z.string().min(2).max(120),
+  });
+  const { posterId, tagId } = paramsSchema.parse(request.params);
+
+  const ownerResult = await db.query<{ creator_id: string }>(
+    `SELECT creator_id FROM posters WHERE id = $1 LIMIT 1`,
+    [posterId]
+  );
+  if (!ownerResult.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Poster not found' };
+  }
+  if (ownerResult.rows[0].creator_id !== actorUserId && request.authUser?.role !== 'admin') {
+    reply.code(403);
+    return { ok: false, error: 'Forbidden' };
+  }
+
+  await db.query(`DELETE FROM poster_tags WHERE id = $1 AND poster_id = $2`, [tagId, posterId]);
+  return { ok: true };
+});
+
+// POST /posters/:posterId/tags/:tagId/click — record a product tag click (public)
+app.post('/posters/:posterId/tags/:tagId/click', async (request, reply) => {
+  const paramsSchema = z.object({
+    posterId: z.string().min(2).max(120),
+    tagId: z.string().min(2).max(120),
+  });
+  const { posterId, tagId } = paramsSchema.parse(request.params);
+
+  const result = await db.query(
+    `UPDATE poster_tags
+     SET click_count = click_count + 1,
+         last_clicked_at = NOW()
+     WHERE id = $1 AND poster_id = $2
+     RETURNING id`,
+    [tagId, posterId]
+  );
+
+  if (!result.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Tag not found' };
+  }
+
+  return { ok: true };
+});
+
 
 // ── Looks API ──────────────────────────────────────────────────────
 
@@ -21954,6 +22734,113 @@ app.post('/wallets/:userId/snapshot', async (request, reply) => {
   };
 });
 
+// ── Seller wallet: pending vs available balance ────────────────────────
+// Returns the seller's pending balance (escrow not yet released) and
+// available balance (released, ready for payout), with a per-order
+// breakdown of pending items and their scheduled release times.
+app.get('/users/:userId/wallet/balances', async (request, reply) => {
+  const paramsSchema = z.object({ userId: z.string().min(2) });
+  const { userId } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
+
+  if (!(await paymentTablesAvailable(db)) || !(await ledgerTablesAvailable(db))) {
+    reply.code(503);
+    return {
+      ok: false,
+      error: 'Payment settlement or ledger tables are unavailable. Run migrations first.',
+    };
+  }
+
+  // Available balance: sum of seller_payable credits minus debits (payouts,
+  // reserve holds). This is what the seller can withdraw.
+  const availableResult = await db.query<{ available_gbp: string }>(
+    `
+      SELECT COALESCE(SUM(
+        CASE WHEN direction = 'credit' THEN amount_gbp ELSE -amount_gbp END
+      ), 0)::text AS available_gbp
+      FROM ledger_entries
+      WHERE account_id = (
+        SELECT id FROM ledger_accounts
+        WHERE owner_type = 'user' AND owner_id = $1 AND code = 'seller_payable'
+        LIMIT 1
+      )
+    `,
+    [userId]
+  );
+  const availableGbp = Number(availableResult.rows[0]?.available_gbp ?? '0');
+
+  // Pending balance: orders that are paid/shipped but not yet delivered,
+  // or delivered but within the buyer-protection hold window.
+  const pendingOrders = await db.query<{
+    id: string;
+    listing_title: string | null;
+    subtotal_gbp: string;
+    status: string;
+    delivered_at: string | null;
+    escrow_release_scheduled_at: string | null;
+    escrow_released_at: string | null;
+  }>(
+    `
+      SELECT
+        o.id,
+        l.title AS listing_title,
+        o.subtotal_gbp::text,
+        o.status,
+        o.delivered_at::text,
+        o.escrow_release_scheduled_at::text,
+        o.escrow_released_at::text
+      FROM orders o
+      LEFT JOIN listings l ON l.id = o.listing_id
+      WHERE o.seller_id = $1
+        AND o.status IN ('paid', 'shipped', 'delivered')
+        AND o.escrow_released_at IS NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM ledger_entries le
+          WHERE le.source_id = o.id
+            AND le.line_type = 'seller_payable_release'
+            AND le.direction = 'credit'
+        )
+      ORDER BY
+        COALESCE(o.escrow_release_scheduled_at, o.delivered_at, o.created_at) ASC
+      LIMIT 50
+    `,
+    [userId]
+  );
+
+  const pendingGbp = pendingOrders.rows.reduce(
+    (sum, row) => sum + Number(row.subtotal_gbp),
+    0
+  );
+
+  // Reserve holds: amounts held in rolling reserve, not yet released.
+  const reserveResult = await db.query<{ held_gbp: string }>(
+    `
+      SELECT COALESCE(SUM(held_amount_gbp), 0)::text AS held_gbp
+      FROM payout_reserve_holds
+      WHERE user_id = $1 AND released_at IS NULL
+    `,
+    [userId]
+  );
+  const heldInReserveGbp = Number(reserveResult.rows[0]?.held_gbp ?? '0');
+
+  return {
+    ok: true,
+    balances: {
+      availableGbp: roundTo(Math.max(0, availableGbp), 2),
+      pendingGbp: roundTo(pendingGbp, 2),
+      heldInReserveGbp: roundTo(heldInReserveGbp, 2),
+    },
+    pendingBreakdown: pendingOrders.rows.map((row) => ({
+      orderId: row.id,
+      listingTitle: row.listing_title,
+      amountGbp: Number(row.subtotal_gbp),
+      orderStatus: row.status,
+      deliveredAt: row.delivered_at,
+      releaseScheduledAt: row.escrow_release_scheduled_at,
+    })),
+  };
+});
+
 app.get('/wallets/:userId/snapshot', async (request, reply) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
   const { userId } = paramsSchema.parse(request.params);
@@ -27437,6 +28324,297 @@ app.post('/users/:userId/payout-accounts', async (request, reply) => {
   };
 });
 
+// ── Payout schedule configuration ───────────────────────────────────────
+app.put('/users/:userId/payout-schedule', async (request, reply) => {
+  const paramsSchema = z.object({ userId: z.string().min(2) });
+  const { userId } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
+
+  const bodySchema = z.object({
+    payoutAccountId: z.coerce.number().int().positive(),
+    schedule: z.enum(['on_demand', 'weekly', 'biweekly', 'monthly']),
+    payoutDayOfWeek: z.coerce.number().int().min(0).max(6).optional(),
+    minimumGbp: z.number().min(0).max(10000).optional(),
+  });
+  const payload = bodySchema.parse(request.body ?? {});
+
+  const result = await db.query<{ user_id: string }>(
+    'SELECT user_id FROM payout_accounts WHERE id = $1 AND user_id = $2 LIMIT 1',
+    [payload.payoutAccountId, userId]
+  );
+  if (!result.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Payout account not found for this user' };
+  }
+
+  // Compute next scheduled payout time.
+  let nextScheduledPayoutAt: string | null = null;
+  if (payload.schedule !== 'on_demand') {
+    const now = new Date();
+    const dayOfWeek = payload.payoutDayOfWeek ?? 1; // Default Monday
+    const targetDay = dayOfWeek;
+    const currentDay = now.getDay();
+    let daysUntil = (targetDay - currentDay + 7) % 7;
+    if (daysUntil === 0) daysUntil = 7; // Next week, not today
+    if (payload.schedule === 'biweekly') daysUntil += 7;
+    if (payload.schedule === 'monthly') {
+      // Next month on the target day-of-week's first occurrence
+      daysUntil = (targetDay - currentDay + 7) % 7;
+      const nextDate = new Date(now);
+      nextDate.setDate(now.getDate() + daysUntil);
+      nextDate.setMonth(nextDate.getMonth() + 1);
+      nextScheduledPayoutAt = nextDate.toISOString();
+    } else {
+      const nextDate = new Date(now);
+      nextDate.setDate(now.getDate() + daysUntil);
+      nextDate.setHours(9, 0, 0, 0); // 9 AM UTC
+      nextScheduledPayoutAt = nextDate.toISOString();
+    }
+  }
+
+  await db.query(
+    `UPDATE payout_accounts
+     SET payout_schedule = $3,
+         payout_day_of_week = $4,
+         payout_minimum_gbp = $5,
+         next_scheduled_payout_at = $6,
+         updated_at = NOW()
+     WHERE id = $1 AND user_id = $2`,
+    [
+      payload.payoutAccountId,
+      userId,
+      payload.schedule,
+      payload.payoutDayOfWeek ?? null,
+      payload.minimumGbp ?? config.payoutDefaultMinimumGbp,
+      nextScheduledPayoutAt,
+    ]
+  );
+
+  return {
+    ok: true,
+    payoutAccountId: payload.payoutAccountId,
+    schedule: payload.schedule,
+    nextScheduledPayoutAt,
+  };
+});
+
+// ── Payout schedule sweep ───────────────────────────────────────────────
+// Batch-creates payout_requests for sellers with scheduled payouts whose
+// available balance exceeds their minimum. Called by a daily cron.
+app.post('/ops/payouts/schedule-sweep', async (request, reply) => {
+  const securityAdminError = ensureSecurityAdminAccess(request, reply);
+  if (securityAdminError) {
+    return securityAdminError;
+  }
+
+  if (!(await paymentTablesAvailable(db))) {
+    reply.code(503);
+    return {
+      ok: false,
+      error: 'Payment settlement tables are unavailable. Run migrations first.',
+    };
+  }
+
+  const payoutPauseState = await getPayoutPauseState();
+  if (payoutPauseState.paused) {
+    reply.code(503);
+    return {
+      ok: false,
+      error: 'Payouts temporarily paused for reconciliation review.',
+    };
+  }
+
+  // Find payout accounts with a scheduled payout due.
+  const dueAccounts = await db.query<{
+    id: number;
+    user_id: string;
+    currency: string;
+    payout_minimum_gbp: string;
+  }>(
+    `
+      SELECT id, user_id, currency, payout_minimum_gbp::text
+      FROM payout_accounts
+      WHERE status = 'active'
+        AND payout_schedule != 'on_demand'
+        AND next_scheduled_payout_at IS NOT NULL
+        AND next_scheduled_payout_at <= NOW()
+      ORDER BY next_scheduled_payout_at ASC
+      LIMIT 200
+    `
+  );
+
+  const created: Array<{ userId: string; payoutAccountId: number; amountGbp: number }> = [];
+
+  for (const account of dueAccounts.rows) {
+    const minimumGbp = Number(account.payout_minimum_gbp) || config.payoutDefaultMinimumGbp;
+
+    // Sum available seller_payable balance (released, not yet requested).
+    const balanceResult = await db.query<{ available_gbp: string }>(
+      `
+        SELECT COALESCE(SUM(amount_gbp), 0)::text AS available_gbp
+        FROM ledger_entries
+        WHERE account_id = (
+          SELECT id FROM ledger_accounts
+          WHERE owner_type = 'user' AND owner_id = $1 AND code = 'seller_payable'
+          LIMIT 1
+        )
+        AND direction = 'credit'
+        AND created_at <= NOW()
+      `,
+      [account.user_id]
+    );
+    const availableGbp = Number(balanceResult.rows[0]?.available_gbp ?? '0');
+
+    if (availableGbp < minimumGbp) {
+      // Reschedule for next cycle.
+      await db.query(
+        `UPDATE payout_accounts SET next_scheduled_payout_at = NULL WHERE id = $1`,
+        [account.id]
+      );
+      continue;
+    }
+
+    // Create a payout request for the available balance.
+    const requestId = createRuntimeId('po');
+    try {
+      await db.query(
+        `INSERT INTO payout_requests (id, user_id, payout_account_id, amount_gbp, amount_currency, status, idempotency_key, request_hash, metadata, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, 'requested', $6, $7, $8::jsonb, NOW(), NOW())`,
+        [
+          requestId,
+          account.user_id,
+          account.id,
+          availableGbp,
+          account.currency,
+          `sched_${account.id}_${new Date().toISOString().slice(0, 10)}`,
+          `sched_${account.id}_${new Date().toISOString().slice(0, 10)}`,
+          toJsonString({ source: 'schedule_sweep' }),
+        ]
+      );
+      created.push({
+        userId: account.user_id,
+        payoutAccountId: account.id,
+        amountGbp: availableGbp,
+      });
+    } catch (error) {
+      request.log.error({ err: error, userId: account.user_id }, 'Scheduled payout creation failed');
+    }
+
+    // Clear the next scheduled payout time.
+    await db.query(
+      `UPDATE payout_accounts SET next_scheduled_payout_at = NULL, updated_at = NOW() WHERE id = $1`,
+      [account.id]
+    );
+  }
+
+  return {
+    ok: true,
+    createdCount: created.length,
+    created,
+  };
+});
+
+// ── Reserve release sweep ───────────────────────────────────────────────
+// Releases rolling reserve holds whose holding period has expired.
+app.post('/ops/payouts/reserve-release-sweep', async (request, reply) => {
+  const securityAdminError = ensureSecurityAdminAccess(request, reply);
+  if (securityAdminError) {
+    return securityAdminError;
+  }
+
+  if (!(await paymentTablesAvailable(db))) {
+    reply.code(503);
+    return {
+      ok: false,
+      error: 'Payment settlement tables are unavailable. Run migrations first.',
+    };
+  }
+
+  const dueHolds = await db.query<{
+    id: number;
+    user_id: string;
+    order_id: string;
+    held_amount_gbp: string;
+  }>(
+    `
+      SELECT id, user_id, order_id, held_amount_gbp::text
+      FROM payout_reserve_holds
+      WHERE released_at IS NULL
+        AND release_eligible_at <= NOW()
+      ORDER BY release_eligible_at ASC
+      LIMIT 200
+    `
+  );
+
+  const released: Array<{ holdId: number; userId: string; amountGbp: number }> = [];
+
+  for (const hold of dueHolds.rows) {
+    const client = await db.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Credit the held amount back to seller_payable.
+      const sellerPayableAccountId = await ensureLedgerAccount(
+        client,
+        'user',
+        hold.user_id,
+        'seller_payable'
+      );
+      const reserveAccountId = await ensureLedgerAccount(
+        client,
+        'platform',
+        'platform',
+        'reserve_hold'
+      );
+
+      const heldAmount = Number(hold.held_amount_gbp);
+      await appendLedgerEntry(client, {
+        accountId: reserveAccountId,
+        counterpartyAccountId: sellerPayableAccountId,
+        direction: 'debit',
+        amountGbp: heldAmount,
+        sourceType: 'reserve_release',
+        sourceId: String(hold.id),
+        lineType: 'reserve_release',
+        metadata: { orderId: hold.order_id, holdId: hold.id },
+      });
+      await appendLedgerEntry(client, {
+        accountId: sellerPayableAccountId,
+        counterpartyAccountId: reserveAccountId,
+        direction: 'credit',
+        amountGbp: heldAmount,
+        sourceType: 'reserve_release',
+        sourceId: String(hold.id),
+        lineType: 'reserve_release',
+        metadata: { orderId: hold.order_id, holdId: hold.id },
+      });
+
+      await client.query(
+        `UPDATE payout_reserve_holds SET released_at = NOW() WHERE id = $1`,
+        [hold.id]
+      );
+
+      await client.query('COMMIT');
+      released.push({
+        holdId: Number(hold.id),
+        userId: hold.user_id,
+        amountGbp: heldAmount,
+      });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      request.log.error({ err: error, holdId: hold.id }, 'Reserve release failed');
+    } finally {
+      client.release();
+    }
+  }
+
+  return {
+    ok: true,
+    releasedCount: released.length,
+    released,
+  };
+});
+
 // Stripe Connect Onboarding Endpoints
 app.post('/users/:userId/stripe-connect/account', async (request, reply) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
@@ -28924,21 +30102,40 @@ app.post('/admin/payouts/:requestId/approve', async (request, reply) => {
     }
 
     try {
-      const providerTransfer = await createStripeConnectPayoutTransfer(stripe, {
-        requestId,
-        userId: payoutRow.user_id,
-        destinationAccountId: payoutRow.provider_account_ref,
-        netAmountGbp: payoutBreakdown.netPayoutGbp,
-      });
-      providerPayoutRef = providerTransfer.providerPayoutRef;
-      providerExecutionMetadata = {
-        provider: 'stripe_connect',
-        providerPayoutRef,
-        destinationAccountId: providerTransfer.destinationAccountId,
-        amountMinor: providerTransfer.amountMinor,
-        currency: providerTransfer.currency,
-        confirmedAt: new Date().toISOString(),
-      };
+      // ── Idempotency guard: skip the provider call if we already have a ref ──
+      // If the payout was already submitted to the provider (e.g., on a retry),
+      // reuse the existing provider_payout_ref instead of creating a duplicate
+      // transfer. Stripe's idempotency key would catch it, but this avoids
+      // the unnecessary API call and makes the guard explicit at the DB level.
+      if (providerPayoutRef) {
+        request.log.info(
+          { requestId, providerPayoutRef },
+          'Payout already has a provider reference — skipping provider call (idempotent)'
+        );
+        providerExecutionMetadata = {
+          provider: 'stripe_connect',
+          providerPayoutRef,
+          destinationAccountId: payoutRow.provider_account_ref,
+          idempotent: true,
+          reusedExistingRef: true,
+        };
+      } else {
+        const providerTransfer = await createStripeConnectPayoutTransfer(stripe, {
+          requestId,
+          userId: payoutRow.user_id,
+          destinationAccountId: payoutRow.provider_account_ref,
+          netAmountGbp: payoutBreakdown.netPayoutGbp,
+        });
+        providerPayoutRef = providerTransfer.providerPayoutRef;
+        providerExecutionMetadata = {
+          provider: 'stripe_connect',
+          providerPayoutRef,
+          destinationAccountId: providerTransfer.destinationAccountId,
+          amountMinor: providerTransfer.amountMinor,
+          currency: providerTransfer.currency,
+          confirmedAt: new Date().toISOString(),
+        };
+      }
     } catch (error) {
       request.log.error(
         { err: error, requestId, userId: payoutRow.user_id },
@@ -30379,30 +31576,30 @@ app.post('/payments/intents/:intentId/refunds', async (request, reply) => {
     let providerRefundRef = createRuntimeId(`refund_${intent.gateway_id}`);
     let refundStatus: 'pending' | 'succeeded' | 'failed' | 'cancelled' = 'pending';
 
-    if (intent.gateway_id === 'stripe_americas' && config.stripeSecretKey && intent.provider_intent_ref) {
-      const stripe = new Stripe(config.stripeSecretKey, {
-        apiVersion: '2024-06-20',
-      });
-
-      const created = await stripe.refunds.create({
-        payment_intent: intent.provider_intent_ref,
-        amount: Math.max(1, Math.round(amount * 100)),
-        reason: payload.reason ? 'requested_by_customer' : undefined,
-        metadata: toStripeMetadata({
-          intentId,
+    // Dispatch to the appropriate provider for a backed refund.
+    // All configured gateways now return money to the buyer's instrument
+    // rather than only recording a local ledger entry.
+    if (intent.provider_intent_ref) {
+      const refundMoney = moneyFromMinor(
+        currency,
+        String(
+          toFiatMinor(amount, currency)
+        )
+      );
+      const gatewayRefund = await createGatewayRefund({
+        gatewayId: intent.gateway_id,
+        intentId,
+        providerIntentRef: intent.provider_intent_ref,
+        money: refundMoney,
+        refundAmount: amount,
+        reason: payload.reason,
+        metadata: {
+          source: 'manual_refund_request',
           ...(payload.metadata ?? {}),
-        }),
+        },
       });
-
-      providerRefundRef = created.id;
-      refundStatus =
-        created.status === 'succeeded'
-          ? 'succeeded'
-          : created.status === 'failed'
-            ? 'failed'
-            : created.status === 'canceled'
-              ? 'cancelled'
-              : 'pending';
+      providerRefundRef = gatewayRefund.providerRefundRef;
+      refundStatus = gatewayRefund.refundStatus;
     }
 
     await upsertPaymentRefund(client, {
@@ -30580,6 +31777,8 @@ app.get('/payments/disputes', async (request, reply) => {
     amount: string;
     currency: string;
     reason: string | null;
+    evidence_due_at: string | null;
+    evidence_submitted_at: string | null;
     metadata: Record<string, unknown>;
     created_at: string;
     updated_at: string;
@@ -30594,6 +31793,8 @@ app.get('/payments/disputes', async (request, reply) => {
         amount::text,
         currency,
         reason,
+        evidence_due_at::text,
+        evidence_submitted_at::text,
         metadata,
         created_at::text,
         updated_at::text
@@ -30616,11 +31817,272 @@ app.get('/payments/disputes', async (request, reply) => {
       amount: Number(row.amount),
       currency: row.currency,
       reason: row.reason,
+      evidenceDueAt: row.evidence_due_at,
+      evidenceSubmittedAt: row.evidence_submitted_at,
       metadata: row.metadata,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     })),
   };
+});
+
+// ── Dispute detail ──────────────────────────────────────────────────────
+app.get('/payments/disputes/:disputeId', async (request, reply) => {
+  const securityAdminError = ensureSecurityAdminAccess(request, reply);
+  if (securityAdminError) {
+    return securityAdminError;
+  }
+
+  const { disputeId } = z.object({
+    disputeId: z.string().min(4).max(120),
+  }).parse(request.params);
+
+  if (!(await paymentTablesAvailable(db))) {
+    reply.code(503);
+    return {
+      ok: false,
+      error: 'Payment settlement tables are unavailable. Run migrations first.',
+    };
+  }
+
+  const result = await db.query<{
+    id: string;
+    intent_id: string | null;
+    gateway_id: string;
+    provider_dispute_ref: string;
+    status: 'open' | 'warning' | 'needs_response' | 'won' | 'lost' | 'closed';
+    amount: string;
+    currency: string;
+    reason: string | null;
+    evidence_due_at: string | null;
+    evidence_submitted_at: string | null;
+    evidence_payload: Record<string, unknown>;
+    evidence_provider_ref: string | null;
+    metadata: Record<string, unknown>;
+    created_at: string;
+    updated_at: string;
+  }>(
+    `
+      SELECT
+        id,
+        intent_id,
+        gateway_id,
+        provider_dispute_ref,
+        status,
+        amount::text,
+        currency,
+        reason,
+        evidence_due_at::text,
+        evidence_submitted_at::text,
+        evidence_payload,
+        evidence_provider_ref,
+        metadata,
+        created_at::text,
+        updated_at::text
+      FROM payment_disputes
+      WHERE id = $1
+      LIMIT 1
+    `,
+    [disputeId]
+  );
+
+  const row = result.rows[0];
+  if (!row) {
+    reply.code(404);
+    return { ok: false, error: 'Dispute not found' };
+  }
+
+  const eventsResult = await db.query<{
+    id: number;
+    event_type: string;
+    actor_id: string | null;
+    payload: Record<string, unknown>;
+    created_at: string;
+  }>(
+    `
+      SELECT id, event_type, actor_id, payload, created_at::text
+      FROM payment_dispute_events
+      WHERE dispute_id = $1
+      ORDER BY created_at DESC
+      LIMIT 50
+    `,
+    [disputeId]
+  );
+
+  return {
+    ok: true,
+    dispute: {
+      id: row.id,
+      intentId: row.intent_id,
+      gatewayId: row.gateway_id,
+      providerDisputeRef: row.provider_dispute_ref,
+      status: row.status,
+      amount: Number(row.amount),
+      currency: row.currency,
+      reason: row.reason,
+      evidenceDueAt: row.evidence_due_at,
+      evidenceSubmittedAt: row.evidence_submitted_at,
+      evidencePayload: row.evidence_payload,
+      evidenceProviderRef: row.evidence_provider_ref,
+      metadata: row.metadata,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    },
+    events: eventsResult.rows.map((e) => ({
+      id: Number(e.id),
+      eventType: e.event_type,
+      actorId: e.actor_id,
+      payload: e.payload,
+      createdAt: e.created_at,
+    })),
+  };
+});
+
+// ── Dispute evidence submission ─────────────────────────────────────────
+app.post('/payments/disputes/:disputeId/evidence', async (request, reply) => {
+  const securityAdminError = ensureSecurityAdminAccess(request, reply);
+  if (securityAdminError) {
+    return securityAdminError;
+  }
+
+  const { disputeId } = z.object({
+    disputeId: z.string().min(4).max(120),
+  }).parse(request.params);
+
+  const bodySchema = z.object({
+    evidence: z.record(z.unknown()),
+    submitToProvider: z.boolean().default(true),
+  });
+  const payload = bodySchema.parse(request.body ?? {});
+
+  if (!(await paymentTablesAvailable(db))) {
+    reply.code(503);
+    return {
+      ok: false,
+      error: 'Payment settlement tables are unavailable. Run migrations first.',
+    };
+  }
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    const disputeResult = await client.query<{
+      id: string;
+      intent_id: string | null;
+      gateway_id: string;
+      provider_dispute_ref: string;
+      status: string;
+      evidence_submitted_at: string | null;
+    }>(
+      `SELECT id, intent_id, gateway_id, provider_dispute_ref, status, evidence_submitted_at
+       FROM payment_disputes
+       WHERE id = $1
+       LIMIT 1
+       FOR UPDATE`,
+      [disputeId]
+    );
+
+    const dispute = disputeResult.rows[0];
+    if (!dispute) {
+      await client.query('ROLLBACK');
+      reply.code(404);
+      return { ok: false, error: 'Dispute not found' };
+    }
+
+    if (dispute.status === 'won' || dispute.status === 'lost' || dispute.status === 'closed') {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return {
+        ok: false,
+        error: `Cannot submit evidence for a dispute with status '${dispute.status}'`,
+      };
+    }
+
+    if (dispute.evidence_submitted_at) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return {
+        ok: false,
+        error: 'Evidence has already been submitted for this dispute',
+      };
+    }
+
+    let evidenceProviderRef: string | null = null;
+    const actorUserId = request.authUser?.userId ?? null;
+
+    // Submit evidence to the provider when supported.
+    if (payload.submitToProvider && dispute.gateway_id === 'stripe_americas' && config.stripeSecretKey) {
+      const stripe = new Stripe(config.stripeSecretKey, {
+        apiVersion: '2024-06-20',
+      });
+      try {
+        const evidenceResponse = await stripe.disputes.update(
+          dispute.provider_dispute_ref,
+          payload.evidence as Stripe.DisputeUpdateParams
+        );
+        evidenceProviderRef = evidenceResponse.id ?? null;
+      } catch (error) {
+        await client.query('ROLLBACK');
+        request.log.error({ err: error, disputeId }, 'Stripe dispute evidence submission failed');
+        reply.code(502);
+        return {
+          ok: false,
+          error: 'Stripe rejected the dispute evidence submission',
+        };
+      }
+    }
+    // For Razorpay/Mollie/Flutterwave/Tap: evidence is stored locally only.
+    // These providers do not expose a synchronous evidence submission API;
+    // the platform documents its response and uses it in representment.
+
+    const now = new Date().toISOString();
+    await client.query(
+      `UPDATE payment_disputes
+       SET evidence_submitted_at = $2,
+           evidence_payload = $3::jsonb,
+           evidence_provider_ref = $4,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [
+        disputeId,
+        now,
+        toJsonString(payload.evidence),
+        evidenceProviderRef,
+      ]
+    );
+
+    await client.query(
+      `INSERT INTO payment_dispute_events (dispute_id, event_type, actor_id, payload)
+       VALUES ($1, 'evidence_submitted', $2, $3::jsonb)`,
+      [
+        disputeId,
+        actorUserId,
+        toJsonString({
+          evidence: payload.evidence,
+          evidenceProviderRef,
+          submittedToProvider: payload.submitToProvider,
+          gatewayId: dispute.gateway_id,
+        }),
+      ]
+    );
+
+    await client.query('COMMIT');
+
+    return {
+      ok: true,
+      disputeId,
+      evidenceSubmittedAt: now,
+      evidenceProviderRef,
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    request.log.error({ err: error, disputeId }, 'Failed to submit dispute evidence');
+    reply.code(500);
+    return { ok: false, error: 'Unable to submit dispute evidence' };
+  } finally {
+    client.release();
+  }
 });
 
 if (config.nodeEnv !== 'production') {
@@ -31491,6 +32953,40 @@ app.post('/webhooks/:provider', async (request, reply) => {
     }
 
     request.log.error({ err: error, provider, event }, 'Failed to process provider webhook');
+
+    // ── Dead-letter queue: persist the failed event for retry ─────────
+    // The webhook event was already inserted (before the processing error),
+    // so we record the failure in the outbox for the retry sweep.
+    try {
+      const backoffSeconds = Math.min(300, 2 ** 0); // Initial: 1s
+      await db.query(
+        `
+          INSERT INTO webhook_processing_outbox (
+            gateway_id, provider_event_id, event_type, intent_id,
+            raw_payload, status, attempts, last_error, next_retry_at
+          )
+          VALUES ($1, $2, $3, $4, $5::jsonb, 'pending', 0, $6, NOW() + ($7 || ' seconds')::INTERVAL)
+          ON CONFLICT (gateway_id, provider_event_id) DO UPDATE
+            SET status = 'pending',
+                attempts = webhook_processing_outbox.attempts,
+                last_error = EXCLUDED.last_error,
+                next_retry_at = NOW() + ($7 || ' seconds')::INTERVAL,
+                updated_at = NOW()
+        `,
+        [
+          expectedGateway,
+          event.providerEventId,
+          event.eventType,
+          event.intentId ?? null,
+          toJsonString(event.rawPayload ?? {}),
+          String((error as Error).message ?? 'Unknown error').slice(0, 2000),
+          String(backoffSeconds),
+        ]
+      );
+    } catch (dlqError) {
+      request.log.error({ err: dlqError }, 'Failed to insert webhook into dead-letter queue');
+    }
+
     reply.code(500);
     return {
       ok: false,
@@ -31499,6 +32995,189 @@ app.post('/webhooks/:provider', async (request, reply) => {
   } finally {
     client.release();
   }
+});
+
+// ── Webhook dead-letter queue retry sweep ──────────────────────────────
+// Retries failed webhook events with exponential backoff. Called by a
+// cron worker or manually by an admin.
+app.post('/ops/webhooks/retry-sweep', async (request, reply) => {
+  const securityAdminError = ensureSecurityAdminAccess(request, reply);
+  if (securityAdminError) {
+    return securityAdminError;
+  }
+
+  if (!(await paymentTablesAvailable(db))) {
+    reply.code(503);
+    return {
+      ok: false,
+      error: 'Payment settlement tables are unavailable. Run migrations first.',
+    };
+  }
+
+  const bodySchema = z.object({
+    batchSize: z.coerce.number().int().min(1).max(100).default(20),
+  });
+  const { batchSize } = bodySchema.parse(request.body ?? {});
+
+  const dueItems = await db.query<{
+    id: number;
+    gateway_id: string;
+    provider_event_id: string;
+    event_type: string;
+    intent_id: string | null;
+    raw_payload: Record<string, unknown>;
+    attempts: number;
+    max_attempts: number;
+  }>(
+    `
+      SELECT id, gateway_id, provider_event_id, event_type, intent_id,
+             raw_payload, attempts, max_attempts
+      FROM webhook_processing_outbox
+      WHERE status IN ('pending', 'failed')
+        AND next_retry_at <= NOW()
+        AND attempts < max_attempts
+      ORDER BY next_retry_at ASC
+      LIMIT $1
+      FOR UPDATE SKIP LOCKED
+    `,
+    [batchSize]
+  );
+
+  const retried: Array<{ id: number; status: string; error?: string }> = [];
+
+  for (const item of dueItems.rows) {
+    const client = await db.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Mark as processing.
+      await client.query(
+        `UPDATE webhook_processing_outbox
+         SET status = 'processing', last_attempt_at = NOW(), attempts = attempts + 1, updated_at = NOW()
+         WHERE id = $1`,
+        [item.id]
+      );
+
+      // Re-normalize and re-process the webhook event.
+      const provider: ProviderSlug = item.gateway_id === 'stripe_americas' ? 'stripe'
+        : item.gateway_id === 'razorpay_in' ? 'razorpay'
+        : item.gateway_id === 'mollie_eu' ? 'mollie'
+        : item.gateway_id === 'flutterwave_africa' ? 'flutterwave'
+        : item.gateway_id === 'tap_gulf' ? 'tap'
+        : item.gateway_id === 'wise_global' ? 'wise'
+        : 'stripe';
+
+      const verification = await verifyAndNormalizeWebhook(
+        provider,
+        toJsonString(item.raw_payload),
+        {},
+        item.raw_payload
+      );
+
+      if (!verification.verified || !verification.event) {
+        throw new Error(verification.reason ?? 'Webhook re-verification failed');
+      }
+
+      const event = verification.event;
+      let intentRow: PaymentIntentRow | null = null;
+      if (event.intentId) {
+        const byId = await client.query<PaymentIntentRow>(
+          `SELECT id, user_id, gateway_id, channel, order_id, coOwn_order_id, instrument_id,
+                  amount_gbp, amount_currency, amount_minor, currency_exponent, money_registry_version,
+                  provider_amount, provider_amount_unit, money_conversion_trace, money_quarantined,
+                  status, provider_intent_ref, client_secret, provider_status, next_action_url,
+                  sca_expires_at, settled_at, failure_code, failure_message, created_at, updated_at
+           FROM payment_intents WHERE id = $1 LIMIT 1`,
+          [event.intentId]
+        );
+        intentRow = byId.rows[0] ?? null;
+      }
+      if (!intentRow && event.providerIntentRef) {
+        intentRow = await findPaymentIntentByProviderRef(client, item.gateway_id, event.providerIntentRef);
+      }
+
+      // Check if this webhook event was already processed.
+      const alreadyProcessed = await client.query<{ id: number }>(
+        `SELECT id FROM payment_webhook_events
+         WHERE gateway_id = $1 AND provider_event_id = $2 AND processed_at IS NOT NULL
+         LIMIT 1`,
+        [item.gateway_id, item.provider_event_id]
+      );
+
+      if (alreadyProcessed.rowCount) {
+        // Already processed — mark as succeeded.
+        await client.query(
+          `UPDATE webhook_processing_outbox SET status = 'succeeded', updated_at = NOW() WHERE id = $1`,
+          [item.id]
+        );
+        retried.push({ id: Number(item.id), status: 'succeeded' });
+      } else {
+        // Re-process: settle the intent if needed.
+        if (event.paymentStatus && intentRow && ['succeeded', 'failed', 'cancelled'].includes(event.paymentStatus)) {
+          await settlePaymentIntent(client, {
+            intentId: intentRow.id,
+            finalStatus: event.paymentStatus as PaymentIntentTerminalStatus,
+            providerAttemptRef: event.providerEventId,
+            rawPayload: { source: 'dlq_retry', provider, eventType: event.eventType, payload: event.rawPayload },
+          });
+        }
+
+        // Mark the webhook event as processed.
+        await client.query(
+          `UPDATE payment_webhook_events SET processed_at = NOW()
+           WHERE gateway_id = $1 AND provider_event_id = $2`,
+          [item.gateway_id, item.provider_event_id]
+        );
+
+        await client.query(
+          `UPDATE webhook_processing_outbox SET status = 'succeeded', updated_at = NOW() WHERE id = $1`,
+          [item.id]
+        );
+        retried.push({ id: Number(item.id), status: 'succeeded' });
+      }
+
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+
+      const nextBackoffSeconds = Math.min(3600, 2 ** (item.attempts + 1));
+      const isDead = item.attempts + 1 >= item.max_attempts;
+
+      try {
+        await client.query('BEGIN');
+        await client.query(
+          `UPDATE webhook_processing_outbox
+           SET status = $2, last_error = $3,
+               next_retry_at = NOW() + ($4 || ' seconds')::INTERVAL,
+               updated_at = NOW()
+           WHERE id = $1`,
+          [
+            item.id,
+            isDead ? 'dead' : 'failed',
+            String((error as Error).message ?? 'Unknown error').slice(0, 2000),
+            String(nextBackoffSeconds),
+          ]
+        );
+        await client.query('COMMIT');
+      } catch {
+        await client.query('ROLLBACK');
+      }
+
+      request.log.error({ err: error, itemId: item.id }, 'Webhook DLQ retry failed');
+      retried.push({ id: Number(item.id), status: isDead ? 'dead' : 'failed', error: (error as Error).message });
+    } finally {
+      client.release();
+    }
+  }
+
+  return {
+    ok: true,
+    processedCount: retried.length,
+    succeeded: retried.filter((r) => r.status === 'succeeded').length,
+    failed: retried.filter((r) => r.status === 'failed').length,
+    dead: retried.filter((r) => r.status === 'dead').length,
+    items: retried,
+  };
 });
 
 app.post('/shipping/serviceability', async (request, reply) => {
@@ -34039,7 +35718,7 @@ app.get('/auctions/home', async (request, reply) => {
     SELECT
       a.id, a.listing_id, a.seller_id, a.starts_at, a.ends_at,
       a.starting_bid_gbp, a.current_bid_gbp, a.buy_now_price_gbp,
-      a.min_increment_gbp, a.bid_count, a.status, a.cancelled_at, a.settled_at,
+      a.reserve_price_gbp, a.min_increment_gbp, a.bid_count, a.status, a.cancelled_at, a.settled_at,
       a.winner_bidder_id AS auction_winner_id, a.created_at,
       l.title, l.image_url, l.brand, l.category, l.condition AS condition_label,
       u.username AS seller_username, u.avatar AS seller_avatar, u.display_name AS seller_display_name
@@ -34052,8 +35731,8 @@ app.get('/auctions/home', async (request, reply) => {
 
   const viewerParams = viewerUserId ? [viewerUserId] : [];
 
-  // Fetch live (including closing soon), upcoming, ended, seller, and watchlist in parallel
-  const [liveRes, upcomingRes, endedRes, sellerRes, watchlistRes, categoryRes] = await Promise.all([
+  // Fetch live (including closing soon), upcoming, ended, seller, watchlist, and categories in parallel
+  const [liveRes, upcomingRes, endedRes, sellerRes, watchlistRes, categoryRes, upcomingCategoryRes] = await Promise.all([
     db.query(baseSelect + ` AND a.starts_at <= NOW() AND a.ends_at > NOW() ORDER BY a.ends_at ASC LIMIT 30`, viewerParams),
     db.query(baseSelect + ` AND a.starts_at > NOW() ORDER BY a.starts_at ASC LIMIT 20`, viewerParams),
     db.query(baseSelect + ` AND a.ends_at <= NOW() ORDER BY a.ends_at DESC LIMIT 20`, viewerParams),
@@ -34064,6 +35743,7 @@ app.get('/auctions/home', async (request, reply) => {
       ? db.query(baseSelect + ` AND EXISTS (SELECT 1 FROM auction_watchlist aw WHERE aw.auction_id = a.id AND aw.user_id = $1) ORDER BY a.ends_at ASC LIMIT 20`, [viewerUserId])
       : Promise.resolve({ rows: [] as any[] }),
     db.query(`SELECT DISTINCT COALESCE(l.category, '') AS category FROM auctions a LEFT JOIN listings l ON l.id = a.listing_id WHERE a.cancelled_at IS NULL AND a.starts_at <= NOW() AND a.ends_at > NOW() AND COALESCE(l.category, '') != '' ORDER BY category ASC`),
+    db.query(`SELECT DISTINCT COALESCE(l.category, '') AS category FROM auctions a LEFT JOIN listings l ON l.id = a.listing_id WHERE a.cancelled_at IS NULL AND a.starts_at > NOW() AND COALESCE(l.category, '') != '' ORDER BY category ASC`),
   ]);
 
   // ── Row mapper (shared with /auctions list endpoint) ──
@@ -34119,6 +35799,7 @@ app.get('/auctions/home', async (request, reply) => {
       currentBidGbp: currentBid,
       minimumNextBidGbp: minimumNextBid,
       buyNowPriceGbp: row.buy_now_price_gbp === null ? null : Number(row.buy_now_price_gbp),
+      reservePriceGbp: row.reserve_price_gbp === null ? null : Number(row.reserve_price_gbp),
       bidCount: row.bid_count,
       lifecycle: canonical.lifecycle,
       terminalReason: canonical.terminalReason,
@@ -34218,7 +35899,32 @@ app.get('/auctions/home', async (request, reply) => {
   const liveFloor = liveItems.filter((i) => !excludeIds.has(i.id));
 
   // ── Category worlds ──
+  // Map raw category strings to human-readable display names.
+  // The listings table stores lowercase categories (women, men) alongside
+  // display-case categories (Watches, Bags, Sneakers, Cameras). The frontend
+  // category rail should show proper display names.
+  const CATEGORY_DISPLAY_NAMES: Record<string, string> = {
+    women: 'Women',
+    men: 'Men',
+    watches: 'Watches',
+    bags: 'Bags',
+    sneakers: 'Sneakers',
+    cameras: 'Cameras',
+    streetwear: 'Streetwear',
+    shoes: 'Shoes',
+    clothing: 'Clothing',
+  };
+  function categoryDisplayName(raw: string): string {
+    const lower = raw.toLowerCase();
+    return CATEGORY_DISPLAY_NAMES[lower] ?? raw;
+  }
+
   const categoryRows = categoryRes.rows as { category: string }[];
+  const upcomingCategoryRows = upcomingCategoryRes.rows as { category: string }[];
+  // Merge live + upcoming categories, deduplicated, preserving sort order.
+  const allCategories = new Set<string>();
+  for (const r of categoryRows) allCategories.add(r.category);
+  for (const r of upcomingCategoryRows) allCategories.add(r.category);
   const categoryWorlds: Array<{
     categoryKey: string;
     displayName: string;
@@ -34226,15 +35932,17 @@ app.get('/auctions/home', async (request, reply) => {
     availableCount?: number;
   }> = [];
 
-  for (const catRow of categoryRows) {
-    const cat = catRow.category;
-    // Find a representative image from live items
-    const repItem = liveItems.find((i) => i.category === cat && i.imageUrl);
+  for (const cat of allCategories) {
+    // Find a representative image from live items first, then upcoming
+    const repItem = liveItems.find((i) => i.category === cat && i.imageUrl)
+      ?? upcomingItems.find((i) => i.category === cat && i.imageUrl);
+    const liveCount = liveItems.filter((i) => i.category === cat).length;
+    const upcomingCount = upcomingItems.filter((i) => i.category === cat).length;
     categoryWorlds.push({
       categoryKey: cat,
-      displayName: cat,
+      displayName: categoryDisplayName(cat),
       representativeImageUrl: repItem?.imageUrl ?? null,
-      availableCount: liveItems.filter((i) => i.category === cat).length || undefined,
+      availableCount: (liveCount + upcomingCount) || undefined,
     });
   }
 
@@ -34416,6 +36124,7 @@ app.get('/auctions', async (request, reply) => {
     starting_bid_gbp: number | string;
     current_bid_gbp: number | string;
     buy_now_price_gbp: number | string | null;
+    reserve_price_gbp: number | string | null;
     min_increment_gbp: number | string;
     bid_count: number;
     status: string;
@@ -34444,6 +36153,7 @@ app.get('/auctions', async (request, reply) => {
         a.starting_bid_gbp,
         a.current_bid_gbp,
         a.buy_now_price_gbp,
+        a.reserve_price_gbp,
         a.min_increment_gbp,
         a.bid_count,
         a.status,
@@ -34526,6 +36236,7 @@ app.get('/auctions', async (request, reply) => {
       currentBidGbp: currentBid,
       minimumNextBidGbp: minimumNextBid,
       buyNowPriceGbp: row.buy_now_price_gbp === null ? null : Number(row.buy_now_price_gbp),
+      reservePriceGbp: row.reserve_price_gbp === null ? null : Number(row.reserve_price_gbp),
       bidCount: row.bid_count,
       lifecycle: computedStatus,
       terminalReason: canonical.terminalReason,
@@ -36016,6 +37727,7 @@ app.get('/auctions/watchlist', async (request, reply) => {
     starting_bid_gbp: number | string;
     current_bid_gbp: number | string;
     buy_now_price_gbp: number | string | null;
+    reserve_price_gbp: number | string | null;
     min_increment_gbp: number | string;
     bid_count: number;
     status: string;
@@ -36027,6 +37739,7 @@ app.get('/auctions/watchlist', async (request, reply) => {
     image_url: string | null;
     brand: string | null;
     category: string | null;
+    condition_label: string | null;
     seller_username: string | null;
     seller_display_name: string | null;
     seller_avatar: string | null;
@@ -36043,6 +37756,7 @@ app.get('/auctions/watchlist', async (request, reply) => {
         a.starting_bid_gbp,
         a.current_bid_gbp,
         a.buy_now_price_gbp,
+        a.reserve_price_gbp,
         a.min_increment_gbp,
         a.bid_count,
         a.status,
@@ -36054,6 +37768,7 @@ app.get('/auctions/watchlist', async (request, reply) => {
         l.image_url,
         l.brand,
         l.category,
+        l.condition AS condition_label,
         u.username AS seller_username,
         u.display_name AS seller_display_name,
         u.avatar AS seller_avatar,
@@ -36111,12 +37826,14 @@ app.get('/auctions/watchlist', async (request, reply) => {
       imageUrl: row.image_url ?? null,
       brand: row.brand ?? null,
       category: row.category ?? null,
+      conditionLabel: row.condition_label ?? null,
       startsAt: row.starts_at,
       endsAt: row.ends_at,
       startingBidGbp: Number(row.starting_bid_gbp),
       currentBidGbp: currentBid,
       minimumNextBidGbp: roundTo(currentBid + minIncrement, 2),
       buyNowPriceGbp: row.buy_now_price_gbp === null ? null : Number(row.buy_now_price_gbp),
+      reservePriceGbp: row.reserve_price_gbp === null ? null : Number(row.reserve_price_gbp),
       bidCount: row.bid_count,
       lifecycle: computedStatus,
       terminalReason: canonical.terminalReason,
@@ -41624,6 +43341,182 @@ app.delete('/poster-highlights/:highlightId/frames/:frameId', async (request, re
 
 registerCreatorDocumentRoutes({ app, db, resolveAuthenticatedUserId });
 
+// ── Creator analytics ─────────────────────────────────────────────────────
+
+const ANALYTICS_CONTENT_TYPES = new Set(['look', 'poster', 'story', 'document']);
+const ANALYTICS_EVENT_TYPES = new Set([
+  'view', 'like', 'save', 'comment', 'share', 'product_click', 'profile_visit',
+]);
+
+// POST /creator/analytics/events — log an analytics event
+app.post('/creator/analytics/events', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+
+  const bodySchema = z.object({
+    content_type: z.string(),
+    content_id: z.string().min(1).max(200),
+    event_type: z.string(),
+    metadata: z.record(z.unknown()).optional(),
+  });
+  const payload = bodySchema.parse(request.body);
+
+  if (!ANALYTICS_CONTENT_TYPES.has(payload.content_type)) {
+    throw createApiError('ANALYTICS_CONTENT_TYPE_INVALID', 'Invalid content_type');
+  }
+  if (!ANALYTICS_EVENT_TYPES.has(payload.event_type)) {
+    throw createApiError('ANALYTICS_EVENT_TYPE_INVALID', 'Invalid event_type');
+  }
+
+  const result = await db.query<{ id: string }>(
+    `INSERT INTO creator_analytics_events (creator_id, content_type, content_id, event_type, viewer_id, metadata)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     RETURNING id`,
+    [
+      actorUserId,
+      payload.content_type,
+      payload.content_id,
+      payload.event_type,
+      actorUserId,
+      JSON.stringify(payload.metadata ?? {}),
+    ]
+  );
+
+  reply.code(201);
+  return { ok: true, eventId: result.rows[0].id };
+});
+
+// GET /creator/analytics/summary — overall stats for the authenticated creator
+app.get('/creator/analytics/summary', async (request) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+
+  const result = await db.query<{
+    views: string;
+    likes: string;
+    saves: string;
+    comments: string;
+    shares: string;
+    product_clicks: string;
+    profile_visits: string;
+  }>(
+    `SELECT
+       COUNT(*) FILTER (WHERE event_type = 'view')          AS views,
+       COUNT(*) FILTER (WHERE event_type = 'like')          AS likes,
+       COUNT(*) FILTER (WHERE event_type = 'save')          AS saves,
+       COUNT(*) FILTER (WHERE event_type = 'comment')       AS comments,
+       COUNT(*) FILTER (WHERE event_type = 'share')         AS shares,
+       COUNT(*) FILTER (WHERE event_type = 'product_click') AS product_clicks,
+       COUNT(*) FILTER (WHERE event_type = 'profile_visit') AS profile_visits
+     FROM creator_analytics_events
+     WHERE creator_id = $1`,
+    [actorUserId]
+  );
+
+  const row = result.rows[0] ?? {};
+  const views = Number(row.views ?? 0);
+  const engagement =
+    Number(row.likes ?? 0) +
+    Number(row.saves ?? 0) +
+    Number(row.comments ?? 0) +
+    Number(row.shares ?? 0) +
+    Number(row.product_clicks ?? 0);
+
+  return {
+    views,
+    likes: Number(row.likes ?? 0),
+    saves: Number(row.saves ?? 0),
+    comments: Number(row.comments ?? 0),
+    shares: Number(row.shares ?? 0),
+    productClicks: Number(row.product_clicks ?? 0),
+    profileVisits: Number(row.profile_visits ?? 0),
+    engagementRate: views > 0 ? Number((engagement / views).toFixed(4)) : 0,
+  };
+});
+
+// GET /creator/analytics/timeline — daily time-series for the authenticated creator
+app.get('/creator/analytics/timeline', async (request) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+
+  const querySchema = z.object({
+    days: z.coerce.number().int().min(1).max(365).default(30),
+  });
+  const { days } = querySchema.parse(request.query ?? {});
+
+  const result = await db.query<{
+    date: string;
+    views: string;
+    likes: string;
+    saves: string;
+    comments: string;
+    shares: string;
+    product_clicks: string;
+    profile_visits: string;
+  }>(
+    `SELECT
+       date_trunc('day', created_at)::date AS date,
+       COUNT(*) FILTER (WHERE event_type = 'view')          AS views,
+       COUNT(*) FILTER (WHERE event_type = 'like')          AS likes,
+       COUNT(*) FILTER (WHERE event_type = 'save')          AS saves,
+       COUNT(*) FILTER (WHERE event_type = 'comment')       AS comments,
+       COUNT(*) FILTER (WHERE event_type = 'share')         AS shares,
+       COUNT(*) FILTER (WHERE event_type = 'product_click') AS product_clicks,
+       COUNT(*) FILTER (WHERE event_type = 'profile_visit') AS profile_visits
+     FROM creator_analytics_events
+     WHERE creator_id = $1
+       AND created_at >= NOW() - ($2 || ' days')::INTERVAL
+     GROUP BY date_trunc('day', created_at)::date
+     ORDER BY date ASC`,
+    [actorUserId, days]
+  );
+
+  return {
+    items: result.rows.map((row) => ({
+      date: row.date,
+      views: Number(row.views),
+      likes: Number(row.likes),
+      saves: Number(row.saves),
+      comments: Number(row.comments),
+      shares: Number(row.shares),
+      productClicks: Number(row.product_clicks),
+      profileVisits: Number(row.profile_visits),
+    })),
+  };
+});
+
+// ── Creator content scheduling ────────────────────────────────────────────
+
+// PATCH /creator/documents/:documentId/schedule — set or clear scheduled_for
+app.patch('/creator/documents/:documentId/schedule', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+
+  const paramsSchema = z.object({ documentId: z.string().min(2).max(120) });
+  const { documentId } = paramsSchema.parse(request.params);
+
+  const bodySchema = z.object({
+    scheduled_for: z.string().datetime().nullable(),
+  });
+  const { scheduled_for } = bodySchema.parse(request.body);
+
+  const ownerResult = await db.query<{ creator_id: string }>(
+    `SELECT creator_id FROM creator_documents WHERE id = $1 LIMIT 1`,
+    [documentId]
+  );
+  if (!ownerResult.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Document not found' };
+  }
+  if (ownerResult.rows[0].creator_id !== actorUserId && request.authUser?.role !== 'admin') {
+    reply.code(403);
+    return { ok: false, error: 'Forbidden' };
+  }
+
+  await db.query(
+    `UPDATE creator_documents SET scheduled_for = $2 WHERE id = $1`,
+    [documentId, scheduled_for ? new Date(scheduled_for).toISOString() : null]
+  );
+
+  return { ok: true, scheduledFor: scheduled_for };
+});
+
 registerPriceAlertRoutes({
   app,
   db,
@@ -41725,4 +43618,5 @@ process.on('SIGTERM', async () => {
   process.exit(0);
 });
 
+void start();
 void start();

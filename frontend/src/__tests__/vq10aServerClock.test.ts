@@ -41,6 +41,7 @@ interface AuctionHomeItem {
   minimumNextBidGbp: number;
   bidCount: number;
   buyNowPriceGbp: number | null;
+  reservePriceGbp: number | null;
   viewerState: 'not_participating' | 'watching' | 'leading' | 'outbid' | 'won' | 'lost' | 'seller';
   isWatched: boolean;
   cancelledAt: string | null;
@@ -82,6 +83,7 @@ function makeItem(
     minimumNextBidGbp: 21,
     bidCount: 5,
     buyNowPriceGbp: null,
+    reservePriceGbp: null,
     viewerState: 'not_participating',
     isWatched: false,
     cancelledAt: null,
@@ -550,6 +552,7 @@ describe('PASS 3.2: Price label resolver', () => {
       minimumNextBidGbp: 21,
       bidCount: 5,
       buyNowPriceGbp: null,
+      reservePriceGbp: null,
       viewerState: 'not_participating',
       isWatched: false,
       cancelledAt: null,
@@ -765,6 +768,7 @@ describe('PASS 3.0C: Attention deduplication via canonical map', () => {
       minimumNextBidGbp: 21,
       bidCount: 3,
       buyNowPriceGbp: null,
+      reservePriceGbp: null,
       viewerState,
       isWatched: false,
       cancelledAt: null,

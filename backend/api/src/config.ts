@@ -286,6 +286,35 @@ export const config = {
   wisePlatformRecipientAccountId: process.env.WISE_PLATFORM_RECIPIENT_ACCOUNT_ID?.trim() || null,
   wisePlatformTransferReferencePrefix:
     process.env.WISE_PLATFORM_TRANSFER_REFERENCE_PREFIX?.trim() || 'THRYFTVERSE SWEEP',
+  buyerProtectionHoldHours: asIntegerInRange(
+    'BUYER_PROTECTION_HOLD_HOURS',
+    process.env.BUYER_PROTECTION_HOLD_HOURS,
+    48,
+    0,
+    168
+  ),
+  payoutDefaultMinimumGbp: asNumber(
+    process.env.PAYOUT_DEFAULT_MINIMUM_GBP,
+    10
+  ),
+  payoutNewSellerReservePct: asNumber(
+    process.env.PAYOUT_NEW_SELLER_RESERVE_PCT,
+    10
+  ),
+  payoutNewSellerReserveReleaseDays: asIntegerInRange(
+    'PAYOUT_NEW_SELLER_RESERVE_RELEASE_DAYS',
+    process.env.PAYOUT_NEW_SELLER_RESERVE_RELEASE_DAYS,
+    14,
+    0,
+    90
+  ),
+  payoutNewSellerThreshold: asIntegerInRange(
+    'PAYOUT_NEW_SELLER_THRESHOLD',
+    process.env.PAYOUT_NEW_SELLER_THRESHOLD,
+    10,
+    0,
+    1000
+  ),
   evriApiKey: process.env.EVRI_API_KEY?.trim() || process.env.SHIPPING_EVRI_API_KEY?.trim() || null,
   evriApiBaseUrl:
     process.env.EVRI_API_BASE_URL?.trim() || process.env.SHIPPING_EVRI_API_URL?.trim() || null,

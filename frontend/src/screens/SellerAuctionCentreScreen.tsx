@@ -60,6 +60,7 @@ function toViewModel(api: MarketAuction): AuctionHomeItem {
     minimumNextBidGbp: api.minimumNextBidGbp,
     bidCount: api.bidCount,
     buyNowPriceGbp: api.buyNowPriceGbp,
+    reservePriceGbp: api.reservePriceGbp ?? null,
     viewerState: api.viewerState,
     isWatched: api.isWatched,
     winnerBidderId: api.winnerBidderId ?? null,

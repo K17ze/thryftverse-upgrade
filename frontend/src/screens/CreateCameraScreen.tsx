@@ -8,6 +8,8 @@ import {
   useWindowDimensions,
   StatusBar,
   Easing,
+  PanResponder,
+  GestureResponderEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { StackScreenProps } from '@react-navigation/stack';
@@ -42,6 +44,9 @@ const MODE_CONTEXT: Record<CreateMode, string> = {
   poster: 'Create a poster',
 };
 
+// Swipe threshold — how far the user needs to swipe to trigger a mode change
+const SWIPE_THRESHOLD = 60;
+
 export default function CreateCameraScreen({ navigation, route }: Props) {
   const initialMode: CreateMode =
     route.params?.mode === 'visual-search' || route.params?.mode === 'poster'
@@ -58,6 +63,7 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
   const [showOverflow, setShowOverflow] = useState(false);
   const indicatorX = useRef(new Animated.Value(0)).current;
   const opacity = useRef(new Animated.Value(0)).current;
+  const modeTransition = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     if (reducedMotion) {
@@ -89,10 +95,50 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
     }).start();
   }, [activeIndex, indicatorX, reducedMotion, segmentWidth]);
 
+  // ── Swipe gesture to switch modes (Snapchat/TikTok pattern) ──
+  const switchMode = useCallback((direction: -1 | 1) => {
+    const currentIndex = MODES.findIndex((m) => m.key === mode);
+    const nextIndex = currentIndex + direction;
+    if (nextIndex < 0 || nextIndex >= MODES.length) return;
+    haptic.selection();
+    // Crossfade the camera content on mode change
+    if (!reducedMotion) {
+      Animated.sequence([
+        Animated.timing(modeTransition, { toValue: 0, duration: 100, useNativeDriver: true }),
+        Animated.timing(modeTransition, { toValue: 1, duration: 160, useNativeDriver: true }),
+      ]).start();
+    }
+    setMode(MODES[nextIndex].key);
+  }, [haptic, mode, modeTransition, reducedMotion]);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_evt, gestureState) => {
+        // Only capture horizontal swipes (not vertical, not taps)
+        return Math.abs(gestureState.dx) > SWIPE_THRESHOLD &&
+               Math.abs(gestureState.dy) < 40 &&
+               Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.5;
+      },
+      onPanResponderRelease: (_evt, gestureState) => {
+        if (gestureState.dx > SWIPE_THRESHOLD) {
+          switchMode(-1); // Swipe right → previous mode
+        } else if (gestureState.dx < -SWIPE_THRESHOLD) {
+          switchMode(1); // Swipe left → next mode
+        }
+      },
+    })
+  ).current;
+
   const handleModeChange = useCallback((newMode: CreateMode) => {
     haptic.selection();
+    if (!reducedMotion) {
+      Animated.sequence([
+        Animated.timing(modeTransition, { toValue: 0, duration: 100, useNativeDriver: true }),
+        Animated.timing(modeTransition, { toValue: 1, duration: 160, useNativeDriver: true }),
+      ]).start();
+    }
     setMode(newMode);
-  }, [haptic]);
+  }, [haptic, modeTransition, reducedMotion]);
 
   const handleCapture = useCallback((uri: string) => {
     if (mode === 'visual-search') {
@@ -186,6 +232,7 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
           },
         ]}
       >
+        {/* Elevated context header — upgraded typography hierarchy */}
         <View style={s.contextHeader}>
           <Text style={s.contextTitle}>{MODE_CONTEXT[mode]}</Text>
           <View style={s.toolRow}>
@@ -230,13 +277,13 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
               <Ionicons
                 name={m.icon}
                 size={16}
-                color={mode === m.key ? '#fff' : 'rgba(255,255,255,0.7)'}
+                color={mode === m.key ? '#fff' : 'rgba(255,255,255,0.55)'}
                 style={s.modeIcon}
               />
               <Text
                 style={[
                   s.modeLabel,
-                  { color: mode === m.key ? '#fff' : 'rgba(255,255,255,0.7)' },
+                  { color: mode === m.key ? '#fff' : 'rgba(255,255,255,0.55)' },
                 ]}
               >
                 {m.label}
@@ -261,17 +308,20 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
   ), [haptic, showOverflow]);
 
   return (
-    <View style={s.container}>
+    <View style={s.container} {...panResponder.panHandlers}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      <CreatorCamera
-        mode={mode}
-        onCapture={handleCapture}
-        onGallery={handleGallery}
-        onClose={handleClose}
-        renderBottomOverlay={renderModeSwitcher}
-        renderTopRightAccessory={renderOverflowButton}
-      />
+      {/* Crossfade layer for mode transitions */}
+      <Animated.View style={[StyleSheet.absoluteFill, { opacity: modeTransition }]} pointerEvents="none">
+        <CreatorCamera
+          mode={mode}
+          onCapture={handleCapture}
+          onGallery={handleGallery}
+          onClose={handleClose}
+          renderBottomOverlay={renderModeSwitcher}
+          renderTopRightAccessory={renderOverflowButton}
+        />
+      </Animated.View>
 
       {showOverflow && (
         <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
@@ -329,13 +379,14 @@ const s = StyleSheet.create({
     paddingTop: 2,
     paddingBottom: Space.xs,
   },
+  // Elevated context title — upgraded from Type.meta to Type.bodyEmphasis for visual weight
   contextTitle: {
     paddingHorizontal: 4,
-    paddingBottom: 5,
-    color: 'rgba(255,255,255,0.72)',
+    paddingBottom: 6,
+    color: 'rgba(255,255,255,0.85)',
     fontFamily: Typography.family.semibold,
-    fontSize: Type.meta.size,
-    letterSpacing: 0.4,
+    fontSize: Type.bodyEmphasis.size,
+    letterSpacing: 0.2,
     textTransform: 'uppercase',
   },
   toolRow: {
@@ -373,7 +424,7 @@ const s = StyleSheet.create({
     top: Space.xs,
     bottom: Space.xs,
     borderRadius: Radius.md,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.22)',
   },
   modeButton: {
     height: 40,
@@ -394,13 +445,13 @@ const s = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: 'rgba(0,0,0,0.3)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   controlPressed: {
     opacity: 0.7,
-    transform: [{ scale: 0.98 }],
+    transform: [{ scale: 0.97 }],
   },
   overflowMenu: {
     position: 'absolute',
