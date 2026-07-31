@@ -13,7 +13,7 @@ import {
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -438,9 +438,13 @@ export default function AuctionHomeScreen() {
     }
   }, [resync, clearResyncFailed, markResyncFailed]);
 
-  React.useEffect(() => {
-    void fetchHome();
-  }, [fetchHome]);
+  // useFocusEffect ensures the auction home re-fetches whenever the user
+  // navigates back to it (e.g., after creating a new auction).
+  useFocusEffect(
+    React.useCallback(() => {
+      void fetchHome();
+    }, [fetchHome])
+  );
 
   React.useEffect(() => {
     if (needsResync) {

@@ -10,7 +10,7 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import { RouteProp, useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
@@ -212,10 +212,14 @@ export default function CoOwnHubScreen() {
     return () => { cancelled = true; };
   }, [actingUserId, listings, show]);
 
-  React.useEffect(() => {
-    const cleanup = loadData();
-    return cleanup;
-  }, [loadData]);
+  // useFocusEffect ensures the hub re-fetches co-own assets whenever the
+  // user navigates back to it (e.g., after creating a new co-own asset).
+  useFocusEffect(
+    React.useCallback(() => {
+      const cleanup = loadData();
+      return cleanup;
+    }, [loadData])
+  );
 
   React.useEffect(() => {
     if (route.params?.initialSegment) {

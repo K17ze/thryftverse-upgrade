@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, StatusBar, FlatList, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, RouteProp, useRoute } from '@react-navigation/native';
+import { useNavigation, RouteProp, useRoute, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { TypeStyles, Space, Radius, Type, Typography } from '../theme/designTokens';
@@ -97,12 +97,16 @@ export default function MyListingsScreen() {
     }
   }, [currentUser?.id, show]);
 
-  useEffect(() => {
-    let mounted = true;
-    setIsLoading(true);
-    load().finally(() => { if (mounted) setIsLoading(false); });
-    return () => { mounted = false; };
-  }, [load]);
+  // useFocusEffect ensures listings re-fetch when the user navigates back
+  // (e.g., after editing or managing a listing from this screen).
+  useFocusEffect(
+    useCallback(() => {
+      let mounted = true;
+      setIsLoading(true);
+      load().finally(() => { if (mounted) setIsLoading(false); });
+      return () => { mounted = false; };
+    }, [load])
+  );
 
   const onRefresh = async () => {
     setIsRefreshing(true);

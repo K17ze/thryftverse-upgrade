@@ -8157,6 +8157,25 @@ async function sweepExpiredAuctions(reason: 'interval' | 'manual'): Promise<numb
         [auction.id, topBid?.id ?? null, topBid?.bidder_id ?? null]
       );
 
+      // If the auction has a winner, mark the underlying listing as sold.
+      // If no winner (reserve not met / no bids), reactivate the listing so
+      // the seller can relist or try again.
+      if (topBid?.bidder_id) {
+        await client.query(
+          `UPDATE listings
+           SET status = 'sold', updated_at = NOW()
+           WHERE id = $1`,
+          [auction.listing_id]
+        );
+      } else {
+        await client.query(
+          `UPDATE listings
+           SET status = 'active', updated_at = NOW()
+           WHERE id = $1 AND status = 'paused'`,
+          [auction.listing_id]
+        );
+      }
+
       if (topBid?.bidder_id && canPostAuctionLedger) {
         await postAuctionSettlementLedgerEntries(client, {
           auctionId: auction.id,
@@ -34574,6 +34593,18 @@ app.post('/auctions', async (request, reply) => {
     ]
   );
 
+  // Pause the underlying listing so it is no longer available for direct
+  // purchase while the auction is active. This prevents double-exposure
+  // where the same item is simultaneously buyable in the feed and being
+  // auctioned. If the auction ends without a sale, the listing is
+  // reactivated by the auction settlement sweep.
+  await db.query(
+    `UPDATE listings
+     SET status = 'paused', updated_at = NOW()
+     WHERE id = $1 AND status = 'active'`,
+    [payload.listingId]
+  );
+
   publishRealtimeEvent({
     topic: 'auctions.market',
     type: 'auction.created',
@@ -35416,6 +35447,17 @@ app.post('/auctions/:auctionId/buy-now', async (request, reply) => {
           : null,
       },
     });
+
+    // Mark the underlying listing as sold — the Buy Now is an immediate
+    // purchase, so the item is no longer available. This aligns auction
+    // Buy Now with the direct-checkout flow which also sets status = 'sold'
+    // via the reconcile_listing_checkout_from_order trigger.
+    await client.query(
+      `UPDATE listings
+       SET status = 'sold', updated_at = NOW()
+       WHERE id = $1`,
+      [auction.listing_id]
+    );
 
     await client.query('COMMIT');
 
@@ -36334,6 +36376,17 @@ app.post('/co-own/assets', async (request, reply) => {
       payload.settlementMode,
       payload.issuerJurisdiction ?? null,
     ]
+  );
+
+  // Pause the underlying listing so it is no longer available for direct
+  // purchase while the co-own asset is open for fractional trading. This
+  // prevents double-exposure where the same item is simultaneously buyable
+  // in the feed and available as a fractional asset.
+  await db.query(
+    `UPDATE listings
+     SET status = 'paused', updated_at = NOW()
+     WHERE id = $1 AND status = 'active'`,
+    [payload.listingId]
   );
 
   reply.code(201);

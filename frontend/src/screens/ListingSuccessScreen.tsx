@@ -23,6 +23,9 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import { PremiumStatusPill } from '../components/ui/PremiumStatusPill';
 import { fetchListingByIdFromApi } from '../services/listingsApi';
+import { useBackendData } from '../context/BackendDataContext';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '../platform/server/queryKeys';
 
 type Props = StackScreenProps<RootStackParamList, 'ListingSuccess'>;
 
@@ -30,6 +33,8 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
   const { colors, isDark } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { formatFromFiat } = useFormattedPrice();
+  const { refreshListings } = useBackendData();
+  const queryClient = useQueryClient();
 
   const listingId = route.params?.listingId;
   const routeTitle = route.params?.title;
@@ -39,6 +44,16 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
 
   const [backendListing, setBackendListing] = React.useState<any>(null);
   const [isLoading, setIsLoading] = React.useState(true);
+
+  // Refresh the feed and invalidate the listing detail query so the new
+  // listing appears immediately when the user navigates back to the feed
+  // or profile — without waiting for the 55-second polling cycle.
+  React.useEffect(() => {
+    void refreshListings();
+    if (listingId) {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(listingId) });
+    }
+  }, [refreshListings, queryClient, listingId]);
 
   React.useEffect(() => {
     if (!listingId) return;

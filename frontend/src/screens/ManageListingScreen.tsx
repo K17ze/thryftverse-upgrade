@@ -35,6 +35,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { fetchListingByIdFromApi, patchListingOnApi, deleteListingOnApi } from '../services/listingsApi';
 import { useStore } from '../store/useStore';
+import { useBackendData } from '../context/BackendDataContext';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '../platform/server/queryKeys';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const WARN_TINT = 'rgba(245,166,35,0.12)';
@@ -50,6 +53,8 @@ export default function ManageListingScreen() {
   const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
   const { itemId } = route.params;
+  const { refreshListings } = useBackendData();
+  const queryClient = useQueryClient();
 
   const [item, setItem] = React.useState<any>(null);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -232,6 +237,8 @@ export default function ManageListingScreen() {
           try {
             await deleteListingOnApi(itemId);
             show('Listing deleted.', 'success');
+            void refreshListings();
+            void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(itemId) });
             navigation.goBack();
           } catch {
             show('Failed to delete listing', 'error');
@@ -256,6 +263,8 @@ export default function ManageListingScreen() {
             await patchListingOnApi(itemId, { status: 'sold' });
             setItem((prev: any) => ({ ...prev, status: 'sold' }));
             show('Listing marked as sold.', 'success');
+            void refreshListings();
+            void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(itemId) });
           } catch {
             show('Failed to update listing', 'error');
           }
@@ -269,6 +278,8 @@ export default function ManageListingScreen() {
       await patchListingOnApi(itemId, { status: 'paused' });
       setItem((prev: any) => ({ ...prev, status: 'paused' }));
       show('Listing paused', 'info');
+      void refreshListings();
+      void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(itemId) });
     } catch {
       show('Failed to update listing', 'error');
     }
@@ -279,6 +290,8 @@ export default function ManageListingScreen() {
       await patchListingOnApi(itemId, { status: 'active' });
       setItem((prev: any) => ({ ...prev, status: 'active' }));
       show('Listing reactivated', 'success');
+      void refreshListings();
+      void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(itemId) });
     } catch {
       show('Failed to update listing', 'error');
     }

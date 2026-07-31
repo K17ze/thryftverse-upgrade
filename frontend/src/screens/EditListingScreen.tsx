@@ -32,6 +32,9 @@ import { MediaUploadQueue } from '../services/mediaUploadQueue';
 import { ListingMediaStudio } from '../components/listing/ListingMediaStudio';
 import { EditListingFooter } from '../components/listing/EditListingFooter';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
+import { useBackendData } from '../context/BackendDataContext';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '../platform/server/queryKeys';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -82,6 +85,8 @@ export default function EditListingScreen() {
   const { show: showToast } = useToast();
   const { currencyCode } = useCurrencyPref();
   const currencySymbol = CURRENCIES[currencyCode].symbol;
+  const { refreshListings } = useBackendData();
+  const queryClient = useQueryClient();
 
   const [listing, setListing] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -431,6 +436,10 @@ export default function EditListingScreen() {
 
       setSaveStage('completed');
       showToast('Listing updated successfully.', 'success');
+      // Refresh feed + invalidate cached detail so the edit propagates
+      // immediately when the user returns to the feed or profile.
+      void refreshListings();
+      void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(itemId) });
       navigation.goBack();
     } catch (e) {
       setSaveStage('failed_recoverable');

@@ -28,6 +28,8 @@ import { createAuction } from '../services/marketApi';
 import { createStableId } from '../utils/createStableId';
 import { EmptyState } from '../components/EmptyState';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '../platform/server/queryKeys';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -53,7 +55,8 @@ export default function CreateAuctionScreen() {
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
   const { currencyCode, goldRates } = useCurrencyContext();
-  const { listings } = useBackendData();
+  const { listings, refreshListings } = useBackendData();
+  const queryClient = useQueryClient();
   const reducedMotionEnabled = useReducedMotion();
 
   const currentUser = useStore((state) => state.currentUser);
@@ -167,6 +170,12 @@ export default function CreateAuctionScreen() {
         buyNow: buyNowEnabled && buyNowInput ? `${currencyCode} ${buyNowInput}` : null,
       });
       show(startInMinutes > 0 ? 'Auction scheduled successfully' : 'Auction is now live', 'success');
+      // The backend pauses the listing when an auction is created from it.
+      // Refresh the feed + invalidate the listing detail so the paused
+      // status propagates immediately.
+      void refreshListings();
+      void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(selectedListing.id) });
+      void queryClient.invalidateQueries({ queryKey: ['auctions', 'home'] });
     } catch (e) {
       show('Failed to launch auction. Please try again.', 'error');
     } finally {

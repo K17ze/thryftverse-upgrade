@@ -25,6 +25,9 @@ import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { Space, Radius, Type, Typography, DockConstants } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useBackendData } from '../context/BackendDataContext';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '../platform/server/queryKeys';
 import { useHaptic } from '../hooks/useHaptic';
 import { haptics } from '../utils/haptics';
 import {
@@ -57,6 +60,8 @@ export default function CreateCoOwnScreen() {
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
   const scrollBottomPadding = Math.max(insets.bottom, Space.md) + DockConstants.singleActionHeight;
+  const { refreshListings } = useBackendData();
+  const queryClient = useQueryClient();
 
   const prefill = route.params;
 
@@ -174,6 +179,12 @@ export default function CreateCoOwnScreen() {
         settlementMode: 'ONEZE',
       });
       show('Co-Own issued successfully', 'success');
+      // The backend pauses the listing when a co-own asset is created from
+      // it. Refresh the feed + invalidate the listing detail so the paused
+      // status propagates immediately when the user returns.
+      void refreshListings();
+      void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(selectedListing.id) });
+      void queryClient.invalidateQueries({ queryKey: ['coown', 'assets'] });
       navigation.goBack();
     } catch (err) {
       show('Failed to issue co-own. Please try again.', 'error');
