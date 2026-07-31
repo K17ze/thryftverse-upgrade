@@ -15,9 +15,9 @@ ALTER TABLE auctions
 -- Each version is immutable once published; supersession is via a new row
 -- referencing the previous version.
 CREATE TABLE IF NOT EXISTS coown_rights (
-  id TEXT PRIMARY KEY,
+  id TEXT PRIMARY KEY DEFAULT ('cwr_' || gen_random_uuid()::text),
   asset_id TEXT NOT NULL REFERENCES coOwn_assets(id) ON DELETE CASCADE,
-  version INTEGER NOT NULL CHECK (version >= 1),
+  version INTEGER NOT NULL DEFAULT 1 CHECK (version >= 1),
   previous_version_id TEXT REFERENCES coown_rights(id) ON DELETE SET NULL,
   status TEXT NOT NULL DEFAULT 'published' CHECK (
     status IN ('draft', 'published', 'superseded')

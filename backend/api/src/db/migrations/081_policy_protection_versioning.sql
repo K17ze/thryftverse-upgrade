@@ -4,7 +4,7 @@
 -- that the product detail screen can reference authoritatively.
 
 CREATE TABLE IF NOT EXISTS policy_documents (
-  id TEXT PRIMARY KEY,
+  id TEXT PRIMARY KEY DEFAULT ('pol_' || gen_random_uuid()::text),
   -- Logical policy key (e.g., 'buyer_protection', 'seller_protection',
   -- 'returns', 'authenticity_guarantee')
   policy_key TEXT NOT NULL,

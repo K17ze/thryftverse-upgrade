@@ -698,10 +698,10 @@ async function storeIdempotencyResponse(
   await client.query(
     `
       UPDATE auction_transaction_idempotency
-      SET response_status = $3, response_body = $4
-      WHERE idempotency_key = $1 AND auction_id = $5 AND user_id = $6
+      SET response_status = $2, response_body = $3
+      WHERE idempotency_key = $1 AND auction_id = $4 AND user_id = $5
     `,
-    [opts.idempotencyKey, opts.operationType, opts.responseStatus, JSON.stringify(opts.responseBody), opts.auctionId, opts.userId]
+    [opts.idempotencyKey, opts.responseStatus, JSON.stringify(opts.responseBody), opts.auctionId, opts.userId]
   );
 }
 
@@ -954,6 +954,18 @@ function isPublicRoute(method: string, path: string) {
   }
 
   if (method === 'GET' && /^\/users\/[^/]+\/poster-highlights$/.test(path)) {
+    return true;
+  }
+
+  // T03: Listing detail is publicly viewable for active/sold listings.
+  // The route handler calls optionalAuthenticate and gates non-public
+  // statuses (draft/paused/deleted) to the seller only.
+  if (method === 'GET' && /^\/listings\/[^/]+$/.test(path)) {
+    return true;
+  }
+
+  // T04: Policy documents are publicly viewable (published versions only).
+  if (method === 'GET' && /^\/policies\/[^/]+$/.test(path)) {
     return true;
   }
 
@@ -35327,21 +35339,32 @@ app.post('/auctions/:auctionId/buy-now', async (request, reply) => {
     );
 
     // T08: Create an order record so Buy Now flows into fulfilment.
-    // The orders.auction_id column (migration 065) has a unique index,
-    // guaranteeing exactly one order per auction Buy Now.
-    const orderId = `auc-${auctionId}-${scopedKey.slice(-12)}`;
-    await client.query(
-      `
-        INSERT INTO orders (
-          id, buyer_id, seller_id, listing_id,
-          subtotal_gbp, buyer_protection_fee_gbp, total_gbp,
-          status, auction_id
-        )
-        VALUES ($1, $2, $3, $4, $5, 0, $5, 'created', $6)
-        ON CONFLICT (auction_id) DO NOTHING
-      `,
-      [orderId, buyerId, auction.seller_id, auction.listing_id, transactionAmountGbp, auctionId]
+    // The orders.auction_id column (migration 065) has a partial unique
+    // index (WHERE auction_id IS NOT NULL), guaranteeing exactly one
+    // order per auction Buy Now. We use a pre-check + INSERT rather
+    // than ON CONFLICT because the partial index makes parameter type
+    // inference unreliable in some PostgreSQL versions.
+    let orderId = `auc-${auctionId}-${scopedKey.slice(-12)}`;
+    const existingOrder = await client.query<{ id: string }>(
+      `SELECT id FROM orders WHERE auction_id = $1 LIMIT 1`,
+      [auctionId]
     );
+    if (!existingOrder.rowCount) {
+      await client.query(
+        `
+          INSERT INTO orders (
+            id, buyer_id, seller_id, listing_id,
+            subtotal_gbp, buyer_protection_fee_gbp, total_gbp,
+            status, auction_id
+          )
+          VALUES ($1, $2, $3, $4, $5, 0, $5, 'created', $6)
+        `,
+        [orderId, buyerId, auction.seller_id, auction.listing_id, transactionAmountGbp, auctionId]
+      );
+    } else {
+      // Order already exists from a prior idempotent replay — reuse its ID
+      orderId = existingOrder.rows[0].id;
+    }
 
     if (amlAssessment.shouldCreateAlert) {
       amlAlert = await createAmlAlert(client, {
@@ -35484,6 +35507,7 @@ app.post('/auctions/:auctionId/buy-now', async (request, reply) => {
     };
   } catch (error) {
     await client.query('ROLLBACK');
+    request.log.error({ err: error, auctionId, buyerId }, 'Buy Now failed');
     reply.code(500);
     return {
       ok: false,
