@@ -11,6 +11,7 @@
     "test:integration": "node --import tsx --test \"src/integration/**/*.test.ts\"",
     "backup:db": "node scripts/postgres-backup.mjs",
     "migrate": "tsx src/db/migrate.ts",
+    "seed": "tsx scripts/seed-dev-data.ts",
     "start": "node --enable-source-maps dist/index.js",
     "smoke:commerce": "node scripts/smoke-commerce-flow.mjs",
     "smoke:coown": "node scripts/smoke-coown-flow.mjs",

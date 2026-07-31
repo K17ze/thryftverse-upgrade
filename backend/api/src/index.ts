@@ -34458,7 +34458,7 @@ app.get('/auctions', async (request, reply) => {
         l.condition AS condition_label,
         u.username AS seller_username,
         u.avatar AS seller_avatar,
-        u.display_name AS seller_display_name,
+        u.display_name AS seller_display_name
         ${viewerSelect}
       FROM auctions a
       LEFT JOIN listings l ON l.id = a.listing_id
