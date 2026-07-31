@@ -25744,6 +25744,21 @@ app.get('/wallet/1ze/:userId/position', async (request, reply) => {
   const serverTimestamp = new Date().toISOString();
   const positionRate = fiatCurrency.toUpperCase() === 'GBP' ? 1 : pricingQuote.sellPrice;
 
+  // ── WS4: Wallet safeguarding (backend-backed, no longer hardcoded) ──
+  // Query the user's safeguarding profile. Default to safeguarded=false
+  // when no row exists (fail closed — never assert safeguarding without
+  // a backend row).
+  const safeguardingResult = await db.query<{
+    safeguarded: boolean;
+    safeguarding_partner: string | null;
+    safeguarding_evidence_url: string | null;
+    safeguarding_terms_url: string | null;
+  }>(
+    'SELECT safeguarded, safeguarding_partner, safeguarding_evidence_url, safeguarding_terms_url FROM wallet_safeguarding_profile WHERE user_id = $1',
+    [userId]
+  );
+  const safeguarding = safeguardingResult.rows[0];
+
   const quote = {
     currency: pricingQuote.currency,
     ratePerGram: positionRate,
@@ -25773,8 +25788,10 @@ app.get('/wallet/1ze/:userId/position', async (request, reply) => {
       unsettledSaleProceeds: 0,
       settledCustomerClaim,
       withdrawable: availableIze,
-      safeguarded: false,
-      safeguardingPartner: null,
+      safeguarded: safeguarding?.safeguarded ?? false,
+      safeguardingPartner: safeguarding?.safeguarding_partner ?? null,
+      safeguardingEvidenceUrl: safeguarding?.safeguarding_evidence_url ?? null,
+      safeguardingTermsUrl: safeguarding?.safeguarding_terms_url ?? null,
       snapshotSequence: Number(sequenceResult.rows[0]?.snapshot_sequence ?? 0),
       serverTimestamp,
       reconciliationState: haltState.halted ? 'reconciling' : 'reconciled',
@@ -36318,11 +36335,62 @@ app.post('/co-own/assets', async (request, reply) => {
     unitPriceStable: z.number().positive(),
     settlementMode: z.enum(['GBP', 'TVUSD', 'HYBRID', 'ONEZE']).default('ONEZE'),
     issuerJurisdiction: z.string().min(2).max(10).optional(),
+    // ── Trust profile (WS1) ──
+    // legal_vehicle_type is required for new issuance (equity-market pattern:
+    // no listing without a disclosed legal wrapper). 'none' is permitted for
+    // assets that genuinely have no wrapper, but it must be stated explicitly.
+    legalVehicleType: z.enum(['spv', 'llc', 'trust', 'series_llc', 'none']),
+    legalVehicleName: z.string().min(2).max(180).optional(),
+    legalVehicleJurisdiction: z.string().min(2).max(64).optional(),
+    custodianName: z.string().min(2).max(180).optional(),
+    custodianLocation: z.string().min(2).max(180).optional(),
+    custodyInsured: z.boolean().optional(),
+    custodyInsurer: z.string().min(2).max(180).optional(),
+    custodyPolicyRef: z.string().min(2).max(180).optional(),
+    custodyCoverageGbp: z.number().nonnegative().optional(),
+    authenticityStatus: z.enum(['unverified', 'pending', 'verified']).optional(),
+    authenticityMethod: z.string().min(2).max(180).optional(),
+    provenance: z.string().min(2).max(2000).optional(),
+    conditionGrade: z.string().min(1).max(64).optional(),
+    appraisalValueGbp: z.number().nonnegative().optional(),
+    appraisalValuedAt: z.string().datetime().optional(),
+    appraisalValuer: z.string().min(2).max(180).optional(),
+    buyerProtection: z.boolean().optional(),
+    buyerProtectionTermsUrl: z.string().url().optional(),
   });
 
   const payload = bodySchema.parse(request.body);
 
+  // Truthfulness invariant: if custody is insured, the insurer must be named.
+  if (payload.custodyInsured && !payload.custodyInsurer) {
+    reply.code(400);
+    return { ok: false, error: 'custodyInsured requires custodyInsurer', code: 'INSURER_REQUIRED' };
+  }
+  // If a legal vehicle other than 'none' is declared, a name is required.
+  if (payload.legalVehicleType !== 'none' && !payload.legalVehicleName) {
+    reply.code(400);
+    return { ok: false, error: 'legalVehicleName required for the chosen vehicle type', code: 'VEHICLE_NAME_REQUIRED' };
+  }
+
   await ensureUserExists(payload.issuerId);
+
+  // ── WS2: KYC gate ──
+  // Issuers must have at least 'id' tier verification (KYC document) to
+  // fractionalize an asset. This prevents anonymous issuance.
+  const issuerVerification = await db.query<{ verification_tier: string | null }>(
+    'SELECT verification_tier FROM coown_issuer_verification_profile WHERE user_id = $1',
+    [payload.issuerId]
+  );
+  const tier = issuerVerification.rows[0]?.verification_tier ?? 'email';
+  if (tier !== 'id' && tier !== 'seller') {
+    reply.code(403);
+    return {
+      ok: false,
+      error: 'Identity verification (KYC) is required to issue Co-Own assets',
+      code: 'ISSUER_KYC_REQUIRED',
+      currentTier: tier,
+    };
+  }
 
   const assetId = payload.id ?? `s_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
 
@@ -36391,9 +36459,30 @@ app.post('/co-own/assets', async (request, reply) => {
           market_move_pct_24h,
           holders,
           volume_24h_gbp,
-          is_open
+          is_open,
+          legal_vehicle_type,
+          legal_vehicle_name,
+          legal_vehicle_jurisdiction,
+          custodian_name,
+          custodian_location,
+          custody_insured,
+          custody_insurer,
+          custody_policy_ref,
+          custody_coverage_gbp,
+          authenticity_status,
+          authenticity_method,
+          provenance,
+          condition_grade,
+          appraisal_value_gbp,
+          appraisal_valued_at,
+          appraisal_valuer,
+          buyer_protection,
+          buyer_protection_terms_url
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $6, $7, $8, $9, $10, 0, 0, 0, TRUE)
+        VALUES (
+          $1, $2, $3, $4, $5, $6, $6, $7, $8, $9, $10, 0, 0, 0, TRUE,
+          $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28
+        )
         RETURNING
           id,
           listing_id,
@@ -36424,6 +36513,24 @@ app.post('/co-own/assets', async (request, reply) => {
         roundTo(payload.unitPriceStable, 4),
         payload.settlementMode,
         payload.issuerJurisdiction ?? null,
+        payload.legalVehicleType,
+        payload.legalVehicleName ?? null,
+        payload.legalVehicleJurisdiction ?? null,
+        payload.custodianName ?? null,
+        payload.custodianLocation ?? null,
+        payload.custodyInsured ?? false,
+        payload.custodyInsurer ?? null,
+        payload.custodyPolicyRef ?? null,
+        payload.custodyCoverageGbp != null ? roundTo(payload.custodyCoverageGbp, 2) : null,
+        payload.authenticityStatus ?? 'unverified',
+        payload.authenticityMethod ?? null,
+        payload.provenance ?? null,
+        payload.conditionGrade ?? null,
+        payload.appraisalValueGbp != null ? roundTo(payload.appraisalValueGbp, 2) : null,
+        payload.appraisalValuedAt ?? null,
+        payload.appraisalValuer ?? null,
+        payload.buyerProtection ?? false,
+        payload.buyerProtectionTermsUrl ?? null,
       ]
     );
 
@@ -36437,6 +36544,29 @@ app.post('/co-own/assets', async (request, reply) => {
        WHERE id = $1 AND status = 'active'`,
       [payload.listingId]
     );
+
+    // Log the trust-profile creation to the append-only audit trail
+    // (SEC Rule 17Ad-7 pattern). Best-effort — must not fail the issuance
+    // if the audit row write fails.
+    try {
+      await client.query(
+        `INSERT INTO coown_asset_trust_events (asset_id, event_type, changed_by, new_payload)
+         VALUES ($1, 'trust_profile_created', $2, $3)`,
+        [
+          result.rows[0].id,
+          payload.issuerId,
+          JSON.stringify({
+            legalVehicleType: payload.legalVehicleType,
+            legalVehicleName: payload.legalVehicleName ?? null,
+            custodyInsured: payload.custodyInsured ?? false,
+            authenticityStatus: payload.authenticityStatus ?? 'unverified',
+            buyerProtection: payload.buyerProtection ?? false,
+          }),
+        ]
+      );
+    } catch (auditErr) {
+      app.log.warn({ err: auditErr, assetId: result.rows[0].id }, 'trust audit log write failed (non-fatal)');
+    }
 
     await client.query('COMMIT');
   } catch (err) {
@@ -37132,11 +37262,15 @@ app.get('/co-own/assets/:assetId/executions', async (request, reply) => {
     unit_price_gbp: string;
     notional_gbp: string;
     created_at: string;
+    settlement_status: string;
+    failure_reason: string | null;
+    recovery_action: string | null;
   }>(
     `
-      SELECT id, units, unit_price_gbp::text, notional_gbp::text, created_at
+      SELECT id, units, unit_price_gbp::text, notional_gbp::text, created_at,
+             settlement_status, failure_reason, recovery_action
       FROM coOwn_trades
-      WHERE asset_id = $1 AND settlement_status = 'settled'
+      WHERE asset_id = $1 AND settlement_status IN ('settled', 'failed', 'reversed')
       ORDER BY created_at DESC, id DESC
       LIMIT $2
     `,
@@ -37153,6 +37287,9 @@ app.get('/co-own/assets/:assetId/executions', async (request, reply) => {
       unitPriceGbp: Number(row.unit_price_gbp),
       notionalGbp: Number(row.notional_gbp),
       executedAt: row.created_at,
+      settlementStatus: row.settlement_status,
+      failureReason: row.failure_reason,
+      recoveryAction: row.recovery_action,
     })),
   };
 });
@@ -39174,6 +39311,40 @@ app.get('/co-own/assets/:assetId', async (request, reply) => {
     issuer_display_name: string | null;
     issuer_avatar: string | null;
     issuer_location: string | null;
+    // ── Issuer verification (WS2) ──
+    issuer_verification_tier: 'email' | 'id' | 'seller' | null;
+    issuer_verification_tier_set_at: string | null;
+    issuer_seller_standards_met: boolean | null;
+    // ── Trust profile (WS1) ──
+    legal_vehicle_type: 'spv' | 'llc' | 'trust' | 'series_llc' | 'none' | null;
+    legal_vehicle_name: string | null;
+    legal_vehicle_jurisdiction: string | null;
+    custodian_name: string | null;
+    custodian_location: string | null;
+    custody_insured: boolean;
+    custody_insurer: string | null;
+    custody_policy_ref: string | null;
+    custody_coverage_gbp: string | number | null;
+    authenticity_status: 'unverified' | 'pending' | 'verified' | null;
+    authenticity_method: string | null;
+    authenticity_verified_at: string | null;
+    provenance: string | null;
+    condition_grade: string | null;
+    appraisal_value_gbp: string | number | null;
+    appraisal_valued_at: string | null;
+    appraisal_valuer: string | null;
+    buyer_protection: boolean;
+    buyer_protection_terms_url: string | null;
+    listing_tier: 'preview' | 'listed' | 'badged' | 'delisted';
+    // ── Settlement & escrow (WS3) ──
+    escrow_partner: string | null;
+    escrow_terms_url: string | null;
+    settlement_eta_hours: number | null;
+    // ── Wallet safeguarding (WS4) ──
+    safeguarded: boolean;
+    safeguarding_partner: string | null;
+    safeguarding_evidence_url: string | null;
+    safeguarding_terms_url: string | null;
   }>(
     `
       SELECT
@@ -39181,9 +39352,13 @@ app.get('/co-own/assets/:assetId', async (request, reply) => {
         u.username AS issuer_username,
         u.display_name AS issuer_display_name,
         u.avatar AS issuer_avatar,
-        u.location AS issuer_location
+        u.location AS issuer_location,
+        ivp.verification_tier AS issuer_verification_tier,
+        ivp.verification_tier_set_at AS issuer_verification_tier_set_at,
+        ivp.seller_standards_met AS issuer_seller_standards_met
       FROM coOwn_assets sa
       LEFT JOIN users u ON u.id = sa.issuer_id
+      LEFT JOIN coown_issuer_verification_profile ivp ON ivp.user_id = sa.issuer_id
       WHERE sa.id = $1
       LIMIT 1
     `,
@@ -39195,6 +39370,58 @@ app.get('/co-own/assets/:assetId', async (request, reply) => {
     reply.code(404);
     return { ok: false, error: 'Asset not found' };
   }
+
+  // ── Trust audit events (WS1, last 10) ──
+  const trustEventsResult = await db.query<{
+    event_type: string;
+    changed_by: string | null;
+    created_at: string;
+  }>(
+    `
+      SELECT event_type, changed_by, created_at
+      FROM coown_asset_trust_events
+      WHERE asset_id = $1
+      ORDER BY created_at DESC
+      LIMIT 10
+    `,
+    [assetId]
+  );
+
+  // Compute appraisal staleness in days (null when no appraisal).
+  let appraisalStaleDays: number | null = null;
+  if (row.appraisal_valued_at) {
+    const valuedAt = new Date(row.appraisal_valued_at).getTime();
+    if (Number.isFinite(valuedAt)) {
+      appraisalStaleDays = Math.max(0, Math.floor((Date.now() - valuedAt) / (24 * 60 * 60 * 1000)));
+    }
+  }
+
+  // ── WS6: Market audit trail + stale mark ──
+  // Query the last 10 public market audit events and compute the stale
+  // mark (days since the last public event). Null when no events exist.
+  const marketAuditResult = await db.query<{
+    id: number;
+    event_type: string;
+    event_payload: unknown;
+    created_at: string;
+  }>(
+    `SELECT id, event_type, event_payload, created_at
+     FROM coown_market_audit_events
+     WHERE asset_id = $1 AND visibility = 'public'
+     ORDER BY created_at DESC, id DESC
+     LIMIT 10`,
+    [assetId]
+  );
+
+  const staleMarkResult = await db.query<{ last_event_at: string | null }>(
+    `SELECT MAX(created_at) AS last_event_at FROM coown_market_audit_events
+     WHERE asset_id = $1 AND visibility = 'public'`,
+    [assetId]
+  );
+  const lastMarketEventAt = staleMarkResult.rows[0]?.last_event_at ?? null;
+  const staleMarkDays = lastMarketEventAt
+    ? Math.max(0, Math.floor((Date.now() - new Date(lastMarketEventAt).getTime()) / (24 * 60 * 60 * 1000)))
+    : null;
 
   // ── Market snapshot (spec 03_COOWN §2) ──
   // Compute from settled trades and open orders so the frontend can
@@ -39332,10 +39559,13 @@ app.get('/co-own/assets/:assetId', async (request, reply) => {
     transferable: boolean;
     min_holding_units: number;
     published_at: string;
+    tbc_eta_date: string | null;
+    tbc_reason: string | null;
   }>(
     `
       SELECT id, version, rights_type, jurisdiction, governing_law,
-             summary_terms, transferable, min_holding_units, published_at
+             summary_terms, transferable, min_holding_units, published_at,
+             tbc_eta_date, tbc_reason
       FROM coown_rights
       WHERE asset_id = $1 AND status = 'published'
       ORDER BY version DESC
@@ -39355,6 +39585,8 @@ app.get('/co-own/assets/:assetId', async (request, reply) => {
         transferable: rightsResult.rows[0].transferable,
         minHoldingUnits: rightsResult.rows[0].min_holding_units,
         publishedAt: rightsResult.rows[0].published_at,
+        tbcEtaDate: rightsResult.rows[0].tbc_eta_date,
+        tbcReason: rightsResult.rows[0].tbc_reason,
       }
     : null;
 
@@ -39372,6 +39604,18 @@ app.get('/co-own/assets/:assetId', async (request, reply) => {
             location: row.issuer_location,
           }
         : null,
+      // ── Issuer verification (WS2) ──
+      // Tiered verification: 'email' (baseline), 'id' (KYC document),
+      // 'seller' (full seller standards). Null when no profile row exists
+      // (fail closed — the frontend shows no badge).
+      issuerVerification: row.issuer_verification_tier
+        ? {
+            tier: row.issuer_verification_tier,
+            tierSetAt: row.issuer_verification_tier_set_at,
+            kycVerified: row.issuer_verification_tier === 'id' || row.issuer_verification_tier === 'seller',
+            sellerStandardsMet: row.issuer_seller_standards_met ?? false,
+          }
+        : null,
       title: row.title,
       imageUrl: row.image_url,
       totalUnits: row.total_units,
@@ -39386,6 +39630,54 @@ app.get('/co-own/assets/:assetId', async (request, reply) => {
       isOpen: row.is_open,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
+      // ── Trust profile (WS1) ──
+      // All fields nullable so existing assets don't break. The frontend
+      // fails closed: a null field means the corresponding UI element does
+      // not render (no fabricated trust signals).
+      legalVehicleType: row.legal_vehicle_type,
+      legalVehicleName: row.legal_vehicle_name,
+      legalVehicleJurisdiction: row.legal_vehicle_jurisdiction,
+      custodianName: row.custodian_name,
+      custodianLocation: row.custodian_location,
+      custodyInsured: row.custody_insured,
+      custodyInsurer: row.custody_insurer,
+      custodyPolicyRef: row.custody_policy_ref,
+      custodyCoverageGbp: row.custody_coverage_gbp == null ? null : Number(row.custody_coverage_gbp),
+      authenticityStatus: row.authenticity_status,
+      authenticityMethod: row.authenticity_method,
+      authenticityVerifiedAt: row.authenticity_verified_at,
+      provenance: row.provenance,
+      conditionGrade: row.condition_grade,
+      appraisalValueGbp: row.appraisal_value_gbp == null ? null : Number(row.appraisal_value_gbp),
+      appraisalValuedAt: row.appraisal_valued_at,
+      appraisalValuer: row.appraisal_valuer,
+      appraisalStaleDays,
+      buyerProtection: row.buyer_protection,
+      buyerProtectionTermsUrl: row.buyer_protection_terms_url,
+      // ── Listing tier (WS5) ──
+      listingTier: row.listing_tier,
+      // ── Settlement & escrow (WS3) ──
+      escrowPartner: row.escrow_partner,
+      escrowTermsUrl: row.escrow_terms_url,
+      settlementEtaHours: row.settlement_eta_hours,
+      // ── Wallet safeguarding (WS4) ──
+      safeguarded: row.safeguarded,
+      safeguardingPartner: row.safeguarding_partner,
+      safeguardingEvidenceUrl: row.safeguarding_evidence_url,
+      safeguardingTermsUrl: row.safeguarding_terms_url,
+      trustAuditEvents: trustEventsResult.rows.map((e) => ({
+        eventType: e.event_type,
+        createdAt: e.created_at,
+        changedByLabel: e.changed_by ?? null,
+      })),
+      // ── WS6: Market audit trail + stale mark ──
+      staleMarkDays,
+      marketAuditEvents: marketAuditResult.rows.map((e) => ({
+        id: e.id,
+        eventType: e.event_type,
+        payload: e.event_payload,
+        createdAt: e.created_at,
+      })),
       // Per spec 03_COOWN §2: backend-backed market snapshot computed
       // from settled trades and open orders.
       marketSnapshot,
@@ -39395,6 +39687,252 @@ app.get('/co-own/assets/:assetId', async (request, reply) => {
       // T06: versioned rights/dossier. Null when no rights have been
       // published for this asset.
       rights,
+    },
+  };
+});
+
+// ── WS1: Refresh appraisal (issuer-only) ──
+// Closes the "stale appraisal with no action" gap. The issuer can refresh
+// the appraisal value/date/valuer; the change is logged to the append-only
+// trust audit trail.
+app.post('/co-own/assets/:assetId/trust/refresh-appraisal', async (request, reply) => {
+  const paramsSchema = z.object({ assetId: z.string().min(2) });
+  const { assetId } = paramsSchema.parse(request.params);
+  const bodySchema = z.object({
+    appraisalValueGbp: z.number().nonnegative(),
+    appraisalValuer: z.string().min(2).max(180),
+    appraisalNotes: z.string().max(2000).optional(),
+  });
+  const payload = bodySchema.parse(request.body);
+
+  const authUser = (request as any).authUser;
+  if (!authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    const assetResult = await client.query<{ issuer_id: string; appraisal_value_gbp: string | number | null; appraisal_valued_at: string | null; appraisal_valuer: string | null }>(
+      'SELECT issuer_id, appraisal_value_gbp, appraisal_valued_at, appraisal_valuer FROM coOwn_assets WHERE id = $1 FOR UPDATE',
+      [assetId]
+    );
+    const asset = assetResult.rows[0];
+    if (!asset) {
+      await client.query('ROLLBACK');
+      reply.code(404);
+      return { ok: false, error: 'Asset not found' };
+    }
+    if (asset.issuer_id !== authUser.userId) {
+      await client.query('ROLLBACK');
+      reply.code(403);
+      return { ok: false, error: 'Only the issuer can refresh the appraisal' };
+    }
+
+    const previousPayload = {
+      appraisalValueGbp: asset.appraisal_value_gbp == null ? null : Number(asset.appraisal_value_gbp),
+      appraisalValuedAt: asset.appraisal_valued_at,
+      appraisalValuer: asset.appraisal_valuer,
+    };
+
+    await client.query(
+      `UPDATE coOwn_assets
+       SET appraisal_value_gbp = $1,
+           appraisal_valued_at = NOW(),
+           appraisal_valuer = $2,
+           updated_at = NOW()
+       WHERE id = $3`,
+      [roundTo(payload.appraisalValueGbp, 2), payload.appraisalValuer, assetId]
+    );
+
+    await client.query(
+      `INSERT INTO coown_asset_trust_events (asset_id, event_type, changed_by, previous_payload, new_payload)
+       VALUES ($1, 'appraisal_refreshed', $2, $3, $4)`,
+      [
+        assetId,
+        authUser.userId,
+        JSON.stringify(previousPayload),
+        JSON.stringify({ appraisalValueGbp: payload.appraisalValueGbp, appraisalValuer: payload.appraisalValuer, notes: payload.appraisalNotes ?? null }),
+      ]
+    );
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    app.log.error({ err }, 'POST /co-own/assets/:assetId/trust/refresh-appraisal failed');
+    reply.code(500);
+    return { ok: false, error: 'Failed to refresh appraisal' };
+  } finally {
+    client.release();
+  }
+
+  return { ok: true, refreshedAt: new Date().toISOString() };
+});
+
+// ── WS5: Promote asset from 'preview' to 'listed' (issuer-only) ──
+// An asset can be promoted only when it has a published rights document
+// with no TBC metadata (tbc_eta_date and tbc_reason both null). This
+// makes the half-listed state honest: 'preview' assets are visible but
+// not tradeable until rights are fully confirmed.
+app.post('/co-own/assets/:assetId/promote', async (request, reply) => {
+  const paramsSchema = z.object({ assetId: z.string().min(2) });
+  const { assetId } = paramsSchema.parse(request.params);
+
+  const authUser = (request as any).authUser;
+  if (!authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    const assetResult = await client.query<{ issuer_id: string; listing_tier: string }>(
+      'SELECT issuer_id, listing_tier FROM coOwn_assets WHERE id = $1 FOR UPDATE',
+      [assetId]
+    );
+    const asset = assetResult.rows[0];
+    if (!asset) {
+      await client.query('ROLLBACK');
+      reply.code(404);
+      return { ok: false, error: 'Asset not found' };
+    }
+    if (asset.issuer_id !== authUser.userId) {
+      await client.query('ROLLBACK');
+      reply.code(403);
+      return { ok: false, error: 'Only the issuer can promote this asset' };
+    }
+    if (asset.listing_tier !== 'preview') {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: 'Asset is not in preview tier', code: 'NOT_PREVIEW' };
+    }
+
+    // Check that published rights exist and have no TBC metadata.
+    const rightsResult = await client.query<{ tbc_eta_date: string | null; tbc_reason: string | null }>(
+      `SELECT tbc_eta_date, tbc_reason FROM coown_rights
+       WHERE asset_id = $1 AND status = 'published'
+       ORDER BY version DESC LIMIT 1`,
+      [assetId]
+    );
+    const rights = rightsResult.rows[0];
+    if (!rights) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: 'Publish rights before promoting', code: 'RIGHTS_NOT_PUBLISHED' };
+    }
+    if (rights.tbc_eta_date || rights.tbc_reason) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: 'Rights still have TBC metadata', code: 'RIGHTS_TBC_PENDING' };
+    }
+
+    await client.query(
+      `UPDATE coOwn_assets SET listing_tier = 'listed', updated_at = NOW() WHERE id = $1`,
+      [assetId]
+    );
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    app.log.error({ err }, 'POST /co-own/assets/:assetId/promote failed');
+    reply.code(500);
+    return { ok: false, error: 'Failed to promote asset' };
+  } finally {
+    client.release();
+  }
+
+  return { ok: true, listingTier: 'listed' };
+});
+
+// ── WS6: Audit trail ──
+// Returns the last 50 market audit events for an asset. Public events
+// are visible to all; internal events are issuer-only. The frontend
+// uses this to surface stale marks and the market history sheet.
+app.get('/co-own/assets/:assetId/audit-trail', async (request, reply) => {
+  const paramsSchema = z.object({ assetId: z.string().min(2) });
+  const { assetId } = paramsSchema.parse(request.params);
+
+  const authUser = (request as any).authUser;
+  const isIssuerOrAdmin = authUser ? await db.query(
+    'SELECT 1 FROM coOwn_assets WHERE id = $1 AND issuer_id = $2',
+    [assetId, authUser.userId]
+  ).then((r) => r.rows.length > 0).catch(() => false) : false;
+
+  const result = await db.query<{
+    id: number;
+    event_type: string;
+    event_payload: unknown;
+    visibility: string;
+    created_at: string;
+    created_by: string | null;
+  }>(
+    `SELECT id, event_type, event_payload, visibility, created_at, created_by
+     FROM coown_market_audit_events
+     WHERE asset_id = $1 ${isIssuerOrAdmin ? '' : "AND visibility = 'public'"}
+     ORDER BY created_at DESC, id DESC
+     LIMIT 50`,
+    [assetId]
+  );
+
+  // Compute stale mark: days since the last public market event.
+  const staleResult = await db.query<{ last_event_at: string | null }>(
+    `SELECT MAX(created_at) AS last_event_at FROM coown_market_audit_events
+     WHERE asset_id = $1 AND visibility = 'public'`,
+    [assetId]
+  );
+  const lastEventAt = staleResult.rows[0]?.last_event_at;
+  const staleMarkDays = lastEventAt
+    ? Math.floor((Date.now() - new Date(lastEventAt).getTime()) / (1000 * 60 * 60 * 24))
+    : null;
+
+  return {
+    ok: true,
+    staleMarkDays,
+    lastEventAt,
+    items: result.rows.map((row) => ({
+      id: row.id,
+      eventType: row.event_type,
+      payload: row.event_payload,
+      visibility: row.visibility,
+      createdAt: row.created_at,
+      createdBy: row.created_by,
+    })),
+  };
+});
+
+// ── WS2: Issuer verification profile ──
+// Returns the caller's Co-Own issuer verification tier. Used by
+// CreateSyndicateScreen to gate issuance on KYC. Public read so the
+// issuer can check their own status before starting the flow.
+app.get('/co-own/issuer-verification/:userId', async (request, reply) => {
+  const paramsSchema = z.object({ userId: z.string().min(2) });
+  const { userId } = paramsSchema.parse(request.params);
+
+  const result = await db.query<{
+    verification_tier: 'email' | 'id' | 'seller' | null;
+    verification_tier_set_at: string | null;
+    seller_standards_met: boolean | null;
+  }>(
+    'SELECT verification_tier, verification_tier_set_at, seller_standards_met FROM coown_issuer_verification_profile WHERE user_id = $1',
+    [userId]
+  );
+
+  const row = result.rows[0];
+  if (!row || !row.verification_tier) {
+    return { ok: true, verification: null };
+  }
+
+  return {
+    ok: true,
+    verification: {
+      tier: row.verification_tier,
+      tierSetAt: row.verification_tier_set_at,
+      kycVerified: row.verification_tier === 'id' || row.verification_tier === 'seller',
+      sellerStandardsMet: row.seller_standards_met ?? false,
     },
   };
 });

@@ -418,6 +418,21 @@ export default function TradeScreen() {
               <Text style={[styles.alertText, { color: colors.textSecondary }]}>
                 This instrument has rights rows marked "To be confirmed". Trading is blocked until all rights are confirmed.
               </Text>
+              {/* WS5: surface TBC reason and ETA when the backend provides them. */}
+              {asset?.rights?.tbcReason ? (
+                <Text style={[styles.alertText, { color: colors.textSecondary, marginTop: Space.xs }]}>
+                  Reason: {asset.rights.tbcReason}
+                </Text>
+              ) : null}
+              {asset?.rights?.tbcEtaDate ? (
+                <Text style={[styles.alertText, { color: colors.textSecondary, marginTop: Space.xs }]}>
+                  Expected by {new Date(asset.rights.tbcEtaDate).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                </Text>
+              ) : (
+                <Text style={[styles.alertText, { color: colors.textMuted, marginTop: Space.xs }]}>
+                  No confirmation date available.
+                </Text>
+              )}
             </View>
           </Reanimated.View>
         )}
@@ -455,6 +470,9 @@ export default function TradeScreen() {
             totalLabel={<CoOwnNumericText value={quote.netValue} unit="1ZE" size="priceLarge" align="right" showUnit={false} />}
             totalCaption={side === 'buy' ? 'Including 1% fee' : 'After 1% fee'}
             settlementLabel={settlementLabel}
+            escrowPartner={asset?.escrowPartner ?? null}
+            escrowTermsUrl={asset?.escrowTermsUrl ?? null}
+            settlementEtaHours={asset?.settlementEtaHours ?? null}
             availableUnits={executableUnits}
             sellableUnits={yourUnits}
             maxUnits={maxUnits}
@@ -707,7 +725,7 @@ const styles = StyleSheet.create({
   alertCard: {
     borderRadius: Radius.lg,
     padding: Space.md,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     marginBottom: Space.md,
   },
   alertRow: {
@@ -728,13 +746,6 @@ const styles = StyleSheet.create({
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     lineHeight: 20,
-  },
-  inputCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
-    gap: Space.sm,
-    marginBottom: Space.md,
   },
   illustrativeBanner: {
     flexDirection: 'row',
@@ -807,12 +818,12 @@ const styles = StyleSheet.create({
   },
   modePill: {
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: Radius.full,
     flexShrink: 0,
   },
   modePillText: {
-    fontSize: 10,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.bold,
     letterSpacing: 0.4,
   },

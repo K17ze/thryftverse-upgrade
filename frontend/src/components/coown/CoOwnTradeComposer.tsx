@@ -52,6 +52,12 @@ export interface CoOwnTradeComposerProps {
   totalLabel: React.ReactNode;
   totalCaption: string;
   settlementLabel: string;
+  /** WS3: Escrow partner holding funds during settlement. */
+  escrowPartner?: string | null;
+  /** WS3: URL to the escrow terms document. */
+  escrowTermsUrl?: string | null;
+  /** WS3: Expected settlement time in hours. */
+  settlementEtaHours?: number | null;
   availableUnits: number;
   sellableUnits: number;
   maxUnits: number;
@@ -89,6 +95,9 @@ export function CoOwnTradeComposer({
   totalLabel,
   totalCaption,
   settlementLabel,
+  escrowPartner,
+  escrowTermsUrl,
+  settlementEtaHours,
   availableUnits,
   sellableUnits,
   maxUnits,
@@ -119,7 +128,7 @@ export function CoOwnTradeComposer({
   return (
     <View style={styles.wrap}>
       {/* Product identity */}
-      <View style={[styles.productCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <View style={styles.productCard}>
         <View style={styles.imageWrap}>
           {imageUri ? (
             <CachedImage uri={imageUri} style={styles.image} contentFit="cover" transition={250} />
@@ -133,8 +142,8 @@ export function CoOwnTradeComposer({
           <Text style={[styles.productTitle, { color: colors.textPrimary }]} numberOfLines={2}>{title}</Text>
           <Text style={[styles.productPrice, { color: colors.textSecondary }]} numberOfLines={1}>{unitPriceLabel} / unit</Text>
         </View>
-        <View style={[styles.sidePill, { backgroundColor: isBuy ? colors.success + '22' : colors.danger + '22' }]}>
-          <Text style={[styles.sideText, { color: isBuy ? colors.success : colors.danger }]} numberOfLines={1}>
+        <View style={[styles.sidePill, { backgroundColor: isBuy ? colors.coownUp + '22' : colors.coownDown + '22' }]}>
+          <Text style={[styles.sideText, { color: isBuy ? colors.coownUp : colors.coownDown }]} numberOfLines={1}>
             {isBuy ? 'BUY' : 'SELL'}
           </Text>
         </View>
@@ -157,7 +166,7 @@ export function CoOwnTradeComposer({
       </View>
 
       {/* Quote summary */}
-      <View style={[styles.quoteCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <View style={styles.quoteCard}>
         <View style={styles.quoteRow}>
           <Text style={[styles.quoteLabel, { color: colors.textSecondary }]} numberOfLines={1}>
             {units} units × {unitPriceLabel}
@@ -192,7 +201,7 @@ export function CoOwnTradeComposer({
       {/* Expandable details — progressive disclosure */}
       {(fillEstimate || depthContext || duration || postTradePreview) && (
         <Pressable
-          style={[styles.detailsToggle, { borderColor: colors.border }]}
+          style={styles.detailsToggle}
           onPress={() => setDetailsExpanded((prev) => !prev)}
           accessibilityRole="button"
           accessibilityLabel={detailsExpanded ? 'Collapse details' : 'Expand details'}
@@ -210,7 +219,7 @@ export function CoOwnTradeComposer({
       )}
 
       {detailsExpanded && (
-        <View style={[styles.detailsSection, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={[styles.detailsSection, { borderTopColor: colors.border }]}>
           {/* Estimated fill + depth impact are computed from a deterministic
               illustrative book (Phase 2.5 — no live order book exists yet).
               Label honestly so this cannot be mistaken for real market depth. */}
@@ -287,6 +296,7 @@ export function CoOwnTradeComposer({
           <Ionicons name="card-outline" size={14} color={colors.textMuted} />
           <Text style={[styles.settlementText, { color: colors.textSecondary }]} numberOfLines={1}>
             Settlement: {settlementLabel}
+            {settlementEtaHours != null ? ` · ~${settlementEtaHours}h` : ''}
           </Text>
         </View>
         {rightsVersion && (
@@ -297,6 +307,18 @@ export function CoOwnTradeComposer({
           </View>
         )}
       </View>
+
+      {/* WS3: Escrow disclosure — show the escrow partner and terms link
+          when the backend provides them. Fail closed (omit when null). */}
+      {escrowPartner ? (
+        <View style={[styles.settlementRow, { marginTop: Space.xs }]}>
+          <Ionicons name="shield-checkmark-outline" size={14} color={colors.textMuted} />
+          <Text style={[styles.settlementText, { color: colors.textSecondary }]} numberOfLines={1}>
+            Escrow: {escrowPartner}
+            {escrowTermsUrl ? ' · terms available' : ''}
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -342,9 +364,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
+    paddingVertical: Space.sm,
   },
   imageWrap: {
     borderRadius: Radius.md,
@@ -361,7 +381,7 @@ const styles = StyleSheet.create({
   productBody: {
     flex: 1,
     minWidth: 0,
-    gap: 3,
+    gap: Space.xs,
   },
   productTitle: {
     fontSize: Type.bodyEmphasis.size,
@@ -394,7 +414,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
     paddingHorizontal: Space.xs,
     alignItems: 'center',
-    gap: 3,
+    gap: Space.xs,
   },
   availLabel: {
     fontSize: Type.meta.size,
@@ -407,9 +427,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.bold,
   },
   quoteCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
+    paddingVertical: Space.sm,
     gap: Space.sm,
   },
   quoteRow: {
@@ -474,7 +492,7 @@ const styles = StyleSheet.create({
   settlementRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs,
   },
   settlementText: {
     fontSize: Type.caption.size,
@@ -501,11 +519,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 2,
+    paddingVertical: Space.sm,
     minHeight: 44,
-    borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
   },
   detailsToggleText: {
     fontSize: Type.body.size,
@@ -514,9 +529,8 @@ const styles = StyleSheet.create({
     letterSpacing: Type.body.letterSpacing,
   },
   detailsSection: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingVertical: Space.md,
     gap: Space.md,
   },
   detailBlock: {

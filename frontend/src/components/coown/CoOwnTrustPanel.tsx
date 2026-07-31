@@ -5,40 +5,75 @@ import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Type, Typography } from '../../theme/designTokens';
 
 export interface CoOwnTrustPanelProps {
-  authenticityStatus?: 'not_offered' | 'eligible' | 'verified' | null;
+  authenticityStatus?: 'unverified' | 'pending' | 'verified' | null;
+  authenticityMethod?: string | null;
   buyerProtection?: boolean;
-  storageInfo?: string | null;
-  possessionInfo?: string | null;
+  buyerProtectionTermsUrl?: string | null;
+  custodianName?: string | null;
+  custodianLocation?: string | null;
+  custodyInsured?: boolean;
+  custodyInsurer?: string | null;
+  legalVehicleType?: 'spv' | 'llc' | 'trust' | 'series_llc' | 'none' | null;
+  legalVehicleName?: string | null;
+  legalVehicleJurisdiction?: string | null;
 }
 
 export function CoOwnTrustPanel({
   authenticityStatus,
+  authenticityMethod,
   buyerProtection,
-  storageInfo,
-  possessionInfo,
+  buyerProtectionTermsUrl,
+  custodianName,
+  custodianLocation,
+  custodyInsured,
+  custodyInsurer,
+  legalVehicleType,
+  legalVehicleName,
+  legalVehicleJurisdiction,
 }: CoOwnTrustPanelProps) {
   const { colors } = useAppTheme();
 
   const items: Array<{ icon: string; label: string; value: string; positive: boolean }> = [];
 
+  // Legal vehicle — equity-market front-cover pattern: the legal wrapper
+  // is the first trust signal. 'none' is shown truthfully (not hidden).
+  if (legalVehicleType && legalVehicleType !== 'none') {
+    const vehicleLabel = legalVehicleType === 'spv' ? 'SPV'
+      : legalVehicleType === 'series_llc' ? 'Series LLC'
+      : legalVehicleType === 'llc' ? 'LLC'
+      : legalVehicleType === 'trust' ? 'Trust'
+      : legalVehicleType;
+    const vehicleValue = legalVehicleName
+      ? legalVehicleJurisdiction
+        ? `${vehicleLabel} · ${legalVehicleName} · ${legalVehicleJurisdiction}`
+        : `${vehicleLabel} · ${legalVehicleName}`
+      : vehicleLabel;
+    items.push({ icon: 'business-outline', label: 'Legal vehicle', value: vehicleValue, positive: true });
+  } else if (legalVehicleType === 'none') {
+    items.push({ icon: 'business-outline', label: 'Legal vehicle', value: 'None declared', positive: false });
+  }
+
   if (authenticityStatus === 'verified') {
-    items.push({ icon: 'shield-checkmark', label: 'Authenticity', value: 'Verified', positive: true });
-  } else if (authenticityStatus === 'eligible') {
-    items.push({ icon: 'shield-outline', label: 'Authenticity', value: 'Eligible for verification', positive: true });
-  } else if (authenticityStatus === 'not_offered') {
-    items.push({ icon: 'shield-outline', label: 'Authenticity', value: 'Not offered', positive: false });
+    const value = authenticityMethod ? `Verified · ${authenticityMethod}` : 'Verified';
+    items.push({ icon: 'shield-checkmark', label: 'Authenticity', value, positive: true });
+  } else if (authenticityStatus === 'pending') {
+    items.push({ icon: 'hourglass-outline', label: 'Authenticity', value: 'Verification pending', positive: false });
+  } else if (authenticityStatus === 'unverified') {
+    // Fail closed — don't show a chip for unverified. The absence is the signal.
   }
 
   if (buyerProtection) {
-    items.push({ icon: 'checkmark-circle', label: 'Buyer protection', value: 'Included', positive: true });
+    const value = buyerProtectionTermsUrl ? 'Included · terms available' : 'Included';
+    items.push({ icon: 'checkmark-circle', label: 'Buyer protection', value, positive: true });
   }
 
-  if (storageInfo) {
-    items.push({ icon: 'cube-outline', label: 'Storage', value: storageInfo, positive: true });
+  if (custodianName) {
+    const value = custodianLocation ? `${custodianName} · ${custodianLocation}` : custodianName;
+    items.push({ icon: 'cube-outline', label: 'Custodian', value, positive: true });
   }
 
-  if (possessionInfo) {
-    items.push({ icon: 'hand-left-outline', label: 'Possession', value: possessionInfo, positive: true });
+  if (custodyInsured && custodyInsurer) {
+    items.push({ icon: 'shield-checkmark-outline', label: 'Insurance', value: custodyInsurer, positive: true });
   }
 
   if (items.length === 0) return null;

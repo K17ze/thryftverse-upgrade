@@ -86,6 +86,8 @@ export default function WalletScreen({ navigation }: Props) {
     withdrawable: 0,
     safeguarded: false,
     safeguardingPartner: undefined,
+    safeguardingEvidenceUrl: null,
+    safeguardingTermsUrl: null,
     snapshotSequence: 0,
     serverTimestamp: '',
     reconciliationState: 'reconciled',
@@ -136,6 +138,8 @@ export default function WalletScreen({ navigation }: Props) {
           withdrawable: position.balances.withdrawable,
           safeguarded: position.balances.safeguarded,
           safeguardingPartner: position.balances.safeguardingPartner ?? undefined,
+          safeguardingEvidenceUrl: position.balances.safeguardingEvidenceUrl ?? null,
+          safeguardingTermsUrl: position.balances.safeguardingTermsUrl ?? null,
           snapshotSequence: position.balances.snapshotSequence,
           serverTimestamp: position.balances.serverTimestamp,
           reconciliationState: position.balances.reconciliationState,
@@ -729,6 +733,21 @@ export default function WalletScreen({ navigation }: Props) {
               ? `Customer 1ZE is safeguarded${balance.safeguardingPartner ? ` at ${balance.safeguardingPartner}` : ''}. Redemption to ${currencyCode} settlement details are confirmed at the time of each request.`
               : `Customer 1ZE safeguarding is being finalised. Redemption to ${currencyCode} will be available once safeguarding is confirmed.`}
           </Text>
+          {/* WS4: substantiate the safeguarding badge with evidence/terms links. */}
+          {balance.safeguarded && (balance.safeguardingEvidenceUrl || balance.safeguardingTermsUrl) ? (
+            <View style={styles.safeguardingLinksRow}>
+              {balance.safeguardingEvidenceUrl ? (
+                <Pressable onPress={() => Linking.openURL(balance.safeguardingEvidenceUrl!)}>
+                  <Text style={[styles.safeguardingLink, { color: colors.brand }]}>Evidence</Text>
+                </Pressable>
+              ) : null}
+              {balance.safeguardingTermsUrl ? (
+                <Pressable onPress={() => Linking.openURL(balance.safeguardingTermsUrl!)}>
+                  <Text style={[styles.safeguardingLink, { color: colors.brand }]}>Terms</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
         </View>
 
         {/* ── 1ZE disclosure — what 1ZE is, per research doc §1.1 ── */}
@@ -964,5 +983,16 @@ const styles = StyleSheet.create({
     lineHeight: Type.caption.lineHeight + 2,
     fontFamily: Typography.family.regular,
     letterSpacing: Type.caption.letterSpacing,
+  },
+  safeguardingLinksRow: {
+    flexDirection: 'row',
+    gap: Space.md,
+    marginTop: Space.sm,
+  },
+  safeguardingLink: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: 0.2,
+    textTransform: 'uppercase',
   },
 });

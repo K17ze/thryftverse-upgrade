@@ -24,6 +24,7 @@ import {
   fetchCoOwnOrderBook,
   fetchCoOwnHoldings,
   type CoOwnOrderBookSnapshot,
+  type MarketCoOwnAsset,
 } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
 import { useToast } from '../context/ToastContext';
@@ -124,7 +125,7 @@ export default function AssetDetailScreen() {
 
   const assetId = route.params?.assetId;
 
-  const [asset, setAsset] = React.useState<any>(null);
+  const [asset, setAsset] = React.useState<MarketCoOwnAsset | null>(null);
   const [orderBook, setOrderBook] = React.useState<CoOwnOrderBookSnapshot | null>(null);
   const [orderBookError, setOrderBookError] = React.useState(false);
   const [yourUnits, setYourUnits] = React.useState<number | null>(currentUser?.id ? null : 0);
@@ -339,8 +340,8 @@ export default function AssetDetailScreen() {
 
   const availableUnits = asset.availableUnits;
   const totalUnits = asset.totalUnits;
-  const navPerUnitGbp = asset.appraisalValue && totalUnits > 0
-    ? asset.appraisalValue / totalUnits
+  const navPerUnitGbp = asset.appraisalValueGbp && totalUnits > 0
+    ? asset.appraisalValueGbp / totalUnits
     : null;
   const referenceVsNavPct = navPerUnitGbp && navPerUnitGbp > 0
     ? ((asset.unitPriceGbp - navPerUnitGbp) / navPerUnitGbp) * 100
@@ -375,27 +376,41 @@ export default function AssetDetailScreen() {
 
   // ── Candle data gating ──
   // Per spec 03_COOWN §4: only expose the candle toggle when real OHLC
-  // candles exist. Do not pass an empty candle component.
-  const candleData = asset.candles ?? [];
-  const hasCandleData = candleData.length > 0;
+  // candles exist. Do not pass an empty candle component. The API returns
+  // candles in {timestamp, openGbp, ...} format; the chart expects
+  // {t, o, h, l, c, v} — map at the call site.
+  const apiCandles = asset.candles ?? [];
+  const hasCandleData = apiCandles.length > 0;
+  const candleData = apiCandles.map((c) => ({
+    t: new Date(c.timestamp).getTime(),
+    o: c.openGbp,
+    h: c.highGbp,
+    l: c.lowGbp,
+    c: c.closeGbp,
+    v: c.volume,
+  }));
 
   const images = asset.imageUrl ? [asset.imageUrl] : [];
+  // Co-Own assets don't carry a marketplace category/condition/description
+  // (those are listing-level fields). The dossier evidence groups are
+  // derived from the trust profile instead.
   const dossierEvidenceGroups = resolveEvidenceGroups({
-    category: asset.category,
-    condition: asset.conditionLabel,
-    description: asset.description,
+    category: null,
+    condition: asset.conditionGrade ?? null,
+    description: asset.provenance ?? null,
   });
   const hasTrustDetails = Boolean(
     asset.authenticityStatus
     || asset.buyerProtection
-    || asset.storageInfo
-    || asset.possessionInfo,
+    || asset.custodianName
+    || asset.custodianLocation,
   );
   const hasStructuredDossier = Boolean(
     asset.provenance?.length
     || asset.conditionGrade
-    || asset.custodyLocation
-    || asset.appraisalValue,
+    || asset.custodianLocation
+    || asset.appraisalValueGbp
+    || asset.legalVehicleType,
   );
   const hasExpandedDossier = dossierEvidenceGroups.length > 0
     || hasTrustDetails
@@ -416,7 +431,11 @@ export default function AssetDetailScreen() {
     navigation.navigate('LookDetail', { lookId: lookItem.id });
   };
 
-  const familyStateAccent = !asset.isOpen ? 'Closed' : availableUnits <= 0 ? 'Unavailable' : 'Open';
+  const familyStateAccent = asset.listingTier === 'preview'
+    ? 'Preview'
+    : asset.listingTier === 'delisted'
+      ? 'Delisted'
+      : !asset.isOpen ? 'Closed' : availableUnits <= 0 ? 'Unavailable' : 'Open';
 
   // Compute scroll bottom padding from dock geometry + safe area.
   const isDualActionDock =
@@ -472,10 +491,21 @@ export default function AssetDetailScreen() {
     setPendingTradeSide(null);
   };
 
-  // Rights rows — fail closed to "To be confirmed" when backend doesn't expose.
-  const rightsRows = CANONICAL_RIGHTS_LABELS.map((label) => {
-    const row = (asset.rightsRows as CoOwnRightsRow[] | undefined)?.find((r) => r.label === label);
-    return row ?? { label, answer: 'To be confirmed', isTbc: true };
+  // Rights rows — fail closed to "To be confirmed" when the backend hasn't
+  // published per-label rights answers. The backend returns a versioned
+  // rights document (asset.rights) with summaryTerms, not per-label rows.
+  // Per-label rows will be exposed in a future API revision; until then,
+  // every row is TBC so we never fabricate rights guarantees.
+  // WS5: when the rights document has tbcReason/tbcEtaDate, surface them
+  // so the user knows when to expect confirmation and why it's pending.
+  const rightsTbcReason = asset.rights?.tbcReason ?? null;
+  const rightsTbcEta = asset.rights?.tbcEtaDate ?? null;
+  const rightsRows: CoOwnRightsRow[] = CANONICAL_RIGHTS_LABELS.map((label) => {
+    return {
+      label,
+      answer: rightsTbcReason ?? 'To be confirmed',
+      isTbc: true,
+    };
   });
   const hasIncompleteRights = rightsRows.some((r) => r.isTbc);
 
@@ -536,7 +566,7 @@ export default function AssetDetailScreen() {
               family="co_own"
               tone="media"
               density={isVeryCompact ? 'compact' : 'standard'}
-              eyebrow={asset.category ?? asset.subcategory ?? 'Luxury asset'}
+              eyebrow={asset.legalVehicleName ?? 'Fractional asset'}
               title={asset.title}
               secondaryLine={`${availableUnits} of ${totalUnits} units available`}
               interestSignal={asset.holders != null ? `${asset.holders} holders` : undefined}
@@ -568,11 +598,15 @@ export default function AssetDetailScreen() {
             institutional
             avatarUri={asset.issuer?.avatar ?? undefined}
             name={issuerUsername}
-            verified={issuerTrust?.verified}
+            verified={asset.issuerVerification?.tier === 'id' || asset.issuerVerification?.tier === 'seller'}
             ratingLine={
-              issuerTrust?.rating != null
-                ? `${issuerTrust.rating.toFixed(1)}${issuerTrust?.reviewCount != null ? ` · ${issuerTrust.reviewCount} reviews` : ''}`
-                : undefined
+              asset.issuerVerification?.tier === 'seller'
+                ? 'Trusted Seller'
+                : asset.issuerVerification?.tier === 'id'
+                  ? 'ID Verified'
+                  : asset.issuerVerification?.tier === 'email'
+                    ? 'Email verified'
+                    : undefined
             }
             locationLine={issuerTrust?.location ?? asset.issuer?.location ?? undefined}
             onPress={() => navigation.navigate('UserProfile', { userId: asset.issuerId })}
@@ -624,7 +658,7 @@ export default function AssetDetailScreen() {
           <CommerceDetailTransactionSurface
             family="co_own"
             flush
-            surfaceColor={colors.surface}
+            surfaceColor="transparent"
             primaryLabel={marketSnapshot?.lastExecutionPriceGbp != null ? 'Last settled trade' : 'Reference unit price'}
             primaryValue={formatCoOwnIze(marketSnapshot?.lastExecutionPriceGbp ?? asset.unitPriceGbp)}
             statusRow={
@@ -649,29 +683,11 @@ export default function AssetDetailScreen() {
                     <Text style={[styles.marketStatusStale, { color: colors.warning }]}>Stale {dataStaleAgeLabel}</Text>
                   )}
                 </View>
-                <View style={styles.marketStatusCluster}>
-                  <Text style={[styles.marketStatusRights, { color: colors.textSecondary }]}>
-                    {orderBookError
-                      ? 'Depth unavailable'
-                      : `Spread ${spreadGbp != null ? formatCoOwnIze(spreadGbp) : 'Not available'}`}
-                  </Text>
-                  {asset.rightsVersion && (
-                    <Pressable
-                      onPress={() => setRightsSheetVisible(true)}
-                      hitSlop={8}
-                      accessibilityLabel={`Rights version ${formatRightsVersion(asset.rightsVersion)}`}
-                    >
-                      <Text style={[styles.marketStatusRights, { color: colors.textSecondary }]}>
-                        {formatRightsVersion(asset.rightsVersion)}
-                      </Text>
-                    </Pressable>
-                  )}
-                  {marketSnapshotLabel && (
-                    <Text style={[styles.marketStatusRights, { color: colors.textMuted }]} numberOfLines={1}>
-                      {marketSnapshotLabel}
-                    </Text>
-                  )}
-                </View>
+                <Text style={[styles.marketStatusRights, { color: colors.textSecondary }]}>
+                  {orderBookError
+                    ? 'Depth unavailable'
+                    : `Spread ${spreadGbp != null ? formatCoOwnIze(spreadGbp) : 'Not available'}`}
+                </Text>
               </View>
             }
           >
@@ -759,7 +775,9 @@ export default function AssetDetailScreen() {
               <View style={styles.fundamentalsRow}>
                 <Text style={[styles.fundamentalsLabel, { color: colors.textSecondary }]}>Next report</Text>
                 <Text style={[styles.fundamentalsValue, { color: colors.textPrimary }]}>
-                  {asset.appraisalNextScheduled ?? 'Not scheduled'}
+                  {asset.appraisalValuedAt
+                    ? new Date(asset.appraisalValuedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+                    : 'Not scheduled'}
                 </Text>
               </View>
               <View style={styles.fundamentalsRow}>
@@ -893,11 +911,47 @@ export default function AssetDetailScreen() {
             dossier" disclosure. Do not render — rows; omit missing. */}
         {hasExpandedDossier ? (
           <CommerceDetailSection label="Asset dossier" divider variant="editorial">
-            {/* Summary facts — maximum five decision facts */}
-            {asset.authenticityStatus && (
+            {/* Trust chips — flat inline icon+text, same pattern as
+                ItemDetailScreen. Surfaces key trust signals without
+                requiring a tap. Per AGENTS.md: flat canvas, no cards.
+                Fail closed: chips only render when the backend provides
+                the substantiating field. */}
+            {(() => {
+              const chips: { icon: keyof typeof Ionicons.glyphMap; label: string }[] = [];
+              if (asset.authenticityStatus === 'verified') {
+                chips.push({ icon: 'ribbon-outline', label: 'Authenticated' });
+              }
+              if (asset.buyerProtection) {
+                chips.push({ icon: 'shield-checkmark-outline', label: 'Buyer protection' });
+              }
+              if (asset.custodianName) {
+                chips.push({ icon: 'cube-outline', label: 'Custodied' });
+              }
+              if (asset.custodyInsured && asset.custodyInsurer) {
+                chips.push({ icon: 'checkmark-circle-outline', label: 'Insured' });
+              }
+              if (asset.legalVehicleType && asset.legalVehicleType !== 'none') {
+                chips.push({ icon: 'business-outline', label: 'SPV' });
+              }
+              if (chips.length === 0) return null;
+              return (
+                <View style={styles.trustChipsRow}>
+                  {chips.map((chip, i) => (
+                    <View key={i} style={styles.trustChip}>
+                      <Ionicons name={chip.icon} size={15} color={colors.textSecondary} />
+                      <Text style={[styles.trustChipText, { color: colors.textSecondary }]} numberOfLines={1}>
+                        {chip.label}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              );
+            })()}
+            {/* Summary facts — maximum five decision facts. Fail closed. */}
+            {asset.authenticityStatus === 'verified' && (
               <CommerceDetailMetricRow
                 label="Authenticity"
-                value={asset.authenticityStatus}
+                value={asset.authenticityMethod ? `Verified · ${asset.authenticityMethod}` : 'Verified'}
               />
             )}
             {asset.conditionGrade && (
@@ -906,10 +960,24 @@ export default function AssetDetailScreen() {
                 value={asset.conditionGrade}
               />
             )}
-            {asset.custodyLocation && (
+            {asset.custodianLocation && (
               <CommerceDetailMetricRow
                 label="Storage"
-                value={asset.custodyLocation}
+                value={asset.custodianLocation}
+              />
+            )}
+            {asset.appraisalStaleDays != null && asset.appraisalStaleDays > 180 && (
+              <CommerceDetailMetricRow
+                label="Appraisal"
+                value={`Stale · ${asset.appraisalStaleDays}d since last valuation`}
+              />
+            )}
+            {/* WS6: Stale market mark — show when no public market events
+                have been logged in >7 days. Fail closed (omit when null). */}
+            {asset.staleMarkDays != null && asset.staleMarkDays > 7 && (
+              <CommerceDetailMetricRow
+                label="Market activity"
+                value={`Pricing may be stale · ${asset.staleMarkDays}d since last market event`}
               />
             )}
             <CommerceDetailDisclosureRow
@@ -928,36 +996,87 @@ export default function AssetDetailScreen() {
 
                 <CoOwnTrustPanel
                   authenticityStatus={asset.authenticityStatus ?? null}
+                  authenticityMethod={asset.authenticityMethod ?? null}
                   buyerProtection={asset.buyerProtection ?? false}
-                  storageInfo={asset.storageInfo ?? null}
-                  possessionInfo={asset.possessionInfo ?? null}
+                  buyerProtectionTermsUrl={asset.buyerProtectionTermsUrl ?? null}
+                  custodianName={asset.custodianName ?? null}
+                  custodianLocation={asset.custodianLocation ?? null}
+                  custodyInsured={asset.custodyInsured ?? false}
+                  custodyInsurer={asset.custodyInsurer ?? null}
+                  legalVehicleType={asset.legalVehicleType ?? null}
+                  legalVehicleName={asset.legalVehicleName ?? null}
+                  legalVehicleJurisdiction={asset.legalVehicleJurisdiction ?? null}
                 />
 
-                {(asset.provenance || asset.conditionGrade || asset.custodyLocation || asset.appraisalValue) && (
+                {(asset.provenance || asset.conditionGrade || asset.custodianLocation || asset.appraisalValueGbp) && (
                   <CoOwnAssetDossier
-                    provenance={asset.provenance}
+                    provenance={asset.provenance ? [{ event: 'Provenance', date: '', note: asset.provenance }] : undefined}
                     condition={asset.conditionGrade ? {
                       grade: asset.conditionGrade,
-                      reportUri: asset.conditionReportUri,
-                      inspectedAt: asset.conditionInspectedAt,
                     } : undefined}
-                    storage={asset.custodyLocation ? {
-                      location: asset.custodyLocation,
-                      custodian: asset.custodyCustodian,
+                    storage={asset.custodianLocation ? {
+                      location: asset.custodianLocation,
+                      custodian: asset.custodianName ?? '—',
                       insured: asset.custodyInsured ?? false,
-                      policyRef: asset.custodyPolicyRef,
+                      policyRef: asset.custodyPolicyRef ?? undefined,
                     } : undefined}
-                    appraisal={asset.appraisalValue ? {
-                      value: asset.appraisalValue,
-                      currency: asset.appraisalCurrency ?? 'GBP',
-                      valuedAt: asset.appraisalValuedAt,
-                      method: asset.appraisalMethod,
-                      valuer: asset.appraisalValuer,
-                      rangeLow: asset.appraisalRangeLow,
-                      rangeHigh: asset.appraisalRangeHigh,
-                      nextScheduled: asset.appraisalNextScheduled,
+                    appraisal={asset.appraisalValueGbp != null ? {
+                      value: asset.appraisalValueGbp,
+                      currency: 'GBP',
+                      valuedAt: asset.appraisalValuedAt ?? '',
+                      method: '—',
+                      valuer: asset.appraisalValuer ?? undefined,
                     } : undefined}
                   />
+                )}
+
+                {/* Trust audit trail — append-only history of trust-profile
+                    changes (SEC Rule 17Ad-7 pattern). Fail closed when empty. */}
+                {asset.trustAuditEvents && asset.trustAuditEvents.length > 0 ? (
+                  <View style={styles.auditTrailWrap}>
+                    <Text style={[styles.auditTrailTitle, { color: colors.textSecondary }]}>
+                      Trust history
+                    </Text>
+                    {asset.trustAuditEvents.map((evt, i) => (
+                      <View key={i} style={styles.auditTrailRow}>
+                        <Text style={[styles.auditTrailEvent, { color: colors.textMuted }]} numberOfLines={1}>
+                          {evt.eventType.replace(/_/g, ' ')}
+                        </Text>
+                        <Text style={[styles.auditTrailDate, { color: colors.textMuted }]} numberOfLines={1}>
+                          {new Date(evt.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+
+                {/* WS6: Market audit trail — price marks, supply changes,
+                    listing tier transitions. Fail closed when empty. */}
+                {asset.marketAuditEvents && asset.marketAuditEvents.length > 0 ? (
+                  <View style={styles.auditTrailWrap}>
+                    <Text style={[styles.auditTrailTitle, { color: colors.textSecondary }]}>
+                      Market history
+                    </Text>
+                    {asset.marketAuditEvents.map((evt) => (
+                      <View key={evt.id} style={styles.auditTrailRow}>
+                        <Text style={[styles.auditTrailEvent, { color: colors.textMuted }]} numberOfLines={1}>
+                          {evt.eventType.replace(/_/g, ' ')}
+                        </Text>
+                        <Text style={[styles.auditTrailDate, { color: colors.textMuted }]} numberOfLines={1}>
+                          {new Date(evt.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <View style={styles.auditTrailWrap}>
+                    <Text style={[styles.auditTrailTitle, { color: colors.textSecondary }]}>
+                      Market history
+                    </Text>
+                    <Text style={[styles.auditTrailEvent, { color: colors.textMuted }]}>
+                      No market history yet
+                    </Text>
+                  </View>
                 )}
               </>
             )}
@@ -987,7 +1106,7 @@ export default function AssetDetailScreen() {
           <CommerceDetailDisclosureRow
             label="Review rights"
             count={CANONICAL_RIGHTS_LABELS.length}
-            summary={asset.rightsVersion ? formatRightsVersion(asset.rightsVersion) : undefined}
+            summary={asset.rights?.version ? formatRightsVersion(`v${asset.rights.version}`) : undefined}
             onPress={() => setRightsSheetVisible(true)}
             leadingIcon="document-text-outline"
           />
@@ -1135,6 +1254,7 @@ export default function AssetDetailScreen() {
           <CommerceDetailStateDock
             value={formatCoOwnIze(asset.unitPriceGbp)}
             valueLabel="Unit price"
+            thumbnailUri={asset.imageUrl ?? undefined}
             primaryAction={
               isHolder
                 ? {
@@ -1194,7 +1314,7 @@ export default function AssetDetailScreen() {
       <CoOwnRightsSheet
         visible={rightsSheetVisible}
         onClose={() => setRightsSheetVisible(false)}
-        disclosureVersion={asset.rightsVersion ?? 'Rights v1'}
+        disclosureVersion={asset.rights?.version ? `Rights v${asset.rights.version}` : 'Rights v1'}
         rights={rightsRows}
       />
 
@@ -1266,7 +1386,7 @@ export default function AssetDetailScreen() {
           publicFloat: null,
           treasury: null,
         }}
-        rightsVersion={asset.rightsVersion ?? undefined}
+        rightsVersion={asset.rights?.version ? `v${asset.rights.version}` : undefined}
       />
 
       {/* Overflow sheet — lower-frequency hero actions (Fav, Watch, Report). */}
@@ -1299,8 +1419,8 @@ const styles = StyleSheet.create({
   },
   identityExtension: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.xs,
-    paddingBottom: Space.xs,
+    paddingTop: Space.sm,
+    paddingBottom: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   // ── Market status row (inside transaction surface) ──
@@ -1344,7 +1464,7 @@ const styles = StyleSheet.create({
   },
   marketBookSide: {
     flex: 1,
-    gap: 2,
+    gap: Space.xs,
   },
   marketBookDivider: {
     width: StyleSheet.hairlineWidth,
@@ -1357,9 +1477,10 @@ const styles = StyleSheet.create({
     letterSpacing: Type.caption.letterSpacing,
   },
   marketBookValue: {
-    fontSize: Type.bodyEmphasis.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 0,
+    fontSize: Type.priceList.size,
+    lineHeight: Type.priceList.lineHeight,
+    fontFamily: Typography.family.bold,
+    letterSpacing: Type.priceList.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   // ── Secondary facts (NAV / distribution / report) ──
@@ -1372,7 +1493,7 @@ const styles = StyleSheet.create({
   },
   marketSecondaryFact: {
     flex: 1,
-    gap: 2,
+    gap: Space.xs,
   },
   marketSecondaryLabel: {
     fontSize: Type.metaElevated.size,
@@ -1462,28 +1583,77 @@ const styles = StyleSheet.create({
     padding: Space.md,
   },
   // ── Viewer position ──
+  // Trust chips — flat inline icon+text pairs. Same pattern as
+  // ItemDetailScreen. No card, no surface fill, no border.
+  trustChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Space.sm,
+    paddingBottom: Space.md,
+  },
+  trustChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  trustChipText: {
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.medium,
+  },
+  auditTrailWrap: {
+    gap: Space.xs,
+    paddingTop: Space.md,
+    marginTop: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#ccc',
+  },
+  auditTrailTitle: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.medium,
+    letterSpacing: 0.2,
+    textTransform: 'uppercase',
+    marginBottom: Space.xs,
+  },
+  auditTrailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: 2,
+  },
+  auditTrailEvent: {
+    fontSize: Type.caption.size,
+    textTransform: 'capitalize',
+  },
+  auditTrailDate: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+  },
   viewerPositionHeader: {
     flexDirection: 'row',
     alignItems: 'baseline',
     justifyContent: 'space-between',
     gap: Space.sm,
-    marginBottom: Space.xs,
+    marginBottom: Space.md,
   },
   viewerPositionCopy: {
-    gap: 2,
+    gap: Space.xs,
     flexShrink: 1,
   },
   viewerPositionValue: {
-    fontSize: Type.bodyEmphasis.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 0,
+    fontSize: Type.priceList.size,
+    lineHeight: Type.priceList.lineHeight,
+    fontFamily: Typography.family.bold,
+    letterSpacing: Type.priceList.letterSpacing,
     fontVariant: ['tabular-nums'],
     flexShrink: 1,
   },
   viewerPositionMarketValue: {
-    fontSize: Type.bodyEmphasis.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 0,
+    fontSize: Type.priceList.size,
+    lineHeight: Type.priceList.lineHeight,
+    fontFamily: Typography.family.bold,
+    letterSpacing: Type.priceList.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   viewerPositionMeta: {
@@ -1500,7 +1670,7 @@ const styles = StyleSheet.create({
     marginBottom: Space.sm,
   },
   supplyMetric: {
-    gap: 2,
+    gap: Space.xs,
     flex: 1,
   },
   supplyMetricTrailing: {
@@ -1526,13 +1696,13 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   allocationBar: {
-    height: 4,
-    borderRadius: 2,
+    height: 6,
+    borderRadius: 3,
     overflow: 'hidden',
   },
   allocationFill: {
     height: '100%',
-    borderRadius: 2,
+    borderRadius: 3,
   },
   supplyHolders: {
     fontSize: Type.caption.size,
@@ -1544,9 +1714,9 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm,
   },
   rightsCriticalStatement: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    lineHeight: Type.body.lineHeight + 2,
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    lineHeight: Type.bodyEmphasis.lineHeight + 2,
   },
   // ── Unavailable exit row (truthful disabled state) ──
   unavailableRow: {

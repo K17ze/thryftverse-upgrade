@@ -189,6 +189,14 @@ export interface MarketCoOwnAsset {
     avatar: string | null;
     location: string | null;
   } | null;
+  /** WS2: Tiered issuer verification. Null when no profile row exists
+   * (fail closed — the frontend shows no badge). */
+  issuerVerification?: {
+    tier: 'email' | 'id' | 'seller';
+    tierSetAt: string | null;
+    kycVerified: boolean;
+    sellerStandardsMet: boolean;
+  } | null;
   title: string;
   imageUrl: string | null;
   totalUnits: number;
@@ -215,6 +223,88 @@ export interface MarketCoOwnAsset {
    * published for this asset. The frontend must not claim rights
    * guarantees without this being populated. */
   rights?: CoOwnRights | null;
+  /** WS5: Explicit listing tier. 'preview' = visible but not tradeable
+   * (rights pending); 'listed' = tradeable; 'badged' = tradeable + verified;
+   * 'delisted' = hidden. */
+  listingTier?: 'preview' | 'listed' | 'badged' | 'delisted';
+  /** WS3: Escrow partner holding funds during settlement. */
+  escrowPartner?: string | null;
+  /** WS3: URL to the escrow terms document. */
+  escrowTermsUrl?: string | null;
+  /** WS3: Expected settlement time in hours. Null when variable. */
+  settlementEtaHours?: number | null;
+  /** WS4: Whether buyer funds/units are safeguarded. Backend-backed
+   * (no longer hardcoded false). */
+  safeguarded?: boolean;
+  /** WS4: The safeguarding partner (e.g. segregated wallet provider). */
+  safeguardingPartner?: string | null;
+  /** WS4: URL to the safeguarding evidence document. */
+  safeguardingEvidenceUrl?: string | null;
+  /** WS4: URL to the safeguarding terms. */
+  safeguardingTermsUrl?: string | null;
+  /** WS6: Days since the last public market audit event. Null when no
+   * events exist. >7 days = stale pricing notice. */
+  staleMarkDays?: number | null;
+  /** WS6: Last 10 public market audit events (price marks, supply
+   * changes, listing tier transitions). */
+  marketAuditEvents?: CoOwnMarketAuditEvent[];
+  // ── Trust profile (WS1) ──
+  // All fields nullable so existing assets don't break. The frontend
+  // fails closed: a null field means the corresponding UI element does
+  // not render (no fabricated trust signals).
+  legalVehicleType?: 'spv' | 'llc' | 'trust' | 'series_llc' | 'none' | null;
+  legalVehicleName?: string | null;
+  legalVehicleJurisdiction?: string | null;
+  custodianName?: string | null;
+  custodianLocation?: string | null;
+  custodyInsured?: boolean;
+  custodyInsurer?: string | null;
+  custodyPolicyRef?: string | null;
+  custodyCoverageGbp?: number | null;
+  authenticityStatus?: 'unverified' | 'pending' | 'verified' | null;
+  authenticityMethod?: string | null;
+  authenticityVerifiedAt?: string | null;
+  provenance?: string | null;
+  conditionGrade?: string | null;
+  appraisalValueGbp?: number | null;
+  appraisalValuedAt?: string | null;
+  appraisalValuer?: string | null;
+  /** Days since the appraisal was last valued. Null when no appraisal. */
+  appraisalStaleDays?: number | null;
+  buyerProtection?: boolean;
+  buyerProtectionTermsUrl?: string | null;
+  /** Append-only audit trail of trust-profile changes (last 10). */
+  trustAuditEvents?: CoOwnTrustAuditEvent[];
+}
+
+/** Trust-profile audit event (WS1, SEC Rule 17Ad-7 pattern). */
+export interface CoOwnTrustAuditEvent {
+  eventType:
+    | 'trust_profile_created'
+    | 'authenticity_updated'
+    | 'custody_changed'
+    | 'insurance_changed'
+    | 'appraisal_refreshed'
+    | 'vehicle_updated'
+    | 'buyer_protection_changed';
+  createdAt: string;
+  changedByLabel?: string | null;
+}
+
+/** WS6: Market-level audit event (price marks, supply changes, etc.) */
+export interface CoOwnMarketAuditEvent {
+  id: number;
+  eventType:
+    | 'price_mark'
+    | 'supply_change'
+    | 'listing_tier_transition'
+    | 'rights_published'
+    | 'trade_settled'
+    | 'trade_failed'
+    | 'appraisal_refreshed'
+    | 'verification_tier_changed';
+  payload?: unknown;
+  createdAt: string;
 }
 
 /** Co-Own rights/dossier. Per T06: versioned, attributable rights
@@ -229,6 +319,10 @@ export interface CoOwnRights {
   transferable: boolean;
   minHoldingUnits: number;
   publishedAt: string;
+  /** WS5: When the rights answer is expected, if currently TBC. */
+  tbcEtaDate?: string | null;
+  /** WS5: Why the rights answer is pending, if currently TBC. */
+  tbcReason?: string | null;
 }
 
 /** Co-Own market snapshot. Per spec 03_COOWN §2. */
@@ -1213,6 +1307,12 @@ export interface MarketCoOwnExecution {
   unitPriceGbp: number;
   notionalGbp: number;
   executedAt: string;
+  /** WS3: settlement status of the trade. */
+  settlementStatus?: 'settled' | 'pending' | 'failed' | 'reversed';
+  /** WS3: why the settlement failed, when status is 'failed'/'reversed'. */
+  failureReason?: string | null;
+  /** WS3: what happens next for a failed/reversed settlement. */
+  recoveryAction?: string | null;
 }
 
 interface ListCoOwnExecutionsResponse {
@@ -1475,6 +1575,25 @@ export interface CreateCoOwnAssetInput {
   unitPriceStable?: number;
   settlementMode?: 'GBP' | 'TVUSD' | 'HYBRID' | 'ONEZE';
   issuerJurisdiction?: string;
+  // ── Trust profile (WS1) ──
+  legalVehicleType: 'spv' | 'llc' | 'trust' | 'series_llc' | 'none';
+  legalVehicleName?: string;
+  legalVehicleJurisdiction?: string;
+  custodianName?: string;
+  custodianLocation?: string;
+  custodyInsured?: boolean;
+  custodyInsurer?: string;
+  custodyPolicyRef?: string;
+  custodyCoverageGbp?: number;
+  authenticityStatus?: 'unverified' | 'pending' | 'verified';
+  authenticityMethod?: string;
+  provenance?: string;
+  conditionGrade?: string;
+  appraisalValueGbp?: number;
+  appraisalValuedAt?: string;
+  appraisalValuer?: string;
+  buyerProtection?: boolean;
+  buyerProtectionTermsUrl?: string;
 }
 
 interface CreateCoOwnAssetResponse {
@@ -1491,6 +1610,34 @@ export async function createCoOwnAsset(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),
+    }
+  );
+}
+
+/** WS1: Refresh the appraisal for a Co-Own asset (issuer-only). */
+export async function refreshCoOwnAppraisal(
+  assetId: string,
+  input: { appraisalValueGbp: number; appraisalValuer: string; appraisalNotes?: string }
+): Promise<{ ok: true; refreshedAt: string }> {
+  return fetchJson<{ ok: true; refreshedAt: string }>(
+    `/co-own/assets/${encodeURIComponent(assetId)}/trust/refresh-appraisal`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    }
+  );
+}
+
+/** WS5: Promote a Co-Own asset from 'preview' to 'listed' (issuer-only). */
+export async function promoteCoOwnAsset(
+  assetId: string
+): Promise<{ ok: true; listingTier: 'preview' | 'listed' | 'badged' | 'delisted' }> {
+  return fetchJson<{ ok: true; listingTier: 'preview' | 'listed' | 'badged' | 'delisted' }>(
+    `/co-own/assets/${encodeURIComponent(assetId)}/promote`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
     }
   );
 }
@@ -1551,6 +1698,26 @@ export interface MarketCoOwnHolding {
 interface ListCoOwnHoldingsResponse {
   ok: true;
   items: MarketCoOwnHolding[];
+}
+
+/** WS2: Fetch the current user's Co-Own issuer verification tier.
+ * Used by CreateSyndicateScreen to gate issuance on KYC. */
+export async function fetchIssuerVerification(userId: string): Promise<{
+  tier: 'email' | 'id' | 'seller';
+  tierSetAt: string | null;
+  kycVerified: boolean;
+  sellerStandardsMet: boolean;
+} | null> {
+  try {
+    const payload = await fetchJson<{ ok: true; verification: { tier: 'email' | 'id' | 'seller'; tierSetAt: string | null; kycVerified: boolean; sellerStandardsMet: boolean } } | { ok: true; verification: null }>(
+      `/co-own/issuer-verification/${encodeURIComponent(userId)}`
+    );
+    return payload.verification;
+  } catch {
+    // Fail closed — if the endpoint doesn't exist or errors, treat as
+    // unverified so the KYC gate blocks issuance.
+    return null;
+  }
 }
 
 export async function fetchCoOwnHoldings(userId: string): Promise<MarketCoOwnHolding[]> {

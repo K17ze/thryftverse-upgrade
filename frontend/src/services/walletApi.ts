@@ -305,6 +305,10 @@ interface WalletIzePositionResponse {
     withdrawable: number;
     safeguarded: boolean;
     safeguardingPartner: string | null;
+    /** WS4: URL to the safeguarding evidence document. */
+    safeguardingEvidenceUrl?: string | null;
+    /** WS4: URL to the safeguarding terms. */
+    safeguardingTermsUrl?: string | null;
     snapshotSequence: number;
     serverTimestamp: string;
     reconciliationState: 'reconciled' | 'reconciling' | 'break';
@@ -585,6 +589,8 @@ export async function getIzePosition(userId: string, fiatCurrency = 'GBP') {
           withdrawable: 2_659.574,
           safeguarded: false,
           safeguardingPartner: null,
+          safeguardingEvidenceUrl: null,
+          safeguardingTermsUrl: null,
           snapshotSequence: 0,
           serverTimestamp: now.toISOString(),
           reconciliationState: 'reconciling' as const,

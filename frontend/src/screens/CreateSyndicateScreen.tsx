@@ -16,7 +16,7 @@ import { useCurrencyContext } from '../context/CurrencyContext';
 import { toFiat, toIze, formatIzeAmount } from '../utils/currency';
 import { sanitizeDecimalInput, sanitizeIntegerInput } from '../utils/currencyAuthoringFlows';
 import { getCreateCoOwnInitialState } from '../utils/syndicatePrefill';
-import { createCoOwnAsset } from '../services/marketApi';
+import { createCoOwnAsset, fetchIssuerVerification } from '../services/marketApi';
 import { fetchUserListingsFromApi, type ListingApiItem } from '../services/listingsApi';
 import { CachedImage } from '../components/CachedImage';
 import { getListingCoverUri } from '../utils/media';
@@ -108,6 +108,34 @@ export default function CreateCoOwnScreen() {
   const [unitPriceInput, setUnitPriceInput] = React.useState(initialState.unitPriceInput);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
+  // ── WS2: Issuer KYC gate ──
+  // The backend requires 'id' or 'seller' tier to issue. Fetch the
+  // current tier so we can show a blocking notice before the user
+  // reaches the issue button (fail fast, don't let them fill the form
+  // only to hit a 403).
+  const [issuerTier, setIssuerTier] = React.useState<'email' | 'id' | 'seller' | null | 'loading'>('loading');
+  React.useEffect(() => {
+    if (!issuerId) { setIssuerTier(null); return; }
+    let cancelled = false;
+    fetchIssuerVerification(issuerId)
+      .then((result) => { if (!cancelled) setIssuerTier(result?.tier ?? 'email'); })
+      .catch(() => { if (!cancelled) setIssuerTier('email'); });
+    return () => { cancelled = true; };
+  }, [issuerId]);
+  const canIssue = issuerTier === 'id' || issuerTier === 'seller';
+
+  // ── Trust profile (WS1) ──
+  // Legal vehicle type is required for issuance (equity-market pattern:
+  // no listing without a disclosed legal wrapper). Defaults to 'spv'.
+  const [legalVehicleType, setLegalVehicleType] = React.useState<'spv' | 'llc' | 'trust' | 'series_llc' | 'none'>('spv');
+  const [legalVehicleName, setLegalVehicleName] = React.useState('');
+  const [legalVehicleJurisdiction, setLegalVehicleJurisdiction] = React.useState('');
+  const [custodianName, setCustodianName] = React.useState('');
+  const [custodianLocation, setCustodianLocation] = React.useState('');
+  const [custodyInsured, setCustodyInsured] = React.useState(false);
+  const [custodyInsurer, setCustodyInsurer] = React.useState('');
+  const [authenticityMethod, setAuthenticityMethod] = React.useState('');
+
   const handleTotalUnitsChange = React.useCallback((value: string) => {
     const sanitized = sanitizeIntegerInput(value);
     if (!sanitized) { setTotalUnitsInput(''); return; }
@@ -177,6 +205,16 @@ export default function CreateCoOwnScreen() {
         unitPriceGbp: unitPriceGBP,
         unitPriceStable,
         settlementMode: 'ONEZE',
+        // ── Trust profile (WS1) ──
+        legalVehicleType,
+        legalVehicleName: legalVehicleType !== 'none' ? legalVehicleName.trim() || undefined : undefined,
+        legalVehicleJurisdiction: legalVehicleJurisdiction.trim() || undefined,
+        custodianName: custodianName.trim() || undefined,
+        custodianLocation: custodianLocation.trim() || undefined,
+        custodyInsured: custodyInsured || undefined,
+        custodyInsurer: custodyInsured ? custodyInsurer.trim() || undefined : undefined,
+        authenticityMethod: authenticityMethod.trim() || undefined,
+        authenticityStatus: authenticityMethod.trim() ? 'verified' : 'unverified',
       });
       show('Co-Own issued successfully', 'success');
       // The backend pauses the listing when a co-own asset is created from
@@ -215,11 +253,12 @@ export default function CreateCoOwnScreen() {
     ? getListingCoverUri(selectedListing.images, selectedListing.imageUrl ?? '')
     : '';
 
-  const canProceedToConfigure = !!selectedListing;
+  const canProceedToConfigure = !!selectedListing && canIssue;
   const canProceedToReview = !!selectedListing
     && Number(totalUnitsInput) >= 1
     && Number(totalUnitsInput) <= MAX_UNITS
-    && Number(unitPriceInput) > 0;
+    && Number(unitPriceInput) > 0
+    && canIssue;
 
   const handleNext = () => {
     if (stage === 'select' && canProceedToConfigure) {
@@ -346,6 +385,23 @@ export default function CreateCoOwnScreen() {
               title="Select a listing"
               description="Choose one of your active listings to split into Co-Own units."
             >
+              {/* ── WS2: KYC gate ──
+                  Issuers must have 'id' or 'seller' tier verification to
+                  issue. Show a blocking notice before the listing selector
+                  so the user doesn't fill the form only to hit a 403. */}
+              {issuerTier !== 'loading' && !canIssue && (
+                <View style={[styles.kycGateCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+                  <Ionicons name="lock-closed-outline" size={20} color={colors.warning} />
+                  <View style={styles.kycGateBody}>
+                    <Text style={[styles.kycGateTitle, { color: colors.textPrimary }]}>
+                      Identity verification required
+                    </Text>
+                    <Text style={[styles.kycGateText, { color: colors.textSecondary }]}>
+                      Complete ID verification to issue Co-Own assets. This protects buyers and meets regulatory standards.
+                    </Text>
+                  </View>
+                </View>
+              )}
               <FlashList
                 data={issuerListings}
                 horizontal
@@ -393,7 +449,7 @@ export default function CreateCoOwnScreen() {
               </View>
 
               {/* Total units */}
-              <View style={[styles.formCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={styles.formCard}>
                 <View style={styles.formLabelRow}>
                   <Text style={[styles.formLabel, { color: colors.textMuted }]}>Total units</Text>
                   <Text style={[styles.formHint, { color: colors.textMuted }]}>Max {MAX_UNITS}</Text>
@@ -424,7 +480,7 @@ export default function CreateCoOwnScreen() {
               </View>
 
               {/* Unit price */}
-              <View style={[styles.formCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={styles.formCard}>
                 <Text style={[styles.formLabel, { color: colors.textMuted }]}>Unit price ({currencyCode})</Text>
                 <AppInput
                   value={unitPriceInput}
@@ -436,8 +492,114 @@ export default function CreateCoOwnScreen() {
                 />
               </View>
 
+              {/* ── Legal & custody (WS1) ──
+                  Equity-market pattern: the legal wrapper and custody
+                  arrangement must be disclosed before issuance. The
+                  legal vehicle type is required; other fields are
+                  optional but shown so the issuer can substantiate
+                  trust signals on the asset detail screen. */}
+              <View style={styles.formCard}>
+                <Text style={[styles.formLabel, { color: colors.textMuted }]}>Legal vehicle</Text>
+                <Text style={[styles.formHint, { color: colors.textMuted, marginBottom: Space.sm }]}>
+                  Required — the legal structure that holds the asset
+                </Text>
+                <View style={styles.vehicleTypeRow}>
+                  {(['spv', 'llc', 'trust', 'series_llc', 'none'] as const).map((vt) => (
+                    <AnimatedPressable
+                      key={vt}
+                      style={[
+                        styles.vehicleTypeChip,
+                        {
+                          backgroundColor: legalVehicleType === vt ? colors.surfaceAlt : 'transparent',
+                          borderColor: legalVehicleType === vt ? colors.border : colors.borderSubtle,
+                        },
+                      ]}
+                      onPress={() => { haptic.selection(); setLegalVehicleType(vt); }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Legal vehicle: ${vt}`}
+                      scaleValue={0.96}
+                      hapticFeedback="light"
+                    >
+                      <Text style={[styles.vehicleTypeText, { color: legalVehicleType === vt ? colors.textPrimary : colors.textSecondary }]}>
+                        {vt === 'spv' ? 'SPV' : vt === 'series_llc' ? 'Series LLC' : vt === 'llc' ? 'LLC' : vt === 'trust' ? 'Trust' : 'None'}
+                      </Text>
+                    </AnimatedPressable>
+                  ))}
+                </View>
+                {legalVehicleType !== 'none' && (
+                  <>
+                    <AppInput
+                      value={legalVehicleName}
+                      onChangeText={setLegalVehicleName}
+                      placeholder="Vehicle name"
+                      accessibilityLabel="Legal vehicle name"
+                    />
+                    <AppInput
+                      value={legalVehicleJurisdiction}
+                      onChangeText={setLegalVehicleJurisdiction}
+                      placeholder="Jurisdiction (e.g. England, Delaware)"
+                      accessibilityLabel="Legal vehicle jurisdiction"
+                    />
+                  </>
+                )}
+              </View>
+
+              <View style={styles.formCard}>
+                <Text style={[styles.formLabel, { color: colors.textMuted }]}>Custodian (optional)</Text>
+                <AppInput
+                  value={custodianName}
+                  onChangeText={setCustodianName}
+                  placeholder="Custodian name"
+                  accessibilityLabel="Custodian name"
+                />
+                <AppInput
+                  value={custodianLocation}
+                  onChangeText={setCustodianLocation}
+                  placeholder="Storage location"
+                  accessibilityLabel="Custodian location"
+                />
+                <View style={styles.insuranceRow}>
+                  <AnimatedPressable
+                    style={[styles.insuranceToggle, { borderColor: custodyInsured ? colors.brand : colors.border }]}
+                    onPress={() => { haptic.selection(); setCustodyInsured((v) => !v); }}
+                    accessibilityRole="switch"
+                    accessibilityLabel="Toggle custody insurance"
+                    accessibilityState={{ checked: custodyInsured }}
+                    scaleValue={0.96}
+                    hapticFeedback="light"
+                  >
+                    <Ionicons
+                      name={custodyInsured ? 'checkmark-circle' : 'ellipse-outline'}
+                      size={18}
+                      color={custodyInsured ? colors.brand : colors.textMuted}
+                    />
+                    <Text style={[styles.insuranceToggleText, { color: custodyInsured ? colors.textPrimary : colors.textSecondary }]}>
+                      Insured
+                    </Text>
+                  </AnimatedPressable>
+                </View>
+                {custodyInsured && (
+                  <AppInput
+                    value={custodyInsurer}
+                    onChangeText={setCustodyInsurer}
+                    placeholder="Insurer name"
+                    accessibilityLabel="Custody insurer name"
+                  />
+                )}
+              </View>
+
+              <View style={styles.formCard}>
+                <Text style={[styles.formLabel, { color: colors.textMuted }]}>Authenticity (optional)</Text>
+                <AppInput
+                  value={authenticityMethod}
+                  onChangeText={setAuthenticityMethod}
+                  placeholder="Verification method (e.g. third-party appraisal)"
+                  accessibilityLabel="Authenticity verification method"
+                />
+              </View>
+
               {/* Estimated value */}
-              <View style={[styles.estimateCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={[styles.estimateCard, { borderTopColor: colors.border }]}>
                 <Text style={[styles.formLabel, { color: colors.textMuted }]}>Estimated value</Text>
                 <View style={styles.estimatedRow}>
                   <View>
@@ -481,7 +643,7 @@ export default function CreateCoOwnScreen() {
               </View>
 
               {/* Summary */}
-              <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={[styles.summaryCard, { borderTopColor: colors.border }]}>
                 <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Issuance summary</Text>
                 <View style={[styles.summaryRow, { borderColor: colors.border }]}>
                   <Text style={[styles.summaryKey, { color: colors.textSecondary }]}>Listing</Text>
@@ -500,6 +662,17 @@ export default function CreateCoOwnScreen() {
                 <View style={[styles.summaryRow, { borderColor: colors.border }]}>
                   <Text style={[styles.summaryKey, { color: colors.textSecondary }]} numberOfLines={1}>Settlement</Text>
                   <Text style={[styles.summaryValue, { color: colors.textPrimary }]} numberOfLines={1}>TVUSD</Text>
+                </View>
+                <View style={[styles.summaryRow, { borderColor: colors.border }]}>
+                  <Text style={[styles.summaryKey, { color: colors.textSecondary }]} numberOfLines={1}>Legal vehicle</Text>
+                  <Text style={[styles.summaryValue, { color: colors.textPrimary }]} numberOfLines={1}>
+                    {legalVehicleType === 'spv' ? 'SPV'
+                      : legalVehicleType === 'series_llc' ? 'Series LLC'
+                      : legalVehicleType === 'llc' ? 'LLC'
+                      : legalVehicleType === 'trust' ? 'Trust'
+                      : 'None'}
+                    {legalVehicleType !== 'none' && legalVehicleName ? ` · ${legalVehicleName}` : ''}
+                  </Text>
                 </View>
                 <View style={[styles.totalRow, { borderColor: colors.border }]}>
                   <Text style={[styles.totalKey, { color: colors.textPrimary }]} numberOfLines={1}>Total value</Text>
@@ -563,7 +736,7 @@ const styles = StyleSheet.create({
   listingCard: {
     width: 160,
     borderRadius: Radius.lg,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: Space.sm,
     gap: Space.xs,
     position: 'relative',
@@ -577,7 +750,7 @@ const styles = StyleSheet.create({
     height: 120,
   },
   listingMeta: {
-    gap: 2,
+    gap: Space.xs,
   },
   listingTitle: {
     fontSize: Type.bodyEmphasis.size,
@@ -617,7 +790,7 @@ const styles = StyleSheet.create({
   },
   previewMeta: {
     flex: 1,
-    gap: 3,
+    gap: Space.xs,
   },
   previewTitle: {
     fontSize: Type.bodyEmphasis.size,
@@ -643,7 +816,7 @@ const styles = StyleSheet.create({
   },
   contextInfo: {
     flex: 1,
-    gap: 3,
+    gap: Space.xs,
   },
   contextTitle: {
     fontSize: Type.bodyEmphasis.size,
@@ -655,9 +828,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
   },
   formCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
+    paddingVertical: Space.md,
     gap: Space.sm,
   },
   formLabelRow: {
@@ -683,18 +854,74 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
   },
   unitPresetText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
   },
-  estimateCard: {
-    borderRadius: Radius.lg,
+  vehicleTypeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Space.xs,
+    marginBottom: Space.sm,
+  },
+  vehicleTypeChip: {
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.md,
+    borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
+    alignItems: 'center',
+  },
+  vehicleTypeText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+  },
+  kycGateCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: Space.sm,
+    padding: Space.md,
+    borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: Space.md,
+  },
+  kycGateBody: {
+    flex: 1,
+    gap: Space.xs,
+  },
+  kycGateTitle: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+  },
+  kycGateText: {
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+  },
+  insuranceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.sm,
+  },
+  insuranceToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingVertical: Space.xs,
+    paddingHorizontal: Space.sm,
+    borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  insuranceToggleText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.medium,
+  },
+  estimateCard: {
+    paddingVertical: Space.md,
+    gap: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   estimatedRow: {
     flexDirection: 'row',
@@ -713,7 +940,7 @@ const styles = StyleSheet.create({
   },
   stablePreview: {
     alignItems: 'flex-end',
-    gap: 2,
+    gap: Space.xs,
   },
   stableLabel: {
     fontSize: Type.meta.size,
@@ -738,7 +965,7 @@ const styles = StyleSheet.create({
   },
   reviewAssetInfo: {
     flex: 1,
-    gap: 3,
+    gap: Space.xs,
   },
   reviewAssetTitle: {
     fontSize: Type.bodyEmphasis.size,
@@ -750,10 +977,9 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
   },
   summaryCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
+    paddingVertical: Space.md,
     gap: 0,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   summaryLabel: {
     fontSize: Type.meta.size,
