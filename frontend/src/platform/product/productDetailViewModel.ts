@@ -45,6 +45,8 @@ export interface ProductMediaItem {
   uri: string;
   kind: MediaKind;
   posterUri?: string | null;
+  /** M05: When the poster was verified (backend-backed trust). */
+  posterVerifiedAt?: string | null;
   altText?: string | null;
   width?: number | null;
   height?: number | null;

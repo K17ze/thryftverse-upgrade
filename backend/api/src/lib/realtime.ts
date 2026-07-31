@@ -197,6 +197,12 @@ function formatSseEvent(event: RealtimeEnvelope): string {
 // resync from the last seen sequence number.
 const topicSequenceMap = new Map<string, number>();
 
+// R07: Per-topic ring buffer of recent events for replay on gap.
+// Stores the last MAX_EVENTS_PER_TOPIC events so clients that detect
+// a sequence gap can replay missed events without a full resnapshot.
+const MAX_EVENTS_PER_TOPIC = 200;
+const topicEventBuffer = new Map<string, RealtimeEnvelope[]>();
+
 function nextSequenceForTopic(topic: string): number {
   const next = (topicSequenceMap.get(topic) ?? 0) + 1;
   topicSequenceMap.set(topic, next);
@@ -206,6 +212,40 @@ function nextSequenceForTopic(topic: string): number {
 /** R01: Get the current sequence for a topic (for resync requests). */
 export function getTopicSequence(topic: string): number {
   return topicSequenceMap.get(normalizeTopic(topic)) ?? 0;
+}
+
+/** R07: Replay events from a given sequence number. Returns events
+ * with seq > fromSeq, up to a maximum of MAX_EVENTS_PER_TOPIC.
+ * If fromSeq is 0, returns all buffered events. If the gap exceeds
+ * the buffer size, the client should do a full resnapshot instead. */
+export function replayEventsFromSequence(topic: string, fromSeq: number): RealtimeEnvelope[] {
+  const normalized = normalizeTopic(topic);
+  const buffer = topicEventBuffer.get(normalized);
+  if (!buffer || buffer.length === 0) return [];
+  return buffer.filter((e) => (e.seq ?? 0) > fromSeq);
+}
+
+/** R07: Check whether a replay can fill the gap. Returns false when
+ * the gap exceeds the buffer size, signaling the client to resnapshot. */
+export function canReplayGap(topic: string, fromSeq: number): boolean {
+  const normalized = normalizeTopic(topic);
+  const buffer = topicEventBuffer.get(normalized);
+  if (!buffer || buffer.length === 0) return false;
+  const oldest = buffer[0]?.seq ?? 0;
+  return fromSeq >= oldest - 1;
+}
+
+function bufferEvent(envelope: RealtimeEnvelope): void {
+  if (envelope.seq == null) return;
+  let buffer = topicEventBuffer.get(envelope.topic);
+  if (!buffer) {
+    buffer = [];
+    topicEventBuffer.set(envelope.topic, buffer);
+  }
+  buffer.push(envelope);
+  if (buffer.length > MAX_EVENTS_PER_TOPIC) {
+    buffer.shift();
+  }
 }
 
 function createEnvelope(topic: string, type: string, payload: Record<string, unknown>, options?: { seq?: boolean; version?: number }): RealtimeEnvelope {
@@ -400,6 +440,9 @@ export function publishRealtimeEvent(input: {
     version: input.version,
   });
   const delivered = deliverLocalEvent(event, input.userId);
+
+  // R07: Buffer the event for replay on gap.
+  bufferEvent(event);
 
   if (realtimePublisher) {
     const message: RealtimeBusMessage = {

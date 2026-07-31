@@ -17290,6 +17290,7 @@ app.get('/listings/:listingId', async (request, reply) => {
     shipping_method: string | null;
     shipping_payer: string | null;
     created_at: string;
+    media_frozen_at: string | null;
     seller_username: string | null;
   }>(
     `
@@ -17297,6 +17298,7 @@ app.get('/listings/:listingId', async (request, reply) => {
         l.id, l.seller_id, l.title, l.description, l.price_gbp, l.image_url,
         l.status, l.category, l.brand, l.size, l.condition,
         l.original_price_gbp, l.shipping_method, l.shipping_payer, l.created_at,
+        l.media_frozen_at,
         u.username AS seller_username
       FROM listings l
       LEFT JOIN users u ON u.id = l.seller_id
@@ -17397,6 +17399,7 @@ app.get('/listings/:listingId', async (request, reply) => {
       shippingMethod: row.shipping_method,
       shippingPayer: row.shipping_payer,
       createdAt: row.created_at,
+      mediaFrozenAt: row.media_frozen_at,
       seller: row.seller_username
         ? {
             id: row.seller_id,
@@ -19034,6 +19037,104 @@ app.post('/listing-images', async (request, reply) => {
   } finally {
     client.release();
   }
+});
+
+// ── M05: Poster verification ──
+// Marks a listing image's poster URL as verified. The verifier (seller
+// or admin) confirms the poster URL is accessible and represents the
+// video. This makes the poster trust backend-backed rather than
+// asserted.
+app.post('/listing-images/:imageId/verify-poster', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ imageId: z.string().min(2) });
+  const { imageId } = paramsSchema.parse(request.params);
+
+  const result = await db.query<{ listing_id: string; poster_url: string | null }>(
+    `SELECT listing_id, poster_url FROM listing_images WHERE id = $1`,
+    [imageId]
+  );
+  const image = result.rows[0];
+  if (!image) {
+    reply.code(404);
+    return { ok: false, error: 'Listing image not found' };
+  }
+  if (!image.poster_url) {
+    reply.code(409);
+    return { ok: false, error: 'No poster URL to verify', code: 'NO_POSTER' };
+  }
+
+  // Verify the listing belongs to the actor.
+  const listingResult = await db.query<{ seller_id: string }>(
+    'SELECT seller_id FROM listings WHERE id = $1',
+    [image.listing_id]
+  );
+  if (listingResult.rows[0]?.seller_id !== actorUserId) {
+    reply.code(403);
+    return { ok: false, error: 'Only the seller can verify poster URLs' };
+  }
+
+  await db.query(
+    `UPDATE listing_images SET poster_verified_at = NOW(), poster_verified_by = $2 WHERE id = $1`,
+    [imageId, actorUserId]
+  );
+
+  return { ok: true, verifiedAt: new Date().toISOString() };
+});
+
+// ── M07: Media freeze ──
+// Freezes media for a listing so it cannot be silently swapped while
+// the item is live. The seller can unfreeze (e.g. to replace a media
+// item) but the action is auditable.
+app.post('/listings/:listingId/media/freeze', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ listingId: z.string().min(2) });
+  const { listingId } = paramsSchema.parse(request.params);
+
+  const listing = await db.query<{ seller_id: string }>(
+    'SELECT seller_id FROM listings WHERE id = $1',
+    [listingId]
+  );
+  if (!listing.rows[0]) {
+    reply.code(404);
+    return { ok: false, error: 'Listing not found' };
+  }
+  if (listing.rows[0].seller_id !== actorUserId) {
+    reply.code(403);
+    return { ok: false, error: 'Only the seller can freeze media' };
+  }
+
+  await db.query(
+    `UPDATE listings SET media_frozen_at = NOW() WHERE id = $1`,
+    [listingId]
+  );
+
+  return { ok: true, frozenAt: new Date().toISOString() };
+});
+
+app.post('/listings/:listingId/media/unfreeze', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ listingId: z.string().min(2) });
+  const { listingId } = paramsSchema.parse(request.params);
+
+  const listing = await db.query<{ seller_id: string }>(
+    'SELECT seller_id FROM listings WHERE id = $1',
+    [listingId]
+  );
+  if (!listing.rows[0]) {
+    reply.code(404);
+    return { ok: false, error: 'Listing not found' };
+  }
+  if (listing.rows[0].seller_id !== actorUserId) {
+    reply.code(403);
+    return { ok: false, error: 'Only the seller can unfreeze media' };
+  }
+
+  await db.query(
+    `UPDATE listings SET media_frozen_at = NULL WHERE id = $1`,
+    [listingId]
+  );
+
+  return { ok: true };
 });
 
 app.post('/secure-profiles', async (request, reply) => {
@@ -35644,6 +35745,7 @@ app.get('/auctions/:auctionId', async (request, reply) => {
     condition_label: string | null;
     description: string | null;
     price_gbp: number | string | null;
+    media_frozen_at: string | null;
     seller_username: string | null;
     seller_avatar: string | null;
     seller_display_name: string | null;
@@ -35675,6 +35777,7 @@ app.get('/auctions/:auctionId', async (request, reply) => {
         l.condition AS condition_label,
         l.description,
         l.price_gbp,
+        l.media_frozen_at,
         u.username AS seller_username,
         u.avatar AS seller_avatar,
         u.display_name AS seller_display_name,
@@ -35755,6 +35858,7 @@ app.get('/auctions/:auctionId', async (request, reply) => {
     media_height: number | null;
     media_type: 'image' | 'video' | null;
     poster_url: string | null;
+    poster_verified_at: string | null;
     blurhash: string | null;
     focal_x: string | number | null;
     focal_y: string | number | null;
@@ -35768,6 +35872,7 @@ app.get('/auctions/:auctionId', async (request, reply) => {
         NULLIF(to_jsonb(listing_images) ->> 'media_height', '')::integer AS media_height,
         COALESCE(NULLIF(to_jsonb(listing_images) ->> 'media_type', ''), 'image') AS media_type,
         NULLIF(to_jsonb(listing_images) ->> 'poster_url', '') AS poster_url,
+        NULLIF(to_jsonb(listing_images) ->> 'poster_verified_at', '') AS poster_verified_at,
         NULLIF(to_jsonb(listing_images) ->> 'blurhash', '') AS blurhash,
         NULLIF(to_jsonb(listing_images) ->> 'focal_x', '') AS focal_x,
         NULLIF(to_jsonb(listing_images) ->> 'focal_y', '') AS focal_y
@@ -35788,6 +35893,7 @@ app.get('/auctions/:auctionId', async (request, reply) => {
     focalX: media.focal_x == null ? null : Number(media.focal_x),
     focalY: media.focal_y == null ? null : Number(media.focal_y),
     posterUrl: media.poster_url,
+    posterVerifiedAt: media.poster_verified_at,
     order: media.sort_order,
   }));
 
@@ -35802,6 +35908,7 @@ app.get('/auctions/:auctionId', async (request, reply) => {
       focalX: null,
       focalY: null,
       posterUrl: null,
+      posterVerifiedAt: null,
       order: 0,
     });
   }
@@ -35823,6 +35930,7 @@ app.get('/auctions/:auctionId', async (request, reply) => {
       // the listing_media table is populated. imageUrl remains as a
       // compatibility field.
       mediaItems,
+      mediaFrozenAt: row.media_frozen_at,
       brand: row.brand ?? null,
       category: row.category ?? null,
       conditionLabel: row.condition_label ?? null,

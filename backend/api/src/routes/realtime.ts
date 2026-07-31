@@ -6,6 +6,8 @@ import {
   registerSseClient,
   registerWsClient,
   getTopicSequence,
+  replayEventsFromSequence,
+  canReplayGap,
 } from '../lib/realtime.js';
 import { canUserSubscribeToRealtimeTopic } from '../lib/realtimeAuthorization.js';
 
@@ -111,6 +113,56 @@ export const registerRealtimeRoutes = ({ app, db }: RealtimeRouteDependencies) =
       ok: true,
       topic,
       seq: getTopicSequence(topic),
+    };
+  });
+
+  // R07: Event replay endpoint.
+  // Returns events from a given sequence number so clients that detect
+  // a gap (via /realtime/seq) can replay missed events without a full
+  // resnapshot. When the gap exceeds the buffer size, returns
+  // `canReplay: false` signaling the client to resnapshot instead.
+  app.get('/realtime/replay', async (request, reply) => {
+    const authUserId = request.authUser?.userId;
+    if (!authUserId) {
+      reply.code(401);
+      return { ok: false, error: 'Unauthorized' };
+    }
+
+    const querySchema = z.object({
+      topic: z.string().min(2).max(120),
+      fromSeq: z.coerce.number().int().min(0).default(0),
+    });
+    const parsed = querySchema.safeParse(request.query ?? {});
+    if (!parsed.success) {
+      reply.code(400);
+      return { ok: false, error: 'Invalid parameters' };
+    }
+
+    const { topic, fromSeq } = parsed.data;
+    const authorized = await canUserSubscribeToRealtimeTopic(db, authUserId, topic);
+    if (!authorized) {
+      reply.code(403);
+      return { ok: false, error: 'Not authorized for this topic' };
+    }
+
+    const replayable = canReplayGap(topic, fromSeq);
+    if (!replayable) {
+      return {
+        ok: true,
+        topic,
+        canReplay: false,
+        currentSeq: getTopicSequence(topic),
+        events: [],
+      };
+    }
+
+    const events = replayEventsFromSequence(topic, fromSeq);
+    return {
+      ok: true,
+      topic,
+      canReplay: true,
+      currentSeq: getTopicSequence(topic),
+      events,
     };
   });
 };

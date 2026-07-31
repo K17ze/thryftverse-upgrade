@@ -301,6 +301,8 @@ export interface ListingApiItem {
   shippingMethod: string | null;
   shippingPayer: string | null;
   createdAt: string;
+  /** M07: When media was frozen (cannot be silently swapped). */
+  mediaFrozenAt?: string | null;
   seller?: ListingSeller | null;
   engagement?: ListingEngagementSummaryApi | null;
 }
