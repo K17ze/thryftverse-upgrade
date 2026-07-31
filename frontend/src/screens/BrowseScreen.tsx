@@ -289,6 +289,7 @@ export default function BrowseScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const scrollY = useSharedValue(0);
   const scrollRef = React.useRef<any>(null);
+  const refreshTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [backendListings, setBackendListings] = useState<Listing[] | null>(null);
   const [backendLoading, setBackendLoading] = useState(false);
@@ -349,7 +350,12 @@ export default function BrowseScreen() {
         if (!cancelled) setBackendLoading(false);
       });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+      }
+    };
   }, [browseFilters, categoryId]);
 
   const scrollHandler = useAnimatedScrollHandler({
@@ -361,7 +367,11 @@ export default function BrowseScreen() {
   const handleRefresh = async () => {
     setRefreshing(true);
     await refreshListings();
-    setTimeout(() => setRefreshing(false), 400);
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    refreshTimerRef.current = setTimeout(() => {
+      refreshTimerRef.current = null;
+      setRefreshing(false);
+    }, 400);
   };
 
   const hasActiveFilters =

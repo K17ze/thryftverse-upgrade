@@ -97,6 +97,7 @@ export default function ClosetScreen() {
   const [activeBrand, setActiveBrand] = useState<string | null>(null);
   const [collectionsSyncError, setCollectionsSyncError] = useState(false);
   const scrollY = useSharedValue(0);
+  const refreshTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const wishlistIds = useStore((state) => state.wishlist);
   const savedProductIds = useStore((state) => state.savedProducts);
@@ -110,7 +111,12 @@ export default function ClosetScreen() {
     void loadCollectionsFromApi()
       .then(() => { if (mounted) setCollectionsSyncError(false); })
       .catch(() => { if (mounted) setCollectionsSyncError(true); });
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+      }
+    };
   }, [loadCollectionsFromApi]);
 
   const handleRefresh = async () => {
@@ -121,7 +127,11 @@ export default function ClosetScreen() {
     } catch {
       setCollectionsSyncError(true);
     } finally {
-      setTimeout(() => setRefreshing(false), 350);
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = setTimeout(() => {
+        refreshTimerRef.current = null;
+        setRefreshing(false);
+      }, 350);
     }
   };
 

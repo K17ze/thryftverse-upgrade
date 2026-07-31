@@ -492,6 +492,16 @@ export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T>
       } catch (error) {
         throw new ApiRequestError(`Network request failed for ${url}: ${(error as Error).message}`);
       }
+    } else {
+      // Token refresh failed — session is no longer valid. Trigger a
+      // lazy logout so the navigator remounts to AuthLanding instead of
+      // leaving the user on a screen with stale auth state.
+      try {
+        const { useStore } = await import('../store/useStore');
+        useStore.getState().logout();
+      } catch {
+        // Store not available (e.g. during app bootstrap) — safe to ignore.
+      }
     }
   }
 

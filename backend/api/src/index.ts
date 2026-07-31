@@ -909,6 +909,16 @@ function isPublicRoute(method: string, path: string) {
     return true;
   }
 
+  // Public discovery feeds — both use optional auth (request.authUser?.userId ?? null)
+  // and only return published/active content for unauthenticated viewers.
+  if (method === 'GET' && path === '/feed/home') {
+    return true;
+  }
+
+  if (method === 'GET' && path === '/looks') {
+    return true;
+  }
+
   if (method === 'GET' && /^\/auctions\/(?!watchlist$)[^/]+$/.test(path)) {
     return true;
   }
@@ -34503,23 +34513,6 @@ app.post('/auctions', async (request, reply) => {
     }
   }
 
-  const listingResult = await db.query<{
-    id: string;
-    seller_id: string;
-    title: string;
-  }>('SELECT id, seller_id, title FROM listings WHERE id = $1 LIMIT 1', [payload.listingId]);
-
-  const listing = listingResult.rows[0];
-  if (!listing) {
-    reply.code(404);
-    return { ok: false, error: 'Listing not found' };
-  }
-
-  if (listing.seller_id !== sellerId && request.authUser.role !== 'admin') {
-    reply.code(403);
-    return { ok: false, error: 'Forbidden: you can only create auctions for your own listings' };
-  }
-
   const startsAt = new Date(payload.startsAt);
   const endsAt = new Date(payload.endsAt);
   if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime()) || endsAt <= startsAt) {
@@ -34539,71 +34532,114 @@ app.post('/auctions', async (request, reply) => {
     return { ok: false, error: 'Buy now price must be greater than starting bid' };
   }
 
-  const result = await db.query<{
-    id: string;
-    listing_id: string;
-    seller_id: string;
-    starts_at: string;
-    ends_at: string;
-    starting_bid_gbp: number | string;
-    current_bid_gbp: number | string;
-    buy_now_price_gbp: number | string | null;
-    bid_count: number;
-    status: 'upcoming' | 'live' | 'ended';
-  }>(
-    `
-      INSERT INTO auctions (
-        id,
-        listing_id,
-        seller_id,
-        starts_at,
-        ends_at,
-        starting_bid_gbp,
-        current_bid_gbp,
-        buy_now_price_gbp,
-        min_increment_gbp,
-        bid_count,
-        status,
-        idempotency_key
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $6, $7, $8, 0, $9, $10)
-      RETURNING
-        id,
-        listing_id,
-        seller_id,
-        starts_at,
-        ends_at,
-        starting_bid_gbp,
-        current_bid_gbp,
-        buy_now_price_gbp,
-        bid_count,
-        status
-    `,
-    [
-      auctionId,
-      payload.listingId,
-      sellerId,
-      startsAt.toISOString(),
-      endsAt.toISOString(),
-      startingBidGbp,
-      buyNowPriceGbp,
-      minIncrementGbp,
-      status,
-      idempotencyKey ?? null,
-    ]
-  );
+  // Transaction: lock the listing row, verify ownership, create auction,
+  // and pause the listing atomically. This prevents a race condition
+  // where the listing could be sold via direct checkout between the
+  // ownership check and the pause.
+  const client = await db.connect();
+  let result: { rows: { id: string; listing_id: string; seller_id: string; starts_at: string; ends_at: string; starting_bid_gbp: number | string; current_bid_gbp: number | string; buy_now_price_gbp: number | string | null; bid_count: number; status: 'upcoming' | 'live' | 'ended' }[] };
+  try {
+    await client.query('BEGIN');
 
-  // Pause the underlying listing so it is no longer available for direct
-  // purchase while the auction is active. This prevents double-exposure
-  // where the same item is simultaneously buyable in the feed and being
-  // auctioned. If the auction ends without a sale, the listing is
-  // reactivated by the auction settlement sweep.
-  await db.query(
-    `UPDATE listings
-     SET status = 'paused', updated_at = NOW()
-     WHERE id = $1 AND status = 'active'`,
-    [payload.listingId]
-  );
+    const listingResult = await client.query<{ id: string; seller_id: string; status: string }>(
+      'SELECT id, seller_id, status FROM listings WHERE id = $1 LIMIT 1 FOR UPDATE',
+      [payload.listingId]
+    );
+
+    const listing = listingResult.rows[0];
+    if (!listing) {
+      await client.query('ROLLBACK');
+      reply.code(404);
+      return { ok: false, error: 'Listing not found' };
+    }
+
+    if (listing.seller_id !== sellerId && request.authUser.role !== 'admin') {
+      await client.query('ROLLBACK');
+      reply.code(403);
+      return { ok: false, error: 'Forbidden: you can only create auctions for your own listings' };
+    }
+
+    if (listing.status !== 'active') {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: 'Listing is not available for auction (it may already be sold, paused, or auctioned)', code: 'LISTING_NOT_AUCTIONABLE' };
+    }
+
+    result = await client.query<{
+      id: string;
+      listing_id: string;
+      seller_id: string;
+      starts_at: string;
+      ends_at: string;
+      starting_bid_gbp: number | string;
+      current_bid_gbp: number | string;
+      buy_now_price_gbp: number | string | null;
+      bid_count: number;
+      status: 'upcoming' | 'live' | 'ended';
+    }>(
+      `
+        INSERT INTO auctions (
+          id,
+          listing_id,
+          seller_id,
+          starts_at,
+          ends_at,
+          starting_bid_gbp,
+          current_bid_gbp,
+          buy_now_price_gbp,
+          min_increment_gbp,
+          bid_count,
+          status,
+          idempotency_key
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $6, $7, $8, 0, $9, $10)
+        RETURNING
+          id,
+          listing_id,
+          seller_id,
+          starts_at,
+          ends_at,
+          starting_bid_gbp,
+          current_bid_gbp,
+          buy_now_price_gbp,
+          bid_count,
+          status
+      `,
+      [
+        auctionId,
+        payload.listingId,
+        sellerId,
+        startsAt.toISOString(),
+        endsAt.toISOString(),
+        startingBidGbp,
+        buyNowPriceGbp,
+        minIncrementGbp,
+        status,
+        idempotencyKey ?? null,
+      ]
+    );
+
+    // Pause the underlying listing so it is no longer available for direct
+    // purchase while the auction is active. This prevents double-exposure
+    // where the same item is simultaneously buyable in the feed and being
+    // auctioned. If the auction ends without a sale, the listing is
+    // reactivated by the auction settlement sweep.
+    await client.query(
+      `UPDATE listings
+       SET status = 'paused', updated_at = NOW()
+       WHERE id = $1 AND status = 'active'`,
+      [payload.listingId]
+    );
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    app.log.error({ err }, 'POST /auctions failed');
+    reply.code(500);
+    return { ok: false, error: 'Failed to create auction' };
+  } finally {
+    client.release();
+  }
 
   publishRealtimeEvent({
     topic: 'auctions.market',
@@ -36288,106 +36324,129 @@ app.post('/co-own/assets', async (request, reply) => {
 
   await ensureUserExists(payload.issuerId);
 
-  const listingResult = await db.query<{
-    id: string;
-    title: string;
-    image_url: string | null;
-  }>(
-    'SELECT id, title, image_url FROM listings WHERE id = $1 AND seller_id = $2 LIMIT 1',
-    [payload.listingId, payload.issuerId]
-  );
-
-  const listing = listingResult.rows[0];
-  if (!listing) {
-    reply.code(404);
-    return { ok: false, error: 'Listing not found or not owned by issuer', code: 'LISTING_OWNERSHIP_DENIED' };
-  }
-
   const assetId = payload.id ?? `s_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-  const resolvedTitle = payload.title ?? `${listing.title} Fraction Pool`;
-  const resolvedImage = payload.imageUrl ?? listing.image_url;
 
-  const result = await db.query<{
-    id: string;
-    listing_id: string;
-    issuer_id: string;
-    title: string;
-    image_url: string | null;
-    total_units: number;
-    available_units: number;
-    unit_price_gbp: number | string;
-    unit_price_stable: number | string;
-    settlement_mode: 'GBP' | 'TVUSD' | 'HYBRID' | 'ONEZE';
-    issuer_jurisdiction: string | null;
-    market_move_pct_24h: number | string;
-    holders: number;
-    volume_24h_gbp: number | string;
-    is_open: boolean;
-    created_at: string;
-    updated_at: string;
-  }>(
-    `
-      INSERT INTO coOwn_assets (
-        id,
-        listing_id,
-        issuer_id,
-        title,
-        image_url,
-        total_units,
-        available_units,
-        unit_price_gbp,
-        unit_price_stable,
-        settlement_mode,
-        issuer_jurisdiction,
-        market_move_pct_24h,
-        holders,
-        volume_24h_gbp,
-        is_open
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $6, $7, $8, $9, $10, 0, 0, 0, TRUE)
-      RETURNING
-        id,
-        listing_id,
-        issuer_id,
-        title,
-        image_url,
-        total_units,
-        available_units,
-        unit_price_gbp,
-        unit_price_stable,
-        settlement_mode,
-        issuer_jurisdiction,
-        market_move_pct_24h,
-        holders,
-        volume_24h_gbp,
-        is_open,
-        created_at,
-        updated_at
-    `,
-    [
-      assetId,
-      payload.listingId,
-      payload.issuerId,
-      resolvedTitle,
-      resolvedImage,
-      payload.totalUnits,
-      roundTo(payload.unitPriceGbp, 4),
-      roundTo(payload.unitPriceStable, 4),
-      payload.settlementMode,
-      payload.issuerJurisdiction ?? null,
-    ]
-  );
+  // Transaction: lock the listing row, verify ownership, create co-own
+  // asset, and pause the listing atomically. This prevents a race
+  // condition where the listing could be sold via direct checkout
+  // between the ownership check and the pause.
+  const client = await db.connect();
+  let result: { rows: { id: string; listing_id: string; issuer_id: string; title: string; image_url: string | null; total_units: number; available_units: number; unit_price_gbp: number | string; unit_price_stable: number | string; settlement_mode: 'GBP' | 'TVUSD' | 'HYBRID' | 'ONEZE'; issuer_jurisdiction: string | null; market_move_pct_24h: number | string; holders: number; volume_24h_gbp: number | string; is_open: boolean; created_at: string; updated_at: string }[] };
+  try {
+    await client.query('BEGIN');
 
-  // Pause the underlying listing so it is no longer available for direct
-  // purchase while the co-own asset is open for fractional trading. This
-  // prevents double-exposure where the same item is simultaneously buyable
-  // in the feed and available as a fractional asset.
-  await db.query(
-    `UPDATE listings
-     SET status = 'paused', updated_at = NOW()
-     WHERE id = $1 AND status = 'active'`,
-    [payload.listingId]
-  );
+    const listingResult = await client.query<{ id: string; title: string; image_url: string | null; status: string }>(
+      'SELECT id, title, image_url, status FROM listings WHERE id = $1 AND seller_id = $2 LIMIT 1 FOR UPDATE',
+      [payload.listingId, payload.issuerId]
+    );
+
+    const listing = listingResult.rows[0];
+    if (!listing) {
+      await client.query('ROLLBACK');
+      reply.code(404);
+      return { ok: false, error: 'Listing not found or not owned by issuer', code: 'LISTING_OWNERSHIP_DENIED' };
+    }
+
+    if (listing.status !== 'active') {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: 'Listing is not available for co-own (it may already be sold, paused, or fractionalized)', code: 'LISTING_NOT_COOWNABLE' };
+    }
+
+    const resolvedTitle = payload.title ?? `${listing.title} Fraction Pool`;
+    const resolvedImage = payload.imageUrl ?? listing.image_url;
+
+    result = await client.query<{
+      id: string;
+      listing_id: string;
+      issuer_id: string;
+      title: string;
+      image_url: string | null;
+      total_units: number;
+      available_units: number;
+      unit_price_gbp: number | string;
+      unit_price_stable: number | string;
+      settlement_mode: 'GBP' | 'TVUSD' | 'HYBRID' | 'ONEZE';
+      issuer_jurisdiction: string | null;
+      market_move_pct_24h: number | string;
+      holders: number;
+      volume_24h_gbp: number | string;
+      is_open: boolean;
+      created_at: string;
+      updated_at: string;
+    }>(
+      `
+        INSERT INTO coOwn_assets (
+          id,
+          listing_id,
+          issuer_id,
+          title,
+          image_url,
+          total_units,
+          available_units,
+          unit_price_gbp,
+          unit_price_stable,
+          settlement_mode,
+          issuer_jurisdiction,
+          market_move_pct_24h,
+          holders,
+          volume_24h_gbp,
+          is_open
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $6, $7, $8, $9, $10, 0, 0, 0, TRUE)
+        RETURNING
+          id,
+          listing_id,
+          issuer_id,
+          title,
+          image_url,
+          total_units,
+          available_units,
+          unit_price_gbp,
+          unit_price_stable,
+          settlement_mode,
+          issuer_jurisdiction,
+          market_move_pct_24h,
+          holders,
+          volume_24h_gbp,
+          is_open,
+          created_at,
+          updated_at
+      `,
+      [
+        assetId,
+        payload.listingId,
+        payload.issuerId,
+        resolvedTitle,
+        resolvedImage,
+        payload.totalUnits,
+        roundTo(payload.unitPriceGbp, 4),
+        roundTo(payload.unitPriceStable, 4),
+        payload.settlementMode,
+        payload.issuerJurisdiction ?? null,
+      ]
+    );
+
+    // Pause the underlying listing so it is no longer available for direct
+    // purchase while the co-own asset is open for fractional trading. This
+    // prevents double-exposure where the same item is simultaneously buyable
+    // in the feed and available as a fractional asset.
+    await client.query(
+      `UPDATE listings
+       SET status = 'paused', updated_at = NOW()
+       WHERE id = $1 AND status = 'active'`,
+      [payload.listingId]
+    );
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    app.log.error({ err }, 'POST /co-own/assets failed');
+    reply.code(500);
+    return { ok: false, error: 'Failed to create co-own asset' };
+  } finally {
+    client.release();
+  }
 
   reply.code(201);
   return {
@@ -38154,6 +38213,7 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
           unit_price_gbp = $5,
           unit_price_stable = $6,
           market_move_pct_24h = $7,
+          is_open = CASE WHEN $2 <= 0 THEN FALSE ELSE is_open END,
           updated_at = NOW()
         WHERE id = $1
         RETURNING

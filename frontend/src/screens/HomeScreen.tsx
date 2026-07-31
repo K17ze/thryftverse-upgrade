@@ -412,6 +412,7 @@ export default function HomeScreen() {
   const scrollRef = React.useRef<any>(null);
   const knownListingIdsRef = React.useRef<Set<string>>(new Set());
   const seededKnownListingIdsRef = React.useRef(false);
+  const refreshTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const headerExpandedHeight = React.useMemo(() => HEADER_EXPANDED + insets.top, [insets.top]);
   const headerCollapsedHeight = React.useMemo(() => HEADER_COLLAPSED + insets.top, [insets.top]);
@@ -515,6 +516,9 @@ export default function HomeScreen() {
       if (pollingTimer) {
         clearInterval(pollingTimer);
       }
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+      }
       appStateSubscription.remove();
     };
   }, [refreshListings, refreshing]);
@@ -546,7 +550,11 @@ export default function HomeScreen() {
       .catch(() => {})
       .finally(() => setPostersLoading(false));
     acknowledgeNewListings();
-    setTimeout(() => setRefreshing(false), 380);
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    refreshTimerRef.current = setTimeout(() => {
+      refreshTimerRef.current = null;
+      setRefreshing(false);
+    }, 380);
   };
 
   const [realPosters, setRealPosters] = React.useState<PosterStory[]>([]);

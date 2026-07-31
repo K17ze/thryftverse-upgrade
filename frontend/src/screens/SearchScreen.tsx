@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
   AnimatedPressable
 } from '../components/AnimatedPressable';
@@ -45,6 +45,7 @@ export default function SearchScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const scrollY = useSharedValue(0);
   const scrollRef = useRef<Reanimated.ScrollView>(null);
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useScrollToTop(scrollRef);
 
   const [activeTab, setActiveTab] = useState<'discover' | 'pulse' | 'looks' | 'edit'>('discover');
@@ -58,8 +59,20 @@ export default function SearchScreen() {
   const handleRefresh = async () => {
     setRefreshing(true);
     await refreshListings();
-    setTimeout(() => setRefreshing(false), 400);
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    refreshTimerRef.current = setTimeout(() => {
+      refreshTimerRef.current = null;
+      setRefreshing(false);
+    }, 400);
   };
+
+  useEffect(() => {
+    return () => {
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+      }
+    };
+  }, []);
 
   const { colors, isDark } = useAppTheme();
 

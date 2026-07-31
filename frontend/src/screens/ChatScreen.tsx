@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AnimatedPressable } from "../components/AnimatedPressable";
 
@@ -657,6 +657,8 @@ export default function ChatScreen({ navigation, route }: Props) {
 
   const undoTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const scrollTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const deleteApiStatusRef = useRef<"pending" | "success" | "error">("pending");
 
   const wasOfflineRef = useRef(false);
@@ -770,7 +772,7 @@ export default function ChatScreen({ navigation, route }: Props) {
     };
     pushMessage(offerMsg);
     appendToConversationStore(offerMsg, currentUser?.id ?? "me");
-    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
+    scheduleScrollToEnd();
     // Clear the payload from route params so it doesn't re-send on re-render
     navigation.setParams({ offerPayload: undefined } as any);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -843,6 +845,9 @@ export default function ChatScreen({ navigation, route }: Props) {
       if (composerPersistTimerRef.current) {
         clearTimeout(composerPersistTimerRef.current);
       }
+      if (scrollTimerRef.current) {
+        clearTimeout(scrollTimerRef.current);
+      }
       if (conversationId && input) {
         upsertComposerStateOnApi(conversationId, {
           draftText: input,
@@ -851,6 +856,18 @@ export default function ChatScreen({ navigation, route }: Props) {
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Helper: scroll to end with cleanup safety. Clears any pending scroll
+  // timer before setting a new one so we never leak timers on unmount.
+  const scheduleScrollToEnd = useCallback(() => {
+    if (scrollTimerRef.current) {
+      clearTimeout(scrollTimerRef.current);
+    }
+    scrollTimerRef.current = setTimeout(() => {
+      scrollTimerRef.current = null;
+      listRef.current?.scrollToEnd({ animated: true });
+    }, 50);
   }, []);
 
   const resolvedPartnerId = useMemo(() => {
@@ -1048,7 +1065,7 @@ export default function ChatScreen({ navigation, route }: Props) {
 
     appendToConversationStore(outgoing, currentUser?.id ?? "me");
 
-    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
+    scheduleScrollToEnd();
 
     sendConversationMessageOnApi(conversationId, trimmed)
       .then((serverMsg) => {
@@ -1513,7 +1530,7 @@ export default function ChatScreen({ navigation, route }: Props) {
     pushMessage(outgoing);
     appendToConversationStore(outgoing, currentUser?.id ?? "me");
     haptic.success();
-    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
+    scheduleScrollToEnd();
     sendMediaMessage(outgoing.id, uri, mediaType);
     setPendingAttachment(null);
   };
