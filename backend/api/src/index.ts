@@ -38506,6 +38506,71 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
 
     await client.query('COMMIT');
 
+    // ── GAP 1 fix: Write market audit event for the order ──
+    // Records the order in the append-only market audit trail so the
+    // frontend market history section has real data to show.
+    try {
+      await db.query(
+        `INSERT INTO coown_market_audit_events (asset_id, event_type, event_payload, visibility, changed_by)
+         VALUES ($1, $2, $3::jsonb, 'public', $4)`,
+        [
+          assetId,
+          `order.${incomingOrder.rows[0].status}`,
+          JSON.stringify({
+            orderId: incomingOrder.rows[0].id,
+            side: payload.side,
+            orderType: payload.orderType,
+            units: payload.units,
+            filledUnits: incomingOrder.rows[0].filled_units,
+            remainingUnits: incomingOrder.rows[0].remaining_units,
+            unitPriceGbp: orderPriceGbp,
+            status: incomingOrder.rows[0].status,
+          }),
+          payload.userId,
+        ]
+      );
+    } catch (auditError) {
+      app.log.error({ err: auditError, assetId }, 'Failed to write market audit event');
+    }
+
+    // ── GAP 2 fix: Publish realtime event for order/trade ──
+    // Subscribers to co-own.asset:{assetId} get notified of order
+    // creation, fills, and status changes.
+    publishRealtimeEvent({
+      topic: `co-own.asset:${assetId}`,
+      type: `order.${incomingOrder.rows[0].status}`,
+      payload: {
+        assetId,
+        orderId: incomingOrder.rows[0].id,
+        side: payload.side,
+        orderType: payload.orderType,
+        units: payload.units,
+        filledUnits: incomingOrder.rows[0].filled_units,
+        remainingUnits: incomingOrder.rows[0].remaining_units,
+        unitPriceGbp: orderPriceGbp,
+        status: incomingOrder.rows[0].status,
+      },
+      seq: true,
+      version: 1,
+    });
+
+    // If trades were executed, publish a trade event too.
+    if (filledUnits > 0 && lastExecutionPriceGbp != null) {
+      publishRealtimeEvent({
+        topic: `co-own.asset:${assetId}`,
+        type: 'trade.executed',
+        payload: {
+          assetId,
+          side: payload.side,
+          units: filledUnits,
+          unitPriceGbp: lastExecutionPriceGbp,
+          notionalGbp: tradedNotionalGbp,
+        },
+        seq: true,
+        version: 1,
+      });
+    }
+
     await appendComplianceAuditSafe(request, {
       eventType: 'co-own.order.created',
       subjectUserId: payload.userId,
@@ -39607,6 +39672,12 @@ app.get('/co-own/assets/:assetId', async (request, reply) => {
   const marketSnapshot = {
     version: 1,
     asOf: new Date().toISOString(),
+    // GAP 5: connection status — 'live' when asset is open and has
+    // recent market activity, 'stale' when no events for >7 days,
+    // 'closed' when asset is not open, 'degraded' when partial.
+    connectionStatus: row.is_open
+      ? (staleMarkDays != null && staleMarkDays > 7 ? 'stale' : 'live')
+      : 'closed',
     lastExecutionPriceGbp,
     lastExecutionAt: snap?.last_execution_at ?? null,
     volume24hGbp: volume24h > 0 ? volume24h : null,
@@ -39669,11 +39740,16 @@ app.get('/co-own/assets/:assetId', async (request, reply) => {
     published_at: string;
     tbc_eta_date: string | null;
     tbc_reason: string | null;
+    economic_rights: string | null;
+    voting_rights: string | null;
+    exit_rights: string | null;
+    fee_rights: string | null;
   }>(
     `
       SELECT id, version, rights_type, jurisdiction, governing_law,
              summary_terms, transferable, min_holding_units, published_at,
-             tbc_eta_date, tbc_reason
+             tbc_eta_date, tbc_reason,
+             economic_rights, voting_rights, exit_rights, fee_rights
       FROM coown_rights
       WHERE asset_id = $1 AND status = 'published'
       ORDER BY version DESC
@@ -39695,6 +39771,45 @@ app.get('/co-own/assets/:assetId', async (request, reply) => {
         publishedAt: rightsResult.rows[0].published_at,
         tbcEtaDate: rightsResult.rows[0].tbc_eta_date,
         tbcReason: rightsResult.rows[0].tbc_reason,
+        economicRights: rightsResult.rows[0].economic_rights,
+        votingRights: rightsResult.rows[0].voting_rights,
+        exitRights: rightsResult.rows[0].exit_rights,
+        feeRights: rightsResult.rows[0].fee_rights,
+      }
+    : null;
+
+  // ── GAP 4 fix: Risk disclosures ──
+  // Fetch the currently published risk disclosure version. Returns
+  // null when no risk disclosures have been published.
+  const riskResult = await db.query<{
+    id: string;
+    version: number;
+    market_risk: string | null;
+    liquidity_risk: string | null;
+    custody_risk: string | null;
+    regulatory_risk: string | null;
+    counterparty_risk: string | null;
+    other_risks: string | null;
+    published_at: string;
+  }>(
+    `SELECT id, version, market_risk, liquidity_risk, custody_risk,
+            regulatory_risk, counterparty_risk, other_risks, published_at
+     FROM coown_risk_disclosures
+     WHERE asset_id = $1 AND status = 'published'
+     ORDER BY version DESC
+     LIMIT 1`,
+    [assetId]
+  );
+
+  const riskDisclosures = riskResult.rows[0]
+    ? {
+        marketRisk: riskResult.rows[0].market_risk,
+        liquidityRisk: riskResult.rows[0].liquidity_risk,
+        custodyRisk: riskResult.rows[0].custody_risk,
+        regulatoryRisk: riskResult.rows[0].regulatory_risk,
+        counterpartyRisk: riskResult.rows[0].counterparty_risk,
+        otherRisks: riskResult.rows[0].other_risks,
+        publishedAt: riskResult.rows[0].published_at,
       }
     : null;
 
@@ -39795,6 +39910,8 @@ app.get('/co-own/assets/:assetId', async (request, reply) => {
       // T06: versioned rights/dossier. Null when no rights have been
       // published for this asset.
       rights,
+      // GAP 4: versioned risk disclosures. Null when none published.
+      riskDisclosures,
     },
   };
 });
@@ -39941,6 +40058,17 @@ app.post('/co-own/assets/:assetId/promote', async (request, reply) => {
     await client.query(
       `UPDATE coOwn_assets SET listing_tier = 'listed', updated_at = NOW() WHERE id = $1`,
       [assetId]
+    );
+
+    // Record the tier transition in the market audit trail.
+    await client.query(
+      `INSERT INTO coown_market_audit_events (asset_id, event_type, event_payload, visibility, changed_by)
+       VALUES ($1, 'listing.tier_promoted', $2::jsonb, 'public', $3)`,
+      [
+        assetId,
+        JSON.stringify({ fromTier: 'preview', toTier: 'listed' }),
+        authUser.userId,
+      ]
     );
 
     await client.query('COMMIT');

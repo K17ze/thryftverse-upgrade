@@ -223,6 +223,8 @@ export interface MarketCoOwnAsset {
    * published for this asset. The frontend must not claim rights
    * guarantees without this being populated. */
   rights?: CoOwnRights | null;
+  /** GAP 4: Versioned risk disclosures. Null when none published. */
+  riskDisclosures?: CoOwnRiskDisclosures | null;
   /** WS5: Explicit listing tier. 'preview' = visible but not tradeable
    * (rights pending); 'listed' = tradeable; 'badged' = tradeable + verified;
    * 'delisted' = hidden. */
@@ -323,6 +325,25 @@ export interface CoOwnRights {
   tbcEtaDate?: string | null;
   /** WS5: Why the rights answer is pending, if currently TBC. */
   tbcReason?: string | null;
+  /** GAP 3: Structured economic rights (revenue share, dividend, etc.). */
+  economicRights?: string | null;
+  /** GAP 3: Structured voting rights (governance, consent, etc.). */
+  votingRights?: string | null;
+  /** GAP 3: Structured exit rights (redemption, wind-up, drag/tag). */
+  exitRights?: string | null;
+  /** GAP 3: Structured fee rights (management fee, carry, etc.). */
+  feeRights?: string | null;
+}
+
+/** GAP 4: Versioned risk disclosures for a Co-Own asset. */
+export interface CoOwnRiskDisclosures {
+  marketRisk: string | null;
+  liquidityRisk: string | null;
+  custodyRisk: string | null;
+  regulatoryRisk: string | null;
+  counterpartyRisk: string | null;
+  otherRisks: string | null;
+  publishedAt: string;
 }
 
 /** Co-Own market snapshot. Per spec 03_COOWN §2. */
@@ -331,6 +352,8 @@ export interface CoOwnMarketSnapshot {
   version: number;
   /** Server time at which the snapshot was assembled. */
   asOf: string;
+  /** GAP 5: Connection status — 'live', 'stale', 'closed', or 'degraded'. */
+  connectionStatus?: 'live' | 'stale' | 'closed' | 'degraded';
   /** Last settled execution price in GBP. Null when no settled trades
    * exist. The frontend uses this to distinguish "Reference unit
    * price" from "Last settled trade". */
