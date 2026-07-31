@@ -77,9 +77,10 @@ test(
         `
         INSERT INTO payment_intents (
           id, user_id, gateway_id, channel, order_id, amount_gbp,
-          amount_currency, status, idempotency_key
+          amount_currency, amount_minor, currency_exponent, money_registry_version,
+          status, idempotency_key
         )
-        VALUES ($1, $2, $3, 'commerce', $4, 84, 'GBP', 'requires_confirmation', $5)
+        VALUES ($1, $2, $3, 'commerce', $4, 84, 'GBP', 8400, 2, 'canonical-v1', 'requires_confirmation', $5)
       `,
         [intentId, buyerId, gatewayId, orderId, `idem_${suffix}`],
       );

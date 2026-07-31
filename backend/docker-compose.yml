@@ -1,0 +1,78 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: thryftverse-postgres
+    environment:
+      POSTGRES_USER: thryftverse
+      POSTGRES_PASSWORD: thryftverse
+      POSTGRES_DB: thryftverse
+    ports:
+      - "5432:5432"
+    volumes:
+      - thryftverse_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U thryftverse -d thryftverse"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    container_name: thryftverse-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: thryftverse-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      APP_URL: http://localhost:4000
+      DATABASE_URL: postgresql://thryftverse:thryftverse@postgres:5432/thryftverse
+      REDIS_URL: redis://redis:6379
+      KEY_SERVICE_URL: http://localhost:4100
+      KEY_SERVICE_CLIENT_TOKEN: local-key-client-token
+      KEY_SERVICE_ADMIN_TOKEN: local-key-admin-token
+      S3_ENDPOINT: http://localhost:9000
+      S3_PUBLIC_ENDPOINT: http://localhost:9000
+      S3_REGION: us-east-1
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin
+      S3_BUCKET: thryftverse-media
+      S3_FORCE_PATH_STYLE: "true"
+      S3_CDN_BASE_URL: http://localhost:9000
+      MEDIA_PROCESSING_ENABLED: "false"
+      MEDIA_PUBLICATION_GATE_ENABLED: "false"
+      DECISION_SERVICE_URL: http://localhost:8000
+      DECISION_SERVICE_TIMEOUT_MS: 2500
+      DECISION_SERVICE_TOKEN: local-decision-service-token
+      AUTH_ACCESS_TOKEN_SECRET: dev-access-token-secret-min-32-chars
+      AUTH_REFRESH_TOKEN_SECRET: dev-refresh-token-secret-min-32-chars
+      AUTH_ACCESS_TOKEN_TTL_SECONDS: 900
+      AUTH_REFRESH_TOKEN_TTL_SECONDS: 2592000
+      AUTH_PASSWORD_HASH_COST: 12
+      AUTH_EMAIL_PROVIDER: log
+      API_SECURITY_ADMIN_TOKEN: local-security-admin-token
+      API_RATE_LIMIT_MAX: 140
+      API_RATE_LIMIT_WINDOW: "1 minute"
+    ports:
+      - "4000:4000"
+    restart: unless-stopped
+
+volumes:
+  thryftverse_pg_data:
