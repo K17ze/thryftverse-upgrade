@@ -13,6 +13,8 @@ export interface CoOwnTrustPanelProps {
   custodianLocation?: string | null;
   custodyInsured?: boolean;
   custodyInsurer?: string | null;
+  custodyCoverageGbp?: number | null;
+  custodyPolicyRef?: string | null;
   legalVehicleType?: 'spv' | 'llc' | 'trust' | 'series_llc' | 'none' | null;
   legalVehicleName?: string | null;
   legalVehicleJurisdiction?: string | null;
@@ -27,6 +29,8 @@ export function CoOwnTrustPanel({
   custodianLocation,
   custodyInsured,
   custodyInsurer,
+  custodyCoverageGbp,
+  custodyPolicyRef,
   legalVehicleType,
   legalVehicleName,
   legalVehicleJurisdiction,
@@ -73,7 +77,18 @@ export function CoOwnTrustPanel({
   }
 
   if (custodyInsured && custodyInsurer) {
-    items.push({ icon: 'shield-checkmark-outline', label: 'Insurance', value: custodyInsurer, positive: true });
+    // Equity-market pattern: disclose insurer, coverage amount, and
+    // policy reference — not just the boolean "insured."
+    const coverageStr = custodyCoverageGbp != null
+      ? ` · £${custodyCoverageGbp.toLocaleString()} coverage`
+      : '';
+    const policyStr = custodyPolicyRef ? ` · policy ${custodyPolicyRef}` : '';
+    items.push({
+      icon: 'shield-checkmark-outline',
+      label: 'Insurance',
+      value: `${custodyInsurer}${coverageStr}${policyStr}`,
+      positive: true,
+    });
   }
 
   if (items.length === 0) return null;

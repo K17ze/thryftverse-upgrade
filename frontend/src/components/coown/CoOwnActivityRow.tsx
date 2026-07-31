@@ -31,6 +31,10 @@ export interface CoOwnActivityRowProps {
   settlementState?: CoOwnSettlementState;
   /** Settlement ETA label (e.g. "ETA 2h"). */
   settlementEtaLabel?: string;
+  /** WS3: Reason the settlement failed. Shown when settlementState is 'failed' or 'reversed'. */
+  failureReason?: string | null;
+  /** WS3: User-facing recovery action for a failed/reversed settlement. */
+  recoveryAction?: string | null;
 }
 
 const STATUS_LABELS: Record<CoOwnActivityStatus, { label: string; color: 'success' | 'textSecondary' | 'danger' }> = {
@@ -67,6 +71,8 @@ export function CoOwnActivityRow({
   filledUnits,
   settlementState,
   settlementEtaLabel,
+  failureReason,
+  recoveryAction,
 }: CoOwnActivityRowProps) {
   const { colors } = useAppTheme();
   const statusCfg = STATUS_LABELS[status];
@@ -143,6 +149,17 @@ export function CoOwnActivityRow({
           )}
           <Text style={[styles.timestamp, { color: colors.textMuted }]}>{timestamp}</Text>
         </View>
+        {/* WS3: Settlement failure reason + recovery action.
+            Equity-market pattern: failed trades must disclose the cause
+            and the user's recovery path — not just a badge. */}
+        {(settlementState === 'failed' || settlementState === 'reversed') && failureReason && (
+          <View style={[styles.failureRow, { backgroundColor: colors.danger + '08' }]}>
+            <Ionicons name="alert-circle-outline" size={12} color={colors.danger} />
+            <Text style={[styles.failureText, { color: colors.danger }]} numberOfLines={2}>
+              {failureReason}{recoveryAction ? ` · ${recoveryAction}` : ''}
+            </Text>
+          </View>
+        )}
       </View>
     </Pressable>
   );
@@ -256,5 +273,21 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontFamily: Typography.family.semibold,
     letterSpacing: 0.3,
+  },
+  // WS3: failure/recovery disclosure
+  failureRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.xs,
+    marginTop: Space.xs,
+    paddingVertical: Space.xs,
+    paddingHorizontal: Space.sm,
+    borderRadius: Radius.sm,
+  },
+  failureText: {
+    flex: 1,
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.medium,
+    lineHeight: Type.meta.size * 1.3,
   },
 });

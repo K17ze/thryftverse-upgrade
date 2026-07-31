@@ -5,8 +5,13 @@ import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Type, Typography } from '../../theme/designTokens';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import type { CoOwnRiskDisclosures } from '../../services/marketApi';
 
 export interface CoOwnRiskDisclosureProps {
+  /** Structured risk disclosures from the backend. When provided, these
+   * replace the generic defaults so the user sees issuer-published,
+   * versioned risk language instead of boilerplate. */
+  disclosures?: CoOwnRiskDisclosures | null;
   risks?: string[];
   onReportIssue?: () => void;
 }
@@ -21,14 +26,29 @@ const DEFAULT_RISKS = [
 
 const PREVIEW_COUNT = 2;
 
-export function CoOwnRiskDisclosure({ risks = DEFAULT_RISKS, onReportIssue }: CoOwnRiskDisclosureProps) {
+/** Builds the risk list from structured disclosures, falling back to
+ * the generic defaults when the backend hasn't published any. */
+function buildRisks(disclosures: CoOwnRiskDisclosures | null | undefined): string[] {
+  if (!disclosures) return DEFAULT_RISKS;
+  const structured: string[] = [];
+  if (disclosures.marketRisk) structured.push(`Market: ${disclosures.marketRisk}`);
+  if (disclosures.liquidityRisk) structured.push(`Liquidity: ${disclosures.liquidityRisk}`);
+  if (disclosures.custodyRisk) structured.push(`Custody: ${disclosures.custodyRisk}`);
+  if (disclosures.regulatoryRisk) structured.push(`Regulatory: ${disclosures.regulatoryRisk}`);
+  if (disclosures.counterpartyRisk) structured.push(`Counterparty: ${disclosures.counterpartyRisk}`);
+  if (disclosures.otherRisks) structured.push(`Other: ${disclosures.otherRisks}`);
+  return structured.length > 0 ? structured : DEFAULT_RISKS;
+}
+
+export function CoOwnRiskDisclosure({ disclosures, risks, onReportIssue }: CoOwnRiskDisclosureProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
   const [expanded, setExpanded] = useState(false);
 
-  const visibleRisks = expanded ? risks : risks.slice(0, PREVIEW_COUNT);
-  const hiddenCount = Math.max(0, risks.length - PREVIEW_COUNT);
+  const resolvedRisks = risks ?? buildRisks(disclosures);
+  const visibleRisks = expanded ? resolvedRisks : resolvedRisks.slice(0, PREVIEW_COUNT);
+  const hiddenCount = Math.max(0, resolvedRisks.length - PREVIEW_COUNT);
 
   const toggleExpanded = () => {
     if (!reducedMotion) haptic.light();
@@ -40,7 +60,7 @@ export function CoOwnRiskDisclosure({ risks = DEFAULT_RISKS, onReportIssue }: Co
       <View style={styles.headerRow}>
         <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
         <Text style={[styles.title, { color: colors.textPrimary }]}>
-          {risks.length} key risks
+          {resolvedRisks.length} key risks
         </Text>
       </View>
 
@@ -57,7 +77,7 @@ export function CoOwnRiskDisclosure({ risks = DEFAULT_RISKS, onReportIssue }: Co
         <Pressable
           onPress={toggleExpanded}
           style={({ pressed }) => [styles.expandBtn, pressed && styles.pressed]}
-          accessibilityLabel={expanded ? 'Hide remaining risks' : `View all ${risks.length} risks`}
+          accessibilityLabel={expanded ? 'Hide remaining risks' : `View all ${resolvedRisks.length} risks`}
           accessibilityRole="button"
           hitSlop={8}
         >

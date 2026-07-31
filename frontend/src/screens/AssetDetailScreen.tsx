@@ -23,6 +23,7 @@ import {
   fetchCoOwnAssetById,
   fetchCoOwnOrderBook,
   fetchCoOwnHoldings,
+  refreshCoOwnAppraisal,
   type CoOwnOrderBookSnapshot,
   type MarketCoOwnAsset,
 } from '../services/marketApi';
@@ -500,7 +501,21 @@ export default function AssetDetailScreen() {
   // so the user knows when to expect confirmation and why it's pending.
   const rightsTbcReason = asset.rights?.tbcReason ?? null;
   const rightsTbcEta = asset.rights?.tbcEtaDate ?? null;
+  // GAP 3 fix: when the backend has published structured rights
+  // (economic/voting/exit/fee), use them instead of forcing every row
+  // to TBC. The structured fields map to the canonical labels so the
+  // user sees real answers, not boilerplate "To be confirmed."
+  const structuredRightsMap: Record<string, string | null> = {
+    'Distributions': asset.rights?.economicRights ?? null,
+    'Voting rights': asset.rights?.votingRights ?? null,
+    'Exit & proceeds': asset.rights?.exitRights ?? null,
+    'Operating costs': asset.rights?.feeRights ?? null,
+  };
   const rightsRows: CoOwnRightsRow[] = CANONICAL_RIGHTS_LABELS.map((label) => {
+    const structured = structuredRightsMap[label] ?? null;
+    if (structured) {
+      return { label, answer: structured, isTbc: false };
+    }
     return {
       label,
       answer: rightsTbcReason ?? 'To be confirmed',
@@ -967,10 +982,32 @@ export default function AssetDetailScreen() {
               />
             )}
             {asset.appraisalStaleDays != null && asset.appraisalStaleDays > 180 && (
-              <CommerceDetailMetricRow
-                label="Appraisal"
-                value={`Stale · ${asset.appraisalStaleDays}d since last valuation`}
-              />
+              <View style={styles.staleAppraisalRow}>
+                <CommerceDetailMetricRow
+                  label="Appraisal"
+                  value={`Stale · ${asset.appraisalStaleDays}d since last valuation`}
+                />
+                {isIssuer && (
+                  <Pressable
+                    style={[styles.refreshBtn, { borderColor: colors.border }]}
+                    onPress={async () => {
+                      try {
+                        await refreshCoOwnAppraisal(assetId, { appraisalValueGbp: asset.appraisalValueGbp ?? 0, appraisalValuer: 'Issuer refresh' });
+                        show('Appraisal refresh requested', 'success');
+                        // Reload asset to get updated stale days
+                        const updated = await fetchCoOwnAssetById(assetId);
+                        setAsset(updated);
+                      } catch {
+                        show('Unable to refresh appraisal', 'error');
+                      }
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Refresh appraisal"
+                  >
+                    <Text style={[styles.refreshBtnText, { color: colors.brand }]}>Refresh</Text>
+                  </Pressable>
+                )}
+              </View>
             )}
             {/* WS6: Stale market mark — show when no public market events
                 have been logged in >7 days. Fail closed (omit when null). */}
@@ -1003,6 +1040,8 @@ export default function AssetDetailScreen() {
                   custodianLocation={asset.custodianLocation ?? null}
                   custodyInsured={asset.custodyInsured ?? false}
                   custodyInsurer={asset.custodyInsurer ?? null}
+                  custodyCoverageGbp={asset.custodyCoverageGbp ?? null}
+                  custodyPolicyRef={asset.custodyPolicyRef ?? null}
                   legalVehicleType={asset.legalVehicleType ?? null}
                   legalVehicleName={asset.legalVehicleName ?? null}
                   legalVehicleJurisdiction={asset.legalVehicleJurisdiction ?? null}
@@ -1353,6 +1392,7 @@ export default function AssetDetailScreen() {
             </View>
             <ScrollView style={styles.riskDisclosureModalScroll} contentContainerStyle={styles.riskDisclosureModalContent}>
               <CoOwnRiskDisclosure
+                disclosures={asset.riskDisclosures ?? null}
                 onReportIssue={() => {
                   setRiskDisclosureVisible(false);
                   navigation.navigate('CoOwnIssue', { assetId: asset.id });
@@ -1636,6 +1676,23 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: Space.sm,
     marginBottom: Space.md,
+  },
+  // Stale appraisal refresh action
+  staleAppraisalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Space.sm,
+  },
+  refreshBtn: {
+    paddingVertical: Space.xs,
+    paddingHorizontal: Space.sm,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+  },
+  refreshBtnText: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
   },
   viewerPositionCopy: {
     gap: Space.xs,
