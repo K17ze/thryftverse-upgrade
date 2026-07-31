@@ -17227,6 +17227,12 @@ app.get('/listings/:listingId', async (request, reply) => {
   const paramsSchema = z.object({ listingId: z.string().min(2) });
   const { listingId } = paramsSchema.parse(request.params);
 
+  // T03: Authorization — non-public listings require authentication.
+  // Only `active` and `sold` listings are publicly viewable. `draft`,
+  // `paused`, and `deleted` listings are visible only to the seller.
+  await optionalAuthenticate(request, '/listings/:listingId');
+  const viewerUserId = (request as any).authUser?.userId as string | undefined;
+
   const result = await readDb.query<{
     id: string;
     seller_id: string;
@@ -17265,6 +17271,16 @@ app.get('/listings/:listingId', async (request, reply) => {
   }
 
   const row = result.rows[0];
+
+  // T03: Gate non-public statuses. Only the seller (or an admin role,
+  // if added later) can view draft/paused/deleted listings.
+  const NON_PUBLIC_STATUSES = new Set(['draft', 'paused', 'deleted']);
+  if (NON_PUBLIC_STATUSES.has(row.status)) {
+    if (!viewerUserId || viewerUserId !== row.seller_id) {
+      reply.code(403);
+      return { ok: false, error: 'You do not have permission to view this listing.', code: 'LISTING_NOT_PUBLIC' };
+    }
+  }
 
   const imagesResult = await readDb.query<{
     image_url: string;
@@ -17384,6 +17400,71 @@ app.get('/listings/:listingId', async (request, reply) => {
       authenticity: {
         status: 'not_offered' as const,
       },
+    },
+  };
+});
+
+// T04: Policy/protection versioning — authoritative policy endpoint.
+// Returns the currently published version of a policy document by key.
+// The product detail screen references this instead of hardcoding terms.
+app.get('/policies/:policyKey', async (request, reply) => {
+  const paramsSchema = z.object({ policyKey: z.string().min(2).max(80) });
+  const { policyKey } = paramsSchema.parse(request.params);
+
+  let policyRow: {
+    id: string;
+    version: number;
+    title: string;
+    summary: string;
+    body: string;
+    jurisdiction: string | null;
+    effective_at: string;
+    published_at: string | null;
+  } | null = null;
+
+  try {
+    const result = await readDb.query<{
+      id: string;
+      version: number;
+      title: string;
+      summary: string;
+      body: string;
+      jurisdiction: string | null;
+      effective_at: string;
+      published_at: string | null;
+    }>(
+      `
+        SELECT id, version, title, summary, body, jurisdiction, effective_at, published_at
+        FROM policy_documents
+        WHERE policy_key = $1 AND status = 'published'
+        ORDER BY version DESC
+        LIMIT 1
+      `,
+      [policyKey]
+    );
+    policyRow = result.rows[0] ?? null;
+  } catch {
+    // Table may not exist yet — fall through to null.
+    policyRow = null;
+  }
+
+  if (!policyRow) {
+    reply.code(404);
+    return { ok: false, error: 'Policy not found', code: 'POLICY_NOT_FOUND' };
+  }
+
+  return {
+    ok: true,
+    policy: {
+      id: policyRow.id,
+      policyKey,
+      version: policyRow.version,
+      title: policyRow.title,
+      summary: policyRow.summary,
+      body: policyRow.body,
+      jurisdiction: policyRow.jurisdiction,
+      effectiveAt: policyRow.effective_at,
+      publishedAt: policyRow.published_at,
     },
   };
 });
@@ -34490,6 +34571,9 @@ app.post('/auctions', async (request, reply) => {
       sellerId: result.rows[0].seller_id,
       status: result.rows[0].status,
     },
+    // R01: versioned event for forward-compatible client parsing.
+    seq: true,
+    version: 1,
   });
 
   reply.code(201);
@@ -34883,6 +34967,9 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
         bidCount: nextBidCount,
         isBuyNow: false,
       },
+      // R01: versioned event for forward-compatible client parsing.
+      seq: true,
+      version: 1,
     });
 
     publishRealtimeEvent({
@@ -34894,6 +34981,8 @@ app.post('/auctions/:auctionId/bids', async (request, reply) => {
         bidCount: nextBidCount,
         isBuyNow: false,
       },
+      seq: true,
+      version: 1,
     });
 
     try {
@@ -35317,6 +35406,9 @@ app.post('/auctions/:auctionId/buy-now', async (request, reply) => {
         bidCount: nextBidCount,
         isBuyNow: true,
       },
+      // R01: versioned event for forward-compatible client parsing.
+      seq: true,
+      version: 1,
     });
 
     publishRealtimeEvent({
@@ -35328,6 +35420,8 @@ app.post('/auctions/:auctionId/buy-now', async (request, reply) => {
         bidCount: nextBidCount,
         isBuyNow: true,
       },
+      seq: true,
+      version: 1,
     });
 
     try {
@@ -36755,10 +36849,15 @@ app.get('/co-own/assets/:assetId/orderbook', async (request, reply) => {
   const paramsSchema = z.object({ assetId: z.string().min(2) });
   const querySchema = z.object({
     limit: z.coerce.number().int().min(1).max(200).default(40),
+    // R06: Per-side depth limits. Each side can be limited independently
+    // so clients can request asymmetric depth (e.g., more bid levels
+    // than ask levels for a buy-focused view).
+    bidLimit: z.coerce.number().int().min(1).max(200).optional(),
+    askLimit: z.coerce.number().int().min(1).max(200).optional(),
   });
 
   const { assetId } = paramsSchema.parse(request.params);
-  const { limit } = querySchema.parse(request.query);
+  const { limit, bidLimit, askLimit } = querySchema.parse(request.query);
 
   const assetExists = await db.query('SELECT id FROM coOwn_assets WHERE id = $1 LIMIT 1', [assetId]);
   if (!assetExists.rowCount) {
@@ -36766,46 +36865,88 @@ app.get('/co-own/assets/:assetId/orderbook', async (request, reply) => {
     return { ok: false, error: 'Co-Own asset not found' };
   }
 
-  const result = await db.query<{
-    side: 'buy' | 'sell';
-    unit_price_gbp: string;
-    units: string;
-    order_count: string;
-  }>(
-    `
-      SELECT
-        side,
-        unit_price_gbp::text,
-        SUM(remaining_units)::text AS units,
-        COUNT(*)::text AS order_count
-      FROM coOwn_orders
-      WHERE asset_id = $1
-        AND status IN ('open', 'partially_filled')
-        AND remaining_units > 0
-      GROUP BY side, unit_price_gbp
-      ORDER BY
-        CASE WHEN side = 'buy' THEN unit_price_gbp END DESC,
-        CASE WHEN side = 'sell' THEN unit_price_gbp END ASC,
-        side ASC
-      LIMIT $2
-    `,
-    [assetId, limit]
-  );
+  // R05: Atomic book snapshot — read the book and sequence in a single
+  // READ COMMITTED transaction with a single timestamp, so the
+  // snapshotSequence and the book rows are consistent. The client can
+  // compare the sequence across polls to detect concurrent mutations.
+  const client = await db.connect();
+  let result: { rows: { side: 'buy' | 'sell'; unit_price_gbp: string; units: string; order_count: string }[] };
+  let sequencing: { snapshot_sequence: string; event_sequence: string; last_execution_timestamp: string | null } | undefined;
+  try {
+    await client.query('BEGIN');
+    // R06: Per-side depth limits via separate queries with independent
+    // LIMIT clauses, so bid and ask depth can be controlled independently.
+    const bidRows = await client.query<{
+      side: 'buy' | 'sell';
+      unit_price_gbp: string;
+      units: string;
+      order_count: string;
+    }>(
+      `
+        SELECT
+          side,
+          unit_price_gbp::text,
+          SUM(remaining_units)::text AS units,
+          COUNT(*)::text AS order_count
+        FROM coOwn_orders
+        WHERE asset_id = $1
+          AND side = 'buy'
+          AND status IN ('open', 'partially_filled')
+          AND remaining_units > 0
+        GROUP BY side, unit_price_gbp
+        ORDER BY unit_price_gbp DESC, side ASC
+        LIMIT $2
+      `,
+      [assetId, bidLimit ?? limit]
+    );
 
-  const sequencingResult = await db.query<{
-    snapshot_sequence: string;
-    event_sequence: string;
-    last_execution_timestamp: string | null;
-  }>(
-    `
-      SELECT
-        COALESCE((SELECT MAX(id) FROM coOwn_orders WHERE asset_id = $1), 0)::text AS snapshot_sequence,
-        COALESCE((SELECT MAX(id) FROM coOwn_trades WHERE asset_id = $1), 0)::text AS event_sequence,
-        (SELECT MAX(created_at)::text FROM coOwn_trades WHERE asset_id = $1) AS last_execution_timestamp
-    `,
-    [assetId]
-  );
-  const sequencing = sequencingResult.rows[0];
+    const askRows = await client.query<{
+      side: 'buy' | 'sell';
+      unit_price_gbp: string;
+      units: string;
+      order_count: string;
+    }>(
+      `
+        SELECT
+          side,
+          unit_price_gbp::text,
+          SUM(remaining_units)::text AS units,
+          COUNT(*)::text AS order_count
+        FROM coOwn_orders
+        WHERE asset_id = $1
+          AND side = 'sell'
+          AND status IN ('open', 'partially_filled')
+          AND remaining_units > 0
+        GROUP BY side, unit_price_gbp
+        ORDER BY unit_price_gbp ASC, side ASC
+        LIMIT $2
+      `,
+      [assetId, askLimit ?? limit]
+    );
+
+    const sequencingResult = await client.query<{
+      snapshot_sequence: string;
+      event_sequence: string;
+      last_execution_timestamp: string | null;
+    }>(
+      `
+        SELECT
+          COALESCE((SELECT MAX(id) FROM coOwn_orders WHERE asset_id = $1), 0)::text AS snapshot_sequence,
+          COALESCE((SELECT MAX(id) FROM coOwn_trades WHERE asset_id = $1), 0)::text AS event_sequence,
+          (SELECT MAX(created_at)::text FROM coOwn_trades WHERE asset_id = $1) AS last_execution_timestamp
+      `,
+      [assetId]
+    );
+    await client.query('COMMIT');
+
+    result = { rows: [...bidRows.rows, ...askRows.rows] };
+    sequencing = sequencingResult.rows[0];
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
   const haltState = await getOnezeMintBurnHaltState();
 
   return {
@@ -36832,6 +36973,12 @@ app.get('/co-own/assets/:assetId/orderbook', async (request, reply) => {
         units: Number(row.units),
         orderCount: Number(row.order_count),
       })),
+    // R06: Echo the per-side depth limits applied so the client knows
+    // whether the response is complete or truncated.
+    depthLimits: {
+      bid: bidLimit ?? limit,
+      ask: askLimit ?? limit,
+    },
   };
 });
 

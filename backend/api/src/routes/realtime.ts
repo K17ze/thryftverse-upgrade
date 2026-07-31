@@ -5,6 +5,7 @@ import {
   parseRealtimeTopics,
   registerSseClient,
   registerWsClient,
+  getTopicSequence,
 } from '../lib/realtime.js';
 import { canUserSubscribeToRealtimeTopic } from '../lib/realtimeAuthorization.js';
 
@@ -75,5 +76,41 @@ export const registerRealtimeRoutes = ({ app, db }: RealtimeRouteDependencies) =
       topics: Array.from(topics.values()),
       userId: authUserId,
     });
+  });
+
+  // R01: Event versioning resync endpoint.
+  // Returns the current sequence number for a topic so clients can
+  // detect gaps after reconnection. The client compares the returned
+  // sequence with the last event seq it received; if there's a gap,
+  // it knows it missed events and should refetch the canonical state
+  // (e.g., re-fetch auction detail) rather than trusting stale data.
+  app.get('/realtime/seq', async (request, reply) => {
+    const authUserId = request.authUser?.userId;
+    if (!authUserId) {
+      reply.code(401);
+      return { ok: false, error: 'Unauthorized' };
+    }
+
+    const querySchema = z.object({
+      topic: z.string().min(2).max(120),
+    });
+    const parsed = querySchema.safeParse(request.query ?? {});
+    if (!parsed.success) {
+      reply.code(400);
+      return { ok: false, error: 'Invalid topic' };
+    }
+
+    const { topic } = parsed.data;
+    const authorized = await canUserSubscribeToRealtimeTopic(db, authUserId, topic);
+    if (!authorized) {
+      reply.code(403);
+      return { ok: false, error: 'Not authorized for this topic' };
+    }
+
+    return {
+      ok: true,
+      topic,
+      seq: getTopicSequence(topic),
+    };
   });
 };

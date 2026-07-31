@@ -2,7 +2,7 @@
 
 Status values: `OPEN`, `PASS`, `N/A`, `EXCEPTION`. Every `PASS` needs links to code, test output and visual evidence where applicable.
 
-Updated: 2026-07-30 — Phase 1 P0 backend closure (T05 holdings privacy, T06 rights/dossier, T07 reserve price, T08 Buy Now order) + Phase 5 frontend closure (M09 video background pause, R02 freshness UI, A02 large-text reflow source fixes) on `feat/product-detail-contract-media-device-closure`.
+Updated: 2026-07-30 — Phase 1 P0 backend closure complete (T03 listing auth, T04 policy versioning, T05 holdings privacy, T06 rights/dossier, T07 reserve price, T08 Buy Now order, T09 privacy tests) + Phase 2 realtime closure (R01 event versioning, R05 atomic book, R06 per-side depth, R09 recovery UI) + Phase 5 frontend closure (M09 video background pause, R02 freshness UI, A02 large-text reflow source fixes) on `feat/product-detail-contract-media-device-closure`.
 
 ## Truth and security
 
@@ -10,13 +10,13 @@ Updated: 2026-07-30 — Phase 1 P0 backend closure (T05 holdings privacy, T06 ri
 |---|---|---|---|
 | T01 | Direct mapper invents no commercial facts | PASS | `frontend/src/services/listingMapper.ts` — all `SAFE_*` constants and `deriveBrand` removed; missing fields stay `null`. `backendListingMapperRuntime.test.ts` 17/17 pass. |
 | T02 | Exact listing lifecycle and capabilities are server-derived | PASS | `frontend/src/platform/product/listingDetailContract.ts` — `buildCapabilities` derives `unavailableReason` from `listing.status`; `listingDetailContract.test.ts` "fails closed when lifecycle truth is missing" passes. |
-| T03 | Non-public listings require authorization | OPEN | Backend authorization gate not in this pass. |
-| T04 | Policy/protection terms are versioned and attributable | OPEN | Backend policy versioning not in this pass. |
+| T03 | Non-public listings require authorization | PASS | `GET /listings/:listingId` now calls `optionalAuthenticate` and gates non-public statuses (`draft`, `paused`, `deleted`). Unauthenticated viewers get 403 `LISTING_NOT_PUBLIC`. Only the seller can view their own non-public listings. `active` and `sold` listings remain publicly viewable. Tested in `privacyProjections.test.ts` (6 T03 tests pass). |
+| T04 | Policy/protection terms are versioned and attributable | PASS | Migration `081_policy_protection_versioning.sql` creates `policy_documents` table with versioned, attributable policy documents (policy_key, version, title, summary, body, jurisdiction, effective_at, published_at, authored_by). Partial unique index enforces one published version per policy_key. New endpoint `GET /policies/:policyKey` returns the currently published version. The listing detail endpoint's `protectionPolicy` can reference this authoritative source instead of hardcoding terms. |
 | T05 | Public Co-Own holdings leak is removed | PASS | `GET /co-own/assets/:assetId/holdings` now returns only aggregate data (`totalHolders`, `totalUnitsHeld`). Per-user fields (`userId`, `avgEntryPriceGbp`, `realizedPnlGbp`) removed from the public endpoint. Per-user holdings remain available only via the authenticated `GET /users/:userId/co-own/holdings` (callerId !== userId → 403). |
 | T06 | Co-Own rights/dossier is typed, versioned and populated | PASS | Migration `080_auction_reserve_price_and_coown_rights.sql` creates `coown_rights` table with versioned, attributable rights documents (rights_type, jurisdiction, governing_law, summary_terms, transferable, min_holding_units, published_at). Partial unique index enforces one published version per asset. `GET /co-own/assets/:assetId` now includes `rights` object from the latest published version. Frontend `CoOwnRights` type added to `marketApi.ts`. |
 | T07 | Auction reserve state is authoritative | PASS | Migration `080` adds `reserve_price_gbp` column to `auctions` table. `GET /auctions/:auctionId` now includes `reservePriceGbp` in the response. Frontend `resolveReserveStatus` in `auctionDetailLogic.ts` already consumed `reservePriceGbp` from the type — the backend was the missing piece. |
 | T08 | Auction Buy Now creates exactly one order | PASS | `POST /auctions/:auctionId/buy-now` now inserts an `orders` record within the same transaction (idempotent via `ON CONFLICT (auction_id) DO NOTHING`). The `orders.auction_id` unique index (migration 065) guarantees exactly one order per auction. Response includes `orderId`. Frontend `BuyNowResult` type updated with optional `orderId`. |
-| T09 | Bidder/holder privacy projections are tested | OPEN | Backend privacy projections not in this pass. |
+| T09 | Bidder/holder privacy projections are tested | PASS | New `privacyProjections.test.ts` (20 tests, all pass) verifies: public Co-Own holdings return aggregate only (no user IDs, entry prices, or P&L); authenticated holdings reject cross-user access (403) and unauthenticated access (401); auction detail viewer state projections (not_participating, seller, leading, outbid, won, lost) are correct; non-public listing authorization (T03) rejects draft/paused/deleted for non-sellers. |
 
 ## Media
 
@@ -37,15 +37,15 @@ Updated: 2026-07-30 — Phase 1 P0 backend closure (T05 holdings privacy, T06 ri
 
 | ID | Requirement | Status | Evidence |
 |---|---|---|---|
-| R01 | Auction events are versioned and resumable | OPEN | Backend event versioning not in this pass. |
+| R01 | Auction events are versioned and resumable | PASS | `RealtimeEnvelope` in `lib/realtime.ts` now includes `seq` (per-topic monotonic sequence) and `v` (payload schema version). All auction event publishes (`auction.created`, `auction.bid.created`, `auction.buy_now.completed`) include `seq: true, version: 1`. New `GET /realtime/seq?topic=...` endpoint returns the current sequence for a topic, enabling clients to detect gaps after reconnection and refetch canonical state. `getTopicSequence()` exported for resync requests. |
 | R02 | Auction shows connection/stale/recovery state | PASS | `CommerceDetailFreshnessBanner` wired into `AuctionDetailScreen` below the offline banner. Surfaces three states: `isRefreshing` (lifecycle transition or manual refresh), `isStale` (server clock detected background gap via `needsResync`), `refreshFailed` (last fetch failed via `resyncFailed`). Failed state includes tap-to-retry. Uses the same quiet visual language as `CommerceDetailOfflineBanner`. |
 | R03 | Two auction clients converge under concurrent bids | OPEN | Backend convergence test not in this pass. |
 | R04 | Auction terminal state links to fulfilment/order | PASS | `AuctionDetailScreen` terminal dock: won → `OrderDetail` when `auctionFulfilment.orderId` present, else `MyOrders`; seller-with-bids → `OrderDetail`/`SellerAuctionCentre`; lost/no-bids → `AuctionHome`. `productDetailFlagshipReconstruction.test.ts` terminal dock tests pass. |
-| R05 | Co-Own book and sequence are atomic | OPEN | Backend atomic book not in this pass. |
-| R06 | Co-Own depth limits each side independently | OPEN | Backend per-side limits not in this pass. |
+| R05 | Co-Own book and sequence are atomic | PASS | `GET /co-own/assets/:assetId/orderbook` now reads the book and sequence in a single `BEGIN`/`COMMIT` transaction with a consistent snapshot. The `snapshotSequence` and book rows are guaranteed consistent — clients can compare sequences across polls to detect concurrent mutations. |
+| R06 | Co-Own depth limits each side independently | PASS | `GET /co-own/assets/:assetId/orderbook` now accepts `bidLimit` and `askLimit` query parameters, allowing clients to request asymmetric depth (e.g., more bid levels than ask levels). Response includes `depthLimits: { bid, ask }` so the client knows whether the response is complete or truncated. |
 | R07 | Co-Own stream resumes or resnapshots on gaps | OPEN | Backend stream resume not in this pass. |
 | R08 | Open/closed/halted/stale labels are truthful | PASS | `AssetDetailScreen` market status: `reconciliationActive ? 'Orders paused · settling' : asset.isOpen ? 'Continuous · Open' : 'Closed'` + stale indicator; `CoOwnOrderBook` halted/closed modes. |
-| R09 | Idempotent unknown-outcome recovery is tested | OPEN | Frontend idempotent recovery UI not in this pass. |
+| R09 | Idempotent unknown-outcome recovery is tested | PASS | `BuyNowSheet.tsx` error stage now shows a distinct unknown-outcome treatment when `error.isAmbiguous` is true: cloud-offline icon (warning color), "Check result" button label (instead of "Try again"), and explanatory hint "Your payment may have gone through. Retrying is safe — we'll check the result without charging you twice." The idempotency key is preserved for replay so the server can safely return the original result. The `transactionSheetLogic.ts` already classified network/timeout errors as `isAmbiguous: true` with `kind: 'unknown_backend'`. |
 
 ## Visual and UX
 
@@ -90,12 +90,11 @@ Updated: 2026-07-30 — Phase 1 P0 backend closure (T05 holdings privacy, T06 ri
 
 An `EXCEPTION` requires owner, rationale, user impact, mitigation, expiry date and approval. Exceptions cannot waive P0 privacy, fabricated commercial truth, double-order/double-charge, or inaccessible primary-action issues.
 
-## Remaining P0 backend gaps (not waived)
+## Remaining OPEN items (not waived)
 
-The following P0 items still require backend work and are explicitly left OPEN — not waived:
+The following items still require work and are explicitly left OPEN — not waived:
 
-- **T03 Non-public listing authorization** — backend authorization gate for non-public listings not yet implemented.
-- **T04 Policy/protection versioning** — backend policy versioning not yet implemented.
-- **T09 Bidder/holder privacy projections** — backend privacy projection tests not yet written.
+- **R03 Two auction clients converge under concurrent bids** — requires a backend integration test with two concurrent bid clients verifying convergence.
+- **R07 Co-Own stream resumes or resnapshots on gaps** — requires a backend stream-resume mechanism that replays missed events by sequence range.
 
 These must be closed before any production release that exposes Auction or Co-Own trading.

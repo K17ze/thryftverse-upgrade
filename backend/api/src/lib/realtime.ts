@@ -8,6 +8,15 @@ export interface RealtimeEnvelope {
   type: string;
   payload: Record<string, unknown>;
   timestamp: string;
+  /** R01: per-topic monotonically increasing sequence number.
+   * Clients track the last seen sequence per topic and can request
+   * resync from that point after a reconnection. Zero means the
+   * sequence was not set (legacy event). */
+  seq?: number;
+  /** R01: schema version of the event payload. Clients use this to
+   * determine whether they can parse the payload. Unknown versions
+   * should be ignored gracefully. */
+  v?: number;
 }
 
 type RealtimeTransport = 'ws' | 'sse';
@@ -183,14 +192,39 @@ function formatSseEvent(event: RealtimeEnvelope): string {
   return `id: ${event.id}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
 }
 
-function createEnvelope(topic: string, type: string, payload: Record<string, unknown>): RealtimeEnvelope {
-  return {
+// R01: Per-topic monotonic sequence counter for event versioning.
+// This enables clients to detect gaps after reconnection and request
+// resync from the last seen sequence number.
+const topicSequenceMap = new Map<string, number>();
+
+function nextSequenceForTopic(topic: string): number {
+  const next = (topicSequenceMap.get(topic) ?? 0) + 1;
+  topicSequenceMap.set(topic, next);
+  return next;
+}
+
+/** R01: Get the current sequence for a topic (for resync requests). */
+export function getTopicSequence(topic: string): number {
+  return topicSequenceMap.get(normalizeTopic(topic)) ?? 0;
+}
+
+function createEnvelope(topic: string, type: string, payload: Record<string, unknown>, options?: { seq?: boolean; version?: number }): RealtimeEnvelope {
+  const normalized = normalizeTopic(topic);
+  const envelope: RealtimeEnvelope = {
     id: runtimeId('rt_event'),
-    topic,
+    topic: normalized,
     type,
     payload,
     timestamp: new Date().toISOString(),
   };
+  // R01: Attach sequence and version when requested.
+  if (options?.seq !== false) {
+    envelope.seq = nextSequenceForTopic(normalized);
+  }
+  if (options?.version != null) {
+    envelope.v = options.version;
+  }
+  return envelope;
 }
 
 export function registerWsClient(input: {
@@ -354,9 +388,17 @@ export function publishRealtimeEvent(input: {
   type: string;
   payload: Record<string, unknown>;
   userId?: string;
+  /** R01: When true (default), attaches a per-topic sequence number. */
+  seq?: boolean;
+  /** R01: Event payload schema version. Clients use this for
+   * forward-compatible parsing. */
+  version?: number;
 }): number {
   const topic = normalizeTopic(input.topic);
-  const event = createEnvelope(topic, input.type, input.payload);
+  const event = createEnvelope(topic, input.type, input.payload, {
+    seq: input.seq,
+    version: input.version,
+  });
   const delivered = deliverLocalEvent(event, input.userId);
 
   if (realtimePublisher) {

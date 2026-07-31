@@ -378,9 +378,23 @@ export function BuyNowSheet({
         {stage === 'error' && error && (
           <View style={styles.stageContent}>
             <View style={styles.errorIconSmall}>
-              <Ionicons name="alert-circle-outline" size={24} color={colors.danger} />
+              <Ionicons
+                name={error.isAmbiguous ? 'cloud-offline-outline' : 'alert-circle-outline'}
+                size={24}
+                color={error.isAmbiguous ? colors.warning : colors.danger}
+              />
             </View>
             <Text style={styles.errorTitle}>{error.message}</Text>
+            {/* R09: Unknown-outcome recovery — when isAmbiguous is true,
+             * the client cannot determine whether the transaction
+             * committed. Show a clear explanation that retrying uses
+             * the same idempotency key so the server can safely
+             * replay without double-charging. */}
+            {error.isAmbiguous && (
+              <Text style={styles.ambiguousHint}>
+                Your payment may have gone through. Retrying is safe — we'll check the result without charging you twice.
+              </Text>
+            )}
             <View style={styles.actions}>
               {error.canRetry && (
                 <AppButton
@@ -389,8 +403,8 @@ export function BuyNowSheet({
                   variant="primary"
                   size="md"
                   align="center"
-                  title="Try again"
-                  accessibilityLabel="Retry Buy Now"
+                  title={error.isAmbiguous ? 'Check result' : 'Try again'}
+                  accessibilityLabel={error.isAmbiguous ? 'Check Buy Now result' : 'Retry Buy Now'}
                 />
               )}
               <AppButton
@@ -594,6 +608,15 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     color: colors.textPrimary,
     textAlign: 'center',
     paddingHorizontal: Space.md,
+  },
+  // R09: Unknown-outcome recovery hint
+  ambiguousHint: {
+    fontSize: 13,
+    fontFamily: Typography.family.regular,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    paddingHorizontal: Space.md,
+    lineHeight: 18,
   },
   });
 }
