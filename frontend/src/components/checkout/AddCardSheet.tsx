@@ -11,7 +11,6 @@ import {
 } from '@stripe/stripe-react-native';
 import { BottomSheet } from '../BottomSheet';
 import { AnimatedPressable } from '../AnimatedPressable';
-import { Colors } from '../../constants/colors';
 import { useStore } from '../../store/useStore';
 import { useToast } from '../../context/ToastContext';
 import { createStripeSetupSheet } from '../../services/commerceApi';
@@ -29,7 +28,8 @@ import {
   configureStripeMobile,
   getStripeReturnUrl,
 } from '../../platform/payments/stripeMobile';
-import { Radius, Space, Typography } from '../../theme/designTokens';
+import { Radius, Space, Typography, Type } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
 
 interface Props {
   visible: boolean;
@@ -38,12 +38,25 @@ interface Props {
 }
 
 export function AddCardSheet({ visible, onDismiss, onSuccess }: Props) {
+  const { colors } = useAppTheme();
   const currentUser = useStore((state) => state.currentUser);
   const [isOpeningProvider, setIsOpeningProvider] = useState(false);
   const [countryCapabilities, setCountryCapabilities] =
     useState<UserCountryCapabilities | null>(null);
   const setupIdempotencyKeyRef = useRef(createStableId('setup_method'));
   const { show } = useToast();
+  const themed = {
+    textPrimary: colors.textPrimary,
+    textSecondary: colors.textSecondary,
+    textMuted: colors.textMuted,
+    brand: colors.brand,
+    border: colors.border,
+    surface: colors.surface,
+    surfaceAlt: colors.surfaceAlt,
+    success: colors.success,
+    textInverse: colors.textInverse,
+  };
+  const styles = useMemo(() => createStyles(themed), [themed]);
 
   useEffect(() => {
     let cancelled = false;
@@ -146,7 +159,7 @@ export function AddCardSheet({ visible, onDismiss, onSuccess }: Props) {
     <BottomSheet visible={visible} onDismiss={onDismiss} snapPoint={0.58}>
       <View style={styles.header}>
         <View style={styles.providerMark} accessibilityElementsHidden>
-          <Ionicons name="card-outline" size={24} color={Colors.brand} />
+          <Ionicons name="card-outline" size={24} color={themed.brand} />
         </View>
         <Text style={styles.title}>Add a payment method</Text>
         <Text style={styles.subtitle}>
@@ -161,7 +174,7 @@ export function AddCardSheet({ visible, onDismiss, onSuccess }: Props) {
           <Ionicons
             name="shield-checkmark-outline"
             size={19}
-            color={Colors.success}
+            color={themed.success}
           />
           <View style={styles.boundaryCopy}>
             <Text style={styles.boundaryTitle}>Secure card entry</Text>
@@ -176,7 +189,7 @@ export function AddCardSheet({ visible, onDismiss, onSuccess }: Props) {
           <Ionicons
             name="eye-off-outline"
             size={19}
-            color={Colors.textSecondary}
+            color={themed.textSecondary}
           />
           <View style={styles.boundaryCopy}>
             <Text style={styles.boundaryTitle}>Limited card details</Text>
@@ -219,12 +232,12 @@ export function AddCardSheet({ visible, onDismiss, onSuccess }: Props) {
         }}
       >
         {isOpeningProvider ? (
-          <ActivityIndicator size="small" color={Colors.textInverse} />
+          <ActivityIndicator size="small" color={themed.textInverse} />
         ) : (
           <Ionicons
             name="open-outline"
             size={18}
-            color={Colors.textInverse}
+            color={themed.textInverse}
           />
         )}
         <Text style={styles.primaryActionText}>
@@ -235,7 +248,11 @@ export function AddCardSheet({ visible, onDismiss, onSuccess }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (themed: {
+  textPrimary: string; textSecondary: string; textMuted: string;
+  brand: string; border: string; surface: string; surfaceAlt: string;
+  success: string; textInverse: string;
+}) => StyleSheet.create({
   header: {
     alignItems: 'center',
     paddingHorizontal: Space.sm,
@@ -245,13 +262,13 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: themed.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Space.md,
   },
   title: {
-    color: Colors.textPrimary,
+    color: themed.textPrimary,
     fontFamily: Typography.family.bold,
     fontSize: 22,
     letterSpacing: -0.35,
@@ -259,14 +276,14 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   subtitle: {
-    color: Colors.textSecondary,
+    color: themed.textSecondary,
     fontFamily: Typography.family.regular,
     fontSize: 14,
     lineHeight: 21,
     textAlign: 'center',
   },
   boundary: {
-    borderColor: Colors.border,
+    borderColor: themed.border,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     marginBottom: Space.md,
@@ -284,42 +301,42 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   boundaryTitle: {
-    color: Colors.textPrimary,
+    color: themed.textPrimary,
     fontFamily: Typography.family.semibold,
     fontSize: 14,
     marginBottom: 2,
   },
   boundaryText: {
-    color: Colors.textSecondary,
+    color: themed.textSecondary,
     fontFamily: Typography.family.regular,
     fontSize: 12,
     lineHeight: 17,
   },
   separator: {
-    backgroundColor: Colors.border,
+    backgroundColor: themed.border,
     height: StyleSheet.hairlineWidth,
     marginLeft: 54,
   },
   blocked: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: themed.surfaceAlt,
     borderRadius: Radius.md,
     marginBottom: Space.md,
     padding: Space.md,
   },
   blockedTitle: {
-    color: Colors.textPrimary,
+    color: themed.textPrimary,
     fontFamily: Typography.family.semibold,
     fontSize: 14,
     marginBottom: 3,
   },
   blockedText: {
-    color: Colors.textSecondary,
+    color: themed.textSecondary,
     fontFamily: Typography.family.regular,
     fontSize: 12,
     lineHeight: 18,
   },
   policy: {
-    color: Colors.textMuted,
+    color: themed.textMuted,
     fontFamily: Typography.family.medium,
     fontSize: 11,
     marginBottom: Space.md,
@@ -327,7 +344,7 @@ const styles = StyleSheet.create({
   },
   primaryAction: {
     alignItems: 'center',
-    backgroundColor: Colors.brand,
+    backgroundColor: themed.brand,
     borderRadius: Radius.lg,
     flexDirection: 'row',
     gap: Space.sm,
@@ -339,7 +356,7 @@ const styles = StyleSheet.create({
     opacity: 0.45,
   },
   primaryActionText: {
-    color: Colors.textInverse,
+    color: themed.textInverse,
     fontFamily: Typography.family.bold,
     fontSize: 16,
   },
