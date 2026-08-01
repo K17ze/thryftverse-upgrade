@@ -1,7 +1,7 @@
 import React from 'react';
 import { AccessibilityRole, ActivityIndicator, StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
-import { Colors } from '../../constants/colors';
-import { Type, Typography } from '../../theme/designTokens';
+import { Type, Typography, Radius, Space } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
 
 // ============================================================================
@@ -46,39 +46,39 @@ type VariantTokens = {
   iconBackgroundColor: string;
 };
 
-function resolveVariantTokens(variant: AppButtonVariant): VariantTokens {
+function resolveVariantTokens(variant: AppButtonVariant, colors: any): VariantTokens {
   switch (variant) {
     case 'secondary':
       return {
-        backgroundColor: Colors.surface,
-        borderColor: Colors.border,
-        titleColor: Colors.textPrimary,
-        subtitleColor: Colors.textSecondary,
+        backgroundColor: colors.surface,
+        borderColor: colors.border,
+        titleColor: colors.textPrimary,
+        subtitleColor: colors.textSecondary,
         iconBackgroundColor: 'transparent',
       };
     case 'ghost':
       return {
         backgroundColor: 'transparent',
         borderColor: 'transparent',
-        titleColor: Colors.textPrimary,
-        subtitleColor: Colors.textSecondary,
+        titleColor: colors.textPrimary,
+        subtitleColor: colors.textSecondary,
         iconBackgroundColor: 'transparent',
       };
     case 'danger':
       return {
-        backgroundColor: Colors.danger,
-        borderColor: Colors.danger,
-        titleColor: Colors.background,
-        subtitleColor: Colors.background,
+        backgroundColor: colors.danger,
+        borderColor: colors.danger,
+        titleColor: colors.background,
+        subtitleColor: colors.background,
         iconBackgroundColor: 'rgba(0,0,0,0.15)',
       };
     case 'primary':
     default:
       return {
-        backgroundColor: Colors.brand,
-        borderColor: Colors.brand,
-        titleColor: Colors.background,
-        subtitleColor: Colors.background,
+        backgroundColor: colors.brand,
+        borderColor: colors.brand,
+        titleColor: colors.background,
+        subtitleColor: colors.background,
         iconBackgroundColor: 'rgba(0,0,0,0.15)',
       };
   }
@@ -119,7 +119,8 @@ export function AppButton({
   accessibilityHint,
   accessibilityRole,
 }: AppButtonProps) {
-  const tokens = resolveVariantTokens(variant);
+  const { colors } = useAppTheme();
+  const tokens = resolveVariantTokens(variant, colors);
   const resolvedAlign = align ?? (subtitle ? 'start' : 'center');
 
   return (
@@ -204,23 +205,23 @@ const styles = StyleSheet.create({
   },
   sizeSm: {
     minHeight: 44,
-    borderRadius: 14,
-    paddingHorizontal: 10,
+    borderRadius: Radius.md,
+    paddingHorizontal: Space.sm + 2,
   },
   sizeMd: {
-    minHeight: 56,
-    borderRadius: 18,
-    paddingHorizontal: 16,
+    minHeight: 52,
+    borderRadius: Radius.lg,
+    paddingHorizontal: Space.md,
   },
   sizeLg: {
-    minHeight: 64,
-    borderRadius: 24,
-    paddingHorizontal: 16,
+    minHeight: 56,
+    borderRadius: Radius.xl,
+    paddingHorizontal: Space.md,
   },
   contentRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: Space.sm + 2,
   },
   contentCentered: {
     justifyContent: 'center',
@@ -228,7 +229,7 @@ const styles = StyleSheet.create({
   iconWrap: {
     width: 30,
     height: 30,
-    borderRadius: 15,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -244,13 +245,15 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.bold,
-    letterSpacing: -0.1,
+    letterSpacing: Type.body.letterSpacing,
   },
   subtitle: {
     marginTop: 1,
     fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
-    letterSpacing: 0.2,
+    letterSpacing: Type.caption.letterSpacing,
   },
 });
