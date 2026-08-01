@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Space, Radius } from '../../theme/designTokens';
 
 export interface PriceInsightStripProps {
@@ -58,6 +58,8 @@ export function PriceInsightStrip({
   soldComps,
   priceHistory,
 }: PriceInsightStripProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const hasDiscount = originalPrice != null && originalPrice > price;
   const discountPercent = hasDiscount && originalPrice
     ? Math.round(((originalPrice - price) / originalPrice) * 100)
@@ -134,22 +136,22 @@ export function PriceInsightStrip({
   return (
     <View style={styles.container}>
       <View style={styles.headerRow}>
-        <Ionicons name="analytics-outline" size={16} color={Colors.textSecondary} />
+        <Ionicons name="analytics-outline" size={16} color={colors.textSecondary} />
         <Text style={styles.sectionTitle}>Price insights</Text>
       </View>
 
       {rows.map((row, index) => {
         const valueColor =
-          row.tone === 'positive' ? Colors.brand
-          : row.tone === 'demand' ? Colors.danger
-          : Colors.textPrimary;
+          row.tone === 'positive' ? colors.brand
+          : row.tone === 'demand' ? colors.danger
+          : colors.textPrimary;
         return (
           <View
             key={row.label}
             style={[styles.row, index < rows.length - 1 && styles.rowBorder]}
           >
             <View style={styles.rowLeft}>
-              <Ionicons name={row.icon} size={18} color={Colors.textSecondary} />
+              <Ionicons name={row.icon} size={18} color={colors.textSecondary} />
               <Text style={styles.rowLabel}>{row.label}</Text>
             </View>
             <Text style={[styles.rowValue, { color: valueColor }]} numberOfLines={1}>
@@ -172,7 +174,7 @@ export function PriceInsightStrip({
             <Ionicons
               name={alertEnabled ? 'notifications' : 'notifications-outline'}
               size={18}
-              color={alertEnabled ? Colors.brand : Colors.textSecondary}
+              color={alertEnabled ? colors.brand : colors.textSecondary}
             />
             <Text style={styles.rowLabel}>Price drop alerts</Text>
           </View>
@@ -185,11 +187,12 @@ export function PriceInsightStrip({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     marginTop: Space.sm,
     marginHorizontal: Space.md,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     paddingVertical: Space.sm,
     paddingHorizontal: Space.md,
@@ -203,7 +206,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     letterSpacing: 0.2,
   },
   row: {
@@ -215,7 +218,7 @@ const styles = StyleSheet.create({
   },
   rowBorder: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   rowLeft: {
     flexDirection: 'row',
@@ -226,7 +229,7 @@ const styles = StyleSheet.create({
   rowLabel: {
     fontSize: 14,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   rowValue: {
     fontSize: 14,
@@ -240,25 +243,26 @@ const styles = StyleSheet.create({
     width: 36,
     height: 20,
     borderRadius: 10,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     justifyContent: 'center',
     paddingHorizontal: 2,
   },
   toggleTrackActive: {
-    backgroundColor: `${Colors.brand}20`,
-    borderColor: Colors.brand,
+    backgroundColor: `${colors.brand}20`,
+    borderColor: colors.brand,
   },
   toggleThumb: {
     width: 14,
     height: 14,
     borderRadius: 7,
-    backgroundColor: Colors.textMuted,
+    backgroundColor: colors.textMuted,
     alignSelf: 'flex-start',
   },
   toggleThumbActive: {
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     alignSelf: 'flex-end',
   },
-});
+  });
+}

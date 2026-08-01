@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Typography } from '../../theme/designTokens';
 
 interface Props {
@@ -36,6 +36,8 @@ function formatDispatchCountdown(ms: number): string {
 }
 
 export function DispatchCountdown({ createdAt, windowHours = 24, shipped }: Props) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   // Tick every second
@@ -53,16 +55,16 @@ export function DispatchCountdown({ createdAt, windowHours = 24, shipped }: Prop
   const urgency = resolveUrgency(msRemaining, windowHours * 60 * 60 * 1000);
 
   const color =
-    urgency === 'overdue' ? Colors.danger :
-    urgency === 'urgent' ? Colors.danger :
-    urgency === 'warning' ? Colors.warning :
-    Colors.textPrimary;
+    urgency === 'overdue' ? colors.danger :
+    urgency === 'urgent' ? colors.danger :
+    urgency === 'warning' ? colors.warning :
+    colors.textPrimary;
 
   const bgColor =
-    urgency === 'overdue' ? `${Colors.danger}15` :
-    urgency === 'urgent' ? `${Colors.danger}10` :
-    urgency === 'warning' ? `${Colors.warning}10` :
-    Colors.surface;
+    urgency === 'overdue' ? `${colors.danger}15` :
+    urgency === 'urgent' ? `${colors.danger}10` :
+    urgency === 'warning' ? `${colors.warning}10` :
+    colors.surface;
 
   const icon =
     urgency === 'overdue' ? 'alert-circle' :
@@ -110,14 +112,14 @@ export function DispatchCountdown({ createdAt, windowHours = 24, shipped }: Prop
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     marginTop: Space.sm,
     paddingHorizontal: Space.md,
     paddingVertical: 10,
     borderRadius: 10,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   row: {
     flexDirection: 'row',
@@ -150,6 +152,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: 11,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
 });

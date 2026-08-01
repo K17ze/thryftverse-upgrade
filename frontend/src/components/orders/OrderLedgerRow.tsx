@@ -1,7 +1,7 @@
 import React, { memo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Typography } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import {
@@ -41,8 +41,11 @@ interface OrderLedgerRowProps {
 }
 
 function OrderLedgerRowImpl({ order, formattedTotal, onPress }: OrderLedgerRowProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   const statusLabel = humaniseStatus(order.status);
-  const statusColor = getStatusColor(order.status, Colors.textMuted);
+  const statusColor = getStatusColor(order.status, colors.textMuted);
   const cancelled = isCancelledStatus(order.status);
   const terminal = isTerminalStatus(order.status);
   const dateLabel = formatDate(order.createdAt);
@@ -104,13 +107,13 @@ function OrderLedgerRowImpl({ order, formattedTotal, onPress }: OrderLedgerRowPr
 
         {trackingLine && (
           <Text style={styles.tracking} numberOfLines={1}>
-            <Ionicons name="cube-outline" size={11} color={Colors.textMuted} /> {trackingLine}
+            <Ionicons name="cube-outline" size={11} color={colors.textMuted} /> {trackingLine}
           </Text>
         )}
 
         {nextAction && (
           <View style={styles.nextActionRow}>
-            <Ionicons name="arrow-forward-circle-outline" size={12} color={Colors.brand} />
+            <Ionicons name="arrow-forward-circle-outline" size={12} color={colors.brand} />
             <Text style={styles.nextActionText}>{nextAction}</Text>
           </View>
         )}
@@ -124,14 +127,14 @@ function OrderLedgerRowImpl({ order, formattedTotal, onPress }: OrderLedgerRowPr
                   <View
                     style={[
                       styles.progressDot,
-                      isCompleted && { backgroundColor: Colors.textPrimary },
+                      isCompleted && { backgroundColor: colors.textPrimary },
                     ]}
                   />
                   {i < progressStages.length - 1 && (
                     <View
                       style={[
                         styles.progressLine,
-                        i < currentStageIndex && { backgroundColor: Colors.textPrimary },
+                        i < currentStageIndex && { backgroundColor: colors.textPrimary },
                       ]}
                     />
                   )}
@@ -145,7 +148,7 @@ function OrderLedgerRowImpl({ order, formattedTotal, onPress }: OrderLedgerRowPr
         )}
       </View>
 
-      <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} style={styles.chevron} />
+      <Ionicons name="chevron-forward" size={16} color={colors.textMuted} style={styles.chevron} />
     </Pressable>
   );
 }
@@ -154,7 +157,7 @@ export const OrderLedgerRow = memo(OrderLedgerRowImpl);
 
 const THUMB_SIZE = 88;
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -196,25 +199,25 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 15,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     lineHeight: 20,
   },
   total: {
     fontSize: 15,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginTop: 1,
   },
   context: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 2,
   },
   tracking: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 1,
   },
   progressRow: {
@@ -227,17 +230,17 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
   },
   progressLine: {
     width: 16,
     height: 1.5,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
   },
   progressLabel: {
     fontSize: 11,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginLeft: 4,
   },
   chevron: {
@@ -252,6 +255,6 @@ const styles = StyleSheet.create({
   nextActionText: {
     fontSize: 12,
     fontFamily: Typography.family.medium,
-    color: Colors.brand,
+    color: colors.brand,
   },
 });

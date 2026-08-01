@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Space } from '../../theme/designTokens';
 import type { SellerTrustSummary, VerificationTier } from '../../platform/product';
 import { VERIFICATION_TIERS, deriveSellerBadges, SELLER_BADGES } from '../../platform/product';
@@ -16,9 +16,9 @@ interface TrustChipProps {
   tone?: 'default' | 'success' | 'muted';
 }
 
-function TrustChip({ icon, label, tone = 'default' }: TrustChipProps) {
+function TrustChip({ icon, label, tone = 'default', colors }: TrustChipProps & { colors: ThemeColors }) {
   const color =
-    tone === 'success' ? Colors.success : tone === 'muted' ? Colors.textMuted : Colors.textSecondary;
+    tone === 'success' ? colors.success : tone === 'muted' ? colors.textMuted : colors.textSecondary;
   return (
     <View style={styles.chip}>
       <Ionicons name={icon} size={12} color={color} />
@@ -56,6 +56,7 @@ export function ProfileTrustSignals({
   soldCount = 0,
   align = 'left',
 }: ProfileTrustSignalsProps) {
+  const { colors } = useAppTheme();
   const chips: TrustChipProps[] = [];
 
   // Verified — tiered badge from seller trust (authoritative) or email-verified fallback
@@ -120,7 +121,7 @@ export function ProfileTrustSignals({
   return (
     <View style={[styles.container, align === 'center' && styles.containerCenter]}>
       {chips.map((chip, index) => (
-        <TrustChip key={`${chip.icon}-${index}`} {...chip} />
+        <TrustChip key={`${chip.icon}-${index}`} {...chip} colors={colors} />
       ))}
     </View>
   );

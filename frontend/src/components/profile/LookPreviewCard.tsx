@@ -5,7 +5,7 @@ import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Space, Radius } from '../../theme/designTokens';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 
@@ -45,6 +45,8 @@ export function LookPreviewCard({
   onSave,
   index = 0,
 }: LookPreviewCardProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   return (
     <Reanimated.View entering={FadeInDown.duration(350).delay(index * 60).springify()}>
       <AnimatedPressable style={styles.card} onPress={onPress} {...PressPresets.card} accessibilityRole="button">
@@ -90,11 +92,11 @@ export function LookPreviewCard({
         {/* Action bar */}
         <View style={styles.actionBar}>
           <AnimatedPressable style={styles.actionItem} onPress={onLike} {...PressPresets.iconButton}>
-            <Ionicons name={saved ? 'heart' : 'heart-outline'} size={18} color={saved ? Colors.danger : Colors.textSecondary} />
+            <Ionicons name={saved ? 'heart' : 'heart-outline'} size={18} color={saved ? colors.danger : colors.textSecondary} />
             <Text style={styles.actionText}>{likes}</Text>
           </AnimatedPressable>
           <AnimatedPressable style={styles.actionItem} onPress={onSave} {...PressPresets.iconButton}>
-            <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={18} color={saved ? Colors.textPrimary : Colors.textSecondary} />
+            <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={18} color={saved ? colors.textPrimary : colors.textSecondary} />
             <Text style={styles.actionText}>{saved ? 'Saved' : 'Save'}</Text>
           </AnimatedPressable>
         </View>
@@ -103,21 +105,22 @@ export function LookPreviewCard({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   card: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     overflow: 'hidden',
     marginBottom: Space.md,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   coverWrap: {
     width: '100%',
     aspectRatio: 0.85,
     position: 'relative',
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   coverImage: {
     width: '100%',
@@ -177,7 +180,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopColor: colors.border,
   },
   actionItem: {
     flexDirection: 'row',
@@ -187,6 +190,7 @@ const styles = StyleSheet.create({
   actionText: {
     fontFamily: Typography.family.medium,
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
-});
+  });
+}

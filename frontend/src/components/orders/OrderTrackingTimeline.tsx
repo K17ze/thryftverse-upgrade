@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Typography } from '../../theme/designTokens';
 
 export interface TimelineEntry {
@@ -18,11 +18,14 @@ interface Props {
 }
 
 export function OrderTrackingTimeline({ entries, warningText }: Props) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View>
       {warningText ? (
         <View style={styles.warningRow}>
-          <Ionicons name="alert-circle-outline" size={14} color={Colors.textMuted} />
+          <Ionicons name="alert-circle-outline" size={14} color={colors.textMuted} />
           <Text style={styles.warningText}>{warningText}</Text>
         </View>
       ) : null}
@@ -38,12 +41,12 @@ export function OrderTrackingTimeline({ entries, warningText }: Props) {
                 : 'ellipse-outline';
         const iconColor =
           entry.state === 'failure'
-            ? Colors.danger
+            ? colors.danger
             : entry.state === 'completed'
-              ? Colors.brand
+              ? colors.brand
               : entry.state === 'active'
-                ? Colors.brand
-                : Colors.border;
+                ? colors.brand
+                : colors.border;
 
         return (
           <View key={entry.id} style={styles.entryRow}>
@@ -90,7 +93,7 @@ export function OrderTrackingTimeline({ entries, warningText }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   warningRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -100,7 +103,7 @@ const styles = StyleSheet.create({
   warningText: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   entryRow: {
     flexDirection: 'row',
@@ -113,13 +116,13 @@ const styles = StyleSheet.create({
   connector: {
     width: 2,
     flex: 1,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
     marginVertical: 4,
     minHeight: 32,
     borderRadius: 1,
   },
   connectorCompleted: {
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
   },
   contentCol: {
     flex: 1,
@@ -134,28 +137,28 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 15,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     flexShrink: 1,
   },
   labelPending: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   labelActive: {
-    color: Colors.brand,
+    color: colors.brand,
   },
   date: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginLeft: Space.sm,
   },
   subtitle: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     lineHeight: 18,
   },
   subtitlePending: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
 });

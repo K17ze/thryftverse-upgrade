@@ -24,7 +24,6 @@ import {
   FlatList,
 } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
 import { Typography, Space, Radius } from '../../theme/designTokens';
 import { isVideoUri } from '../../utils/media';
 import { CachedImage } from '../CachedImage';

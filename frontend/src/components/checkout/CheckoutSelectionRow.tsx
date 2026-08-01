@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Typography, Radius } from '../../theme/designTokens';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -39,6 +39,9 @@ export function CheckoutSelectionRow({
   isFilled = true,
   testID,
 }: Props) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={styles.wrapper}>
       <Pressable
@@ -56,7 +59,7 @@ export function CheckoutSelectionRow({
               <Ionicons
                 name={icon}
                 size={16}
-                color={isFilled ? Colors.brand : Colors.textMuted}
+                color={isFilled ? colors.brand : colors.textMuted}
               />
             </View>
           )}
@@ -72,7 +75,7 @@ export function CheckoutSelectionRow({
             ) : null}
             {errorText ? (
               <View style={styles.alertRow}>
-                <Ionicons name="alert-circle-outline" size={12} color={Colors.danger} />
+                <Ionicons name="alert-circle-outline" size={12} color={colors.danger} />
                 <Text style={styles.errorText}>{errorText}</Text>
               </View>
             ) : null}
@@ -87,7 +90,7 @@ export function CheckoutSelectionRow({
             <Ionicons
               name="chevron-forward"
               size={14}
-              color={isFilled ? Colors.textMuted : Colors.brand}
+              color={isFilled ? colors.textMuted : colors.brand}
             />
           </View>
         </View>
@@ -96,10 +99,10 @@ export function CheckoutSelectionRow({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   wrapper: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   row: {
     flexDirection: 'row',
@@ -121,13 +124,13 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: Radius.full,
-    backgroundColor: `${Colors.brand}12`,
+    backgroundColor: `${colors.brand}12`,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
   },
   iconWrapEmpty: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   textCol: {
     flex: 1,
@@ -136,23 +139,23 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 11,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
   },
   title: {
     fontSize: 16,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   titleEmpty: {
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   subtitle: {
     fontSize: 14,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     lineHeight: 19,
   },
   alertRow: {
@@ -169,7 +172,7 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 13,
     fontFamily: Typography.family.medium,
-    color: Colors.danger,
+    color: colors.danger,
   },
   right: {
     flexDirection: 'row',
@@ -185,9 +188,9 @@ const styles = StyleSheet.create({
   actionLabel: {
     fontSize: 15,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   actionLabelAdd: {
-    color: Colors.brand,
+    color: colors.brand,
   },
 });

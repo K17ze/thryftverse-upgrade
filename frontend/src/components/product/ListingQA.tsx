@@ -7,7 +7,7 @@ import {
   TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Typography } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -48,6 +48,8 @@ export function ListingQA({
   isSeller,
   initialQuestions = [],
 }: ListingQAProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [questions, setQuestions] = useState<ListingQuestion[]>(initialQuestions);
   const [askText, setAskText] = useState('');
   const [answerText, setAnswerText] = useState('');
@@ -120,7 +122,7 @@ export function ListingQA({
     <View style={styles.container}>
       {/* Section header */}
       <View style={styles.headerRow}>
-        <Ionicons name="chatbubble-ellipses-outline" size={18} color={Colors.textPrimary} />
+        <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.textPrimary} />
         <Text style={styles.sectionTitle}>Questions & answers</Text>
         {questions.length > 0 && (
           <View style={styles.countBadge}>
@@ -136,7 +138,7 @@ export function ListingQA({
           value={askText}
           onChangeText={setAskText}
           placeholder="Ask a question about this item..."
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={colors.textMuted}
           multiline
           maxLength={300}
           accessibilityLabel="Ask a question"
@@ -149,14 +151,14 @@ export function ListingQA({
           accessibilityRole="button"
           accessibilityLabel="Post question"
         >
-          <Ionicons name="send" size={16} color={askText.trim() ? '#fff' : Colors.textMuted} />
+          <Ionicons name="send" size={16} color={askText.trim() ? '#fff' : colors.textMuted} />
         </AnimatedPressable>
       </View>
 
       {/* Questions list */}
       {questions.length === 0 ? (
         <View style={styles.emptyWrap}>
-          <Ionicons name="chatbubble-outline" size={28} color={Colors.textMuted} />
+          <Ionicons name="chatbubble-outline" size={28} color={colors.textMuted} />
           <Text style={styles.emptyText}>No questions yet</Text>
           <Text style={styles.emptySubtext}>Be the first to ask about this item</Text>
         </View>
@@ -180,7 +182,7 @@ export function ListingQA({
               {q.answer ? (
                 <View style={styles.answerWrap}>
                   <View style={styles.answerHeader}>
-                    <Ionicons name="shield-checkmark-outline" size={12} color={Colors.success} />
+                    <Ionicons name="shield-checkmark-outline" size={12} color={colors.success} />
                     <Text style={styles.answerLabel}>Seller · {q.answer.responderName}</Text>
                     <Text style={styles.qTime}>{formatTime(q.answer.createdAt)}</Text>
                   </View>
@@ -193,7 +195,7 @@ export function ListingQA({
                   accessibilityRole="button"
                   accessibilityLabel="Answer this question"
                 >
-                  <Ionicons name="arrow-undo-outline" size={14} color={Colors.brand} />
+                  <Ionicons name="arrow-undo-outline" size={14} color={colors.brand} />
                   <Text style={styles.answerBtnText}>Answer</Text>
                 </Pressable>
               ) : null}
@@ -206,7 +208,7 @@ export function ListingQA({
                     value={answerText}
                     onChangeText={setAnswerText}
                     placeholder="Type your answer..."
-                    placeholderTextColor={Colors.textMuted}
+                    placeholderTextColor={colors.textMuted}
                     multiline
                     maxLength={500}
                     autoFocus
@@ -244,16 +246,17 @@ export function ListingQA({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     marginHorizontal: Space.md,
     marginTop: Space.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
     borderRadius: Radius.lg,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   headerRow: {
     flexDirection: 'row',
@@ -265,13 +268,13 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   countBadge: {
     minWidth: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 6,
@@ -279,7 +282,7 @@ const styles = StyleSheet.create({
   countText: {
     fontSize: 11,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   askRow: {
     flexDirection: 'row',
@@ -293,21 +296,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     fontSize: 14,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   askBtn: {
     width: 40,
     height: 40,
     borderRadius: Radius.md,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
   },
   askBtnDisabled: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   emptyWrap: {
     alignItems: 'center',
@@ -317,12 +320,12 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 14,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   emptySubtext: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   qList: {
     gap: Space.md,
@@ -330,7 +333,7 @@ const styles = StyleSheet.create({
   qItem: {
     paddingBottom: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   qHeader: {
     flexDirection: 'row',
@@ -342,37 +345,37 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: `${Colors.brand}20`,
+    backgroundColor: `${colors.brand}20`,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
+    color: colors.brand,
   },
   qAsker: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   qTime: {
     fontSize: 11,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   qText: {
     fontSize: 14,
     lineHeight: 19,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginBottom: Space.sm,
   },
   answerWrap: {
     marginLeft: Space.sm + 4,
     paddingLeft: Space.sm,
     borderLeftWidth: 2,
-    borderLeftColor: Colors.success,
+    borderLeftColor: colors.success,
   },
   answerHeader: {
     flexDirection: 'row',
@@ -384,13 +387,13 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    color: Colors.success,
+    color: colors.success,
   },
   answerText: {
     fontSize: 13,
     lineHeight: 18,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   answerBtn: {
     flexDirection: 'row',
@@ -399,13 +402,13 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: Radius.sm,
-    backgroundColor: `${Colors.brand}10`,
+    backgroundColor: `${colors.brand}10`,
     alignSelf: 'flex-start',
   },
   answerBtnText: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
+    color: colors.brand,
   },
   answerInputWrap: {
     marginTop: Space.sm,
@@ -417,10 +420,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     fontSize: 14,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   answerActions: {
     flexDirection: 'row',
@@ -434,13 +437,13 @@ const styles = StyleSheet.create({
   cancelAnswerText: {
     fontSize: 13,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   postAnswerBtn: {
     paddingVertical: 6,
     paddingHorizontal: 16,
     borderRadius: Radius.sm,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
   },
   postAnswerText: {
     fontSize: 13,
@@ -450,7 +453,8 @@ const styles = StyleSheet.create({
   pendingAnswer: {
     fontSize: 11,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontStyle: 'italic',
   },
-});
+  });
+}

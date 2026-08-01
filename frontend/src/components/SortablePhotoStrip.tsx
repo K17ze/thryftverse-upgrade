@@ -11,7 +11,7 @@ import Reanimated, {
   Easing,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from './AnimatedPressable';
 import { isVideoUri } from '../utils/media';
@@ -42,6 +42,8 @@ interface Props {
 
 export function SortablePhotoStrip({ photos, onReorder, onAddPhoto, itemIds, renderItem, showAddButton = true, reorderEnabled = true }: Props) {
   const ids = itemIds ?? photos;
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   return (
     <View style={styles.container}>
       <Reanimated.ScrollView
@@ -76,7 +78,7 @@ export function SortablePhotoStrip({ photos, onReorder, onAddPhoto, itemIds, ren
               accessibilityRole="button"
               accessibilityLabel="Add more photos"
             >
-              <Ionicons name="add" size={28} color={Colors.background} />
+              <Ionicons name="add" size={28} color={colors.background} />
             </AnimatedPressable>
           )}
         </View>
@@ -102,6 +104,8 @@ interface ItemProps {
 
 function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, renderItem, reorderEnabled = true }: ItemProps) {
   const isVideo = isVideoUri(id);
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const isDragging = useSharedValue(false);
   const position = useSharedValue(index * TOTAL_SIZE);
   const zIndex = useSharedValue(0);
@@ -221,7 +225,7 @@ function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, re
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   container: {
     paddingVertical: 16,
     height: ITEM_SIZE + 60,
@@ -230,7 +234,7 @@ const styles = StyleSheet.create({
     width: ITEM_SIZE,
     height: ITEM_SIZE,
     borderRadius: 16,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
@@ -247,7 +251,7 @@ const styles = StyleSheet.create({
     height: ITEM_SIZE,
     borderRadius: 16,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
@@ -268,17 +272,17 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     paddingVertical: 2,
     alignItems: 'center',
   },
   coverText: {
-    color: Colors.background,
+    color: colors.background,
     fontSize: 10,
     fontFamily: Typography.family.bold,
   },
   hintText: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontSize: 12,
     fontFamily: Typography.family.medium,
     textAlign: 'center',

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Typography, Type } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -31,6 +31,8 @@ export function CuratedCollectionsRail({
   onOpenCollection,
   onSeeAll,
 }: CuratedCollectionsRailProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width } = useWindowDimensions();
   const cardWidth = Math.min(320, Math.max(272, width - Space.md * 3));
 
@@ -50,7 +52,7 @@ export function CuratedCollectionsRail({
             accessibilityLabel="See all curated collections"
           >
             <Text style={styles.seeAllText}>See all</Text>
-            <Ionicons name="arrow-forward" size={16} color={Colors.textPrimary} />
+            <Ionicons name="arrow-forward" size={16} color={colors.textPrimary} />
           </AnimatedPressable>
         )}
       </View>
@@ -76,6 +78,8 @@ export function CuratedCollectionsRail({
             key={collection.id}
             collection={collection}
             width={cardWidth}
+            colors={colors}
+            styles={styles}
             onPress={() => onOpenCollection(collection.id)}
           />
         ))}
@@ -89,13 +93,17 @@ export function CuratedCollectionsRail({
 function CollectionCard({
   collection,
   width,
+  colors,
+  styles,
   onPress,
 }: {
   collection: CuratedCollection;
   width: number;
+  colors: ThemeColors;
+  styles: ReturnType<typeof createStyles>;
   onPress: () => void;
 }) {
-  const accent = collection.accentColor ?? Colors.brand;
+  const accent = collection.accentColor ?? colors.brand;
 
   return (
     <AnimatedPressable
@@ -143,7 +151,7 @@ function CollectionCard({
           <Text style={styles.cardSubtitle} numberOfLines={2}>{collection.subtitle}</Text>
         </View>
         <View style={styles.cardOpenIcon}>
-          <Ionicons name="arrow-forward" size={17} color={Colors.textPrimary} />
+          <Ionicons name="arrow-forward" size={17} color={colors.textPrimary} />
         </View>
       </View>
     </AnimatedPressable>
@@ -152,7 +160,8 @@ function CollectionCard({
 
 // ── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     marginTop: Space.lg,
     marginBottom: Space.lg,
@@ -167,7 +176,7 @@ const styles = StyleSheet.create({
   kicker: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     letterSpacing: 0.8,
     textTransform: 'uppercase',
   },
@@ -181,7 +190,7 @@ const styles = StyleSheet.create({
   seeAllText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   titleRow: {
     paddingHorizontal: Space.md,
@@ -191,14 +200,14 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 25,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: -0.6,
     lineHeight: 30,
   },
   subtitle: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   rail: {
     paddingHorizontal: Space.md,
@@ -211,16 +220,16 @@ const styles = StyleSheet.create({
     minHeight: 148,
     borderRadius: Radius.xl,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   cardMedia: {
     width: 116,
     minHeight: 148,
     position: 'relative',
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   cardImageContainer: {
     width: '100%',
@@ -235,7 +244,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: Space.md,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   fallbackMonogram: {
     width: 42,
@@ -243,14 +252,14 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   fallbackMonogramText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: 0.4,
   },
   cardMediaTint: {
@@ -286,21 +295,21 @@ const styles = StyleSheet.create({
   cardKicker: {
     fontSize: 10,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     letterSpacing: 0.6,
     textTransform: 'uppercase',
   },
   cardTitle: {
     fontSize: 19,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: -0.2,
     lineHeight: 23,
   },
   cardSubtitle: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     lineHeight: 17,
   },
   cardOpenIcon: {
@@ -309,8 +318,9 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
-});
+  });
+}

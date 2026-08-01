@@ -16,7 +16,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import {
   fetchPosterStories,
@@ -61,6 +61,7 @@ export default function PosterViewerScreen() {
   const insets = useSafeAreaInsets();
   const { show } = useToast();
   const currentUser = useStore((state) => state.currentUser);
+  const { colors } = useAppTheme();
 
   const [stories, setStories] = React.useState<PosterStory[]>([]);
   const [storyIndex, setStoryIndex] = React.useState(0);

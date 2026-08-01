@@ -25,7 +25,7 @@ import {
 } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Space, Radius } from '../../theme/designTokens';
 import { isVideoUri } from '../../utils/media';
 import { CachedImage } from '../CachedImage';
@@ -47,6 +47,16 @@ const applyRubberBand = (v: number, min: number, max: number, friction = 0.24) =
   if (v > max) return max + (v - max) * friction;
   return v;
 };
+
+const subComponentStyles = StyleSheet.create({
+  page: {
+    backgroundColor: '#0a0a0a',
+  },
+  image: {
+    width: '100%',
+    height: '100%',
+  },
+});
 
 interface MediaPageProps {
   item: ProductMediaItem;
@@ -176,7 +186,7 @@ function MediaPage({
   return (
     <GestureDetector gesture={composed}>
       <Reanimated.View
-        style={[styles.page, { width, height }, animStyle]}
+        style={[subComponentStyles.page, { width, height }, animStyle]}
         accessible
         accessibilityRole="imagebutton"
         accessibilityLabel={`${item.altText ?? 'Product image'}. Open fullscreen.`}
@@ -186,14 +196,14 @@ function MediaPage({
           <ImageEmptyGraphic
             icon="image-outline"
             label="Photo unavailable"
-            style={styles.image}
+            style={subComponentStyles.image}
           />
         ) : (
           item.focalPoint ? (
             <CachedImage
               uri={item.uri}
-              style={styles.image}
-              containerStyle={styles.image}
+              style={subComponentStyles.image}
+              containerStyle={subComponentStyles.image}
               contentFit={item.fit ?? 'contain'}
               focalPoint={item.focalPoint}
               onError={() => setFailed(true)}
@@ -201,7 +211,7 @@ function MediaPage({
           ) : (
             <SharedTransitionImage
               source={{ uri: item.uri }}
-              style={styles.image}
+              style={subComponentStyles.image}
               resizeMode={item.fit ?? 'contain'}
               sharedTransitionTag={sharedTransitionTag}
               onError={() => setFailed(true)}
@@ -239,13 +249,13 @@ function VideoPage({
 
   return (
     <View
-      style={[styles.page, { width, height }]}
+      style={[subComponentStyles.page, { width, height }]}
       accessible
       accessibilityLabel={item.altText ?? 'Product video'}
     >
       <Video
         source={{ uri: item.uri }}
-        style={styles.image}
+        style={subComponentStyles.image}
         resizeMode={item.fit === 'cover' ? ResizeMode.COVER : ResizeMode.CONTAIN}
         shouldPlay={shouldPlay}
         isMuted
@@ -330,6 +340,8 @@ export function CommerceMediaStage({
   onActiveIndexChange,
   initialIndex = 0,
 }: CommerceMediaStageProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const reducedMotion = useReducedMotion();
   const [activeIndex, setActiveIndex] = useState(initialIndex);
@@ -537,7 +549,7 @@ export function CommerceMediaStage({
                 <Ionicons
                   name={isSaved ? 'bookmark' : 'bookmark-outline'}
                   size={24}
-                  color={isSaved ? Colors.brand : '#fff'}
+                  color={isSaved ? colors.brand : '#fff'}
                   style={styles.controlIcon}
                 />
               </AnimatedPressable>
@@ -549,7 +561,7 @@ export function CommerceMediaStage({
                   isActive={isFav}
                   onToggle={onToggleFav}
                   size={24}
-                  activeColor={Colors.danger}
+                  activeColor={colors.danger}
                   inactiveColor="#fff"
                 />
               </View>
@@ -669,24 +681,17 @@ export function CommerceMediaStage({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   heroContainer: {
     position: 'relative',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     overflow: 'hidden',
   },
   emptyHero: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.surfaceAlt,
-  },
-  page: {
-    backgroundColor: '#0a0a0a',
-  },
-  image: {
-    width: '100%',
-    height: '100%',
+    backgroundColor: colors.surfaceAlt,
   },
   topScrim: {
     position: 'absolute',
@@ -710,13 +715,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: Space.lg,
     left: Space.md,
-    backgroundColor: Colors.success,
+    backgroundColor: colors.success,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
   },
   soldText: {
-    color: Colors.background,
+    color: colors.background,
     fontSize: 16,
     fontFamily: Typography.family.bold,
     letterSpacing: 1,

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Typography } from '../../theme/designTokens';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -49,6 +49,8 @@ export function OrderStatusStepper({
   failureLabel = 'Cancelled',
   stageTimestamps,
 }: OrderStatusStepperProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const currentIndex = STAGE_ORDER.indexOf(currentStage);
 
   function formatStageDate(value?: string): string | undefined {
@@ -67,9 +69,9 @@ export function OrderStatusStepper({
     return (
       <View style={[styles.container, styles.failureContainer]}>
         <View style={[styles.stageIconWrap, styles.failureIconWrap]}>
-          <Ionicons name="close-circle" size={20} color={Colors.danger} />
+          <Ionicons name="close-circle" size={20} color={colors.danger} />
         </View>
-        <Text style={[styles.failureLabel, { color: Colors.danger }]}>{failureLabel}</Text>
+        <Text style={[styles.failureLabel, { color: colors.danger }]}>{failureLabel}</Text>
       </View>
     );
   }
@@ -83,9 +85,9 @@ export function OrderStatusStepper({
         const isPending = index > currentIndex;
         const isLast = index === STAGE_ORDER.length - 1;
 
-        const iconColor = isCompleted || isCurrent ? Colors.brand : Colors.textMuted;
-        const labelColor = isCompleted || isCurrent ? Colors.textPrimary : Colors.textMuted;
-        const lineColor = isCompleted ? Colors.brand : Colors.border;
+        const iconColor = isCompleted || isCurrent ? colors.brand : colors.textMuted;
+        const labelColor = isCompleted || isCurrent ? colors.textPrimary : colors.textMuted;
+        const lineColor = isCompleted ? colors.brand : colors.border;
 
         return (
           <React.Fragment key={stage}>
@@ -93,7 +95,7 @@ export function OrderStatusStepper({
               <View
                 style={[
                   styles.stageIconWrap,
-                  { backgroundColor: isCompleted || isCurrent ? `${Colors.brand}15` : Colors.surfaceAlt },
+                  { backgroundColor: isCompleted || isCurrent ? `${colors.brand}15` : colors.surfaceAlt },
                   isCurrent && styles.stageIconWrapActive,
                 ]}
               >
@@ -129,7 +131,7 @@ export function OrderStatusStepper({
 
 // ── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -149,7 +151,7 @@ const styles = StyleSheet.create({
   },
   stageIconWrapActive: {
     borderWidth: 2,
-    borderColor: Colors.brand,
+    borderColor: colors.brand,
   },
   stageLabel: {
     fontSize: 10,
@@ -163,7 +165,7 @@ const styles = StyleSheet.create({
   stageTimestamp: {
     fontSize: 8,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textAlign: 'center',
     marginTop: 1,
   },
@@ -187,7 +189,7 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm + 2,
   },
   failureIconWrap: {
-    backgroundColor: `${Colors.danger}15`,
+    backgroundColor: `${colors.danger}15`,
   },
   failureLabel: {
     fontSize: 15,

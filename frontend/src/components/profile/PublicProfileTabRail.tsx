@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Space } from '../../theme/designTokens';
 
 interface TabItem {
@@ -16,6 +16,8 @@ interface PublicProfileTabRailProps {
 }
 
 export function PublicProfileTabRail({ tabs, activeKey, onChange }: PublicProfileTabRailProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   return (
     <View style={styles.container}>
       {tabs.map((tab) => {
@@ -47,12 +49,13 @@ export function PublicProfileTabRail({ tabs, activeKey, onChange }: PublicProfil
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flexDirection: 'row',
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   tab: {
     flex: 1,
@@ -68,19 +71,19 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   labelActive: {
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   count: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   countActive: {
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   underline: {
     position: 'absolute',
@@ -88,6 +91,7 @@ const styles = StyleSheet.create({
     left: '25%',
     right: '25%',
     height: 2,
-    backgroundColor: Colors.textPrimary,
+    backgroundColor: colors.textPrimary,
   },
-});
+  });
+}

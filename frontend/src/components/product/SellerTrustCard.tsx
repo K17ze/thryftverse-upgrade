@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Space, Radius } from '../../theme/designTokens';
 import type { SellerTrustSummary, VerificationTier } from '../../platform/product';
 import { VERIFICATION_TIERS, deriveSellerBadges, SELLER_BADGES } from '../../platform/product';
@@ -22,6 +22,8 @@ export function SellerTrustCard({
   onMessage,
   onFollow,
 }: SellerTrustCardProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const rating = seller.rating ?? null;
   const reviewCount = seller.reviewCount ?? null;
   const completedSales = seller.completedSales ?? null;
@@ -132,7 +134,7 @@ export function SellerTrustCard({
                   <Ionicons
                     name={info.icon as keyof typeof Ionicons.glyphMap}
                     size={16}
-                    color={info.color === 'brand' ? Colors.brand : Colors.success}
+                    color={info.color === 'brand' ? colors.brand : colors.success}
                     accessibilityLabel={info.label}
                   />
                 );
@@ -163,7 +165,7 @@ export function SellerTrustCard({
                     if (!badge) return null;
                     return (
                       <View key={type} style={styles.standardsBadge}>
-                        <Ionicons name={badge.icon as keyof typeof Ionicons.glyphMap} size={10} color={Colors.brand} />
+                        <Ionicons name={badge.icon as keyof typeof Ionicons.glyphMap} size={10} color={colors.brand} />
                         <Text style={styles.standardsBadgeText} numberOfLines={1}>{badge.label}</Text>
                       </View>
                     );
@@ -196,7 +198,7 @@ export function SellerTrustCard({
               accessibilityLabel={`Message ${seller.username}`}
               accessibilityRole="button"
             >
-              <Ionicons name="chatbubble-outline" size={18} color={Colors.textPrimary} />
+              <Ionicons name="chatbubble-outline" size={18} color={colors.textPrimary} />
               <Text style={styles.messageText}>Message</Text>
             </AnimatedPressable>
           )}
@@ -207,7 +209,7 @@ export function SellerTrustCard({
         <View style={styles.metricsGrid}>
           {trustMetrics.map((metric) => (
             <View key={metric.label} style={styles.metricCell}>
-              <Ionicons name={metric.icon} size={16} color={Colors.textMuted} />
+              <Ionicons name={metric.icon} size={16} color={colors.textMuted} />
               <Text style={styles.metricLabel}>{metric.label}</Text>
               <Text style={styles.metricValue} numberOfLines={1}>
                 {metric.value}
@@ -220,18 +222,19 @@ export function SellerTrustCard({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     marginTop: Space.sm,
     marginHorizontal: Space.md,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     padding: Space.md,
   },
   sectionTitle: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginBottom: Space.sm,
     letterSpacing: 0.2,
   },
@@ -256,14 +259,14 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarFallbackText: {
     fontSize: 22,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   profileInfo: {
     flex: 1,
@@ -278,14 +281,14 @@ const styles = StyleSheet.create({
   username: {
     fontSize: 16,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     flexShrink: 1,
     minWidth: 0,
   },
   location: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 2,
   },
   badgeRow: {
@@ -297,13 +300,13 @@ const styles = StyleSheet.create({
   badge: {
     paddingHorizontal: 8,
     paddingVertical: 2,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.sm,
   },
   badgeText: {
     fontSize: 10,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   standardsBadge: {
     flexDirection: 'row',
@@ -311,15 +314,15 @@ const styles = StyleSheet.create({
     gap: 3,
     paddingHorizontal: 7,
     paddingVertical: 2,
-    backgroundColor: `${Colors.brand}10`,
+    backgroundColor: `${colors.brand}10`,
     borderRadius: Radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: `${Colors.brand}25`,
+    borderColor: `${colors.brand}25`,
   },
   standardsBadgeText: {
     fontSize: 10,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
+    color: colors.brand,
   },
   actionRow: {
     flexDirection: 'row',
@@ -329,28 +332,28 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 44,
     paddingVertical: 12,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
   followingBtn: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   followText: {
     fontSize: 14,
     fontFamily: Typography.family.semibold,
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
   followingText: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   messageBtn: {
     flex: 1,
     flexDirection: 'row',
     minHeight: 44,
     paddingVertical: 12,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -359,7 +362,7 @@ const styles = StyleSheet.create({
   messageText: {
     fontSize: 14,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   metricsGrid: {
     flexDirection: 'row',
@@ -377,11 +380,12 @@ const styles = StyleSheet.create({
   metricLabel: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   metricValue: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
-});
+  });
+}

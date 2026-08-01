@@ -1,13 +1,15 @@
 import React from 'react';
 import { View, Dimensions } from 'react-native';
 import { SkeletonLoader } from '../SkeletonLoader';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 
 const { width: W } = Dimensions.get('window');
 const ITEM_W = (W - 48) / 2;
-const STATS_BG = Colors.surface;
 
 export function ProfileSkeleton() {
+  const { colors } = useAppTheme();
+  const statsBg = colors.surface;
+
   return (
     <View style={{ paddingHorizontal: 20 }}>
       {/* Hero section */}
@@ -17,7 +19,7 @@ export function ProfileSkeleton() {
         <SkeletonLoader width={100} height={13} borderRadius={6} />
       </View>
       {/* Stats bar */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-around', backgroundColor: STATS_BG, borderRadius: 20, padding: 20, marginBottom: 24 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-around', backgroundColor: statsBg, borderRadius: 20, padding: 20, marginBottom: 24 }}>
         {[0, 1, 2, 3].map(i => (
           <View key={i} style={{ alignItems: 'center', gap: 6 }}>
             <SkeletonLoader width={40} height={22} borderRadius={11} />

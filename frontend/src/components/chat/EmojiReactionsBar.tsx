@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, ViewStyle } from 'react-native';
 import { AnimatedPressable } from '../AnimatedPressable';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography , Space, Radius  } from '../../theme/designTokens';
 import { Caption } from '../ui/Text';
 
@@ -30,6 +30,8 @@ export function EmojiReactionsBar({
   onReact,
   style,
 }: EmojiReactionsBarProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [expanded, setExpanded] = React.useState(false);
 
   const reactionMap = React.useMemo(() => {
@@ -58,7 +60,7 @@ export function EmojiReactionsBar({
         <Caption style={styles.emoji}>{emoji}</Caption>
         {existing && existing.count > 0 ? (
           <Caption
-            color={isActive ? Colors.brand : Colors.textMuted}
+            color={isActive ? colors.brand : colors.textMuted}
             style={styles.count}
           >
             {existing.count}
@@ -82,7 +84,7 @@ export function EmojiReactionsBar({
           scaleValue={0.9}
           hapticFeedback="light"
         >
-          <Caption color={expanded ? Colors.brand : Colors.textMuted} style={styles.plus}>
+          <Caption color={expanded ? colors.brand : colors.textMuted} style={styles.plus}>
             {expanded ? '\u00D7' : '+'}
           </Caption>
         </AnimatedPressable>
@@ -109,6 +111,9 @@ export function MessageReactionsSummary({
   onPress?: () => void;
   style?: ViewStyle;
 }) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   if (!reactions.length) return null;
 
   return (
@@ -126,14 +131,14 @@ export function MessageReactionsSummary({
           </View>
         ))}
       </View>
-      <Caption color={Colors.textMuted} style={styles.summaryCount}>
+      <Caption color={colors.textMuted} style={styles.summaryCount}>
         {reactions.reduce((sum, r) => sum + r.count, 0)}
       </Caption>
     </AnimatedPressable>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -144,17 +149,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     borderRadius: Radius.full,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs + 3,
     minHeight: 36,
   },
   chipActive: {
-    borderColor: Colors.brand,
-    backgroundColor: `${Colors.brand}10`,
+    borderColor: colors.brand,
+    backgroundColor: `${colors.brand}10`,
   },
   emoji: {
     fontSize: 16,
@@ -169,7 +174,7 @@ const styles = StyleSheet.create({
   },
   expandedDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
     marginHorizontal: Space.xs,
     marginTop: Space.xs,
   },
@@ -184,9 +189,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderWidth: 0.5,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     borderRadius: Radius.full,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
@@ -200,11 +205,11 @@ const styles = StyleSheet.create({
     width: 18,
     height: 18,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 0.5,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   summaryEmoji: {
     fontSize: 10,

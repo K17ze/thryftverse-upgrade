@@ -7,7 +7,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Caption, BodyEmphasis } from '../ui/Text';
@@ -37,6 +37,9 @@ export function MessageContextMenu({
   isFailed,
   isTranslated,
 }: MessageContextMenuProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   const actions = React.useMemo<ActionDef[]>(() => {
     return deriveMessageActions({
       isOwnMessage: Boolean(isOwnMessage),
@@ -102,7 +105,7 @@ export function MessageContextMenu({
 
         {messageText ? (
           <View style={styles.previewRow}>
-            <Caption color={Colors.textSecondary} numberOfLines={2}>
+            <Caption color={colors.textSecondary} numberOfLines={2}>
               {messageText}
             </Caption>
           </View>
@@ -124,10 +127,10 @@ export function MessageContextMenu({
                 <Ionicons
                   name={action.icon as any}
                   size={22}
-                  color={action.destructive ? Colors.danger : Colors.textPrimary}
+                  color={action.destructive ? colors.danger : colors.textPrimary}
                 />
                 <BodyEmphasis
-                  color={action.destructive ? Colors.danger : Colors.textPrimary}
+                  color={action.destructive ? colors.danger : colors.textPrimary}
                   style={styles.actionLabel}
                 >
                   {action.label}
@@ -146,14 +149,14 @@ export function MessageContextMenu({
           scaleValue={0.98}
           hapticFeedback="light"
         >
-          <BodyEmphasis color={Colors.textPrimary}>Cancel</BodyEmphasis>
+          <BodyEmphasis color={colors.textPrimary}>Cancel</BodyEmphasis>
         </AnimatedPressable>
       </Animated.View>
     </Modal>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   backdrop: {
     ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.45)',
@@ -163,7 +166,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderTopLeftRadius: Radius.xl + 8,
     borderTopRightRadius: Radius.xl + 8,
     paddingHorizontal: Space.lg - 4,
@@ -178,19 +181,19 @@ const styles = StyleSheet.create({
   handle: {
     width: 40,
     height: 4,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
     borderRadius: 2,
     alignSelf: 'center',
     marginBottom: Space.md,
   },
   previewRow: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.lg,
     padding: Space.sm + 4,
     marginBottom: Space.sm + 4,
   },
   actionsList: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.lg,
     overflow: 'hidden',
     marginBottom: Space.sm + 4,
@@ -202,20 +205,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 6,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   actionLabel: {
     flex: 1,
   },
   cancelBtn: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.lg,
     paddingVertical: Space.md,
     alignItems: 'center',
   },
   destructiveDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
     marginHorizontal: Space.md,
   },
 });

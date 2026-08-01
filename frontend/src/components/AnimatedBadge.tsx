@@ -6,7 +6,7 @@ import Reanimated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
-import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Typography } from '../theme/designTokens';
 
 interface AnimatedBadgeProps {
@@ -15,6 +15,8 @@ interface AnimatedBadgeProps {
 }
 
 export function AnimatedBadge({ count, size = 18 }: AnimatedBadgeProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const scale = useSharedValue(1);
 
   useEffect(() => {
@@ -52,9 +54,9 @@ export function AnimatedBadge({ count, size = 18 }: AnimatedBadgeProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   badge: {
-    backgroundColor: Colors.danger,
+    backgroundColor: colors.danger,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,

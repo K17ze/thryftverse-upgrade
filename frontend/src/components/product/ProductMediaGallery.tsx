@@ -23,7 +23,7 @@ import {
   FlatList,
 } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Space, Radius } from '../../theme/designTokens';
 import { isVideoUri } from '../../utils/media';
 import { CachedImage } from '../CachedImage';
@@ -44,6 +44,16 @@ const applyRubberBand = (v: number, min: number, max: number, friction = 0.24) =
   if (v > max) return max + (v - max) * friction;
   return v;
 };
+
+const subComponentStyles = StyleSheet.create({
+  page: {
+    backgroundColor: '#0a0a0a',
+  },
+  image: {
+    width: '100%',
+    height: '100%',
+  },
+});
 
 interface MediaPageProps {
   uri: string;
@@ -139,18 +149,18 @@ function MediaPage({ uri, width, height, onDoubleTap, sharedTransitionTag, onZoo
 
   return (
     <GestureDetector gesture={composed}>
-      <Reanimated.View style={[styles.page, { width, height }, animStyle]}>
+      <Reanimated.View style={[subComponentStyles.page, { width, height }, animStyle]}>
         {failed || !uri ? (
           // Premium fallback for missing/failed media — never a bare gray box.
           <ImageEmptyGraphic
             icon="image-outline"
             label="Photo unavailable"
-            style={styles.image}
+            style={subComponentStyles.image}
           />
         ) : (
           <SharedTransitionImage
             source={{ uri }}
-            style={styles.image}
+            style={subComponentStyles.image}
             resizeMode="cover"
             sharedTransitionTag={sharedTransitionTag}
             onError={() => setFailed(true)}
@@ -163,10 +173,10 @@ function MediaPage({ uri, width, height, onDoubleTap, sharedTransitionTag, onZoo
 
 function VideoPage({ uri, width, height, shouldPlay }: { uri: string; width: number; height: number; shouldPlay: boolean }) {
   return (
-    <View style={[styles.page, { width, height }]}>
+    <View style={[subComponentStyles.page, { width, height }]}>
       <Video
         source={{ uri }}
-        style={styles.image}
+        style={subComponentStyles.image}
         resizeMode={ResizeMode.COVER}
         shouldPlay={shouldPlay}
         isMuted
@@ -214,6 +224,8 @@ export function ProductMediaGallery({
   bigHeartOpacity,
   bigHeartScale,
 }: ProductMediaGalleryProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const [activeIndex, setActiveIndex] = useState(0);
   const listRef = useRef<FlatList<any>>(null);
@@ -337,7 +349,7 @@ export function ProductMediaGallery({
             <Ionicons
               name={isSaved ? 'bookmark' : 'bookmark-outline'}
               size={24}
-              color={isSaved ? Colors.brand : '#fff'}
+              color={isSaved ? colors.brand : '#fff'}
             />
           </AnimatedPressable>
 
@@ -346,7 +358,7 @@ export function ProductMediaGallery({
               isActive={isFav}
               onToggle={onToggleFav}
               size={24}
-              activeColor={Colors.danger}
+              activeColor={colors.danger}
               inactiveColor="#fff"
             />
           </View>
@@ -416,18 +428,12 @@ export function ProductMediaGallery({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   heroContainer: {
     position: 'relative',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     overflow: 'hidden',
-  },
-  page: {
-    backgroundColor: '#0a0a0a',
-  },
-  image: {
-    width: '100%',
-    height: '100%',
   },
   topScrim: {
     position: 'absolute',
@@ -452,13 +458,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: Space.lg,
     left: Space.md,
-    backgroundColor: Colors.success,
+    backgroundColor: colors.success,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
   },
   soldText: {
-    color: Colors.background,
+    color: colors.background,
     fontSize: 16,
     fontFamily: Typography.family.bold,
     letterSpacing: 1,
@@ -554,4 +560,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-});
+  });
+}

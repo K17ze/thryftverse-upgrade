@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Modal, Pressable, TextInput, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Typography, Type } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AppButton } from '../ui/AppButton';
@@ -30,6 +30,8 @@ export function SellerResponseComposer({
   onClose,
   onSubmit,
 }: SellerResponseComposerProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [text, setText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -72,7 +74,7 @@ export function SellerResponseComposer({
           <View style={styles.header}>
             <View style={styles.headerLeft}>
               <View style={styles.headerIcon}>
-                <Ionicons name="chatbubble-ellipses-outline" size={18} color={Colors.brand} />
+                <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.brand} />
               </View>
               <View>
                 <Text style={styles.title}>Respond to review</Text>
@@ -89,13 +91,13 @@ export function SellerResponseComposer({
               accessibilityRole="button"
               accessibilityLabel="Close response composer"
             >
-              <Ionicons name="close" size={22} color={Colors.textMuted} />
+              <Ionicons name="close" size={22} color={colors.textMuted} />
             </Pressable>
           </View>
 
           {/* Guidance */}
           <View style={styles.guidanceBox}>
-            <Ionicons name="information-circle-outline" size={14} color={Colors.textMuted} />
+            <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
             <Text style={styles.guidanceText}>
               Keep it professional and thank the buyer. Your response is public.
             </Text>
@@ -106,7 +108,7 @@ export function SellerResponseComposer({
             <TextInput
               style={styles.input}
               placeholder="Thank your buyer and address their feedback..."
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
               multiline
               textAlignVertical="top"
               value={text}
@@ -127,7 +129,7 @@ export function SellerResponseComposer({
               size="md"
               hapticFeedback="medium"
               accessibilityLabel="Post seller response"
-              icon={isSubmitting ? undefined : <Ionicons name="send-outline" size={16} color={Colors.textInverse} />}
+              icon={isSubmitting ? undefined : <Ionicons name="send-outline" size={16} color={colors.textInverse} />}
             />
           </View>
         </Pressable>
@@ -138,14 +140,15 @@ export function SellerResponseComposer({
 
 // ── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   backdrop: {
     flex: 1,
     justifyContent: 'flex-end',
     backgroundColor: 'rgba(0,0,0,0.5)',
   },
   sheet: {
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
     paddingBottom: Space.xl,
@@ -177,7 +180,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: Radius.full,
-    backgroundColor: `${Colors.brand}15`,
+    backgroundColor: `${colors.brand}15`,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
@@ -185,14 +188,14 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 17,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: -0.3,
     marginBottom: 2,
   },
   subtitle: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     lineHeight: 17,
   },
   guidanceBox: {
@@ -201,7 +204,7 @@ const styles = StyleSheet.create({
     gap: 6,
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.md,
     padding: Space.sm,
   },
@@ -209,21 +212,21 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     lineHeight: 16,
   },
   inputCard: {
     marginHorizontal: Space.md,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     padding: Space.md,
   },
   input: {
     minHeight: 100,
     maxHeight: 200,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     textAlignVertical: 'top',
@@ -231,7 +234,7 @@ const styles = StyleSheet.create({
   charCount: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textAlign: 'right',
     marginTop: Space.xs,
   },
@@ -239,4 +242,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
   },
-});
+  });
+}

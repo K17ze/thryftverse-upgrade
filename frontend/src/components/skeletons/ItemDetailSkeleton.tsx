@@ -1,12 +1,14 @@
 import React from 'react';
 import { View, Dimensions } from 'react-native';
 import { SkeletonLoader } from '../SkeletonLoader';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 
 const { width: W } = Dimensions.get('window');
-const SELLER_CARD_BG = Colors.surface;
 
 export function ItemDetailSkeleton() {
+  const { colors } = useAppTheme();
+  const sellerCardBg = colors.surface;
+
   return (
     <View>
       {/* Hero image */}
@@ -30,7 +32,7 @@ export function ItemDetailSkeleton() {
           <SkeletonLoader width="80%" height={13} borderRadius={6} />
         </View>
         {/* Seller card */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 12, backgroundColor: SELLER_CARD_BG, borderRadius: 20, padding: 16 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 12, backgroundColor: sellerCardBg, borderRadius: 20, padding: 16 }}>
           <SkeletonLoader width={48} height={48} borderRadius={24} />
           <View style={{ flex: 1, gap: 8 }}>
             <SkeletonLoader width="50%" height={14} borderRadius={7} />

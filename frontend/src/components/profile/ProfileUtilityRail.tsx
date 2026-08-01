@@ -2,7 +2,7 @@ import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Typography } from '../../theme/designTokens';
 
 interface UtilityItem {
@@ -14,6 +14,8 @@ interface UtilityItem {
 }
 
 export function ProfileUtilityRail({ items }: { items: UtilityItem[] }) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const scrollRef = React.useRef<ScrollView>(null);
 
   React.useEffect(() => {
@@ -43,7 +45,7 @@ export function ProfileUtilityRail({ items }: { items: UtilityItem[] }) {
             accessibilityRole="button"
             accessibilityLabel={item.accessibilityLabel}
           >
-            <Ionicons name={item.icon} size={20} color={Colors.textPrimary} />
+            <Ionicons name={item.icon} size={20} color={colors.textPrimary} />
             <Text style={styles.label} numberOfLines={1}>
               {item.label}
             </Text>
@@ -61,11 +63,12 @@ export function ProfileUtilityRail({ items }: { items: UtilityItem[] }) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   content: {
     paddingHorizontal: Space.md,
@@ -79,13 +82,13 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   label: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
     fontSize: 12,
     lineHeight: 16,
   },
   value: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontFamily: Typography.family.regular,
     fontSize: 10,
     lineHeight: 12,
@@ -93,4 +96,5 @@ const styles = StyleSheet.create({
   valuePlaceholder: {
     height: 12,
   },
-});
+  });
+}

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Space, Radius } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -49,6 +49,8 @@ export function CommercePartyStrip({
   showFollow = false,
   facts = [],
 }: CommercePartyStripProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const showSellerVerified = party.sellerAccountVerified === true;
   const showIssuerVerified = party.issuerIdentityVerified === true;
 
@@ -87,10 +89,10 @@ export function CommercePartyStrip({
                 {party.displayName ?? party.username}
               </Text>
               {showSellerVerified && (
-                <Ionicons name="checkmark-circle" size={14} color={Colors.success} />
+                <Ionicons name="checkmark-circle" size={14} color={colors.success} />
               )}
               {showIssuerVerified && (
-                <Ionicons name="shield-checkmark-outline" size={14} color={Colors.success} />
+                <Ionicons name="shield-checkmark-outline" size={14} color={colors.success} />
               )}
             </View>
             {party.location ? (
@@ -132,7 +134,7 @@ export function CommercePartyStrip({
               accessibilityLabel={`${messageLabel} ${party.username}`}
               accessibilityRole="button"
             >
-              <Ionicons name="chatbubble-outline" size={16} color={Colors.textPrimary} />
+              <Ionicons name="chatbubble-outline" size={16} color={colors.textPrimary} />
               <Text style={styles.messageText}>{messageLabel}</Text>
             </AnimatedPressable>
           )}
@@ -156,18 +158,18 @@ export function CommercePartyStrip({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     marginTop: Space.sm,
     marginHorizontal: Space.md,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     padding: Space.md,
   },
   sectionTitle: {
     fontSize: 11,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginBottom: Space.sm,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
@@ -193,14 +195,14 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarFallbackText: {
     fontSize: 20,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   profileInfo: {
     flex: 1,
@@ -213,12 +215,12 @@ const styles = StyleSheet.create({
   username: {
     fontSize: 15,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   location: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 2,
   },
   badgeRow: {
@@ -230,13 +232,13 @@ const styles = StyleSheet.create({
   badge: {
     paddingHorizontal: 8,
     paddingVertical: 2,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.sm,
   },
   badgeText: {
     fontSize: 10,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   actionRow: {
     flexDirection: 'row',
@@ -245,27 +247,27 @@ const styles = StyleSheet.create({
   followBtn: {
     flex: 1,
     paddingVertical: 10,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
   followingBtn: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   followText: {
     fontSize: 14,
     fontFamily: Typography.family.semibold,
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
   followingText: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   messageBtn: {
     flex: 1,
     flexDirection: 'row',
     paddingVertical: 10,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -274,7 +276,7 @@ const styles = StyleSheet.create({
   messageText: {
     fontSize: 14,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   factsRow: {
     flexDirection: 'row',
@@ -286,18 +288,18 @@ const styles = StyleSheet.create({
   factItem: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   factLabel: {
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   factValue: {
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   factsSeparator: {
     fontSize: 12,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
 });

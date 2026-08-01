@@ -13,7 +13,7 @@ import { CameraView, useCameraPermissions, CameraType } from 'expo-camera';
 import * as MediaLibrary from 'expo-media-library/legacy';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Typography } from '../theme/designTokens';
 import { useToast } from '../context/ToastContext';
 import { Linking } from 'react-native';
@@ -38,6 +38,8 @@ export default function VisualSearchCamera({
 }: VisualSearchCameraProps) {
   const { show } = useToast();
   const insets = useSafeAreaInsets();
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const cameraRef = React.useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = React.useState<CameraType>('back');
@@ -120,7 +122,7 @@ export default function VisualSearchCamera({
   if (!permission) {
     return (
       <View style={styles.permissionOverlay}>
-        <ActivityIndicator size="large" color={Colors.brand} />
+        <ActivityIndicator size="large" color={colors.brand} />
       </View>
     );
   }
@@ -252,7 +254,7 @@ export default function VisualSearchCamera({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   permissionOverlay: {
     ...StyleSheet.absoluteFill,
     backgroundColor: '#000',
@@ -282,12 +284,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 24,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
   },
   permissionBtnText: {
     fontFamily: Typography.family.semibold,
     fontSize: 14,
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
   focusReticle: {
     position: 'absolute',

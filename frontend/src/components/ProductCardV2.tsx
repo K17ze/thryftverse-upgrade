@@ -6,7 +6,7 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Space, Radius, Control } from '../theme/designTokens';
 import { T } from './ui/Text';
 import { AnimatedPressable } from './AnimatedPressable';
@@ -65,6 +65,8 @@ export function ProductCardV2({
   const haptic = useHaptic();
   const { formatFromFiat } = useFormattedPrice();
   const reducedMotionEnabled = useReducedMotion();
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   const [imageFailed, setImageFailed] = useState(false);
   const aspectRatio = mediaAspectRatio ?? resolveListingMediaAspectRatio(item);
@@ -158,7 +160,7 @@ export function ProductCardV2({
             <Ionicons
               name={hasVideo ? 'videocam' : 'images'}
               size={13}
-              color={Colors.textInverse}
+              color={colors.textInverse}
             />
           </View>
         )}
@@ -180,7 +182,7 @@ export function ProductCardV2({
               <Ionicons
                 name={isSaved ? 'bookmark' : 'bookmark-outline'}
                 size={20}
-                color={isSaved ? Colors.brand : Colors.textInverse}
+                color={isSaved ? colors.brand : colors.textInverse}
                 style={styles.actionGlyph}
               />
             </AnimatedPressable>
@@ -190,8 +192,8 @@ export function ProductCardV2({
               isActive={isFav}
               onToggle={handleToggleFav}
               size={21}
-              activeColor={Colors.danger}
-              inactiveColor={Colors.textInverse}
+              activeColor={colors.danger}
+              inactiveColor={colors.textInverse}
             />
           </View>
         </View>
@@ -210,7 +212,7 @@ export function ProductCardV2({
             </View>
             {item.likes > 0 ? (
               <View style={styles.likes}>
-                <Ionicons name="heart" size={9} color={Colors.textMuted} />
+                <Ionicons name="heart" size={9} color={colors.textMuted} />
                 <T.Caption style={styles.likesText}>{item.likes}</T.Caption>
               </View>
             ) : null}
@@ -239,7 +241,7 @@ export function ProductCardV2({
                 // Premium compact seller placeholder — keeps alignment and
                 // avoids awkward whitespace when avatar is missing.
                 <View style={styles.sellerAvatarPlaceholder}>
-                  <Ionicons name="person" size={10} color={Colors.textMuted} />
+                  <Ionicons name="person" size={10} color={colors.textMuted} />
                 </View>
               )}
               <Text style={styles.sellerName} numberOfLines={1}>@{sellerUsername}</Text>
@@ -254,7 +256,7 @@ export function ProductCardV2({
                   accessibilityRole="button"
                   accessibilityLabel={`Message @${sellerUsername}`}
                 >
-                  <Ionicons name="chatbubble-outline" size={17} color={Colors.textPrimary} />
+                  <Ionicons name="chatbubble-outline" size={17} color={colors.textPrimary} />
                 </AnimatedPressable>
               ) : null}
             </View>
@@ -288,6 +290,8 @@ interface MasonryGridProps {
 }
 
 export function MasonryGrid({ items, onPressItem, numColumns = 2, showSaveButton = false, visualOnly = false }: MasonryGridProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   // True masonry: assign each item to the shortest column for visual balance
   const columns: { item: Listing; originalIndex: number }[][] = Array.from({ length: numColumns }, () => []);
   const heights = Array.from({ length: numColumns }, () => 0);
@@ -337,7 +341,7 @@ export function MasonryGrid({ items, onPressItem, numColumns = 2, showSaveButton
 // STYLES
 // ============================================================================
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   container: {
     flex: 1,
   },
@@ -347,7 +351,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'hidden',
     borderRadius: Radius.lg,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   image: {
     width: '100%',
@@ -370,7 +374,7 @@ const styles = StyleSheet.create({
   soldPillText: {
     fontSize: 11,
     fontFamily: Typography.family.bold,
-    color: Colors.textInverse,
+    color: colors.textInverse,
     letterSpacing: 0.3,
     textTransform: 'uppercase',
   },
@@ -418,7 +422,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 19,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: -0.15,
   },
   priceRow: {
@@ -437,13 +441,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 20,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: -0.2,
   },
   originalPrice: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textDecorationLine: 'line-through',
   },
   likes: {
@@ -478,16 +482,16 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   sellerName: {
     fontSize: 12,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     flex: 1,
   },
   messageButton: {
@@ -513,7 +517,7 @@ const styles = StyleSheet.create({
   conditionText: {
     fontSize: 11,
     fontFamily: Typography.family.bold,
-    color: Colors.textInverse,
+    color: colors.textInverse,
     letterSpacing: 0.3,
     textTransform: 'uppercase',
   },

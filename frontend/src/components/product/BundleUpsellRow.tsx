@@ -1,7 +1,7 @@
 import React, { memo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Space, Radius } from '../../theme/designTokens';
 import type { Listing } from '../../data/mockData';
 import { CachedImage } from '../CachedImage';
@@ -41,6 +41,8 @@ function BundleUpsellRowComponent({
   sellerName,
   onOpenBundleBag,
 }: BundleUpsellRowProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { formatFromFiat, displayMode } = useFormattedPrice();
 
   const bundleItems = items
@@ -57,7 +59,7 @@ function BundleUpsellRowComponent({
     <View style={styles.container}>
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
-          <Ionicons name="cube" size={16} color={Colors.brand} />
+          <Ionicons name="cube" size={16} color={colors.brand} />
           <Text style={styles.sectionTitle}>Bundle and save</Text>
         </View>
         <View style={styles.bundleCountBadge}>
@@ -95,7 +97,7 @@ function BundleUpsellRowComponent({
                 />
                 {!bundleItem.images?.[0] ? (
                   <View style={styles.thumbFallback}>
-                    <Ionicons name="shirt-outline" size={20} color={Colors.textMuted} />
+                    <Ionicons name="shirt-outline" size={20} color={colors.textMuted} />
                   </View>
                 ) : null}
               </View>
@@ -119,9 +121,9 @@ function BundleUpsellRowComponent({
           accessibilityRole="button"
           accessibilityLabel="Open bundle bag to select items and checkout"
         >
-          <Ionicons name="bag-add-outline" size={16} color={Colors.brand} />
+          <Ionicons name="bag-add-outline" size={16} color={colors.brand} />
           <Text style={styles.createBundleBtnText}>Create bundle</Text>
-          <Ionicons name="chevron-forward" size={14} color={Colors.brand} />
+          <Ionicons name="chevron-forward" size={14} color={colors.brand} />
         </Pressable>
       )}
     </View>
@@ -130,11 +132,12 @@ function BundleUpsellRowComponent({
 
 export const BundleUpsellRow = memo(BundleUpsellRowComponent);
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     marginTop: Space.sm,
     marginHorizontal: Space.md,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     paddingVertical: Space.sm,
     paddingHorizontal: Space.md,
@@ -153,24 +156,24 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     letterSpacing: 0.2,
   },
   bundleCountBadge: {
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: Radius.full,
-    backgroundColor: `${Colors.brand}12`,
+    backgroundColor: `${colors.brand}12`,
   },
   bundleCountText: {
     fontSize: 11,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
+    color: colors.brand,
   },
   subtitle: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     lineHeight: 16,
     marginBottom: Space.sm,
   },
@@ -189,7 +192,7 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     marginBottom: 6,
     overflow: 'hidden',
   },
@@ -205,7 +208,7 @@ const styles = StyleSheet.create({
   thumbPrice: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     textAlign: 'center',
   },
   totalRow: {
@@ -215,17 +218,17 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
     paddingTop: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
+    borderTopColor: colors.border,
   },
   totalLabel: {
     fontSize: 13,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   totalValue: {
     fontSize: 15,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   createBundleBtn: {
     flexDirection: 'row',
@@ -236,8 +239,8 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: `${Colors.brand}40`,
-    backgroundColor: `${Colors.brand}08`,
+    borderColor: `${colors.brand}40`,
+    backgroundColor: `${colors.brand}08`,
   },
   createBundleBtnPressed: {
     opacity: 0.7,
@@ -245,6 +248,7 @@ const styles = StyleSheet.create({
   createBundleBtnText: {
     fontSize: 14,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
+    color: colors.brand,
   },
-});
+  });
+}

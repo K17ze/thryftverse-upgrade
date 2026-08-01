@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Space, Radius } from '../../theme/designTokens';
 import {
   SellerBadgeType,
@@ -14,16 +14,18 @@ import {
 interface BadgeChipProps {
   badge: SellerBadgeInfo;
   size?: 'sm' | 'md';
+  colors: ThemeColors;
+  styles: ReturnType<typeof createStyles>;
 }
 
-function BadgeChip({ badge, size = 'md' }: BadgeChipProps) {
+function BadgeChip({ badge, size = 'md', colors, styles }: BadgeChipProps) {
   const isSm = size === 'sm';
   return (
     <View style={[styles.chip, isSm && styles.chipSm]}>
       <Ionicons
         name={badge.icon as keyof typeof Ionicons.glyphMap}
         size={isSm ? 11 : 13}
-        color={Colors.brand}
+        color={colors.brand}
       />
       <Text style={[styles.chipText, isSm && styles.chipTextSm]} numberOfLines={1}>
         {badge.label}
@@ -50,6 +52,8 @@ export function SellerStandardsBadges({
   align = 'left',
   limit,
 }: SellerStandardsBadgesProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const earnedBadges = React.useMemo(
     () => deriveSellerBadges(sellerTrust),
     [sellerTrust],
@@ -64,7 +68,7 @@ export function SellerStandardsBadges({
       {badgesToShow.map((type) => {
         const badge = SELLER_BADGES[type];
         if (!badge) return null;
-        return <BadgeChip key={type} badge={badge} size={size} />;
+        return <BadgeChip key={type} badge={badge} size={size} colors={colors} styles={styles} />;
       })}
     </View>
   );
@@ -73,7 +77,8 @@ export function SellerStandardsBadges({
 export { deriveSellerBadges, SELLER_BADGES };
 export type { SellerBadgeType, SellerBadgeInfo };
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -89,10 +94,10 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    backgroundColor: `${Colors.brand}10`,
+    backgroundColor: `${colors.brand}10`,
     borderRadius: Radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: `${Colors.brand}30`,
+    borderColor: `${colors.brand}30`,
   },
   chipSm: {
     paddingHorizontal: 7,
@@ -102,10 +107,11 @@ const styles = StyleSheet.create({
   chipText: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
+    color: colors.brand,
     letterSpacing: 0.1,
   },
   chipTextSm: {
     fontSize: 10,
   },
-});
+  });
+}

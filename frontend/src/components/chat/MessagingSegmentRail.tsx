@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { Pressable } from 'react-native';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Type, TypeStyles, Typography } from '../../theme/designTokens';
 
 export type MessagingSegment = 'all' | 'buying' | 'selling' | 'requests' | 'groups';
@@ -21,6 +21,9 @@ export function MessagingSegmentRail({
   buyingCount = 0,
   sellingCount = 0,
 }: MessagingSegmentRailProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   const segments: { key: MessagingSegment; label: string; badge?: number }[] = [
     { key: 'all', label: 'All' },
     { key: 'buying', label: 'Buying', badge: buyingCount > 0 ? buyingCount : undefined },
@@ -64,12 +67,12 @@ export function MessagingSegmentRail({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   root: {
     paddingHorizontal: Space.md,
     paddingVertical: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   content: {
     flexDirection: 'row',
@@ -88,16 +91,16 @@ const styles = StyleSheet.create({
   },
   labelActive: {
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   labelInactive: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   badge: {
     minWidth: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 4,
@@ -105,6 +108,6 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 10,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
 });

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Space } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 
@@ -26,6 +26,8 @@ export function PublicProfileIdentityHero({
   memberSince,
   listingCount,
 }: PublicProfileIdentityHeroProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const contextParts: string[] = [];
   if (location) contextParts.push(location);
   if (memberSince) contextParts.push(`Member since ${memberSince}`);
@@ -43,7 +45,7 @@ export function PublicProfileIdentityHero({
             />
           ) : (
             <View style={[styles.avatar, styles.avatarFallback]}>
-              <Ionicons name="person" size={36} color={Colors.textMuted} />
+              <Ionicons name="person" size={36} color={colors.textMuted} />
             </View>
           )}
         </View>
@@ -77,7 +79,8 @@ export function PublicProfileIdentityHero({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
@@ -97,10 +100,10 @@ const styles = StyleSheet.create({
     height: AVATAR_SIZE,
     borderRadius: AVATAR_SIZE / 2,
     borderWidth: 3,
-    borderColor: Colors.background,
+    borderColor: colors.background,
   },
   avatarFallback: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -110,19 +113,19 @@ const styles = StyleSheet.create({
   displayName: {
     fontSize: 22,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: -0.4,
     marginBottom: 2,
   },
   username: {
     fontSize: 14,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   bio: {
     fontSize: 14,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     lineHeight: 20,
     marginBottom: Space.sm,
   },
@@ -135,10 +138,11 @@ const styles = StyleSheet.create({
   contextText: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   contextSep: {
     fontSize: 12,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
-});
+  });
+}

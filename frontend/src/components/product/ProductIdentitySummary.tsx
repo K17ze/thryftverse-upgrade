@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Space, Radius } from '../../theme/designTokens';
 import type { ListingEngagementSummary } from '../../platform/product';
 
@@ -29,6 +29,8 @@ export function ProductIdentitySummary({
   izeText,
   engagement,
 }: ProductIdentitySummaryProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const engagementParts: string[] = [];
   if (engagement?.likes && engagement.likes > 0) {
     engagementParts.push(`${engagement.likes} like${engagement.likes > 1 ? 's' : ''}`);
@@ -84,13 +86,13 @@ export function ProductIdentitySummary({
 
       {showInterestSignal ? (
         <View style={styles.interestRow}>
-          <Ionicons name="people-outline" size={13} color={Colors.brand} />
+          <Ionicons name="people-outline" size={13} color={colors.brand} />
           <Text style={styles.interestText} numberOfLines={1}>
             {interestCount} people are interested
           </Text>
           {showWatching ? (
             <View style={styles.watchingBadge}>
-              <Ionicons name="eye" size={10} color={Colors.danger} />
+              <Ionicons name="eye" size={10} color={colors.danger} />
               <Text style={styles.watchingText} numberOfLines={1}>
                 {watcherCount} watching
               </Text>
@@ -106,7 +108,8 @@ export function ProductIdentitySummary({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
@@ -115,13 +118,13 @@ const styles = StyleSheet.create({
   brand: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginBottom: Space.xs,
   },
   title: {
     fontSize: 22,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     lineHeight: 28,
     letterSpacing: -0.4,
     marginBottom: Space.sm,
@@ -135,7 +138,7 @@ const styles = StyleSheet.create({
   price: {
     fontSize: 28,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: -0.6,
     flexShrink: 1,
     minWidth: 0,
@@ -143,7 +146,7 @@ const styles = StyleSheet.create({
   originalPrice: {
     fontSize: 15,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textDecorationLine: 'line-through',
     flexShrink: 0,
   },
@@ -151,7 +154,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: Radius.sm,
-    backgroundColor: Colors.danger,
+    backgroundColor: colors.danger,
     flexShrink: 0,
   },
   dropBadgeText: {
@@ -169,7 +172,7 @@ const styles = StyleSheet.create({
   interestText: {
     fontSize: 12,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     flexShrink: 1,
   },
   watchingBadge: {
@@ -179,31 +182,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: Radius.full,
-    backgroundColor: `${Colors.danger}12`,
+    backgroundColor: `${colors.danger}12`,
     flexShrink: 0,
   },
   watchingText: {
     fontSize: 11,
     fontFamily: Typography.family.semibold,
-    color: Colors.danger,
+    color: colors.danger,
   },
   protectionTotal: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: Space.xs,
   },
   izeText: {
     fontSize: 13,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginTop: 2,
     letterSpacing: 0.1,
   },
   engagementText: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: Space.xs,
   },
-});
+  });
+}

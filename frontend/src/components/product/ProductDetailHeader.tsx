@@ -7,7 +7,7 @@ import Reanimated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Space, Radius } from '../../theme/designTokens';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -34,6 +34,8 @@ export function ProductDetailHeader({
   isFav,
   onToggleFav,
 }: ProductDetailHeaderProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
 
   const containerStyle = useAnimatedStyle(() => {
@@ -68,7 +70,7 @@ export function ProductDetailHeader({
             <Ionicons
               name="arrow-back"
               size={22}
-              color={Colors.textPrimary}
+              color={colors.textPrimary}
               onPress={onBack}
               accessibilityLabel="Go back"
               accessibilityRole="button"
@@ -91,7 +93,7 @@ export function ProductDetailHeader({
             <Ionicons
               name="share-outline"
               size={20}
-              color={Colors.textPrimary}
+              color={colors.textPrimary}
               onPress={onShare}
               accessibilityLabel="Share"
               accessibilityRole="button"
@@ -101,7 +103,7 @@ export function ProductDetailHeader({
             <Ionicons
               name={isFav ? 'heart' : 'heart-outline'}
               size={20}
-              color={isFav ? Colors.danger : Colors.textPrimary}
+              color={isFav ? colors.danger : colors.textPrimary}
               onPress={onToggleFav}
               accessibilityLabel={isFav ? 'Remove from wishlist' : 'Add to wishlist'}
               accessibilityRole="button"
@@ -117,15 +119,16 @@ export function ProductDetailHeader({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
     paddingHorizontal: Space.md,
     paddingBottom: Space.sm,
     zIndex: 50,
@@ -159,13 +162,13 @@ const styles = StyleSheet.create({
   brand: {
     fontSize: 11,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     letterSpacing: 0.3,
   },
   title: {
     fontSize: 14,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   priceRow: {
     marginTop: 4,
@@ -173,6 +176,7 @@ const styles = StyleSheet.create({
   price: {
     fontSize: 16,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
-});
+  });
+}

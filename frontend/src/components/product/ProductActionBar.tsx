@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Space, Radius } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
@@ -24,6 +24,8 @@ export function ProductActionBar({
   onMessage,
   onManage,
 }: ProductActionBarProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width: screenWidth } = useWindowDimensions();
   const isCompact = screenWidth < 390;
   const actionCount = (capabilities.canOffer ? 1 : 0) + (capabilities.canBuy ? 1 : 0) + (capabilities.canMessage ? 1 : 0);
@@ -44,7 +46,7 @@ export function ProductActionBar({
           accessibilityLabel="Manage listing"
           accessibilityRole="button"
         >
-          <Ionicons name="settings-outline" size={18} color={Colors.textInverse} />
+          <Ionicons name="settings-outline" size={18} color={colors.textInverse} />
           <Text style={styles.manageText} numberOfLines={1}>Manage</Text>
         </AnimatedPressable>
       </View>
@@ -59,7 +61,7 @@ export function ProductActionBar({
           <Text style={styles.priceValue} numberOfLines={1}>{formattedPrice}</Text>
         </View>
         <View style={styles.soldBadge}>
-          <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
+          <Ionicons name="checkmark-circle" size={18} color={colors.success} />
           <Text style={styles.soldText} numberOfLines={1}>This item has been sold</Text>
         </View>
       </View>
@@ -104,7 +106,7 @@ export function ProductActionBar({
               accessibilityLabel="Message seller"
               accessibilityRole="button"
             >
-              <Ionicons name="chatbubble-outline" size={18} color={Colors.textPrimary} />
+              <Ionicons name="chatbubble-outline" size={18} color={colors.textPrimary} />
               <Text style={styles.messageBtnText} numberOfLines={1}>Message</Text>
             </AnimatedPressable>
           )}
@@ -153,7 +155,7 @@ export function ProductActionBar({
             accessibilityLabel="Message seller"
             accessibilityRole="button"
           >
-            <Ionicons name="chatbubble-outline" size={18} color={Colors.textPrimary} />
+            <Ionicons name="chatbubble-outline" size={18} color={colors.textPrimary} />
           </AnimatedPressable>
         )}
       </View>
@@ -161,7 +163,8 @@ export function ProductActionBar({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     width: '100%',
     minWidth: 0,
@@ -189,13 +192,13 @@ const styles = StyleSheet.create({
   priceLabel: {
     fontSize: 11,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   priceValue: {
     minWidth: 0,
     fontSize: 20,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   actionRow: {
     minWidth: 0,
@@ -209,7 +212,7 @@ const styles = StyleSheet.create({
     minWidth: 68,
     paddingVertical: 12,
     paddingHorizontal: Space.md,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -221,7 +224,7 @@ const styles = StyleSheet.create({
     minHeight: 44,
     paddingVertical: 12,
     paddingHorizontal: Space.md,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -230,14 +233,14 @@ const styles = StyleSheet.create({
     minWidth: 0,
     fontSize: 15,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   buyBtn: {
     minHeight: 44,
     minWidth: 108,
     paddingVertical: 14,
     paddingHorizontal: Space.lg,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -247,7 +250,7 @@ const styles = StyleSheet.create({
     minHeight: 48,
     paddingVertical: 14,
     paddingHorizontal: Space.lg,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -256,12 +259,12 @@ const styles = StyleSheet.create({
     minWidth: 0,
     fontSize: 16,
     fontFamily: Typography.family.bold,
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
   messageBtn: {
     width: 44,
     minHeight: 44,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -274,7 +277,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingVertical: 12,
     paddingHorizontal: Space.md,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -284,7 +287,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
     fontSize: 15,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   secondaryRow: {
     width: '100%',
@@ -298,7 +301,7 @@ const styles = StyleSheet.create({
     minWidth: 104,
     paddingVertical: 12,
     paddingHorizontal: Space.md,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -310,7 +313,7 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     fontSize: 15,
     fontFamily: Typography.family.semibold,
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
   soldBadge: {
     minWidth: 0,
@@ -326,6 +329,7 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     fontSize: 14,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
-});
+  });
+}

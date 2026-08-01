@@ -18,12 +18,10 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const SHEET_BG = Colors.surface;
-const HANDLE_BG = Colors.textMuted + '80'; // 50% opacity
 
 interface BottomSheetProps {
   visible: boolean;
@@ -47,6 +45,8 @@ export function BottomSheet({
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const sheetHeight = SCREEN_HEIGHT * snapPoint;
   const translateY = useSharedValue(sheetHeight);
   const backdropOpacity = useSharedValue(0);
@@ -132,7 +132,7 @@ export function BottomSheet({
       <Reanimated.View style={[styles.backdrop, backdropStyle]}>
         <BlurView
           intensity={blurIntensity}
-          tint={Colors.background === '#FFFFFF' ? 'light' : 'dark'}
+          tint={colors.background === '#FFFFFF' ? 'light' : 'dark'}
           style={StyleSheet.absoluteFill}
         />
         <Pressable style={StyleSheet.absoluteFill} onPress={close} />
@@ -169,7 +169,7 @@ export function BottomSheet({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   backdrop: {
     ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.15)',
@@ -179,7 +179,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: SHEET_BG,
+    backgroundColor: colors.surface,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     // iOS native sheet shadow
@@ -201,7 +201,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 5,
     borderRadius: 3,
-    backgroundColor: HANDLE_BG,
+    backgroundColor: colors.textMuted + '80',
   },
   contentWrap: {
     flex: 1,

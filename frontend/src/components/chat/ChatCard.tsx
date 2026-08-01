@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Radius, Elevation } from '../../theme/designTokens';
 
 export type ChatCardVariant = 'surface' | 'elevated' | 'tint';
@@ -12,23 +12,23 @@ interface ChatCardProps {
   noBorder?: boolean;
 }
 
-function resolveChatCardStyle(variant: ChatCardVariant) {
+function resolveChatCardStyle(variant: ChatCardVariant, colors: ThemeColors) {
   switch (variant) {
     case 'tint':
       return {
-        backgroundColor: Colors.surfaceAlt,
-        borderColor: Colors.border,
+        backgroundColor: colors.surfaceAlt,
+        borderColor: colors.border,
       };
     case 'elevated':
       return {
-        backgroundColor: Colors.surfaceAlt,
-        borderColor: Colors.border,
+        backgroundColor: colors.surfaceAlt,
+        borderColor: colors.border,
       };
     case 'surface':
     default:
       return {
-        backgroundColor: Colors.surfaceAlt,
-        borderColor: Colors.border,
+        backgroundColor: colors.surfaceAlt,
+        borderColor: colors.border,
       };
   }
 }
@@ -39,7 +39,9 @@ export function ChatCard({
   style,
   noBorder = false,
 }: ChatCardProps) {
-  const tone = resolveChatCardStyle(variant);
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const tone = resolveChatCardStyle(variant, colors);
   const isElevated = variant === 'elevated';
 
   return (
@@ -59,7 +61,7 @@ export function ChatCard({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   base: {
     borderRadius: Radius.lg,
     borderWidth: 0.5,

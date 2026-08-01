@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Space } from '../../theme/designTokens';
 
 type MediaStatus = 'idle' | 'uploading' | 'failed' | 'confirmed';
@@ -23,12 +23,14 @@ export function ProfileMediaEditor({
   onRetry,
   onRevert,
 }: ProfileMediaEditorProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   // Only render for active states — idle/confirmed is handled by the preview's camera buttons.
   // This eliminates duplicate "Change cover" / "Change avatar" text rows.
   if (status === 'uploading') {
     return (
       <View style={styles.row}>
-        <ActivityIndicator size="small" color={Colors.brand} />
+        <ActivityIndicator size="small" color={colors.brand} />
         <Text style={styles.statusText}>Uploading {label.toLowerCase()}…</Text>
       </View>
     );
@@ -38,7 +40,7 @@ export function ProfileMediaEditor({
     return (
       <View style={styles.failedContainer}>
         <View style={styles.failedRow}>
-          <Ionicons name="warning-outline" size={14} color={Colors.danger} />
+          <Ionicons name="warning-outline" size={14} color={colors.danger} />
           <Text style={styles.errorText} numberOfLines={2}>
             {error || `${label} upload failed`}
           </Text>
@@ -69,7 +71,8 @@ export function ProfileMediaEditor({
   return null;
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -80,7 +83,7 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   failedContainer: {
     paddingHorizontal: Space.md,
@@ -100,7 +103,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.danger,
+    color: colors.danger,
     lineHeight: 16,
   },
   actionRow: {
@@ -113,6 +116,7 @@ const styles = StyleSheet.create({
   actionText: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
+    color: colors.brand,
   },
-});
+  });
+}

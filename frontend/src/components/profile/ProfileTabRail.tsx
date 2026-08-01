@@ -6,15 +6,8 @@ import Reanimated, {
   withTiming,
   Easing,
 } from 'react-native-reanimated';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Typography } from '../../theme/designTokens';
-
-const BG = Colors.background;
-const BORDER = Colors.border;
-const MUTED = Colors.textMuted;
-const TEXT = Colors.textPrimary;
-const SECONDARY = Colors.textSecondary;
-const BRAND = Colors.brand;
 
 const TAB_HEIGHT = 44;
 const TIMING_CONFIG = { duration: 220, easing: Easing.out(Easing.cubic) };
@@ -36,6 +29,8 @@ interface TabRailProps {
  * Reduced motion: instant assignment — no timing animation.
  */
 export function TabRail({ tabs, activeKey, onChange, reducedMotion = false }: TabRailProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const tabWidths = useRef<Record<string, number>>({});
   const tabOffsets = useRef<Record<string, number>>({});
   const underlineTranslateX = useSharedValue(0);
@@ -132,6 +127,8 @@ interface SegmentedControlProps<K extends string = SegmentKey> {
  * Reduced motion: instant assignment.
  */
 export function SegmentedControl<K extends string = SegmentKey>({ segments, activeKey, onChange, reducedMotion = false }: SegmentedControlProps<K>) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const segWidths = useRef<Record<string, number>>({});
   const segOffsets = useRef<Record<string, number>>({});
   const segUnderlineX = useSharedValue(0);
@@ -203,12 +200,13 @@ export function SegmentedControl<K extends string = SegmentKey>({ segments, acti
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   tabRail: {
     flexDirection: 'row',
-    backgroundColor: BG,
+    backgroundColor: colors.background,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: BORDER,
+    borderBottomColor: colors.border,
     position: 'relative',
   },
   tab: {
@@ -225,32 +223,32 @@ const styles = StyleSheet.create({
   tabLabel: {
     fontSize: 14,
     fontFamily: Typography.family.medium,
-    color: SECONDARY,
+    color: colors.textSecondary,
     letterSpacing: -0.2,
   },
   tabLabelActive: {
     fontFamily: Typography.family.bold,
-    color: TEXT,
+    color: colors.textPrimary,
   },
   tabCount: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: MUTED,
+    color: colors.textMuted,
     minWidth: 14,
   },
   tabCountActive: {
-    color: SECONDARY,
+    color: colors.textSecondary,
   },
   tabUnderline: {
     position: 'absolute',
     bottom: 0,
     height: 2,
-    backgroundColor: TEXT,
+    backgroundColor: colors.textPrimary,
     borderRadius: 1,
   },
   segmentControl: {
     flexDirection: 'row',
-    backgroundColor: BG,
+    backgroundColor: colors.background,
     position: 'relative',
   },
   segment: {
@@ -260,18 +258,19 @@ const styles = StyleSheet.create({
   segmentLabel: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: MUTED,
+    color: colors.textMuted,
     letterSpacing: -0.1,
   },
   segmentLabelActive: {
     fontFamily: Typography.family.semibold,
-    color: TEXT,
+    color: colors.textPrimary,
   },
   segmentUnderline: {
     position: 'absolute',
     bottom: 0,
     height: 2,
-    backgroundColor: TEXT,
+    backgroundColor: colors.textPrimary,
     borderRadius: 1,
   },
-});
+  });
+}

@@ -1,7 +1,7 @@
 import React, { useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Space, Radius } from '../../theme/designTokens';
 import { Listing } from '../../data/mockData';
 import { ProductCardV2 } from '../ProductCardV2';
@@ -28,6 +28,8 @@ export function DiscoveryGrid({
   title = 'More like this',
   subtitle,
 }: DiscoveryGridProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const handlePress = useCallback(
     (item: Listing, index: number) => {
       ProductAnalytics.recommendationClick(listingId, 'continue_exploring', index);
@@ -65,7 +67,7 @@ export function DiscoveryGrid({
         ListFooterComponent={
           hasMore ? (
             <View style={styles.footerLoading}>
-              <ActivityIndicator size="small" color={Colors.textMuted} />
+              <ActivityIndicator size="small" color={colors.textMuted} />
             </View>
           ) : null
         }
@@ -74,7 +76,8 @@ export function DiscoveryGrid({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     marginTop: Space.lg,
     paddingHorizontal: Space.md,
@@ -82,13 +85,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 17,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginBottom: 2,
   },
   subtitle: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginBottom: Space.sm,
   },
   listContent: {
@@ -102,4 +105,5 @@ const styles = StyleSheet.create({
     paddingVertical: Space.lg,
     alignItems: 'center',
   },
-});
+  });
+}

@@ -18,7 +18,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 
 interface Props {
   /** Whether the item is already liked */
@@ -39,6 +39,7 @@ export function DoubleTapHeart({
 }: Props) {
   const haptic = useHaptic();
   const reducedMotionEnabled = useReducedMotion();
+  const { colors } = useAppTheme();
   const heartScale = useSharedValue(0);
   const heartOpacity = useSharedValue(0);
 
@@ -86,7 +87,7 @@ export function DoubleTapHeart({
 
         {/* Animated heart overlay */}
         <Animated.View style={[styles.heartOverlay, heartStyle]} pointerEvents="none">
-          <Ionicons name="heart" size={heartSize} color={Colors.danger} />
+          <Ionicons name="heart" size={heartSize} color={colors.danger} />
         </Animated.View>
       </View>
     </GestureDetector>

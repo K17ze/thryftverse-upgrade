@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Space } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 
@@ -18,6 +18,8 @@ export function PublicProfileActionRow({
   onMore,
   messageLabel = 'Message',
 }: PublicProfileActionRowProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   return (
     <View style={styles.container}>
       <AnimatedPressable
@@ -27,7 +29,7 @@ export function PublicProfileActionRow({
         accessibilityRole="button"
         accessibilityLabel="Send message to seller"
       >
-        <Ionicons name="chatbubble-outline" size={16} color={Colors.textInverse} />
+        <Ionicons name="chatbubble-outline" size={16} color={colors.textInverse} />
         <Text style={styles.messageBtnText}>{messageLabel}</Text>
       </AnimatedPressable>
 
@@ -39,7 +41,7 @@ export function PublicProfileActionRow({
           accessibilityRole="button"
           accessibilityLabel="Share profile"
         >
-          <Ionicons name="share-outline" size={18} color={Colors.textPrimary} />
+          <Ionicons name="share-outline" size={18} color={colors.textPrimary} />
         </AnimatedPressable>
 
         <AnimatedPressable
@@ -49,14 +51,15 @@ export function PublicProfileActionRow({
           accessibilityRole="button"
           accessibilityLabel="More options"
         >
-          <Ionicons name="ellipsis-horizontal" size={18} color={Colors.textPrimary} />
+          <Ionicons name="ellipsis-horizontal" size={18} color={colors.textPrimary} />
         </AnimatedPressable>
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -72,12 +75,12 @@ const styles = StyleSheet.create({
     gap: 8,
     height: 44,
     borderRadius: 22,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
   },
   messageBtnText: {
     fontSize: 15,
     fontFamily: Typography.family.semibold,
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
   secondaryRow: {
     flexDirection: 'row',
@@ -88,9 +91,10 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: 22,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    backgroundColor: Colors.background,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
   },
-});
+  });
+}

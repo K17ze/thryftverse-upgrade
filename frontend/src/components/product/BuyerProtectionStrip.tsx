@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Space, Radius } from '../../theme/designTokens';
 
 export interface BuyerProtectionStripProps {
@@ -29,13 +29,15 @@ export function BuyerProtectionStrip({
   compact = false,
   message,
 }: BuyerProtectionStripProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const text = message ?? 'Your money is held safely until you confirm receipt';
   const label = policyLabel ?? 'Buyer Protection';
 
   if (compact) {
     return (
       <View style={styles.compactContainer}>
-        <Ionicons name="shield-checkmark" size={14} color={Colors.success} />
+        <Ionicons name="shield-checkmark" size={14} color={colors.success} />
         <Text style={styles.compactText} numberOfLines={1}>
           {text}
         </Text>
@@ -46,7 +48,7 @@ export function BuyerProtectionStrip({
   return (
     <View style={styles.container}>
       <View style={styles.iconWrap}>
-        <Ionicons name="shield-checkmark" size={18} color={Colors.success} />
+        <Ionicons name="shield-checkmark" size={18} color={colors.success} />
       </View>
       <View style={styles.textWrap}>
         <Text style={styles.title}>{label}</Text>
@@ -54,12 +56,13 @@ export function BuyerProtectionStrip({
           {text}
         </Text>
       </View>
-      <Ionicons name="lock-closed" size={14} color={Colors.success} style={styles.endIcon} />
+      <Ionicons name="lock-closed" size={14} color={colors.success} style={styles.endIcon} />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -69,15 +72,15 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
     marginHorizontal: Space.md,
     borderRadius: Radius.lg,
-    backgroundColor: `${Colors.success}0A`,
+    backgroundColor: `${colors.success}0A`,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: `${Colors.success}20`,
+    borderColor: `${colors.success}20`,
   },
   iconWrap: {
     width: 36,
     height: 36,
     borderRadius: Radius.full,
-    backgroundColor: `${Colors.success}18`,
+    backgroundColor: `${colors.success}18`,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -89,13 +92,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: 0.1,
   },
   subtitle: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     lineHeight: 16,
   },
   endIcon: {
@@ -108,15 +111,16 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    backgroundColor: `${Colors.success}0A`,
+    backgroundColor: `${colors.success}0A`,
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: `${Colors.success}20`,
+    borderColor: `${colors.success}20`,
   },
   compactText: {
     flex: 1,
     fontSize: 12,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
-});
+  });
+}

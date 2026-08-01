@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Space, Radius } from '../../theme/designTokens';
 import { VERIFICATION_TIERS, VerificationTier } from '../../platform/product/listingDetailContract';
 
@@ -21,17 +21,18 @@ export interface VerificationBadgeProps {
   compact?: boolean;
 }
 
-function resolveColor(colorKey: string): string {
-  if (colorKey === 'success') return Colors.success;
-  if (colorKey === 'brand') return Colors.brand;
-  if (colorKey === 'danger') return Colors.danger;
-  return Colors.textSecondary;
+function resolveColor(colorKey: string, colors: ThemeColors): string {
+  if (colorKey === 'success') return colors.success;
+  if (colorKey === 'brand') return colors.brand;
+  if (colorKey === 'danger') return colors.danger;
+  return colors.textSecondary;
 }
 
 export function VerificationBadge({ tier, compact = false }: VerificationBadgeProps) {
+  const { colors } = useAppTheme();
   const info = VERIFICATION_TIERS[tier];
   if (!info) return null;
-  const color = resolveColor(info.color);
+  const color = resolveColor(info.color, colors);
 
   if (compact) {
     return (

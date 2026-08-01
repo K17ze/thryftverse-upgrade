@@ -10,7 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Typography } from '../../theme/designTokens';
 import type { LookApiItem } from '../../services/looksApi';
 import type { StackNavigationProp } from '@react-navigation/stack';
@@ -41,10 +41,12 @@ export function ProfileLooksGrid({
   onCreateLook,
   navigation,
 }: ProfileLooksGridProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   if (isLoading && looks.length === 0) {
     return (
       <View style={styles.stateWrap} accessibilityLabel="Loading looks">
-        <ActivityIndicator size="large" color={Colors.brand} />
+        <ActivityIndicator size="large" color={colors.brand} />
       </View>
     );
   }
@@ -52,7 +54,7 @@ export function ProfileLooksGrid({
   if (error && looks.length === 0) {
     return (
       <View style={styles.stateWrap}>
-        <Ionicons name="cloud-offline-outline" size={32} color={Colors.textMuted} />
+        <Ionicons name="cloud-offline-outline" size={32} color={colors.textMuted} />
         <Text style={styles.stateTitle}>Looks could not be loaded</Text>
         <Pressable
           style={styles.retryBtn}
@@ -69,7 +71,7 @@ export function ProfileLooksGrid({
   if (looks.length === 0 && !error) {
     return (
       <View style={styles.stateWrap}>
-        <Ionicons name="camera-outline" size={32} color={Colors.textMuted} />
+        <Ionicons name="camera-outline" size={32} color={colors.textMuted} />
         <Text style={styles.stateTitle}>No Looks yet</Text>
         {isSelfProfile ? (
           <>
@@ -123,11 +125,11 @@ export function ProfileLooksGrid({
             ) : null}
             <View style={styles.tileMeta}>
               <View style={styles.metaItem}>
-                <Ionicons name="pricetag-outline" size={12} color={Colors.textMuted} />
+                <Ionicons name="pricetag-outline" size={12} color={colors.textMuted} />
                 <Text style={styles.metaText}>{look.tags.length}</Text>
               </View>
               <View style={styles.metaItem}>
-                <Ionicons name="heart-outline" size={12} color={Colors.textMuted} />
+                <Ionicons name="heart-outline" size={12} color={colors.textMuted} />
                 <Text style={styles.metaText}>{look.likeCount}</Text>
               </View>
             </View>
@@ -138,7 +140,8 @@ export function ProfileLooksGrid({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -153,7 +156,7 @@ const styles = StyleSheet.create({
     aspectRatio: 0.8,
     borderRadius: Radius.md,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   tileImage: {
     width: '100%',
@@ -162,7 +165,7 @@ const styles = StyleSheet.create({
   tileCaption: {
     fontSize: 12,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginTop: 6,
   },
   tileMeta: {
@@ -178,7 +181,7 @@ const styles = StyleSheet.create({
   metaText: {
     fontSize: 11,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   stateWrap: {
     alignItems: 'center',
@@ -190,19 +193,19 @@ const styles = StyleSheet.create({
   stateTitle: {
     fontSize: 15,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   stateSubtitle: {
     fontSize: 14,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textAlign: 'center',
   },
   retryBtn: {
     marginTop: 4,
     paddingHorizontal: 20,
     paddingVertical: 8,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     borderRadius: 16,
   },
   retryBtnText: {
@@ -214,7 +217,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
     paddingHorizontal: 20,
     paddingVertical: 8,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     borderRadius: 16,
   },
   createBtnText: {
@@ -222,4 +225,5 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
     color: '#fff',
   },
-});
+  });
+}

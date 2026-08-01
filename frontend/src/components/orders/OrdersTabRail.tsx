@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Typography } from '../../theme/designTokens';
 
 export type OrdersTab = 'buying' | 'selling';
@@ -18,6 +18,9 @@ export function OrdersTabRail({
   sellingCount,
   onChange,
 }: OrdersTabRailProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   const tabs: { key: OrdersTab; label: string; count: number }[] = [
     { key: 'buying', label: 'Buying', count: buyingCount },
     { key: 'selling', label: 'Selling', count: sellingCount },
@@ -53,7 +56,7 @@ export function OrdersTabRail({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     paddingHorizontal: Space.md,
@@ -68,12 +71,12 @@ const styles = StyleSheet.create({
   tabText: {
     fontSize: 15,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   tabTextActive: {
     fontSize: 15,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   tabUnderline: {
     position: 'absolute',
@@ -81,7 +84,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 2,
-    backgroundColor: Colors.textPrimary,
+    backgroundColor: colors.textPrimary,
     borderRadius: 1,
   },
 });

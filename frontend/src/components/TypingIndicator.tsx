@@ -5,7 +5,7 @@ import {
   Animated,
   ViewStyle,
 } from 'react-native';
-import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 
 interface TypingIndicatorProps {
   dotCount?: number;
@@ -19,11 +19,13 @@ interface TypingIndicatorProps {
 export function TypingIndicator({
   dotCount = 3,
   dotSize = 8,
-  dotColor = Colors.textMuted,
+  dotColor,
   dotSpacing = 4,
   animationDuration = 600,
   style,
 }: TypingIndicatorProps) {
+  const { colors } = useAppTheme();
+  const resolvedDotColor = dotColor ?? colors.textMuted;
   const animations = useRef(
     Array.from({ length: dotCount }, () => new Animated.Value(0))
   ).current;
@@ -89,7 +91,7 @@ export function TypingIndicator({
                 width: dotSize,
                 height: dotSize,
                 borderRadius: dotSize / 2,
-                backgroundColor: dotColor,
+                backgroundColor: resolvedDotColor,
                 marginHorizontal: dotSpacing / 2,
                 transform: [
                   { translateY },

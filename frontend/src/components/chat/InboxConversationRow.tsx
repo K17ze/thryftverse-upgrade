@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Type, TypeStyles, Typography } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -39,6 +39,9 @@ export function InboxConversationRow({
   onPress,
   accessibilityHint,
 }: InboxConversationRowProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   const accessibilityParts: string[] = [
     displayTitle,
     lastMessage,
@@ -71,10 +74,10 @@ export function InboxConversationRow({
                 {displayTitle}
               </Text>
               {isPinned && (
-                <Ionicons name="pin" size={11} color={Colors.textMuted} style={styles.metaIcon} />
+                <Ionicons name="pin" size={11} color={colors.textMuted} style={styles.metaIcon} />
               )}
               {isMuted && (
-                <Ionicons name="volume-mute" size={11} color={Colors.textMuted} style={styles.metaIcon} />
+                <Ionicons name="volume-mute" size={11} color={colors.textMuted} style={styles.metaIcon} />
               )}
             </View>
             <Text
@@ -122,7 +125,7 @@ export function InboxConversationRow({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -154,7 +157,7 @@ const styles = StyleSheet.create({
   name: {
     fontSize: Type.body.size,
     fontFamily: TypeStyles.body.fontFamily,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: Type.body.letterSpacing,
   },
   nameUnread: {
@@ -166,12 +169,12 @@ const styles = StyleSheet.create({
   time: {
     fontSize: Type.meta.size,
     fontFamily: TypeStyles.body.fontFamily,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     paddingLeft: Space.xs,
   },
   timeUnread: {
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   bottomLine: {
     flexDirection: 'row',
@@ -181,22 +184,22 @@ const styles = StyleSheet.create({
   memberCount: {
     fontSize: Type.meta.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   draftLabel: {
     fontSize: Type.meta.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.brand,
+    color: colors.brand,
   },
   preview: {
     flex: 1,
     fontSize: Type.caption.size,
     fontFamily: TypeStyles.body.fontFamily,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     lineHeight: Type.caption.lineHeight,
   },
   previewUnread: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
   },
   previewWithMemberPrefix: {},
@@ -204,13 +207,13 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     marginLeft: 2,
   },
   itemThumb: {
     width: 24,
     height: 24,
     borderRadius: Radius.sm,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
 });

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Caption, BodyEmphasis, Meta } from '../ui/Text';
@@ -21,6 +21,9 @@ export function ReplyQuote({
   onPress,
   style,
 }: ReplyQuoteProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={[styles.container, style]}>
       <View style={styles.bar} />
@@ -34,8 +37,8 @@ export function ReplyQuote({
         scaleValue={0.99}
         hapticFeedback="light"
       >
-        <Meta color={Colors.brand}>{senderName}</Meta>
-        <Caption color={Colors.textSecondary} numberOfLines={1}>
+        <Meta color={colors.brand}>{senderName}</Meta>
+        <Caption color={colors.textSecondary} numberOfLines={1}>
           {text}
         </Caption>
       </AnimatedPressable>
@@ -48,7 +51,7 @@ export function ReplyQuote({
         scaleValue={0.9}
         hapticFeedback="light"
       >
-        <Ionicons name="close" size={18} color={Colors.textMuted} />
+        <Ionicons name="close" size={18} color={colors.textMuted} />
       </AnimatedPressable>
     </View>
   );
@@ -63,12 +66,15 @@ export function ReplyIndicator({
   text: string;
   style?: ViewStyle;
 }) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={[styles.indicatorContainer, style]}>
       <View style={styles.indicatorBar} />
       <View style={styles.indicatorContent}>
-        <Meta color={Colors.brand}>{senderName}</Meta>
-        <Caption color={Colors.textSecondary} numberOfLines={1}>
+        <Meta color={colors.brand}>{senderName}</Meta>
+        <Caption color={colors.textSecondary} numberOfLines={1}>
           {text}
         </Caption>
       </View>
@@ -76,22 +82,22 @@ export function ReplyIndicator({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.md,
     paddingVertical: Space.sm,
     paddingHorizontal: Space.sm,
     marginBottom: Space.xs,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   bar: {
     width: 3,
     alignSelf: 'stretch',
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     borderRadius: 2,
     marginRight: Space.sm,
   },
@@ -115,7 +121,7 @@ const styles = StyleSheet.create({
   },
   indicatorBar: {
     width: 3,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     borderRadius: 2,
     marginRight: Space.sm,
   },

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Type, Space, Radius } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
@@ -20,6 +20,8 @@ interface Props {
 }
 
 export function CollectionCard({ collection, onPress }: Props) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { listings } = useBackendData();
   const count = collection.itemIds?.length ?? 0;
 
@@ -63,7 +65,7 @@ export function CollectionCard({ collection, onPress }: Props) {
                 )}
                 {covers.length === 2 && (
                   <View style={[styles.sideCover, styles.sideEmpty]}>
-                    <Ionicons name="folder-open-outline" size={20} color={Colors.textMuted} />
+                    <Ionicons name="folder-open-outline" size={20} color={colors.textMuted} />
                   </View>
                 )}
               </View>
@@ -71,7 +73,7 @@ export function CollectionCard({ collection, onPress }: Props) {
           </>
         ) : (
           <View style={styles.emptyCover}>
-            <Ionicons name="folder-open-outline" size={40} color={Colors.textMuted} />
+            <Ionicons name="folder-open-outline" size={40} color={colors.textMuted} />
             <Text style={styles.emptyCoverText}>Empty</Text>
           </View>
         )}
@@ -81,7 +83,7 @@ export function CollectionCard({ collection, onPress }: Props) {
       <View style={styles.info}>
         <View style={styles.nameRow}>
           <Text style={styles.name} numberOfLines={1}>{collection.name}</Text>
-          <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </View>
         <Text style={styles.meta}>{count} {count === 1 ? 'item' : 'items'}</Text>
       </View>
@@ -89,12 +91,12 @@ export function CollectionCard({ collection, onPress }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     borderRadius: Radius.lg,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     marginBottom: Space.md,
     overflow: 'hidden',
   },
@@ -109,7 +111,7 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: Radius.md,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   mainCoverSingle: {
     width: '100%',
@@ -122,7 +124,7 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: Radius.md,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   sideEmpty: {
     alignItems: 'center',
@@ -141,13 +143,13 @@ const styles = StyleSheet.create({
   emptyCoverText: {
     fontSize: 13,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   info: {
     padding: Space.sm,
     paddingHorizontal: Space.md,
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopColor: colors.border,
   },
   nameRow: {
     flexDirection: 'row',
@@ -158,13 +160,13 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 15,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     flex: 1,
   },
   meta: {
     fontSize: 12,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 2,
   },
 });

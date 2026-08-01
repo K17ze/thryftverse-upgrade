@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Space, Radius } from '../../theme/designTokens';
 import type { RecommendationLook } from '../../platform/product';
 import { CachedImage } from '../CachedImage';
@@ -15,12 +15,14 @@ export interface SeenInLooksRailProps {
 }
 
 export function SeenInLooksRail({ items, onPressItem }: SeenInLooksRailProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   if (items.length === 0) return null;
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Ionicons name="sparkles" size={16} color={Colors.textMuted} />
+        <Ionicons name="sparkles" size={16} color={colors.textMuted} />
         <Text style={styles.title}>Seen in Looks</Text>
       </View>
       <Text style={styles.subtitle}>Styled by the community</Text>
@@ -67,7 +69,8 @@ export function SeenInLooksRail({ items, onPressItem }: SeenInLooksRailProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     marginTop: Space.lg,
   },
@@ -80,12 +83,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 17,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   subtitle: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     paddingHorizontal: Space.md,
     marginBottom: Space.sm,
   },
@@ -100,7 +103,7 @@ const styles = StyleSheet.create({
     height: 200,
     borderRadius: Radius.md,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   lookImage: {
     width: '100%',
@@ -109,18 +112,19 @@ const styles = StyleSheet.create({
   lookImageFallback: {
     width: '100%',
     height: '100%',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   lookTitle: {
     fontSize: 13,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginTop: 6,
   },
   lookCreator: {
     fontSize: 11,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 1,
   },
-});
+  });
+}
