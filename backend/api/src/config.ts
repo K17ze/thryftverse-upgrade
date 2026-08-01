@@ -315,6 +315,29 @@ export const config = {
     0,
     1000
   ),
+  paypalClientId: process.env.PAYPAL_CLIENT_ID?.trim() || null,
+  paypalClientSecret: process.env.PAYPAL_CLIENT_SECRET?.trim() || null,
+  paypalApiBaseUrl:
+    process.env.PAYPAL_API_BASE_URL?.trim()
+    || (process.env.NODE_ENV === 'production'
+      ? 'https://api-m.paypal.com'
+      : 'https://api-m.sandbox.paypal.com'),
+  personaApiKey: process.env.PERSONA_API_KEY?.trim() || null,
+  personaTemplateId: process.env.PERSONA_TEMPLATE_ID?.trim() || null,
+  personaWebhookSecret: process.env.PERSONA_WEBHOOK_SECRET?.trim() || null,
+  personaApiBaseUrl:
+    process.env.PERSONA_API_BASE_URL?.trim() || 'https://withpersona.com/api/v1',
+  onfidoApiKey: process.env.ONFIDO_API_KEY?.trim() || null,
+  onfidoWebhookToken: process.env.ONFIDO_WEBHOOK_TOKEN?.trim() || null,
+  onfidoApiBaseUrl:
+    process.env.ONFIDO_API_BASE_URL?.trim() || 'https://api.onfido.com/v3.5',
+  webhookIpAllowlistEnabled:
+    process.env.WEBHOOK_IP_ALLOWLIST_ENABLED?.trim().toLowerCase() === 'true',
+  webhookAllowlistedIpRanges:
+    (process.env.WEBHOOK_ALLOWLISTED_IP_RANGES?.trim() ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
   evriApiKey: process.env.EVRI_API_KEY?.trim() || process.env.SHIPPING_EVRI_API_KEY?.trim() || null,
   evriApiBaseUrl:
     process.env.EVRI_API_BASE_URL?.trim() || process.env.SHIPPING_EVRI_API_URL?.trim() || null,

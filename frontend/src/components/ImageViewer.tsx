@@ -4,7 +4,8 @@ import { Video, ResizeMode } from './compat/Video';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
+  withTiming,
+  Easing,
   runOnJS,
 } from 'react-native-reanimated';
 import {
@@ -54,9 +55,9 @@ function ImagePage({ uri, onDoubleTap, sharedTransitionTag }: ImagePageProps) {
     })
     .onEnd(() => {
       if (scale.value < MIN_ZOOM) {
-        scale.value = withSpring(MIN_ZOOM);
-        translateX.value = withSpring(0);
-        translateY.value = withSpring(0);
+        scale.value = withTiming(MIN_ZOOM, { duration: 200 });
+        translateX.value = withTiming(0, { duration: 200 });
+        translateY.value = withTiming(0, { duration: 200 });
         savedScale.value = MIN_ZOOM;
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
@@ -83,8 +84,8 @@ function ImagePage({ uri, onDoubleTap, sharedTransitionTag }: ImagePageProps) {
       if (zoomLevel <= 1) {
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
-        translateX.value = withSpring(0, { damping: 18, stiffness: 220 });
-        translateY.value = withSpring(0, { damping: 18, stiffness: 220 });
+        translateX.value = withTiming(0, { duration: 200, easing: Easing.out(Easing.cubic) });
+        translateY.value = withTiming(0, { duration: 200, easing: Easing.out(Easing.cubic) });
         return;
       }
 
@@ -98,31 +99,23 @@ function ImagePage({ uri, onDoubleTap, sharedTransitionTag }: ImagePageProps) {
       savedTranslateX.value = targetX;
       savedTranslateY.value = targetY;
 
-      translateX.value = withSpring(targetX, {
-        damping: 17,
-        stiffness: 200,
-        velocity: reducedMotionEnabled ? 0 : e.velocityX,
-      });
-      translateY.value = withSpring(targetY, {
-        damping: 17,
-        stiffness: 200,
-        velocity: reducedMotionEnabled ? 0 : e.velocityY,
-      });
+      translateX.value = withTiming(targetX, { duration: 220, easing: Easing.out(Easing.cubic) });
+      translateY.value = withTiming(targetY, { duration: 220, easing: Easing.out(Easing.cubic) });
     });
 
   const doubleTap = Gesture.Tap()
     .numberOfTaps(2)
     .onEnd(() => {
       if (scale.value > 1) {
-        scale.value = withSpring(1, { damping: 15 });
-        translateX.value = withSpring(0);
-        translateY.value = withSpring(0);
+        scale.value = withTiming(1, { duration: 200 });
+        translateX.value = withTiming(0, { duration: 200 });
+        translateY.value = withTiming(0, { duration: 200 });
         savedScale.value = 1;
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
       } else {
         const zoomTarget = reducedMotionEnabled ? 2 : 2.5;
-        scale.value = withSpring(zoomTarget, { damping: 12 });
+        scale.value = withTiming(zoomTarget, { duration: 200, easing: Easing.out(Easing.cubic) });
         savedScale.value = zoomTarget;
         if (onDoubleTap) runOnJS(onDoubleTap)();
       }
@@ -182,7 +175,7 @@ function Dot({ index, activeIndex }: DotProps) {
   const width = useSharedValue(isActive ? 24 : 8);
 
   React.useEffect(() => {
-    width.value = withSpring(isActive ? 24 : 8, { damping: 15, stiffness: 200 });
+    width.value = withTiming(isActive ? 24 : 8, { duration: 200, easing: Easing.out(Easing.cubic) });
   }, [isActive, width]);
 
   const dotStyle = useAnimatedStyle(() => ({

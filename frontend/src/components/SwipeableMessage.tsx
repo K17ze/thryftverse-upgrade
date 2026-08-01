@@ -5,10 +5,11 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
+  withTiming,
   interpolate,
   Extrapolation,
   runOnJS,
+  Easing,
 } from 'react-native-reanimated';
 import { Colors } from '../constants/colors';
 import { Radius } from '../theme/designTokens';
@@ -22,10 +23,7 @@ interface SwipeableMessageProps {
   replyThreshold?: number;
 }
 
-const SWIPE_SPRING = {
-  damping: 15,
-  stiffness: 150,
-};
+const SWIPE_TIMING = { duration: 200, easing: Easing.out(Easing.cubic) };
 
 export function SwipeableMessage({
   children,
@@ -69,8 +67,8 @@ export function SwipeableMessage({
         runOnJS(triggerActions)();
       }
 
-      // Spring back to original position
-      translateX.value = withSpring(0, SWIPE_SPRING);
+      // Snap back to original position with timing
+      translateX.value = withTiming(0, SWIPE_TIMING);
     });
 
   const foregroundStyle = useAnimatedStyle(() => ({

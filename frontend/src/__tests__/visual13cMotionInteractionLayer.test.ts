@@ -135,8 +135,8 @@ describe('VISUAL-13C Motion / Interaction / Quality Layer', () => {
   // ── 6. ProfileTabRail has active visual transition support ──
   it('ProfileTabRail uses animated sliding indicator', () => {
     const src = read(join(COMPONENTS, 'profile/ProfileTabRail.tsx'));
-    expect(src).toContain('indicatorX');
-    expect(src).toContain('withSpring');
+    expect(src).toContain('underlineTranslateX');
+    expect(src).toContain('withTiming');
     expect(src).toContain('useAnimatedStyle');
   });
 

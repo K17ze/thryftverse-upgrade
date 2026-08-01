@@ -19,7 +19,8 @@ import Reanimated, {
   FadeInUp,
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
+  withTiming,
+  Easing,
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -226,9 +227,9 @@ function ScoreBadge({ score }: { score: number }) {
   const scoreStyles = useMemo(() => createScoreStyles(colors), [colors]);
   const scale = useSharedValue(1);
   React.useEffect(() => {
-    scale.value = withSpring(1.15, { damping: 12 });
+    scale.value = withTiming(1.12, { duration: 150, easing: Easing.out(Easing.quad) });
     const t = setTimeout(() => {
-      scale.value = withSpring(1, { damping: 12 });
+      scale.value = withTiming(1, { duration: 150, easing: Easing.inOut(Easing.quad) });
     }, 200);
     return () => clearTimeout(t);
   }, [score]);

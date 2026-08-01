@@ -4,7 +4,6 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
   withSequence,
   withDelay,
   withTiming,
@@ -28,7 +27,7 @@ export function DoubleTapHandler({ children, onDoubleTap }: DoubleTapHandlerProp
 
     // Pop up fast, stay a bit, then quickly dissolve and shrink
     scale.value = withSequence(
-      withSpring(1, { damping: 10, stiffness: 400 }),
+      withTiming(1, { duration: 140 }),
       withDelay(400, withTiming(0.8, { duration: 150 }))
     );
     opacity.value = withSequence(

@@ -8,7 +8,6 @@ import {
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { useHaptic } from '../hooks/useHaptic';
@@ -129,7 +128,7 @@ export function AnimatedPressable({
           if (reducedMotionEnabled) {
             scale.value = withTiming(1, { duration: 0 });
           } else {
-            scale.value = withSpring(1, Motion.spring.pressRelease);
+            scale.value = withTiming(1, { duration: 120 });
           }
         }
         if (typeof activeOpacity === 'number') {

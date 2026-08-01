@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, Pressable, LayoutChangeEvent } from 'react-nati
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
+  withTiming,
+  Easing,
 } from 'react-native-reanimated';
 import { Colors } from '../../constants/colors';
 import { Space, Typography } from '../../theme/designTokens';
@@ -16,7 +17,7 @@ const SECONDARY = Colors.textSecondary;
 const BRAND = Colors.brand;
 
 const TAB_HEIGHT = 44;
-const SPRING_CONFIG = { damping: 18, stiffness: 260, mass: 1 };
+const TIMING_CONFIG = { duration: 220, easing: Easing.out(Easing.cubic) };
 
 export type TabKey = 'Shop' | 'Looks' | 'Reviews';
 export type SegmentKey = 'forsale' | 'sold';
@@ -59,8 +60,8 @@ export function TabRail({ tabs, activeKey, onChange, reducedMotion = false }: Ta
       underlineTranslateX.value = targetX;
       underlineWidth.value = underlineW;
     } else {
-      underlineTranslateX.value = withSpring(targetX, SPRING_CONFIG);
-      underlineWidth.value = withSpring(underlineW, SPRING_CONFIG);
+      underlineTranslateX.value = withTiming(targetX, TIMING_CONFIG);
+      underlineWidth.value = withTiming(underlineW, TIMING_CONFIG);
     }
   }, [measureTabs, reducedMotion, underlineTranslateX, underlineWidth]);
 
@@ -153,8 +154,8 @@ export function SegmentedControl<K extends string = SegmentKey>({ segments, acti
       segUnderlineX.value = offsetX;
       segUnderlineW.value = segW;
     } else {
-      segUnderlineX.value = withSpring(offsetX, SPRING_CONFIG);
-      segUnderlineW.value = withSpring(segW, SPRING_CONFIG);
+      segUnderlineX.value = withTiming(offsetX, TIMING_CONFIG);
+      segUnderlineW.value = withTiming(segW, TIMING_CONFIG);
     }
   }, [measureSegments, reducedMotion, segUnderlineX, segUnderlineW]);
 

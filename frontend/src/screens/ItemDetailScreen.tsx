@@ -6,12 +6,12 @@ import {
   StatusBar,
   ActivityIndicator,
   Pressable,
+  RefreshControl,
   useWindowDimensions,
 } from 'react-native';
 import Reanimated, {
   useAnimatedScrollHandler,
   useSharedValue,
-  withSpring,
   withTiming,
   withSequence,
   FadeInDown,
@@ -25,13 +25,13 @@ import type { DisplayReadyListing } from '../services/listingMapper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
+import { createDmConversationOnApi } from '../services/chatApi';
 import { useHaptic } from '../hooks/useHaptic';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { enablePriceAlert, disablePriceAlert, getPriceAlertStatus } from '../services/priceAlertsApi';
 import { toIze, formatIzeAmount } from '../utils/currency';
-import { Motion } from '../constants/motion';
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { useBackendData } from '../context/BackendDataContext';
 import { CachedImage } from '../components/CachedImage';
@@ -117,6 +117,9 @@ export default function ItemDetailScreen() {
   const isFav = useStore((state) => state.isWishlisted(route.params?.itemId));
   const toggleFav = useStore((state) => state.toggleWishlist);
   const currentUser = useStore((state) => state.currentUser);
+  const upsertConversation = useStore((state) => state.upsertConversation);
+  const [isResolvingConversation, setIsResolvingConversation] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const { isSyncing, lastError, refreshListings, listings: backendListings } = useBackendData();
 
   const { itemId } = route.params || {};
@@ -228,8 +231,8 @@ export default function ItemDetailScreen() {
     }
     bigHeartOpacity.value = 1;
     bigHeartScale.value = withSequence(
-      withSpring(1.5, Motion.spring.flagshipPop),
-      withTiming(1.5, { duration: 400 }),
+      withTiming(1.4, { duration: 180 }),
+      withTiming(1.4, { duration: 400 }),
       withTiming(0, { duration: 200 })
     );
   };
@@ -242,6 +245,19 @@ export default function ItemDetailScreen() {
       show('Added to wishlist', 'success');
     }
   };
+
+  // Pull-to-refresh — refetches the listing and backend data in parallel.
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.allSettled([
+        refetchListing(),
+        refreshListings(),
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refetchListing, refreshListings]);
 
   const handleShare = () => {
     setShareVisible(true);
@@ -401,8 +417,6 @@ export default function ItemDetailScreen() {
   ].filter(Boolean).join(' · ');
 
   const secondaryLine = [
-    hasDiscount && formattedOriginal ? `Was ${formattedOriginal}` : null,
-    discountPercent ? `-${Math.round(discountPercent)}%` : null,
     formattedProtectionTotal ? `${formattedProtectionTotal} with Buyer Protection` : null,
   ].filter(Boolean).join(' · ') || undefined;
 
@@ -481,6 +495,11 @@ export default function ItemDetailScreen() {
         scrollY={scrollY}
         title={displayTitle}
         onBack={() => navigation.goBack()}
+        rightAction={{
+          icon: 'share-outline',
+          label: 'Share listing',
+          onPress: handleShare,
+        }}
       />
 
       <Reanimated.ScrollView
@@ -488,6 +507,15 @@ export default function ItemDetailScreen() {
         contentContainerStyle={{ paddingBottom: scrollBottomPadding }}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.brand}
+            colors={[colors.brand]}
+            progressBackgroundColor={colors.surfaceAlt}
+          />
+        }
       >
         {/* ── Zone A — Media stage ──
             CommerceMediaStage handles paging/zoom/fullscreen only.
@@ -530,6 +558,11 @@ export default function ItemDetailScreen() {
           topInset={insets.top}
           rightActions={[
             {
+              icon: 'share-outline',
+              label: 'Share',
+              onPress: handleShare,
+            },
+            {
               icon: isItemSavedAnywhere(item.id) ? 'bookmark' : 'bookmark-outline',
               activeIcon: 'bookmark',
               label: isItemSavedAnywhere(item.id) ? 'Saved to collection' : 'Save to collection',
@@ -559,15 +592,38 @@ export default function ItemDetailScreen() {
             eyebrow={item.brand ?? item.category ?? 'Direct listing'}
             title={displayTitle}
             primaryValue={formattedPrice}
+            originalValue={hasDiscount && formattedOriginal ? formattedOriginal : undefined}
+            discountBadge={hasDiscount && discountPercent ? `-${Math.round(discountPercent)}%` : undefined}
             secondaryLine={secondaryLine}
             interestSignal={interestSignal}
           />
 
           {attributeLine ? (
             <View style={styles.attributeRow}>
-              <Text style={[styles.attributeText, { color: colors.textMuted }]} numberOfLines={2}>
-                {attributeLine}
-              </Text>
+              <View style={styles.attributeLeftCluster}>
+                {/* Condition chip — Vinted pattern: condition is the
+                    most important attribute for second-hand buyers, so
+                    it gets a distinct visual treatment instead of
+                    blending into muted text. */}
+                {item.condition ? (
+                  <View style={[styles.conditionChip, { backgroundColor: colors.surfaceAlt }]}>
+                    <Text style={[styles.conditionChipText, { color: colors.textPrimary }]}>
+                      {item.condition}
+                    </Text>
+                  </View>
+                ) : null}
+                {(() => {
+                  const remaining = [
+                    item.size && `Size ${item.size}`,
+                    item.category,
+                  ].filter(Boolean).join(' · ');
+                  return remaining ? (
+                    <Text style={[styles.attributeText, { color: colors.textSecondary }]} numberOfLines={1}>
+                      {remaining}
+                    </Text>
+                  ) : null;
+                })()}
+              </View>
               {item.size && (
                 <Pressable
                   onPress={() => { haptic.light(); setSizeGuideVisible(true); }}
@@ -592,7 +648,7 @@ export default function ItemDetailScreen() {
         </View>
 
         {seller && (
-          <View style={styles.sellerRowWrap}>
+          <View style={[styles.sellerRowWrap, { borderTopColor: colors.borderSubtle }]}>
             <CommerceDetailSellerRow
               avatarUri={seller.avatar ?? undefined}
               name={seller.username}
@@ -610,13 +666,30 @@ export default function ItemDetailScreen() {
               primaryAction={
                 !capabilities.isOwner
                   ? {
-                      label: 'Message',
-                      onPress: () => {
+                      label: isResolvingConversation ? 'Starting…' : 'Message',
+                      onPress: async () => {
+                        if (!currentUser?.id) {
+                          show('Sign in to message the seller.', 'error');
+                          return;
+                        }
+                        if (isResolvingConversation) return;
                         if (item) ProductAnalytics.sellerMessageStart(item.id);
-                        navigation.navigate('NewMessage', {
-                          preselectedUserId: seller.id,
-                          preselectedDisplayName: seller.username,
-                        });
+                        setIsResolvingConversation(true);
+                        try {
+                          const conversation = await createDmConversationOnApi({
+                            recipientUserId: seller.id,
+                            itemId: item.id,
+                          });
+                          upsertConversation(conversation);
+                          navigation.navigate('Chat', {
+                            conversationId: conversation.id,
+                            partnerUserId: seller.id,
+                          });
+                        } catch {
+                          show('Could not start conversation. Please try again.', 'error');
+                        } finally {
+                          setIsResolvingConversation(false);
+                        }
                       },
                     }
                   : undefined
@@ -624,8 +697,21 @@ export default function ItemDetailScreen() {
               secondaryAction={
                 !capabilities.isOwner
                   ? {
-                      label: 'Follow',
-                      onPress: () => sellerFollowMutation.mutate(),
+                      label: sellerFollowMutation.isPending ? 'Following…' : (sellerTrustData?.isFollowing ? 'Following' : 'Follow'),
+                      onPress: () => {
+                        if (!currentUser?.id) {
+                          show('Sign in to follow this seller.', 'error');
+                          return;
+                        }
+                        sellerFollowMutation.mutate(undefined, {
+                          onSuccess: (data) => {
+                            show(data.isFollowing ? 'Followed seller' : 'Unfollowed seller', 'success');
+                          },
+                          onError: () => {
+                            show('Could not follow seller. Please try again.', 'error');
+                          },
+                        });
+                      },
                     }
                   : undefined
               }
@@ -678,7 +764,7 @@ export default function ItemDetailScreen() {
                 <View style={styles.trustChipsRow}>
                   {chips.map((chip, i) => (
                     <View key={i} style={styles.trustChip}>
-                      <Ionicons name={chip.icon} size={15} color={colors.textSecondary} />
+                      <Ionicons name={chip.icon} size={16} color={colors.textSecondary} />
                       <Text style={[styles.trustChipText, { color: colors.textSecondary }]} numberOfLines={1}>
                         {chip.label}
                       </Text>
@@ -839,7 +925,7 @@ export default function ItemDetailScreen() {
             summary={qaSummary?.questionCount ? undefined : 'No questions yet'}
             count={qaSummary?.questionCount ?? listingEngagement?.questionCount}
             onPress={() => setQaSheetVisible(true)}
-            leadingIcon="chatbubble-outline"
+            leadingIcon="help-circle-outline"
             accessibilityLabel="View questions and answers"
           />
         </CommerceDetailSection>
@@ -1217,6 +1303,11 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   editorialIdentityChapter: {
+    // Per Design.md spacing rhythm: between-group spacing after
+    // full-bleed media. 16px (Space.md) creates a deliberate chapter
+    // break without excessive white space. The media is the product;
+    // the canvas is the author — the transition should feel deliberate
+    // but not distant.
     paddingTop: Space.md,
     paddingBottom: Space.sm,
   },
@@ -1233,13 +1324,36 @@ const styles = StyleSheet.create({
     marginTop: 0,
     paddingBottom: Space.sm,
   },
+  attributeLeftCluster: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    flexShrink: 1,
+  },
+  // Condition chip — Vinted pattern: condition gets a distinct visual
+  // treatment (small surface-alt pill) instead of blending into muted
+  // text. It's the most important attribute for second-hand buyers.
+  // Per Design.md: compact contained control, 32px visible chrome
+  // inside 44px hit target. paddingVertical 5 gives a 26px visible
+  // height with 12px caption text — premium pill proportion.
+  conditionChip: {
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: 5,
+    borderRadius: Radius.md,
+    flexShrink: 0,
+  },
+  conditionChipText: {
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.semibold,
+  },
   attributeText: {
     fontSize: Type.body.size,
     lineHeight: Type.body.lineHeight,
     flexShrink: 1,
   },
   sizeGuideLink: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     flexShrink: 0,
   },
@@ -1248,34 +1362,45 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   izeText: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
     paddingHorizontal: Space.md,
     paddingBottom: Space.sm,
     letterSpacing: 0.1,
   },
   // ── Seller row ──
+  // Per Design.md between-group spacing: the seller row is a distinct
+  // group from the identity chapter. paddingVertical Space.md (16px)
+  // gives proper breathing room for avatar + name + rating + actions.
+  // The hairline top border separates it from the identity chapter
+  // without adding a card surface (per AGENTS.md surface budget).
+  // Tight rhythm: paddingVertical Space.sm + xs (12px) keeps the
+  // seller row connected to the identity chapter above.
   sellerRowWrap: {
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
+    paddingVertical: Space.sm + Space.xs,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'transparent', // overridden inline with theme color
   },
   // ── Purchase details ──
   // Trust chips — flat inline icon+text pairs. No card, no surface fill,
   // no border. Just icon + label + gap. Per AGENTS.md surface budget.
+  // Per Design.md trust/commerce card micro spec: captionElevated (13px)
+  // for trust copy. Icons at 16px (standard metadata glyph band 14-18px).
   trustChipsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Space.sm,
-    paddingBottom: Space.sm,
+    gap: Space.sm + 2,
+    paddingBottom: Space.sm + 2,
   },
   trustChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
+    gap: Space.xs + 1,
   },
   trustChipText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.medium,
   },
   purchaseSummary: {
@@ -1301,8 +1426,8 @@ const styles = StyleSheet.create({
   },
   purchaseSheetSubtitle: {
     marginTop: 2,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
   },
   purchaseSheetBody: {
@@ -1336,7 +1461,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
   },
   descriptionToggle: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
     alignSelf: 'flex-start',
   },
@@ -1382,6 +1507,9 @@ const styles = StyleSheet.create({
     paddingTop: Space.sm,
   },
   // ── More like this grid ──
+  // Per Design.md: discovery density, at least two meaningful media
+  // objects. 2-column grid with gap Space.sm (8px) between cards.
+  // Card internal gap 4px for text breathing room below image.
   moreLikeThisGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1391,7 +1519,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: '47%',
     maxWidth: '49%',
-    gap: 3,
+    gap: Space.xs,
   },
   moreLikeThisImage: {
     width: '100%',
@@ -1413,13 +1541,13 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.medium,
   },
   moreLikeThisMeta: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
   },
   // ── Discovery ──
   recommendationSection: {
-    marginTop: Space.lg,
+    marginTop: Space.md,
   },
   railLoading: {
     flexDirection: 'row',
@@ -1429,7 +1557,7 @@ const styles = StyleSheet.create({
     paddingVertical: Space.lg,
   },
   railLoadingText: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
   },
   recErrorRow: {

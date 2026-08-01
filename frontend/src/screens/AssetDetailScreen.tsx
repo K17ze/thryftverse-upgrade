@@ -247,7 +247,9 @@ export default function AssetDetailScreen() {
       });
   }, [assetId, currentUser?.id]);
 
-  // Pull-to-refresh — reloads asset, order book, and holdings in parallel.
+  // Pull-to-refresh — reloads asset, order book, holdings, and recourse
+  // status in parallel. The recourse fetch is non-fatal (catch → null)
+  // so a recourse endpoint failure doesn't block the rest of the refresh.
   const handleRefresh = React.useCallback(() => {
     if (!assetId) return;
     setRefreshing(true);
@@ -1029,7 +1031,7 @@ export default function AssetDetailScreen() {
                 <View style={styles.trustChipsRow}>
                   {chips.map((chip, i) => (
                     <View key={i} style={styles.trustChip}>
-                      <Ionicons name={chip.icon} size={15} color={colors.textSecondary} />
+                      <Ionicons name={chip.icon} size={16} color={colors.textSecondary} />
                       <Text style={[styles.trustChipText, { color: colors.textSecondary }]} numberOfLines={1}>
                         {chip.label}
                       </Text>
@@ -1575,21 +1577,24 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   marketStatusDot: {
-    width: 7,
-    height: 7,
+    width: 8,
+    height: 8,
     borderRadius: 4,
   },
   marketStatusText: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.semibold,
     letterSpacing: 0,
   },
   marketStatusStale: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
   },
   marketStatusRights: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
   },
   // ── Market book row (bid/ask inside transaction surface) ──
@@ -1609,10 +1614,10 @@ const styles = StyleSheet.create({
     marginHorizontal: Space.sm,
   },
   marketBookLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   marketBookValue: {
     fontSize: Type.priceList.size,
@@ -1659,10 +1664,10 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   fundamentalsLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
+    letterSpacing: Type.captionElevated.letterSpacing,
     flexShrink: 0,
   },
   fundamentalsValue: {
@@ -1721,8 +1726,8 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   trustChipText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.medium,
   },
   auditTrailWrap: {
@@ -1732,9 +1737,10 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   auditTrailTitle: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    letterSpacing: 0.2,
+    fontSize: Type.metaElevated.size,
+    lineHeight: Type.metaElevated.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.metaElevated.letterSpacing,
     textTransform: 'uppercase',
     marginBottom: Space.xs,
   },
@@ -1743,14 +1749,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     gap: Space.sm,
-    paddingVertical: 2,
+    paddingVertical: Space.xs,
   },
   auditTrailEvent: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     textTransform: 'capitalize',
   },
   auditTrailDate: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.medium,
   },
   viewerPositionHeader: {
@@ -1758,7 +1766,7 @@ const styles = StyleSheet.create({
     alignItems: 'baseline',
     justifyContent: 'space-between',
     gap: Space.sm,
-    marginBottom: Space.md,
+    marginBottom: Space.sm,
   },
   // Stale appraisal refresh action
   staleAppraisalRow: {
@@ -1770,7 +1778,7 @@ const styles = StyleSheet.create({
   refreshBtn: {
     paddingVertical: Space.xs,
     paddingHorizontal: Space.sm,
-    borderRadius: Radius.sm,
+    borderRadius: Radius.md,
     borderWidth: 1,
   },
   refreshBtnText: {
@@ -1797,9 +1805,9 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   viewerPositionMeta: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight,
+    lineHeight: Type.captionElevated.lineHeight,
   },
   // ── Supply summary ──
   supplySummary: {
@@ -1817,10 +1825,10 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   supplyMetricLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   supplyUnits: {
     fontSize: Type.subtitle.size,
@@ -1836,18 +1844,19 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   allocationBar: {
-    height: 6,
-    borderRadius: 3,
+    height: 8,
+    borderRadius: Radius.full,
     overflow: 'hidden',
   },
   allocationFill: {
     height: '100%',
-    borderRadius: 3,
+    borderRadius: Radius.full,
   },
   supplyHolders: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
-    marginTop: Space.xs,
+    marginTop: Space.sm,
   },
   // ── Rights summary ──
   rightsSummary: {
@@ -1856,7 +1865,7 @@ const styles = StyleSheet.create({
   rightsCriticalStatement: {
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
-    lineHeight: Type.bodyEmphasis.lineHeight + 2,
+    lineHeight: Type.bodyEmphasis.lineHeight,
   },
   // ── Unavailable exit row (truthful disabled state) ──
   unavailableRow: {
@@ -1891,6 +1900,6 @@ const styles = StyleSheet.create({
   },
   // ── Discovery ──
   recommendationSection: {
-    marginTop: Space.lg,
+    marginTop: Space.md,
   },
 });

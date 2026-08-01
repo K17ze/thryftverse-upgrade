@@ -12,8 +12,8 @@ import {
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
   withTiming,
+  Easing,
   runOnJS,
   FadeIn,
   FadeOut,
@@ -70,9 +70,9 @@ function FullscreenImagePage({
     })
     .onEnd(() => {
       if (scale.value < MIN_ZOOM) {
-        scale.value = withSpring(MIN_ZOOM);
-        translateX.value = withSpring(0);
-        translateY.value = withSpring(0);
+        scale.value = withTiming(MIN_ZOOM, { duration: 200 });
+        translateX.value = withTiming(0, { duration: 200 });
+        translateY.value = withTiming(0, { duration: 200 });
         savedScale.value = MIN_ZOOM;
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
@@ -99,8 +99,8 @@ function FullscreenImagePage({
         }
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
-        translateX.value = withSpring(0);
-        translateY.value = withSpring(0);
+        translateX.value = withTiming(0, { duration: 200, easing: Easing.out(Easing.cubic) });
+        translateY.value = withTiming(0, { duration: 200, easing: Easing.out(Easing.cubic) });
         return;
       }
       const maxX = (width * (zoom - 1)) / 2;
@@ -109,23 +109,23 @@ function FullscreenImagePage({
       const ty = clamp(translateY.value + e.velocityY * 0.08, -maxY, maxY);
       savedTranslateX.value = tx;
       savedTranslateY.value = ty;
-      translateX.value = withSpring(tx, { damping: 17, stiffness: 200, velocity: reducedMotion ? 0 : e.velocityX });
-      translateY.value = withSpring(ty, { damping: 17, stiffness: 200, velocity: reducedMotion ? 0 : e.velocityY });
+      translateX.value = withTiming(tx, { duration: 220, easing: Easing.out(Easing.cubic) });
+      translateY.value = withTiming(ty, { duration: 220, easing: Easing.out(Easing.cubic) });
     });
 
   const doubleTap = Gesture.Tap()
     .numberOfTaps(2)
     .onEnd(() => {
       if (scale.value > 1) {
-        scale.value = withSpring(1, { damping: 15 });
-        translateX.value = withSpring(0);
-        translateY.value = withSpring(0);
+        scale.value = withTiming(1, { duration: 200 });
+        translateX.value = withTiming(0, { duration: 200 });
+        translateY.value = withTiming(0, { duration: 200 });
         savedScale.value = 1;
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
       } else {
         const target = reducedMotion ? 2 : 3;
-        scale.value = withSpring(target, { damping: 12 });
+        scale.value = withTiming(target, { duration: 200, easing: Easing.out(Easing.cubic) });
         savedScale.value = target;
       }
     });

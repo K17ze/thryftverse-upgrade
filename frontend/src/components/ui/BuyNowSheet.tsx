@@ -259,7 +259,7 @@ export function BuyNowSheet({
     <BottomSheet
       visible={visible}
       onDismiss={handleDismiss}
-      snapPoint={0.55}
+      snapPoint={0.65}
       blurIntensity={30}
     >
       <View style={styles.container}>
@@ -428,6 +428,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
   return StyleSheet.create({
   container: {
     paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
     paddingBottom: Space.md,
   },
   itemHeader: {

@@ -58,11 +58,19 @@ interface QueueHandlers {
 const queueConnection = new IORedis(config.redisUrl, {
   maxRetriesPerRequest: null,
   enableReadyCheck: false,
+  retryStrategy: (times) => Math.min(times * 500, 5000),
+});
+queueConnection.on('error', (err) => {
+  console.warn('[queues] queueConnection redis error:', err.message);
 });
 
 const workerConnection = new IORedis(config.redisUrl, {
   maxRetriesPerRequest: null,
   enableReadyCheck: false,
+  retryStrategy: (times) => Math.min(times * 500, 5000),
+});
+workerConnection.on('error', (err) => {
+  console.warn('[queues] workerConnection redis error:', err.message);
 });
 
 const PUSH_QUEUE_NAME = 'push_notifications';
@@ -105,6 +113,9 @@ export function startBackgroundWorkers(handlers: QueueHandlers): void {
         concurrency: 6,
       }
     );
+    pushWorker.on('error', (err) => {
+      console.warn('[queues] pushWorker error:', err.message);
+    });
   }
 
   if (!infraWorker) {
@@ -143,6 +154,9 @@ export function startBackgroundWorkers(handlers: QueueHandlers): void {
         concurrency: 1,
       }
     );
+    infraWorker.on('error', (err) => {
+      console.warn('[queues] infraWorker error:', err.message);
+    });
   }
 }
 

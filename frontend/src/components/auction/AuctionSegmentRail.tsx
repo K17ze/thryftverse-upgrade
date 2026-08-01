@@ -1,7 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, LayoutChangeEvent } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
-import Reanimated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
+import Reanimated, { useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import { Colors } from '../../constants/colors';
 import { Space, Typography } from '../../theme/designTokens';
 import { haptics } from '../../utils/haptics';

@@ -4,11 +4,11 @@ import { Video, ResizeMode } from './compat/Video';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
   useAnimatedReaction,
   runOnJS,
   withTiming,
   SharedValue,
+  Easing,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Colors } from '../constants/colors';
@@ -112,7 +112,7 @@ function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, re
     () => index,
     (currIndex) => {
       if (!isDragging.value) {
-        position.value = withSpring(currIndex * TOTAL_SIZE, { damping: 20, stiffness: 200 });
+        position.value = withTiming(currIndex * TOTAL_SIZE, { duration: 200, easing: Easing.out(Easing.cubic) });
       }
     },
     [index]
@@ -130,7 +130,7 @@ function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, re
     .onEnd((e) => {
       const newIndex = Math.max(0, Math.min(total - 1, Math.round(position.value / TOTAL_SIZE)));
       isDragging.value = false;
-      position.value = withSpring(newIndex * TOTAL_SIZE, { damping: 20, stiffness: 200 }, () => {
+      position.value = withTiming(newIndex * TOTAL_SIZE, { duration: 200, easing: Easing.out(Easing.cubic) }, () => {
         zIndex.value = 0;
       });
 
@@ -151,7 +151,7 @@ function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, re
       zIndex: zIndex.value,
       transform: [
         { translateX: position.value },
-        { scale: withSpring(isDragging.value ? 1.05 : 1) }
+        { scale: withTiming(isDragging.value ? 1.05 : 1, { duration: 120 }) }
       ],
       shadowOpacity: withTiming(isDragging.value ? 0.3 : 0),
     };

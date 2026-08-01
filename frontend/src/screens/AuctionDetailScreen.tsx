@@ -76,6 +76,7 @@ import {
 } from '../platform/product';
 import type { RecommendationLook } from '../platform/product';
 import { useStore } from '../store/useStore';
+import { createDmConversationOnApi } from '../services/chatApi';
 import type { Listing } from '../services/listingsApi';
 import {
   resolveStateAction,
@@ -141,6 +142,8 @@ export default function AuctionDetailScreen() {
   const [relatedLoading, setRelatedLoading] = React.useState(false);
 
   const currentUser = useStore((state) => state.currentUser);
+  const upsertConversation = useStore((state) => state.upsertConversation);
+  const [isResolvingConversation, setIsResolvingConversation] = React.useState(false);
 
   const { width: screenWidth } = useWindowDimensions();
   const isCompact = screenWidth < COMMERCE_DETAIL_COMPACT_WIDTH;
@@ -580,9 +583,9 @@ export default function AuctionDetailScreen() {
         title={auction.title}
         onBack={() => navigation.goBack()}
         rightAction={{
-          icon: 'ellipsis-horizontal',
-          label: 'More actions',
-          onPress: () => setOverflowVisible(true),
+          icon: 'share-outline',
+          label: 'Share auction',
+          onPress: social.openShare,
         }}
       />
 
@@ -651,6 +654,11 @@ export default function AuctionDetailScreen() {
           onBack={() => navigation.goBack()}
           topInset={insets.top}
           rightActions={[
+            {
+              icon: 'share-outline',
+              label: 'Share',
+              onPress: social.openShare,
+            },
             {
               icon: auction.isWatched ? 'eye' : 'eye-outline',
               activeIcon: 'eye',
@@ -841,7 +849,7 @@ export default function AuctionDetailScreen() {
           </View>
         )}
 
-        <View style={styles.identityExtension}>
+        <View style={[styles.identityExtension, { borderTopColor: colors.borderSubtle }]}>
           <CommerceDetailSellerRow
             name={auction.seller.displayName ?? auction.seller.username}
             verified={sellerTrustData?.verified}
@@ -854,20 +862,50 @@ export default function AuctionDetailScreen() {
             primaryAction={
               !isSeller
                 ? {
-                    label: 'Message',
-                    onPress: () =>
-                      navigation.navigate('NewMessage', {
-                        preselectedUserId: auction.seller.id,
-                        preselectedDisplayName: auction.seller.username,
-                      }),
+                    label: isResolvingConversation ? 'Starting…' : 'Message',
+                    onPress: async () => {
+                      if (!currentUser?.id) {
+                        show('Sign in to message the seller.', 'error');
+                        return;
+                      }
+                      if (isResolvingConversation) return;
+                      setIsResolvingConversation(true);
+                      try {
+                        const conversation = await createDmConversationOnApi({
+                          recipientUserId: auction.seller.id,
+                        });
+                        upsertConversation(conversation);
+                        navigation.navigate('Chat', {
+                          conversationId: conversation.id,
+                          partnerUserId: auction.seller.id,
+                        });
+                      } catch {
+                        show('Could not start conversation. Please try again.', 'error');
+                      } finally {
+                        setIsResolvingConversation(false);
+                      }
+                    },
                   }
                 : undefined
             }
             secondaryAction={
               !isSeller
                 ? {
-                    label: 'Follow',
-                    onPress: () => sellerFollowMutation.mutate(),
+                    label: sellerFollowMutation.isPending ? 'Following…' : (sellerTrustData?.isFollowing ? 'Following' : 'Follow'),
+                    onPress: () => {
+                      if (!currentUser?.id) {
+                        show('Sign in to follow this seller.', 'error');
+                        return;
+                      }
+                      sellerFollowMutation.mutate(undefined, {
+                        onSuccess: (data) => {
+                          show(data.isFollowing ? 'Followed seller' : 'Unfollowed seller', 'success');
+                        },
+                        onError: () => {
+                          show('Could not follow seller. Please try again.', 'error');
+                        },
+                      });
+                    },
                   }
                 : undefined
             }
@@ -1539,8 +1577,8 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   bidActivityLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.medium,
   },
   bidActivityBidder: {
@@ -1596,10 +1634,13 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
   },
   // ── Terminal result — one compact module ──
+  // Per Design.md between-group spacing: 24px after media for a
+  // deliberate chapter break. The terminal result is the first
+  // content module after media in terminal states.
   terminalResultModule: {
     marginHorizontal: Space.md,
-    marginTop: Space.sm,
-    paddingVertical: Space.md,
+    marginTop: Space.md,
+    paddingVertical: Space.sm,
     gap: Space.xs,
   },
   terminalResultTitleWon: {
@@ -1749,9 +1790,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Space.xs,
   },
+  // ── Seller identity extension ──
+  // Tight rhythm: the seller row follows the transaction surface
+  // or terminal result. paddingVertical Space.sm + xs (12px) keeps
+  // the seller row connected to the content above without excessive
+  // white space, while the hairline border provides visual separation.
   identityExtension: {
     paddingHorizontal: Space.md,
-    paddingBottom: Space.xs,
+    paddingVertical: Space.sm + Space.xs,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'transparent', // overridden inline with theme color
   },
   viewerStateLine: {
     fontSize: Type.bodyEmphasis.size,

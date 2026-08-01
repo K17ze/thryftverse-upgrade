@@ -12,8 +12,8 @@ import Reanimated, {
   useAnimatedStyle,
   interpolate,
   Extrapolation,
-  withSpring,
   withTiming,
+  Easing,
   runOnJS,
   type SharedValue,
 } from 'react-native-reanimated';
@@ -74,9 +74,9 @@ function MediaPage({ uri, width, height, onDoubleTap, sharedTransitionTag, onZoo
     })
     .onEnd(() => {
       if (scale.value < MIN_ZOOM) {
-        scale.value = withSpring(MIN_ZOOM);
-        translateX.value = withSpring(0);
-        translateY.value = withSpring(0);
+        scale.value = withTiming(MIN_ZOOM, { duration: 200 });
+        translateX.value = withTiming(0, { duration: 200 });
+        translateY.value = withTiming(0, { duration: 200 });
         savedScale.value = MIN_ZOOM;
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
@@ -100,8 +100,8 @@ function MediaPage({ uri, width, height, onDoubleTap, sharedTransitionTag, onZoo
       if (zoom <= 1) {
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
-        translateX.value = withSpring(0, { damping: 18, stiffness: 220 });
-        translateY.value = withSpring(0, { damping: 18, stiffness: 220 });
+        translateX.value = withTiming(0, { duration: 200, easing: Easing.out(Easing.cubic) });
+        translateY.value = withTiming(0, { duration: 200, easing: Easing.out(Easing.cubic) });
         return;
       }
       const maxX = (width * (zoom - 1)) / 2;
@@ -110,23 +110,23 @@ function MediaPage({ uri, width, height, onDoubleTap, sharedTransitionTag, onZoo
       const ty = clamp(translateY.value + e.velocityY * 0.08, -maxY, maxY);
       savedTranslateX.value = tx;
       savedTranslateY.value = ty;
-      translateX.value = withSpring(tx, { damping: 17, stiffness: 200, velocity: reducedMotion ? 0 : e.velocityX });
-      translateY.value = withSpring(ty, { damping: 17, stiffness: 200, velocity: reducedMotion ? 0 : e.velocityY });
+      translateX.value = withTiming(tx, { duration: 220, easing: Easing.out(Easing.cubic) });
+      translateY.value = withTiming(ty, { duration: 220, easing: Easing.out(Easing.cubic) });
     });
 
   const doubleTap = Gesture.Tap()
     .numberOfTaps(2)
     .onEnd(() => {
       if (scale.value > 1) {
-        scale.value = withSpring(1, { damping: 15 });
-        translateX.value = withSpring(0);
-        translateY.value = withSpring(0);
+        scale.value = withTiming(1, { duration: 200 });
+        translateX.value = withTiming(0, { duration: 200 });
+        translateY.value = withTiming(0, { duration: 200 });
         savedScale.value = 1;
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
       } else {
         const target = reducedMotion ? 2 : 2.5;
-        scale.value = withSpring(target, { damping: 12 });
+        scale.value = withTiming(target, { duration: 200, easing: Easing.out(Easing.cubic) });
         savedScale.value = target;
         if (onDoubleTap) runOnJS(onDoubleTap)();
       }

@@ -69,6 +69,14 @@ function MediaPage({
 }: MediaPageProps) {
   const reducedMotion = useReducedMotion();
   const [failed, setFailed] = useState(false);
+  // Track zoom state in React state so the pan gesture can be
+  // disabled when not zoomed. This is critical: when the pan gesture
+  // is always active, it captures horizontal swipes and prevents the
+  // parent FlatList from paging between images. By only enabling pan
+  // when zoomed > 1x, horizontal swipes pass through to the FlatList
+  // for carousel pagination, and the user can pan the zoomed image
+  // once they've pinched or double-tapped to zoom in.
+  const [isZoomed, setIsZoomed] = useState(false);
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
   const translateX = useSharedValue(0);
@@ -92,12 +100,17 @@ function MediaPage({
         savedScale.value = MIN_ZOOM;
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
+        runOnJS(setIsZoomed)(false);
       } else {
         savedScale.value = scale.value;
+        runOnJS(setIsZoomed)(true);
       }
     });
 
+  // Pan is only enabled when zoomed in. When not zoomed, horizontal
+  // swipes pass through to the parent FlatList for carousel pagination.
   const pan = Gesture.Pan()
+    .enabled(isZoomed)
     .onUpdate((e) => {
       const zoom = Math.max(scale.value, savedScale.value);
       if (zoom > 1) {
@@ -136,10 +149,12 @@ function MediaPage({
         savedScale.value = 1;
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
+        runOnJS(setIsZoomed)(false);
       } else {
         const target = reducedMotion ? 2 : 2.5;
         scale.value = withSpring(target, { damping: 12 });
         savedScale.value = target;
+        runOnJS(setIsZoomed)(true);
         if (onDoubleTap) runOnJS(onDoubleTap)();
       }
     });
@@ -319,6 +334,16 @@ export function CommerceMediaStage({
   const reducedMotion = useReducedMotion();
   const [activeIndex, setActiveIndex] = useState(initialIndex);
   const listRef = useRef<FlatList<any>>(null);
+  // Zoom hint — shows a subtle magnifying glass on first view, fades out
+  // after 2.5s or on first zoom interaction. Airbnb pattern: one-time
+  // visual cue that pinch-to-zoom is available.
+  const zoomHintOpacity = useSharedValue(0);
+  const zoomHintDismissed = useRef(false);
+  const dismissZoomHint = useCallback(() => {
+    if (zoomHintDismissed.current) return;
+    zoomHintDismissed.current = true;
+    zoomHintOpacity.value = withTiming(0, { duration: 400 });
+  }, [zoomHintOpacity]);
   const mediaItems = React.useMemo<ProductMediaItem[]>(() => {
     if (media) return media.filter((item) => !!item.uri);
     const videoUriSet = new Set(videoUris);
@@ -330,6 +355,12 @@ export function CommerceMediaStage({
         fit: 'contain',
       }));
   }, [images, media, videoUris]);
+  React.useEffect(() => {
+    if (reducedMotion || mediaItems.length === 0) return;
+    zoomHintOpacity.value = withTiming(0.7, { duration: 300 });
+    const timer = setTimeout(() => dismissZoomHint(), 2800);
+    return () => clearTimeout(timer);
+  }, [reducedMotion, mediaItems.length, zoomHintOpacity, dismissZoomHint]);
 
   React.useEffect(() => {
     if (mediaItems.length === 0) return;
@@ -358,6 +389,9 @@ export function CommerceMediaStage({
   const bigHeartStyle = useAnimatedStyle(() => ({
     opacity: bigHeartOpacity?.value ?? 0,
     transform: [{ scale: bigHeartScale?.value ?? 0 }],
+  }));
+  const zoomHintStyle = useAnimatedStyle(() => ({
+    opacity: zoomHintOpacity.value,
   }));
   const bottomScrimStyle = useAnimatedStyle(() => {
     // Clear the editorial caption before the collapsed navigation title
@@ -429,8 +463,8 @@ export function CommerceMediaStage({
               height={heroHeight}
               onDoubleTap={onDoubleTap}
               sharedTransitionTag={index === 0 && objectId ? `image-${objectId}-0` : undefined}
-              onZoomStart={onZoomStart}
-              onOpenFullscreen={() => onOpenFullscreen(index)}
+              onZoomStart={() => { dismissZoomHint(); onZoomStart?.(); }}
+              onOpenFullscreen={() => { dismissZoomHint(); onOpenFullscreen(index); }}
             />
           )
         }
@@ -543,9 +577,26 @@ export function CommerceMediaStage({
           accessibilityRole="button"
           accessibilityLabel={`${mediaItems[activeIndex]?.kind === 'video' ? 'Video' : 'Image'} ${activeIndex + 1} of ${mediaItems.length}. Open fullscreen.`}
         >
-          <Text style={styles.indexText}>
-            {activeIndex + 1} / {mediaItems.length}
-          </Text>
+          {/* Dot indicators — Depop/Vinted/Grailed pattern.
+              Up to 5 dots; active dot is wider and full-opacity.
+              Beyond 5 images, dots collapse to a numeric counter. */}
+          {mediaItems.length <= 5 ? (
+            <View style={styles.dotRow}>
+              {mediaItems.map((_, i) => (
+                <View
+                  key={i}
+                  style={[
+                    styles.dot,
+                    i === activeIndex && styles.dotActive,
+                  ]}
+                />
+              ))}
+            </View>
+          ) : (
+            <Text style={styles.indexText}>
+              {activeIndex + 1} / {mediaItems.length}
+            </Text>
+          )}
         </Pressable>
       )}
 
@@ -554,6 +605,16 @@ export function CommerceMediaStage({
           <Ionicons name="play-circle" size={16} color="#fff" />
           <Text style={styles.videoBadgeText}>Video</Text>
         </View>
+      )}
+
+      {/* Zoom hint — subtle magnifying glass that fades after 2.8s or
+          on first zoom/fullscreen interaction. Airbnb pattern: one-time
+          visual cue that pinch-to-zoom is available. */}
+      {!reducedMotion && mediaItems.length > 0 && (
+        <Reanimated.View style={[styles.zoomHint, zoomHintStyle]} pointerEvents="none">
+          <Ionicons name="add-circle-outline" size={18} color="#fff" style={styles.zoomHintIcon} />
+          <Text style={styles.zoomHintText}>Pinch to zoom</Text>
+        </Reanimated.View>
       )}
 
       {showThumbnailStrip && mediaItems.length > 1 && (
@@ -715,6 +776,25 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: Radius.md,
   },
+  // Dot indicators — quiet position signal (Depop/Vinted pattern).
+  // Inactive dots are small and translucent; active dot is wider and opaque.
+  dotRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  dot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: 'rgba(255,255,255,0.45)',
+  },
+  dotActive: {
+    width: 14,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#fff',
+  },
   indexText: {
     color: '#fff',
     fontSize: 12,
@@ -735,6 +815,30 @@ const styles = StyleSheet.create({
   videoBadgeText: {
     color: '#fff',
     fontSize: 12,
+    fontFamily: Typography.family.medium,
+  },
+  // Zoom hint — bottom-center pill, fades out after 2.8s or on first
+  // zoom interaction. Quiet, one-time cue (Airbnb pattern).
+  zoomHint: {
+    position: 'absolute',
+    bottom: Space.sm,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: Radius.md,
+  },
+  zoomHintIcon: {
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  zoomHintText: {
+    color: '#fff',
+    fontSize: 11,
     fontFamily: Typography.family.medium,
   },
   bottomScrim: {

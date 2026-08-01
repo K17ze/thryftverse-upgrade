@@ -3,7 +3,6 @@ import { View, Text, StyleSheet } from 'react-native';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
@@ -20,10 +19,10 @@ export function AnimatedBadge({ count, size = 18 }: AnimatedBadgeProps) {
 
   useEffect(() => {
     if (count > 0) {
-      // Rubber-band bounce effect on count change
+      // Quick scale pop then settle — timing-based, no bounce
       scale.value = withSequence(
         withTiming(1.3, { duration: 100 }),
-        withSpring(1, { damping: 10, stiffness: 300 })
+        withTiming(1, { duration: 120 })
       );
     } else {
       scale.value = withTiming(0, { duration: 200 }); // Shrink out if 0

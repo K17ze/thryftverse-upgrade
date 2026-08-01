@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, Text, Pressable, useWindowDimensions } from 'react-native';
+import { View, StyleSheet, Text, Pressable, useWindowDimensions, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Reanimated from 'react-native-reanimated';
 import { FadeIn } from 'react-native-reanimated';
@@ -60,6 +60,9 @@ export interface CommerceDetailStateDockAction {
 export interface CommerceDetailStateDockProps {
   /** Optional value line rendered on the left (price / current bid / state). */
   value?: string;
+  /** Optional original price shown with strikethrough above the current
+   *  value. Used for discounted items (Depop/eBay pattern). */
+  originalValue?: string;
   /** Optional label under the value (e.g. "Current bid"). */
   valueLabel?: string;
   /** Optional state badge rendered on the left in place of value (e.g.
@@ -98,6 +101,7 @@ const COMPACT_STACK_THRESHOLD = COMMERCE_DETAIL_COMPACT_WIDTH;
 
 export function CommerceDetailStateDock({
   value,
+  originalValue,
   valueLabel,
   stateBadge,
   subtitle,
@@ -155,6 +159,14 @@ export function CommerceDetailStateDock({
           ) : null}
           <View style={styles.valueTextCluster}>
             {stateBadge}
+            {originalValue && !stateBadge ? (
+              <Text
+                style={[styles.originalValue, { color: colors.textMuted }]}
+                accessibilityRole="text"
+              >
+                {originalValue}
+              </Text>
+            ) : null}
             {value ? (
               <Text
                 style={[styles.value, { color: colors.textPrimary }]}
@@ -191,6 +203,7 @@ export function CommerceDetailStateDock({
                 shouldStack ? styles.secondaryActionStacked : styles.secondaryAction,
                 { borderColor: colors.border },
                 pressed && !secondaryAction.disabled && styles.pressed,
+                secondaryAction.disabled && styles.disabled,
               ]}
               accessibilityLabel={secondaryAction.accessibilityLabel ?? secondaryAction.label}
               accessibilityRole="button"
@@ -199,18 +212,22 @@ export function CommerceDetailStateDock({
                 busy: secondaryAction.loading,
               }}
             >
-              <Text
-                style={[
-                  styles.secondaryActionText,
-                  {
-                    color: secondaryAction.disabled
-                      ? colors.textMuted
-                      : colors.textPrimary,
-                  },
-                ]}
-              >
-                {secondaryAction.label}
-              </Text>
+              {secondaryAction.loading ? (
+                <ActivityIndicator size="small" color={colors.textPrimary} />
+              ) : (
+                <Text
+                  style={[
+                    styles.secondaryActionText,
+                    {
+                      color: secondaryAction.disabled
+                        ? colors.textMuted
+                        : colors.textPrimary,
+                    },
+                  ]}
+                >
+                  {secondaryAction.label}
+                </Text>
+              )}
             </Pressable>
           ) : null}
           {primaryAction ? (
@@ -229,6 +246,7 @@ export function CommerceDetailStateDock({
                   borderWidth: primaryIsEmphasized ? 0 : 1,
                 },
                 pressed && !primaryAction.disabled && styles.pressed,
+                primaryAction.disabled && styles.disabled,
               ]}
               accessibilityLabel={primaryAction.accessibilityLabel ?? primaryAction.label}
               accessibilityRole="button"
@@ -237,20 +255,24 @@ export function CommerceDetailStateDock({
                 busy: primaryAction.loading,
               }}
             >
-              <Text
-                style={[
-                  styles.primaryActionText,
-                  {
-                    color: primaryAction.disabled
-                      ? colors.textMuted
-                      : primaryIsEmphasized
-                        ? colors.textInverse
-                        : colors.textPrimary,
-                  },
-                ]}
-              >
-                {primaryAction.loading ? '…' : primaryAction.label}
-              </Text>
+              {primaryAction.loading ? (
+                <ActivityIndicator size="small" color={primaryIsEmphasized ? colors.textInverse : colors.textPrimary} />
+              ) : (
+                <Text
+                  style={[
+                    styles.primaryActionText,
+                    {
+                      color: primaryAction.disabled
+                        ? colors.textMuted
+                        : primaryIsEmphasized
+                          ? colors.textInverse
+                          : colors.textPrimary,
+                    },
+                  ]}
+                >
+                  {primaryAction.label}
+                </Text>
+              )}
             </Pressable>
           ) : null}
         </View>
@@ -281,8 +303,18 @@ const styles = StyleSheet.create({
     width: '100%',
     minWidth: 0,
     paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
+    paddingTop: Space.sm + 2,
     borderTopWidth: StyleSheet.hairlineWidth,
+    // Per Design.md Elevation.floating: the dock is a genuinely floating
+    // surface separating persistent action from scroll content. A stronger
+    // shadow (0.10/12px) creates clear depth separation without being
+    // decorative. Research: "0 -2px 8px rgba(0,0,0,0.06)" is the minimum;
+    // flagship docks use 0.10–0.12 to read as elevated, not flat.
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.10,
+    shadowRadius: 12,
+    elevation: 6,
   },
   row: {
     flexDirection: 'row',
@@ -313,26 +345,45 @@ const styles = StyleSheet.create({
     gap: Space.xs,
     flexShrink: 1,
   },
-  // Product thumbnail — 32x32, small radius. Quiet, no border.
-  // Research: "anchors them back to the product they intended to buy."
+  // Product thumbnail — 40x40, medium radius. Quiet, no border.
+  // Research (ecomdesignpro 2026): "40-48px with 8px radius, optional
+  // on mobile." Radius.md (8px) matches the primary action radius for
+  // visual coherence within the dock.
   thumbnail: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.sm,
+    width: 40,
+    height: 40,
+    borderRadius: Radius.md,
     flexShrink: 0,
   },
   value: {
-    fontSize: Type.priceLarge.size,
-    lineHeight: Type.priceLarge.lineHeight,
+    // Per Design.md: price-list (20px) is the correct size for dock
+    // values. price-large (28px) is reserved for checkout totals.
+    // Research (ecomdesignpro 2026): "Keep the bar short, usually 64
+    // to 80 px tall" — a 28px price dominates a 72px dock.
+    fontSize: Type.priceList.size,
+    lineHeight: Type.priceList.lineHeight,
     fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceLarge.letterSpacing,
+    letterSpacing: Type.priceList.letterSpacing,
+    fontVariant: ['tabular-nums'],
+  },
+  // Strikethrough original price — quiet, muted, shown above current
+  // value when a discount is active. Depop/eBay pattern.
+  originalValue: {
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.regular,
+    textDecorationLine: 'line-through',
     fontVariant: ['tabular-nums'],
   },
   valueLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
+    // Per Design.md trust/commerce card micro spec: captionElevated
+    // (13px) for trust copy and metadata labels. The value label
+    // ("Current bid", "Your listing") is a metadata label that
+    // benefits from slightly larger size for legibility in the dock.
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   actionCluster: {
     flexDirection: 'row',
@@ -350,19 +401,22 @@ const styles = StyleSheet.create({
   },
   // Per spec 05 §5: restrained radii — medium radius (Radius.md = 8)
   // for primary commerce action, not radius 24.
+  // Research 2025: 48–52dp tall for persistent footer buttons. Using
+  // 50px to give the primary action slightly more presence than the
+  // secondary (48px), creating subtle hierarchy within the dock.
   primaryAction: {
-    minHeight: 44,
-    paddingHorizontal: Space.md,
+    minHeight: 50,
+    paddingHorizontal: Space.lg,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 112,
+    minWidth: 120,
   },
   // Stacked primary: flexes to consume available width so the label
   // never truncates on compact widths.
   primaryActionStacked: {
-    minHeight: 44,
-    paddingHorizontal: Space.md,
+    minHeight: 50,
+    paddingHorizontal: Space.lg,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -377,7 +431,7 @@ const styles = StyleSheet.create({
   // Per spec 05 §5: secondary is a quiet outlined control with medium
   // radius, not a giant pill.
   secondaryAction: {
-    minHeight: 44,
+    minHeight: 48,
     paddingHorizontal: Space.md,
     borderRadius: Radius.md,
     alignItems: 'center',
@@ -385,7 +439,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   secondaryActionStacked: {
-    minHeight: 44,
+    minHeight: 48,
     paddingHorizontal: Space.md,
     borderRadius: Radius.md,
     alignItems: 'center',
@@ -402,9 +456,19 @@ const styles = StyleSheet.create({
     opacity: 0.85,
     transform: [{ scale: 0.97 }],
   },
+  // Disabled state — opacity reduction per research: "Use opacity
+  // reduction (40%), avoid graying out (can be confused with secondary
+  // actions)."
+  disabled: {
+    opacity: 0.4,
+  },
   subtitle: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
+    // Per Design.md trust/commerce card micro spec: captionElevated
+    // (13px) for trust copy and state explanations. The subtitle
+    // ("Complete rights disclosure", "This item has been sold") is
+    // contextual copy that benefits from the slightly larger size.
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
   },
 });

@@ -174,9 +174,9 @@ describe('co-own-detail flagship closure (spec 03_COOWN)', () => {
       expect(rightsSection![0]).not.toContain('<CoOwnRiskDisclosure');
     });
 
-    it('risk disclosure opens in a Modal', () => {
-      expect(src).toContain('riskDisclosureModalSheet');
-      expect(src).toContain('riskDisclosureModalOverlay');
+    it('risk disclosure opens in a BottomSheet', () => {
+      expect(src).toContain('riskDisclosureSheetHeader');
+      expect(src).toContain('BottomSheet');
     });
   });
 

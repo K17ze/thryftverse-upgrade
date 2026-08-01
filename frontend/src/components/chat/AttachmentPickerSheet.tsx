@@ -3,9 +3,9 @@ import { View, StyleSheet, Dimensions } from 'react-native';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
   withTiming,
   runOnJS,
+  Easing,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
@@ -66,7 +66,7 @@ export function AttachmentPickerSheet({ visible, onClose, onSelect, isGroup = fa
     if (visible) {
       setRendered(true);
       opacity.value = withTiming(1, { duration: 180 });
-      translateY.value = withSpring(0, { damping: 22, stiffness: 200 });
+      translateY.value = withTiming(0, { duration: 280, easing: Easing.out(Easing.cubic) });
     } else if (rendered) {
       opacity.value = withTiming(0, { duration: 150 });
       translateY.value = withTiming(SCREEN_HEIGHT * 0.5, { duration: 200 });
@@ -92,7 +92,7 @@ export function AttachmentPickerSheet({ visible, onClose, onSelect, isGroup = fa
       if (e.translationY > 100 || e.velocityY > 600) {
         runOnJS(onClose)();
       } else {
-        translateY.value = withSpring(0, { damping: 22, stiffness: 200 });
+        translateY.value = withTiming(0, { duration: 280, easing: Easing.out(Easing.cubic) });
       }
     });
 

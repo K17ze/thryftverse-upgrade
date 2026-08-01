@@ -3,7 +3,7 @@ import { View, StyleSheet, Pressable } from 'react-native';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
+  withTiming,
   interpolate,
   interpolateColor,
 } from 'react-native-reanimated';
@@ -20,11 +20,7 @@ export function PremiumToggle({ value, onValueChange, disabled = false }: Premiu
   const progress = useSharedValue(value ? 1 : 0);
 
   React.useEffect(() => {
-    progress.value = withSpring(value ? 1 : 0, {
-      damping: 15,
-      stiffness: 200,
-      mass: 0.8,
-    });
+    progress.value = withTiming(value ? 1 : 0, { duration: 180 });
   }, [value, progress]);
 
   const trackStyle = useAnimatedStyle(() => ({

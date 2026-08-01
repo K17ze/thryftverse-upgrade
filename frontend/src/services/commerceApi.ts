@@ -56,7 +56,7 @@ export interface CommercePaymentMethod {
   provider: 'stripe';
   providerCustomerId: string;
   providerPaymentMethodId: string;
-  type: 'card';
+  type: 'card' | 'apple_pay' | 'google_pay' | 'bank_account';
   brand: string;
   last4: string;
   expiryMonth: number;
@@ -66,6 +66,7 @@ export interface CommercePaymentMethod {
   isDefault: boolean;
   status: 'active';
   redisplayConsent: string;
+  walletType?: string | null;
   createdAt: string;
   updatedAt: string;
 }

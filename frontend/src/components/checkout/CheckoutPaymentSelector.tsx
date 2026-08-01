@@ -55,11 +55,23 @@ export function CheckoutPaymentSelector({
             >
               <View style={styles.rowLeft}>
                 <View style={[styles.cardIconWrap, isSelected && styles.cardIconWrapSelected]}>
-                  <Ionicons
-                    name="card"
-                    size={18}
-                    color={isSelected ? Colors.brand : Colors.textSecondary}
-                  />
+                  {method.type === 'apple_pay' ? (
+                    <Text style={styles.walletIconText}>Pay</Text>
+                  ) : method.type === 'google_pay' ? (
+                    <Text style={styles.walletIconText}>G</Text>
+                  ) : method.type === 'bank_account' ? (
+                    <Ionicons
+                      name="business"
+                      size={18}
+                      color={isSelected ? Colors.brand : Colors.textSecondary}
+                    />
+                  ) : (
+                    <Ionicons
+                      name="card"
+                      size={18}
+                      color={isSelected ? Colors.brand : Colors.textSecondary}
+                    />
+                  )}
                 </View>
                 <View style={styles.rowInfo}>
                   <View style={styles.methodLabelRow}>
@@ -160,6 +172,11 @@ const styles = StyleSheet.create({
   },
   cardIconWrapSelected: {
     backgroundColor: `${Colors.brand}15`,
+  },
+  walletIconText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.textPrimary,
   },
   rowInfo: {
     flex: 1,

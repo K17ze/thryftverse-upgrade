@@ -10,6 +10,7 @@ import {
   AppState,
   Alert,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -110,6 +111,9 @@ function toEtaLabel(carrier: CapabilityCarrier): string {
 
 const PAYMENT_INTENT_POLL_ATTEMPTS = 12;
 const PAYMENT_INTENT_POLL_INTERVAL_MS = 1_500;
+// Extended polling for 3DS/SCA re-authentication: up to 5 minutes.
+const PAYMENT_INTENT_SCA_POLL_ATTEMPTS = 100;
+const PAYMENT_INTENT_SCA_POLL_INTERVAL_MS = 3_000;
 
 type CheckoutPaymentSettlementStatus = 'succeeded' | 'failed' | 'pending' | 'aborted';
 
@@ -123,7 +127,10 @@ async function waitForPaymentIntentSettlement(
   intentId: string,
   shouldContinue: () => boolean
 ): Promise<CheckoutPaymentSettlementStatus> {
-  for (let attempt = 0; attempt < PAYMENT_INTENT_POLL_ATTEMPTS; attempt += 1) {
+  let maxAttempts = PAYMENT_INTENT_POLL_ATTEMPTS;
+  let intervalMs = PAYMENT_INTENT_POLL_INTERVAL_MS;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     if (!shouldContinue()) {
       return 'aborted';
     }
@@ -139,6 +146,26 @@ async function waitForPaymentIntentSettlement(
       if (normalizedStatus === 'failed' || normalizedStatus === 'cancelled') {
         return 'failed';
       }
+
+      // ── 3DS/SCA re-authentication ─────────────────────────────────────
+      // When the intent requires action (e.g., 3DS challenge), extend the
+      // polling window and open the next_action_url for the user to
+      // authenticate with their bank.
+      if (normalizedStatus === 'requires_action' || normalizedStatus === 'requires_confirmation') {
+        const nextActionUrl = (latestIntent as { nextActionUrl?: string | null }).nextActionUrl;
+        if (nextActionUrl) {
+          // Open the bank's 3DS authentication page in the device browser.
+          try {
+            await Linking.openURL(nextActionUrl);
+          } catch {
+            // Linking may fail on some platforms; the user can also
+            // complete auth in the PaymentSheet.
+          }
+        }
+        // Switch to extended polling (5 min) to allow time for 3DS.
+        maxAttempts = PAYMENT_INTENT_SCA_POLL_ATTEMPTS;
+        intervalMs = PAYMENT_INTENT_SCA_POLL_INTERVAL_MS;
+      }
     } catch {
       // Continue polling until timeout to absorb transient API/network failures.
     }
@@ -147,8 +174,8 @@ async function waitForPaymentIntentSettlement(
       return 'aborted';
     }
 
-    if (attempt < PAYMENT_INTENT_POLL_ATTEMPTS - 1) {
-      await wait(PAYMENT_INTENT_POLL_INTERVAL_MS);
+    if (attempt < maxAttempts - 1) {
+      await wait(intervalMs);
     }
   }
 
@@ -1334,6 +1361,26 @@ export default function CheckoutScreen() {
           <Text style={[styles.footerTotalLabel, t.footerTotalLabel]}>Total</Text>
           <Text style={[styles.footerTotalPrice, t.footerTotalPrice]}>{formatFromFiat(TOTAL, 'GBP')}</Text>
         </View>
+
+        {/* Apple Pay as primary CTA on iOS when enabled */}
+        {Platform.OS === 'ios' && isPaymentMethodAllowed(checkoutCapabilities, 'apple_pay') && !isSubmitting && (
+          <Pressable
+            onPress={() => { haptics.press(); handlePay(); }}
+            style={({ pressed }) => [
+              styles.applePayBtn,
+              pressed && styles.payBtnPressed,
+              (!checkoutEligible || isInteractionLocked) && styles.payBtnDisabled,
+            ]}
+            disabled={!checkoutEligible || isInteractionLocked}
+            accessibilityRole="button"
+            accessibilityLabel={`Pay ${formatFromFiat(TOTAL, 'GBP')} with Apple Pay`}
+            accessibilityState={{ disabled: !checkoutEligible || isInteractionLocked }}
+          >
+            <Ionicons name="logo-apple" size={18} color="#ffffff" />
+            <Text style={styles.applePayBtnText}>Pay</Text>
+          </Pressable>
+        )}
+
         <Pressable
           style={({ pressed }) => [
             styles.payBtn,
@@ -1609,6 +1656,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.lg,
     borderRadius: Radius.md,
     minHeight: 48,
+  },
+  applePayBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.xs,
+    minWidth: 140,
+    height: 48,
+    borderRadius: Radius.md,
+    backgroundColor: '#000000',
+    marginBottom: Space.xs,
+  },
+  applePayBtnText: {
+    color: '#ffffff',
+    fontSize: 17,
+    fontWeight: '600',
   },
   payBtnDisabled: {
     opacity: 0.5,

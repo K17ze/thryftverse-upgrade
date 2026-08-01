@@ -16,7 +16,6 @@ import { View, StyleSheet, Pressable, PressableProps, ViewStyle } from 'react-na
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
   withTiming,
   Easing,
   runOnJS,
@@ -26,9 +25,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Space, Radius } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 
-// ── Spring presets ─────────────────────────────────────────────────
-const SPRING_SNAP = { damping: 25, stiffness: 400, mass: 1 };
-const SPRING_SHEET = { damping: 28, stiffness: 380, mass: 1 };
+// ── Timing presets ─────────────────────────────────────────────────
+const TIMING_SNAP = { duration: 120, easing: Easing.out(Easing.cubic) };
+const TIMING_SHEET = { duration: 280, easing: Easing.out(Easing.cubic) };
 
 // ── PressScale ─────────────────────────────────────────────────────
 // Wraps a Pressable with spring-based scale-on-press feedback.
@@ -75,11 +74,11 @@ export function PressScale({
       accessibilityLabel={accessibilityLabel}
       accessibilityRole={accessibilityRole}
       onPressIn={(e) => {
-        pressedSV.value = withSpring(1, SPRING_SNAP);
+        pressedSV.value = withTiming(1, TIMING_SNAP);
         onPressIn?.(e);
       }}
       onPressOut={(e) => {
-        pressedSV.value = withSpring(0, SPRING_SNAP);
+        pressedSV.value = withTiming(0, TIMING_SNAP);
         onPressOut?.(e);
       }}
     >
@@ -125,7 +124,7 @@ export function SheetContainer({
         translateY.value = 0;
         backdropOpacity.value = 1;
       } else {
-        translateY.value = withSpring(0, SPRING_SHEET);
+        translateY.value = withTiming(0, TIMING_SHEET);
         backdropOpacity.value = withTiming(1, { duration: 160, easing: Easing.out(Easing.ease) });
       }
     } else if (mountedRef.current) {

@@ -43,6 +43,13 @@ export interface CommerceDetailIdentityProps {
    * Family rule: only `direct` may show price here. Auction and Co-Own
    * own their dominant value in the transaction surface. */
   primaryValue?: string;
+  /** Original price shown with strikethrough when a discount is active.
+   * Rendered to the right of primaryValue in the value row.
+   * Direct family only. */
+  originalValue?: string;
+  /** Discount percentage badge (e.g. "-20%"). Rendered after the
+   * strikethrough original price. Direct family only. */
+  discountBadge?: string;
   /** One secondary truth line (e.g. "Original £120" or "5 bids"). */
   secondaryLine?: string;
   /** Optional compact interest signal (e.g. "23 watching"). */
@@ -63,6 +70,8 @@ export function CommerceDetailIdentity({
   eyebrow,
   title,
   primaryValue,
+  originalValue,
+  discountBadge,
   secondaryLine,
   interestSignal,
   familyChip,
@@ -78,6 +87,8 @@ export function CommerceDetailIdentity({
   // surface, so we suppress primaryValue here to prevent duplicated
   // price hierarchy.
   const showPrimaryValue = family === 'direct' ? primaryValue : undefined;
+  const showOriginalValue = family === 'direct' ? originalValue : undefined;
+  const showDiscountBadge = family === 'direct' ? discountBadge : undefined;
 
   const titleStyle = [
     styles.title,
@@ -124,7 +135,7 @@ export function CommerceDetailIdentity({
         {title}
       </Text>
 
-      {(showPrimaryValue || secondaryLine || interestSignal) && (
+      {(showPrimaryValue || showOriginalValue || showDiscountBadge || secondaryLine || interestSignal) && (
         <View style={styles.valueRow}>
           {showPrimaryValue ? (
             <Text
@@ -137,6 +148,24 @@ export function CommerceDetailIdentity({
             >
               {showPrimaryValue}
             </Text>
+          ) : null}
+          {showOriginalValue ? (
+            <Text
+              style={[
+                styles.originalValue,
+                { color: isMedia ? 'rgba(255,255,255,0.6)' : colors.textMuted },
+              ]}
+              accessibilityRole="text"
+            >
+              {showOriginalValue}
+            </Text>
+          ) : null}
+          {showDiscountBadge ? (
+            <View style={[styles.discountBadge, { backgroundColor: colors.danger }]}>
+              <Text style={[styles.discountBadgeText, { color: colors.textInverse }]}>
+                {showDiscountBadge}
+              </Text>
+            </View>
           ) : null}
           {secondaryLine ? (
             <Text
@@ -252,11 +281,19 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     marginTop: Space.sm,
   },
+  // Per Design.md + research (Depop/Vinted/Vestiaire 2025-2026):
+  // the in-page product price is the primary price anchor — larger
+  // than a line item (priceList 20px) but smaller than a checkout
+  // total (priceLarge 28px). 22px matches the media-tone variant
+  // and aligns with benchmark apps where the in-page price is
+  // typically 20-24px. The dock carries its own priceList (20px)
+  // value, so the identity price remains the visual anchor while
+  // the dock is the actionable repetition.
   primaryValue: {
-    fontSize: Type.priceLarge.size,
-    lineHeight: Type.priceLarge.lineHeight,
+    fontSize: 22,
+    lineHeight: 27,
     fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceLarge.letterSpacing,
+    letterSpacing: -0.3,
     fontVariant: ['tabular-nums'],
   },
   primaryValueMedia: {
@@ -266,6 +303,31 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.5)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 8,
+  },
+  // Strikethrough original price — quiet, muted, line-through.
+  // Depop/eBay pattern: shows the savings visually without requiring
+  // the user to read the secondary line.
+  originalValue: {
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.regular,
+    textDecorationLine: 'line-through',
+    fontVariant: ['tabular-nums'],
+  },
+  // Discount badge — small danger-tinted pill with the savings %.
+  // eBay pattern: draws the eye to the deal without dominating.
+  discountBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    alignSelf: 'flex-start',
+    marginTop: 2,
+  },
+  discountBadgeText: {
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    fontFamily: Typography.family.bold,
+    fontVariant: ['tabular-nums'],
   },
   secondaryLine: {
     fontSize: Type.body.size,

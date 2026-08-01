@@ -98,15 +98,15 @@ export function CommerceDetailSection({
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.md + Space.xs,
+    paddingTop: Space.md,
     paddingBottom: Space.sm,
   },
   // editorial: stronger heading, more breathing room, no divider.
-  // Uses Space.xl for a true chapter-break feel — the editorial variant
-  // marks a new section in the product story, not just a row group.
+  // Uses Space.lg (24px) for a chapter break — enough to separate
+  // sections visually without creating excessive white space.
   containerEditorial: {
-    paddingTop: Space.xl,
-    paddingBottom: Space.md,
+    paddingTop: Space.lg,
+    paddingBottom: Space.sm,
   },
   // compact: disclosure row with minimal vertical spacing.
   containerCompact: {
@@ -125,21 +125,23 @@ const styles = StyleSheet.create({
     paddingBottom: Space.sm,
   },
   // discovery: visual heading and rail spacing.
+  // Matches editorial rhythm (24px) so discovery sections don't
+  // create a larger gap than editorial sections.
   containerDiscovery: {
-    paddingTop: Space.xl,
-    paddingBottom: Space.md,
+    paddingTop: Space.lg,
+    paddingBottom: Space.sm,
   },
   divider: {
     height: StyleSheet.hairlineWidth,
     marginHorizontal: -Space.md,
-    marginBottom: Space.md,
+    marginBottom: Space.sm,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Space.sm,
-    marginBottom: Space.md,
+    marginBottom: Space.sm + Space.xs,
   },
   label: {
     fontSize: Type.bodyEmphasis.size,

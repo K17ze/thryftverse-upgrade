@@ -611,9 +611,10 @@ describe('PASS 4.12: Static guardrails (source inspection)', () => {
     expect(screenSrc).not.toMatch(/seller.*conversationId/);
   });
 
-  it('uses NewMessage route for seller messaging', () => {
-    expect(screenSrc).toContain('NewMessage');
-    expect(screenSrc).toContain('preselectedUserId');
+  it('uses direct Chat navigation for seller messaging', () => {
+    expect(screenSrc).toContain('createDmConversationOnApi');
+    expect(screenSrc).toContain('Chat');
+    expect(screenSrc).toContain('conversationId');
   });
 
   it('handles cancelled state', () => {
@@ -935,10 +936,10 @@ describe('PASS 4.1: Seller and messaging parity', () => {
     expect(screenSrc).toContain('auction.seller.id');
   });
 
-  it('has NewMessage navigation with preselectedUserId', () => {
-    expect(screenSrc).toContain('NewMessage');
-    expect(screenSrc).toContain('preselectedUserId');
-    expect(screenSrc).toContain('preselectedDisplayName');
+  it('has direct Chat navigation with createDmConversationOnApi', () => {
+    expect(screenSrc).toContain('createDmConversationOnApi');
+    expect(screenSrc).toContain('Chat');
+    expect(screenSrc).toContain('partnerUserId');
   });
 
   it('hides Message Seller when viewer is seller', () => {
@@ -949,9 +950,10 @@ describe('PASS 4.1: Seller and messaging parity', () => {
   });
 
   it('does not use fabricated conversation IDs', () => {
-    expect(screenSrc).not.toMatch(/conversationId.*seller/);
-    expect(screenSrc).not.toMatch(/seller.*conversationId/);
-    expect(screenSrc).not.toContain('partnerUserId');
+    // The screen must resolve conversations via createDmConversationOnApi
+    // (real backend call), not fabricate a conversationId locally.
+    expect(screenSrc).toContain('createDmConversationOnApi');
+    expect(screenSrc).not.toMatch(/conversationId:\s*['"]/);
   });
 
   it('has avatar fallback for missing avatarUrl', () => {
@@ -1163,7 +1165,7 @@ describe('PASS 4.1: UI/UX quality parity', () => {
 
   it('seller actions remain discoverable (profile + message)', () => {
     expect(screenSrc).toContain('UserProfile');
-    expect(screenSrc).toContain('NewMessage');
+    expect(screenSrc).toContain('createDmConversationOnApi');
   });
 
   it('terminal states do not show dead controls', () => {

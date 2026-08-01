@@ -7,7 +7,6 @@ import Reanimated, {
   useAnimatedStyle,
   runOnJS,
   withTiming,
-  withSpring,
   withRepeat,
   cancelAnimation,
   Easing,
@@ -216,8 +215,8 @@ function LayerRenderer({
 
   useEffect(() => {
     if (isSelected) {
-      selectionOpacity.value = withSpring(1, { damping: 25, stiffness: 400 });
-      handleScale.value = withSpring(1, { damping: 25, stiffness: 400 });
+      selectionOpacity.value = withTiming(1, { duration: 150 });
+      handleScale.value = withTiming(1, { duration: 150 });
     } else {
       selectionOpacity.value = withTiming(0, { duration: 120 });
       handleScale.value = withTiming(0.5, { duration: 120 });

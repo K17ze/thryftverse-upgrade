@@ -976,7 +976,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   sellerBalanceValue: {
-    fontSize: Type.heading.size,
+    fontSize: Type.title.size,
     fontWeight: '700',
   },
   pendingToggle: {

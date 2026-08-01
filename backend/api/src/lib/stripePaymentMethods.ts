@@ -16,7 +16,7 @@ export interface ProviderPaymentMethodProjection {
   provider: 'stripe';
   providerCustomerId: string;
   providerPaymentMethodId: string;
-  type: 'card';
+  type: 'card' | 'apple_pay' | 'google_pay';
   brand: string;
   last4: string;
   expiryMonth: number;
@@ -26,6 +26,7 @@ export interface ProviderPaymentMethodProjection {
   isDefault: boolean;
   status: 'active';
   redisplayConsent: string;
+  walletType: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -36,7 +37,7 @@ interface PaymentMethodProjectionRow {
   provider: string;
   provider_customer_ref: string;
   provider_payment_method_ref: string;
-  method_type: 'card';
+  method_type: 'card' | 'apple_pay' | 'google_pay';
   label: string;
   details: string;
   brand: string;
@@ -46,6 +47,7 @@ interface PaymentMethodProjectionRow {
   is_default: boolean;
   status: 'active';
   redisplay_consent: string | null;
+  wallet_type: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -84,7 +86,7 @@ function projectionFromRow(row: PaymentMethodProjectionRow): ProviderPaymentMeth
     provider: 'stripe',
     providerCustomerId: row.provider_customer_ref,
     providerPaymentMethodId: row.provider_payment_method_ref,
-    type: 'card',
+    type: row.method_type,
     brand: row.brand,
     last4: row.last4,
     expiryMonth: Number(row.expiry_month),
@@ -94,6 +96,7 @@ function projectionFromRow(row: PaymentMethodProjectionRow): ProviderPaymentMeth
     isDefault: row.is_default,
     status: 'active',
     redisplayConsent: row.redisplay_consent ?? 'unspecified',
+    walletType: row.wallet_type,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -357,6 +360,7 @@ export async function syncStripePaymentMethodProjections(input: {
        is_default,
        status,
        redisplay_consent,
+       wallet_type,
        created_at::text,
        updated_at::text
      FROM user_payment_methods

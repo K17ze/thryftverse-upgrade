@@ -5,9 +5,8 @@ import { useToast, ToastType } from '../context/ToastContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AnimatedPressable } from './AnimatedPressable';
 import { Typography } from '../theme/designTokens';
-import { Motion } from '../constants/motion';
 import { Colors } from '../constants/colors';
-import Reanimated, { useSharedValue, useAnimatedStyle, withSpring, withTiming, runOnJS } from 'react-native-reanimated';
+import Reanimated, { useSharedValue, useAnimatedStyle, withTiming, runOnJS, Easing } from 'react-native-reanimated';
 
 // Info toast uses a warm brand-gold accent (#d7b98f) — a ThryftVerse signature color
 // not yet in the token system. Success and error use theme tokens.
@@ -33,7 +32,7 @@ function ToastItem({ id, message, type }: ToastItemProps) {
   const opacity = useSharedValue(0);
 
   useEffect(() => {
-    translateY.value = withSpring(0, Motion.spring.flagshipPop);
+    translateY.value = withTiming(0, { duration: 280, easing: Easing.out(Easing.quad) });
     opacity.value = withTiming(1, { duration: 150 });
 
     const timer = setTimeout(() => {

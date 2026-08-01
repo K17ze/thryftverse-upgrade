@@ -8,10 +8,11 @@ import { View, StyleSheet } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
+  withTiming,
   withSequence,
   withDelay,
   runOnJS,
+  Easing,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
@@ -55,16 +56,15 @@ export function DoubleTapHeart({
     heartScale.value = 0;
     heartOpacity.value = 1;
 
-    // Spring up, then fade out
+    // Clean scale-up with ease-out, hold, then fade out
     heartScale.value = withSequence(
-      withSpring(1.2, { damping: 10, stiffness: 200 }),
-      withSpring(1, { damping: 10, stiffness: 200 }),
-      withDelay(
-        600,
-        withSpring(0, { damping: 15, stiffness: 100 }, () => {
-          heartOpacity.value = 0;
-        })
-      )
+      withTiming(1.2, { duration: 160, easing: Easing.out(Easing.quad) }),
+      withTiming(1.2, { duration: 500 }),
+      withTiming(0, { duration: 180, easing: Easing.in(Easing.quad) })
+    );
+    heartOpacity.value = withSequence(
+      withTiming(1, { duration: 100 }),
+      withDelay(620, withTiming(0, { duration: 180 }))
     );
   }, [isLiked, onLike, haptic, reducedMotionEnabled, heartScale, heartOpacity]);
 

@@ -11,14 +11,14 @@ import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   runOnJS,
-  withSpring,
+  withTiming,
+  Easing,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Colors } from '../constants/colors';
-import { Motion } from '../constants/motion';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -57,9 +57,9 @@ export function BottomSheet({
       translateY.value = 0;
       backdropOpacity.value = 1;
     } else {
-      // Spring-based open for flagship feel — organic, not mechanical
-      translateY.value = withSpring(0, Motion.spring.flagship);
-      backdropOpacity.value = withSpring(1, { damping: 20, stiffness: 280 });
+      // Timing-based open — clean, controlled, premium feel
+      translateY.value = withTiming(0, { duration: 320, easing: Easing.out(Easing.cubic) });
+      backdropOpacity.value = withTiming(1, { duration: 240 });
     }
   }, [translateY, backdropOpacity, reducedMotion]);
 
@@ -69,10 +69,10 @@ export function BottomSheet({
       backdropOpacity.value = 0;
       runOnJS(onDismiss)();
     } else {
-      // Spring-based dismiss — no timing, no setTimeout
-      translateY.value = withSpring(sheetHeight, { damping: 22, stiffness: 280 });
-      backdropOpacity.value = withSpring(0, { damping: 20, stiffness: 280 });
-      const t = setTimeout(() => runOnJS(onDismiss)(), 220);
+      // Timing-based dismiss — predictable duration for callback timing
+      translateY.value = withTiming(sheetHeight, { duration: 260, easing: Easing.in(Easing.cubic) });
+      backdropOpacity.value = withTiming(0, { duration: 200 });
+      const t = setTimeout(() => runOnJS(onDismiss)(), 260);
       return () => clearTimeout(t);
     }
   }, [translateY, backdropOpacity, sheetHeight, onDismiss, reducedMotion]);
@@ -110,8 +110,8 @@ export function BottomSheet({
         runOnJS(haptic.medium)();
         runOnJS(close)();
       } else {
-        // Snap back to open with spring
-        translateY.value = withSpring(0, Motion.spring.flagship);
+        // Snap back to open with timing
+        translateY.value = withTiming(0, { duration: 200, easing: Easing.out(Easing.cubic) });
       }
     });
 
