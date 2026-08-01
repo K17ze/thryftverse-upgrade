@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, useWindowDimensions } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,7 +16,7 @@ import { useCurrencyContext } from '../context/CurrencyContext';
 import { toFiat, toIze, formatIzeAmount } from '../utils/currency';
 import { sanitizeDecimalInput, sanitizeIntegerInput } from '../utils/currencyAuthoringFlows';
 import { getCreateCoOwnInitialState } from '../utils/syndicatePrefill';
-import { createCoOwnAsset, fetchIssuerVerification } from '../services/marketApi';
+import { createCoOwnAsset, fetchIssuerVerification, signRecourseAgreement } from '../services/marketApi';
 import { fetchUserListingsFromApi, type ListingApiItem } from '../services/listingsApi';
 import { CachedImage } from '../components/CachedImage';
 import { getListingCoverUri } from '../utils/media';
@@ -46,7 +46,7 @@ type RouteT = RouteProp<RootStackParamList, 'CreateCoOwn'>;
 // This is a real backend constraint, not a UI-only limit.
 const MAX_UNITS = 20;
 
-type Stage = 'select' | 'configure' | 'review';
+type Stage = 'select' | 'configure' | 'review' | 'recourse';
 
 export default function CreateCoOwnScreen() {
   const navigation = useNavigation<NavT>();
@@ -107,6 +107,8 @@ export default function CreateCoOwnScreen() {
   const [totalUnitsInput, setTotalUnitsInput] = React.useState(initialState.totalUnitsInput);
   const [unitPriceInput, setUnitPriceInput] = React.useState(initialState.unitPriceInput);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [recourseAccepted, setRecourseAccepted] = React.useState(false);
+  const [createdAssetId, setCreatedAssetId] = React.useState<string | null>(null);
 
   // ── WS2: Issuer KYC gate ──
   // The backend requires 'id' or 'seller' tier to issue. Fetch the
@@ -196,7 +198,7 @@ export default function CreateCoOwnScreen() {
     setIsSubmitting(true);
     try {
       const imageUrl = getListingCoverUri(selectedListing.images, selectedListing.imageUrl ?? '');
-      await createCoOwnAsset({
+      const result = await createCoOwnAsset({
         listingId: selectedListing.id,
         issuerId,
         title: `${selectedListing.title} Split`,
@@ -216,16 +218,43 @@ export default function CreateCoOwnScreen() {
         authenticityMethod: authenticityMethod.trim() || undefined,
         authenticityStatus: authenticityMethod.trim() ? 'verified' : 'unverified',
       });
+      // Store the created asset ID for the recourse signing step
+      const assetId = result.assetId;
+      setCreatedAssetId(assetId);
+      // Move to the recourse agreement signing stage
+      setStage('recourse');
+    } catch (err) {
+      show('Failed to issue co-own. Please try again.', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const signAndFinish = async () => {
+    if (!createdAssetId) {
+      show('Asset not created yet', 'error');
+      return;
+    }
+    if (!recourseAccepted) {
+      show('You must accept the recourse agreement to continue', 'error');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await signRecourseAgreement(createdAssetId, { personalGuarantee: true });
       show('Co-Own issued successfully', 'success');
       // The backend pauses the listing when a co-own asset is created from
       // it. Refresh the feed + invalidate the listing detail so the paused
       // status propagates immediately when the user returns.
       void refreshListings();
-      void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(selectedListing.id) });
+      if (selectedListing) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(selectedListing.id) });
+      }
       void queryClient.invalidateQueries({ queryKey: ['coown', 'assets'] });
       navigation.goBack();
     } catch (err) {
-      show('Failed to issue co-own. Please try again.', 'error');
+      show('Failed to sign recourse agreement. The asset was created but cannot be traded until signed.', 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -275,6 +304,10 @@ export default function CreateCoOwnScreen() {
       setStage('select');
     } else if (stage === 'review') {
       setStage('configure');
+    } else if (stage === 'recourse') {
+      // Don't go back to review — the asset is already created.
+      // Going back would create a duplicate. Navigate out instead.
+      navigation.goBack();
     } else {
       navigation.goBack();
     }
@@ -284,6 +317,7 @@ export default function CreateCoOwnScreen() {
     select: 'Select listing',
     configure: 'Configure',
     review: 'Review & issue',
+    recourse: 'Seller liability',
   };
 
   const renderListingCard = ({ item }: { item: ListingApiItem }) => {
@@ -687,6 +721,86 @@ export default function CreateCoOwnScreen() {
             </CoOwnIssueStudioStep>
           </Reanimated.View>
         )}
+
+        {/* ── Stage 4: Recourse agreement — seller signs personal liability ── */}
+        {stage === 'recourse' && (
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
+            <CoOwnIssueStudioStep
+              stepNumber={4}
+              totalSteps={4}
+              title="Seller liability agreement"
+              description="You are personally liable for safeguarding this asset. Read carefully before signing."
+            >
+              {/* Liability summary */}
+              <View style={[styles.recourseSummaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <View style={styles.recourseLiabilityRow}>
+                  <Ionicons name="shield-checkmark" size={20} color={colors.brand} />
+                  <View style={styles.recourseLiabilityBody}>
+                    <Text style={[styles.recourseLiabilityLabel, { color: colors.textMuted }]}>
+                      Personal liability
+                    </Text>
+                    <Text style={[styles.recourseLiabilityValue, { color: colors.textPrimary }]}>
+                      {estimatedValue > 0
+                        ? formatFromFiat(estimatedValue, 'GBP', { displayMode: 'fiat' })
+                        : '—'}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={[styles.recourseLiabilityNote, { color: colors.textSecondary }]}>
+                  If you fail to safeguard the physical asset, prove authenticity on demand, or produce the item when requested by a unit holder, you are legally liable to repay the total traded value of this asset.
+                </Text>
+              </View>
+
+              {/* Obligations list */}
+              <View style={styles.recourseObligationsList}>
+                <Text style={[styles.recourseObligationsTitle, { color: colors.textSecondary }]}>
+                  Your obligations
+                </Text>
+                {[
+                  { icon: 'cube-outline', text: 'Safeguard the physical asset in the condition stated' },
+                  { icon: 'search-outline', text: 'Prove authenticity when requested by a unit holder' },
+                  { icon: 'hand-right-outline', text: 'Produce the physical item on demand within 14 days' },
+                  { icon: 'cash-outline', text: 'Repay the total traded value if you fail any obligation' },
+                ].map((ob, i) => (
+                  <View key={i} style={[styles.recourseObligationRow, i < 3 && { borderBottomColor: colors.borderSubtle }]}>
+                    <Ionicons name={ob.icon as any} size={16} color={colors.textMuted} />
+                    <Text style={[styles.recourseObligationText, { color: colors.textSecondary }]}>
+                      {ob.text}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+
+              {/* Acceptance checkbox */}
+              <Pressable
+                style={({ pressed }) => [
+                  styles.recourseAcceptRow,
+                  { borderColor: recourseAccepted ? colors.brand : colors.border },
+                  pressed && { opacity: 0.7 },
+                ]}
+                onPress={() => { haptic.selection(); setRecourseAccepted(!recourseAccepted); }}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: recourseAccepted }}
+                accessibilityLabel="Accept personal liability agreement"
+              >
+                <View style={[
+                  styles.recourseCheckbox,
+                  {
+                    backgroundColor: recourseAccepted ? colors.brand : 'transparent',
+                    borderColor: recourseAccepted ? colors.brand : colors.border,
+                  },
+                ]}>
+                  {recourseAccepted && (
+                    <Ionicons name="checkmark" size={14} color={colors.background} />
+                  )}
+                </View>
+                <Text style={[styles.recourseAcceptText, { color: colors.textPrimary }]}>
+                  I understand and accept personal liability for this asset
+                </Text>
+              </Pressable>
+            </CoOwnIssueStudioStep>
+          </Reanimated.View>
+        )}
       </ScrollView>
 
       {/* Sticky action dock */}
@@ -701,6 +815,18 @@ export default function CreateCoOwnScreen() {
             disabled={isSubmitting}
             hapticFeedback="heavy"
             accessibilityLabel="Issue co-own"
+            style={{ flex: 1 }}
+          />
+        ) : stage === 'recourse' ? (
+          <AppButton
+            title={isSubmitting ? 'Signing...' : 'Sign & finish'}
+            icon={<Ionicons name="shield-checkmark" size={16} color={colors.background} />}
+            onPress={() => void signAndFinish()}
+            variant="primary"
+            size="lg"
+            disabled={isSubmitting || !recourseAccepted}
+            hapticFeedback="heavy"
+            accessibilityLabel="Sign recourse agreement and finish"
             style={{ flex: 1 }}
           />
         ) : (
@@ -1029,5 +1155,85 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.bold,
     letterSpacing: -0.3,
     flexShrink: 0,
+  },
+  // ── Recourse agreement stage ──
+  recourseSummaryCard: {
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Space.md,
+    gap: Space.sm,
+  },
+  recourseLiabilityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+  },
+  recourseLiabilityBody: {
+    flex: 1,
+    gap: 2,
+  },
+  recourseLiabilityLabel: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.medium,
+    letterSpacing: 0.2,
+    textTransform: 'uppercase',
+  },
+  recourseLiabilityValue: {
+    fontSize: Type.priceList.size,
+    fontFamily: Typography.family.bold,
+    letterSpacing: -0.3,
+  },
+  recourseLiabilityNote: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
+    lineHeight: 20,
+  },
+  recourseObligationsList: {
+    gap: 0,
+    marginTop: Space.md,
+  },
+  recourseObligationsTitle: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+    marginBottom: Space.sm,
+  },
+  recourseObligationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  recourseObligationText: {
+    flex: 1,
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
+    lineHeight: 19,
+  },
+  recourseAcceptRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.md,
+    paddingHorizontal: Space.md,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    marginTop: Space.md,
+  },
+  recourseCheckbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recourseAcceptText: {
+    flex: 1,
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    lineHeight: 19,
   },
 });

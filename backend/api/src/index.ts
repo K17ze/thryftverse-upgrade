@@ -42685,6 +42685,24 @@ app.post('/co-own/assets/:assetId/verification-demand', async (request, reply) =
       ]
     );
 
+    // Notify the seller that a verification demand has been filed
+    const demandTypeLabel = body.demandType === 'authenticity' ? 'authenticity proof'
+      : body.demandType === 'possession' ? 'possession proof'
+      : body.demandType === 'condition' ? 'condition proof'
+      : 'inspection access';
+    await client.query(
+      `INSERT INTO notification_events (id, user_id, channel, title, body, payload, status, event_type, actor_user_id)
+       VALUES ($1, $2, 'in_app', $3, $4, $5::jsonb, 'sent', 'coown_verification_demand', $6)`,
+      [
+        `notif_demand_${demandId}`,
+        asset.issuer_id,
+        'Verification requested',
+        `A unit holder has requested ${demandTypeLabel} for your Co-Own asset. You have ${body.deadlineDays} days to respond.`,
+        JSON.stringify({ assetId, demandId, demandType: body.demandType, deadline: deadline.toISOString() }),
+        authUser.userId,
+      ]
+    );
+
     await client.query('COMMIT');
 
     return {
@@ -42753,8 +42771,9 @@ app.post('/co-own/assets/:assetId/verification-demand/:demandId/respond', async 
       status: string;
       demand_type: string;
       deadline: string;
+      requested_by: string;
     }>(
-      `SELECT id, status, demand_type, deadline
+      `SELECT id, status, demand_type, deadline, requested_by
        FROM coown_verification_demands
        WHERE id = $1 AND asset_id = $2 FOR UPDATE`,
       [Number(demandId), assetId]
@@ -42820,6 +42839,22 @@ app.post('/co-own/assets/:assetId/verification-demand/:demandId/respond', async 
         authUser.userId,
       ]
     );
+
+    // Notify the buyer who requested the verification
+    if (demand.requested_by && demand.requested_by !== 'platform') {
+      await client.query(
+        `INSERT INTO notification_events (id, user_id, channel, title, body, payload, status, event_type, actor_user_id)
+         VALUES ($1, $2, 'in_app', $3, $4, $5::jsonb, 'sent', 'coown_verification_response', $6)`,
+        [
+          `notif_response_${demand.id}`,
+          demand.requested_by,
+          'Seller responded',
+          `The seller has provided evidence for your ${demand.demand_type} verification request.`,
+          JSON.stringify({ assetId, demandId: demand.id, evidenceUrl: body.evidenceUrl }),
+          authUser.userId,
+        ]
+      );
+    }
 
     await client.query('COMMIT');
 
