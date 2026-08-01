@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
+import type { ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Space } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -21,6 +22,8 @@ export function ListingSellerRow({
   onProfilePress,
   onMessage,
 }: ListingSellerRowProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   if (seller) {
     return (
       <View style={styles.container}>
@@ -43,14 +46,14 @@ export function ListingSellerRow({
             </Text>
             {seller.rating != null && seller.reviewCount != null ? (
               <View style={styles.metaRow}>
-                <Ionicons name="star" size={11} color={Colors.brand} />
+                <Ionicons name="star" size={11} color={colors.brand} />
                 <Text style={styles.metaText}>
                   {seller.rating} · {seller.reviewCount} reviews
                 </Text>
               </View>
             ) : seller.rating != null ? (
               <View style={styles.metaRow}>
-                <Ionicons name="star" size={11} color={Colors.brand} />
+                <Ionicons name="star" size={11} color={colors.brand} />
                 <Text style={styles.metaText}>{seller.rating} rating</Text>
               </View>
             ) : seller.reviewCount != null ? (
@@ -59,7 +62,7 @@ export function ListingSellerRow({
               <Text style={styles.metaText} numberOfLines={1}>{seller.location}</Text>
             ) : null}
           </View>
-          <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
         </AnimatedPressable>
 
         <AppButton
@@ -79,7 +82,7 @@ export function ListingSellerRow({
       <View style={styles.container}>
         <View style={styles.identityTap}>
           <View style={[styles.avatar, styles.avatarFallback]}>
-            <Ionicons name="person" size={18} color={Colors.textMuted} />
+            <Ionicons name="person" size={18} color={colors.textMuted} />
           </View>
           <View style={styles.info}>
             <Text style={styles.name}>Seller</Text>
@@ -93,7 +96,8 @@ export function ListingSellerRow({
   return null;
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -113,7 +117,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   avatarFallback: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -123,7 +127,7 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 14,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   metaRow: {
     flexDirection: 'row',
@@ -134,19 +138,20 @@ const styles = StyleSheet.create({
   metaText: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   messageBtn: {
     minHeight: 34,
     paddingHorizontal: 14,
     borderRadius: 17,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    backgroundColor: Colors.background,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
   },
   messageBtnText: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontSize: 13,
     fontFamily: Typography.family.semibold,
   },
-});
+  });
+}

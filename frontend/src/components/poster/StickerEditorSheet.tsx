@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius, Type, Typography } from '../../theme/designTokens';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { KeyboardAwareScrollView } from '../../platform/keyboard/KeyboardProvider';
 import { useToast } from '../../context/ToastContext';
 import { searchUsers, type UserSearchResult } from '../../services/profileApi';
@@ -162,6 +162,8 @@ function SheetShell({
   children: React.ReactNode;
   canDelete?: boolean;
 }) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   return (
     <KeyboardAwareScrollView
       style={styles.overlay}
@@ -182,7 +184,7 @@ function SheetShell({
                 accessibilityLabel="Delete sticker"
                 accessibilityRole="button"
               >
-                <Ionicons name="trash-outline" size={20} color={Colors.danger} />
+                <Ionicons name="trash-outline" size={20} color={colors.danger} />
               </Pressable>
             )}
             <Pressable
@@ -191,7 +193,7 @@ function SheetShell({
               accessibilityLabel="Close editor"
               accessibilityRole="button"
             >
-              <Ionicons name="close" size={20} color={Colors.textSecondary} />
+              <Ionicons name="close" size={20} color={colors.textSecondary} />
             </Pressable>
           </View>
         </View>
@@ -214,6 +216,8 @@ function TextStickerEditor({
   onDelete: () => void;
   onClose: () => void;
 }) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [text, setText] = useState(existingPayload?.text ?? '');
   const [textStyle, setTextStyle] = useState<PosterTextStyle>(
     existingPayload?.textStyle ?? 'editorial'
@@ -274,7 +278,7 @@ function TextStickerEditor({
         <TextInput
           style={styles.textInput}
           placeholder="Enter sticker text"
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={colors.textMuted}
           value={text}
           onChangeText={setText}
           multiline
@@ -311,7 +315,7 @@ function TextStickerEditor({
               onPress={() => setTextColor(c)}
               style={[
                 styles.colorDot,
-                { backgroundColor: c, borderColor: c === '#ffffff' ? Colors.border : 'transparent' },
+                { backgroundColor: c, borderColor: c === '#ffffff' ? colors.border : 'transparent' },
                 textColor === c && styles.colorDotActive,
               ]}
               accessibilityLabel={`Text colour ${c}`}
@@ -329,14 +333,14 @@ function TextStickerEditor({
               style={[
                 styles.colorDot,
                 c === 'transparent'
-                  ? { backgroundColor: 'transparent', borderWidth: 1, borderColor: Colors.border, borderStyle: 'dashed' as const }
+                  ? { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.border, borderStyle: 'dashed' as const }
                   : { backgroundColor: c },
                 bgColor === c && styles.colorDotActive,
               ]}
               accessibilityLabel={`Background colour ${c}`}
             >
               {c === 'transparent' && (
-                <Ionicons name="close" size={12} color={Colors.textMuted} />
+                <Ionicons name="close" size={12} color={colors.textMuted} />
               )}
             </Pressable>
           ))}
@@ -353,7 +357,7 @@ function TextStickerEditor({
               accessibilityLabel={`Align ${a.value}`}
               accessibilityRole="button"
             >
-              <Ionicons name={a.icon as any} size={18} color={alignment === a.value ? '#fff' : Colors.textSecondary} />
+              <Ionicons name={a.icon as any} size={18} color={alignment === a.value ? '#fff' : colors.textSecondary} />
             </Pressable>
           ))}
         </View>
@@ -387,6 +391,8 @@ function MentionStickerEditor({
   onDelete: () => void;
   onClose: () => void;
 }) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<UserSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -473,17 +479,17 @@ function MentionStickerEditor({
             accessibilityLabel="Change user"
             accessibilityRole="button"
           >
-            <Ionicons name="close-circle" size={22} color={Colors.textMuted} />
+            <Ionicons name="close-circle" size={22} color={colors.textMuted} />
           </Pressable>
         </View>
       ) : (
         <>
           <View style={styles.searchRow}>
-            <Ionicons name="search" size={18} color={Colors.textMuted} style={styles.searchIcon} />
+            <Ionicons name="search" size={18} color={colors.textMuted} style={styles.searchIcon} />
             <TextInput
               style={styles.searchInput}
               placeholder="Search by username..."
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
               value={query}
               onChangeText={handleQueryChange}
               autoCapitalize="none"
@@ -491,7 +497,7 @@ function MentionStickerEditor({
               autoFocus
               accessibilityLabel="Search users"
             />
-            {isSearching && <ActivityIndicator size="small" color={Colors.brand} />}
+            {isSearching && <ActivityIndicator size="small" color={colors.brand} />}
           </View>
 
           <FlatList
@@ -566,6 +572,8 @@ function ListingStickerEditor({
   onDelete: () => void;
   onClose: () => void;
 }) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [query, setQuery] = useState('');
   const [allListings, setAllListings] = useState<ListingSearchItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -637,7 +645,7 @@ function ListingStickerEditor({
             {selected.imageUrl ? (
               <Text style={styles.selectedListingIcon}>img</Text>
             ) : (
-              <Ionicons name="pricetag" size={18} color={Colors.textSecondary} />
+              <Ionicons name="pricetag" size={18} color={colors.textSecondary} />
             )}
           </View>
           <View style={styles.selectedUserInfo}>
@@ -650,17 +658,17 @@ function ListingStickerEditor({
             accessibilityLabel="Change listing"
             accessibilityRole="button"
           >
-            <Ionicons name="close-circle" size={22} color={Colors.textMuted} />
+            <Ionicons name="close-circle" size={22} color={colors.textMuted} />
           </Pressable>
         </View>
       ) : (
         <>
           <View style={styles.searchRow}>
-            <Ionicons name="search" size={18} color={Colors.textMuted} style={styles.searchIcon} />
+            <Ionicons name="search" size={18} color={colors.textMuted} style={styles.searchIcon} />
             <TextInput
               style={styles.searchInput}
               placeholder="Search your listings..."
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
               value={query}
               onChangeText={setQuery}
               autoCapitalize="none"
@@ -672,7 +680,7 @@ function ListingStickerEditor({
 
           {isLoading ? (
             <View style={styles.loadingBody}>
-              <ActivityIndicator size="large" color={Colors.brand} />
+              <ActivityIndicator size="large" color={colors.brand} />
             </View>
           ) : loadFailed ? (
             <View style={styles.emptySearch}>
@@ -690,7 +698,7 @@ function ListingStickerEditor({
                   accessibilityRole="button"
                 >
                   <View style={styles.userResultAvatar}>
-                    <Ionicons name="pricetag" size={16} color={Colors.textSecondary} />
+                    <Ionicons name="pricetag" size={16} color={colors.textSecondary} />
                   </View>
                   <View style={styles.userResultInfo}>
                     <Text style={styles.userResultName} numberOfLines={1}>{item.title}</Text>
@@ -746,6 +754,8 @@ function LookStickerEditor({
   onDelete: () => void;
   onClose: () => void;
 }) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [query, setQuery] = useState('');
   const [allLooks, setAllLooks] = useState<LookSearchItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -813,7 +823,7 @@ function LookStickerEditor({
       {selected ? (
         <View style={styles.selectedUserRow}>
           <View style={styles.selectedListingThumb}>
-            <Ionicons name="shirt-outline" size={18} color={Colors.textSecondary} />
+            <Ionicons name="shirt-outline" size={18} color={colors.textSecondary} />
           </View>
           <View style={styles.selectedUserInfo}>
             <Text style={styles.selectedUserName} numberOfLines={2}>{selected.caption}</Text>
@@ -824,17 +834,17 @@ function LookStickerEditor({
             accessibilityLabel="Change look"
             accessibilityRole="button"
           >
-            <Ionicons name="close-circle" size={22} color={Colors.textMuted} />
+            <Ionicons name="close-circle" size={22} color={colors.textMuted} />
           </Pressable>
         </View>
       ) : (
         <>
           <View style={styles.searchRow}>
-            <Ionicons name="search" size={18} color={Colors.textMuted} style={styles.searchIcon} />
+            <Ionicons name="search" size={18} color={colors.textMuted} style={styles.searchIcon} />
             <TextInput
               style={styles.searchInput}
               placeholder="Search looks..."
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
               value={query}
               onChangeText={setQuery}
               autoCapitalize="none"
@@ -846,7 +856,7 @@ function LookStickerEditor({
 
           {isLoading ? (
             <View style={styles.loadingBody}>
-              <ActivityIndicator size="large" color={Colors.brand} />
+              <ActivityIndicator size="large" color={colors.brand} />
             </View>
           ) : loadFailed ? (
             <View style={styles.emptySearch}>
@@ -864,7 +874,7 @@ function LookStickerEditor({
                   accessibilityRole="button"
                 >
                   <View style={styles.userResultAvatar}>
-                    <Ionicons name="shirt-outline" size={16} color={Colors.textSecondary} />
+                    <Ionicons name="shirt-outline" size={16} color={colors.textSecondary} />
                   </View>
                   <View style={styles.userResultInfo}>
                     <Text style={styles.userResultName} numberOfLines={2}>{item.caption}</Text>
@@ -911,6 +921,8 @@ function StyleVoteStickerEditor({
   onDelete: () => void;
   onClose: () => void;
 }) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [question, setQuestion] = useState(existingPayload?.question ?? '');
   const [option1, setOption1] = useState(existingPayload?.options?.[0]?.label ?? '');
   const [option2, setOption2] = useState(existingPayload?.options?.[1]?.label ?? '');
@@ -946,7 +958,7 @@ function StyleVoteStickerEditor({
         <TextInput
           style={styles.textInput}
           placeholder="e.g. Which outfit is better?"
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={colors.textMuted}
           value={question}
           onChangeText={setQuestion}
           maxLength={MAX_QUESTION_LENGTH}
@@ -961,7 +973,7 @@ function StyleVoteStickerEditor({
         <TextInput
           style={styles.textInput}
           placeholder="First option"
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={colors.textMuted}
           value={option1}
           onChangeText={setOption1}
           maxLength={MAX_OPTION_LENGTH}
@@ -972,7 +984,7 @@ function StyleVoteStickerEditor({
         <TextInput
           style={styles.textInput}
           placeholder="Second option"
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={colors.textMuted}
           value={option2}
           onChangeText={setOption2}
           maxLength={MAX_OPTION_LENGTH}
@@ -1007,7 +1019,8 @@ function generateUUID(): string {
 
 // ── Styles ──────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+function createStyles(colors: any) {
+  return StyleSheet.create({
   overlay: {
     position: 'absolute',
     top: 0,
@@ -1022,7 +1035,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
   },
   sheet: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
     maxHeight: '80%',
@@ -1032,7 +1045,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
     alignSelf: 'center',
     marginTop: Space.sm,
     marginBottom: Space.xs,
@@ -1047,7 +1060,7 @@ const styles = StyleSheet.create({
   sheetTitle: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   headerActions: {
     flexDirection: 'row',
@@ -1094,20 +1107,20 @@ const styles = StyleSheet.create({
   textInput: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     minHeight: 48,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     borderRadius: Radius.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     textAlignVertical: 'top',
   },
   charCount: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textAlign: 'right',
     marginTop: 2,
     marginBottom: Space.sm,
@@ -1115,7 +1128,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginTop: Space.sm,
     marginBottom: Space.xs,
   },
@@ -1126,19 +1139,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: 8,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     marginRight: Space.xs,
   },
   optionChipActive: {
-    backgroundColor: Colors.brand,
-    borderColor: Colors.brand,
+    backgroundColor: colors.brand,
+    borderColor: colors.brand,
   },
   optionChipText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   optionChipTextActive: {
     color: '#fff',
@@ -1153,7 +1166,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   colorDotActive: {
-    borderColor: Colors.brand,
+    borderColor: colors.brand,
   },
   alignmentRow: {
     flexDirection: 'row',
@@ -1164,15 +1177,15 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     justifyContent: 'center',
     alignItems: 'center',
   },
   alignBtnActive: {
-    backgroundColor: Colors.brand,
-    borderColor: Colors.brand,
+    backgroundColor: colors.brand,
+    borderColor: colors.brand,
   },
   searchRow: {
     flexDirection: 'row',
@@ -1188,13 +1201,13 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     minHeight: 44,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     borderRadius: Radius.md,
     paddingHorizontal: Space.md,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   userList: {
     maxHeight: 300,
@@ -1206,18 +1219,18 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     paddingVertical: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   userResultAvatar: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
   },
   userResultAvatarText: {
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontFamily: Typography.family.bold,
     fontSize: 16,
   },
@@ -1228,12 +1241,12 @@ const styles = StyleSheet.create({
   userResultName: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   userResultDisplayName: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   selectedUserRow: {
     flexDirection: 'row',
@@ -1241,7 +1254,7 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     marginHorizontal: Space.md,
     borderRadius: Radius.md,
     marginTop: Space.sm,
@@ -1250,12 +1263,12 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: Colors.brand + '22',
+    backgroundColor: colors.brand + '22',
     justifyContent: 'center',
     alignItems: 'center',
   },
   selectedUserAvatarText: {
-    color: Colors.brand,
+    color: colors.brand,
     fontFamily: Typography.family.bold,
     fontSize: 18,
   },
@@ -1263,14 +1276,14 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
   },
   selectedListingIcon: {
     fontSize: 10,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   selectedUserInfo: {
     flex: 1,
@@ -1279,12 +1292,12 @@ const styles = StyleSheet.create({
   selectedUserName: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   selectedUserDisplayName: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   clearSelectionBtn: {
     width: 36,
@@ -1304,22 +1317,22 @@ const styles = StyleSheet.create({
   emptySearchText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   errorText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    color: Colors.danger,
+    color: colors.danger,
     marginTop: Space.xs,
   },
   footerBar: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
+    borderTopColor: colors.border,
   },
   saveBtn: {
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     borderRadius: Radius.lg,
     paddingVertical: 14,
     alignItems: 'center',
@@ -1335,3 +1348,4 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
 });
+}

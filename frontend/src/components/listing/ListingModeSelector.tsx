@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
+import type { ThemeColors } from '../../theme/ThemeContext';
 import { Space, Typography } from '../../theme/designTokens';
 
 export type ListingMode = 'sell_now' | 'co_own' | 'auction';
@@ -18,6 +19,8 @@ const MODES: { key: ListingMode; label: string; icon: string; description: strin
 ];
 
 export function ListingModeSelector({ mode, onChange }: ListingModeSelectorProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const activeMode = MODES.find((m) => m.key === mode);
 
   return (
@@ -37,7 +40,7 @@ export function ListingModeSelector({ mode, onChange }: ListingModeSelectorProps
               <Ionicons
                 name={m.icon as any}
                 size={15}
-                color={active ? Colors.textInverse : Colors.textMuted}
+                color={active ? colors.textInverse : colors.textMuted}
                 style={{ marginRight: 6 }}
               />
               <Text
@@ -59,14 +62,15 @@ export function ListingModeSelector({ mode, onChange }: ListingModeSelectorProps
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     paddingHorizontal: Space.md,
   },
   segmentRow: {
     flexDirection: 'row',
     gap: 6,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: 10,
     padding: 4,
   },
@@ -80,22 +84,23 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   segmentActive: {
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
   },
   segmentText: {
     fontSize: 13,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   segmentTextActive: {
     fontFamily: Typography.family.bold,
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
   modeDescription: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 8,
     paddingHorizontal: 4,
   },
-});
+  });
+}

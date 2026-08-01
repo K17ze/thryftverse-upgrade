@@ -11,7 +11,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
+import type { ThemeColors } from '../../theme/ThemeContext';
 import { Type, Space, Radius, Typography } from '../../theme/designTokens';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -27,7 +28,7 @@ const { width: SCREEN_W } = Dimensions.get('window');
 type NavT = StackNavigationProp<RootStackParamList>;
 
 /* ── Sub-components ── */
-function TrendingRailItem({ item, index, onPress }: { item: { id: string; title: string; brand: string; price: number; image: string }; index: number; onPress: () => void }) {
+function TrendingRailItem({ item, index, onPress, styles }: { item: { id: string; title: string; brand: string; price: number; image: string }; index: number; onPress: () => void; styles: ReturnType<typeof createStyles> }) {
   return (
     <Reanimated.View entering={FadeInDown.duration(350).delay(index * 60).springify()}>
       <AnimatedPressable style={styles.trendingItem} onPress={onPress} activeOpacity={0.92}>
@@ -42,6 +43,8 @@ function TrendingRailItem({ item, index, onPress }: { item: { id: string; title:
 
 /* ── Main Tab ── */
 export default function EditTab() {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
   const { show } = useToast();
@@ -106,6 +109,7 @@ export default function EditTab() {
                 item={item}
                 index={i}
                 onPress={() => { haptic.light(); navigation.push('ItemDetail', { itemId: item.id }); }}
+                styles={styles}
               />
             ))}
           </HorizontalRail>
@@ -128,6 +132,7 @@ export default function EditTab() {
                 item={item}
                 index={i}
                 onPress={() => { haptic.light(); navigation.push('ItemDetail', { itemId: item.id }); }}
+                styles={styles}
               />
             ))}
           </HorizontalRail>
@@ -150,6 +155,7 @@ export default function EditTab() {
                 item={item}
                 index={i}
                 onPress={() => { haptic.light(); navigation.push('ItemDetail', { itemId: item.id }); }}
+                styles={styles}
               />
             ))}
           </HorizontalRail>
@@ -175,7 +181,7 @@ export default function EditTab() {
             </View>
           </View>
           <View style={styles.quizIconWrap}>
-            <Ionicons name="color-wand" size={28} color={Colors.brand} />
+            <Ionicons name="color-wand" size={28} color={colors.brand} />
           </View>
         </AnimatedPressable>
       </Reanimated.View>
@@ -185,7 +191,8 @@ export default function EditTab() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   scrollContent: {
     paddingTop: Space.sm,
     paddingBottom: Space.xl,
@@ -204,25 +211,25 @@ const styles = StyleSheet.create({
     width: 140,
     height: 180,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   trendingBrand: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     letterSpacing: Type.meta.letterSpacing,
     marginTop: 4,
   },
   trendingTitle: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: Type.body.letterSpacing,
   },
   trendingPrice: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.bold,
-    color: Colors.brand,
+    color: colors.brand,
     letterSpacing: Type.caption.letterSpacing,
   },
 
@@ -230,10 +237,10 @@ const styles = StyleSheet.create({
   quizCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     marginHorizontal: Space.md,
     padding: Space.md,
     gap: Space.sm,
@@ -250,13 +257,13 @@ const styles = StyleSheet.create({
   quizTitle: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: Type.subtitle.letterSpacing,
   },
   quizSub: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     letterSpacing: Type.caption.letterSpacing,
     lineHeight: 18,
   },
@@ -267,7 +274,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   quizPill: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.full,
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -275,15 +282,16 @@ const styles = StyleSheet.create({
   quizPillText: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
+    color: colors.brand,
     letterSpacing: Type.meta.letterSpacing,
   },
   quizIconWrap: {
     width: 48,
     height: 48,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
-});
+  });
+}

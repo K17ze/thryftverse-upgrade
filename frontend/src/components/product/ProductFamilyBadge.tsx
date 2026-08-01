@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
 import type { ListingFamily } from '../../platform/product';
 
 export interface ProductFamilyBadgeProps {
@@ -32,6 +32,7 @@ export function ProductFamilyBadge({
   stateAccent,
   compact = false,
 }: ProductFamilyBadgeProps) {
+  const { colors } = useAppTheme();
   const meta = FAMILY_META[family];
   const showAccent = !!stateAccent;
 
@@ -42,13 +43,13 @@ export function ProductFamilyBadge({
       accessibilityRole="text"
     >
       <View style={styles.familyChip}>
-        <Ionicons name={meta.icon} size={compact ? 11 : 13} color={Colors.textInverse} />
+        <Ionicons name={meta.icon} size={compact ? 11 : 13} color={colors.textInverse} />
         <Text style={[styles.familyLabel, compact && styles.familyLabelCompact]}>
           {meta.label}
         </Text>
       </View>
       {showAccent && (
-        <View style={styles.accentChip}>
+        <View style={[styles.accentChip, { backgroundColor: colors.brand }]}>
           <Text style={[styles.accentLabel, compact && styles.accentLabelCompact]}>
             {stateAccent}
           </Text>
@@ -65,36 +66,37 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   containerCompact: {
-    gap: 4,
+    gap: Space.xs - 1,
   },
   familyChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingVertical: 5,
+    gap: Space.xs - 1,
+    paddingVertical: Space.xs - 1,
     paddingHorizontal: Space.sm,
     backgroundColor: 'rgba(0,0,0,0.55)',
     borderRadius: Radius.lg,
   },
   familyLabel: {
-    fontSize: 12,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.semibold,
-    color: Colors.textInverse,
+    color: '#fff',
     letterSpacing: 0.2,
   },
   familyLabelCompact: {
     fontSize: 10,
   },
   accentChip: {
-    paddingVertical: 5,
+    paddingVertical: Space.xs - 1,
     paddingHorizontal: Space.sm,
-    backgroundColor: Colors.brand,
     borderRadius: Radius.lg,
   },
   accentLabel: {
-    fontSize: 12,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.bold,
-    color: Colors.textInverse,
+    color: '#fff',
     letterSpacing: 0.2,
   },
   accentLabelCompact: {

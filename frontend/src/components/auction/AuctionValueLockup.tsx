@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Typography } from '../../theme/designTokens';
 
 type ValueState = 'current' | 'starting' | 'final';
@@ -29,6 +29,8 @@ export function AuctionValueLockup({
   state = 'current',
   scale = 'featured',
 }: Props) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const prefix = STATE_PREFIX[state];
   const sizes = SCALE_SIZES[scale];
 
@@ -53,25 +55,25 @@ const SCALE_SIZES: Record<ValueScale, { ize: number; izeLineHeight: number; loca
   compact: { ize: 15, izeLineHeight: 19, local: 11, prefix: 10 },
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   container: {
     gap: 2,
   },
   izeValue: {
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.5,
   },
   prefix: {
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.2,
   },
   localValue: {
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.1,
   },

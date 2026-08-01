@@ -13,7 +13,7 @@ import Reanimated, { FadeInDown, SlideInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Typography } from '../../theme/designTokens';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useToast } from '../../context/ToastContext';
@@ -58,6 +58,8 @@ export function LookCommentsSheet({
   isAuthenticated,
   onSignInRequired,
 }: LookCommentsSheetProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
   const { show } = useToast();
   const [comments, setComments] = useState<LookCommentApiItem[]>([]);
@@ -145,7 +147,7 @@ export function LookCommentsSheet({
               contentFit="cover"
             />
           ) : (
-            <Ionicons name="person-circle" size={32} color={Colors.textMuted} />
+            <Ionicons name="person-circle" size={32} color={colors.textMuted} />
           )}
         </View>
         <View style={styles.commentBody}>
@@ -162,7 +164,7 @@ export function LookCommentsSheet({
             accessibilityRole="button"
             accessibilityLabel="Delete comment"
           >
-            <Ionicons name="trash-outline" size={18} color={Colors.textMuted} />
+            <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
           </Pressable>
         )}
       </Reanimated.View>
@@ -186,7 +188,7 @@ export function LookCommentsSheet({
             accessibilityRole="button"
             accessibilityLabel="Close comments"
           >
-            <Ionicons name="close" size={24} color={Colors.textPrimary} />
+            <Ionicons name="close" size={24} color={colors.textPrimary} />
           </AnimatedPressable>
         </View>
 
@@ -198,10 +200,10 @@ export function LookCommentsSheet({
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={
             isLoading ? (
-              <ActivityIndicator size="large" color={Colors.brand} style={{ marginTop: 40 }} />
+              <ActivityIndicator size="large" color={colors.brand} style={{ marginTop: 40 }} />
             ) : (
               <View style={styles.emptyWrap}>
-                <Ionicons name="chatbubble-outline" size={32} color={Colors.textMuted} />
+                <Ionicons name="chatbubble-outline" size={32} color={colors.textMuted} />
                 <Text style={styles.emptyText}>No comments yet</Text>
                 <Text style={styles.emptySubtext}>Be the first to comment</Text>
               </View>
@@ -223,7 +225,7 @@ export function LookCommentsSheet({
               value={commentText}
               onChangeText={setCommentText}
               placeholder="Add a comment..."
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
               maxLength={1000}
               accessibilityLabel="Comment input"
               multiline
@@ -251,7 +253,7 @@ export function LookCommentsSheet({
               accessibilityRole="button"
               accessibilityLabel="Sign in to comment"
             >
-              <Ionicons name="log-in-outline" size={18} color={Colors.brand} />
+              <Ionicons name="log-in-outline" size={18} color={colors.brand} />
               <Text style={styles.signInBtnText}>Sign in to comment</Text>
             </Pressable>
           </View>
@@ -261,10 +263,10 @@ export function LookCommentsSheet({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -273,12 +275,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   headerTitle: {
     fontSize: 18,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   closeBtn: {
     width: 40,
@@ -304,7 +306,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   avatar: {
     width: 32,
@@ -318,18 +320,18 @@ const styles = StyleSheet.create({
   commentAuthor: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   commentText: {
     fontSize: 14,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     lineHeight: 20,
   },
   commentTime: {
     fontSize: 11,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 2,
   },
   emptyWrap: {
@@ -340,12 +342,12 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   emptySubtext: {
     fontSize: 14,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   inputBar: {
     flexDirection: 'row',
@@ -354,26 +356,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderTopColor: colors.border,
+    backgroundColor: colors.surface,
   },
   input: {
     flex: 1,
     minHeight: 40,
     maxHeight: 100,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.lg,
     paddingHorizontal: Space.md,
     paddingVertical: 8,
     fontSize: 15,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   sendBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -384,8 +386,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderTopColor: colors.border,
+    backgroundColor: colors.surface,
     alignItems: 'center',
   },
   signInBtn: {
@@ -397,12 +399,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: Colors.brand,
+    borderColor: colors.brand,
     backgroundColor: 'rgba(99,102,241,0.06)',
   },
   signInBtnText: {
     fontSize: 14,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
+    color: colors.brand,
   },
 });

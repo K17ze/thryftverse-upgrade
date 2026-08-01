@@ -8,7 +8,7 @@ import {
   TextInputProps,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Type , Typography  } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 
@@ -34,6 +34,8 @@ export const AppSearchBar = forwardRef<TextInput, AppSearchBarProps>(function Ap
   },
   ref
 ) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [isFocused, setIsFocused] = useState(false);
 
   const handleClear = () => {
@@ -43,13 +45,13 @@ export const AppSearchBar = forwardRef<TextInput, AppSearchBarProps>(function Ap
 
   return (
     <View style={[styles.container, isFocused && styles.containerFocused, containerStyle]}>
-      <Ionicons name="search-outline" size={18} color={isFocused ? Colors.textSecondary : Colors.textMuted} />
+      <Ionicons name="search-outline" size={18} color={isFocused ? colors.textSecondary : colors.textMuted} />
       <TextInput
         ref={ref}
         {...inputProps}
         style={styles.input}
         placeholder={placeholder}
-        placeholderTextColor={Colors.textMuted}
+        placeholderTextColor={colors.textMuted}
         value={value}
         onChangeText={onChangeText}
         onFocus={(e) => { setIsFocused(true); inputProps?.onFocus?.(e); }}
@@ -64,7 +66,7 @@ export const AppSearchBar = forwardRef<TextInput, AppSearchBarProps>(function Ap
           accessibilityLabel="Clear search"
           accessibilityRole="button"
         >
-          <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
+          <Ionicons name="close-circle" size={18} color={colors.textMuted} />
         </AnimatedPressable>
       ) : rightNode ? (
         rightNode
@@ -73,27 +75,27 @@ export const AppSearchBar = forwardRef<TextInput, AppSearchBarProps>(function Ap
   );
 })
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     paddingHorizontal: Space.sm + Space.xs,
     paddingVertical: Space.sm,
     gap: Space.xs + Space.xs,
   },
   containerFocused: {
-    borderColor: Colors.textSecondary,
-    backgroundColor: Colors.surfaceAlt,
+    borderColor: colors.textSecondary,
+    backgroundColor: colors.surfaceAlt,
   },
   input: {
     flex: 1,
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: Type.body.letterSpacing,
     paddingVertical: 0,
   },

@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { CameraView, useCameraPermissions, CameraType } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { useToast } from '../../context/ToastContext';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
@@ -24,6 +24,7 @@ interface CameraCaptureProps {
 }
 
 export default function CameraCapture({ onPhotoCapture, onClose }: CameraCaptureProps) {
+  const { colors } = useAppTheme();
   const { show } = useToast();
   const cameraRef = React.useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
@@ -100,7 +101,7 @@ export default function CameraCapture({ onPhotoCapture, onClose }: CameraCapture
   if (!permission) {
     return (
       <View style={styles.permissionOverlay}>
-        <ActivityIndicator size="large" color={Colors.brand} />
+        <ActivityIndicator size="large" color={colors.brand} />
       </View>
     );
   }

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AppButton } from '../ui/AppButton';
@@ -43,6 +43,9 @@ export function UnitsComposer({
   onCancel,
   onSubmit,
 }: UnitsComposerProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   if (!visible) {
     return null;
   }
@@ -109,8 +112,8 @@ export function UnitsComposer({
               style={[
                 styles.quoteRealized,
                 estimatedRealized.startsWith('+')
-                  ? { color: Colors.success }
-                  : { color: Colors.danger },
+                  ? { color: colors.success }
+                  : { color: colors.danger },
               ]}
             >
               {estimatedRealized}
@@ -153,7 +156,7 @@ export function UnitsComposer({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFill,
     zIndex: 300,
@@ -164,14 +167,14 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
   },
   card: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
     paddingHorizontal: Space.md,
     paddingTop: Space.lg,
     paddingBottom: Space.xl,
     borderTopWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   modeLabel: {
     textAlign: 'center',
@@ -202,15 +205,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: Space.md,
     paddingVertical: Space.sm,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.md,
   },
   quoteLabel: {
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginBottom: 2,
   },
   quoteValue: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   quoteSub: {
     marginTop: 2,

@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, ViewStyle, StyleProp } from 'react-native';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Typography } from '../../theme/designTokens';
 
 interface PremiumListSectionProps {
@@ -18,6 +18,9 @@ export function PremiumListSection({
   style,
   cardStyle,
 }: PremiumListSectionProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={[styles.wrapper, style]}>
       {title ? (
@@ -33,7 +36,7 @@ export function PremiumListSection({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   wrapper: {
     marginBottom: Space.lg,
     paddingHorizontal: Space.md,
@@ -45,21 +48,21 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 13,
     fontFamily: Typography.family.bold,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
   },
   subtitle: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     lineHeight: 17,
   },
   card: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     overflow: 'hidden',
   },
 });

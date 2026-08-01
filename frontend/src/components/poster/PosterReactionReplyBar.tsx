@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius, Type, Typography } from '../../theme/designTokens';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 import type { PosterReactionType } from '../../services/postersApi';
 
 const REACTIONS: Array<{ type: PosterReactionType; icon: string; label: string }> = [
@@ -41,6 +41,8 @@ export function PosterReactionReplyBar({
   isOwner,
   onShowActivity,
 }: PosterReactionReplyBarProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [replyText, setReplyText] = useState('');
   const [showReactions, setShowReactions] = useState(false);
 
@@ -91,7 +93,7 @@ export function PosterReactionReplyBar({
               accessibilityLabel={`${r.label} reaction`}
               accessibilityRole="button"
             >
-              <Ionicons name={r.icon as any} size={22} color={viewerReaction === r.type ? Colors.brand : '#fff'} />
+              <Ionicons name={r.icon as any} size={22} color={viewerReaction === r.type ? colors.brand : '#fff'} />
             </Pressable>
           ))}
         </View>
@@ -105,7 +107,7 @@ export function PosterReactionReplyBar({
             accessibilityLabel="Show reactions"
             accessibilityRole="button"
           >
-            <Ionicons name={viewerReaction ? 'heart' : 'happy-outline'} size={22} color={viewerReaction ? Colors.brand : '#fff'} />
+            <Ionicons name={viewerReaction ? 'heart' : 'happy-outline'} size={22} color={viewerReaction ? colors.brand : '#fff'} />
           </Pressable>
         )}
 
@@ -137,7 +139,8 @@ export function PosterReactionReplyBar({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: any) {
+  return StyleSheet.create({
   container: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.sm,
@@ -162,7 +165,7 @@ const styles = StyleSheet.create({
   reactionBtnActive: {
     backgroundColor: 'rgba(255,255,255,0.2)',
     borderWidth: 1,
-    borderColor: Colors.brand,
+    borderColor: colors.brand,
   },
   inputRow: {
     flexDirection: 'row',
@@ -193,7 +196,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
   },
   activityBtn: {
     flexDirection: 'row',
@@ -216,3 +219,4 @@ const styles = StyleSheet.create({
     fontSize: Type.body.size,
   },
 });
+}

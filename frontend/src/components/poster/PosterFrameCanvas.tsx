@@ -11,7 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Space, Radius, Type, Typography } from '../../theme/designTokens';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { Video, ResizeMode } from '../compat/Video';
 import { PosterStickerLayer } from './PosterStickerLayer';
 import type { ComposerFrame } from './PosterFrameStrip';
@@ -44,6 +44,8 @@ export function PosterFrameCanvas({
   onStickerPositionChange,
   onCanvasPress,
 }: PosterFrameCanvasProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const isTextFrame = frame.mediaType === 'text' && !frame.mediaUri;
   const isVideo = frame.mediaType === 'video' && !!frame.mediaUri;
   const isImage = frame.mediaType === 'image' && !!frame.mediaUri;
@@ -106,7 +108,7 @@ export function PosterFrameCanvas({
         {
           width,
           height,
-          backgroundColor: frame.backgroundColor ?? (isTextFrame ? '#1a1a1a' : Colors.surfaceAlt),
+          backgroundColor: frame.backgroundColor ?? (isTextFrame ? '#1a1a1a' : colors.surfaceAlt),
         },
       ]}
     >
@@ -154,7 +156,7 @@ export function PosterFrameCanvas({
 
       {isVideo && videoError && (
         <View style={styles.videoErrorState}>
-          <Ionicons name="warning-outline" size={28} color={Colors.textMuted} />
+          <Ionicons name="warning-outline" size={28} color={colors.textMuted} />
           <Text style={styles.videoErrorText}>Video unavailable</Text>
         </View>
       )}
@@ -193,11 +195,12 @@ export function PosterFrameCanvas({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: any) {
+  return StyleSheet.create({
   canvas: {
     borderRadius: Radius.lg,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   textFrameContent: {
     ...StyleSheet.absoluteFill,
@@ -248,15 +251,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: Space.xs,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   videoErrorText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   backgroundPressLayer: {
     ...StyleSheet.absoluteFill,
     zIndex: 1,
   },
 });
+}

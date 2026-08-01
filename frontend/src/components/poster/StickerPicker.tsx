@@ -10,7 +10,6 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
 import { Typography } from '../../theme/designTokens';
 
 const { height: SCREEN_H } = Dimensions.get('window');

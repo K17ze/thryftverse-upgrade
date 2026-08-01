@@ -15,7 +15,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { SharedTransitionView } from '../SharedTransitionView';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
+import type { ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Typography } from '../../theme/designTokens';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -32,10 +33,14 @@ function LookCard({
   look,
   onPress,
   index,
+  colors,
+  styles,
 }: {
   look: LookApiItem;
   onPress: () => void;
   index: number;
+  colors: ThemeColors;
+  styles: ReturnType<typeof createStyles>;
 }) {
   const [activeTag, setActiveTag] = useState<string | null>(null);
 
@@ -80,7 +85,7 @@ function LookCard({
 
           {look.tags.length > 0 && (
             <View style={styles.tagBadge}>
-              <Ionicons name="pricetag" size={10} color={Colors.brand} />
+              <Ionicons name="pricetag" size={10} color={colors.brand} />
               <Text style={styles.tagBadgeText}>{look.tags.length}</Text>
             </View>
           )}
@@ -99,7 +104,7 @@ function LookCard({
 
           <View style={styles.overlayStats}>
             <View style={styles.overlayStatBtn}>
-              <Ionicons name={look.likedByViewer ? 'heart' : 'heart-outline'} size={14} color={look.likedByViewer ? Colors.danger : '#fff'} />
+              <Ionicons name={look.likedByViewer ? 'heart' : 'heart-outline'} size={14} color={look.likedByViewer ? colors.danger : '#fff'} />
               <Text style={styles.overlayStatCount}>{look.likeCount}</Text>
             </View>
             <View style={styles.overlayStatBtn}>
@@ -107,7 +112,7 @@ function LookCard({
               <Text style={styles.overlayStatCount}>{look.commentCount}</Text>
             </View>
             <View style={styles.overlayStatBtn}>
-              <Ionicons name={look.savedByViewer ? 'bookmark' : 'bookmark-outline'} size={13} color={look.savedByViewer ? Colors.brand : 'rgba(255,255,255,0.9)'} />
+              <Ionicons name={look.savedByViewer ? 'bookmark' : 'bookmark-outline'} size={13} color={look.savedByViewer ? colors.brand : 'rgba(255,255,255,0.9)'} />
             </View>
           </View>
         </View>
@@ -117,6 +122,8 @@ function LookCard({
 }
 
 export default function LooksTab() {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<NavT>();
   const [looks, setLooks] = useState<LookApiItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -158,7 +165,7 @@ export default function LooksTab() {
   if (isLoading) {
     return (
       <View style={styles.loadingWrap}>
-        <ActivityIndicator size="large" color={Colors.brand} />
+        <ActivityIndicator size="large" color={colors.brand} />
       </View>
     );
   }
@@ -166,7 +173,7 @@ export default function LooksTab() {
   if (loadError && looks.length === 0) {
     return (
       <Reanimated.View entering={FadeInDown.duration(400)} style={styles.errorWrap}>
-        <Ionicons name="cloud-offline-outline" size={40} color={Colors.textMuted} />
+        <Ionicons name="cloud-offline-outline" size={40} color={colors.textMuted} />
         <Text style={styles.errorTitle}>Looks could not be loaded</Text>
         <Text style={styles.errorSubtitle}>Check your connection and try again.</Text>
         <AnimatedPressable
@@ -196,7 +203,7 @@ export default function LooksTab() {
           onCtaPress={handleCreateLook}
           graphic={
             <View style={{ alignItems: 'center', marginBottom: Space.md }}>
-              <Ionicons name="images-outline" size={48} color={Colors.brand} />
+              <Ionicons name="images-outline" size={48} color={colors.brand} />
             </View>
           }
         />
@@ -209,7 +216,7 @@ export default function LooksTab() {
       showsVerticalScrollIndicator={false}
       contentContainerStyle={styles.scrollContent}
       refreshControl={
-        <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={Colors.brand} />
+        <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={colors.brand} />
       }
       ListHeaderComponent={
         <View>
@@ -235,13 +242,16 @@ export default function LooksTab() {
           look={item}
           onPress={() => navigation.navigate('LookDetail', { lookId: item.id })}
           index={index}
+          colors={colors}
+          styles={styles}
         />
       )}
     />
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   loadingWrap: {
     flex: 1,
     alignItems: 'center',
@@ -262,19 +272,19 @@ const styles = StyleSheet.create({
   errorTitle: {
     fontSize: 18,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   errorSubtitle: {
     fontSize: 14,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textAlign: 'center',
   },
   retryBtn: {
     marginTop: Space.sm,
     paddingHorizontal: 24,
     paddingVertical: 10,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     borderRadius: 20,
   },
   retryBtnText: {
@@ -286,7 +296,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: 8,
     paddingHorizontal: Space.md,
     paddingVertical: 10,
@@ -297,15 +307,15 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 12,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   retryLink: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
+    color: colors.brand,
   },
   card: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.sm,
     marginBottom: Space.lg,
     overflow: 'hidden',
@@ -420,6 +430,7 @@ const styles = StyleSheet.create({
   tagBadgeText: {
     fontSize: 11,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
-});
+  });
+}

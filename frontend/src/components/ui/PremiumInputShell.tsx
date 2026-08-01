@@ -11,7 +11,7 @@ import {
   StyleProp,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Typography } from '../../theme/designTokens';
 
 interface PremiumInputShellProps extends Omit<TextInputProps, 'style'> {
@@ -51,6 +51,8 @@ export const PremiumInputShell = forwardRef<TextInput, PremiumInputShellProps>(
     },
     ref
   ) {
+    const { colors } = useAppTheme();
+    const styles = React.useMemo(() => createStyles(colors), [colors]);
     const [isFocused, setIsFocused] = useState(false);
     const hasError = Boolean(errorText);
     const isFilled = Boolean(value && String(value).length > 0);
@@ -66,12 +68,12 @@ export const PremiumInputShell = forwardRef<TextInput, PremiumInputShellProps>(
     };
 
     const borderColor = hasError
-      ? Colors.danger
+      ? colors.danger
       : isFocused
-      ? Colors.brand
+      ? colors.brand
       : isFilled
-      ? Colors.borderLight
-      : Colors.border;
+      ? colors.borderSubtle
+      : colors.border;
 
     return (
       <View style={[styles.container, containerStyle]}>
@@ -101,7 +103,7 @@ export const PremiumInputShell = forwardRef<TextInput, PremiumInputShellProps>(
             <Ionicons
               name={leftIcon}
               size={18}
-              color={hasError ? Colors.danger : isFocused ? Colors.brand : Colors.textMuted}
+              color={hasError ? colors.danger : isFocused ? colors.brand : colors.textMuted}
               style={styles.leftIcon}
             />
           ) : null}
@@ -114,7 +116,7 @@ export const PremiumInputShell = forwardRef<TextInput, PremiumInputShellProps>(
             onChangeText={onChangeText}
             keyboardType={keyboardType}
             placeholder={placeholder}
-            placeholderTextColor={placeholderTextColor ?? Colors.textMuted}
+            placeholderTextColor={placeholderTextColor ?? colors.textMuted}
             multiline={multiline}
             onFocus={handleFocus}
             onBlur={handleBlur}
@@ -140,29 +142,29 @@ export const PremiumInputShell = forwardRef<TextInput, PremiumInputShellProps>(
   }
 );
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     marginBottom: Space.md,
   },
   label: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginBottom: Space.sm,
     letterSpacing: 0.2,
   },
   labelFocused: {
-    color: Colors.brand,
+    color: colors.brand,
   },
   labelError: {
-    color: Colors.danger,
+    color: colors.danger,
   },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: Radius.lg,
     borderWidth: 1,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     paddingHorizontal: Space.md,
     gap: Space.sm,
   },
@@ -174,7 +176,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontSize: 15,
     fontFamily: Typography.family.medium,
     paddingVertical: 14,
@@ -192,14 +194,14 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
     fontSize: 12,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     lineHeight: 17,
   },
   errorText: {
     marginTop: Space.sm,
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    color: Colors.danger,
+    color: colors.danger,
     lineHeight: 17,
   },
 });

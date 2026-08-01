@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius } from '../../theme/designTokens';
 
 interface TradeCardProps {
@@ -23,6 +23,9 @@ export function TradeCard({
   fullWidth = true,
   variant,
 }: TradeCardProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View
       style={[
@@ -38,14 +41,14 @@ export function TradeCard({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   base: {
     borderRadius: Radius.lg,
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   fullWidth: {
     marginHorizontal: Space.md,

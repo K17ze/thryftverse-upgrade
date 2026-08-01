@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { Typography, Space } from '../../theme/designTokens';
 
 interface Props {
@@ -20,6 +20,8 @@ export function DiscoverySectionHeader({
   onAction,
   style,
 }: Props) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   return (
     <View style={[styles.container, style]}>
       <View style={styles.textBlock}>
@@ -38,14 +40,14 @@ export function DiscoverySectionHeader({
           accessibilityLabel={`${actionLabel} ${title}`}
         >
           <Text style={styles.actionLabel}>{actionLabel}</Text>
-          <Ionicons name="arrow-forward" size={14} color={Colors.textPrimary} />
+          <Ionicons name="arrow-forward" size={14} color={colors.textPrimary} />
         </AnimatedPressable>
       ) : null}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -61,7 +63,7 @@ const styles = StyleSheet.create({
   kicker: {
     fontFamily: Typography.family.medium,
     fontSize: 11,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginBottom: 2,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
@@ -69,7 +71,7 @@ const styles = StyleSheet.create({
   title: {
     fontFamily: Typography.family.bold,
     fontSize: 20,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: -0.4,
     lineHeight: 26,
   },
@@ -80,12 +82,12 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 8,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   actionLabel: {
     fontFamily: Typography.family.semibold,
     fontSize: 12,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: -0.2,
   },
 });

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Typography } from '../../theme/designTokens';
 
 type CountdownStage = 'upcoming' | 'plenty' | 'moderate' | 'urgent' | 'final' | 'ended';
@@ -36,18 +36,23 @@ function resolveStage(urgent: boolean | undefined, text: string): CountdownStage
   return 'plenty';
 }
 
-const STAGE_COLORS: Record<CountdownStage, { text: string; icon: string; bar: string }> = {
-  upcoming: { text: Colors.brand, icon: Colors.brand, bar: Colors.brand },
-  plenty: { text: Colors.textPrimary, icon: Colors.textMuted, bar: Colors.textMuted },
-  moderate: { text: Colors.textPrimary, icon: '#E8A93C', bar: '#E8A93C' },
-  urgent: { text: Colors.danger, icon: Colors.danger, bar: Colors.danger },
-  final: { text: Colors.danger, icon: Colors.danger, bar: Colors.danger },
-  ended: { text: Colors.textMuted, icon: Colors.textMuted, bar: Colors.border },
-};
+function getStageColors(colors: ReturnType<typeof useAppTheme>['colors']): Record<CountdownStage, { text: string; icon: string; bar: string }> {
+  return {
+    upcoming: { text: colors.brand, icon: colors.brand, bar: colors.brand },
+    plenty: { text: colors.textPrimary, icon: colors.textMuted, bar: colors.textMuted },
+    moderate: { text: colors.textPrimary, icon: '#E8A93C', bar: '#E8A93C' },
+    urgent: { text: colors.danger, icon: colors.danger, bar: colors.danger },
+    final: { text: colors.danger, icon: colors.danger, bar: colors.danger },
+    ended: { text: colors.textMuted, icon: colors.textMuted, bar: colors.border },
+  };
+}
 
 export function AuctionCountdown({ text, urgent, compact, progress, stage, showProgress, prominent }: Props) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const resolvedStage = stage ?? resolveStage(urgent, text);
-  const colors = STAGE_COLORS[resolvedStage];
+  const stageColors = getStageColors(colors);
+  const colors2 = stageColors[resolvedStage];
   const stageLabel = STAGE_LABELS[resolvedStage];
   const iconSize = prominent ? 16 : compact ? 11 : 13;
   const fontSize = prominent ? 20 : compact ? 12 : 14;
@@ -59,12 +64,12 @@ export function AuctionCountdown({ text, urgent, compact, progress, stage, showP
         <Ionicons
           name={resolvedStage === 'ended' ? 'checkmark-done-outline' : 'time-outline'}
           size={iconSize}
-          color={colors.icon}
+          color={colors2.icon}
         />
         <Text
           style={[
             styles.text,
-            { color: colors.text, fontSize },
+            { color: colors2.text, fontSize },
             prominent && styles.textProminent,
             isFinalOrUrgent && styles.textUrgent,
           ]}
@@ -73,7 +78,7 @@ export function AuctionCountdown({ text, urgent, compact, progress, stage, showP
           {text}
         </Text>
         {stageLabel && !compact ? (
-          <Text style={[styles.stageLabel, { color: colors.text }]}>
+          <Text style={[styles.stageLabel, { color: colors2.text }]}>
             {stageLabel}
           </Text>
         ) : null}
@@ -85,7 +90,7 @@ export function AuctionCountdown({ text, urgent, compact, progress, stage, showP
               styles.progressBarFill,
               {
                 width: `${Math.round(progress * 100)}%`,
-                backgroundColor: colors.bar,
+                backgroundColor: colors2.bar,
               },
             ]}
           />
@@ -95,7 +100,7 @@ export function AuctionCountdown({ text, urgent, compact, progress, stage, showP
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   container: {
     flexDirection: 'column',
     gap: 4,
@@ -128,7 +133,7 @@ const styles = StyleSheet.create({
   progressBar: {
     height: 2,
     borderRadius: 1,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
     overflow: 'hidden',
   },
   progressBarFill: {

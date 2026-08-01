@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, useWindowDimensions, Modal, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Typography, Elevation, Stroke } from '../../theme/designTokens';
 
 export type AuctionHeaderActionKey = 'search' | 'filter' | 'create' | 'seller' | 'activity';
@@ -37,6 +37,8 @@ export function AuctionMarketHeader({
   onBack,
   actions,
 }: Props) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const isVerySmall = width < VERY_SMALL_THRESHOLD;
@@ -69,7 +71,7 @@ export function AuctionMarketHeader({
             accessibilityLabel="Go back"
             style={styles.iconBtn}
           >
-            <Ionicons name="chevron-back" size={22} color={Colors.textPrimary} />
+            <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
           </Pressable>
         ) : null}
 
@@ -90,7 +92,7 @@ export function AuctionMarketHeader({
               accessibilityLabel={searchAction.label}
               style={styles.iconBtn}
             >
-              <Ionicons name={searchAction.icon} size={22} color={Colors.textPrimary} />
+              <Ionicons name={searchAction.icon} size={22} color={colors.textPrimary} />
             </Pressable>
           )}
 
@@ -103,7 +105,7 @@ export function AuctionMarketHeader({
               accessibilityLabel={activityAction.label}
               style={styles.iconBtn}
             >
-              <Ionicons name={activityAction.icon} size={22} color={Colors.textPrimary} />
+              <Ionicons name={activityAction.icon} size={22} color={colors.textPrimary} />
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>
                   {activityAction.badgeCount! > 9 ? '9+' : activityAction.badgeCount}
@@ -121,7 +123,7 @@ export function AuctionMarketHeader({
               accessibilityLabel="More auction options"
               style={styles.iconBtn}
             >
-              <Ionicons name="ellipsis-horizontal" size={22} color={Colors.textPrimary} />
+              <Ionicons name="ellipsis-horizontal" size={22} color={colors.textPrimary} />
             </Pressable>
           )}
 
@@ -134,7 +136,7 @@ export function AuctionMarketHeader({
               accessibilityLabel={createAction.label}
               style={styles.createBtn}
             >
-              <Ionicons name={createAction.icon} size={22} color={Colors.brand} />
+              <Ionicons name={createAction.icon} size={22} color={colors.brand} />
             </Pressable>
           )}
         </View>
@@ -158,7 +160,7 @@ export function AuctionMarketHeader({
                   accessibilityRole="button"
                   accessibilityLabel={action.label}
                 >
-                  <Ionicons name={action.icon} size={20} color={Colors.textPrimary} />
+                  <Ionicons name={action.icon} size={20} color={colors.textPrimary} />
                   <Text style={styles.overflowLabel}>{action.label}</Text>
                   {action.badgeCount != null && action.badgeCount > 0 && (
                     <View style={styles.overflowBadge}>
@@ -177,7 +179,7 @@ export function AuctionMarketHeader({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   header: {
     paddingBottom: Space.sm,
     paddingHorizontal: Space.md,
@@ -212,14 +214,14 @@ const styles = StyleSheet.create({
   title: {
     fontFamily: Typography.family.bold,
     fontSize: 24,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: -0.6,
   },
   // Context elevated — 14pt medium with tighter tracking for editorial feel
   context: {
     fontFamily: Typography.family.medium,
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginTop: 2,
     letterSpacing: -0.3,
   },
@@ -236,17 +238,17 @@ const styles = StyleSheet.create({
     minWidth: 14,
     height: 14,
     borderRadius: Radius.full,
-    backgroundColor: Colors.danger,
+    backgroundColor: colors.danger,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 3,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.background,
+    borderColor: colors.background,
   },
   badgeText: {
     fontFamily: Typography.family.bold,
     fontSize: 9,
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
   overflowBackdrop: {
     flex: 1,
@@ -257,7 +259,7 @@ const styles = StyleSheet.create({
   overflowSheet: {
     marginTop: 120,
     marginRight: Space.md,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     paddingVertical: Space.xs,
     minWidth: 220,
@@ -274,17 +276,17 @@ const styles = StyleSheet.create({
     flex: 1,
     fontFamily: Typography.family.medium,
     fontSize: 15,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   overflowBadge: {
     minWidth: 18,
     height: 18,
     borderRadius: Radius.full,
-    backgroundColor: Colors.danger,
+    backgroundColor: colors.danger,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 5,
     borderWidth: Stroke.standard,
-    borderColor: Colors.surface,
+    borderColor: colors.surface,
   },
 });

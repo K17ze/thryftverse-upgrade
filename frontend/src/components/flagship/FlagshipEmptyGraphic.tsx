@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, useWindowDimensions } from 'react-native';
 import { Canvas, Path, Skia, rect, rrect } from '@shopify/react-native-skia';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius } from '../../theme/designTokens';
 
 interface FlagshipEmptyGraphicProps {
@@ -13,8 +13,10 @@ interface FlagshipEmptyGraphicProps {
 export function FlagshipEmptyGraphic({
   variant = 'bag',
   size = 160,
-  color = Colors.brand,
+  color,
 }: FlagshipEmptyGraphicProps) {
+  const { colors } = useAppTheme();
+  const resolvedColor = color ?? colors.brand;
   const { width } = useWindowDimensions();
   const s = Math.min(size, width * 0.45);
   const cx = s / 2;
@@ -101,11 +103,11 @@ export function FlagshipEmptyGraphic({
     <View style={[styles.container, { width: s, height: s }]}>
       <Canvas style={{ width: s, height: s }}>
         {/* Background circle */}
-        <Path path={bgCircle} color={color} opacity={0.08} />
+        <Path path={bgCircle} color={resolvedColor} opacity={0.08} />
         {/* Graphic stroke */}
         <Path
           path={selected}
-          color={color}
+          color={resolvedColor}
           style="stroke"
           strokeWidth={3.5}
           strokeCap="round"

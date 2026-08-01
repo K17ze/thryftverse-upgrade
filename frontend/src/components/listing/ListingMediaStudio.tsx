@@ -9,7 +9,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
+import type { ThemeColors } from '../../theme/ThemeContext';
 import { Space, Typography } from '../../theme/designTokens';
 import { SortablePhotoStrip } from '../SortablePhotoStrip';
 import { ListingMediaDraftItem } from '../../utils/mediaUploadAsset';
@@ -58,20 +59,33 @@ function getDisplayUri(item: ListingMediaDraftItem): string {
   return item.publicUrl || item.uri;
 }
 
+const statusLabelStyles = StyleSheet.create({
+  statusLabelText: {
+    fontSize: 9,
+    fontFamily: Typography.family.semibold,
+    color: '#fff',
+  },
+  statusLabelFailed: {
+    fontSize: 9,
+    fontFamily: Typography.family.semibold,
+    color: '#fff',
+  },
+});
+
 function StatusLabel({ status }: { status: ItemStatus }) {
   switch (status) {
     case 'pending':
-      return <Text style={styles.statusLabelText}>Queued</Text>;
+      return <Text style={statusLabelStyles.statusLabelText}>Queued</Text>;
     case 'preparing':
-      return <Text style={styles.statusLabelText}>Preparing…</Text>;
+      return <Text style={statusLabelStyles.statusLabelText}>Preparing…</Text>;
     case 'uploading':
-      return <Text style={styles.statusLabelText}>Uploading…</Text>;
+      return <Text style={statusLabelStyles.statusLabelText}>Uploading…</Text>;
     case 'uploaded':
       return null;
     case 'failed':
-      return <Text style={styles.statusLabelFailed}>Failed</Text>;
+      return <Text style={statusLabelStyles.statusLabelFailed}>Failed</Text>;
     case 'cancelled':
-      return <Text style={styles.statusLabelText}>Cancelled</Text>;
+      return <Text style={statusLabelStyles.statusLabelText}>Cancelled</Text>;
     default:
       return null;
   }
@@ -92,12 +106,14 @@ export function ListingMediaStudio({
   reorderEnabled = true,
   lockedNote,
 }: ListingMediaStudioProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   if (items.length === 0) {
     return (
       <View style={styles.container}>
         <View style={styles.emptyCanvas}>
           <View style={styles.emptyIconWrap}>
-            <Ionicons name="images-outline" size={36} color={Colors.textMuted} />
+            <Ionicons name="images-outline" size={36} color={colors.textMuted} />
           </View>
           <Text style={styles.emptyTitle}>Add photos or video</Text>
           <Text style={styles.emptySub}>First photo becomes your cover</Text>
@@ -109,7 +125,7 @@ export function ListingMediaStudio({
               accessibilityRole="button"
               accessibilityLabel="Choose from library"
             >
-              <Ionicons name="images-outline" size={18} color={Colors.textInverse} style={{ marginRight: 8 }} />
+              <Ionicons name="images-outline" size={18} color={colors.textInverse} style={{ marginRight: 8 }} />
               <Text style={styles.emptyPrimaryText}>Choose from library</Text>
             </Pressable>
             <Pressable
@@ -118,7 +134,7 @@ export function ListingMediaStudio({
               accessibilityRole="button"
               accessibilityLabel="Take photo with camera"
             >
-              <Ionicons name="camera-outline" size={18} color={Colors.textPrimary} />
+              <Ionicons name="camera-outline" size={18} color={colors.textPrimary} />
               <Text style={styles.emptySecondaryText}>Camera</Text>
             </Pressable>
           </View>
@@ -153,7 +169,7 @@ export function ListingMediaStudio({
       <View style={styles.thumbContent}>
         {isVideo ? (
           <View style={styles.thumbVideoTile}>
-            <Ionicons name="videocam" size={22} color={Colors.textMuted} />
+            <Ionicons name="videocam" size={22} color={colors.textMuted} />
           </View>
         ) : (
           <Image source={{ uri: displayUri }} style={styles.thumbImage} resizeMode="cover" />
@@ -183,7 +199,7 @@ export function ListingMediaStudio({
 
         {status === 'uploaded' && (
           <View style={styles.thumbUploadedBadge}>
-            <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
+            <Ionicons name="checkmark-circle" size={16} color={colors.success} />
           </View>
         )}
 
@@ -340,7 +356,7 @@ export function ListingMediaStudio({
             accessibilityRole="button"
             accessibilityLabel="Add more photos from library"
           >
-            <Ionicons name="images-outline" size={16} color={Colors.textSecondary} />
+            <Ionicons name="images-outline" size={16} color={colors.textSecondary} />
             <Text style={styles.studioActionText}>Add more</Text>
           </Pressable>
         )}
@@ -351,7 +367,7 @@ export function ListingMediaStudio({
           accessibilityRole="button"
           accessibilityLabel="Take photo with camera"
         >
-          <Ionicons name="camera-outline" size={16} color={Colors.textSecondary} />
+          <Ionicons name="camera-outline" size={16} color={colors.textSecondary} />
           <Text style={styles.studioActionText}>Camera</Text>
         </Pressable>
       </View>
@@ -364,14 +380,15 @@ export function ListingMediaStudio({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     width: SCREEN_W,
   },
   emptyCanvas: {
     width: SCREEN_W,
     height: COVER_H,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: Space.xl,
@@ -380,7 +397,7 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Space.md,
@@ -388,13 +405,13 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 16,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginBottom: 4,
   },
   emptySub: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginBottom: Space.lg,
   },
   emptyActions: {
@@ -408,12 +425,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.lg,
     paddingVertical: 12,
     borderRadius: 24,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
   },
   emptyPrimaryText: {
     fontSize: 14,
     fontFamily: Typography.family.semibold,
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
   emptySecondaryBtn: {
     flexDirection: 'row',
@@ -422,19 +439,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: 12,
     borderRadius: 24,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   emptySecondaryText: {
     fontSize: 14,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   emptyCount: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: Space.md,
   },
   coverWrap: {
@@ -442,7 +459,7 @@ const styles = StyleSheet.create({
     height: COVER_H,
     position: 'relative',
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   coverImage: {
     width: SCREEN_W,
@@ -575,7 +592,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
     position: 'relative',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   thumbImage: {
     width: THUMB_SIZE,
@@ -586,7 +603,7 @@ const styles = StyleSheet.create({
     width: THUMB_SIZE,
     height: THUMB_SIZE,
     borderRadius: 16,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -606,12 +623,12 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     paddingVertical: 2,
     alignItems: 'center',
   },
   thumbCoverText: {
-    color: Colors.background,
+    color: colors.background,
     fontSize: 9,
     fontFamily: Typography.family.bold,
   },
@@ -629,16 +646,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 4,
     alignItems: 'center',
-  },
-  statusLabelText: {
-    fontSize: 9,
-    fontFamily: Typography.family.semibold,
-    color: '#fff',
-  },
-  statusLabelFailed: {
-    fontSize: 9,
-    fontFamily: Typography.family.semibold,
-    color: '#fff',
   },
   thumbUploadedBadge: {
     position: 'absolute',
@@ -715,21 +722,22 @@ const styles = StyleSheet.create({
   studioActionText: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   errorText: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    color: Colors.danger,
+    color: colors.danger,
     paddingHorizontal: Space.md,
     paddingTop: 4,
   },
   lockedNote: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     paddingHorizontal: Space.md,
     paddingTop: 6,
     textAlign: 'center',
   },
-});
+  });
+}

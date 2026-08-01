@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Typography } from '../../theme/designTokens';
 
 interface PremiumFormCardProps {
@@ -20,6 +20,9 @@ export function PremiumFormCard({
   style,
   contentStyle,
 }: PremiumFormCardProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={[styles.card, style]}>
       {(title || subtitle || action) && (
@@ -42,12 +45,12 @@ export function PremiumFormCard({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   card: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     marginBottom: Space.md,
     overflow: 'hidden',
   },
@@ -66,14 +69,14 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 15,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: -0.3,
   },
   subtitle: {
     marginTop: 2,
     fontSize: 12,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     lineHeight: 17,
   },
   action: {

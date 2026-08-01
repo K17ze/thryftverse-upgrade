@@ -11,7 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Space, Radius, Type, Typography } from '../../theme/designTokens';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { PosterFrameCanvas } from './PosterFrameCanvas';
 import { StickerEditorSheet } from './StickerEditorSheet';
 import { createStableId } from '../../utils/createStableId';
@@ -64,6 +64,8 @@ export function PosterFrameComposer({
   canvasHeight = CANVAS_H,
   posterMode = 'poster',
 }: PosterFrameComposerProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
 
   const [editorVisible, setEditorVisible] = useState(false);
@@ -339,7 +341,7 @@ export function PosterFrameComposer({
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.stickerToolbar, { width: canvasWidth }]}>
           {/* Edit — available for all sticker types */}
           <Pressable style={styles.stickerToolBtn} onPress={() => openEditEditor(selectedSticker)} accessibilityLabel="Edit sticker">
-            <Ionicons name="create-outline" size={20} color={Colors.textPrimary} />
+            <Ionicons name="create-outline" size={20} color={colors.textPrimary} />
             <Text style={styles.stickerToolLabel}>Edit</Text>
           </Pressable>
 
@@ -356,7 +358,7 @@ export function PosterFrameComposer({
               }}
               accessibilityLabel="Change text color"
             >
-              <Ionicons name="color-palette-outline" size={20} color={Colors.textPrimary} />
+              <Ionicons name="color-palette-outline" size={20} color={colors.textPrimary} />
               <Text style={styles.stickerToolLabel}>Color</Text>
             </Pressable>
           )}
@@ -374,28 +376,28 @@ export function PosterFrameComposer({
               }}
               accessibilityLabel="Cycle text style"
             >
-              <Ionicons name="text-outline" size={20} color={Colors.textPrimary} />
+              <Ionicons name="text-outline" size={20} color={colors.textPrimary} />
               <Text style={styles.stickerToolLabel}>Style</Text>
             </Pressable>
           )}
 
           {/* Scale — available for all sticker types */}
           <Pressable style={styles.stickerToolBtn} onPress={() => handleScaleChange(-SCALE_STEP)} accessibilityLabel="Make smaller">
-            <Ionicons name="remove-circle-outline" size={20} color={Colors.textPrimary} />
+            <Ionicons name="remove-circle-outline" size={20} color={colors.textPrimary} />
             <Text style={styles.stickerToolLabel}>Smaller</Text>
           </Pressable>
           <Pressable style={styles.stickerToolBtn} onPress={() => handleScaleChange(SCALE_STEP)} accessibilityLabel="Make larger">
-            <Ionicons name="add-circle-outline" size={20} color={Colors.textPrimary} />
+            <Ionicons name="add-circle-outline" size={20} color={colors.textPrimary} />
             <Text style={styles.stickerToolLabel}>Larger</Text>
           </Pressable>
 
           {/* Rotate — available for all sticker types */}
           <Pressable style={styles.stickerToolBtn} onPress={() => handleRotate(-1)} accessibilityLabel="Rotate left">
-            <Ionicons name="return-up-back-outline" size={20} color={Colors.textPrimary} />
+            <Ionicons name="return-up-back-outline" size={20} color={colors.textPrimary} />
             <Text style={styles.stickerToolLabel}>Rotate L</Text>
           </Pressable>
           <Pressable style={styles.stickerToolBtn} onPress={() => handleRotate(1)} accessibilityLabel="Rotate right">
-            <Ionicons name="return-up-forward-outline" size={20} color={Colors.textPrimary} />
+            <Ionicons name="return-up-forward-outline" size={20} color={colors.textPrimary} />
             <Text style={styles.stickerToolLabel}>Rotate R</Text>
           </Pressable>
 
@@ -408,7 +410,7 @@ export function PosterFrameComposer({
             }}
             accessibilityLabel="Bring to front"
           >
-            <Ionicons name="arrow-up-circle-outline" size={20} color={Colors.textPrimary} />
+            <Ionicons name="arrow-up-circle-outline" size={20} color={colors.textPrimary} />
             <Text style={styles.stickerToolLabel}>Front</Text>
           </Pressable>
           <Pressable
@@ -419,20 +421,20 @@ export function PosterFrameComposer({
             }}
             accessibilityLabel="Send to back"
           >
-            <Ionicons name="arrow-down-circle-outline" size={20} color={Colors.textPrimary} />
+            <Ionicons name="arrow-down-circle-outline" size={20} color={colors.textPrimary} />
             <Text style={styles.stickerToolLabel}>Back</Text>
           </Pressable>
 
           {/* Duplicate — available for all sticker types */}
           <Pressable style={styles.stickerToolBtn} onPress={handleDuplicate} accessibilityLabel="Duplicate sticker">
-            <Ionicons name="copy-outline" size={20} color={Colors.textPrimary} />
+            <Ionicons name="copy-outline" size={20} color={colors.textPrimary} />
             <Text style={styles.stickerToolLabel}>Duplicate</Text>
           </Pressable>
 
           {/* Delete — available for all sticker types */}
           <Pressable style={styles.stickerToolBtn} onPress={handleDelete} accessibilityLabel="Delete sticker">
-            <Ionicons name="trash-outline" size={20} color={Colors.danger} />
-            <Text style={[styles.stickerToolLabel, { color: Colors.danger }]}>Delete</Text>
+            <Ionicons name="trash-outline" size={20} color={colors.danger} />
+            <Text style={[styles.stickerToolLabel, { color: colors.danger }]}>Delete</Text>
           </Pressable>
         </ScrollView>
       )}
@@ -453,7 +455,7 @@ export function PosterFrameComposer({
             accessibilityLabel={`Add ${item.label}`}
             accessibilityRole="button"
           >
-            <Ionicons name={item.icon as any} size={22} color={Colors.textPrimary} />
+            <Ionicons name={item.icon as any} size={22} color={colors.textPrimary} />
             <Text style={styles.railLabel}>{item.label}</Text>
           </Pressable>
         ))}
@@ -479,7 +481,7 @@ export function PosterFrameComposer({
                 accessibilityLabel={item.label}
                 accessibilityRole="button"
               >
-                <Ionicons name={item.icon as any} size={22} color={Colors.textPrimary} />
+                <Ionicons name={item.icon as any} size={22} color={colors.textPrimary} />
                 <Text style={styles.actionLabel}>{item.label}</Text>
               </Pressable>
             ))}
@@ -507,7 +509,8 @@ export function PosterFrameComposer({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: any) {
+  return StyleSheet.create({
   container: {
     alignItems: 'center',
     gap: Space.sm,
@@ -524,7 +527,7 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   bgDotActive: {
-    borderColor: Colors.textPrimary,
+    borderColor: colors.textPrimary,
   },
   durationRow: {
     flexDirection: 'row',
@@ -534,20 +537,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: 6,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     minWidth: 44,
     alignItems: 'center',
   },
   durationBtnActive: {
-    backgroundColor: Colors.brand,
-    borderColor: Colors.brand,
+    backgroundColor: colors.brand,
+    borderColor: colors.brand,
   },
   durationText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   durationTextActive: {
     color: '#fff',
@@ -566,7 +569,7 @@ const styles = StyleSheet.create({
   stickerToolLabel: {
     fontSize: 10,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   toolRail: {
     maxHeight: 64,
@@ -582,7 +585,7 @@ const styles = StyleSheet.create({
   railLabel: {
     fontSize: 11,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   overlay: {
     flex: 1,
@@ -590,7 +593,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   actionSheet: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
     paddingHorizontal: Space.md,
@@ -601,14 +604,14 @@ const styles = StyleSheet.create({
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
     alignSelf: 'center',
     marginTop: Space.sm,
   },
   sheetTitle: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginBottom: Space.xs,
   },
   actionItem: {
@@ -621,14 +624,14 @@ const styles = StyleSheet.create({
   actionLabel: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   cancelBtn: {
     alignItems: 'center',
     paddingVertical: 14,
     marginTop: Space.sm,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     borderRadius: Radius.md,
     minHeight: 44,
     justifyContent: 'center',
@@ -636,6 +639,7 @@ const styles = StyleSheet.create({
   cancelText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
 });
+}

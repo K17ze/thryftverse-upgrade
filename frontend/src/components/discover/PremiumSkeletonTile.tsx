@@ -9,7 +9,7 @@ import Reanimated, {
   Easing,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 
 const AnimatedLinearGradient = Reanimated.createAnimatedComponent(LinearGradient);
 
@@ -26,6 +26,7 @@ export function PremiumSkeletonTile({
   borderRadius = 8,
   style,
 }: Props) {
+  const { colors } = useAppTheme();
   const shimmerX = useSharedValue(-1);
 
   React.useEffect(() => {
@@ -51,7 +52,7 @@ export function PremiumSkeletonTile({
         style,
       ]}
     >
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.surfaceAlt, borderRadius }]} />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surfaceAlt, borderRadius }]} />
       <AnimatedLinearGradient
         colors={['transparent', 'rgba(255,255,255,0.05)', 'transparent']}
         start={{ x: 0, y: 0.5 }}

@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius } from '../../theme/designTokens';
 import { Caption } from '../ui/Text';
 
@@ -23,14 +23,14 @@ function computeStrength(password: string): PasswordStrength {
   return 'strong';
 }
 
-function strengthLabelColor(strength: PasswordStrength): string {
+function strengthLabelColor(strength: PasswordStrength, colors: ThemeColors): string {
   switch (strength) {
     case 'weak':
     case 'fair':
-      return Colors.textSecondary;
+      return colors.textSecondary;
     case 'good':
     case 'strong':
-      return Colors.brand;
+      return colors.brand;
   }
 }
 
@@ -60,9 +60,32 @@ function strengthLabel(strength: PasswordStrength): string {
   }
 }
 
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      marginTop: Space.xs,
+    },
+    bars: {
+      flexDirection: 'row',
+      gap: Space.xs,
+    },
+    segment: {
+      flex: 1,
+      height: 4,
+      borderRadius: Radius.sm,
+      backgroundColor: colors.border,
+    },
+    label: {
+      marginTop: Space.xs,
+      textAlign: 'right',
+    },
+  });
+
 export function PasswordStrengthBar({ password }: PasswordStrengthBarProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const strength = computeStrength(password);
-  const labelColor = strengthLabelColor(strength);
+  const labelColor = strengthLabelColor(strength, colors);
   const segments = ['weak', 'fair', 'good', 'strong'] as PasswordStrength[];
   const activeIndex = segments.indexOf(strength);
 
@@ -74,7 +97,7 @@ export function PasswordStrengthBar({ password }: PasswordStrengthBarProps) {
             key={seg}
             style={[
               styles.segment,
-              idx <= activeIndex && { backgroundColor: Colors.brand, opacity: strengthFillOpacity(strength) },
+              idx <= activeIndex && { backgroundColor: colors.brand, opacity: strengthFillOpacity(strength) },
             ]}
           />
         ))}
@@ -85,23 +108,3 @@ export function PasswordStrengthBar({ password }: PasswordStrengthBarProps) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    marginTop: Space.xs,
-  },
-  bars: {
-    flexDirection: 'row',
-    gap: Space.xs,
-  },
-  segment: {
-    flex: 1,
-    height: 4,
-    borderRadius: Radius.sm,
-    backgroundColor: Colors.border,
-  },
-  label: {
-    marginTop: Space.xs,
-    textAlign: 'right',
-  },
-});

@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Dimensions, ViewStyle, ActivityIndicator, Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Typography } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -45,6 +45,8 @@ export function FlagshipProfileMedia({
   onRetryCover,
   onRevertCover,
 }: FlagshipProfileMediaProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const effectiveCover = coverVideoUri || coverUri;
   const hasCover = Boolean(effectiveCover);
   const showCoverError = coverError != null && !isUploadingCover;
@@ -147,7 +149,7 @@ export function FlagshipProfileMedia({
               />
             ) : (
               <View style={[styles.avatarImage, styles.avatarFallback]}>
-                <Ionicons name="person" size={32} color={Colors.textMuted} />
+                <Ionicons name="person" size={32} color={colors.textMuted} />
               </View>
             )}
 
@@ -179,7 +181,7 @@ export function FlagshipProfileMedia({
 const DEFAULT_COVER_H = 220;
 const AVATAR_SIZE = 104;
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   root: {
     width: SCREEN_W,
   },
@@ -194,7 +196,7 @@ const styles = StyleSheet.create({
     height: DEFAULT_COVER_H,
   },
   coverFallback: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   coverGradient: {
     position: 'absolute',
@@ -237,7 +239,7 @@ const styles = StyleSheet.create({
   coverErrorText: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    color: Colors.danger,
+    color: colors.danger,
   },
   coverErrorActions: {
     flexDirection: 'row',
@@ -266,8 +268,8 @@ const styles = StyleSheet.create({
     height: AVATAR_SIZE,
     borderRadius: Radius.full,
     borderWidth: 4,
-    borderColor: Colors.background,
-    backgroundColor: Colors.surface,
+    borderColor: colors.background,
+    backgroundColor: colors.surface,
     overflow: 'hidden',
     position: 'relative',
   },
@@ -277,7 +279,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
   },
   avatarFallback: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -288,10 +290,10 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: Radius.full,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: Colors.background,
+    borderColor: colors.background,
   },
 });

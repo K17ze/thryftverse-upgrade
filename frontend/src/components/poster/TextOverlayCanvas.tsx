@@ -12,7 +12,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { KeyboardStickyView } from '../../platform/keyboard/KeyboardProvider';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -73,6 +73,8 @@ const BG_OPTIONS = [
 ];
 
 export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, isActive }: TextOverlayCanvasProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const inputRef = React.useRef<TextInput>(null);
@@ -317,7 +319,7 @@ export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, 
                   style={[styles.alignBtn, activeLayer.alignment === a && styles.alignBtnActive]}
                   onPress={() => updateLayer(activeLayer.id, { alignment: a })}
                 >
-                  <Text style={{ fontSize: 16, color: activeLayer.alignment === a ? Colors.brand : Colors.textMuted, fontFamily: 'Inter_700Bold' }}>
+                  <Text style={{ fontSize: 16, color: activeLayer.alignment === a ? colors.brand : colors.textMuted, fontFamily: 'Inter_700Bold' }}>
                     {a === 'left' ? 'L' : a === 'center' ? 'C' : 'R'}
                   </Text>
                 </Pressable>
@@ -350,12 +352,12 @@ export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, 
                   key={i}
                   style={[
                     styles.bgOrb,
-                    { backgroundColor: c || 'transparent', borderColor: c ? 'transparent' : Colors.border },
+                    { backgroundColor: c || 'transparent', borderColor: c ? 'transparent' : colors.border },
                     activeLayer.backgroundColor === c && styles.bgOrbActive,
                   ]}
                   onPress={() => updateLayer(activeLayer.id, { backgroundColor: c })}
                 >
-                  {!c && <Ionicons name="close" size={12} color={Colors.textMuted} />}
+                  {!c && <Ionicons name="close" size={12} color={colors.textMuted} />}
                 </Pressable>
               ))}
             </ScrollView>
@@ -371,7 +373,8 @@ export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, 
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: any) {
+  return StyleSheet.create({
   textBubble: {
     position: 'absolute',
     borderRadius: 12,
@@ -528,7 +531,7 @@ const styles = StyleSheet.create({
   },
   doneBtn: {
     alignSelf: 'center',
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     borderRadius: 14,
     paddingHorizontal: 32,
     paddingVertical: 12,
@@ -539,3 +542,4 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
   },
 });
+}

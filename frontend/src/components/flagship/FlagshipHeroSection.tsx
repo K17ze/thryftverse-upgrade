@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, useWindowDimensions, Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Reanimated, { FadeInUp } from 'react-native-reanimated';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Type } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { AppButton } from '../ui/AppButton';
@@ -24,6 +24,8 @@ export function FlagshipHeroSection({
   onCta,
   height = 320,
 }: FlagshipHeroSectionProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width } = useWindowDimensions();
 
   return (
@@ -58,14 +60,14 @@ export function FlagshipHeroSection({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   root: {
     position: 'relative',
     overflow: 'hidden',
     borderRadius: Radius.none,
   },
   imageFallback: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   textWrap: {
     position: 'absolute',

@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Type, TypeStyles, Typography } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 
@@ -10,7 +10,32 @@ export interface SettingsSignOutRowProps {
   onSignOut: () => Promise<void> | void;
 }
 
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 14,
+      paddingHorizontal: Space.md,
+      gap: Space.sm + 4,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+    },
+    icon: {
+      width: 20,
+    },
+    label: {
+      flex: 1,
+      fontSize: Type.body.size,
+      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+      color: colors.danger,
+      letterSpacing: Type.body.letterSpacing,
+    },
+  });
+
 export function SettingsSignOutRow({ username, onSignOut }: SettingsSignOutRowProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [isBusy, setIsBusy] = useState(false);
 
   const handlePress = useCallback(() => {
@@ -52,9 +77,9 @@ export function SettingsSignOutRow({ username, onSignOut }: SettingsSignOutRowPr
     >
       <View style={styles.row}>
         {isBusy ? (
-          <ActivityIndicator size={18} color={Colors.danger} style={styles.icon} />
+          <ActivityIndicator size={18} color={colors.danger} style={styles.icon} />
         ) : (
-          <Ionicons name="log-out-outline" size={20} color={Colors.danger} style={styles.icon} />
+          <Ionicons name="log-out-outline" size={20} color={colors.danger} style={styles.icon} />
         )}
         <Text style={styles.label}>
           {isBusy ? 'Signing out…' : 'Sign Out'}
@@ -63,25 +88,3 @@ export function SettingsSignOutRow({ username, onSignOut }: SettingsSignOutRowPr
     </AnimatedPressable>
   );
 }
-
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: Space.md,
-    gap: Space.sm + 4,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
-  },
-  icon: {
-    width: 20,
-  },
-  label: {
-    flex: 1,
-    fontSize: Type.body.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.danger,
-    letterSpacing: Type.body.letterSpacing,
-  },
-});

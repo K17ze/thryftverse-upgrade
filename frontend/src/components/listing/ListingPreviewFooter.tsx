@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
+import type { ThemeColors } from '../../theme/ThemeContext';
 import { Space, Typography } from '../../theme/designTokens';
 import { haptics } from '../../utils/haptics';
 
@@ -16,6 +17,8 @@ export function ListingPreviewFooter({
   onBack,
   bottomInset,
 }: ListingPreviewFooterProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const secondaryLabel = origin === 'sell'
     ? 'Return to publish'
     : origin === 'edit'
@@ -31,7 +34,7 @@ export function ListingPreviewFooter({
         accessibilityRole="button"
         accessibilityLabel="Back to edit"
       >
-        <Ionicons name="chevron-back" size={18} color={Colors.textPrimary} />
+        <Ionicons name="chevron-back" size={18} color={colors.textPrimary} />
         <Text style={styles.secondaryText}>Back to edit</Text>
       </Pressable>
 
@@ -50,7 +53,8 @@ export function ListingPreviewFooter({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     position: 'absolute',
     bottom: 0,
@@ -61,9 +65,9 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
+    borderTopColor: colors.border,
   },
   secondaryBtn: {
     flexDirection: 'row',
@@ -73,14 +77,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     minHeight: 48,
   },
   secondaryText: {
     fontSize: 14,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   primaryBtn: {
     flex: 1,
@@ -88,12 +92,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 14,
     borderRadius: 12,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     minHeight: 48,
   },
   primaryText: {
     fontSize: 15,
     fontFamily: Typography.family.bold,
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
-});
+  });
+}

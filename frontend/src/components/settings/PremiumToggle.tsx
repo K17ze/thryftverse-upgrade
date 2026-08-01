@@ -7,7 +7,7 @@ import Reanimated, {
   interpolate,
   interpolateColor,
 } from 'react-native-reanimated';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { haptics } from '../../utils/haptics';
 
 interface PremiumToggleProps {
@@ -17,6 +17,7 @@ interface PremiumToggleProps {
 }
 
 export function PremiumToggle({ value, onValueChange, disabled = false }: PremiumToggleProps) {
+  const { colors } = useAppTheme();
   const progress = useSharedValue(value ? 1 : 0);
 
   React.useEffect(() => {
@@ -27,7 +28,7 @@ export function PremiumToggle({ value, onValueChange, disabled = false }: Premiu
     backgroundColor: interpolateColor(
       progress.value,
       [0, 1],
-      [Colors.border, Colors.brand]
+      [colors.border, colors.brand]
     ),
   }));
 

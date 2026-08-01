@@ -10,7 +10,8 @@ import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
+import type { ThemeColors } from '../../theme/ThemeContext';
 import { Type, Space, Radius, Typography } from '../../theme/designTokens';
 import { useStore } from '../../store/useStore';
 import { useBackendData } from '../../context/BackendDataContext';
@@ -52,7 +53,7 @@ interface LiveAuctionItem {
 }
 
 /* ── Sub-components ── */
-function LiveNowCard({ auction, index, onPress }: { auction: LiveAuctionItem; index: number; onPress: () => void }) {
+function LiveNowCard({ auction, index, onPress, styles }: { auction: LiveAuctionItem; index: number; onPress: () => void; styles: ReturnType<typeof createStyles> }) {
   const countdown = formatCountdown(Math.max(0, auction.endsAtMs - Date.now()));
   return (
     <Reanimated.View entering={FadeInDown.duration(350).delay(index * 60).springify()}>
@@ -71,15 +72,15 @@ function LiveNowCard({ auction, index, onPress }: { auction: LiveAuctionItem; in
   );
 }
 
-function ActivityCard({ item, onPress, index }: { item: ActivityItem; onPress: () => void; index: number }) {
+function ActivityCard({ item, onPress, index, colors, styles }: { item: ActivityItem; onPress: () => void; index: number; colors: ThemeColors; styles: ReturnType<typeof createStyles> }) {
   const iconMap: Record<ActivityType, string> = {
     auction_live: 'flame-outline',
     fresh_drop: 'cube-outline',
     price_drop: 'trending-down-outline',
   };
   const accentMap: Record<ActivityType, string> = {
-    auction_live: Colors.danger,
-    fresh_drop: Colors.brand,
+    auction_live: colors.danger,
+    fresh_drop: colors.brand,
     price_drop: '#dd6a33',
   };
 
@@ -103,7 +104,7 @@ function ActivityCard({ item, onPress, index }: { item: ActivityItem; onPress: (
         {item.actionLabel && (
           <View style={styles.activityAction}>
             <Text style={styles.activityActionText}>{item.actionLabel}</Text>
-            <Ionicons name="chevron-forward" size={14} color={Colors.brand} />
+            <Ionicons name="chevron-forward" size={14} color={colors.brand} />
           </View>
         )}
       </AnimatedPressable>
@@ -113,6 +114,8 @@ function ActivityCard({ item, onPress, index }: { item: ActivityItem; onPress: (
 
 /* ── Main Tab ── */
 export default function PulseTab() {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
   const { show } = useToast();
@@ -210,6 +213,7 @@ export default function PulseTab() {
                 auction={auction}
                 index={i}
                 onPress={() => { haptic.light(); navigation.push('ItemDetail', { itemId: auction.listingId }); }}
+                styles={styles}
               />
             ))}
           </HorizontalRail>
@@ -227,7 +231,7 @@ export default function PulseTab() {
             <Text style={styles.pulseBannerTitle}>Marketplace Live</Text>
             <Text style={styles.pulseBannerSub}>{activities.length} active events · {liveAuctions.length} live auctions</Text>
           </View>
-          <Ionicons name="arrow-forward" size={18} color={Colors.brand} />
+          <Ionicons name="arrow-forward" size={18} color={colors.brand} />
         </AnimatedPressable>
       </Reanimated.View>
 
@@ -240,7 +244,7 @@ export default function PulseTab() {
           onAction={handleViewAll}
         />
         {activities.map((item, i) => (
-          <ActivityCard key={item.id} item={item} onPress={() => handleActivityPress(item)} index={i} />
+          <ActivityCard key={item.id} item={item} onPress={() => handleActivityPress(item)} index={i} colors={colors} styles={styles} />
         ))}
       </Reanimated.View>
 
@@ -249,7 +253,8 @@ export default function PulseTab() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   scrollContent: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
@@ -264,10 +269,10 @@ const styles = StyleSheet.create({
   },
   liveCard: {
     width: 150,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     padding: Space.sm,
     gap: Space.sm,
     shadowColor: '#000',
@@ -280,7 +285,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 120,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   liveContent: {
     gap: 3,
@@ -288,13 +293,13 @@ const styles = StyleSheet.create({
   liveTitle: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: Type.caption.letterSpacing,
   },
   liveBid: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     letterSpacing: Type.meta.letterSpacing,
   },
   liveBadge: {
@@ -312,12 +317,12 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: Colors.danger,
+    backgroundColor: colors.danger,
   },
   liveText: {
     fontSize: 10,
     fontFamily: Typography.family.semibold,
-    color: Colors.danger,
+    color: colors.danger,
   },
 
   /* Pulse Banner */
@@ -325,10 +330,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     padding: Space.md,
     marginBottom: Space.md,
     shadowColor: '#000',
@@ -348,25 +353,25 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: Colors.danger,
+    backgroundColor: colors.danger,
     opacity: 0.25,
   },
   pulseCore: {
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: Colors.danger,
+    backgroundColor: colors.danger,
   },
   pulseBannerTitle: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: Type.subtitle.letterSpacing,
   },
   pulseBannerSub: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     letterSpacing: Type.meta.letterSpacing,
   },
 
@@ -403,10 +408,10 @@ const styles = StyleSheet.create({
   },
   sellerCard: {
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     padding: Space.sm,
     width: 110,
     shadowColor: '#000',
@@ -419,19 +424,19 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   sellerName: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginTop: 8,
     letterSpacing: Type.caption.letterSpacing,
   },
   sellerMeta: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 2,
     letterSpacing: Type.meta.letterSpacing,
   },
@@ -449,22 +454,22 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: Colors.success,
+    backgroundColor: colors.success,
   },
   sellerLiveText: {
     fontSize: 10,
     fontFamily: Typography.family.semibold,
-    color: Colors.success,
+    color: colors.success,
   },
 
   /* Activity */
   activityCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     padding: Space.md,
     marginBottom: Space.sm,
     gap: Space.md,
@@ -478,7 +483,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   activityContent: {
     flex: 1,
@@ -497,25 +502,25 @@ const styles = StyleSheet.create({
   activityTitle: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: Type.body.letterSpacing,
     lineHeight: Type.body.lineHeight,
   },
   activitySubtitle: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     letterSpacing: Type.caption.letterSpacing,
   },
   activityMeta: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     letterSpacing: Type.meta.letterSpacing,
     marginTop: 2,
   },
   activityMetaAccent: {
-    color: Colors.danger,
+    color: colors.danger,
     fontFamily: Typography.family.semibold,
   },
   activityAction: {
@@ -526,6 +531,7 @@ const styles = StyleSheet.create({
   activityActionText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
+    color: colors.brand,
   },
-});
+  });
+}

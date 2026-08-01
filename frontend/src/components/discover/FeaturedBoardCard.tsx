@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { Typography } from '../../theme/designTokens';
 
 export interface FeaturedBoard {
@@ -21,6 +21,8 @@ interface Props {
 }
 
 export function FeaturedBoardCard({ board }: Props) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const imgs = board.images.slice(0, 3);
   while (imgs.length < 3) {
     imgs.push('');
@@ -63,7 +65,7 @@ export function FeaturedBoardCard({ board }: Props) {
       <View style={styles.metaRow}>
         <Text style={styles.subtitle}>{board.subtitle}</Text>
         {board.isVerified && (
-          <Ionicons name="checkmark-circle" size={14} color={Colors.brand} style={{ marginLeft: 4 }} />
+          <Ionicons name="checkmark-circle" size={14} color={colors.brand} style={{ marginLeft: 4 }} />
         )}
       </View>
       <Text style={styles.meta}>{board.meta}</Text>
@@ -71,7 +73,7 @@ export function FeaturedBoardCard({ board }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   card: {
     width: 260,
     marginRight: 12,
@@ -99,7 +101,7 @@ const styles = StyleSheet.create({
   title: {
     fontFamily: Typography.family.semibold,
     fontSize: 15,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginBottom: 3,
     letterSpacing: -0.2,
   },
@@ -111,11 +113,11 @@ const styles = StyleSheet.create({
   subtitle: {
     fontFamily: Typography.family.medium,
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   meta: {
     fontFamily: Typography.family.medium,
     fontSize: 12,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
 });

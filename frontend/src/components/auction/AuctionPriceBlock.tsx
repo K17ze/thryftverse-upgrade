@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Typography } from '../../theme/designTokens';
 
 interface Props {
@@ -17,6 +17,8 @@ interface Props {
 }
 
 export function AuctionPriceBlock({ primary, secondary, label, size = 'card', dominant }: Props) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const sizes = {
     hero: { primary: 32, secondary: 14, label: 11 },
     card: { primary: 20, secondary: 12, label: 10 },
@@ -48,13 +50,13 @@ export function AuctionPriceBlock({ primary, secondary, label, size = 'card', do
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   block: {
     gap: 2,
   },
   label: {
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     letterSpacing: -0.1,
   },
   priceRow: {
@@ -64,7 +66,7 @@ const styles = StyleSheet.create({
   },
   primary: {
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.4,
   },
@@ -73,7 +75,7 @@ const styles = StyleSheet.create({
   },
   secondary: {
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontVariant: ['tabular-nums'],
     letterSpacing: 0,
   },

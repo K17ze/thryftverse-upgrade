@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, useWindowDimensions, Platform } from 'react-native';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Typography, Stroke } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -45,6 +45,8 @@ export function AuctionGridCard({
   cardWidth,
   priceLabel,
 }: Props) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width } = useWindowDimensions();
   const w = cardWidth ?? (width - Space.md * 2 - Space.sm) / 2;
 
@@ -103,7 +105,7 @@ export function AuctionGridCard({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   card: {
     marginBottom: Space.sm,
   },
@@ -112,7 +114,7 @@ const styles = StyleSheet.create({
     aspectRatio: 4 / 5,
     borderRadius: Radius.lg,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   imageContainer: {
     borderRadius: Radius.lg,
@@ -129,7 +131,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: Radius.full,
-    backgroundColor: Colors.danger,
+    backgroundColor: colors.danger,
     borderWidth: Stroke.standard,
     borderColor: 'rgba(0,0,0,0.35)',
   },
@@ -152,7 +154,7 @@ const styles = StyleSheet.create({
   personalMarkerText: {
     fontFamily: Typography.family.semibold,
     fontSize: 11,
-    color: Colors.textInverse,
+    color: colors.textInverse,
     letterSpacing: 0.4,
   },
   body: {
@@ -162,13 +164,13 @@ const styles = StyleSheet.create({
   brand: {
     fontFamily: Typography.family.medium,
     fontSize: 11,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     letterSpacing: 0.2,
   },
   title: {
     fontFamily: Typography.family.semibold,
     fontSize: 14,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: -0.3,
     lineHeight: 18,
   },
@@ -181,7 +183,7 @@ const styles = StyleSheet.create({
   bidCount: {
     fontFamily: Typography.family.medium,
     fontSize: 11,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
 });
 

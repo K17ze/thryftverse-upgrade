@@ -2,7 +2,7 @@ import React from 'react';
 import { View, StyleSheet, Dimensions, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Type } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { isVideoUri } from '../../utils/media';
@@ -38,6 +38,8 @@ export function FlagshipProductCard({
   condition,
   style,
 }: FlagshipProductCardProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const hasVideo = isVideoUri(imageUri);
 
   return (
@@ -64,7 +66,7 @@ export function FlagshipProductCard({
             <Ionicons
               name={isSaved || isWishlisted ? 'heart' : 'heart-outline'}
               size={20}
-              color={isSaved || isWishlisted ? Colors.danger : '#fff'}
+              color={isSaved || isWishlisted ? colors.danger : '#fff'}
             />
           </Pressable>
         )}
@@ -114,14 +116,14 @@ export function FlagshipProductCard({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   root: {
     marginBottom: Space.md,
   },
   imageWrap: {
     borderRadius: Radius.lg,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   saveBtn: {
     position: 'absolute',
@@ -177,29 +179,29 @@ const styles = StyleSheet.create({
   titleText: {
     fontSize: Type.body.size,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     lineHeight: 18,
   },
   sellerText: {
     fontSize: Type.meta.size,
     fontWeight: '500',
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginTop: 2,
     paddingHorizontal: 2,
   },
   conditionPill: {
     alignSelf: 'flex-start',
     marginTop: 4,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: Radius.full,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   conditionText: {
     fontSize: Type.meta.size,
     fontWeight: '500',
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
 });

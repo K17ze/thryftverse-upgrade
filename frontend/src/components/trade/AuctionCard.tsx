@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AppButton } from '../ui/AppButton';
@@ -55,6 +55,9 @@ export function AuctionCard({
   isBuyNowLoading = false,
   isBidSubmitting = false,
 }: AuctionCardProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   return (
     <AnimatedPressable
       style={styles.container}
@@ -133,7 +136,7 @@ export function AuctionCard({
                 accessibilityLabel={`Message ${sellerName}`}
                 accessibilityHint="Opens chat with this seller"
               >
-                <Ionicons name="chatbubble-ellipses-outline" size={14} color={Colors.textPrimary} />
+                <Ionicons name="chatbubble-ellipses-outline" size={14} color={colors.textPrimary} />
               </AnimatedPressable>
             )}
           </View>
@@ -145,7 +148,7 @@ export function AuctionCard({
             <BodyEmphasis style={styles.bidValue}>{currentBid}</BodyEmphasis>
           </View>
           <View style={styles.bidCountWrap}>
-            <Ionicons name="people-outline" size={12} color={Colors.textMuted} />
+            <Ionicons name="people-outline" size={12} color={colors.textMuted} />
             <Meta style={styles.bidCount}>{bidCount} bids</Meta>
           </View>
         </View>
@@ -199,12 +202,12 @@ export function AuctionCard({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     overflow: 'hidden',
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
@@ -238,7 +241,7 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: Colors.danger,
+    backgroundColor: colors.danger,
   },
   liveText: {
     color: '#fff',
@@ -309,13 +312,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   seller: {
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   sellerMessageBtn: {
     width: 32,
     height: 32,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -329,7 +332,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   bidValue: {
-    color: Colors.brand,
+    color: colors.brand,
   },
   bidCountWrap: {
     flexDirection: 'row',
@@ -340,13 +343,13 @@ const styles = StyleSheet.create({
   progressTrack: {
     height: 4,
     borderRadius: 2,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     marginBottom: Space.sm,
   },
   progressFill: {
     height: 4,
     borderRadius: 2,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
   },
   actionRow: {
     flexDirection: 'row',
@@ -359,7 +362,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   watchBtnActive: {
-    borderColor: Colors.brand,
+    borderColor: colors.brand,
   },
   actionBtnDisabled: {
     opacity: 0.52,

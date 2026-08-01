@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
+import type { ThemeColors } from '../../theme/ThemeContext';
 import { Space, Typography } from '../../theme/designTokens';
 
 type SaveStage =
@@ -45,6 +46,8 @@ export function EditListingFooter({
   onSave,
   bottomInset,
 }: EditListingFooterProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const stageText = getStageText(saveStage);
   const showFeedback = stageText !== null || (errorMsg !== null && saveStage !== 'idle');
 
@@ -54,13 +57,13 @@ export function EditListingFooter({
       {showFeedback && (
         <View style={styles.feedbackRow}>
           {saveStage !== 'failed_recoverable' && saveStage !== 'idle' && saveStage !== 'completed' && (
-            <ActivityIndicator size="small" color={Colors.brand} />
+            <ActivityIndicator size="small" color={colors.brand} />
           )}
           {saveStage === 'failed_recoverable' && (
-            <Ionicons name="warning-outline" size={14} color={Colors.danger} />
+            <Ionicons name="warning-outline" size={14} color={colors.danger} />
           )}
           {saveStage === 'completed' && (
-            <Ionicons name="checkmark-circle" size={14} color={Colors.success} />
+            <Ionicons name="checkmark-circle" size={14} color={colors.success} />
           )}
           <Text
             style={[
@@ -96,7 +99,7 @@ export function EditListingFooter({
           accessibilityState={{ disabled: saveDisabled }}
         >
           {isSaving ? (
-            <ActivityIndicator size="small" color={Colors.textInverse} />
+            <ActivityIndicator size="small" color={colors.textInverse} />
           ) : (
             <Text
               style={[
@@ -113,11 +116,12 @@ export function EditListingFooter({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
+    borderTopColor: colors.border,
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
   },
@@ -131,10 +135,10 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   feedbackTextError: {
-    color: Colors.danger,
+    color: colors.danger,
     fontFamily: Typography.family.semibold,
   },
   actionRow: {
@@ -145,34 +149,35 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 48,
     borderRadius: 24,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   previewText: {
     fontSize: 15,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   saveBtn: {
     flex: 1.5,
     height: 48,
     borderRadius: 24,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
   },
   saveBtnDisabled: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   saveText: {
     fontSize: 15,
     fontFamily: Typography.family.bold,
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
   saveTextDisabled: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
-});
+  });
+}

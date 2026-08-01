@@ -10,7 +10,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 import type { Listing } from '../../data/mockData';
 import { CachedImage } from '../CachedImage';
 import { getListingCoverUri } from '../../utils/media';
@@ -51,6 +51,8 @@ export default function DetailsDrawer({
   isPublishing,
   currentUserId,
 }: DetailsDrawerProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const translateY = React.useRef(new Animated.Value(DRAWER_HEIGHT)).current;
   const backdropOpacity = React.useRef(new Animated.Value(0)).current;
 
@@ -107,7 +109,7 @@ export default function DetailsDrawer({
         </View>
         {selected && (
           <View style={styles.selectedBadge}>
-            <Ionicons name="checkmark" size={12} color={Colors.background} />
+            <Ionicons name="checkmark" size={12} color={colors.background} />
           </View>
         )}
       </Pressable>
@@ -188,7 +190,7 @@ export default function DetailsDrawer({
                 value={caption}
                 onChangeText={onCaptionChange}
                 placeholder="Add a caption..."
-                placeholderTextColor={Colors.textMuted}
+                placeholderTextColor={colors.textMuted}
                 multiline
                 maxLength={200}
                 textAlignVertical="top"
@@ -218,7 +220,8 @@ export default function DetailsDrawer({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: any) {
+  return StyleSheet.create({
   backdrop: {
     ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.4)',
@@ -229,7 +232,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: DRAWER_HEIGHT,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     overflow: 'hidden',
@@ -246,7 +249,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
   },
   scrollContent: {
     paddingHorizontal: 16,
@@ -259,7 +262,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 13,
     fontFamily: Typography.family.bold,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -271,12 +274,12 @@ const styles = StyleSheet.create({
     width: 100,
     borderRadius: 14,
     overflow: 'hidden',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   listingCardSelected: {
-    borderColor: Colors.brand,
+    borderColor: colors.brand,
     borderWidth: 2,
   },
   listingImage: {
@@ -289,7 +292,7 @@ const styles = StyleSheet.create({
   listingTitle: {
     fontSize: 11,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   selectedBadge: {
     position: 'absolute',
@@ -298,14 +301,14 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
   },
   emptyText: {
     fontSize: 13,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     paddingVertical: 20,
   },
   expiryRow: {
@@ -316,31 +319,31 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     paddingVertical: 10,
     alignItems: 'center',
   },
   expiryPillActive: {
-    borderColor: Colors.brand,
-    backgroundColor: Colors.brand + '15',
+    borderColor: colors.brand,
+    backgroundColor: colors.brand + '15',
   },
   expiryPillText: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   expiryPillTextActive: {
-    color: Colors.brand,
+    color: colors.brand,
     fontFamily: Typography.family.bold,
   },
   captionInput: {
     minHeight: 80,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-    color: Colors.textPrimary,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    color: colors.textPrimary,
     fontSize: 14,
     fontFamily: Typography.family.regular,
     paddingHorizontal: 12,
@@ -349,7 +352,7 @@ const styles = StyleSheet.create({
   charCount: {
     fontSize: 11,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textAlign: 'right',
   },
   publishBtn: {
@@ -357,7 +360,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     borderRadius: 16,
     paddingVertical: 14,
     marginTop: 8,
@@ -371,3 +374,4 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.bold,
   },
 });
+}

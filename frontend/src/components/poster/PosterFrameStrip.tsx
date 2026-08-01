@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Image, ActivityIndicator, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius, Type, Typography } from '../../theme/designTokens';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 
 export type FramePublishState = 'idle' | 'uploading' | 'uploaded' | 'failed';
 
@@ -52,6 +52,8 @@ export function PosterFrameStrip({
   publishStates,
   posterMode = 'poster',
 }: PosterFrameStripProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const canAdd = frames.length < maxFrames;
   const activeFrame = frames[activeIndex];
   const thumbAspect = posterMode === 'look' ? (4 / 3) : (16 / 9);
@@ -149,7 +151,7 @@ export function PosterFrameStrip({
                     <Ionicons
                       name={frame.mediaType === 'video' ? 'videocam' : 'image'}
                       size={16}
-                      color={Colors.textMuted}
+                      color={colors.textMuted}
                     />
                   </View>
                 )}
@@ -158,7 +160,7 @@ export function PosterFrameStrip({
               {/* Publish state indicator */}
               {pubState === 'uploading' && (
                 <View style={styles.pubStateBadge}>
-                  <ActivityIndicator size="small" color={Colors.brand} />
+                  <ActivityIndicator size="small" color={colors.brand} />
                 </View>
               )}
               {pubState === 'uploaded' && (
@@ -168,7 +170,7 @@ export function PosterFrameStrip({
               )}
               {pubState === 'failed' && (
                 <View style={styles.pubStateBadge}>
-                  <Ionicons name="warning" size={14} color={Colors.danger} />
+                  <Ionicons name="warning" size={14} color={colors.danger} />
                 </View>
               )}
 
@@ -186,7 +188,7 @@ export function PosterFrameStrip({
             accessibilityLabel="Add new frame"
             accessibilityRole="button"
           >
-            <Ionicons name="add" size={22} color={Colors.textSecondary} />
+            <Ionicons name="add" size={22} color={colors.textSecondary} />
           </Pressable>
         )}
       </ScrollView>
@@ -201,7 +203,7 @@ export function PosterFrameStrip({
               accessibilityLabel="Move frame left"
               accessibilityRole="button"
             >
-              <Ionicons name="chevron-back-outline" size={18} color={Colors.textPrimary} />
+              <Ionicons name="chevron-back-outline" size={18} color={colors.textPrimary} />
               <Text style={styles.frameOpLabel}>Left</Text>
             </Pressable>
           )}
@@ -212,7 +214,7 @@ export function PosterFrameStrip({
               accessibilityLabel="Move frame right"
               accessibilityRole="button"
             >
-              <Ionicons name="chevron-forward-outline" size={18} color={Colors.textPrimary} />
+              <Ionicons name="chevron-forward-outline" size={18} color={colors.textPrimary} />
               <Text style={styles.frameOpLabel}>Right</Text>
             </Pressable>
           )}
@@ -223,7 +225,7 @@ export function PosterFrameStrip({
               accessibilityLabel="Duplicate frame"
               accessibilityRole="button"
             >
-              <Ionicons name="copy-outline" size={18} color={Colors.textPrimary} />
+              <Ionicons name="copy-outline" size={18} color={colors.textPrimary} />
               <Text style={styles.frameOpLabel}>Duplicate</Text>
             </Pressable>
           )}
@@ -234,8 +236,8 @@ export function PosterFrameStrip({
               accessibilityLabel="Remove frame"
               accessibilityRole="button"
             >
-              <Ionicons name="trash-outline" size={18} color={Colors.danger} />
-              <Text style={[styles.frameOpLabel, { color: Colors.danger }]}>Remove</Text>
+              <Ionicons name="trash-outline" size={18} color={colors.danger} />
+              <Text style={[styles.frameOpLabel, { color: colors.danger }]}>Remove</Text>
             </Pressable>
           )}
         </View>
@@ -261,7 +263,7 @@ export function PosterFrameStrip({
                 accessibilityLabel="Move frame left"
                 accessibilityRole="button"
               >
-                <Ionicons name="chevron-back-outline" size={20} color={Colors.textPrimary} />
+                <Ionicons name="chevron-back-outline" size={20} color={colors.textPrimary} />
                 <Text style={styles.contextItemText}>Move left</Text>
               </Pressable>
             )}
@@ -272,7 +274,7 @@ export function PosterFrameStrip({
                 accessibilityLabel="Move frame right"
                 accessibilityRole="button"
               >
-                <Ionicons name="chevron-forward-outline" size={20} color={Colors.textPrimary} />
+                <Ionicons name="chevron-forward-outline" size={20} color={colors.textPrimary} />
                 <Text style={styles.contextItemText}>Move right</Text>
               </Pressable>
             )}
@@ -283,7 +285,7 @@ export function PosterFrameStrip({
                 accessibilityLabel="Duplicate frame"
                 accessibilityRole="button"
               >
-                <Ionicons name="copy-outline" size={20} color={Colors.textPrimary} />
+                <Ionicons name="copy-outline" size={20} color={colors.textPrimary} />
                 <Text style={styles.contextItemText}>Duplicate</Text>
               </Pressable>
             )}
@@ -294,8 +296,8 @@ export function PosterFrameStrip({
                 accessibilityLabel="Remove frame"
                 accessibilityRole="button"
               >
-                <Ionicons name="trash-outline" size={20} color={Colors.danger} />
-                <Text style={[styles.contextItemText, { color: Colors.danger }]}>Remove</Text>
+                <Ionicons name="trash-outline" size={20} color={colors.danger} />
+                <Text style={[styles.contextItemText, { color: colors.danger }]}>Remove</Text>
               </Pressable>
             )}
             <Pressable
@@ -315,7 +317,8 @@ export function PosterFrameStrip({
 
 const THUMB_SIZE = 52;
 
-const styles = StyleSheet.create({
+function createStyles(colors: any) {
+  return StyleSheet.create({
   container: {
     paddingVertical: Space.sm,
   },
@@ -332,7 +335,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   frameThumbActive: {
-    borderColor: Colors.brand,
+    borderColor: colors.brand,
   },
   frameThumbInner: {
     flex: 1,
@@ -341,7 +344,7 @@ const styles = StyleSheet.create({
   },
   mediaFramePreview: {
     flex: 1,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -403,11 +406,11 @@ const styles = StyleSheet.create({
     width: THUMB_SIZE,
     borderRadius: Radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   frameOps: {
     flexDirection: 'row',
@@ -426,7 +429,7 @@ const styles = StyleSheet.create({
   frameOpLabel: {
     fontSize: 10,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   contextOverlay: {
     flex: 1,
@@ -434,7 +437,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   contextSheet: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
     paddingHorizontal: Space.md,
@@ -445,14 +448,14 @@ const styles = StyleSheet.create({
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
     alignSelf: 'center',
     marginTop: Space.sm,
   },
   contextTitle: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginBottom: Space.xs,
   },
   contextItem: {
@@ -465,19 +468,20 @@ const styles = StyleSheet.create({
   contextItemText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   contextCancelBtn: {
     alignItems: 'center',
     paddingVertical: 14,
     marginTop: Space.sm,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     borderRadius: Radius.md,
   },
   contextCancelText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
 });
+}

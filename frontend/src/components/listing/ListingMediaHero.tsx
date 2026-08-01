@@ -7,7 +7,8 @@ import Reanimated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
+import type { ThemeColors } from '../../theme/ThemeContext';
 import { Typography } from '../../theme/designTokens';
 import { isVideoUri } from '../../utils/media';
 import { ImageViewer } from '../ImageViewer';
@@ -50,6 +51,8 @@ export function ListingMediaHero({
   bigHeartScale,
   scrollY,
 }: ListingMediaHeroProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [activeIndex, setActiveIndex] = useState(0);
 
   const heroStyle = useAnimatedStyle(() => {
@@ -139,7 +142,7 @@ export function ListingMediaHero({
             <Ionicons
               name={isSaved ? 'bookmark' : 'bookmark-outline'}
               size={24}
-              color={isSaved ? Colors.brand : '#fff'}
+              color={isSaved ? colors.brand : '#fff'}
             />
           </AnimatedPressable>
 
@@ -148,7 +151,7 @@ export function ListingMediaHero({
               isActive={isFav}
               onToggle={onToggleFav}
               size={24}
-              activeColor={Colors.danger}
+              activeColor={colors.danger}
               inactiveColor="#fff"
             />
           </View>
@@ -158,11 +161,12 @@ export function ListingMediaHero({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   heroContainer: {
     width: SCREEN_W,
     position: 'relative',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     overflow: 'hidden',
   },
   topScrim: {
@@ -188,13 +192,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 32,
     left: 20,
-    backgroundColor: Colors.success,
+    backgroundColor: colors.success,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
   },
   soldText: {
-    color: Colors.background,
+    color: colors.background,
     fontSize: 16,
     fontFamily: Typography.family.bold,
     letterSpacing: 1,
@@ -252,4 +256,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-});
+  });
+}

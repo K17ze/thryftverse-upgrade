@@ -9,7 +9,7 @@ import Reanimated, {
   runOnJS,
 } from 'react-native-reanimated';
 import { Space, Radius, Type, Typography } from '../../theme/designTokens';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 import type { PosterSticker as ApiPosterSticker } from '../../services/postersApi';
 
 interface PosterStickerLayerProps {
@@ -89,6 +89,8 @@ function DraggableSticker({
   onPress,
   onPositionChange,
 }: DraggableStickerProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const translateX = useSharedValue(sticker.x * containerWidth);
   const translateY = useSharedValue(sticker.y * containerHeight);
   const startX = useSharedValue(0);
@@ -197,6 +199,8 @@ function DraggableSticker({
 }
 
 function StickerContent({ sticker }: { sticker: ApiPosterSticker }) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   switch (sticker.type) {
     case 'text':
       return (
@@ -272,7 +276,8 @@ function StickerContent({ sticker }: { sticker: ApiPosterSticker }) {
   }
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: any) {
+  return StyleSheet.create({
   stickerBase: {
     position: 'absolute',
   },
@@ -299,7 +304,7 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     borderWidth: 1.5,
     borderColor: '#fff',
   },
@@ -343,7 +348,7 @@ const styles = StyleSheet.create({
     fontSize: Type.caption.size,
   },
   listingPrice: {
-    color: Colors.brand,
+    color: colors.brand,
     fontFamily: Typography.family.bold,
     fontSize: Type.body.size,
   },
@@ -388,3 +393,4 @@ const styles = StyleSheet.create({
     fontSize: Type.caption.size,
   },
 });
+}

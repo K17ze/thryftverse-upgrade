@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 
@@ -12,22 +12,23 @@ export interface ProductErrorStateProps {
 }
 
 export function ProductErrorState({ onRetry, message }: ProductErrorStateProps) {
+  const { colors } = useAppTheme();
   return (
     <View style={styles.container}>
-      <Ionicons name="alert-circle-outline" size={56} color={Colors.textMuted} />
-      <Text style={styles.title}>Something went wrong</Text>
-      <Text style={styles.message}>
+      <Ionicons name="alert-circle-outline" size={56} color={colors.textMuted} />
+      <Text style={[styles.title, { color: colors.textPrimary }]}>Something went wrong</Text>
+      <Text style={[styles.message, { color: colors.textMuted }]}>
         {message ?? 'We could not load this listing. Please try again.'}
       </Text>
       {onRetry && (
         <AnimatedPressable
-          style={styles.retryBtn}
+          style={[styles.retryBtn, { backgroundColor: colors.brand }]}
           onPress={onRetry}
           {...PressPresets.primaryButton}
           accessibilityLabel="Retry loading listing"
           accessibilityRole="button"
         >
-          <Text style={styles.retryText}>Retry</Text>
+          <Text style={[styles.retryText, { color: colors.textInverse }]}>Retry</Text>
         </AnimatedPressable>
       )}
     </View>
@@ -44,28 +45,30 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   title: {
-    fontSize: 18,
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    letterSpacing: Type.subtitle.letterSpacing,
     marginTop: Space.md,
   },
   message: {
-    fontSize: 14,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight + 2,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     textAlign: 'center',
-    lineHeight: 20,
   },
   retryBtn: {
     marginTop: Space.md,
     paddingHorizontal: Space.lg,
-    paddingVertical: 12,
-    backgroundColor: Colors.brand,
+    paddingVertical: Space.md,
     borderRadius: Radius.md,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   retryText: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.semibold,
-    color: Colors.textInverse,
   },
 });

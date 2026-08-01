@@ -6,7 +6,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Typography } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 
@@ -31,6 +31,8 @@ export function PremiumActionFooter({
   secondaryDisabled = false,
   errorText,
 }: PremiumActionFooterProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const isPrimaryDisabled = primaryDisabled || primaryLoading;
 
   return (
@@ -53,7 +55,7 @@ export function PremiumActionFooter({
         accessibilityState={{ disabled: isPrimaryDisabled }}
       >
         {primaryLoading ? (
-          <ActivityIndicator size="small" color={Colors.background} />
+          <ActivityIndicator size="small" color={colors.background} />
         ) : (
           <Text style={styles.primaryText}>{primaryLabel}</Text>
         )}
@@ -77,18 +79,18 @@ export function PremiumActionFooter({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopColor: colors.border,
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
     paddingBottom: Space.sm,
     gap: Space.sm,
   },
   errorBanner: {
-    backgroundColor: Colors.danger + '12',
+    backgroundColor: colors.danger + '12',
     borderRadius: Radius.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
@@ -97,11 +99,11 @@ const styles = StyleSheet.create({
   errorBannerText: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.danger,
+    color: colors.danger,
     textAlign: 'center',
   },
   primaryBtn: {
-    backgroundColor: Colors.textPrimary,
+    backgroundColor: colors.textPrimary,
     borderRadius: Radius.lg,
     minHeight: 52,
     alignItems: 'center',
@@ -111,7 +113,7 @@ const styles = StyleSheet.create({
     opacity: 0.45,
   },
   primaryText: {
-    color: Colors.background,
+    color: colors.background,
     fontSize: 16,
     fontFamily: Typography.family.bold,
   },
@@ -125,7 +127,7 @@ const styles = StyleSheet.create({
     opacity: 0.4,
   },
   secondaryText: {
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontSize: 15,
     fontFamily: Typography.family.semibold,
   },

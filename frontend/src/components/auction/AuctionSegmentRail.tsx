@@ -2,7 +2,7 @@ import React, { useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, LayoutChangeEvent } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
 import Reanimated, { useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Typography } from '../../theme/designTokens';
 import { haptics } from '../../utils/haptics';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -26,6 +26,8 @@ export function AuctionSegmentRail({
   onSelect,
   accessibilityLabelPrefix = 'Show',
 }: Props) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const reducedMotion = useReducedMotion();
   const underlineX = useSharedValue(0);
   const underlineWidth = useSharedValue(0);
@@ -95,7 +97,7 @@ export function AuctionSegmentRail({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   container: {
     position: 'relative',
   },
@@ -114,21 +116,21 @@ const styles = StyleSheet.create({
   label: {
     fontFamily: Typography.family.medium,
     fontSize: 15,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     letterSpacing: -0.2,
   },
   labelActive: {
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   count: {
     fontFamily: Typography.family.regular,
     fontSize: 12,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontVariant: ['tabular-nums'],
   },
   countActive: {
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   underline: {
     position: 'absolute',
@@ -136,6 +138,6 @@ const styles = StyleSheet.create({
     left: 0,
     height: 2,
     borderRadius: 1,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
   },
 });
