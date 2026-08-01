@@ -10,11 +10,10 @@ import {
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  runOnJS,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
 import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 
@@ -35,6 +34,7 @@ export function AttachmentReviewSheet({
   onClose,
   onSend,
 }: AttachmentReviewSheetProps) {
+  const { colors } = useAppTheme();
   const [caption, setCaption] = useState('');
   const [shouldRender, setShouldRender] = useState(visible);
   const translateY = useSharedValue(height);
@@ -66,19 +66,20 @@ export function AttachmentReviewSheet({
       <Reanimated.View style={[styles.overlay, overlayStyle]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
       </Reanimated.View>
-      <Reanimated.View style={[styles.sheet, sheetStyle]}>
-        <View style={styles.handle} />
+      <Reanimated.View style={[styles.sheet, { backgroundColor: colors.surface }, sheetStyle]}>
+        <View style={[styles.handle, { backgroundColor: colors.border }]} />
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Review attachment</Text>
-          <AnimatedPressable
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>
+            Review attachment
+          </Text>
+          <Pressable
             onPress={onClose}
-            scaleValue={0.9}
-            hapticFeedback="light"
+            hitSlop={12}
             accessibilityLabel="Cancel attachment"
             accessibilityRole="button"
           >
-            <Ionicons name="close" size={24} color={Colors.textPrimary} />
-          </AnimatedPressable>
+            <Ionicons name="close" size={24} color={colors.textPrimary} />
+          </Pressable>
         </View>
 
         <View style={styles.previewWrap}>
@@ -89,33 +90,31 @@ export function AttachmentReviewSheet({
           />
           {mediaType === 'video' && (
             <View style={styles.videoBadge}>
-              <Ionicons name="play-circle" size={32} color="#fff" />
+              <Ionicons name="play-circle" size={32} color={colors.textInverse} />
             </View>
           )}
         </View>
 
         <View style={styles.captionRow}>
           <TextInput
-            style={styles.captionInput}
+            style={[styles.captionInput, { backgroundColor: colors.surfaceAlt, color: colors.textPrimary }]}
             value={caption}
             onChangeText={setCaption}
             placeholder="Add a caption..."
-            placeholderTextColor={Colors.textMuted}
+            placeholderTextColor={colors.textMuted}
             multiline
             maxLength={500}
             accessibilityLabel="Attachment caption"
             accessibilityRole="text"
           />
-          <AnimatedPressable
+          <Pressable
             onPress={() => onSend(caption.trim())}
-            scaleValue={0.9}
-            hapticFeedback="medium"
-            style={styles.sendBtn}
+            style={[styles.sendBtn, { backgroundColor: colors.brand }]}
             accessibilityLabel="Send attachment"
             accessibilityRole="button"
           >
-            <Ionicons name="arrow-up" size={20} color={Colors.textInverse} />
-          </AnimatedPressable>
+            <Ionicons name="arrow-up" size={20} color={colors.textInverse} />
+          </Pressable>
         </View>
       </Reanimated.View>
     </View>
@@ -132,17 +131,15 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: Colors.surface,
-    borderTopLeftRadius: Radius.lg,
-    borderTopRightRadius: Radius.lg,
-    paddingBottom: 40,
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+    paddingBottom: Space.xxl + Space.sm,
     maxHeight: height * 0.85,
   },
   handle: {
     width: 36,
     height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.border,
+    borderRadius: Radius.full,
     alignSelf: 'center',
     marginTop: Space.sm,
   },
@@ -153,11 +150,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
     paddingBottom: Space.xs,
+    minHeight: 44,
   },
   headerTitle: {
-    fontSize: Type.body.size,
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   previewWrap: {
     marginHorizontal: Space.md,
@@ -193,18 +191,16 @@ const styles = StyleSheet.create({
     minHeight: 40,
     maxHeight: 100,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
-    paddingHorizontal: Space.sm + 4,
+    paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
   },
   sendBtn: {
     width: 44,
     height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.textPrimary,
+    borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
   },

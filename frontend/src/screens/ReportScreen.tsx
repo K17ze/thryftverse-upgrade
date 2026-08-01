@@ -3,7 +3,7 @@ import { ActivityIndicator, StyleSheet, Text, TextInput, View } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
-import { Space, Typography } from '../theme/designTokens';
+import { Space, Typography, Type, Radius } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import {
   FlagshipHeader,
@@ -263,15 +263,17 @@ function createStyles(colors: ThemeColors) {
   introTitle: {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: 17,
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
+    letterSpacing: Type.subtitle.letterSpacing,
   },
   introBody: {
     maxWidth: 340,
-    marginTop: 5,
+    marginTop: Space.xs,
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight + 2,
   },
   reasons: {
     borderTopWidth: StyleSheet.hairlineWidth,
@@ -282,7 +284,7 @@ function createStyles(colors: ThemeColors) {
     minHeight: 68,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: Space.md,
   },
   reasonDivider: {
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -296,18 +298,19 @@ function createStyles(colors: ThemeColors) {
   reasonLabel: {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: 14,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
   },
   reasonDescription: {
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: 12,
-    lineHeight: 17,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight + 2,
   },
   radio: {
     width: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius: Radius.full,
     borderWidth: 1,
     borderColor: colors.border,
     alignItems: 'center',
@@ -319,40 +322,43 @@ function createStyles(colors: ThemeColors) {
   radioDot: {
     width: 10,
     height: 10,
-    borderRadius: 5,
+    borderRadius: Radius.full,
     backgroundColor: colors.textPrimary,
   },
   details: {
     marginTop: Space.lg,
   },
   detailsLabel: {
-    marginBottom: 7,
+    marginBottom: Space.xs + 2,
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
   },
   detailsInput: {
     minHeight: 116,
-    padding: 13,
+    padding: Space.md,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     color: colors.textPrimary,
     backgroundColor: colors.background,
     fontFamily: Typography.family.regular,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
   },
   characterCount: {
-    marginTop: 5,
+    marginTop: Space.xs,
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: 11,
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    letterSpacing: Type.meta.letterSpacing,
     textAlign: 'right',
   },
   submitAction: {
     minHeight: 48,
-    borderRadius: 12,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.textPrimary,
@@ -363,7 +369,8 @@ function createStyles(colors: ThemeColors) {
   submitText: {
     color: colors.textInverse,
     fontFamily: Typography.family.semibold,
-    fontSize: 14,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
   },
   complete: {
     alignItems: 'center',
@@ -374,7 +381,9 @@ function createStyles(colors: ThemeColors) {
     marginTop: Space.md,
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: 17,
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
+    letterSpacing: Type.subtitle.letterSpacing,
     textAlign: 'center',
   },
   completeBody: {
@@ -382,8 +391,8 @@ function createStyles(colors: ThemeColors) {
     marginTop: Space.xs,
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight + 2,
     textAlign: 'center',
   },
   doneAction: {
@@ -391,7 +400,7 @@ function createStyles(colors: ThemeColors) {
     minHeight: 44,
     marginTop: Space.lg,
     paddingHorizontal: Space.lg,
-    borderRadius: 11,
+    borderRadius: Radius.full,
     backgroundColor: colors.textPrimary,
     alignItems: 'center',
     justifyContent: 'center',
@@ -399,7 +408,8 @@ function createStyles(colors: ThemeColors) {
   doneActionText: {
     color: colors.textInverse,
     fontFamily: Typography.family.semibold,
-    fontSize: 14,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
   },
   secondaryDoneAction: {
     minWidth: 140,
@@ -408,14 +418,15 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.lg,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 11,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
   secondaryDoneText: {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: 14,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
   },
   });
 }
