@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, Modal, Pressable, ScrollView, TextInput, Switch } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { AppButton } from '../ui/AppButton';
@@ -45,6 +45,24 @@ export function OfferToLikersSheet({
   onClose,
   onSend,
 }: OfferToLikersSheetProps) {
+  const { colors } = useAppTheme();
+  const themed = {
+    textPrimary: colors.textPrimary,
+    textSecondary: colors.textSecondary,
+    textMuted: colors.textMuted,
+    brand: colors.brand,
+    border: colors.border,
+    borderSubtle: colors.borderSubtle,
+    surface: colors.surface,
+    surfaceAlt: colors.surfaceAlt,
+    surfaceElevated: colors.surfaceElevated,
+    danger: colors.danger,
+    success: colors.success,
+    warning: colors.warning,
+    background: colors.background,
+    textInverse: colors.textInverse,
+  };
+  const styles = React.useMemo(() => createStyles(themed), [themed]);
   const { formatFromFiat } = useFormattedPrice();
   const { currencyCode, goldRates } = useCurrencyContext();
   const currencySymbol = CURRENCIES[currencyCode].symbol;
@@ -136,7 +154,7 @@ export function OfferToLikersSheet({
           <View style={styles.header}>
             <View style={styles.headerLeft}>
               <View style={styles.headerIconWrap}>
-                <Ionicons name="heart-outline" size={18} color={Colors.brand} />
+                <Ionicons name="heart-outline" size={18} color={themed.brand} />
               </View>
               <View>
                 <Text style={styles.title}>Offer to likers</Text>
@@ -166,7 +184,7 @@ export function OfferToLikersSheet({
                 <CachedImage uri={listing.image} style={styles.itemImage} contentFit="cover" />
               ) : (
                 <View style={styles.itemImageFallback}>
-                  <Ionicons name="shirt-outline" size={20} color={Colors.textMuted} />
+                  <Ionicons name="shirt-outline" size={20} color={themed.textMuted} />
                 </View>
               )}
               <View style={styles.itemInfo}>
@@ -212,7 +230,7 @@ export function OfferToLikersSheet({
               accessibilityLabel="Set custom offer price"
             >
               <View style={styles.customPriceToggleLeft}>
-                <Ionicons name="create-outline" size={16} color={Colors.textSecondary} />
+                <Ionicons name="create-outline" size={16} color={themed.textSecondary} />
                 <Text style={styles.customPriceToggleLabel}>Custom price</Text>
               </View>
               {useCustomPrice && (
@@ -223,8 +241,8 @@ export function OfferToLikersSheet({
                     value={customPrice}
                     onChangeText={handleCustomPriceChange}
                     keyboardType="decimal-pad"
-                    selectionColor={Colors.brand}
-                    placeholderTextColor={Colors.textMuted}
+                    selectionColor={themed.brand}
+                    placeholderTextColor={themed.textMuted}
                     placeholder="0.00"
                     accessibilityLabel="Custom offer price"
                   />
@@ -235,11 +253,11 @@ export function OfferToLikersSheet({
             {/* Free shipping toggle */}
             <View style={styles.toggleRow}>
               <View style={styles.toggleLeft}>
-                <View style={[styles.toggleIconWrap, { backgroundColor: includeFreeShipping ? `${Colors.success}15` : Colors.surfaceAlt }]}>
+                <View style={[styles.toggleIconWrap, { backgroundColor: includeFreeShipping ? `${themed.success}15` : themed.surfaceAlt }]}>
                   <Ionicons
                     name="cube-outline"
                     size={16}
-                    color={includeFreeShipping ? Colors.success : Colors.textMuted}
+                    color={includeFreeShipping ? themed.success : themed.textMuted}
                   />
                 </View>
                 <View>
@@ -288,19 +306,19 @@ export function OfferToLikersSheet({
               </View>
               <View style={[styles.summaryRow, styles.summaryRowDivider]}>
                 <Text style={styles.summaryLabel}>Buyer saves</Text>
-                <Text style={[styles.summaryValue, { color: Colors.success }]}>{formattedSavings}</Text>
+                <Text style={[styles.summaryValue, { color: themed.success }]}>{formattedSavings}</Text>
               </View>
               {includeFreeShipping && (
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>Shipping</Text>
-                  <Text style={[styles.summaryValue, { color: Colors.success }]}>Free</Text>
+                  <Text style={[styles.summaryValue, { color: themed.success }]}>Free</Text>
                 </View>
               )}
             </View>
 
             {/* Info note */}
             <View style={styles.infoNote}>
-              <Ionicons name="lock-closed-outline" size={13} color={Colors.textMuted} />
+              <Ionicons name="lock-closed-outline" size={13} color={themed.textMuted} />
               <Text style={styles.infoNoteText}>
                 Each liker receives a private offer. Only one offer per listing at a time.
               </Text>
@@ -313,7 +331,7 @@ export function OfferToLikersSheet({
               style={styles.sendBtn}
               title={`Send to ${likerCount} ${likerCount === 1 ? 'liker' : 'likers'}`}
               subtitle={formattedOfferPrice}
-              icon={<Ionicons name="paper-plane-outline" size={16} color={Colors.textInverse} />}
+              icon={<Ionicons name="paper-plane-outline" size={16} color={themed.textInverse} />}
               variant="primary"
               size="lg"
               onPress={handleSend}
@@ -329,14 +347,20 @@ export function OfferToLikersSheet({
 
 // ── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const createStyles = (themed: {
+  textPrimary: string; textSecondary: string; textMuted: string;
+  brand: string; border: string; borderSubtle: string;
+  surface: string; surfaceAlt: string; surfaceElevated: string;
+  danger: string; success: string; warning: string;
+  background: string; textInverse: string;
+}) => StyleSheet.create({
   backdrop: {
     flex: 1,
     justifyContent: 'flex-end',
     backgroundColor: 'rgba(0,0,0,0.4)',
   },
   sheet: {
-    backgroundColor: Colors.background,
+    backgroundColor: themed.background,
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
     paddingBottom: Space.xl,
@@ -346,7 +370,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: Colors.border,
+    backgroundColor: themed.border,
     alignSelf: 'center',
     marginTop: Space.sm,
     marginBottom: Space.xs,
@@ -369,7 +393,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: Radius.full,
-    backgroundColor: `${Colors.brand}15`,
+    backgroundColor: `${themed.brand}15`,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
@@ -377,19 +401,19 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 17,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: themed.textPrimary,
     marginBottom: 2,
   },
   subtitle: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: themed.textSecondary,
     lineHeight: 17,
   },
   closeText: {
     fontSize: 15,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
+    color: themed.brand,
     marginTop: 4,
   },
   scroll: {
@@ -404,7 +428,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm + 2,
-    backgroundColor: Colors.surface,
+    backgroundColor: themed.surface,
     borderRadius: Radius.lg,
     padding: Space.md,
     marginBottom: Space.lg,
@@ -418,7 +442,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: themed.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -428,21 +452,21 @@ const styles = StyleSheet.create({
   itemTitle: {
     fontSize: 15,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: themed.textPrimary,
     marginBottom: 4,
     lineHeight: 19,
   },
   itemPrice: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: themed.textMuted,
   },
 
   // Section labels
   sectionLabel: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
+    color: themed.textSecondary,
     letterSpacing: 0.2,
     marginBottom: Space.sm,
   },
@@ -457,26 +481,26 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
+    backgroundColor: themed.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: themed.border,
     alignItems: 'center',
     minHeight: 48,
     justifyContent: 'center',
   },
   discountChipActive: {
-    backgroundColor: `${Colors.brand}12`,
-    borderColor: Colors.brand,
+    backgroundColor: `${themed.brand}12`,
+    borderColor: themed.brand,
     borderWidth: 1.5,
   },
   discountChipText: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
+    color: themed.textSecondary,
     textAlign: 'center',
   },
   discountChipTextActive: {
-    color: Colors.brand,
+    color: themed.brand,
   },
 
   // Custom price
@@ -484,7 +508,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: Colors.surface,
+    backgroundColor: themed.surface,
     borderRadius: Radius.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
@@ -499,7 +523,7 @@ const styles = StyleSheet.create({
   customPriceToggleLabel: {
     fontSize: 14,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
+    color: themed.textPrimary,
   },
   customPriceInputRow: {
     flexDirection: 'row',
@@ -509,12 +533,12 @@ const styles = StyleSheet.create({
   currencySymbol: {
     fontSize: 16,
     fontFamily: Typography.family.bold,
-    color: Colors.brand,
+    color: themed.brand,
   },
   customPriceInput: {
     fontSize: 16,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: themed.textPrimary,
     minWidth: 60,
     paddingVertical: 0,
   },
@@ -524,7 +548,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: Colors.surface,
+    backgroundColor: themed.surface,
     borderRadius: Radius.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
@@ -548,13 +572,13 @@ const styles = StyleSheet.create({
   toggleTitle: {
     fontSize: 14,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: themed.textPrimary,
     marginBottom: 2,
   },
   toggleSub: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: themed.textMuted,
     lineHeight: 15,
   },
 
@@ -568,30 +592,30 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
+    backgroundColor: themed.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: themed.border,
     alignItems: 'center',
     minHeight: 48,
     justifyContent: 'center',
   },
   expiryChipActive: {
-    backgroundColor: `${Colors.brand}12`,
-    borderColor: Colors.brand,
+    backgroundColor: `${themed.brand}12`,
+    borderColor: themed.brand,
     borderWidth: 1.5,
   },
   expiryChipText: {
     fontSize: 14,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
+    color: themed.textSecondary,
   },
   expiryChipTextActive: {
-    color: Colors.brand,
+    color: themed.brand,
   },
   expiryHint: {
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: themed.textMuted,
     marginTop: Space.xs,
     lineHeight: 16,
     marginBottom: Space.lg,
@@ -599,7 +623,7 @@ const styles = StyleSheet.create({
 
   // Summary
   summaryCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: themed.surface,
     borderRadius: Radius.lg,
     padding: Space.md,
     marginBottom: Space.md,
@@ -612,19 +636,19 @@ const styles = StyleSheet.create({
   },
   summaryRowDivider: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
+    borderTopColor: themed.border,
     marginTop: 2,
     paddingTop: 10,
   },
   summaryLabel: {
     fontSize: 14,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: themed.textSecondary,
   },
   summaryValue: {
     fontSize: 16,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: themed.textPrimary,
   },
 
   // Info note
@@ -638,7 +662,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 12,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: themed.textMuted,
     lineHeight: 16,
   },
 
@@ -647,7 +671,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
+    borderTopColor: themed.border,
   },
   sendBtn: {
     width: '100%',

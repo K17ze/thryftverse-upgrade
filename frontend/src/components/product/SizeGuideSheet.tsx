@@ -1,8 +1,8 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Modal, Pressable, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
 
 // ── Size guide data ──────────────────────────────────────────────────────────
 // Standard retail measurement tables per category. These are reference charts,
@@ -132,6 +132,7 @@ export function SizeGuideSheet({
   currentSize,
   onClose,
 }: SizeGuideSheetProps) {
+  const { colors } = useAppTheme();
   const guide = useMemo(() => resolveSizeGuide(category), [category]);
 
   return (
@@ -142,15 +143,17 @@ export function SizeGuideSheet({
       onRequestClose={onClose}
     >
       <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
-          <View style={styles.handle} />
+        <Pressable
+          style={[styles.sheet, { backgroundColor: colors.background }]}
+          onPress={(e) => e.stopPropagation()}
+        >
+          <View style={[styles.handle, { backgroundColor: colors.border }]} />
 
           <View style={styles.header}>
             <View style={styles.headerLeft}>
-              <View style={styles.headerIconWrap}>
-                <Ionicons name="resize-outline" size={18} color={Colors.brand} />
-              </View>
-              <Text style={styles.title}>Size guide</Text>
+              <Text style={[styles.title, { color: colors.textPrimary }]}>
+                Size guide
+              </Text>
             </View>
             <Pressable
               onPress={onClose}
@@ -158,21 +161,32 @@ export function SizeGuideSheet({
               accessibilityRole="button"
               accessibilityLabel="Close size guide"
             >
-              <Text style={styles.closeText}>Done</Text>
+              <Text style={[styles.closeText, { color: colors.brand }]}>Done</Text>
             </Pressable>
           </View>
 
           {guide ? (
             <>
-              <Text style={styles.guideTitle}>{guide.title}</Text>
+              <Text style={[styles.guideTitle, { color: colors.textSecondary }]}>
+                {guide.title}
+              </Text>
               <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+                {/* Measurement table — flat with hairline separators.
+                    Per AGENTS.md: flat canvas, hairlines are the default
+                    utility structure. No bordered card container. */}
                 <View style={styles.table}>
-                  <View style={styles.tableHeader}>
+                  <View
+                    style={[
+                      styles.tableHeader,
+                      { backgroundColor: colors.surface, borderBottomColor: colors.borderSubtle },
+                    ]}
+                  >
                     {guide.columns.map((col, colIdx) => (
                       <Text
                         key={col}
                         style={[
                           styles.tableHeaderText,
+                          { color: colors.textMuted },
                           colIdx === 0 && styles.tableHeaderFirstCol,
                         ]}
                         numberOfLines={1}
@@ -190,16 +204,18 @@ export function SizeGuideSheet({
                         key={row.size}
                         style={[
                           styles.tableRow,
-                          rowIdx % 2 === 1 && !isCurrentRow && styles.tableRowAlt,
-                          isCurrentRow && styles.tableRowHighlight,
-                          isLastRow && styles.tableRowLast,
+                          { borderBottomColor: colors.borderSubtle },
+                          rowIdx % 2 === 1 && !isCurrentRow && { backgroundColor: colors.surface },
+                          isCurrentRow && { backgroundColor: `${colors.brand}12` },
+                          isLastRow && { borderBottomWidth: 0 },
                         ]}
                       >
                         <Text
                           style={[
                             styles.tableCell,
+                            { color: colors.textPrimary },
                             styles.tableFirstCol,
-                            isCurrentRow && styles.tableCellHighlight,
+                            isCurrentRow && { color: colors.brand, fontFamily: Typography.family.semibold },
                           ]}
                           numberOfLines={1}
                         >
@@ -213,7 +229,8 @@ export function SizeGuideSheet({
                               key={col}
                               style={[
                                 styles.tableCell,
-                                isCurrentRow && styles.tableCellHighlight,
+                                { color: colors.textPrimary },
+                                isCurrentRow && { color: colors.brand, fontFamily: Typography.family.semibold },
                               ]}
                               numberOfLines={1}
                             >
@@ -225,15 +242,19 @@ export function SizeGuideSheet({
                     );
                   })}
                 </View>
-                <View style={styles.measureTipRow}>
-                  <Ionicons name="resize-outline" size={16} color={Colors.brand} />
-                  <Text style={styles.measureTipText}>
+
+                {/* How to measure tip */}
+                <View style={[styles.measureTipRow, { borderTopColor: colors.borderSubtle }]}>
+                  <Ionicons name="resize-outline" size={16} color={colors.brand} />
+                  <Text style={[styles.measureTipText, { color: colors.textSecondary }]}>
                     Lay the garment flat and measure armpit-to-armpit for chest, shoulder seam to hem for length.
                   </Text>
                 </View>
+
+                {/* Footer note */}
                 <View style={styles.footerNote}>
-                  <Ionicons name="information-circle-outline" size={14} color={Colors.textMuted} />
-                  <Text style={styles.footerText}>
+                  <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
+                  <Text style={[styles.footerText, { color: colors.textMuted }]}>
                     Standard retail references. Always check the item description for specific measurements.
                   </Text>
                 </View>
@@ -241,11 +262,13 @@ export function SizeGuideSheet({
             </>
           ) : (
             <View style={styles.emptyState}>
-              <View style={styles.emptyIconWrap}>
-                <Ionicons name="resize-outline" size={32} color={Colors.textMuted} />
+              <View style={[styles.emptyIconWrap, { backgroundColor: colors.surface }]}>
+                <Ionicons name="resize-outline" size={32} color={colors.textMuted} />
               </View>
-              <Text style={styles.emptyTitle}>No size guide available</Text>
-              <Text style={styles.emptyText}>
+              <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
+                No size guide available
+              </Text>
+              <Text style={[styles.emptyText, { color: colors.textMuted }]}>
                 Size guides are available for tops, bottoms, dresses, shoes, outerwear, bags, and jewellery.
               </Text>
             </View>
@@ -265,7 +288,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.4)',
   },
   sheet: {
-    backgroundColor: Colors.background,
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
     paddingBottom: Space.xl,
@@ -274,8 +296,7 @@ const styles = StyleSheet.create({
   handle: {
     width: 36,
     height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.border,
+    borderRadius: Radius.full,
     alignSelf: 'center',
     marginTop: Space.sm,
     marginBottom: Space.xs,
@@ -286,61 +307,52 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
     paddingBottom: Space.sm,
+    minHeight: 44,
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
   },
-  headerIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.full,
-    backgroundColor: `${Colors.brand}15`,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   title: {
-    fontSize: 17,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.subtitle.letterSpacing,
   },
   closeText: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
   },
   guideTitle: {
-    fontSize: 14,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
     paddingHorizontal: Space.md,
     paddingBottom: Space.sm,
   },
   scroll: {
     paddingHorizontal: Space.md,
   },
+  // ── Table — flat with hairline separators ──
   table: {
     borderRadius: Radius.md,
     overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
   },
   tableHeader: {
     flexDirection: 'row',
     paddingVertical: Space.sm,
     paddingHorizontal: Space.sm,
-    backgroundColor: Colors.surface,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
   },
   tableHeaderText: {
     flex: 1,
-    fontSize: 11,
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
+    letterSpacing: Type.meta.letterSpacing,
     textTransform: 'uppercase',
-    letterSpacing: 0.4,
   },
   tableHeaderFirstCol: {
     flex: 0.7,
@@ -350,62 +362,49 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
-  },
-  tableRowAlt: {
-    backgroundColor: Colors.surface,
-  },
-  tableRowLast: {
-    borderBottomWidth: 0,
-  },
-  tableRowHighlight: {
-    backgroundColor: `${Colors.brand}12`,
+    minHeight: 44,
   },
   tableCell: {
     flex: 1,
-    fontSize: 14,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
+    fontVariant: ['tabular-nums'],
   },
   tableFirstCol: {
     flex: 0.7,
     fontFamily: Typography.family.semibold,
   },
-  tableCellHighlight: {
-    color: Colors.brand,
-    fontFamily: Typography.family.semibold,
-  },
-  footerNote: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 6,
-    paddingTop: Space.md,
-    paddingBottom: Space.lg,
-  },
+  // ── Tips and notes ──
   measureTipRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 8,
+    gap: Space.xs + 2,
     paddingHorizontal: Space.sm,
     paddingTop: Space.md,
     marginTop: Space.xs,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
   },
   measureTipText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight + 2,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
-    lineHeight: 17,
+  },
+  footerNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.xs + 2,
+    paddingTop: Space.md,
+    paddingBottom: Space.lg,
   },
   footerText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight + 2,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-    lineHeight: 17,
   },
+  // ── Empty state ──
   emptyState: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.xl,
@@ -415,22 +414,20 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Space.md,
   },
   emptyTitle: {
-    fontSize: 16,
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
     marginBottom: Space.xs,
   },
   emptyText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight + 2,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     textAlign: 'center',
-    lineHeight: 18,
   },
 });

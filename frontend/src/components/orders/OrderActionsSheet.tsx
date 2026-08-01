@@ -8,8 +8,8 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Space, Typography } from '../../theme/designTokens';
+import { Space, Typography, Type, Radius } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
 import {
   normaliseOrderStatus,
   needsAction,
@@ -43,6 +43,7 @@ export function OrderActionsSheet({
   actions,
   onClose,
 }: OrderActionsSheetProps) {
+  const { colors } = useAppTheme();
   const statusLabel = normaliseOrderStatus(orderStatus);
   const hasAction = needsAction(orderStatus, role);
 
@@ -54,26 +55,31 @@ export function OrderActionsSheet({
       onRequestClose={onClose}
     >
       <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
-          <View style={styles.handle} />
+        <Pressable
+          style={[styles.sheet, { backgroundColor: colors.background }]}
+          onPress={(e) => e.stopPropagation()}
+        >
+          <View style={[styles.handle, { backgroundColor: colors.border }]} />
 
           <View style={styles.header}>
-            <Text style={styles.title}>Order options</Text>
+            <Text style={[styles.title, { color: colors.textPrimary }]}>
+              Order options
+            </Text>
             <Pressable
               onPress={onClose}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              hitSlop={12}
               accessibilityRole="button"
               accessibilityLabel="Close actions sheet"
             >
-              <Ionicons name="close" size={22} color={Colors.textPrimary} />
+              <Ionicons name="close" size={22} color={colors.textPrimary} />
             </Pressable>
           </View>
 
           {hasAction && (
             <View style={styles.actionBanner}>
-              <Ionicons name="alert-circle-outline" size={16} color={Colors.brand} />
-              <Text style={styles.actionBannerText}>
-                {role === 'buyer' ? 'This order needs your attention' : 'This order needs your attention'}
+              <Ionicons name="alert-circle-outline" size={16} color={colors.brand} />
+              <Text style={[styles.actionBannerText, { color: colors.brand }]}>
+                This order needs your attention
               </Text>
             </View>
           )}
@@ -82,10 +88,10 @@ export function OrderActionsSheet({
             {actions.map((action) => {
               const color =
                 action.variant === 'destructive'
-                  ? Colors.danger
+                  ? colors.danger
                   : action.variant === 'primary'
-                    ? Colors.brand
-                    : Colors.textPrimary;
+                    ? colors.brand
+                    : colors.textPrimary;
               return (
                 <Pressable
                   key={action.key}
@@ -99,15 +105,19 @@ export function OrderActionsSheet({
                 >
                   <Ionicons name={action.icon} size={20} color={color} />
                   <Text style={[styles.actionText, { color }]}>{action.label}</Text>
-                  <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
                 </Pressable>
               );
             })}
           </ScrollView>
 
-          <View style={styles.orderIdRow}>
-            <Text style={styles.orderIdLabel}>Order number</Text>
-            <Text style={styles.orderIdValue}>{orderId.slice(0, 12).toUpperCase()}</Text>
+          <View style={[styles.orderIdRow, { borderTopColor: colors.borderSubtle }]}>
+            <Text style={[styles.orderIdLabel, { color: colors.textMuted }]}>
+              Order number
+            </Text>
+            <Text style={[styles.orderIdValue, { color: colors.textSecondary }]}>
+              {orderId.slice(0, 12).toUpperCase()}
+            </Text>
           </View>
         </Pressable>
       </Pressable>
@@ -122,9 +132,8 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: Colors.background,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
     paddingHorizontal: Space.md,
     paddingBottom: Space.xl,
     maxHeight: '70%',
@@ -132,8 +141,7 @@ const styles = StyleSheet.create({
   handle: {
     width: 36,
     height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.borderLight,
+    borderRadius: Radius.full,
     alignSelf: 'center',
     marginTop: Space.sm,
     marginBottom: Space.md,
@@ -143,34 +151,37 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: Space.sm,
+    minHeight: 44,
   },
   title: {
-    fontSize: 17,
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    letterSpacing: Type.subtitle.letterSpacing,
   },
   actionBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
     paddingVertical: Space.xs,
     marginBottom: Space.xs,
   },
   actionBannerText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.medium,
-    color: Colors.brand,
   },
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-    paddingVertical: 14,
+    gap: Space.md,
+    paddingVertical: Space.md,
     minHeight: 44,
   },
   actionText: {
     flex: 1,
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.regular,
   },
   orderIdRow: {
@@ -179,16 +190,16 @@ const styles = StyleSheet.create({
     paddingTop: Space.md,
     marginTop: Space.xs,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
   },
   orderIdLabel: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
   },
   orderIdValue: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
+    fontVariant: ['tabular-nums'],
   },
 });
