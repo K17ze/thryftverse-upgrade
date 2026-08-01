@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
 import { Space, Radius, Type, TypeStyles } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { CachedImage } from '../CachedImage';
 
 interface Reaction {
@@ -60,12 +60,14 @@ export function MessageBubble({
   onMediaPress,
   onReplyPress,
 }: MessageBubbleProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const hasFailed = status === 'failed' || uploadStatus === 'failed';
   const isUploading = uploadStatus === 'uploading' || status === 'sending';
 
-  const bubbleBg = isMe ? Colors.brand : Colors.surfaceAlt;
-  const bubbleText = isMe ? Colors.textInverse : Colors.textPrimary;
-  const metaColor = isMe ? `${Colors.textInverse}99` : Colors.textMuted;
+  const bubbleBg = isMe ? colors.brand : colors.surfaceAlt;
+  const bubbleText = isMe ? colors.textInverse : colors.textPrimary;
+  const metaColor = isMe ? `${colors.textInverse}99` : colors.textMuted;
 
   const isStandalone = isFirstInCluster && isLastInCluster;
   const isTop = isFirstInCluster && !isLastInCluster;
@@ -115,7 +117,7 @@ export function MessageBubble({
           ]}
         >
           {replyTo ? (
-            <Pressable onPress={onReplyPress} style={[styles.replyBlock, { borderLeftColor: isMe ? `${Colors.textInverse}40` : Colors.border }]}>
+            <Pressable onPress={onReplyPress} style={[styles.replyBlock, { borderLeftColor: isMe ? `${colors.textInverse}40` : colors.border }]}>
               <Text style={[styles.replyName, { color: metaColor }]}>
                 {replyTo.senderName}
               </Text>
@@ -134,12 +136,12 @@ export function MessageBubble({
               />
               {mediaType === 'video' ? (
                 <View style={styles.videoBadge}>
-                  <Ionicons name="play" size={14} color={Colors.textInverse} />
+                  <Ionicons name="play" size={14} color={colors.textInverse} />
                 </View>
               ) : null}
               {isUploading ? (
                 <View style={styles.uploadOverlay}>
-                  <Ionicons name="cloud-upload-outline" size={20} color={Colors.textInverse} />
+                  <Ionicons name="cloud-upload-outline" size={20} color={colors.textInverse} />
                   <Text style={styles.uploadText}>Sending...</Text>
                 </View>
               ) : null}
@@ -165,7 +167,7 @@ export function MessageBubble({
                 {isUploading ? (
                   <Ionicons name="time-outline" size={10} color={metaColor} />
                 ) : hasFailed ? (
-                  <Ionicons name="alert-circle" size={10} color={isMe ? Colors.textInverse : Colors.danger} />
+                  <Ionicons name="alert-circle" size={10} color={isMe ? colors.textInverse : colors.danger} />
                 ) : (
                   <Ionicons name="checkmark" size={10} color={metaColor} />
                 )}
@@ -176,7 +178,7 @@ export function MessageBubble({
 
         {hasFailed && onRetry ? (
           <Pressable onPress={onRetry} style={styles.retryBadge}>
-            <Ionicons name="refresh" size={11} color={Colors.danger} />
+            <Ionicons name="refresh" size={11} color={colors.danger} />
             <Text style={styles.retryText}>Tap to retry</Text>
           </Pressable>
         ) : null}
@@ -196,7 +198,7 @@ export function MessageBubble({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -210,7 +212,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 4,
@@ -218,7 +220,7 @@ const styles = StyleSheet.create({
   avatarText: {
     fontSize: Type.meta.size,
     fontFamily: TypeStyles.title.fontFamily,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   avatarSpacer: {
     width: 28,
@@ -230,7 +232,7 @@ const styles = StyleSheet.create({
   senderName: {
     fontSize: Type.caption.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.brand,
+    color: colors.brand,
     marginBottom: 2,
     marginLeft: Space.xs,
   },
@@ -240,15 +242,15 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   bubbleMe: {
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     alignSelf: 'flex-end',
   },
   bubbleThem: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     alignSelf: 'flex-start',
   },
   bubbleFailed: {
-    backgroundColor: `${Colors.danger}15`,
+    backgroundColor: `${colors.danger}15`,
   },
   replyBlock: {
     borderLeftWidth: 3,
@@ -303,7 +305,7 @@ const styles = StyleSheet.create({
   mediaWrap: {
     borderRadius: Radius.md,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   mediaImage: {
     width: '100%',
@@ -334,7 +336,7 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   uploadText: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
     fontSize: Type.caption.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
   },
@@ -347,13 +349,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
     borderRadius: Radius.md,
-    backgroundColor: `${Colors.danger}14`,
+    backgroundColor: `${colors.danger}14`,
     alignSelf: 'flex-start',
   },
   retryText: {
     fontSize: Type.meta.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.danger,
+    color: colors.danger,
   },
   reactions: {
     flexDirection: 'row',
@@ -370,14 +372,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     paddingHorizontal: 8,
     paddingVertical: 4,
     minHeight: 28,
   },
   reactionChipActive: {
-    backgroundColor: `${Colors.brand}15`,
+    backgroundColor: `${colors.brand}15`,
   },
   reactionEmoji: {
     fontSize: 13,
@@ -385,6 +387,6 @@ const styles = StyleSheet.create({
   reactionCount: {
     fontSize: Type.meta.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
 });

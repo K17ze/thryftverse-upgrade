@@ -2,8 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomSheet } from '../BottomSheet';
-import { Colors } from '../../constants/colors';
-import { Space, Typography, Radius } from '../../theme/designTokens';
+import { Space, Typography, Radius, Type } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { CommercePaymentMethod } from '../../services/commerceApi';
 
 interface Props {
@@ -25,6 +25,8 @@ export function CheckoutPaymentSelector({
   isSelecting,
   onAddCard,
 }: Props) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   return (
     <BottomSheet visible={visible} onDismiss={onDismiss} snapPoint={0.55}>
       <Text style={styles.title}>Select payment method</Text>
@@ -63,13 +65,13 @@ export function CheckoutPaymentSelector({
                     <Ionicons
                       name="business"
                       size={18}
-                      color={isSelected ? Colors.brand : Colors.textSecondary}
+                      color={isSelected ? colors.brand : colors.textSecondary}
                     />
                   ) : (
                     <Ionicons
                       name="card"
                       size={18}
-                      color={isSelected ? Colors.brand : Colors.textSecondary}
+                      color={isSelected ? colors.brand : colors.textSecondary}
                     />
                   )}
                 </View>
@@ -88,11 +90,11 @@ export function CheckoutPaymentSelector({
                 </View>
               </View>
               {isSelecting && isSelected ? (
-                <ActivityIndicator size="small" color={Colors.brand} />
+                <ActivityIndicator size="small" color={colors.brand} />
               ) : isSelected ? (
-                <Ionicons name="checkmark-circle" size={22} color={Colors.brand} />
+                <Ionicons name="checkmark-circle" size={22} color={colors.brand} />
               ) : (
-                <Ionicons name="radio-button-off" size={22} color={Colors.textMuted} />
+                <Ionicons name="radio-button-off" size={22} color={colors.textMuted} />
               )}
             </Pressable>
           );
@@ -108,28 +110,28 @@ export function CheckoutPaymentSelector({
             accessibilityLabel="Add a new card"
           >
             <View style={styles.addCardIconWrap}>
-              <Ionicons name="add-circle-outline" size={18} color={Colors.brand} />
+              <Ionicons name="add-circle-outline" size={18} color={colors.brand} />
             </View>
             <Text style={styles.addCardText}>Add new card</Text>
-            <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
           </Pressable>
         )}
       </ScrollView>
 
       {/* Secure payment trust indicator */}
       <View style={styles.trustFooter}>
-        <Ionicons name="shield-checkmark-outline" size={12} color={Colors.textMuted} />
+        <Ionicons name="shield-checkmark-outline" size={12} color={colors.textMuted} />
         <Text style={styles.trustText}>Card details are collected securely</Text>
       </View>
     </BottomSheet>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   title: {
     fontSize: 18,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     textAlign: 'center',
     marginBottom: Space.md,
   },
@@ -146,12 +148,12 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     marginBottom: Space.sm,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
   },
   rowSelected: {
-    borderColor: Colors.brand,
-    backgroundColor: `${Colors.brand}08`,
+    borderColor: colors.brand,
+    backgroundColor: `${colors.brand}08`,
   },
   rowPressed: {
     opacity: 0.7,
@@ -166,17 +168,17 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
   cardIconWrapSelected: {
-    backgroundColor: `${Colors.brand}15`,
+    backgroundColor: `${colors.brand}15`,
   },
   walletIconText: {
     fontSize: 13,
     fontWeight: '700',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   rowInfo: {
     flex: 1,
@@ -190,15 +192,15 @@ const styles = StyleSheet.create({
   methodLabel: {
     fontSize: 16,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   methodDetails: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   defaultBadge: {
-    backgroundColor: `${Colors.brand}12`,
+    backgroundColor: `${colors.brand}12`,
     borderRadius: 8,
     paddingHorizontal: 6,
     paddingVertical: 1,
@@ -206,7 +208,7 @@ const styles = StyleSheet.create({
   defaultBadgeText: {
     fontSize: 10,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
+    color: colors.brand,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -218,7 +220,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     borderStyle: 'dashed',
     marginTop: Space.xs,
   },
@@ -229,7 +231,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: Radius.md,
-    backgroundColor: `${Colors.brand}12`,
+    backgroundColor: `${colors.brand}12`,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -237,7 +239,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
+    color: colors.brand,
   },
   trustFooter: {
     flexDirection: 'row',
@@ -246,12 +248,12 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingVertical: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
+    borderTopColor: colors.border,
   },
   trustText: {
     fontSize: 11,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     letterSpacing: 0.2,
   },
 });

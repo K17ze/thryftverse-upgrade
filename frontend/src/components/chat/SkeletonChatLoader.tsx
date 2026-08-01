@@ -6,13 +6,13 @@ import Reanimated, {
   withRepeat,
   withTiming,
 } from 'react-native-reanimated';
-import { Colors } from '../../constants/colors';
 import { Space, Radius } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
 
 // Deterministic bubble-width fractions so the skeleton layout does not jump between renders.
 const BUBBLE_FRACTIONS = [0.62, 0.44, 0.7, 0.38, 0.55, 0.48, 0.66, 0.42];
 
-function SkeletonBar({ width, height = 14, style }: { width: number | string; height?: number; style?: any }) {
+function SkeletonBar({ width, height = 14, style, barColor }: { width: number | string; height?: number; style?: any; barColor: string }) {
   const opacity = useSharedValue(0.3);
 
   React.useEffect(() => {
@@ -30,7 +30,7 @@ function SkeletonBar({ width, height = 14, style }: { width: number | string; he
   return (
     <Reanimated.View
       style={[
-        styles.bar,
+        { backgroundColor: barColor, borderRadius: Radius.sm },
         { width, height },
         animStyle,
         style,
@@ -40,6 +40,7 @@ function SkeletonBar({ width, height = 14, style }: { width: number | string; he
 }
 
 export function SkeletonChatLoader({ count = 8 }: { count?: number }) {
+  const { colors } = useAppTheme();
   const { width: screenWidth } = useWindowDimensions();
   return (
     <View style={styles.container}>
@@ -57,12 +58,12 @@ export function SkeletonChatLoader({ count = 8 }: { count?: number }) {
           >
             {!isMe && (
               <View style={styles.avatar}>
-                <SkeletonBar width={32} height={32} style={{ borderRadius: Radius.full }} />
+                <SkeletonBar width={32} height={32} style={{ borderRadius: Radius.full }} barColor={colors.border} />
               </View>
             )}
-            <View style={[styles.bubble, { maxWidth: bubbleWidth }]}>
-              <SkeletonBar width="100%" height={12} />
-              <SkeletonBar width="60%" height={12} style={{ marginTop: Space.xs }} />
+            <View style={[styles.bubble, { backgroundColor: colors.surfaceAlt, borderColor: colors.borderSubtle }]}>
+              <SkeletonBar width="100%" height={12} barColor={colors.border} />
+              <SkeletonBar width="60%" height={12} style={{ marginTop: Space.xs }} barColor={colors.border} />
             </View>
           </View>
         );
@@ -89,15 +90,9 @@ const styles = StyleSheet.create({
     marginRight: Space.sm,
   },
   bubble: {
-    backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.xl,
     paddingHorizontal: Space.md - 2,
     paddingVertical: Space.sm + 2,
-    borderWidth: 0.5,
-    borderColor: Colors.border,
-  },
-  bar: {
-    backgroundColor: Colors.border,
-    borderRadius: Radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
   },
 });

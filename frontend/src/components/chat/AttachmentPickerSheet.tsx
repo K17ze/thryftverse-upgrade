@@ -9,8 +9,8 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
 import { Space, Radius, Elevation } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Caption, BodyEmphasis } from '../ui/Text';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -57,6 +57,7 @@ interface AttachmentPickerSheetProps {
 }
 
 export function AttachmentPickerSheet({ visible, onClose, onSelect, isGroup = false, hasLinkedItem = false, hasLinkedOrder = false }: AttachmentPickerSheetProps) {
+  const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
   const translateY = useSharedValue(SCREEN_HEIGHT);
   const opacity = useSharedValue(0);
@@ -117,8 +118,8 @@ export function AttachmentPickerSheet({ visible, onClose, onSelect, isGroup = fa
       </Reanimated.View>
 
       <GestureDetector gesture={gesture}>
-        <Reanimated.View style={[styles.sheet, sheetStyle]}>
-          <View style={styles.handle} />
+        <Reanimated.View style={[styles.sheet, { backgroundColor: colors.surfaceAlt }, sheetStyle]}>
+          <View style={[styles.handle, { backgroundColor: colors.border }]} />
 
           <View style={styles.optionsGrid}>
             {visibleOptions.map((opt) => (
@@ -135,19 +136,21 @@ export function AttachmentPickerSheet({ visible, onClose, onSelect, isGroup = fa
                 <View style={[styles.iconCircle, { backgroundColor: `${opt.color}18` }]}>
                   <Ionicons name={opt.icon} size={24} color={opt.color} />
                 </View>
-                <Caption color={Colors.textPrimary} style={styles.optionLabel}>{opt.label}</Caption>
+                <Caption color={colors.textPrimary} style={styles.optionLabel}>{opt.label}</Caption>
               </AnimatedPressable>
             ))}
           </View>
 
           <AnimatedPressable
-            style={styles.cancelBtn}
+            style={[styles.cancelBtn, { backgroundColor: colors.surfaceAlt }]}
             onPress={onClose}
             activeOpacity={0.8}
             scaleValue={0.98}
             hapticFeedback="light"
+            accessibilityRole="button"
+            accessibilityLabel="Cancel"
           >
-            <BodyEmphasis color={Colors.textPrimary}>Cancel</BodyEmphasis>
+            <BodyEmphasis color={colors.textPrimary}>Cancel</BodyEmphasis>
           </AnimatedPressable>
         </Reanimated.View>
       </GestureDetector>
@@ -166,7 +169,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
   sheet: {
-    backgroundColor: Colors.surfaceAlt,
     borderTopLeftRadius: Radius.xl + 8,
     borderTopRightRadius: Radius.xl + 8,
     paddingHorizontal: Space.lg - 4,
@@ -177,8 +179,7 @@ const styles = StyleSheet.create({
   handle: {
     width: 40,
     height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.border,
+    borderRadius: Radius.full,
     alignSelf: 'center',
     marginBottom: Space.md,
   },
@@ -193,6 +194,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.sm,
     paddingVertical: Space.sm,
+    minHeight: 44,
   },
   iconCircle: {
     width: 60,
@@ -206,10 +208,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   cancelBtn: {
-    backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.lg,
     paddingVertical: Space.md,
     alignItems: 'center',
     marginTop: Space.sm,
+    minHeight: 44,
+    justifyContent: 'center',
   },
 });

@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
 import { Space, Radius, Type, TypeStyles, Typography } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 
@@ -35,7 +35,9 @@ export function ChatListingContextBar({
   onTitlePress,
   defaultCollapsed = false,
 }: ChatListingContextBarProps) {
+  const { colors } = useAppTheme();
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   return (
     <View style={styles.root}>
@@ -79,7 +81,7 @@ export function ChatListingContextBar({
           accessibilityLabel={collapsed ? 'Expand listing actions' : 'Collapse listing actions'}
           style={styles.collapseBtn}
         >
-          <Ionicons name={collapsed ? 'ellipsis-horizontal' : 'close'} size={18} color={Colors.textSecondary} />
+          <Ionicons name={collapsed ? 'ellipsis-horizontal' : 'close'} size={18} color={colors.textSecondary} />
         </AnimatedPressable>
       </View>
       {!collapsed && (
@@ -93,7 +95,7 @@ export function ChatListingContextBar({
             accessibilityRole="button"
             accessibilityLabel={primaryActionLabel}
           >
-            <Ionicons name={primaryActionIcon as any} size={14} color={Colors.textInverse} />
+            <Ionicons name={primaryActionIcon as any} size={14} color={colors.textInverse} />
             <Text style={styles.primaryBtnText}>{primaryActionLabel}</Text>
           </AnimatedPressable>
           {secondaryActionLabel && onSecondaryAction ? (
@@ -106,7 +108,7 @@ export function ChatListingContextBar({
               accessibilityRole="button"
               accessibilityLabel={secondaryActionLabel}
             >
-              <Ionicons name={(secondaryActionIcon ?? 'chatbubbles-outline') as any} size={14} color={Colors.textPrimary} />
+              <Ionicons name={(secondaryActionIcon ?? 'chatbubbles-outline') as any} size={14} color={colors.textPrimary} />
               <Text style={styles.secondaryBtnText}>{secondaryActionLabel}</Text>
             </AnimatedPressable>
           ) : null}
@@ -116,11 +118,11 @@ export function ChatListingContextBar({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   root: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
     paddingHorizontal: Space.md,
     paddingVertical: Space.xs + 2,
     gap: Space.sm,
@@ -147,7 +149,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   thumbFallback: {
     justifyContent: 'center',
@@ -156,7 +158,7 @@ const styles = StyleSheet.create({
   thumbFallbackText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     letterSpacing: 0.8,
   },
   info: {
@@ -166,7 +168,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: Type.body.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: Type.body.letterSpacing,
   },
   metaRow: {
@@ -177,12 +179,12 @@ const styles = StyleSheet.create({
   price: {
     fontSize: Type.caption.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   availability: {
     fontSize: Type.caption.size,
     fontFamily: TypeStyles.body.fontFamily,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   actionsRow: {
     flexDirection: 'row',
@@ -196,12 +198,12 @@ const styles = StyleSheet.create({
     gap: 4,
     minHeight: 44,
     borderRadius: Radius.md,
-    backgroundColor: Colors.textPrimary,
+    backgroundColor: colors.textPrimary,
   },
   primaryBtnText: {
     fontSize: Type.caption.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
   secondaryBtn: {
     flex: 1,
@@ -211,13 +213,13 @@ const styles = StyleSheet.create({
     gap: 4,
     minHeight: 44,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   secondaryBtnText: {
     fontSize: Type.caption.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
 });

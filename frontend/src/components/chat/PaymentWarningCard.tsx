@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
 
 export interface PaymentWarningCardProps {
   /** Whether this warning has been dismissed by the user */
@@ -26,16 +26,19 @@ export interface PaymentWarningCardProps {
  * no false-block of sending; events logged for trust ops."
  */
 export function PaymentWarningCard({ dismissed, onDismiss, onReport, isMe }: PaymentWarningCardProps) {
+  const { colors } = useAppTheme();
   if (dismissed) return null;
 
   return (
-    <View style={[styles.container, isMe && styles.containerMe]}>
+    <View style={[styles.container, { backgroundColor: `${colors.danger}12`, borderColor: `${colors.danger}50` }, isMe && styles.containerMe]}>
       <View style={styles.iconWrap}>
-        <Ionicons name="warning" size={16} color={Colors.danger} />
+        <Ionicons name="warning" size={16} color={colors.danger} />
       </View>
       <View style={styles.textCol}>
-        <Text style={styles.title}>Keep payments on ThryftVerse</Text>
-        <Text style={styles.body}>
+        <Text style={[styles.title, { color: colors.danger }]}>
+          Keep payments on ThryftVerse
+        </Text>
+        <Text style={[styles.body, { color: colors.textSecondary }]}>
           Off-platform payments aren't covered by Buyer Protection. If this is a
           legitimate transaction, complete it in the app to stay protected.
         </Text>
@@ -47,8 +50,8 @@ export function PaymentWarningCard({ dismissed, onDismiss, onReport, isMe }: Pay
             accessibilityRole="button"
             accessibilityLabel="Report this conversation"
           >
-            <Ionicons name="flag-outline" size={12} color={Colors.danger} />
-            <Text style={styles.reportBtnText}>Report</Text>
+            <Ionicons name="flag-outline" size={12} color={colors.danger} />
+            <Text style={[styles.reportBtnText, { color: colors.danger }]}>Report</Text>
           </Pressable>
         )}
       </View>
@@ -59,7 +62,7 @@ export function PaymentWarningCard({ dismissed, onDismiss, onReport, isMe }: Pay
         accessibilityRole="button"
         accessibilityLabel="Dismiss warning"
       >
-        <Ionicons name="close" size={14} color={Colors.textMuted} />
+        <Ionicons name="close" size={14} color={colors.textMuted} />
       </Pressable>
     </View>
   );
@@ -68,15 +71,13 @@ export function PaymentWarningCard({ dismissed, onDismiss, onReport, isMe }: Pay
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 6,
-    marginHorizontal: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    gap: Space.sm + 2,
+    marginTop: Space.xs + 2,
+    marginHorizontal: Space.md,
+    paddingHorizontal: Space.md + 2,
+    paddingVertical: Space.md,
     borderRadius: Radius.lg,
-    backgroundColor: `${Colors.danger}12`,
     borderWidth: 1,
-    borderColor: `${Colors.danger}50`,
   },
   containerMe: {
     marginHorizontal: 0,
@@ -89,33 +90,34 @@ const styles = StyleSheet.create({
   },
   textCol: {
     flex: 1,
-    gap: 4,
+    gap: Space.xs,
   },
   title: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.semibold,
-    color: Colors.danger,
   },
   body: {
-    fontSize: 12,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight + 2,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
-    lineHeight: 17,
   },
   reportBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: 6,
+    gap: Space.xs,
+    marginTop: Space.xs + 2,
     alignSelf: 'flex-start',
+    minHeight: 32,
   },
   reportBtnText: {
-    fontSize: 12,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.semibold,
-    color: Colors.danger,
   },
   closeBtn: {
     paddingTop: 2,
     flexShrink: 0,
+    minHeight: 32,
   },
 });
