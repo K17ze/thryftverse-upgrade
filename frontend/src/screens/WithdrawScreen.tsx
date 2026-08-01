@@ -201,7 +201,7 @@ export default function WithdrawScreen() {
 
     return {
       name: 'Connect a payout profile',
-      details: 'Verify your identity and bank details with Stripe',
+      details: 'Verify your identity and bank details to enable payouts',
     };
   }, [allowBankAccounts, payoutAccount]);
 
@@ -249,7 +249,7 @@ export default function WithdrawScreen() {
 
     if (!connectStatus.payoutsEnabled) {
       throw new Error(
-        'Payout setup is not complete yet. Finish the required Stripe steps, then refresh your payout profile.'
+        'Payout setup is not complete yet. Finish the required verification steps, then refresh your payout profile.'
       );
     }
 
@@ -277,7 +277,7 @@ export default function WithdrawScreen() {
     }
 
     if (activeAccount.status !== 'active') {
-      throw new Error('Stripe has not enabled payouts for this profile yet.');
+      throw new Error('Payouts are not enabled for this profile yet.');
     }
 
     setPayoutAccount(activeAccount);
@@ -490,7 +490,7 @@ export default function WithdrawScreen() {
                 ? 'Refresh verified payout profile'
                 : 'Connect verified payout profile'
             }
-            accessibilityHint="Opens secure Stripe payout onboarding when verification is required"
+            accessibilityHint="Opens secure payout onboarding when verification is required"
           >
             <View style={styles.bankLeft}>
               <View style={styles.bankIcon}>
@@ -515,7 +515,7 @@ export default function WithdrawScreen() {
                   ? 'Refresh payout profile'
                   : 'Connect payout profile'
               }
-              accessibilityHint="Checks Stripe payout verification and opens any required onboarding steps"
+              accessibilityHint="Checks payout verification and opens any required onboarding steps"
             >
               <Ionicons
                 name={payoutAccount?.status === 'active' ? 'refresh' : 'open-outline'}
@@ -527,7 +527,7 @@ export default function WithdrawScreen() {
                   ? 'Checking payout profile…'
                   : payoutAccount?.status === 'active'
                     ? 'Refresh payout profile'
-                    : 'Connect with Stripe'}
+                    : 'Set up payouts'}
               </Text>
             </AnimatedPressable>
           ) : (

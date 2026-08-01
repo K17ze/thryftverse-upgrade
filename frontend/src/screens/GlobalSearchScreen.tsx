@@ -94,7 +94,7 @@ const HERO_ITEMS: HeroItem[] = [
   {
     id: 'hero1',
     type: 'video',
-    uri: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+    uri: '',
     posterUri: '',
     sponsor: 'H&M',
     title: 'H&M Summer 2026',

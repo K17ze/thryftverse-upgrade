@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -12,8 +12,8 @@ import { AppButton } from './AppButton';
 import { AppInput } from './AppInput';
 import { CachedImage } from '../CachedImage';
 import { Meta, Headline } from './Text';
-import { Colors } from '../../constants/colors';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { Space, Radius, Typography, Type } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
 import {
   sanitizeDecimalInput,
 } from '../../utils/currencyAuthoringFlows';
@@ -59,7 +59,7 @@ interface BidSheetProps {
   onRefreshDetail: () => Promise<AuctionDetailResponse | null>;
   onReviewBuyNow?: () => void;
   serverClockMs: number;
-  /** Pre-fill the bid input with this amount (GBP) — e.g. from an outbid notification */
+  /** Pre-fill the bid input with this amount (GBP) � e.g. from an outbid notification */
   initialBidAmount?: number;
 }
 
@@ -76,6 +76,27 @@ export function BidSheet({
   serverClockMs,
   initialBidAmount,
 }: BidSheetProps) {
+  const { colors } = useAppTheme();
+  // Map theme colors to the legacy Colors interface so the static
+  // StyleSheet can use themed values. This is a migration bridge �
+  // the static styles below reference these via the `themed` object.
+  const themed = {
+    textPrimary: colors.textPrimary,
+    textSecondary: colors.textSecondary,
+    textMuted: colors.textMuted,
+    brand: colors.brand,
+    border: colors.border,
+    borderSubtle: colors.borderSubtle,
+    surface: colors.surface,
+    surfaceAlt: colors.surfaceAlt,
+    surfaceElevated: colors.surfaceElevated,
+    danger: colors.danger,
+    success: colors.success,
+    warning: colors.warning,
+    background: colors.background,
+    textInverse: colors.textInverse,
+  };
+  const styles = React.useMemo(() => createStyles(themed), [themed]);
   const [stage, setStage] = React.useState<BidSheetStage>('entry');
   const [bidInput, setBidInput] = React.useState('');
   const [error, setError] = React.useState<TransactionError | null>(null);
@@ -86,7 +107,7 @@ export function BidSheet({
   const [currentMinimum, setCurrentMinimum] = React.useState(auction.minimumNextBidGbp);
   const idempotencyKeyRef = React.useRef<string | null>(null);
 
-  // Shared authoritative snapshot helper â€” returns refreshed state or null on failure
+  // Shared authoritative snapshot helper — returns refreshed state or null on failure
   const getAuthoritativeSnapshot = async (): Promise<{
     minimumNextBidGbp: number;
     effectiveState: 'upcoming' | 'live' | 'ended' | 'cancelled' | 'settled';
@@ -129,7 +150,7 @@ export function BidSheet({
     }
   }, [visible, auction.minimumNextBidGbp, currencyCode, goldRates, initialBidAmount]);
 
-  // Lifecycle guard â€” close sheet if auction transitions to terminal
+  // Lifecycle guard — close sheet if auction transitions to terminal
   React.useEffect(() => {
     if (visible && shouldCloseSheetDueToLifecycle(auction.effectiveState)) {
       setError({
@@ -264,18 +285,18 @@ export function BidSheet({
       setError(txError);
 
       if (txError.isAmbiguous) {
-        // Ambiguous failure â€” preserve the same idempotency key for replay
+        // Ambiguous failure — preserve the same idempotency key for replay
         // Do NOT reset the key. User retries with the same key.
         setStage('error');
       } else if (txError.kind === 'buy_now_review_required') {
-        // Recoverable conflict â€” refresh detail once to get authoritative Buy Now price
+        // Recoverable conflict — refresh detail once to get authoritative Buy Now price
         await onRefreshDetail();
         // Preserve the entered bid so user can return to it
-        // Do NOT reset idempotency key â€” this was a definitive rejection, not a transaction
+        // Do NOT reset idempotency key — this was a definitive rejection, not a transaction
         idempotencyKeyRef.current = null;
         setStage('recoverable_conflict');
       } else if (txError.transactionPossible) {
-        // Definitive rejection with retry possible â€” refresh and reset key for new attempt
+        // Definitive rejection with retry possible — refresh and reset key for new attempt
         await onRefreshDetail();
         if (txError.updatedMinimumGbp) {
           setCurrentMinimum(txError.updatedMinimumGbp);
@@ -283,7 +304,7 @@ export function BidSheet({
         idempotencyKeyRef.current = null;
         setStage('entry');
       } else {
-        // Definitive terminal rejection â€” no retry
+        // Definitive terminal rejection — no retry
         setStage('error');
       }
     } finally {
@@ -304,11 +325,11 @@ export function BidSheet({
   const handleRetry = () => {
     setError(null);
     if (error?.isAmbiguous) {
-      // Ambiguous failure â€” retry with the same idempotency key
+      // Ambiguous failure — retry with the same idempotency key
       // Key is preserved, go back to review to confirm retry
       setStage('review');
     } else {
-      // Definitive rejection â€” new key will be generated on next confirm
+      // Definitive rejection — new key will be generated on next confirm
       idempotencyKeyRef.current = null;
       setStage('entry');
     }
@@ -337,7 +358,7 @@ export function BidSheet({
             />
           ) : (
             <View style={styles.itemThumbPlaceholder}>
-              <Ionicons name="image-outline" size={20} color={Colors.textMuted} />
+              <Ionicons name="image-outline" size={20} color={themed.textMuted} />
             </View>
           )}
           <View style={styles.itemHeaderText}>
@@ -348,12 +369,12 @@ export function BidSheet({
 
         <View style={styles.divider} />
 
-        {/* â”€â”€ Entry stage â€” large centered amount â”€â”€ */}
+        {/* ── Entry stage — large centered amount ── */}
         {stage === 'entry' && (
           <View style={styles.stageContent}>
             <Text style={styles.entryHeading}>PLACE YOUR BID</Text>
 
-            {/* Large amount input â€” dominates the sheet */}
+            {/* Large amount input — dominates the sheet */}
             <View style={styles.amountContainer}>
               <Text style={styles.amountCurrency}>{currencyCode}</Text>
               <AppInput
@@ -368,12 +389,12 @@ export function BidSheet({
               />
             </View>
 
-            {/* 1ZE equivalent â€” platform value */}
+            {/* 1ZE equivalent — platform value */}
             <Text style={styles.amountIzeEquivalent}>
               {formatIzeAmount(toIze(Number(bidInput) || 0, currencyCode, goldRates), 2)}
             </Text>
 
-            {/* Minimum and current â€” stacked, not columns */}
+            {/* Minimum and current — stacked, not columns */}
             <View style={styles.bidContextStack}>
               <View style={styles.bidContextRow}>
                 <Text style={styles.bidContextLabel}>Minimum to lead</Text>
@@ -385,7 +406,7 @@ export function BidSheet({
               </View>
               <View style={styles.bidContextRow}>
                 <Text style={styles.bidContextLabel}>Time remaining</Text>
-                <Text style={[styles.bidContextValueSecondary, auction.effectiveState === 'live' && { color: Colors.danger }]}>
+                <Text style={[styles.bidContextValueSecondary, auction.effectiveState === 'live' && { color: themed.danger }]}>
                   {auction.countdownText}
                 </Text>
               </View>
@@ -410,20 +431,20 @@ export function BidSheet({
               ))}
             </View>
 
-            {/* Bid confidence indicator — shows if the current amount would lead */}
+            {/* Bid confidence indicator � shows if the current amount would lead */}
             {(() => {
               const bidGbp = gbpAmount ?? 0;
               const wouldLead = bidGbp >= currentMinimum && bidGbp > 0;
               if (bidGbp <= 0) return null;
               return (
-                <View style={[styles.confidenceRow, { backgroundColor: wouldLead ? `${Colors.success}10` : `${Colors.danger}10` }]}>
+                <View style={[styles.confidenceRow, { backgroundColor: wouldLead ? `${themed.success}10` : `${themed.danger}10` }]}>
                   <Ionicons
                     name={wouldLead ? 'checkmark-circle-outline' : 'alert-circle-outline'}
                     size={14}
-                    color={wouldLead ? Colors.success : Colors.danger}
+                    color={wouldLead ? themed.success : themed.danger}
                   />
-                  <Text style={[styles.confidenceText, { color: wouldLead ? Colors.success : Colors.danger }]}>
-                    {wouldLead ? 'This bid would put you in the lead' : 'Below minimum to lead — increase your bid'}
+                  <Text style={[styles.confidenceText, { color: wouldLead ? themed.success : themed.danger }]}>
+                    {wouldLead ? 'This bid would put you in the lead' : 'Below minimum to lead � increase your bid'}
                   </Text>
                 </View>
               );
@@ -431,7 +452,7 @@ export function BidSheet({
 
             {error && (
               <View style={styles.errorRow}>
-                <Ionicons name="alert-circle-outline" size={14} color={Colors.danger} />
+                <Ionicons name="alert-circle-outline" size={14} color={themed.danger} />
                 <Text style={styles.errorText}>{error.message}</Text>
               </View>
             )}
@@ -459,7 +480,7 @@ export function BidSheet({
           </View>
         )}
 
-        {/* â”€â”€ Review stage â€” clean confirmation receipt â”€â”€ */}
+        {/* ── Review stage — clean confirmation receipt ── */}
         {stage === 'review' && (
           <View style={styles.stageContent}>
             <Text style={styles.reviewHeading}>CONFIRM YOUR BID</Text>
@@ -498,7 +519,7 @@ export function BidSheet({
             </View>
 
             <View style={styles.commitmentRow}>
-              <Ionicons name="information-circle-outline" size={14} color={Colors.textSecondary} />
+              <Ionicons name="information-circle-outline" size={14} color={themed.textSecondary} />
               <Text style={styles.commitmentText}>
                 Bids are binding once accepted.
               </Text>
@@ -506,7 +527,7 @@ export function BidSheet({
 
             {error && (
               <View style={styles.errorRow}>
-                <Ionicons name="alert-circle-outline" size={14} color={Colors.danger} />
+                <Ionicons name="alert-circle-outline" size={14} color={themed.danger} />
                 <Text style={styles.errorText}>{error.message}</Text>
               </View>
             )}
@@ -534,22 +555,22 @@ export function BidSheet({
           </View>
         )}
 
-        {/* â”€â”€ Submitting stage â”€â”€ */}
+        {/* ── Submitting stage ── */}
         {stage === 'submitting' && (
           <View style={styles.centerStage}>
             <View style={styles.submittingSpinnerWrap}>
-              <Ionicons name="hourglass-outline" size={40} color={Colors.brand} />
+              <Ionicons name="hourglass-outline" size={40} color={themed.brand} />
             </View>
             <Text style={styles.submittingText}>Submitting your bid...</Text>
             <Text style={styles.submittingDetail}>This may take a moment.</Text>
           </View>
         )}
 
-        {/* â”€â”€ Success stage â”€â”€ */}
+        {/* ── Success stage ── */}
         {stage === 'success' && (
           <View style={styles.centerStage}>
             <View style={styles.successIcon}>
-              <Ionicons name="checkmark-circle" size={56} color={Colors.success} />
+              <Ionicons name="checkmark-circle" size={56} color={themed.success} />
             </View>
             <Text style={styles.successTitle}>Bid placed</Text>
             <Text style={styles.successDetail}>
@@ -567,11 +588,11 @@ export function BidSheet({
           </View>
         )}
 
-        {/* â”€â”€ Recoverable conflict stage â”€â”€ */}
+        {/* ── Recoverable conflict stage ── */}
         {stage === 'recoverable_conflict' && error && error.kind === 'buy_now_review_required' && (
           <View style={styles.stageContent}>
             <View style={styles.conflictIconRow}>
-              <Ionicons name="information-circle-outline" size={28} color={Colors.brand} />
+              <Ionicons name="information-circle-outline" size={28} color={themed.brand} />
             </View>
             <Text style={styles.conflictHeading}>Consider Buy Now</Text>
             <Text style={styles.conflictExplanation}>{error.message}</Text>
@@ -607,11 +628,11 @@ export function BidSheet({
           </View>
         )}
 
-        {/* â”€â”€ Error (terminal) stage â”€â”€ */}
+        {/* ── Error (terminal) stage ── */}
         {stage === 'error' && error && (
           <View style={styles.stageContent}>
             <View style={styles.errorIconSmall}>
-              <Ionicons name="alert-circle-outline" size={24} color={Colors.danger} />
+              <Ionicons name="alert-circle-outline" size={24} color={themed.danger} />
             </View>
             <Text style={styles.errorTitle}>{error.message}</Text>
             <View style={styles.actions}>
@@ -643,7 +664,13 @@ export function BidSheet({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (themed: {
+  textPrimary: string; textSecondary: string; textMuted: string;
+  brand: string; border: string; borderSubtle: string;
+  surface: string; surfaceAlt: string; surfaceElevated: string;
+  danger: string; success: string; warning: string;
+  background: string; textInverse: string;
+}) => StyleSheet.create({
   container: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.md,
@@ -668,7 +695,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: themed.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -678,25 +705,25 @@ const styles = StyleSheet.create({
   itemTitle: {
     fontSize: 16,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: themed.textPrimary,
   },
   itemSeller: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: themed.textSecondary,
     marginTop: 2,
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
+    backgroundColor: themed.border,
     marginBottom: Space.sm,
   },
   stageContent: {
     gap: Space.sm,
   },
-  // â”€â”€ Entry stage â€” large centered amount â”€â”€
+  // ── Entry stage — large centered amount ──
   entryHeading: {
     fontSize: 11,
-    color: Colors.textMuted,
+    color: themed.textMuted,
     fontFamily: Typography.family.semibold,
     letterSpacing: 0.8,
     textAlign: 'center',
@@ -711,7 +738,7 @@ const styles = StyleSheet.create({
   },
   amountCurrency: {
     fontSize: 20,
-    color: Colors.textMuted,
+    color: themed.textMuted,
     fontFamily: Typography.family.semibold,
   },
   amountInput: {
@@ -719,7 +746,7 @@ const styles = StyleSheet.create({
   },
   amountIzeEquivalent: {
     fontSize: 13,
-    color: Colors.brand,
+    color: themed.brand,
     fontFamily: Typography.family.medium,
     textAlign: 'center',
     marginBottom: Space.sm,
@@ -728,9 +755,9 @@ const styles = StyleSheet.create({
   bidContextStack: {
     gap: Space.xs + 2,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
+    borderTopColor: themed.border,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: themed.border,
     paddingVertical: Space.sm,
   },
   bidContextRow: {
@@ -740,20 +767,20 @@ const styles = StyleSheet.create({
   },
   bidContextLabel: {
     fontSize: 10,
-    color: Colors.textMuted,
+    color: themed.textMuted,
     fontFamily: Typography.family.semibold,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
   bidContextValue: {
     fontSize: 15,
-    color: Colors.textPrimary,
+    color: themed.textPrimary,
     fontFamily: Typography.family.semibold,
     fontVariant: ['tabular-nums'],
   },
   bidContextValueSecondary: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: themed.textSecondary,
     fontFamily: Typography.family.medium,
     fontVariant: ['tabular-nums'],
   },
@@ -768,14 +795,14 @@ const styles = StyleSheet.create({
   },
   dismissLinkText: {
     fontSize: 14,
-    color: Colors.textMuted,
+    color: themed.textMuted,
     fontFamily: Typography.family.regular,
   },
-  // â”€â”€ Review stage â€” receipt â”€â”€
+  // ── Review stage — receipt ──
   reviewHeading: {
     fontSize: 11,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
+    color: themed.textMuted,
     letterSpacing: 0.8,
     textAlign: 'center',
     marginBottom: Space.sm,
@@ -791,19 +818,19 @@ const styles = StyleSheet.create({
     lineHeight: 42,
     fontWeight: '700',
     letterSpacing: -0.5,
-    color: Colors.textPrimary,
+    color: themed.textPrimary,
     fontFamily: Typography.family.bold,
     fontVariant: ['tabular-nums'],
   },
   reviewAmountIze: {
     fontSize: 14,
-    color: Colors.brand,
+    color: themed.brand,
     fontFamily: Typography.family.medium,
     fontVariant: ['tabular-nums'],
   },
   reviewGbpEquivalent: {
     fontSize: 12,
-    color: Colors.textMuted,
+    color: themed.textMuted,
     fontFamily: Typography.family.regular,
     fontVariant: ['tabular-nums'],
   },
@@ -811,9 +838,9 @@ const styles = StyleSheet.create({
     gap: Space.xs + 2,
     paddingVertical: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
+    borderTopColor: themed.border,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: themed.border,
   },
   reviewReceiptRow: {
     flexDirection: 'row',
@@ -822,13 +849,13 @@ const styles = StyleSheet.create({
   },
   reviewReceiptLabel: {
     fontSize: 10,
-    color: Colors.textMuted,
+    color: themed.textMuted,
     fontFamily: Typography.family.semibold,
     letterSpacing: 0.5,
   },
   reviewReceiptValue: {
     fontSize: 14,
-    color: Colors.textPrimary,
+    color: themed.textPrimary,
     fontFamily: Typography.family.medium,
   },
   countdownRow: {
@@ -839,13 +866,13 @@ const styles = StyleSheet.create({
   },
   izeEquivalentText: {
     fontSize: 11,
-    color: Colors.textMuted,
+    color: themed.textMuted,
     fontFamily: Typography.family.regular,
     marginBottom: Space.xs,
   },
   countdownText: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: themed.textSecondary,
     fontFamily: Typography.family.medium,
   },
   input: {
@@ -861,21 +888,21 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: themed.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: themed.border,
     alignItems: 'center',
     minHeight: 44,
     justifyContent: 'center',
   },
   incrementChipPressed: {
-    backgroundColor: Colors.border,
+    backgroundColor: themed.border,
     opacity: 0.7,
   },
   incrementText: {
     fontSize: 13,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
+    color: themed.textPrimary,
   },
   confidenceRow: {
     flexDirection: 'row',
@@ -905,7 +932,7 @@ const styles = StyleSheet.create({
   errorText: {
     flex: 1,
     fontSize: 13,
-    color: Colors.danger,
+    color: themed.danger,
     fontFamily: Typography.family.medium,
     lineHeight: 18,
   },
@@ -920,7 +947,7 @@ const styles = StyleSheet.create({
   primaryBtn: {},
   reviewDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
+    backgroundColor: themed.border,
     marginVertical: Space.xs,
   },
   commitmentRow: {
@@ -931,7 +958,7 @@ const styles = StyleSheet.create({
   },
   commitmentText: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: themed.textSecondary,
     fontFamily: Typography.family.regular,
   },
   centerStage: {
@@ -942,14 +969,14 @@ const styles = StyleSheet.create({
   submittingText: {
     fontSize: 16,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
+    color: themed.textPrimary,
   },
   submittingSpinnerWrap: {
     marginBottom: Space.xs,
   },
   submittingDetail: {
     fontSize: 13,
-    color: Colors.textMuted,
+    color: themed.textMuted,
     fontFamily: Typography.family.regular,
   },
   successIcon: {
@@ -958,11 +985,11 @@ const styles = StyleSheet.create({
   successTitle: {
     fontSize: 20,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: themed.textPrimary,
   },
   successDetail: {
     fontSize: 16,
-    color: Colors.textSecondary,
+    color: themed.textSecondary,
     fontFamily: Typography.family.medium,
   },
   doneBtn: {
@@ -978,7 +1005,7 @@ const styles = StyleSheet.create({
   errorTitle: {
     fontSize: 16,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
+    color: themed.textPrimary,
     textAlign: 'center',
     paddingHorizontal: Space.md,
   },
@@ -989,13 +1016,13 @@ const styles = StyleSheet.create({
   conflictHeading: {
     fontSize: 20,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: themed.textPrimary,
     textAlign: 'center',
     marginBottom: Space.xs,
   },
   conflictExplanation: {
     fontSize: 15,
-    color: Colors.textSecondary,
+    color: themed.textSecondary,
     fontFamily: Typography.family.regular,
     textAlign: 'center',
     paddingHorizontal: Space.sm,
@@ -1007,17 +1034,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: Space.sm,
     paddingHorizontal: Space.md,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: themed.surfaceAlt,
     borderRadius: Radius.md,
     marginBottom: Space.md,
   },
   conflictPriceLabel: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: themed.textSecondary,
   },
   conflictPriceValue: {
     fontSize: 18,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: themed.textPrimary,
   },
 });
+

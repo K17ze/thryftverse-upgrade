@@ -276,7 +276,7 @@ export default function PaymentsScreen({ navigation }: Props) {
         <View style={[styles.trustBanner, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Ionicons name="shield-checkmark-outline" size={18} color={colors.success} />
           <Text style={[styles.trustBannerText, { color: colors.textSecondary }]}>
-            Card entry and authentication are handled in Stripe's payment sheet.
+            Card details are collected securely. We never store your card number or security code.
           </Text>
         </View>
       </Reanimated.View>
@@ -335,7 +335,7 @@ export default function PaymentsScreen({ navigation }: Props) {
                   <Ionicons name="card-outline" size={24} color={colors.textMuted} />
                 </View>
                 <Text style={styles.primaryCardTitle}>No payment method</Text>
-                <Text style={styles.primaryCardSub}>Add a card through Stripe to use it at checkout</Text>
+                <Text style={styles.primaryCardSub}>Add a card to check out faster</Text>
                 <AnimatedPressable
                   style={[styles.primaryCardCta, { backgroundColor: colors.brand }]}
                   onPress={() => setAddCardSheetVisible(true)}

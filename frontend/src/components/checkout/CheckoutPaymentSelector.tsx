@@ -119,7 +119,7 @@ export function CheckoutPaymentSelector({
       {/* Secure payment trust indicator */}
       <View style={styles.trustFooter}>
         <Ionicons name="shield-checkmark-outline" size={12} color={Colors.textMuted} />
-        <Text style={styles.trustText}>Card confirmation opens in Stripe PaymentSheet</Text>
+        <Text style={styles.trustText}>Card details are collected securely</Text>
       </View>
     </BottomSheet>
   );

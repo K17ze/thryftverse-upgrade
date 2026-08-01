@@ -80,12 +80,6 @@ export default function HelpSupportScreen({ navigation }: Props) {
               isFirst
             />
             <SettingsRow
-              icon="chatbubble-outline"
-              title="Live chat"
-              subtitle="Not available yet — email us for a fast response"
-              disabled
-            />
-            <SettingsRow
               icon="flag-outline"
               title="Report a problem"
               subtitle="Something not working right? Let us know"

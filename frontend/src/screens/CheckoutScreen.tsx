@@ -207,8 +207,8 @@ function buildOrderSignature(params: {
 const STAGE_LABELS: Record<CheckoutStage, string> = {
   idle: '',
   creating_order: 'Creating your order…',
-  opening_payment: 'Opening Stripe PaymentSheet…',
-  awaiting_payment: 'Waiting for payment confirmation…',
+  opening_payment: 'Preparing payment…',
+  awaiting_payment: 'Confirming payment…',
   payment_pending: 'Payment is still pending.',
   payment_failed: 'Payment failed. Try again.',
 };
@@ -1122,7 +1122,7 @@ export default function CheckoutScreen() {
       ? 'Retry payment'
       : stage === 'payment_pending'
         ? 'Waiting for confirmation…'
-        : 'Review and pay';
+        : `Pay ${formatFromFiat(TOTAL, 'GBP')}`;
 
   return (
     <SafeAreaView style={[styles.container, t.container]} edges={['top']}>
@@ -1391,7 +1391,7 @@ export default function CheckoutScreen() {
           onPress={() => { haptics.press(); handlePay(); }}
           disabled={!checkoutEligible || isInteractionLocked}
           accessibilityRole="button"
-          accessibilityLabel={`Review and pay ${formatFromFiat(TOTAL, 'GBP')} with Stripe`}
+          accessibilityLabel={`Pay ${formatFromFiat(TOTAL, 'GBP')}`}
           accessibilityState={{
             disabled: !checkoutEligible || isInteractionLocked,
             busy: isSubmitting,

@@ -131,7 +131,7 @@ export function AddCardSheet({ visible, onDismiss, onSuccess }: Props) {
     } catch (error) {
       const parsed = parseApiError(
         error,
-        'Unable to open Stripe card collection right now.'
+        'Unable to open card entry right now. Please try again.'
       );
       await Haptics.notificationAsync(
         Haptics.NotificationFeedbackType.Error
@@ -150,9 +150,9 @@ export function AddCardSheet({ visible, onDismiss, onSuccess }: Props) {
         </View>
         <Text style={styles.title}>Add a payment method</Text>
         <Text style={styles.subtitle}>
-          Card details are collected in Stripe's payment sheet.
-          Thryftverse receives a reusable payment-method reference, not your
-          card number or security code.
+          Card details are collected securely. ThryftVerse receives a
+          reusable payment-method reference, not your card number or
+          security code.
         </Text>
       </View>
 
@@ -164,9 +164,10 @@ export function AddCardSheet({ visible, onDismiss, onSuccess }: Props) {
             color={Colors.success}
           />
           <View style={styles.boundaryCopy}>
-            <Text style={styles.boundaryTitle}>Provider-hosted entry</Text>
+            <Text style={styles.boundaryTitle}>Secure card entry</Text>
             <Text style={styles.boundaryText}>
-              Stripe handles card entry and any required authentication.
+              Card details are collected through our encrypted payment
+              provider with bank-grade security.
             </Text>
           </View>
         </View>
@@ -211,7 +212,7 @@ export function AddCardSheet({ visible, onDismiss, onSuccess }: Props) {
         disabled={!cardAllowed || isOpeningProvider}
         onPress={() => void handleOpenStripe()}
         accessibilityRole="button"
-        accessibilityLabel="Continue to Stripe to add a card"
+        accessibilityLabel="Add a card"
         accessibilityState={{
           disabled: !cardAllowed || isOpeningProvider,
           busy: isOpeningProvider,
@@ -227,7 +228,7 @@ export function AddCardSheet({ visible, onDismiss, onSuccess }: Props) {
           />
         )}
         <Text style={styles.primaryActionText}>
-          {isOpeningProvider ? 'Opening Stripe…' : 'Continue to Stripe'}
+          {isOpeningProvider ? 'Opening secure card entry…' : 'Add card'}
         </Text>
       </AnimatedPressable>
     </BottomSheet>
