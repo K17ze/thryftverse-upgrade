@@ -277,6 +277,17 @@ export interface MarketCoOwnAsset {
   buyerProtectionTermsUrl?: string | null;
   /** Append-only audit trail of trust-profile changes (last 10). */
   trustAuditEvents?: CoOwnTrustAuditEvent[];
+  // ── Recourse agreement (WS7) ──
+  /** Whether the seller has signed the personal liability recourse agreement. */
+  recourseAgreementSigned?: boolean;
+  /** Recourse status: 'pending' (not signed), 'active' (signed), 'triggered'
+   * (seller defaulted), 'settled' (debt recovered), 'disputed'. */
+  recourseStatus?: 'pending' | 'active' | 'triggered' | 'settled' | 'disputed';
+  /** Total cumulative traded value in GBP. Used to calculate seller's debt
+   * if recourse is triggered. */
+  totalTradedValueGbp?: number;
+  /** Number of active verification demands from unit holders. */
+  activeVerificationDemands?: number;
 }
 
 /** Trust-profile audit event (WS1, SEC Rule 17Ad-7 pattern). */
@@ -1892,5 +1903,125 @@ export async function listCoOwnExecutions(
 ): Promise<ListCoOwnExecutionsResponse> {
   return fetchJson<ListCoOwnExecutionsResponse>(
     `/co-own/assets/${encodeURIComponent(assetId)}/executions${toQuery({ limit: options?.limit ?? 200 })}`
+  );
+}
+
+// ── Recourse agreement API (WS7) ────────────────────────────────────
+
+export interface CoOwnRecourseAgreement {
+  id: string;
+  sellerId: string;
+  version: number;
+  agreementUrl: string | null;
+  signedAt: string;
+  maxLiabilityGbp: number;
+  personalGuarantee: boolean;
+  status: 'active' | 'triggered' | 'settled' | 'disputed' | 'void';
+  triggeredAt: string | null;
+  triggeredReason: string | null;
+  settledAt: string | null;
+  settledAmountGbp: number | null;
+}
+
+export interface CoOwnSellerLiability {
+  totalActiveLiabilityGbp: number;
+  activeAgreementCount: number;
+  totalAgreementsSigned: number;
+  totalRecourseTriggered: number;
+  totalDebtRecoveredGbp: number;
+  riskTier: 'standard' | 'elevated' | 'high' | 'blocked';
+  backgroundCheckStatus: 'pending' | 'passed' | 'failed' | 'expired';
+}
+
+export interface CoOwnVerificationDemand {
+  id: number;
+  requestedBy: string;
+  demandType: 'authenticity' | 'possession' | 'condition' | 'inspection';
+  deadline: string;
+  status: 'pending' | 'responded' | 'compliant' | 'failed' | 'expired' | 'withdrawn';
+  respondedAt: string | null;
+  evidenceUrl: string | null;
+  evidenceNotes: string | null;
+  inspectorVerdict: 'compliant' | 'failed' | 'inconclusive' | null;
+  createdAt: string;
+}
+
+export interface CoOwnRecourseEvent {
+  id: number;
+  eventType: string;
+  payload: unknown;
+  amountGbp: number | null;
+  triggeredBy: string | null;
+  createdAt: string;
+}
+
+export interface CoOwnRecourseStatus {
+  ok: true;
+  agreement: CoOwnRecourseAgreement | null;
+  sellerLiability: CoOwnSellerLiability | null;
+  verificationDemands: CoOwnVerificationDemand[];
+  events: CoOwnRecourseEvent[];
+}
+
+export async function fetchCoOwnRecourseStatus(assetId: string): Promise<CoOwnRecourseStatus> {
+  return fetchJson<CoOwnRecourseStatus>(
+    `/co-own/assets/${encodeURIComponent(assetId)}/recourse`
+  );
+}
+
+export async function signRecourseAgreement(
+  assetId: string,
+  options?: { agreementUrl?: string; personalGuarantee?: boolean }
+): Promise<{ ok: true; agreement: CoOwnRecourseAgreement }> {
+  return fetchJson<{ ok: true; agreement: CoOwnRecourseAgreement }>(
+    `/co-own/assets/${encodeURIComponent(assetId)}/recourse-agreement`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        agreementUrl: options?.agreementUrl,
+        personalGuarantee: options?.personalGuarantee ?? true,
+      }),
+    }
+  );
+}
+
+export async function createVerificationDemand(
+  assetId: string,
+  demandType: 'authenticity' | 'possession' | 'condition' | 'inspection',
+  options?: { deadlineDays?: number; notes?: string }
+): Promise<{ ok: true; demand: CoOwnVerificationDemand }> {
+  return fetchJson<{ ok: true; demand: CoOwnVerificationDemand }>(
+    `/co-own/assets/${encodeURIComponent(assetId)}/verification-demand`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        demandType,
+        deadlineDays: options?.deadlineDays ?? 14,
+        notes: options?.notes,
+      }),
+    }
+  );
+}
+
+export async function respondToVerificationDemand(
+  assetId: string,
+  demandId: number,
+  evidenceUrl: string,
+  evidenceNotes?: string
+): Promise<{ ok: true; demand: Partial<CoOwnVerificationDemand> }> {
+  return fetchJson<{ ok: true; demand: Partial<CoOwnVerificationDemand> }>(
+    `/co-own/assets/${encodeURIComponent(assetId)}/verification-demand/${demandId}/respond`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ evidenceUrl, evidenceNotes }),
+    }
+  );
+}
+
+export async function fetchSellerLiability(
+  userId: string
+): Promise<{ ok: true; liability: CoOwnSellerLiability | null }> {
+  return fetchJson<{ ok: true; liability: CoOwnSellerLiability | null }>(
+    `/co-own/seller/${encodeURIComponent(userId)}/liability`
   );
 }

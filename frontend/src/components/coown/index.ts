@@ -27,6 +27,8 @@ export { CoOwnIssuerCard, CoOwnVehicleCard } from './CoOwnIssuerCard';
 export type { CoOwnIssuerCardProps, CoOwnVehicleFields, CoOwnVehicleDocument } from './CoOwnIssuerCard';
 export { CoOwnTrustPanel } from './CoOwnTrustPanel';
 export type { CoOwnTrustPanelProps } from './CoOwnTrustPanel';
+export { CoOwnRecoursePanel } from './CoOwnRecoursePanel';
+export type { CoOwnRecoursePanelProps } from './CoOwnRecoursePanel';
 export { CoOwnRiskDisclosure } from './CoOwnRiskDisclosure';
 export type { CoOwnRiskDisclosureProps } from './CoOwnRiskDisclosure';
 export { CoOwnStickyActionDock } from './CoOwnStickyActionDock';

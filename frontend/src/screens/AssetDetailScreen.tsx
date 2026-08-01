@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, useWindowDimensions, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable, useWindowDimensions } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,14 +18,17 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { Space, Type, Typography, Radius, DockConstants } from '../theme/designTokens';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import {
   fetchCoOwnAssetById,
   fetchCoOwnOrderBook,
   fetchCoOwnHoldings,
   refreshCoOwnAppraisal,
+  fetchCoOwnRecourseStatus,
+  createVerificationDemand,
+  signRecourseAgreement,
   type CoOwnOrderBookSnapshot,
   type MarketCoOwnAsset,
+  type CoOwnRecourseStatus,
 } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
 import { useToast } from '../context/ToastContext';
@@ -46,11 +49,14 @@ import {
   CommerceDetailUnavailableInline,
   CommerceDetailStateDock,
   CommerceDetailMediaRail,
+  CommerceDetailOfflineBanner,
+  CommerceDetailFreshnessBanner,
   COMMERCE_DETAIL_COMPACT_WIDTH,
 } from '../components/commerce/detail';
 import { ProductFamilyBadge, RecommendationRail, FullscreenMediaViewer } from '../components/product';
 import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
 import { ShareSheet } from '../components/ShareSheet';
+import { BottomSheet } from '../components/BottomSheet';
 import { resolveEvidenceGroups } from '../platform/commerce/categoryEvidence';
 import { resolveCoOwnConversation } from '../utils/coOwnMessaging';
 import {
@@ -64,6 +70,7 @@ import type { RecommendationLook } from '../platform/product';
 import {
   CoOwnOwnershipPanel,
   CoOwnTrustPanel,
+  CoOwnRecoursePanel,
   CoOwnRiskDisclosure,
   CoOwnAssetDetailSkeleton,
   CoOwnStateCanvas,
@@ -73,7 +80,6 @@ import {
   CoOwnRightsSheet,
   CoOwnOrderBook,
   CoOwnCandleChart,
-  CoOwnOfflineBanner,
   CoOwnSupplySheet,
   CoOwnOverflowSheet,
   CoOwnMarketOverview,
@@ -110,13 +116,11 @@ export default function AssetDetailScreen() {
   const navigation = useNavigation<NavT>();
   const route = useRoute<RouteT>();
   const { colors, isDark } = useAppTheme();
-  const reducedMotionEnabled = useReducedMotion();
   const { isOffline } = useConnectivity();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
   const isCompact = screenWidth < COMMERCE_DETAIL_COMPACT_WIDTH;
   const isVeryCompact = screenWidth < 340;
-  const isTablet = screenWidth >= 768;
   const currentUser = useStore((state) => state.currentUser);
   const upsertConversation = useStore((state) => state.upsertConversation);
   const isCoOwnWatched = useStore((state) => state.isCoOwnWatched);
@@ -131,6 +135,8 @@ export default function AssetDetailScreen() {
   const [orderBookError, setOrderBookError] = React.useState(false);
   const [yourUnits, setYourUnits] = React.useState<number | null>(currentUser?.id ? null : 0);
   const [holdingsError, setHoldingsError] = React.useState(false);
+  const [recourseStatus, setRecourseStatus] = React.useState<CoOwnRecourseStatus | null>(null);
+  const [verificationDemandLoading, setVerificationDemandLoading] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isError, setIsError] = React.useState(false);
   const [isResolvingConversation, setIsResolvingConversation] = React.useState(false);
@@ -151,6 +157,7 @@ export default function AssetDetailScreen() {
   // Per spec 03_COOWN §8: risk disclosure collapsed by default, opens
   // in a modal sheet via "View risk disclosure" disclosure row.
   const [riskDisclosureVisible, setRiskDisclosureVisible] = React.useState(false);
+  const [refreshing, setRefreshing] = React.useState(false);
 
   const coOwnCompliance = useStore((s) => s.coOwnCompliance);
   const updateCoOwnCompliance = useStore((s) => s.updateCoOwnCompliance);
@@ -179,7 +186,8 @@ export default function AssetDetailScreen() {
       fetchCoOwnAssetById(assetId),
       fetchCoOwnOrderBook(assetId, { limit: 40 }),
       currentUser?.id ? fetchCoOwnHoldings(currentUser.id) : Promise.resolve([]),
-    ]).then(([assetResult, bookResult, holdingsResult]) => {
+      fetchCoOwnRecourseStatus(assetId).catch(() => null),
+    ]).then(([assetResult, bookResult, holdingsResult, recourseResult]) => {
       if (cancelled) return;
 
       if (assetResult.status === 'rejected') {
@@ -205,6 +213,10 @@ export default function AssetDetailScreen() {
       } else {
         setHoldingsError(true);
         setYourUnits(null);
+      }
+
+      if (recourseResult.status === 'fulfilled' && recourseResult.value) {
+        setRecourseStatus(recourseResult.value);
       }
 
       setIsLoading(false);
@@ -233,6 +245,41 @@ export default function AssetDetailScreen() {
         setYourUnits(null);
         setHoldingsError(true);
       });
+  }, [assetId, currentUser?.id]);
+
+  // Pull-to-refresh — reloads asset, order book, and holdings in parallel.
+  const handleRefresh = React.useCallback(() => {
+    if (!assetId) return;
+    setRefreshing(true);
+    void Promise.allSettled([
+      fetchCoOwnAssetById(assetId),
+      fetchCoOwnOrderBook(assetId, { limit: 40 }),
+      currentUser?.id ? fetchCoOwnHoldings(currentUser.id) : Promise.resolve([]),
+      fetchCoOwnRecourseStatus(assetId).catch(() => null),
+    ]).then(([assetResult, bookResult, holdingsResult, recourseResult]) => {
+      if (assetResult.status === 'fulfilled') {
+        setAsset(assetResult.value);
+        setDataLoadedAt(Date.now());
+      }
+      if (bookResult.status === 'fulfilled') {
+        setOrderBook(bookResult.value);
+        setOrderBookError(false);
+      } else {
+        setOrderBookError(true);
+      }
+      if (holdingsResult.status === 'fulfilled') {
+        const holding = holdingsResult.value.find((entry) => entry.assetId === assetId);
+        setYourUnits(holding?.unitsOwned ?? 0);
+        setHoldingsError(false);
+      } else if (currentUser?.id) {
+        setYourUnits(null);
+        setHoldingsError(true);
+      }
+      if (recourseResult.status === 'fulfilled' && recourseResult.value) {
+        setRecourseStatus(recourseResult.value);
+      }
+      setRefreshing(false);
+    });
   }, [assetId, currentUser?.id]);
 
   // ── Hooks must run before conditional returns (Rules of Hooks) ──
@@ -542,14 +589,38 @@ export default function AssetDetailScreen() {
         }}
       />
 
-      <CoOwnOfflineBanner isOffline={isOffline} />
-
       <Reanimated.ScrollView
         showsVerticalScrollIndicator={false}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
         contentContainerStyle={{ paddingBottom: scrollBottomPadding }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.brand}
+            colors={[colors.brand]}
+            progressBackgroundColor={colors.surfaceAlt}
+          />
+        }
       >
+        {/* ── Offline banner ──
+            Per spec 05 §14: offline state must be designed, not a blank
+            screen. Cached asset data may still be visible. Uses the shared
+            CommerceDetailOfflineBanner for consistency across all detail
+            surfaces. */}
+        <CommerceDetailOfflineBanner isOffline={isOffline} />
+
+        {/* ── Freshness indicator ──
+            Surfaces stale, reconnecting, and refresh-failed states for the
+            realtime market data on this screen. Same shared primitive as
+            AuctionDetailScreen. */}
+        <CommerceDetailFreshnessBanner
+          isRefreshing={refreshing}
+          isStale={dataStale && !refreshing}
+          onRetry={handleRefresh}
+        />
+
         {/* ── Zone A — Media stage ──
             CommerceMediaStage handles paging/zoom/fullscreen only.
             CommerceDetailMediaRail overlays the max-3-visible-controls
@@ -592,6 +663,11 @@ export default function AssetDetailScreen() {
           onBack={() => navigation.goBack()}
           topInset={insets.top}
           rightActions={[
+            {
+              icon: 'share-outline',
+              label: 'Share',
+              onPress: social.openShare,
+            },
             {
               icon: social.isSavedToCollection ? 'bookmark' : 'bookmark-outline',
               activeIcon: 'bookmark',
@@ -1047,6 +1123,36 @@ export default function AssetDetailScreen() {
                   legalVehicleJurisdiction={asset.legalVehicleJurisdiction ?? null}
                 />
 
+                {/* WS7: Seller accountability — recourse agreement, personal
+                    liability, verification demands. Shows the seller's
+                    signed personal guarantee and any active verification
+                    requests from unit holders. */}
+                <CoOwnRecoursePanel
+                  recourseAgreementSigned={asset.recourseAgreementSigned ?? false}
+                  recourseStatus={asset.recourseStatus ?? 'pending'}
+                  totalTradedValueGbp={asset.totalTradedValueGbp}
+                  activeVerificationDemands={asset.activeVerificationDemands}
+                  agreement={recourseStatus?.agreement ?? null}
+                  sellerLiability={recourseStatus?.sellerLiability ?? null}
+                  verificationDemands={recourseStatus?.verificationDemands}
+                  isHolder={(yourUnits ?? 0) > 0}
+                  onRequestVerification={async () => {
+                    if (!assetId) return;
+                    setVerificationDemandLoading(true);
+                    try {
+                      await createVerificationDemand(assetId, 'authenticity');
+                      show('Verification request sent to seller', 'success');
+                      // Refresh recourse status
+                      const updated = await fetchCoOwnRecourseStatus(assetId);
+                      setRecourseStatus(updated);
+                    } catch {
+                      show('Could not send verification request', 'error');
+                    } finally {
+                      setVerificationDemandLoading(false);
+                    }
+                  }}
+                />
+
                 {(asset.provenance || asset.conditionGrade || asset.custodianLocation || asset.appraisalValueGbp) && (
                   <CoOwnAssetDossier
                     provenance={asset.provenance ? [{ event: 'Provenance', date: '', note: asset.provenance }] : undefined}
@@ -1072,7 +1178,7 @@ export default function AssetDetailScreen() {
                 {/* Trust audit trail — append-only history of trust-profile
                     changes (SEC Rule 17Ad-7 pattern). Fail closed when empty. */}
                 {asset.trustAuditEvents && asset.trustAuditEvents.length > 0 ? (
-                  <View style={styles.auditTrailWrap}>
+                  <View style={[styles.auditTrailWrap, { borderTopColor: colors.borderSubtle }]}>
                     <Text style={[styles.auditTrailTitle, { color: colors.textSecondary }]}>
                       Trust history
                     </Text>
@@ -1092,7 +1198,7 @@ export default function AssetDetailScreen() {
                 {/* WS6: Market audit trail — price marks, supply changes,
                     listing tier transitions. Fail closed when empty. */}
                 {asset.marketAuditEvents && asset.marketAuditEvents.length > 0 ? (
-                  <View style={styles.auditTrailWrap}>
+                  <View style={[styles.auditTrailWrap, { borderTopColor: colors.borderSubtle }]}>
                     <Text style={[styles.auditTrailTitle, { color: colors.textSecondary }]}>
                       Market history
                     </Text>
@@ -1108,7 +1214,7 @@ export default function AssetDetailScreen() {
                     ))}
                   </View>
                 ) : (
-                  <View style={styles.auditTrailWrap}>
+                  <View style={[styles.auditTrailWrap, { borderTopColor: colors.borderSubtle }]}>
                     <Text style={[styles.auditTrailTitle, { color: colors.textSecondary }]}>
                       Market history
                     </Text>
@@ -1357,51 +1463,39 @@ export default function AssetDetailScreen() {
         rights={rightsRows}
       />
 
-      {/* Risk disclosure modal — per spec 03_COOWN §8: collapsed by
-          default, opens in a modal sheet via "View risk disclosure". */}
-      <Modal
+      {/* Risk disclosure sheet — per spec 03_COOWN §8: collapsed by
+          default, opens in a BottomSheet via "View risk disclosure".
+          Uses the shared BottomSheet primitive for consistency with all
+          other detail surfaces. */}
+      <BottomSheet
         visible={riskDisclosureVisible}
-        transparent
-        animationType={reducedMotionEnabled ? 'none' : 'slide'}
-        onRequestClose={() => setRiskDisclosureVisible(false)}
+        onDismiss={() => setRiskDisclosureVisible(false)}
+        snapPoint={0.7}
       >
-        <View style={styles.riskDisclosureModalOverlay}>
-          <View
-            style={[
-              styles.riskDisclosureModalSheet,
-              {
-                backgroundColor: colors.background,
-                paddingBottom: Math.max(insets.bottom, Space.md),
-              },
-              isTablet && styles.riskDisclosureModalSheetTablet,
-            ]}
+        <View style={[styles.riskDisclosureSheetHeader, { borderBottomColor: colors.borderSubtle }]}>
+          <Text style={[styles.riskDisclosureSheetTitle, { color: colors.textPrimary }]}>
+            Risk disclosure
+          </Text>
+          <Pressable
+            onPress={() => setRiskDisclosureVisible(false)}
+            hitSlop={12}
+            style={styles.sheetCloseTarget}
+            accessibilityLabel="Close risk disclosure"
+            accessibilityRole="button"
           >
-            <View style={[styles.riskDisclosureModalHeader, { borderBottomColor: colors.borderSubtle }]}>
-              <Text style={[styles.riskDisclosureModalTitle, { color: colors.textPrimary }]}>
-                Risk disclosure
-              </Text>
-              <Pressable
-                onPress={() => setRiskDisclosureVisible(false)}
-                hitSlop={12}
-                style={styles.modalCloseTarget}
-                accessibilityLabel="Close risk disclosure"
-                accessibilityRole="button"
-              >
-                <Ionicons name="close" size={22} color={colors.textSecondary} />
-              </Pressable>
-            </View>
-            <ScrollView style={styles.riskDisclosureModalScroll} contentContainerStyle={styles.riskDisclosureModalContent}>
-              <CoOwnRiskDisclosure
-                disclosures={asset.riskDisclosures ?? null}
-                onReportIssue={() => {
-                  setRiskDisclosureVisible(false);
-                  navigation.navigate('CoOwnIssue', { assetId: asset.id });
-                }}
-              />
-            </ScrollView>
-          </View>
+            <Ionicons name="close" size={22} color={colors.textSecondary} />
+          </Pressable>
         </View>
-      </Modal>
+        <ScrollView style={styles.riskDisclosureSheetScroll} contentContainerStyle={styles.riskDisclosureSheetContent}>
+          <CoOwnRiskDisclosure
+            disclosures={asset.riskDisclosures ?? null}
+            onReportIssue={() => {
+              setRiskDisclosureVisible(false);
+              navigation.navigate('CoOwnIssue', { assetId: asset.id });
+            }}
+          />
+        </ScrollView>
+      </BottomSheet>
 
       {/* Supply structure sheet — per spec 03_COOWN §6: do not infer
           treasury, authorised, issued, public float or sponsor locked
@@ -1457,10 +1551,14 @@ const styles = StyleSheet.create({
   familyBadgeOverlay: {
     alignSelf: 'flex-start',
   },
+  // ── Issuer identity extension ──
+  // Per Design.md between-group spacing: the issuer row is a distinct
+  // group. paddingVertical Space.md (16px) gives proper breathing room
+  // for avatar + name + verification + actions.
   identityExtension: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.sm,
+    paddingTop: Space.md,
+    paddingBottom: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   // ── Market status row (inside transaction surface) ──
@@ -1580,24 +1678,10 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     fontVariant: [],
   },
-  // ── Risk disclosure modal (per spec 03_COOWN §8) ──
-  riskDisclosureModalOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.4)',
-  },
-  riskDisclosureModalSheet: {
-    borderTopLeftRadius: Radius.xl,
-    borderTopRightRadius: Radius.xl,
-    height: '80%',
-    maxHeight: '80%',
-  },
-  riskDisclosureModalSheetTablet: {
-    width: '100%',
-    maxWidth: 640,
-    alignSelf: 'center',
-  },
-  riskDisclosureModalHeader: {
+  // ── Risk disclosure sheet (per spec 03_COOWN §8) ──
+  // Uses the shared BottomSheet primitive; only the header and scroll
+  // content styles are screen-local.
+  riskDisclosureSheetHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -1605,21 +1689,21 @@ const styles = StyleSheet.create({
     paddingVertical: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  modalCloseTarget: {
+  sheetCloseTarget: {
     width: 44,
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  riskDisclosureModalTitle: {
+  riskDisclosureSheetTitle: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
     lineHeight: Type.subtitle.lineHeight,
   },
-  riskDisclosureModalScroll: {
+  riskDisclosureSheetScroll: {
     flex: 1,
   },
-  riskDisclosureModalContent: {
+  riskDisclosureSheetContent: {
     padding: Space.md,
   },
   // ── Viewer position ──
@@ -1646,7 +1730,6 @@ const styles = StyleSheet.create({
     paddingTop: Space.md,
     marginTop: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#ccc',
   },
   auditTrailTitle: {
     fontSize: Type.meta.size,

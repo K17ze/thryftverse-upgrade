@@ -11,10 +11,15 @@
  *     node --import tsx scripts/seed-dev-data.ts
  */
 import { Pool } from 'pg';
+import { hashPassword } from '../src/lib/auth';
 
 const DATABASE_URL =
   process.env.DATABASE_URL ??
   'postgresql://thryftverse:thryftverse@localhost:5432/thryftverse';
+
+/** Dev-only password for all seed users. Lets you log in as any seed user
+ *  to see the full auction home experience (watchlist, attention, bids). */
+const SEED_PASSWORD = 'seed12345';
 
 // ── Real product images from Unsplash CDN ──────────────────────────────────
 // These are stable, high-quality fashion product photos with known dimensions.
@@ -86,6 +91,9 @@ interface SeedAuction {
   startsAtOffsetH: number;
   endsAtOffsetH: number;
   bids: { bidderId: string; amountGbp: number }[];
+  /** Set for ended auctions — the winning bidder. Triggers 'won'/'lost'
+   *  viewer states and enables the attention strip. */
+  winnerBidderId?: string | null;
 }
 
 const USERS: SeedUser[] = [
@@ -292,19 +300,20 @@ const LISTINGS: SeedListing[] = [
 
 const AUCTIONS: SeedAuction[] = [
   // ── Live auctions (already started, ending at various times) ──
-  // Ends in 48h — long-running live auction
+  // Ends in 48h — long-running live auction. seed_u1 is leading.
   { listingId: 'seed_l1', startingBidGbp: 150, buyNowPriceGbp: 250, reservePriceGbp: 180, startsAtOffsetH: -24, endsAtOffsetH: 48, bids: [
     { bidderId: 'seed_u3', amountGbp: 160 },
     { bidderId: 'seed_u4', amountGbp: 175 },
-    { bidderId: 'seed_u3', amountGbp: 190 },
+    { bidderId: 'seed_u1', amountGbp: 190 },
   ]},
-  // Ends in 72h — live with single bid
+  // Ends in 72h — live with single bid from seed_u1 (leading)
   { listingId: 'seed_l5', startingBidGbp: 140, buyNowPriceGbp: 220, reservePriceGbp: null, startsAtOffsetH: -12, endsAtOffsetH: 72, bids: [
     { bidderId: 'seed_u4', amountGbp: 150 },
+    { bidderId: 'seed_u1', amountGbp: 165 },
   ]},
-  // Ends in 24h — live with active bidding
+  // Ends in 24h — live with active bidding. seed_u1 is outbid.
   { listingId: 'seed_l8', startingBidGbp: 280, buyNowPriceGbp: 400, reservePriceGbp: 300, startsAtOffsetH: -48, endsAtOffsetH: 24, bids: [
-    { bidderId: 'seed_u2', amountGbp: 290 },
+    { bidderId: 'seed_u1', amountGbp: 290 },
     { bidderId: 'seed_u3', amountGbp: 310 },
     { bidderId: 'seed_u2', amountGbp: 325 },
     { bidderId: 'seed_u3', amountGbp: 340 },
@@ -313,18 +322,18 @@ const AUCTIONS: SeedAuction[] = [
   { listingId: 'seed_l6', startingBidGbp: 50, buyNowPriceGbp: 90, reservePriceGbp: null, startsAtOffsetH: -6, endsAtOffsetH: 120, bids: [] },
 
   // ── Closing soon (ends within 60 minutes) ──
-  // Ends in 8 min — final minutes urgency
+  // Ends in 8 min — final minutes urgency. seed_u1 is OUTBID (triggers attention strip).
   { listingId: 'seed_l11', startingBidGbp: 3500, buyNowPriceGbp: 4500, reservePriceGbp: 3800, startsAtOffsetH: -72, endsAtOffsetH: 0.13, bids: [
-    { bidderId: 'seed_u3', amountGbp: 3600 },
-    { bidderId: 'seed_u4', amountGbp: 3800 },
-    { bidderId: 'seed_u3', amountGbp: 4100 },
+    { bidderId: 'seed_u1', amountGbp: 3600 },
+    { bidderId: 'seed_u3', amountGbp: 3800 },
+    { bidderId: 'seed_u4', amountGbp: 4100 },
   ]},
-  // Ends in 22 min — ending soon
+  // Ends in 22 min — ending soon. seed_u1 is leading.
   { listingId: 'seed_l14', startingBidGbp: 9000, buyNowPriceGbp: 14000, reservePriceGbp: 10000, startsAtOffsetH: -96, endsAtOffsetH: 0.37, bids: [
     { bidderId: 'seed_u3', amountGbp: 9500 },
-    { bidderId: 'seed_u4', amountGbp: 10500 },
+    { bidderId: 'seed_u1', amountGbp: 10500 },
   ]},
-  // Ends in 45 min — ending soon
+  // Ends in 45 min — ending soon. No viewer bids.
   { listingId: 'seed_l16', startingBidGbp: 120, buyNowPriceGbp: 200, reservePriceGbp: null, startsAtOffsetH: -48, endsAtOffsetH: 0.75, bids: [
     { bidderId: 'seed_u4', amountGbp: 130 },
     { bidderId: 'seed_u3', amountGbp: 145 },
@@ -339,16 +348,18 @@ const AUCTIONS: SeedAuction[] = [
   { listingId: 'seed_l13', startingBidGbp: 15000, buyNowPriceGbp: 22000, reservePriceGbp: 16000, startsAtOffsetH: 48, endsAtOffsetH: 144, bids: [] },
 
   // ── Recently closed (ended) ──
-  // Ended 2h ago — sold with bids
-  { listingId: 'seed_l17', startingBidGbp: 2500, buyNowPriceGbp: 3500, reservePriceGbp: 2800, startsAtOffsetH: -50, endsAtOffsetH: -2, bids: [
-    { bidderId: 'seed_u3', amountGbp: 2600 },
-    { bidderId: 'seed_u4', amountGbp: 2900 },
+  // Ended 2h ago — sold. seed_u1 LOST (was outbid). Winner is seed_u3.
+  { listingId: 'seed_l17', startingBidGbp: 2500, buyNowPriceGbp: 3500, reservePriceGbp: 2800, startsAtOffsetH: -50, endsAtOffsetH: -2, winnerBidderId: 'seed_u3', bids: [
+    { bidderId: 'seed_u1', amountGbp: 2600 },
+    { bidderId: 'seed_u3', amountGbp: 2900 },
+    { bidderId: 'seed_u4', amountGbp: 3000 },
     { bidderId: 'seed_u3', amountGbp: 3100 },
   ]},
-  // Ended 24h ago — sold
-  { listingId: 'seed_l9', startingBidGbp: 80, buyNowPriceGbp: 150, reservePriceGbp: null, startsAtOffsetH: -72, endsAtOffsetH: -24, bids: [
+  // Ended 24h ago — sold. seed_u1 WON this auction.
+  { listingId: 'seed_l9', startingBidGbp: 80, buyNowPriceGbp: 150, reservePriceGbp: null, startsAtOffsetH: -72, endsAtOffsetH: -24, winnerBidderId: 'seed_u1', bids: [
     { bidderId: 'seed_u4', amountGbp: 90 },
-    { bidderId: 'seed_u3', amountGbp: 110 },
+    { bidderId: 'seed_u3', amountGbp: 100 },
+    { bidderId: 'seed_u1', amountGbp: 110 },
   ]},
 ];
 
@@ -360,21 +371,25 @@ async function seed() {
     await client.query('BEGIN');
 
     // ── Users ────────────────────────────────────────────────────────────────
+    // Hash the dev password once and reuse for all seed users.
+    const passwordHash = await hashPassword(SEED_PASSWORD);
     for (const u of USERS) {
       await client.query(
-        `INSERT INTO users (id, username, email, avatar, display_name, bio, location, role)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, 'user')
+        `INSERT INTO users (id, username, email, avatar, display_name, bio, location, role, password_hash, email_verified_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'user', $8, NOW())
          ON CONFLICT (id) DO UPDATE SET
            username = EXCLUDED.username,
            email = EXCLUDED.email,
            avatar = EXCLUDED.avatar,
            display_name = EXCLUDED.display_name,
            bio = EXCLUDED.bio,
-           location = EXCLUDED.location`,
-        [u.id, u.username, u.email, u.avatar, u.display_name, u.bio, u.location]
+           location = EXCLUDED.location,
+           password_hash = EXCLUDED.password_hash,
+           email_verified_at = EXCLUDED.email_verified_at`,
+        [u.id, u.username, u.email, u.avatar, u.display_name, u.bio, u.location, passwordHash]
       );
     }
-    console.log(`[seed] ${USERS.length} users upserted`);
+    console.log(`[seed] ${USERS.length} users upserted (password: "${SEED_PASSWORD}")`);
 
     // ── Listings ────────────────────────────────────────────────────────────
     for (const l of LISTINGS) {
@@ -431,14 +446,19 @@ async function seed() {
       const startsAt = new Date(Date.now() + a.startsAtOffsetH * 3600_000).toISOString();
       const endsAt = new Date(Date.now() + a.endsAtOffsetH * 3600_000).toISOString();
       const currentBid = a.bids.length > 0 ? a.bids[a.bids.length - 1].amountGbp : a.startingBidGbp;
+      const isEnded = a.endsAtOffsetH <= 0;
+      const winnerId = a.winnerBidderId ?? null;
+      // Settled only if ended AND has a winner (auction was resolved)
+      const settledAt = isEnded && winnerId ? endsAt : null;
 
       await client.query(
         `INSERT INTO auctions (
             id, listing_id, seller_id, starts_at, ends_at,
             starting_bid_gbp, current_bid_gbp, buy_now_price_gbp,
-            reserve_price_gbp, bid_count, status, min_increment_gbp
+            reserve_price_gbp, bid_count, status, min_increment_gbp,
+            winner_bidder_id, settled_at, cancelled_at
           )
-          VALUES ($1, $2, (SELECT seller_id FROM listings WHERE id = $2), $3, $4, $5, $6, $7, $8, $9, 'live', 1.00)
+          VALUES ($1, $2, (SELECT seller_id FROM listings WHERE id = $2), $3, $4, $5, $6, $7, $8, $9, $10, 1.00, $11, $12, NULL)
           ON CONFLICT (id) DO UPDATE SET
             starts_at = EXCLUDED.starts_at,
             ends_at = EXCLUDED.ends_at,
@@ -447,9 +467,13 @@ async function seed() {
             buy_now_price_gbp = EXCLUDED.buy_now_price_gbp,
             reserve_price_gbp = EXCLUDED.reserve_price_gbp,
             bid_count = EXCLUDED.bid_count,
-            status = 'live'`,
+            status = EXCLUDED.status,
+            winner_bidder_id = EXCLUDED.winner_bidder_id,
+            settled_at = EXCLUDED.settled_at,
+            cancelled_at = NULL`,
         [auctionId, a.listingId, startsAt, endsAt, a.startingBidGbp, currentBid,
-         a.buyNowPriceGbp, a.reservePriceGbp, a.bids.length]
+         a.buyNowPriceGbp, a.reservePriceGbp, a.bids.length,
+         isEnded ? 'ended' : 'live', winnerId, settledAt]
       );
 
       // ── Bids ──────────────────────────────────────────────────────────────
@@ -621,6 +645,84 @@ async function seed() {
        ON CONFLICT (user_id) DO UPDATE SET verification_tier = 'id', seller_standards_met = true`
     );
     console.log('[seed] issuer verification profile upserted');
+
+    // ── Recourse agreements for seeded Co-Own assets ────────────────────────
+    // Each Co-Own asset has a signed recourse agreement making the seller
+    // personally liable for safeguarding, authenticity, and possession.
+    const recourseAgreements = [
+      {
+        id: 'recourse_seed_coown_1',
+        assetId: 'seed_coown_1',
+        sellerId: 'seed_u1',
+        totalUnits: 10,
+        unitPrice: 32,
+        maxLiability: 320,
+      },
+      {
+        id: 'recourse_seed_coown_2',
+        assetId: 'seed_coown_2',
+        sellerId: 'seed_u1',
+        totalUnits: 20,
+        unitPrice: 10,
+        maxLiability: 200,
+      },
+    ];
+    for (const ra of recourseAgreements) {
+      await client.query(
+        `INSERT INTO coown_recourse_agreements
+          (id, asset_id, seller_id, agreement_version, signed_at,
+           total_units_at_signing, unit_price_at_signing, max_liability_gbp,
+           personal_guarantee, status)
+         VALUES ($1, $2, $3, 1, NOW() - INTERVAL '5 days',
+                 $4, $5, $6, true, 'active')
+         ON CONFLICT (asset_id) DO UPDATE SET
+           status = 'active', personal_guarantee = true,
+           max_liability_gbp = EXCLUDED.max_liability_gbp`,
+        [ra.id, ra.assetId, ra.sellerId, ra.totalUnits, ra.unitPrice, ra.maxLiability]
+      );
+
+      // Log the signing event
+      await client.query(
+        `INSERT INTO coown_recourse_events
+          (asset_id, agreement_id, event_type, event_payload, triggered_by, visibility)
+         VALUES ($1, $2, 'agreement_signed', $3::jsonb, $4, 'public')
+         ON CONFLICT DO NOTHING`,
+        [
+          ra.assetId,
+          ra.id,
+          JSON.stringify({ maxLiabilityGbp: ra.maxLiability, totalUnits: ra.totalUnits, personalGuarantee: true }),
+          ra.sellerId,
+        ]
+      );
+    }
+
+    // Update asset recourse fields
+    for (const ra of recourseAgreements) {
+      await client.query(
+        `UPDATE coOwn_assets
+         SET recourse_agreement_signed = true, recourse_status = 'active'
+         WHERE id = $1`,
+        [ra.assetId]
+      );
+    }
+
+    // Seller liability profile for seed_u1
+    await client.query(
+      `INSERT INTO coown_seller_liability_profile
+        (user_id, total_active_liability_gbp, active_agreement_count,
+         total_agreements_signed, risk_tier, background_check_status,
+         background_check_completed_at, background_check_provider, updated_at)
+       VALUES ('seed_u1', 520, 2, 2, 'standard', 'passed',
+               NOW() - INTERVAL '7 days', 'Persona', NOW())
+       ON CONFLICT (user_id) DO UPDATE SET
+         total_active_liability_gbp = 520,
+         active_agreement_count = 2,
+         total_agreements_signed = 2,
+         risk_tier = 'standard',
+         background_check_status = 'passed',
+         updated_at = NOW()`
+    );
+    console.log(`[seed] ${recourseAgreements.length} recourse agreements + seller liability profile upserted`);
 
     // ── Compliance profiles for all seed users ──────────────────────────────
     for (const u of USERS) {
@@ -982,6 +1084,263 @@ async function seed() {
       );
     }
     console.log(`[seed] ${analyticsEvents.length} creator analytics events inserted (past 7 days)`);
+
+    // ── User addresses (for checkout) ─────────────────────────────────────
+    // Schema: user_addresses(id BIGSERIAL, user_id, name, street, city, postcode, is_default)
+    // We use fixed IDs via setval to keep references stable across re-seeds.
+    const seedAddresses = [
+      { id: 9001, userId: 'seed_u1', name: 'Marie Fullery', street: '12 Shoreditch High St, Flat 3', city: 'London', postcode: 'E1 6JJ' },
+      { id: 9002, userId: 'seed_u2', name: 'Scott Art', street: '45 Brick Lane', city: 'London', postcode: 'E1 6QR' },
+      { id: 9003, userId: 'seed_u3', name: 'Dan K. Dunks', street: '78 Portobello Rd', city: 'London', postcode: 'W11 3PR' },
+      { id: 9004, userId: 'seed_u4', name: 'Lucy Gibson', street: '23 Camden Lock, Studio 5', city: 'London', postcode: 'NW1 8AF' },
+    ];
+    for (const addr of seedAddresses) {
+      await client.query(
+        `INSERT INTO user_addresses (id, user_id, name, street, city, postcode, is_default, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, true, NOW(), NOW())
+         ON CONFLICT (id) DO UPDATE SET
+           name = EXCLUDED.name,
+           street = EXCLUDED.street,
+           city = EXCLUDED.city,
+           postcode = EXCLUDED.postcode,
+           is_default = true`,
+        [addr.id, addr.userId, addr.name, addr.street, addr.city, addr.postcode]
+      );
+    }
+    await client.query(`SELECT setval('user_addresses_id_seq', GREATEST(9004, (SELECT MAX(id) FROM user_addresses)))`);
+    console.log(`[seed] ${seedAddresses.length} user addresses upserted`);
+
+    // ── Mock payment methods (dev-mode mock, not real Stripe) ──────────────
+    // Schema: user_payment_methods(id BIGSERIAL, user_id, method_type, label, provider,
+    //   provider_customer_ref, provider_payment_method_ref, brand, last4,
+    //   expiry_month, expiry_year, is_default, status)
+    // Constraint: active methods require provider != 'legacy_local' AND both refs set.
+    const seedPaymentMethods = [
+      { id: 9001, userId: 'seed_u1', label: 'Visa ending 4242', provider: 'mock_fiat_gbp', customerRef: 'mock_cus_u1', pmRef: 'mock_pm_visa_4242', brand: 'visa', last4: '4242', expMonth: 12, expYear: 2028 },
+      { id: 9002, userId: 'seed_u2', label: 'Mastercard ending 5555', provider: 'mock_fiat_gbp', customerRef: 'mock_cus_u2', pmRef: 'mock_pm_mc_5555', brand: 'mastercard', last4: '5555', expMonth: 8, expYear: 2027 },
+      { id: 9003, userId: 'seed_u3', label: 'Visa ending 1313', provider: 'mock_fiat_gbp', customerRef: 'mock_cus_u3', pmRef: 'mock_pm_visa_1313', brand: 'visa', last4: '1313', expMonth: 3, expYear: 2026 },
+      { id: 9004, userId: 'seed_u4', label: 'Mastercard ending 8888', provider: 'mock_fiat_gbp', customerRef: 'mock_cus_u4', pmRef: 'mock_pm_mc_8888', brand: 'mastercard', last4: '8888', expMonth: 11, expYear: 2029 },
+    ];
+    for (const pm of seedPaymentMethods) {
+      await client.query(
+        `INSERT INTO user_payment_methods (id, user_id, method_type, label, provider, provider_customer_ref, provider_payment_method_ref, brand, last4, expiry_month, expiry_year, is_default, status, created_at, updated_at)
+         VALUES ($1, $2, 'card', $3, $4, $5, $6, $7, $8, $9, $10, true, 'active', NOW(), NOW())
+         ON CONFLICT (id) DO UPDATE SET
+           label = EXCLUDED.label,
+           provider = EXCLUDED.provider,
+           provider_customer_ref = EXCLUDED.provider_customer_ref,
+           provider_payment_method_ref = EXCLUDED.provider_payment_method_ref,
+           brand = EXCLUDED.brand,
+           last4 = EXCLUDED.last4,
+           expiry_month = EXCLUDED.expiry_month,
+           expiry_year = EXCLUDED.expiry_year,
+           status = 'active'`,
+        [pm.id, pm.userId, pm.label, pm.provider, pm.customerRef, pm.pmRef, pm.brand, pm.last4, pm.expMonth, pm.expYear]
+      );
+    }
+    await client.query(`SELECT setval('user_payment_methods_id_seq', GREATEST(9004, (SELECT MAX(id) FROM user_payment_methods)))`);
+    console.log(`[seed] ${seedPaymentMethods.length} mock payment methods upserted`);
+
+    // ── Mock payout accounts (for sellers to withdraw without Stripe) ──────
+    // Schema: payout_accounts(id BIGSERIAL, user_id, gateway_id, provider_account_ref,
+    //   status, metadata, country_code, currency)
+    const seedPayoutAccounts = [
+      { id: 9001, userId: 'seed_u1', gatewayId: 'mock_fiat_gbp', providerRef: 'mock_ba_u1', bankLast4: '1234' },
+      { id: 9002, userId: 'seed_u2', gatewayId: 'mock_fiat_gbp', providerRef: 'mock_ba_u2', bankLast4: '5678' },
+      { id: 9003, userId: 'seed_u3', gatewayId: 'mock_fiat_gbp', providerRef: 'mock_ba_u3', bankLast4: '9012' },
+    ];
+    for (const pa of seedPayoutAccounts) {
+      await client.query(
+        `INSERT INTO payout_accounts (id, user_id, gateway_id, provider_account_ref, status, metadata, country_code, currency, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, 'active', $5, 'GB', 'GBP', NOW(), NOW())
+         ON CONFLICT (id) DO UPDATE SET
+           status = 'active',
+           provider_account_ref = EXCLUDED.provider_account_ref,
+           metadata = EXCLUDED.metadata,
+           updated_at = NOW()`,
+        [pa.id, pa.userId, pa.gatewayId, pa.providerRef, JSON.stringify({ bankName: 'Mock Bank UK', last4: pa.bankLast4 })]
+      );
+    }
+    await client.query(`SELECT setval('payout_accounts_id_seq', GREATEST(9003, (SELECT MAX(id) FROM payout_accounts)))`);
+    console.log(`[seed] ${seedPayoutAccounts.length} mock payout accounts upserted`);
+
+    // ── Mock Stripe Connect accounts (for sellers) ─────────────────────────
+    // Schema: stripe_connect_accounts(id SERIAL, user_id, stripe_account_id, status,
+    //   charges_enabled, payouts_enabled, country, default_currency)
+    const seedStripeConnectAccounts = [
+      { id: 9001, userId: 'seed_u1', stripeAccountId: 'acct_mock_u1' },
+      { id: 9002, userId: 'seed_u2', stripeAccountId: 'acct_mock_u2' },
+      { id: 9003, userId: 'seed_u3', stripeAccountId: 'acct_mock_u3' },
+    ];
+    for (const sca of seedStripeConnectAccounts) {
+      await client.query(
+        `INSERT INTO stripe_connect_accounts (id, user_id, stripe_account_id, status, charges_enabled, payouts_enabled, country, default_currency, created_at, updated_at)
+         VALUES ($1, $2, $3, 'active', true, true, 'GB', 'GBP', NOW(), NOW())
+         ON CONFLICT (id) DO UPDATE SET
+           stripe_account_id = EXCLUDED.stripe_account_id,
+           status = 'active',
+           charges_enabled = true,
+           payouts_enabled = true,
+           updated_at = NOW()`,
+        [sca.id, sca.userId, sca.stripeAccountId]
+      );
+    }
+    await client.query(`SELECT setval('stripe_connect_accounts_id_seq', GREATEST(9003, (SELECT MAX(id) FROM stripe_connect_accounts)))`);
+    console.log(`[seed] ${seedStripeConnectAccounts.length} mock Stripe Connect accounts upserted`);
+
+    // ── User follows (social graph) ────────────────────────────────────────
+    // Schema: user_follows(id TEXT PK, follower_id, following_id, created_at)
+    const seedFollows = [
+      { id: 'seed_follow_1', followerId: 'seed_u2', followingId: 'seed_u1' },
+      { id: 'seed_follow_2', followerId: 'seed_u3', followingId: 'seed_u1' },
+      { id: 'seed_follow_3', followerId: 'seed_u4', followingId: 'seed_u1' },
+      { id: 'seed_follow_4', followerId: 'seed_u1', followingId: 'seed_u2' },
+      { id: 'seed_follow_5', followerId: 'seed_u4', followingId: 'seed_u3' },
+      { id: 'seed_follow_6', followerId: 'seed_u1', followingId: 'seed_u3' },
+      { id: 'seed_follow_7', followerId: 'seed_u2', followingId: 'seed_u3' },
+    ];
+    for (const f of seedFollows) {
+      await client.query(
+        `INSERT INTO user_follows (id, follower_id, following_id, created_at)
+         VALUES ($1, $2, $3, NOW() - (FLOOR(RANDOM() * 30)::TEXT || ' days')::INTERVAL)
+         ON CONFLICT (id) DO UPDATE SET
+           follower_id = EXCLUDED.follower_id,
+           following_id = EXCLUDED.following_id`,
+        [f.id, f.followerId, f.followingId]
+      );
+    }
+    console.log(`[seed] ${seedFollows.length} user follows upserted`);
+
+    // ── DM conversations + messages ────────────────────────────────────────
+    // Schema: chat_conversations(id TEXT PK, type, title, owner_id, item_id, metadata)
+    //         chat_members(conversation_id, user_id, role, joined_at, last_read_at)
+    //         chat_messages(id TEXT PK, conversation_id, sender_id, body, created_at)
+    const seedConversations = [
+      {
+        id: 'seed_conv_1',
+        type: 'dm' as const,
+        title: null,
+        ownerId: 'seed_u2',
+        itemId: 'seed_l1',
+        memberIds: ['seed_u1', 'seed_u2'],
+        messages: [
+          { senderId: 'seed_u2', body: 'Hi Marie! Is the YSL sweater still available?', hoursAgo: 26 },
+          { senderId: 'seed_u1', body: 'Hi Scott! Yes it is — it\'s in great condition, barely worn.', hoursAgo: 25 },
+          { senderId: 'seed_u2', body: 'Amazing! Would you consider an offer of £180?', hoursAgo: 24 },
+          { senderId: 'seed_u1', body: 'I could do £190 with free shipping. Let me know!', hoursAgo: 23 },
+          { senderId: 'seed_u2', body: 'Deal! I\'ll make an offer now.', hoursAgo: 22 },
+        ],
+      },
+      {
+        id: 'seed_conv_2',
+        type: 'dm' as const,
+        title: null,
+        ownerId: 'seed_u4',
+        itemId: 'seed_l8',
+        memberIds: ['seed_u4', 'seed_u3'],
+        messages: [
+          { senderId: 'seed_u4', body: 'Hey Dan, love the Nike Air Max! What\'s the condition like?', hoursAgo: 48 },
+          { senderId: 'seed_u3', body: 'Hey Lucy! They\'re VNDS — worn twice, no creases. Original box included.', hoursAgo: 47 },
+          { senderId: 'seed_u4', body: 'Perfect, I\'ll grab them now.', hoursAgo: 46 },
+        ],
+      },
+    ];
+    for (const conv of seedConversations) {
+      await client.query(
+        `INSERT INTO chat_conversations (id, type, title, owner_id, item_id, metadata, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, '{}', NOW() - '48 hours'::INTERVAL, NOW() - '22 hours'::INTERVAL)
+         ON CONFLICT (id) DO UPDATE SET
+           type = EXCLUDED.type,
+           title = EXCLUDED.title,
+           owner_id = EXCLUDED.owner_id,
+           item_id = EXCLUDED.item_id,
+           updated_at = NOW() - '22 hours'::INTERVAL`,
+        [conv.id, conv.type, conv.title, conv.ownerId, conv.itemId]
+      );
+      for (const memberId of conv.memberIds) {
+        const role = memberId === conv.ownerId ? 'owner' : 'member';
+        await client.query(
+          `INSERT INTO chat_members (conversation_id, user_id, role, joined_at)
+           VALUES ($1, $2, $3, NOW() - '48 hours'::INTERVAL)
+           ON CONFLICT (conversation_id, user_id) DO UPDATE SET
+             joined_at = NOW() - '48 hours'::INTERVAL`,
+          [conv.id, memberId, role]
+        );
+      }
+      for (const msg of conv.messages) {
+        const msgId = `${conv.id}_msg_${msg.hoursAgo}`;
+        await client.query(
+          `INSERT INTO chat_messages (id, conversation_id, sender_type, sender_user_id, body, metadata, created_at)
+           VALUES ($1, $2, 'user', $3, $4, '{}', NOW() - ($5 || ' hours')::INTERVAL)
+           ON CONFLICT (id) DO UPDATE SET
+             body = EXCLUDED.body`,
+          [msgId, conv.id, msg.senderId, msg.body, msg.hoursAgo]
+        );
+      }
+    }
+    console.log(`[seed] ${seedConversations.length} DM conversations with messages upserted`);
+
+    // ── Sample orders (completed buy-now transactions) ─────────────────────
+    // Schema: orders(id TEXT, buyer_id, seller_id, listing_id, subtotal_gbp,
+    //   buyer_protection_fee_gbp, total_gbp, postage_fee_gbp, status,
+    //   address_id BIGINT, payment_method_id BIGINT, tracking_number,
+    //   shipping_provider, paid_at, shipped_at, delivered_at)
+    const seedOrders = [
+      {
+        id: 'seed_order_1', buyerId: 'seed_u2', sellerId: 'seed_u1', listingId: 'seed_l1',
+        addressId: 9002, paymentMethodId: 9002,
+        subtotalGbp: '190.00', postageGbp: '0.00', protectionGbp: '3.80', totalGbp: '193.80',
+        status: 'delivered', trackingNumber: 'RM123456789GB', shippingProvider: 'Royal Mail Tracked 48',
+        daysAgo: 14,
+      },
+      {
+        id: 'seed_order_2', buyerId: 'seed_u4', sellerId: 'seed_u3', listingId: 'seed_l8',
+        addressId: 9004, paymentMethodId: 9004,
+        subtotalGbp: '85.00', postageGbp: '3.95', protectionGbp: '1.70', totalGbp: '90.65',
+        status: 'shipped', trackingNumber: 'EV987654321GB', shippingProvider: 'Evri Tracked',
+        daysAgo: 3,
+      },
+    ];
+    for (const order of seedOrders) {
+      const createdExpr = `NOW() - '${order.daysAgo} days'::INTERVAL`;
+      const deliveredExpr = order.status === 'delivered'
+        ? `NOW() - '${Math.max(0, order.daysAgo - 12)} days'::INTERVAL`
+        : 'NULL';
+      await client.query(
+        `INSERT INTO orders (id, buyer_id, seller_id, listing_id, subtotal_gbp, buyer_protection_fee_gbp, postage_fee_gbp, total_gbp, status, address_id, payment_method_id, tracking_number, shipping_provider, paid_at, shipped_at, delivered_at, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, ${createdExpr}, ${createdExpr} + '1 day'::INTERVAL, ${deliveredExpr}, ${createdExpr}, ${createdExpr} + '1 day'::INTERVAL)
+         ON CONFLICT (id) DO UPDATE SET
+           status = EXCLUDED.status,
+           tracking_number = EXCLUDED.tracking_number,
+           shipping_provider = EXCLUDED.shipping_provider,
+           paid_at = EXCLUDED.paid_at,
+           shipped_at = EXCLUDED.shipped_at,
+           delivered_at = EXCLUDED.delivered_at`,
+        [order.id, order.buyerId, order.sellerId, order.listingId,
+         order.subtotalGbp, order.protectionGbp, order.postageGbp, order.totalGbp,
+         order.status, order.addressId, order.paymentMethodId,
+         order.trackingNumber, order.shippingProvider]
+      );
+    }
+    console.log(`[seed] ${seedOrders.length} sample orders upserted`);
+
+    // ── Order reviews (seller ratings) ─────────────────────────────────────
+    // Schema: order_reviews(id TEXT, order_id, reviewer_id, seller_id, rating, comment)
+    const seedReviews = [
+      { id: 'seed_review_1', orderId: 'seed_order_1', reviewerId: 'seed_u2', sellerId: 'seed_u1', rating: 5, comment: 'Item exactly as described, fast shipping. Great seller!', daysAgo: 12 },
+      { id: 'seed_review_2', orderId: 'seed_order_2', reviewerId: 'seed_u4', sellerId: 'seed_u3', rating: 4, comment: 'Good condition, well packaged. Would buy again.', daysAgo: 2 },
+    ];
+    for (const review of seedReviews) {
+      await client.query(
+        `INSERT INTO order_reviews (id, order_id, reviewer_id, seller_id, rating, comment, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, NOW() - ($7 || ' days')::INTERVAL)
+         ON CONFLICT (id) DO UPDATE SET
+           rating = EXCLUDED.rating,
+           comment = EXCLUDED.comment`,
+        [review.id, review.orderId, review.reviewerId, review.sellerId, review.rating, review.comment, review.daysAgo]
+      );
+    }
+    console.log(`[seed] ${seedReviews.length} order reviews upserted`);
 
     await client.query('COMMIT');
     console.log('[seed] done — all data committed');
