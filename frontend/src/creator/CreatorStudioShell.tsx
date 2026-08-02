@@ -29,6 +29,8 @@ import { CreatorAssetPicker, type AssetPickerMode } from './CreatorAssetPicker';
 import { CreatorTemplateBrowser } from './CreatorTemplateBrowser';
 import { CreatorPreviewOverlay } from './CreatorPreviewOverlay';
 import { CreatorEntryScreen } from './CreatorEntryScreen';
+import { CreatorCropSheet } from './CreatorCropSheet';
+import { CreatorCutoutSheet } from './CreatorCutoutSheet';
 import { PressScale } from './CreatorAnimations';
 import { useHaptic } from '../hooks/useHaptic';
 import type { CreatorTemplate } from './templates';
@@ -64,6 +66,8 @@ function CreatorStudioInner() {
   const [showOverflow, setShowOverflow] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [entryComplete, setEntryComplete] = useState(Boolean(route.params?.startBlank));
+  const [cropTarget, setCropTarget] = useState<CreatorLayer | null>(null);
+  const [cutoutTarget, setCutoutTarget] = useState<CreatorLayer | null>(null);
 
   // Show entry screen when document is empty and not loading a draft/template
   const hasContent = document.pages.some((p) => p.layers.length > 0);
@@ -409,6 +413,8 @@ function CreatorStudioInner() {
               else if (layer.type === 'mention') setPickerMode('mention');
               else if (layer.type === 'vote') setPickerMode('vote');
             }}
+            onCropLayer={(layer) => setCropTarget(layer)}
+            onCutoutLayer={(layer) => setCutoutTarget(layer)}
             onDeleteLayer={(id) => removeLayer(id)}
             onDuplicateLayer={(id) => duplicateLayer(id)}
             onReorderLayer={(id, dir) => reorderLayer(id, dir)}
@@ -524,6 +530,43 @@ function CreatorStudioInner() {
           setDocument(doc);
         }}
       />
+      {/* ── Crop sheet (Look mode — Instagram-style aspect ratio crop) ── */}
+      {cropTarget && cropTarget.type === 'media' && (
+        <CreatorCropSheet
+          visible={!!cropTarget}
+          imageUri={(cropTarget.payload as any)?.mediaUri ?? ''}
+          onClose={() => setCropTarget(null)}
+          onCropComplete={(newUri) => {
+            if (cropTarget) {
+              updateLayer(cropTarget.id, {
+                payload: { ...(cropTarget.payload as any), mediaUri: newUri },
+              } as any);
+            }
+            setCropTarget(null);
+          }}
+        />
+      )}
+      {/* ── Cutout sheet (Look mode — Snapchat-style scissors cutout) ── */}
+      {cutoutTarget && cutoutTarget.type === 'media' && (
+        <CreatorCutoutSheet
+          visible={!!cutoutTarget}
+          imageUri={(cutoutTarget.payload as any)?.mediaUri ?? ''}
+          onClose={() => setCutoutTarget(null)}
+          onCutoutComplete={(newUri) => {
+            if (cutoutTarget) {
+              // Replace the media layer's URI with the cutout result
+              updateLayer(cutoutTarget.id, {
+                payload: {
+                  ...(cutoutTarget.payload as any),
+                  mediaUri: newUri,
+                  contentFit: 'contain',
+                },
+              } as any);
+            }
+            setCutoutTarget(null);
+          }}
+        />
+      )}
       <CreatorAssetPicker
         visible={pickerMode !== null}
         mode={pickerMode ?? 'media'}

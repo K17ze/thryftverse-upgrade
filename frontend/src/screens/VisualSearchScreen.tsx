@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,8 @@ import {
   StatusBar,
   TextInput,
   RefreshControl,
+  Animated as RNAnimated,
+  Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -55,6 +57,40 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
   const [visualMatching, setVisualMatching] = useState(false);
   const [resultNote, setResultNote] = useState<string | undefined>(undefined);
   const [refreshing, setRefreshing] = useState(false);
+
+  // ── Instagram-style scanning animation ──────────────────────────────
+  // When a photo is captured/selected, an animated scanline sweeps across
+  // the thumbnail to communicate AI analysis is in progress.
+  const scanLineAnim = useRef(new RNAnimated.Value(0)).current;
+  const scanOpacityAnim = useRef(new RNAnimated.Value(0)).current;
+
+  useEffect(() => {
+    if (status === 'loading') {
+      scanOpacityAnim.setValue(1);
+      RNAnimated.loop(
+        RNAnimated.sequence([
+          RNAnimated.timing(scanLineAnim, {
+            toValue: 1,
+            duration: 1200,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+          RNAnimated.timing(scanLineAnim, {
+            toValue: 0,
+            duration: 800,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+        ]),
+      ).start();
+    } else {
+      RNAnimated.timing(scanOpacityAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [status, scanLineAnim, scanOpacityAnim]);
 
   // Derive available categories from listings for refinement chips.
   const availableCategories = useMemo(() => {
@@ -308,6 +344,32 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
             onError={() => setPreviewFailed(true)}
           />
         )}
+        {/* Instagram-style scanning overlay — animated scanline + corner brackets */}
+        <RNAnimated.View
+          style={[
+            styles.scanOverlay,
+            { opacity: scanOpacityAnim },
+          ]}
+          pointerEvents="none"
+        >
+          <RNAnimated.View
+            style={[
+              styles.scanLine,
+              {
+                transform: [{
+                  translateY: scanLineAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0, 64],
+                  }),
+                }],
+              },
+            ]}
+          />
+          <View style={styles.scanBracketTL} />
+          <View style={styles.scanBracketTR} />
+          <View style={styles.scanBracketBL} />
+          <View style={styles.scanBracketBR} />
+        </RNAnimated.View>
         <AnimatedPressable
           style={styles.queryThumbRemove}
           onPress={handleRemoveImage}
@@ -579,7 +641,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
     if (status === 'loading') {
       return (
         <View style={styles.resultsSection}>
-          <DiscoverySectionHeader title="Results" kicker="Searching" />
+          <DiscoverySectionHeader title="Results" kicker="Analyzing image…" />
           {renderSkeletonGrid()}
         </View>
       );
@@ -687,6 +749,64 @@ function createStyles(colors: ThemeColors) {
     position: 'relative',
   },
   queryThumb: { width: '100%', height: '100%' },
+  // ── Scanning animation overlay ────────────────────────────────────────
+  scanOverlay: {
+    ...StyleSheet.absoluteFill,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+  },
+  scanLine: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: colors.brand,
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  scanBracketTL: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    width: 12,
+    height: 12,
+    borderTopWidth: 2,
+    borderLeftWidth: 2,
+    borderColor: colors.brand,
+  },
+  scanBracketTR: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 12,
+    height: 12,
+    borderTopWidth: 2,
+    borderRightWidth: 2,
+    borderColor: colors.brand,
+  },
+  scanBracketBL: {
+    position: 'absolute',
+    bottom: 6,
+    left: 6,
+    width: 12,
+    height: 12,
+    borderBottomWidth: 2,
+    borderLeftWidth: 2,
+    borderColor: colors.brand,
+  },
+  scanBracketBR: {
+    position: 'absolute',
+    bottom: 6,
+    right: 6,
+    width: 12,
+    height: 12,
+    borderBottomWidth: 2,
+    borderRightWidth: 2,
+    borderColor: colors.brand,
+  },
   queryThumbRemove: {
     position: 'absolute',
     top: 4,

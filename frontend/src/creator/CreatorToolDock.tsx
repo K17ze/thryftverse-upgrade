@@ -34,6 +34,10 @@ export interface CreatorToolDockProps {
   /** Page-level actions — Poster: add page, Look: layout presets */
   onAddPage?: () => void;
   onLayoutPresets?: () => void;
+  /** Look-specific: crop a media layer */
+  onCropLayer?: (layer: CreatorLayer) => void;
+  /** Look-specific: cutout a media layer */
+  onCutoutLayer?: (layer: CreatorLayer) => void;
 }
 
 export function CreatorToolDock({
@@ -48,6 +52,8 @@ export function CreatorToolDock({
   floating = false,
   onAddPage,
   onLayoutPresets,
+  onCropLayer,
+  onCutoutLayer,
 }: CreatorToolDockProps) {
   const { document } = useCreator();
   const { colors } = useAppTheme();
@@ -56,7 +62,7 @@ export function CreatorToolDock({
 
   // Build contextual tools based on selection state and mode
   const tools: RailTool[] = selectedLayer
-    ? buildSelectionTools(selectedLayer, isLook, onEditLayer, onDeleteLayer, onDuplicateLayer, onReorderLayer)
+    ? buildSelectionTools(selectedLayer, isLook, onEditLayer, onDeleteLayer, onDuplicateLayer, onReorderLayer, onCropLayer, onCutoutLayer)
     : buildDefaultTools(isLook, onToolPress, onAddPage, onLayoutPresets);
 
   const handleToolPress = useCallback((tool: RailTool) => {
@@ -187,6 +193,8 @@ function buildSelectionTools(
   onDeleteLayer: (id: string) => void,
   onDuplicateLayer: (id: string) => void,
   onReorderLayer: (id: string, direction: 'forward' | 'backward') => void,
+  onCropLayer?: (layer: CreatorLayer) => void,
+  onCutoutLayer?: (layer: CreatorLayer) => void,
 ): RailTool[] {
   const tools: RailTool[] = [];
 
@@ -196,8 +204,17 @@ function buildSelectionTools(
   } else if (layer.type === 'media') {
     if (isLook) {
       // Look media: crop + cutout (collage-specific)
-      tools.push({ icon: 'crop-outline', label: 'Crop', action: () => onEditLayer(layer) });
-      tools.push({ icon: 'cut-outline', label: 'Cutout', action: () => onEditLayer(layer) });
+      // Use dedicated crop/cutout handlers when available; fall back to edit
+      tools.push({
+        icon: 'crop-outline',
+        label: 'Crop',
+        action: () => (onCropLayer ? onCropLayer(layer) : onEditLayer(layer)),
+      });
+      tools.push({
+        icon: 'cut-outline',
+        label: 'Cutout',
+        action: () => (onCutoutLayer ? onCutoutLayer(layer) : onEditLayer(layer)),
+      });
     } else {
       // Poster media: replace + trim (story-specific)
       tools.push({ icon: 'swap-horizontal-outline', label: 'Replace', action: () => onEditLayer(layer) });
