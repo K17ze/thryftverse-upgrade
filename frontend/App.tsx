@@ -384,12 +384,12 @@ export default function App() {
   }
 
   return (
+    <ThemeProvider>
     <AppErrorBoundary>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
           <KeyboardProvider>
           <ServerStateProvider>
-          <ThemeProvider>
             <ToastProvider>
               <BackendDataProvider>
                 <CurrencyProvider>
@@ -420,11 +420,11 @@ export default function App() {
               </BackendDataProvider>
               <ToastContainer />
             </ToastProvider>
-          </ThemeProvider>
           </ServerStateProvider>
           </KeyboardProvider>
         </SafeAreaProvider>
       </GestureHandlerRootView>
     </AppErrorBoundary>
+    </ThemeProvider>
   );
 }

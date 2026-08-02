@@ -130,6 +130,12 @@ import ManageCollectionItemsScreen from '../screens/ManageCollectionItemsScreen'
 import CreateCollectionScreen from '../screens/CreateCollectionScreen';
 import OrderSupportScreen from '../screens/OrderSupportScreen';
 import BuyerProtectionScreen from '../screens/BuyerProtectionScreen';
+import ConnectedAccountsScreen from '../screens/ConnectedAccountsScreen';
+import EmailNotificationsScreen from '../screens/EmailNotificationsScreen';
+import AccessibilitySettingsScreen from '../screens/AccessibilitySettingsScreen';
+import CoOwnPriceAlertsScreen from '../screens/CoOwnPriceAlertsScreen';
+import CoOwnTaxDocumentsScreen from '../screens/CoOwnTaxDocumentsScreen';
+import CoOwnRecurringOrdersScreen from '../screens/CoOwnRecurringOrdersScreen';
 import ChatMediaPreviewScreen from '../screens/ChatMediaPreviewScreen';
 // UI-18 — Reference-perfect product UX
 import EditCollectionScreen from '../screens/EditCollectionScreen';
@@ -355,6 +361,12 @@ export default function AppNavigator() {
       <Stack.Screen name="CreateCollection" component={CreateCollectionScreen} options={modalScreenOptions} />
       <Stack.Screen name="OrderSupport" component={OrderSupportScreen} />
       <Stack.Screen name="BuyerProtection" component={BuyerProtectionScreen} />
+      <Stack.Screen name="ConnectedAccounts" component={ConnectedAccountsScreen} />
+      <Stack.Screen name="EmailNotifications" component={EmailNotificationsScreen} />
+      <Stack.Screen name="AccessibilitySettings" component={AccessibilitySettingsScreen} />
+      <Stack.Screen name="CoOwnPriceAlerts" component={CoOwnPriceAlertsScreen} />
+      <Stack.Screen name="CoOwnTaxDocuments" component={CoOwnTaxDocumentsScreen} />
+      <Stack.Screen name="CoOwnRecurringOrders" component={CoOwnRecurringOrdersScreen} />
       <Stack.Screen name="ChatMediaPreview" component={ChatMediaPreviewScreen} options={modalScreenOptions} />
       {/* UI-18 — Reference-perfect product UX */}
       <Stack.Screen name="EditCollection" component={EditCollectionScreen} options={modalScreenOptions} />

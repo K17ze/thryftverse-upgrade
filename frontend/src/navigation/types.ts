@@ -204,6 +204,12 @@ export type RootStackParamList = {
   CreateCollection: undefined;
   OrderSupport: { orderId: string };
   BuyerProtection: { orderId: string };
+  ConnectedAccounts: undefined;
+  EmailNotifications: undefined;
+  AccessibilitySettings: undefined;
+  CoOwnPriceAlerts: undefined;
+  CoOwnTaxDocuments: undefined;
+  CoOwnRecurringOrders: undefined;
   ChatMediaPreview: { mediaUri: string; mediaType?: 'image' | 'video'; senderLabel?: string; timestamp?: string; messageId?: string };
   // UI-18 — Reference-perfect product UX
   EditCollection: { collectionId: string };

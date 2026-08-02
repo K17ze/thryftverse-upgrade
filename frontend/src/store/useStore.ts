@@ -6,7 +6,7 @@ import type { AuctionMarketItem, AuctionViewModel, CoOwnAsset } from '../data/tr
 import type { ChatBot, Conversation, Message as ConversationMessage } from '../data/mockData';
 import { MOCK_CHAT_BOTS, MOCK_CONVERSATIONS } from '../data/mockData';
 import { ENABLE_RUNTIME_MOCKS } from '../constants/runtimeFlags';
-import { updateUserAccountPreferences, updateUserPostagePreferences, updateUserPersonalisation } from '../services/accountApi';
+import { updateUserAccountPreferences, updateUserPostagePreferences, updateUserPersonalisation, updateChatPrivacy } from '../services/accountApi';
 import { addToCoOwnWatchlist, removeFromCoOwnWatchlist } from '../services/marketApi';
 import {
   fetchSystemBotsFromApi,
@@ -1427,9 +1427,15 @@ export const useStore = create<StoreState>()(
     }),
   isMutedConversation: (id) => get().mutedConversationIds.includes(id),
   readReceiptsEnabled: true,
-  setReadReceiptsEnabled: (v) => set({ readReceiptsEnabled: v }),
+  setReadReceiptsEnabled: (v) => {
+    set({ readReceiptsEnabled: v });
+    void updateChatPrivacy({ readReceiptsEnabled: v }).catch(() => {});
+  },
   allowMessagesFrom: 'everyone',
-  setAllowMessagesFrom: (v) => set({ allowMessagesFrom: v }),
+  setAllowMessagesFrom: (v) => {
+    set({ allowMessagesFrom: v });
+    void updateChatPrivacy({ allowMessagesFrom: v }).catch(() => {});
+  },
   archivedConversationIds: [],
   toggleArchivedConversation: (id) =>
     set((state) => {

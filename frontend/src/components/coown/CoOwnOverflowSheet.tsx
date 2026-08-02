@@ -26,6 +26,7 @@ export interface CoOwnOverflowSheetProps {
   onWatch: () => void;
   isWatched: boolean;
   onReport: () => void;
+  onPriceAlert?: () => void;
 }
 
 export function CoOwnOverflowSheet({
@@ -37,6 +38,7 @@ export function CoOwnOverflowSheet({
   onWatch,
   isWatched,
   onReport,
+  onPriceAlert,
 }: CoOwnOverflowSheetProps) {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
@@ -72,6 +74,14 @@ export function CoOwnOverflowSheet({
         onWatch();
       }),
     },
+    ...(onPriceAlert ? [{
+      icon: 'notifications-outline' as keyof typeof Ionicons.glyphMap,
+      label: 'Create price alert',
+      onPress: () => handleAction(() => {
+        onClose();
+        onPriceAlert();
+      }),
+    }] : []),
     {
       icon: 'flag-outline' as keyof typeof Ionicons.glyphMap,
       label: 'Report an issue',

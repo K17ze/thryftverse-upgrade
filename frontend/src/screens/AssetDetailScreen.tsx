@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable, useWindowDimensions, Modal, TextInput } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,6 +29,7 @@ import {
   type CoOwnOrderBookSnapshot,
   type MarketCoOwnAsset,
   type CoOwnRecourseStatus,
+  createCoOwnPriceAlert,
 } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
 import { useToast } from '../context/ToastContext';
@@ -87,6 +88,7 @@ import {
   type CoOwnRightsRow,
   type CoOwnCandleRange,
 } from '../components/coown';
+import { AppButton } from '../components/ui/AppButton';
 import { useConnectivity } from '../hooks/useConnectivity';
 
 type RouteT = RouteProp<RootStackParamList, 'AssetDetail'>;
@@ -151,6 +153,35 @@ export default function AssetDetailScreen() {
   const [supplySheetVisible, setSupplySheetVisible] = React.useState(false);
   const [candleRange, setCandleRange] = React.useState<CoOwnCandleRange>('1W');
   const [showVolume, setShowVolume] = React.useState(false);
+  // Price alert creation
+  const [priceAlertVisible, setPriceAlertVisible] = React.useState(false);
+  const [alertTargetPrice, setAlertTargetPrice] = React.useState('');
+  const [alertCondition, setAlertCondition] = React.useState<'above' | 'below'>('above');
+  const [alertSubmitting, setAlertSubmitting] = React.useState(false);
+
+  const handleCreatePriceAlert = React.useCallback(async () => {
+    if (!assetId) return;
+    const priceNum = parseFloat(alertTargetPrice);
+    if (!priceNum || priceNum <= 0) {
+      show('Enter a valid target price', 'error');
+      return;
+    }
+    const priceMinor = Math.round(priceNum * 100);
+    setAlertSubmitting(true);
+    try {
+      await createCoOwnPriceAlert(assetId, alertCondition, priceMinor);
+      haptics.success();
+      show(`Price alert set: ${alertCondition} £${priceNum.toFixed(2)}`, 'success');
+      setPriceAlertVisible(false);
+      setAlertTargetPrice('');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to create alert';
+      show(message, 'error');
+    } finally {
+      setAlertSubmitting(false);
+    }
+  }, [assetId, alertTargetPrice, alertCondition, show]);
+
   const [dataLoadedAt, setDataLoadedAt] = React.useState<number | null>(null);
   // Per spec 03_COOWN §5: dossier collapsed by default.
   const [dossierExpanded, setDossierExpanded] = React.useState(false);
@@ -1537,11 +1568,88 @@ export default function AssetDetailScreen() {
           setOverflowVisible(false);
         }}
         isWatched={isWatched}
+        onPriceAlert={() => {
+          setOverflowVisible(false);
+          setPriceAlertVisible(true);
+        }}
         onReport={() => {
           setOverflowVisible(false);
           navigation.navigate('CoOwnIssue', { assetId: asset.id });
         }}
       />
+
+      {/* Price alert creation modal */}
+      <Modal
+        visible={priceAlertVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setPriceAlertVisible(false)}
+      >
+        <Pressable style={priceAlertStyles.overlay} onPress={() => setPriceAlertVisible(false)}>
+          <Pressable style={[priceAlertStyles.sheet, { backgroundColor: colors.surface }]} onPress={(e) => e.stopPropagation()}>
+            <Text style={[priceAlertStyles.sheetTitle, { color: colors.textPrimary }]}>Create price alert</Text>
+            <Text style={[priceAlertStyles.sheetSubtitle, { color: colors.textSecondary }]}>
+              Get notified when the price {alertCondition === 'above' ? 'rises above' : 'drops below'} your target.
+            </Text>
+
+            {/* Condition selector */}
+            <View style={priceAlertStyles.conditionRow}>
+              {(['above', 'below'] as const).map((c) => {
+                const isSelected = alertCondition === c;
+                return (
+                  <Pressable
+                    key={c}
+                    style={[
+                      priceAlertStyles.conditionTab,
+                      { backgroundColor: isSelected ? colors.brand : colors.surfaceAlt, borderColor: isSelected ? colors.brand : colors.border },
+                    ]}
+                    onPress={() => { haptics.tap(); setAlertCondition(c); }}
+                  >
+                    <Ionicons
+                      name={c === 'above' ? 'arrow-up' : 'arrow-down'}
+                      size={16}
+                      color={isSelected ? '#fff' : colors.textSecondary}
+                    />
+                    <Text style={[priceAlertStyles.conditionText, { color: isSelected ? '#fff' : colors.textSecondary }]}>
+                      {c === 'above' ? 'Above' : 'Below'}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {/* Price input */}
+            <Text style={[priceAlertStyles.inputLabel, { color: colors.textSecondary }]}>Target price (£)</Text>
+            <TextInput
+              style={[priceAlertStyles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+              value={alertTargetPrice}
+              onChangeText={setAlertTargetPrice}
+              placeholder="e.g. 25.00"
+              placeholderTextColor={colors.textMuted}
+              keyboardType="decimal-pad"
+              accessibilityLabel="Target price"
+            />
+
+            <View style={priceAlertStyles.actions}>
+              <AppButton
+                title="Cancel"
+                onPress={() => setPriceAlertVisible(false)}
+                variant="secondary"
+                size="md"
+                style={{ flex: 1, marginRight: Space.sm }}
+              />
+              <AppButton
+                title={alertSubmitting ? 'Creating…' : 'Create alert'}
+                onPress={() => { haptics.tap(); void handleCreatePriceAlert(); }}
+                variant="primary"
+                size="md"
+                disabled={alertSubmitting || !alertTargetPrice}
+                style={{ flex: 1 }}
+              />
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -1901,5 +2009,66 @@ const styles = StyleSheet.create({
   // ── Discovery ──
   recommendationSection: {
     marginTop: Space.md,
+  },
+});
+
+const priceAlertStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  sheet: {
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+    padding: Space.lg,
+    paddingBottom: Space.xl,
+  },
+  sheetTitle: {
+    fontSize: Type.subtitle.size,
+    fontFamily: Typography.family.semibold,
+    marginBottom: Space.xs,
+  },
+  sheetSubtitle: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    marginBottom: Space.md,
+    lineHeight: 18,
+  },
+  conditionRow: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    marginBottom: Space.md,
+  },
+  conditionTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.xs,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+  },
+  conditionText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.medium,
+  },
+  inputLabel: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.medium,
+    marginBottom: Space.xs,
+  },
+  input: {
+    borderWidth: 1,
+    borderRadius: Radius.md,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
+    marginBottom: Space.lg,
+  },
+  actions: {
+    flexDirection: 'row',
   },
 });

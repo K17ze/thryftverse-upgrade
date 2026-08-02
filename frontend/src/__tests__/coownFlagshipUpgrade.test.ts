@@ -60,12 +60,13 @@ describe('COOWN-FLAGSHIP: Co-Own department flagship upgrade', () => {
       expect(src).not.toContain('24h');
     });
 
-    it('BuyoutScreen shows unavailable state', () => {
+    it('BuyoutScreen supports buyout offer creation', () => {
       const src = readSrc('screens/BuyoutScreen.tsx');
-      // Asset-level exit is operator-initiated per rights, not a self-service
-      // buyout flow the backend doesn't support — the screen says so honestly.
-      expect(src).toContain('Asset-level exit');
-      expect(src).toContain('initiated by the vehicle operator');
+      // The screen now provides a self-service buyout offer creation flow
+      // using the backend POST /co-own/assets/:assetId/buyout-offers endpoint.
+      expect(src).toContain('createCoOwnBuyoutOffer');
+      expect(src).toContain('Submit offer');
+      expect(src).toContain('Offer price');
     });
   });
 

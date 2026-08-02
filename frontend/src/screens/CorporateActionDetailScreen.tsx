@@ -10,7 +10,7 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, RefreshControl, TextInput } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -32,7 +32,8 @@ import {
   type CoOwnCorporateActionStatus,
 } from '../components/coown';
 import { AppButton } from '../components/ui/AppButton';
-import { fetchCoOwnAssetCorporateActions, type CoOwnCorporateAction } from '../services/marketApi';
+import { fetchCoOwnAssetCorporateActions, fetchGovernanceVotes, castGovernanceVote, type CoOwnCorporateAction } from '../services/marketApi';
+import { useToast } from '../context/ToastContext';
 
 type RouteT = RouteProp<RootStackParamList, 'CorporateActionDetail'>;
 type NavT = StackNavigationProp<RootStackParamList>;
@@ -89,6 +90,15 @@ export default function CorporateActionDetailScreen() {
   const [refreshing, setRefreshing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
+  // Governance voting state
+  const { show: showToast } = useToast();
+  const [voteSummary, setVoteSummary] = React.useState<{ vote: string; votingPowerUnits: number; voteCount: number }[]>([]);
+  const [totalVotingPower, setTotalVotingPower] = React.useState(0);
+  const [myVote, setMyVote] = React.useState<'for' | 'against' | 'abstain' | null>(null);
+  const [voteRationale, setVoteRationale] = React.useState('');
+  const [submittingVote, setSubmittingVote] = React.useState(false);
+  const isGovernanceAction = (fetchedAction?.actionType ?? actionType) === 'governance' || (fetchedAction?.actionType ?? actionType) === 'vote';
+
   const loadAction = React.useCallback(async () => {
     if (!actionId) return;
     try {
@@ -111,6 +121,39 @@ export default function CorporateActionDetailScreen() {
   React.useEffect(() => {
     void loadAction();
   }, [loadAction]);
+
+  // Load governance votes when action is a governance type
+  const loadVotes = React.useCallback(async () => {
+    if (!actionId || !isGovernanceAction) return;
+    try {
+      const result = await fetchGovernanceVotes(actionId);
+      setVoteSummary(result.summary);
+      setTotalVotingPower(result.totalVotingPower);
+      setMyVote(result.myVote);
+    } catch {
+      // Silent — voting is supplementary
+    }
+  }, [actionId, isGovernanceAction]);
+
+  React.useEffect(() => {
+    void loadVotes();
+  }, [loadVotes]);
+
+  const handleCastVote = React.useCallback(async (vote: 'for' | 'against' | 'abstain') => {
+    if (!actionId || !assetId) return;
+    setSubmittingVote(true);
+    try {
+      await castGovernanceVote(actionId, { assetId, vote, rationale: voteRationale.trim() || undefined });
+      haptics.success();
+      showToast('Vote submitted', 'success');
+      await loadVotes();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to submit vote';
+      showToast(message, 'error');
+    } finally {
+      setSubmittingVote(false);
+    }
+  }, [actionId, assetId, voteRationale, showToast, loadVotes]);
 
   const handleRefresh = React.useCallback(() => {
     haptics.tap();
@@ -291,10 +334,96 @@ export default function CorporateActionDetailScreen() {
               {displayStatus === 'effective' && 'This event is effective — it has been applied to your position.'}
               {displayStatus === 'completed' && 'This event is completed.'}
               {displayStatus === 'cancelled' && 'This event was cancelled and will not take effect.'}
-              {!['pending', 'announced', 'effective', 'completed', 'cancelled'].includes(displayStatus) && displayStatus}
+              {displayStatus === 'open' && 'This vote is open for participation.'}
+              {!['pending', 'announced', 'effective', 'completed', 'cancelled', 'open'].includes(displayStatus) && displayStatus}
             </Text>
           </View>
         </Reanimated.View>
+
+        {/* Governance voting */}
+        {isGovernanceAction && actionId && (
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(300)}>
+            <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Cast your vote</Text>
+              <Text style={[styles.sectionBody, { color: colors.textSecondary, marginBottom: Space.md }]}>
+                Your voting power is proportional to your unit holdings. You can change your vote while the action remains open.
+              </Text>
+
+              {/* Vote results */}
+              {voteSummary.length > 0 && totalVotingPower > 0 && (
+                <View style={[styles.voteResults, { borderColor: colors.borderSubtle }]} key={`votes-${myVote}-${totalVotingPower}`}>
+                  {(['for', 'against', 'abstain'] as const).map((v) => {
+                    const entry = voteSummary.find((s) => s.vote === v);
+                    const power = entry?.votingPowerUnits ?? 0;
+                    const pct = totalVotingPower > 0 ? (power / totalVotingPower) * 100 : 0;
+                    const label = v === 'for' ? 'For' : v === 'against' ? 'Against' : 'Abstain';
+                    const color = v === 'for' ? colors.success : v === 'against' ? colors.danger : colors.textMuted;
+                    return (
+                      <View key={v} style={styles.voteResultRow}>
+                        <Text style={[styles.voteResultLabel, { color: colors.textSecondary }]}>{label}</Text>
+                        <View style={styles.voteResultBar}>
+                          <View style={[styles.voteResultFill, { width: `${pct}%`, backgroundColor: color }]} />
+                        </View>
+                        <Text style={[styles.voteResultPct, { color }]}>
+                          {pct.toFixed(1)}%
+                        </Text>
+                      </View>
+                    );
+                  })}
+                  <Text style={[styles.voteTotal, { color: colors.textMuted }]}>
+                    {totalVotingPower.toLocaleString()} units voted
+                  </Text>
+                </View>
+              )}
+
+              {/* My vote indicator */}
+              {myVote && (
+                <View style={[styles.myVoteBadge, { backgroundColor: colors.brand + '15' }]}>
+                  <Ionicons name="checkmark-circle" size={16} color={colors.brand} />
+                  <Text style={[styles.myVoteText, { color: colors.brand }]}>
+                    You voted {myVote}
+                  </Text>
+                </View>
+              )}
+
+              {/* Rationale input */}
+              <Text style={[styles.inputLabel, { color: colors.textSecondary, marginTop: Space.sm }]}>
+                Rationale (optional)
+              </Text>
+              <TextInput
+                style={[styles.voteInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+                value={voteRationale}
+                onChangeText={setVoteRationale}
+                placeholder="Explain your reasoning…"
+                placeholderTextColor={colors.textMuted}
+                multiline
+                maxLength={2000}
+                accessibilityLabel="Vote rationale"
+              />
+
+              {/* Vote buttons */}
+              <View style={styles.voteButtons}>
+                {(['for', 'against', 'abstain'] as const).map((v) => {
+                  const label = v === 'for' ? 'For' : v === 'against' ? 'Against' : 'Abstain';
+                  const variant = v === 'for' ? 'primary' : 'secondary';
+                  const icon = v === 'for' ? 'thumbs-up-outline' : v === 'against' ? 'thumbs-down-outline' : 'remove-circle-outline';
+                  return (
+                    <AppButton
+                      key={v}
+                      title={label}
+                      onPress={() => { haptics.tap(); void handleCastVote(v); }}
+                      variant={variant}
+                      size="sm"
+                      disabled={submittingVote}
+                      icon={<Ionicons name={icon as any} size={16} color={variant === 'primary' ? '#fff' : colors.textPrimary} />}
+                      style={{ flex: 1 }}
+                    />
+                  );
+                })}
+              </View>
+            </View>
+          </Reanimated.View>
+        )}
       </ScrollView>
 
       <CoOwnStickyActionDock>
@@ -370,6 +499,81 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.regular,
     letterSpacing: Type.caption.letterSpacing,
     marginTop: Space.xs,
+  },
+  voteResults: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.md,
+    padding: Space.md,
+    marginBottom: Space.md,
+    gap: Space.sm,
+  },
+  voteResultRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+  },
+  voteResultLabel: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+    width: 64,
+  },
+  voteResultBar: {
+    flex: 1,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(128,128,128,0.15)',
+    overflow: 'hidden',
+  },
+  voteResultFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  voteResultPct: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.semibold,
+    width: 48,
+    textAlign: 'right',
+    fontVariant: ['tabular-nums'],
+  },
+  voteTotal: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.regular,
+    textAlign: 'center',
+    marginTop: Space.xs,
+  },
+  myVoteBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
+    borderRadius: Radius.full,
+    alignSelf: 'flex-start',
+    marginBottom: Space.sm,
+  },
+  myVoteText: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+  },
+  inputLabel: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.medium,
+    marginBottom: Space.xs,
+  },
+  voteInput: {
+    borderWidth: 1,
+    borderRadius: Radius.md,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
+    minHeight: 60,
+    maxHeight: 120,
+    marginBottom: Space.md,
+  },
+  voteButtons: {
+    flexDirection: 'row',
+    gap: Space.sm,
   },
 });
 }

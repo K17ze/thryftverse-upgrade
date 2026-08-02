@@ -2181,3 +2181,182 @@ export async function fetchFollowingActivity(
   const payload = await fetchJson<{ ok: true; items: FollowingActivityItem[]; nextCursor: string | null }>(`/feed/following${query}`);
   return { items: payload.items, nextCursor: payload.nextCursor };
 }
+
+/* ─── Co-Own Price Alerts ─── */
+
+export interface CoOwnPriceAlert {
+  id: string;
+  assetId: string;
+  condition: 'above' | 'below';
+  targetPriceGbpMinor: number;
+  active: boolean;
+  triggeredAt: string | null;
+  createdAt: string;
+}
+
+export async function fetchCoOwnPriceAlerts(): Promise<CoOwnPriceAlert[]> {
+  const payload = await fetchJson<{ ok: true; alerts: CoOwnPriceAlert[] }>('/co-own/price-alerts');
+  return payload.alerts;
+}
+
+export async function createCoOwnPriceAlert(
+  assetId: string,
+  condition: 'above' | 'below',
+  targetPriceGbpMinor: number
+): Promise<CoOwnPriceAlert> {
+  const payload = await fetchJson<{ ok: true; alert: CoOwnPriceAlert }>('/co-own/price-alerts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ assetId, condition, targetPriceGbpMinor }),
+  });
+  return payload.alert;
+}
+
+export async function deleteCoOwnPriceAlert(id: string): Promise<void> {
+  await fetchJson<{ ok: true }>(`/co-own/price-alerts/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+/* ─── Co-Own Price History (OHLCV) ─── */
+
+export interface PriceCandle {
+  timestamp: string;
+  openGbpMinor: number;
+  highGbpMinor: number;
+  lowGbpMinor: number;
+  closeGbpMinor: number;
+  volumeUnits: number;
+  tradeCount: number;
+}
+
+export async function fetchCoOwnPriceHistory(
+  assetId: string,
+  options: { interval?: '1h' | '4h' | '1d' | '1w'; limit?: number } = {}
+): Promise<{ interval: string; candles: PriceCandle[] }> {
+  const query = toQuery({ interval: options.interval, limit: options.limit });
+  const payload = await fetchJson<{ ok: true; interval: string; candles: PriceCandle[] }>(
+    `/co-own/assets/${encodeURIComponent(assetId)}/price-history${query}`
+  );
+  return { interval: payload.interval, candles: payload.candles };
+}
+
+/* ─── Co-Own Governance Voting ─── */
+
+export interface GovernanceVoteSummary {
+  vote: 'for' | 'against' | 'abstain';
+  votingPowerUnits: number;
+  voteCount: number;
+}
+
+export interface GovernanceVoteResult {
+  summary: GovernanceVoteSummary[];
+  totalVotingPower: number;
+  myVote: 'for' | 'against' | 'abstain' | null;
+}
+
+export async function fetchGovernanceVotes(actionId: string): Promise<GovernanceVoteResult> {
+  const payload = await fetchJson<{ ok: true } & GovernanceVoteResult>(
+    `/co-own/corporate-actions/${encodeURIComponent(actionId)}/votes`
+  );
+  return { summary: payload.summary, totalVotingPower: payload.totalVotingPower, myVote: payload.myVote };
+}
+
+export async function castGovernanceVote(
+  actionId: string,
+  input: { assetId: string; vote: 'for' | 'against' | 'abstain'; rationale?: string }
+): Promise<{ actionId: string; vote: string; votingPowerUnits: number; createdAt: string }> {
+  const payload = await fetchJson<{ ok: true; vote: { actionId: string; vote: string; votingPowerUnits: number; createdAt: string } }>(
+    `/co-own/corporate-actions/${encodeURIComponent(actionId)}/vote`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    }
+  );
+  return payload.vote;
+}
+
+/* ─── Co-Own DRIP ─── */
+
+export interface DripEnrollment {
+  assetId: string;
+  enrolled: boolean;
+  enrolledAt: string | null;
+}
+
+export async function fetchDripEnrollments(): Promise<DripEnrollment[]> {
+  const payload = await fetchJson<{ ok: true; enrollments: DripEnrollment[] }>('/co-own/drip/enrollments');
+  return payload.enrollments;
+}
+
+export async function updateDripEnrollment(assetId: string, enrolled: boolean): Promise<void> {
+  await fetchJson<{ ok: true; assetId: string; enrolled: boolean }>('/co-own/drip/enroll', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ assetId, enrolled }),
+  });
+}
+
+/* ─── Co-Own Recurring Orders ─── */
+
+export interface CoOwnRecurringOrder {
+  id: string;
+  assetId: string;
+  side: 'buy';
+  unitsPerExecution: number;
+  frequency: 'weekly' | 'biweekly' | 'monthly';
+  nextExecutionAt: string;
+  maxPriceGbpMinor: number | null;
+  active: boolean;
+  executionsCount: number;
+  createdAt: string;
+}
+
+export async function fetchCoOwnRecurringOrders(): Promise<CoOwnRecurringOrder[]> {
+  const payload = await fetchJson<{ ok: true; orders: CoOwnRecurringOrder[] }>('/co-own/recurring-orders');
+  return payload.orders;
+}
+
+export async function createCoOwnRecurringOrder(input: {
+  assetId: string;
+  unitsPerExecution: number;
+  frequency: 'weekly' | 'biweekly' | 'monthly';
+  maxPriceGbpMinor?: number;
+}): Promise<CoOwnRecurringOrder> {
+  const payload = await fetchJson<{ ok: true; order: CoOwnRecurringOrder }>('/co-own/recurring-orders', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  return payload.order;
+}
+
+export async function cancelCoOwnRecurringOrder(id: string): Promise<void> {
+  await fetchJson<{ ok: true }>(`/co-own/recurring-orders/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+/* ─── Co-Own Tax Documents ─── */
+
+export interface CoOwnTaxDocument {
+  taxYear: string;
+  startDate: string;
+  endDate: string;
+  currency: string;
+  summary: {
+    totalPurchasesGbpMinor: number;
+    totalSalesGbpMinor: number;
+    totalDistributionsGbpMinor: number;
+    realizedPnlGbpMinor: number;
+  };
+  purchases: Array<{ assetId: string; totalGbpMinor: number; units: number; executionCount: number }>;
+  sales: Array<{ assetId: string; totalGbpMinor: number; units: number; executionCount: number }>;
+  distributions: Array<{ assetId: string; totalGbpMinor: number; count: number }>;
+  generatedAt: string;
+}
+
+export async function fetchCoOwnTaxDocument(taxYear?: string): Promise<CoOwnTaxDocument> {
+  const query = toQuery({ taxYear });
+  const payload = await fetchJson<{ ok: true; taxDocument: CoOwnTaxDocument }>(
+    `/users/me/co-own/tax-documents${query}`
+  );
+  return payload.taxDocument;
+}

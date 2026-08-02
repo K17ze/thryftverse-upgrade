@@ -961,6 +961,14 @@ function isPublicRoute(method: string, path: string) {
     return true;
   }
 
+  if (method === 'GET' && /^\/co-own\/assets\/[^/]+\/price-history$/.test(path)) {
+    return true;
+  }
+
+  if (method === 'GET' && /^\/co-own\/corporate-actions\/[^/]+\/votes$/.test(path)) {
+    return true;
+  }
+
   if (method === 'GET' && /^\/users\/[^/]+\/profile$/.test(path)) {
     return true;
   }
@@ -14138,6 +14146,955 @@ app.patch('/users/me/personalisation', async (request, reply) => {
       categoriesAndSizesPref: row.personalisation_categories_pref,
       brandsPref: row.personalisation_brands_pref,
       membersPref: row.personalisation_members_pref,
+    },
+  };
+});
+
+/* ── Chat Privacy Sync ── */
+
+// GET /users/me/chat-privacy — retrieve chat privacy settings
+app.get('/users/me/chat-privacy', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const result = await db.query<{
+    read_receipts_enabled: boolean;
+    allow_messages_from: string;
+  }>(
+    `SELECT read_receipts_enabled, allow_messages_from FROM users WHERE id = $1`,
+    [request.authUser.userId]
+  );
+
+  if (result.rows.length === 0) {
+    reply.code(404);
+    return { ok: false, error: 'User not found' };
+  }
+
+  return {
+    ok: true,
+    chatPrivacy: {
+      readReceiptsEnabled: result.rows[0].read_receipts_enabled,
+      allowMessagesFrom: result.rows[0].allow_messages_from,
+    },
+  };
+});
+
+// PATCH /users/me/chat-privacy — update chat privacy settings
+app.patch('/users/me/chat-privacy', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const bodySchema = z.object({
+    readReceiptsEnabled: z.boolean().optional(),
+    allowMessagesFrom: z.enum(['everyone', 'following', 'nobody']).optional(),
+  });
+
+  const payload = bodySchema.parse(request.body ?? {});
+
+  const allowed: Record<string, unknown> = {};
+  if (payload.readReceiptsEnabled !== undefined) allowed.read_receipts_enabled = payload.readReceiptsEnabled;
+  if (payload.allowMessagesFrom !== undefined) allowed.allow_messages_from = payload.allowMessagesFrom;
+
+  if (Object.keys(allowed).length === 0) {
+    reply.code(400);
+    return { ok: false, error: 'No fields provided to update' };
+  }
+
+  const setClauses = Object.keys(allowed).map((key, idx) => `${key} = $${idx + 2}`);
+  const values = Object.values(allowed);
+
+  const result = await db.query<{ read_receipts_enabled: boolean; allow_messages_from: string }>(
+    `UPDATE users SET ${setClauses.join(', ')}, updated_at = NOW() WHERE id = $1
+     RETURNING read_receipts_enabled, allow_messages_from`,
+    [request.authUser.userId, ...values]
+  );
+
+  if (result.rows.length === 0) {
+    reply.code(404);
+    return { ok: false, error: 'User not found' };
+  }
+
+  return {
+    ok: true,
+    chatPrivacy: {
+      readReceiptsEnabled: result.rows[0].read_receipts_enabled,
+      allowMessagesFrom: result.rows[0].allow_messages_from,
+    },
+  };
+});
+
+/* ── Activity Status ── */
+
+// PATCH /users/me/activity-status — toggle online status visibility
+app.patch('/users/me/activity-status', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const bodySchema = z.object({ visible: z.boolean() });
+  const { visible } = bodySchema.parse(request.body ?? {});
+
+  await db.query(
+    `UPDATE users SET activity_status_visible = $2, updated_at = NOW() WHERE id = $1`,
+    [request.authUser.userId, visible]
+  );
+
+  return { ok: true, activityStatusVisible: visible };
+});
+
+/* ── Search Visibility ── */
+
+// PATCH /users/me/search-visibility — toggle search visibility
+app.patch('/users/me/search-visibility', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const bodySchema = z.object({ visibility: z.enum(['visible', 'hidden']) });
+  const { visibility } = bodySchema.parse(request.body ?? {});
+
+  await db.query(
+    `UPDATE users SET search_visibility = $2, updated_at = NOW() WHERE id = $1`,
+    [request.authUser.userId, visibility]
+  );
+
+  return { ok: true, searchVisibility: visibility };
+});
+
+/* ── Locale Preferences ── */
+
+// PATCH /users/me/locale — sync language/currency/region preferences
+app.patch('/users/me/locale', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const bodySchema = z.object({
+    locale: z.string().trim().min(2).max(10).optional(),
+    currencyCode: z.string().trim().length(3).optional(),
+    regionCode: z.string().trim().min(2).max(5).optional(),
+  });
+
+  const payload = bodySchema.parse(request.body ?? {});
+
+  const allowed: Record<string, unknown> = {};
+  if (payload.locale !== undefined) allowed.locale = payload.locale;
+  if (payload.currencyCode !== undefined) allowed.currency_code = payload.currencyCode.toUpperCase();
+  if (payload.regionCode !== undefined) allowed.region_code = payload.regionCode;
+
+  if (Object.keys(allowed).length === 0) {
+    reply.code(400);
+    return { ok: false, error: 'No fields provided to update' };
+  }
+
+  const setClauses = Object.keys(allowed).map((key, idx) => `${key} = $${idx + 2}`);
+  const values = Object.values(allowed);
+
+  const result = await db.query<{ locale: string | null; currency_code: string; region_code: string | null }>(
+    `UPDATE users SET ${setClauses.join(', ')}, updated_at = NOW() WHERE id = $1
+     RETURNING locale, currency_code, region_code`,
+    [request.authUser.userId, ...values]
+  );
+
+  if (result.rows.length === 0) {
+    reply.code(404);
+    return { ok: false, error: 'User not found' };
+  }
+
+  return {
+    ok: true,
+    locale: {
+      locale: result.rows[0].locale,
+      currencyCode: result.rows[0].currency_code,
+      regionCode: result.rows[0].region_code,
+    },
+  };
+});
+
+/* ── Connected Accounts ── */
+
+// GET /users/me/connected-accounts — list linked OAuth providers
+app.get('/users/me/connected-accounts', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const result = await db.query<{
+    id: string;
+    provider: string;
+    provider_email: string | null;
+    linked_at: string;
+    metadata: Record<string, unknown> | null;
+  }>(
+    `SELECT id, provider, provider_email, linked_at, metadata
+     FROM user_connected_accounts
+     WHERE user_id = $1 AND unlinked_at IS NULL
+     ORDER BY linked_at ASC`,
+    [request.authUser.userId]
+  );
+
+  return {
+    ok: true,
+    accounts: result.rows.map((row) => ({
+      id: row.id,
+      provider: row.provider,
+      providerEmail: row.provider_email,
+      linkedAt: row.linked_at,
+      metadata: row.metadata,
+    })),
+  };
+});
+
+// DELETE /users/me/connected-accounts/:id — unlink a connected account
+app.delete('/users/me/connected-accounts/:id', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const paramsSchema = z.object({ id: z.string().min(1) });
+  const { id } = paramsSchema.parse(request.params);
+
+  // Check the user has another auth method (password or another connected account)
+  const userResult = await db.query<{ password_hash: string | null }>(
+    `SELECT password_hash FROM users WHERE id = $1`,
+    [request.authUser.userId]
+  );
+
+  if (userResult.rows.length === 0) {
+    reply.code(404);
+    return { ok: false, error: 'User not found' };
+  }
+
+  const otherAccountsResult = await db.query(
+    `SELECT COUNT(*)::int AS count FROM user_connected_accounts
+     WHERE user_id = $1 AND id != $2 AND unlinked_at IS NULL`,
+    [request.authUser.userId, id]
+  );
+
+  const hasPassword = userResult.rows[0].password_hash != null;
+  const hasOtherAccounts = otherAccountsResult.rows[0].count > 0;
+
+  if (!hasPassword && !hasOtherAccounts) {
+    reply.code(400);
+    return {
+      ok: false,
+      error: 'Cannot unlink your only authentication method. Set a password first.',
+    };
+  }
+
+  const result = await db.query(
+    `UPDATE user_connected_accounts SET unlinked_at = NOW() WHERE id = $1 AND user_id = $2 AND unlinked_at IS NULL`,
+    [id, request.authUser.userId]
+  );
+
+  if (result.rowCount === 0) {
+    reply.code(404);
+    return { ok: false, error: 'Connected account not found' };
+  }
+
+  return { ok: true };
+});
+
+/* ── Email Notification Preferences ── */
+
+// GET /users/me/email-preferences — retrieve per-category email preferences
+app.get('/users/me/email-preferences', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const result = await db.query(
+    `SELECT * FROM user_email_preferences WHERE user_id = $1`,
+    [request.authUser.userId]
+  );
+
+  if (result.rows.length === 0) {
+    // Return defaults
+    return {
+      ok: true,
+      preferences: {
+        orderUpdates: true,
+        messageNotifications: true,
+        priceDropAlerts: true,
+        newListingsFromFollowing: true,
+        marketing: false,
+        securityAlerts: true,
+        distributionNotices: true,
+        corporateActionNotices: true,
+      },
+    };
+  }
+
+  const row = result.rows[0] as Record<string, unknown>;
+  return {
+    ok: true,
+    preferences: {
+      orderUpdates: row.order_updates,
+      messageNotifications: row.message_notifications,
+      priceDropAlerts: row.price_drop_alerts,
+      newListingsFromFollowing: row.new_listings_from_following,
+      marketing: row.marketing,
+      securityAlerts: row.security_alerts,
+      distributionNotices: row.distribution_notices,
+      corporateActionNotices: row.corporate_action_notices,
+    },
+  };
+});
+
+// PUT /users/me/email-preferences — update per-category email preferences
+app.put('/users/me/email-preferences', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const bodySchema = z.object({
+    orderUpdates: z.boolean().optional(),
+    messageNotifications: z.boolean().optional(),
+    priceDropAlerts: z.boolean().optional(),
+    newListingsFromFollowing: z.boolean().optional(),
+    marketing: z.boolean().optional(),
+    securityAlerts: z.boolean().optional(),
+    distributionNotices: z.boolean().optional(),
+    corporateActionNotices: z.boolean().optional(),
+  });
+
+  const payload = bodySchema.parse(request.body ?? {});
+
+  const columns: Record<string, boolean> = {};
+  if (payload.orderUpdates !== undefined) columns.order_updates = payload.orderUpdates;
+  if (payload.messageNotifications !== undefined) columns.message_notifications = payload.messageNotifications;
+  if (payload.priceDropAlerts !== undefined) columns.price_drop_alerts = payload.priceDropAlerts;
+  if (payload.newListingsFromFollowing !== undefined) columns.new_listings_from_following = payload.newListingsFromFollowing;
+  if (payload.marketing !== undefined) columns.marketing = payload.marketing;
+  if (payload.securityAlerts !== undefined) columns.security_alerts = payload.securityAlerts;
+  if (payload.distributionNotices !== undefined) columns.distribution_notices = payload.distributionNotices;
+  if (payload.corporateActionNotices !== undefined) columns.corporate_action_notices = payload.corporateActionNotices;
+
+  if (Object.keys(columns).length === 0) {
+    reply.code(400);
+    return { ok: false, error: 'No fields provided to update' };
+  }
+
+  const setClauses = Object.keys(columns).map((key, idx) => `${key} = $${idx + 2}`);
+  const values = Object.values(columns);
+
+  await db.query(
+    `INSERT INTO user_email_preferences (user_id, ${Object.keys(columns).join(', ')})
+     VALUES ($1, ${values.map((_, idx) => `$${idx + 2}`).join(', ')})
+     ON CONFLICT (user_id) DO UPDATE SET ${setClauses.join(', ')}, updated_at = NOW()`,
+    [request.authUser.userId, ...values]
+  );
+
+  return { ok: true };
+});
+
+/* ── Co-Own Price Alerts ── */
+
+// GET /co-own/price-alerts — list user's Co-Own price alerts
+app.get('/co-own/price-alerts', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const result = await db.query<{
+    id: string;
+    asset_id: string;
+    condition: string;
+    target_price_gbp_minor: string | number;
+    active: boolean;
+    triggered_at: string | null;
+    created_at: string;
+  }>(
+    `SELECT id, asset_id, condition, target_price_gbp_minor, active, triggered_at, created_at
+     FROM coown_price_alerts WHERE user_id = $1 ORDER BY created_at DESC`,
+    [request.authUser.userId]
+  );
+
+  return {
+    ok: true,
+    alerts: result.rows.map((row) => ({
+      id: row.id,
+      assetId: row.asset_id,
+      condition: row.condition,
+      targetPriceGbpMinor: Number(row.target_price_gbp_minor),
+      active: row.active,
+      triggeredAt: row.triggered_at,
+      createdAt: row.created_at,
+    })),
+  };
+});
+
+// POST /co-own/price-alerts — create a Co-Own price alert
+app.post('/co-own/price-alerts', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const bodySchema = z.object({
+    assetId: z.string().min(2).max(128),
+    condition: z.enum(['above', 'below']),
+    targetPriceGbpMinor: z.number().int().positive(),
+  });
+
+  const { assetId, condition, targetPriceGbpMinor } = bodySchema.parse(request.body ?? {});
+
+  const result = await db.query<{
+    id: string;
+    created_at: string;
+  }>(
+    `INSERT INTO coown_price_alerts (user_id, asset_id, condition, target_price_gbp_minor)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (user_id, asset_id, condition, target_price_gbp_minor) WHERE active = TRUE
+     DO UPDATE SET active = TRUE, updated_at = NOW()
+     RETURNING id, created_at`,
+    [request.authUser.userId, assetId, condition, targetPriceGbpMinor]
+  );
+
+  reply.code(201);
+  return {
+    ok: true,
+    alert: {
+      id: result.rows[0].id,
+      assetId,
+      condition,
+      targetPriceGbpMinor,
+      active: true,
+      createdAt: result.rows[0].created_at,
+    },
+  };
+});
+
+// DELETE /co-own/price-alerts/:id — delete a Co-Own price alert
+app.delete('/co-own/price-alerts/:id', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const paramsSchema = z.object({ id: z.string().min(1) });
+  const { id } = paramsSchema.parse(request.params);
+
+  await db.query(
+    `DELETE FROM coown_price_alerts WHERE id = $1 AND user_id = $2`,
+    [id, request.authUser.userId]
+  );
+
+  return { ok: true };
+});
+
+/* ── Co-Own Price History (OHLCV) ── */
+
+// GET /co-own/assets/:assetId/price-history — aggregated OHLCV candles
+app.get('/co-own/assets/:assetId/price-history', async (request) => {
+  const paramsSchema = z.object({ assetId: z.string().min(2).max(128) });
+  const { assetId } = paramsSchema.parse(request.params);
+
+  const querySchema = z.object({
+    interval: z.enum(['1h', '4h', '1d', '1w']).default('1d'),
+    limit: z.coerce.number().int().min(1).max(500).default(100),
+  });
+  const { interval, limit } = querySchema.parse(request.query);
+
+  // First try the pre-aggregated table
+  const cached = await db.query<{
+    bucket_start: string;
+    open_gbp_minor: string | number;
+    high_gbp_minor: string | number;
+    low_gbp_minor: string | number;
+    close_gbp_minor: string | number;
+    volume_units: string | number;
+    trade_count: string | number;
+  }>(
+    `SELECT bucket_start, open_gbp_minor, high_gbp_minor, low_gbp_minor, close_gbp_minor,
+            volume_units, trade_count
+     FROM coown_price_history
+     WHERE asset_id = $1 AND interval = $2
+     ORDER BY bucket_start DESC
+     LIMIT $3`,
+    [assetId, interval, limit]
+  );
+
+  if (cached.rows.length > 0) {
+    return {
+      ok: true,
+      interval,
+      candles: cached.rows.reverse().map((row) => ({
+        timestamp: row.bucket_start,
+        openGbpMinor: Number(row.open_gbp_minor),
+        highGbpMinor: Number(row.high_gbp_minor),
+        lowGbpMinor: Number(row.low_gbp_minor),
+        closeGbpMinor: Number(row.close_gbp_minor),
+        volumeUnits: Number(row.volume_units),
+        tradeCount: Number(row.trade_count),
+      })),
+    };
+  }
+
+  // Fallback: aggregate from executions in real-time
+  const intervalClause: Record<string, string> = {
+    '1h': "date_trunc('hour', executed_at)",
+    '4h': "date_trunc('hour', executed_at) - (EXTRACT(HOUR FROM executed_at)::int % 4) * INTERVAL '1 hour'",
+    '1d': "date_trunc('day', executed_at)",
+    '1w': "date_trunc('week', executed_at)",
+  };
+
+  const result = await db.query<{
+    bucket_start: string;
+    open_gbp_minor: string | number;
+    high_gbp_minor: string | number;
+    low_gbp_minor: string | number;
+    close_gbp_minor: string | number;
+    volume_units: string | number;
+    trade_count: string | number;
+  }>(
+    `SELECT
+       ${intervalClause[interval]} AS bucket_start,
+       (array_agg(price_gbp_minor ORDER BY executed_at ASC))[1] AS open_gbp_minor,
+       MAX(price_gbp_minor) AS high_gbp_minor,
+       MIN(price_gbp_minor) AS low_gbp_minor,
+       (array_agg(price_gbp_minor ORDER BY executed_at DESC))[1] AS close_gbp_minor,
+       SUM(units)::int AS volume_units,
+       COUNT(*)::int AS trade_count
+     FROM coown_executions
+     WHERE asset_id = $1
+     GROUP BY 1
+     ORDER BY bucket_start DESC
+     LIMIT $2`,
+    [assetId, limit]
+  );
+
+  return {
+    ok: true,
+    interval,
+    candles: result.rows.reverse().map((row) => ({
+      timestamp: row.bucket_start,
+      openGbpMinor: Number(row.open_gbp_minor),
+      highGbpMinor: Number(row.high_gbp_minor),
+      lowGbpMinor: Number(row.low_gbp_minor),
+      closeGbpMinor: Number(row.close_gbp_minor),
+      volumeUnits: Number(row.volume_units),
+      tradeCount: Number(row.trade_count),
+    })),
+  };
+});
+
+/* ── Co-Own Governance Voting ── */
+
+// GET /co-own/corporate-actions/:actionId/votes — list votes for a governance action
+app.get('/co-own/corporate-actions/:actionId/votes', async (request) => {
+  const paramsSchema = z.object({ actionId: z.string().min(2).max(128) });
+  const { actionId } = paramsSchema.parse(request.params);
+
+  const result = await db.query<{
+    vote: string;
+    voting_power_units: string | number;
+    count: string | number;
+    total_power: string | number;
+  }>(
+    `SELECT vote, SUM(voting_power_units)::bigint AS voting_power_units,
+            COUNT(*)::int AS count,
+            SUM(SUM(voting_power_units)) OVER ()::bigint AS total_power
+     FROM coown_governance_votes
+     WHERE corporate_action_id = $1
+     GROUP BY vote
+     ORDER BY vote`,
+    [actionId]
+  );
+
+  const summary = result.rows.map((row) => ({
+    vote: row.vote,
+    votingPowerUnits: Number(row.voting_power_units),
+    voteCount: Number(row.count),
+  }));
+
+  const totalPower = result.rows.length > 0 ? Number(result.rows[0].total_power) : 0;
+
+  // Check if the current user has voted
+  const authUserId = request.authUser?.userId;
+  let myVote: string | null = null;
+  if (authUserId) {
+    const myVoteResult = await db.query<{ vote: string }>(
+      `SELECT vote FROM coown_governance_votes WHERE corporate_action_id = $1 AND user_id = $2`,
+      [actionId, authUserId]
+    );
+    if (myVoteResult.rows.length > 0) myVote = myVoteResult.rows[0].vote;
+  }
+
+  return {
+    ok: true,
+    summary,
+    totalVotingPower: totalPower,
+    myVote,
+  };
+});
+
+// POST /co-own/corporate-actions/:actionId/vote — cast a governance vote
+app.post('/co-own/corporate-actions/:actionId/vote', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const paramsSchema = z.object({ actionId: z.string().min(2).max(128) });
+  const { actionId } = paramsSchema.parse(request.params);
+
+  const bodySchema = z.object({
+    assetId: z.string().min(2).max(128),
+    vote: z.enum(['for', 'against', 'abstain']),
+    rationale: z.string().trim().max(2000).optional(),
+  });
+
+  const { assetId, vote, rationale } = bodySchema.parse(request.body ?? {});
+
+  // Verify the user holds units of this asset
+  const holdingsResult = await db.query<{ units: string | number }>(
+    `SELECT COALESCE(SUM(units), 0)::bigint AS units
+     FROM coown_holdings
+     WHERE asset_id = $1 AND holder_user_id = $2`,
+    [assetId, request.authUser.userId]
+  );
+
+  const votingPower = Number(holdingsResult.rows[0]?.units ?? 0);
+  if (votingPower === 0) {
+    reply.code(403);
+    return { ok: false, error: 'You must hold units of this asset to vote' };
+  }
+
+  // Verify the corporate action is a governance type and still open
+  const actionResult = await db.query<{ status: string; action_type: string }>(
+    `SELECT status, action_type FROM coown_corporate_actions WHERE id = $1`,
+    [actionId]
+  );
+
+  if (actionResult.rows.length === 0) {
+    reply.code(404);
+    return { ok: false, error: 'Corporate action not found' };
+  }
+
+  if (actionResult.rows[0].action_type !== 'governance') {
+    reply.code(400);
+    return { ok: false, error: 'Voting is only available for governance actions' };
+  }
+
+  if (actionResult.rows[0].status !== 'open') {
+    reply.code(400);
+    return { ok: false, error: 'Voting has closed for this action' };
+  }
+
+  // Upsert the vote (user can change their vote while open)
+  const result = await db.query<{ created_at: string }>(
+    `INSERT INTO coown_governance_votes (corporate_action_id, user_id, asset_id, vote, voting_power_units, rationale)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (corporate_action_id, user_id)
+     DO UPDATE SET vote = $4, voting_power_units = $5, rationale = $6, created_at = NOW()
+     RETURNING created_at`,
+    [actionId, request.authUser.userId, assetId, vote, votingPower, rationale ?? null]
+  );
+
+  return {
+    ok: true,
+    vote: {
+      actionId,
+      vote,
+      votingPowerUnits: votingPower,
+      createdAt: result.rows[0].created_at,
+    },
+  };
+});
+
+/* ── Co-Own DRIP ── */
+
+// GET /co-own/drip/enrollments — list user's DRIP enrollments
+app.get('/co-own/drip/enrollments', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const result = await db.query<{
+    asset_id: string;
+    enrolled: boolean;
+    enrolled_at: string | null;
+  }>(
+    `SELECT asset_id, enrolled, enrolled_at FROM coown_drip_enrollments WHERE user_id = $1`,
+    [request.authUser.userId]
+  );
+
+  return {
+    ok: true,
+    enrollments: result.rows.map((row) => ({
+      assetId: row.asset_id,
+      enrolled: row.enrolled,
+      enrolledAt: row.enrolled_at,
+    })),
+  };
+});
+
+// POST /co-own/drip/enroll — enroll or unenroll from DRIP for an asset
+app.post('/co-own/drip/enroll', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const bodySchema = z.object({
+    assetId: z.string().min(2).max(128),
+    enrolled: z.boolean(),
+  });
+
+  const { assetId, enrolled } = bodySchema.parse(request.body ?? {});
+
+  await db.query(
+    `INSERT INTO coown_drip_enrollments (user_id, asset_id, enrolled, enrolled_at)
+     VALUES ($1, $2, $3, CASE WHEN $3 THEN NOW() ELSE NULL END)
+     ON CONFLICT (user_id, asset_id)
+     DO UPDATE SET enrolled = $3, enrolled_at = CASE WHEN $3 THEN NOW() ELSE NULL END, updated_at = NOW()`,
+    [request.authUser.userId, assetId, enrolled]
+  );
+
+  return { ok: true, assetId, enrolled };
+});
+
+/* ── Co-Own Recurring Orders ── */
+
+// GET /co-own/recurring-orders — list user's recurring orders
+app.get('/co-own/recurring-orders', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const result = await db.query<{
+    id: string;
+    asset_id: string;
+    side: string;
+    units_per_execution: number;
+    frequency: string;
+    next_execution_at: string;
+    max_price_gbp_minor: string | number | null;
+    active: boolean;
+    executions_count: number;
+    created_at: string;
+  }>(
+    `SELECT id, asset_id, side, units_per_execution, frequency, next_execution_at,
+            max_price_gbp_minor, active, executions_count, created_at
+     FROM coown_recurring_orders WHERE user_id = $1 ORDER BY created_at DESC`,
+    [request.authUser.userId]
+  );
+
+  return {
+    ok: true,
+    orders: result.rows.map((row) => ({
+      id: row.id,
+      assetId: row.asset_id,
+      side: row.side,
+      unitsPerExecution: row.units_per_execution,
+      frequency: row.frequency,
+      nextExecutionAt: row.next_execution_at,
+      maxPriceGbpMinor: row.max_price_gbp_minor == null ? null : Number(row.max_price_gbp_minor),
+      active: row.active,
+      executionsCount: row.executions_count,
+      createdAt: row.created_at,
+    })),
+  };
+});
+
+// POST /co-own/recurring-orders — create a recurring order
+app.post('/co-own/recurring-orders', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const bodySchema = z.object({
+    assetId: z.string().min(2).max(128),
+    unitsPerExecution: z.number().int().min(1).max(10000),
+    frequency: z.enum(['weekly', 'biweekly', 'monthly']),
+    maxPriceGbpMinor: z.number().int().positive().optional(),
+  });
+
+  const { assetId, unitsPerExecution, frequency, maxPriceGbpMinor } = bodySchema.parse(request.body ?? {});
+
+  const nextExecutionDate = new Date();
+  if (frequency === 'weekly') nextExecutionDate.setDate(nextExecutionDate.getDate() + 7);
+  else if (frequency === 'biweekly') nextExecutionDate.setDate(nextExecutionDate.getDate() + 14);
+  else nextExecutionDate.setMonth(nextExecutionDate.getMonth() + 1);
+
+  const result = await db.query<{
+    id: string;
+    next_execution_at: string;
+    created_at: string;
+  }>(
+    `INSERT INTO coown_recurring_orders
+       (user_id, asset_id, side, units_per_execution, frequency, next_execution_at, max_price_gbp_minor)
+     VALUES ($1, $2, 'buy', $3, $4, $5, $6)
+     RETURNING id, next_execution_at, created_at`,
+    [request.authUser.userId, assetId, unitsPerExecution, frequency, nextExecutionDate, maxPriceGbpMinor ?? null]
+  );
+
+  reply.code(201);
+  return {
+    ok: true,
+    order: {
+      id: result.rows[0].id,
+      assetId,
+      side: 'buy',
+      unitsPerExecution,
+      frequency,
+      nextExecutionAt: result.rows[0].next_execution_at,
+      maxPriceGbpMinor: maxPriceGbpMinor ?? null,
+      active: true,
+      executionsCount: 0,
+      createdAt: result.rows[0].created_at,
+    },
+  };
+});
+
+// DELETE /co-own/recurring-orders/:id — cancel a recurring order
+app.delete('/co-own/recurring-orders/:id', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const paramsSchema = z.object({ id: z.string().min(1) });
+  const { id } = paramsSchema.parse(request.params);
+
+  await db.query(
+    `UPDATE coown_recurring_orders SET active = FALSE, updated_at = NOW() WHERE id = $1 AND user_id = $2`,
+    [id, request.authUser.userId]
+  );
+
+  return { ok: true };
+});
+
+/* ── Co-Own Tax Documents ── */
+
+// GET /users/me/co-own/tax-documents — generate annual tax statement
+app.get('/users/me/co-own/tax-documents', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const querySchema = z.object({
+    taxYear: z.string().regex(/^\d{4}-\d{4}$/).optional(),
+  });
+  const { taxYear } = querySchema.parse(request.query);
+
+  // Determine UK tax year (April 6 to April 5)
+  let startDate: string;
+  let endDate: string;
+  if (taxYear) {
+    const [startYear] = taxYear.split('-');
+    startDate = `${startYear}-04-06`;
+    endDate = `${parseInt(startYear) + 1}-04-05`;
+  } else {
+    const now = new Date();
+    const currentYear = now.getMonth() < 3 || (now.getMonth() === 3 && now.getDate() < 6)
+      ? now.getFullYear() - 1
+      : now.getFullYear();
+    startDate = `${currentYear}-04-06`;
+    endDate = `${currentYear + 1}-04-05`;
+  }
+
+  // Get all executions for the user in the tax year
+  const buysResult = await db.query<{
+    asset_id: string;
+    total_gbp_minor: string | number;
+    units: string | number;
+    execution_count: string | number;
+  }>(
+    `SELECT asset_id,
+            SUM(price_gbp_minor * units)::bigint AS total_gbp_minor,
+            SUM(units)::int AS units,
+            COUNT(*)::int AS execution_count
+     FROM coown_executions
+     WHERE buyer_user_id = $1 AND executed_at >= $2 AND executed_at < $3
+     GROUP BY asset_id`,
+    [request.authUser.userId, startDate, endDate]
+  );
+
+  const sellsResult = await db.query<{
+    asset_id: string;
+    total_gbp_minor: string | number;
+    units: string | number;
+    execution_count: string | number;
+  }>(
+    `SELECT asset_id,
+            SUM(price_gbp_minor * units)::bigint AS total_gbp_minor,
+            SUM(units)::int AS units,
+            COUNT(*)::int AS execution_count
+     FROM coown_executions
+     WHERE seller_user_id = $1 AND executed_at >= $2 AND executed_at < $3
+     GROUP BY asset_id`,
+    [request.authUser.userId, startDate, endDate]
+  );
+
+  // Get distributions in the tax year
+  const distributionsResult = await db.query<{
+    asset_id: string;
+    total_gbp_minor: string | number;
+    count: string | number;
+  }>(
+    `SELECT asset_id,
+            SUM(amount_gbp_minor)::bigint AS total_gbp_minor,
+            COUNT(*)::int AS count
+     FROM coown_distributions
+     WHERE recipient_user_id = $1 AND created_at >= $2 AND created_at < $3
+     GROUP BY asset_id`,
+    [request.authUser.userId, startDate, endDate]
+  );
+
+  const totalBuys = buysResult.rows.reduce((sum, r) => sum + Number(r.total_gbp_minor), 0);
+  const totalSells = sellsResult.rows.reduce((sum, r) => sum + Number(r.total_gbp_minor), 0);
+  const totalDistributions = distributionsResult.rows.reduce((sum, r) => sum + Number(r.total_gbp_minor), 0);
+  const realizedPnl = totalSells - totalBuys;
+
+  return {
+    ok: true,
+    taxDocument: {
+      taxYear: taxYear ?? `${startDate.slice(0, 4)}-${endDate.slice(0, 4)}`,
+      startDate,
+      endDate,
+      currency: 'GBP',
+      summary: {
+        totalPurchasesGbpMinor: totalBuys,
+        totalSalesGbpMinor: totalSells,
+        totalDistributionsGbpMinor: totalDistributions,
+        realizedPnlGbpMinor: realizedPnl,
+      },
+      purchases: buysResult.rows.map((r) => ({
+        assetId: r.asset_id,
+        totalGbpMinor: Number(r.total_gbp_minor),
+        units: Number(r.units),
+        executionCount: Number(r.execution_count),
+      })),
+      sales: sellsResult.rows.map((r) => ({
+        assetId: r.asset_id,
+        totalGbpMinor: Number(r.total_gbp_minor),
+        units: Number(r.units),
+        executionCount: Number(r.execution_count),
+      })),
+      distributions: distributionsResult.rows.map((r) => ({
+        assetId: r.asset_id,
+        totalGbpMinor: Number(r.total_gbp_minor),
+        count: Number(r.count),
+      })),
+      generatedAt: new Date().toISOString(),
     },
   };
 });

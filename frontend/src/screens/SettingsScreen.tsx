@@ -58,6 +58,12 @@ const ROUTE_METADATA: DestinationMeta[] = [
   { key: 'ChatSettings', label: 'Messages & notifications', searchTerms: 'messages chat notifications messaging', section: 'Messages & notifications', showSection: true },
   { key: 'Personalisation', label: 'Personalisation & appearance', searchTerms: 'personalisation feed preferences theme currency language appearance', section: 'Personalisation & appearance', showSection: true },
   { key: 'PushNotifications', label: 'Notification categories', searchTerms: 'push notifications alerts categories', section: 'Messages & notifications', showSection: true },
+  { key: 'EmailNotifications', label: 'Email preferences', searchTerms: 'email notifications preferences categories', section: 'Messages & notifications' },
+  { key: 'ConnectedAccounts', label: 'Connected accounts', searchTerms: 'connected accounts google apple oauth social login', section: 'Security', showSection: true },
+  { key: 'AccessibilitySettings', label: 'Accessibility', searchTerms: 'accessibility text size reduced motion high contrast screen reader', section: 'Personalisation & appearance' },
+  { key: 'CoOwnPriceAlerts', label: 'Co-Own price alerts', searchTerms: 'co-own price alerts notifications syndicate', section: 'Co-Own', showSection: true },
+  { key: 'CoOwnRecurringOrders', label: 'Auto-invest plans', searchTerms: 'co-own recurring orders auto invest syndicate', section: 'Co-Own' },
+  { key: 'CoOwnTaxDocuments', label: 'Tax documents', searchTerms: 'co-own tax documents statements cgt syndicate', section: 'Co-Own' },
   { key: 'HelpSupport', label: 'Help', searchTerms: 'help support faq contact', section: 'Help', showSection: true },
   { key: 'About', label: 'About Thryftverse', searchTerms: 'about version', section: 'Help', showSection: true },
 ];

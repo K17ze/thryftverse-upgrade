@@ -7,6 +7,7 @@ import { useToast } from '../context/ToastContext';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { updateActivityStatus, updateSearchVisibility } from '../services/accountApi';
 
 type Props = StackScreenProps<RootStackParamList, 'PrivacySettings'>;
 
@@ -16,11 +17,38 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
   const updateAccountPreferences = useStore((s) => s.updateAccountPreferences);
   const blockedCount = useStore((s) => s.blockedUsers.length);
 
+  // Local state for new toggles (synced to backend on change)
+  const [activityStatusVisible, setActivityStatusVisible] = React.useState(true);
+  const [searchVisibility, setSearchVisibility] = React.useState<'visible' | 'hidden'>('visible');
+
   const handleOpenExternal = async (url: string) => {
     try {
       await Linking.openURL(url);
     } catch {
       show('Unable to open link', 'error');
+    }
+  };
+
+  const handleActivityStatusToggle = async (v: boolean) => {
+    setActivityStatusVisible(v);
+    try {
+      await updateActivityStatus(v);
+      show(v ? 'Activity status visible' : 'Activity status hidden', 'success');
+    } catch {
+      setActivityStatusVisible(!v);
+      show('Failed to update activity status', 'error');
+    }
+  };
+
+  const handleSearchVisibilityToggle = async (v: boolean) => {
+    const next = v ? 'visible' : 'hidden';
+    setSearchVisibility(next);
+    try {
+      await updateSearchVisibility(next);
+      show(v ? 'Visible in search' : 'Hidden from search', 'success');
+    } catch {
+      setSearchVisibility(v ? 'hidden' : 'visible');
+      show('Failed to update search visibility', 'error');
     }
   };
 
@@ -34,6 +62,20 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
           toggleValue={accountPreferences.privateProfile}
           onToggle={(v) => updateAccountPreferences({ privateProfile: v })}
           isFirst
+        />
+        <SettingsRow
+          icon="radio-button-on-outline"
+          title="Activity status"
+          subtitle="Show when you're online and active"
+          toggleValue={activityStatusVisible}
+          onToggle={handleActivityStatusToggle}
+        />
+        <SettingsRow
+          icon="search-outline"
+          title="Search visibility"
+          subtitle="Allow others to find you in search"
+          toggleValue={searchVisibility === 'visible'}
+          onToggle={handleSearchVisibilityToggle}
           isLast
         />
       </SettingsSection>

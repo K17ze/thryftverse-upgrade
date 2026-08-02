@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, useWindowDimensions, TextInput, ActivityIndicator, Alert } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,7 +12,7 @@ import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useToast } from '../context/ToastContext';
 import { parseApiError } from '../lib/apiClient';
-import { fetchCoOwnAssetById, fetchCoOwnHoldings } from '../services/marketApi';
+import { fetchCoOwnAssetById, fetchCoOwnHoldings, createCoOwnBuyoutOffer } from '../services/marketApi';
 import { AppButton } from '../components/ui/AppButton';
 import { CachedImage } from '../components/CachedImage';
 import { Space, Radius, Type, Typography, DockConstants } from '../theme/designTokens';
@@ -45,6 +45,11 @@ export default function BuyoutScreen() {
   const [sharesOwned, setSharesOwned] = React.useState(0);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isError, setIsError] = React.useState(false);
+
+  // Buyout offer creation state
+  const [offerPrice, setOfferPrice] = React.useState('');
+  const [targetUnits, setTargetUnits] = React.useState('');
+  const [submitting, setSubmitting] = React.useState(false);
 
   React.useEffect(() => {
     if (!buyoutAssetId) { setIsLoading(false); setIsError(true); return; }
@@ -80,6 +85,52 @@ export default function BuyoutScreen() {
     if (buyoutAssetId) navigation.replace('AssetDetail', { assetId: buyoutAssetId });
     else navigation.navigate('CoOwnHub');
   }, [navigation, buyoutAssetId]);
+
+  const handleCreateBuyoutOffer = React.useCallback(async () => {
+    if (!asset || !currentUser?.id) return;
+    const priceNum = parseFloat(offerPrice);
+    if (!priceNum || priceNum <= 0) {
+      show('Enter a valid offer price', 'error');
+      return;
+    }
+    const unitsNum = targetUnits.trim() ? parseInt(targetUnits, 10) : undefined;
+    if (targetUnits.trim() && (!unitsNum || unitsNum <= 0)) {
+      show('Enter a valid target units count', 'error');
+      return;
+    }
+
+    Alert.alert(
+      'Submit buyout offer?',
+      `Offer £${priceNum.toFixed(2)}${unitsNum ? ` for ${unitsNum} units` : ' for remaining units'}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Submit offer',
+          style: 'default',
+          onPress: async () => {
+            setSubmitting(true);
+            try {
+              await createCoOwnBuyoutOffer(asset.id, {
+                bidderUserId: currentUser.id,
+                offerPriceGbp: priceNum,
+                targetUnits: unitsNum,
+              });
+              haptics.success();
+              show('Buyout offer submitted', 'success');
+              setOfferPrice('');
+              setTargetUnits('');
+              navigation.replace('AssetDetail', { assetId: asset.id });
+            } catch (err) {
+              const parsed = parseApiError(err, 'Failed to submit buyout offer');
+              show(parsed.message, 'error');
+            } finally {
+              setSubmitting(false);
+            }
+          },
+        },
+      ]
+    );
+  }, [asset, currentUser?.id, offerPrice, targetUnits, navigation, show]);
 
   if (isLoading) {
     return (
@@ -176,28 +227,83 @@ export default function BuyoutScreen() {
           ) : (
             <View style={[styles.statusCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <View style={[styles.statusIconWrap, { backgroundColor: colors.surfaceAlt }]}>
-                <Ionicons name="lock-closed-outline" size={28} color={colors.textMuted} />
+                <Ionicons name="cash-outline" size={28} color={colors.brand} />
               </View>
-              <Text style={[styles.statusTitle, { color: colors.textPrimary }]}>Asset-level exit</Text>
+              <Text style={[styles.statusTitle, { color: colors.textPrimary }]}>Make a buyout offer</Text>
               <Text style={[styles.statusBody, { color: colors.textSecondary }]}>
-                Asset-level exit is initiated by the vehicle operator per the rights document. Contact concierge to register interest.
+                Submit an offer to acquire the remaining {remainingUnits} units from current holders. Holders will be notified and can accept or decline.
               </Text>
             </View>
           )}
         </Reanimated.View>
+
+        {/* Buyout offer form */}
+        {!ownsAll && (
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(200)}>
+            <View style={[styles.formCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Offer price (£)</Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+                value={offerPrice}
+                onChangeText={setOfferPrice}
+                placeholder="e.g. 500.00"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="decimal-pad"
+                accessibilityLabel="Offer price in pounds"
+              />
+
+              <Text style={[styles.formLabel, { color: colors.textSecondary, marginTop: Space.md }]}>Target units (optional)</Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+                value={targetUnits}
+                onChangeText={setTargetUnits}
+                placeholder={`All remaining (${remainingUnits})`}
+                placeholderTextColor={colors.textMuted}
+                keyboardType="numeric"
+                accessibilityLabel="Target units to acquire"
+              />
+              <Text style={[styles.formHint, { color: colors.textMuted }]}>
+                Leave blank to offer on all remaining units.
+              </Text>
+            </View>
+          </Reanimated.View>
+        )}
       </ScrollView>
 
       {/* Sticky action dock */}
       <CoOwnStickyActionDock>
-        <AppButton
-          title="Back to item"
-          onPress={() => { haptics.tap(); navigation.replace('AssetDetail', { assetId: asset.id }); }}
-          variant="secondary"
-          size="lg"
-          icon={<Ionicons name="arrow-back" size={16} color={colors.textPrimary} />}
-          accessibilityLabel="Go back to item detail"
-          style={{ flex: 1 }}
-        />
+        {ownsAll ? (
+          <AppButton
+            title="Back to item"
+            onPress={() => { haptics.tap(); navigation.replace('AssetDetail', { assetId: asset.id }); }}
+            variant="secondary"
+            size="lg"
+            icon={<Ionicons name="arrow-back" size={16} color={colors.textPrimary} />}
+            accessibilityLabel="Go back to item detail"
+            style={{ flex: 1 }}
+          />
+        ) : (
+          <View style={{ flexDirection: 'row', gap: Space.sm, flex: 1 }}>
+            <AppButton
+              title="Back"
+              onPress={() => { haptics.tap(); handleBack(); }}
+              variant="secondary"
+              size="lg"
+              accessibilityLabel="Go back"
+              style={{ flex: 1 }}
+            />
+            <AppButton
+              title={submitting ? 'Submitting…' : 'Submit offer'}
+              onPress={() => { haptics.tap(); void handleCreateBuyoutOffer(); }}
+              variant="primary"
+              size="lg"
+              disabled={submitting || !offerPrice}
+              icon={submitting ? <ActivityIndicator size="small" color="#fff" /> : <Ionicons name="send-outline" size={16} color="#fff" />}
+              accessibilityLabel="Submit buyout offer"
+              style={{ flex: 2 }}
+            />
+          </View>
+        )}
       </CoOwnStickyActionDock>
     </SafeAreaView>
   );
@@ -285,5 +391,29 @@ const styles = StyleSheet.create({
   futureFeatureText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
+  },
+  formCard: {
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Space.md,
+    marginBottom: Space.lg,
+  },
+  formLabel: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+    marginBottom: Space.xs,
+  },
+  input: {
+    borderWidth: 1,
+    borderRadius: Radius.md,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
+  },
+  formHint: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.regular,
+    marginTop: Space.xs,
   },
 });

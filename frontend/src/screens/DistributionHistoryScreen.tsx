@@ -26,8 +26,11 @@ import {
   CoOwnMarketHeader,
   CoOwnStateCanvas,
 } from '../components/coown';
-import { fetchCoOwnDistributions, type CoOwnDistribution } from '../services/marketApi';
+import { fetchCoOwnDistributions, fetchDripEnrollments, updateDripEnrollment, type CoOwnDistribution } from '../services/marketApi';
 import { formatCoOwnIze } from '../utils/currency';
+import { useToast } from '../context/ToastContext';
+import { Switch } from 'react-native';
+import { AppButton } from '../components/ui/AppButton';
 
 type RouteT = RouteProp<RootStackParamList, 'DistributionHistory'>;
 type NavT = StackNavigationProp<RootStackParamList>;
@@ -61,14 +64,22 @@ export default function DistributionHistoryScreen() {
   const [refreshing, setRefreshing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
+  // DRIP enrollment state
+  const { show: showToast } = useToast();
+  const [dripEnrollments, setDripEnrollments] = React.useState<Record<string, boolean>>({});
+  const [dripToggling, setDripToggling] = React.useState<string | null>(null);
+
   const loadDistributions = React.useCallback(async () => {
     try {
       setError(null);
-      const result = await fetchCoOwnDistributions({
-        assetId: filterAssetId,
-        limit: 100,
-      });
+      const [result, dripResult] = await Promise.all([
+        fetchCoOwnDistributions({ assetId: filterAssetId, limit: 100 }),
+        fetchDripEnrollments().catch(() => []),
+      ]);
       setDistributions(result.items);
+      const dripMap: Record<string, boolean> = {};
+      dripResult.forEach((e) => { dripMap[e.assetId] = e.enrolled; });
+      setDripEnrollments(dripMap);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load distributions');
     } finally {
@@ -91,6 +102,23 @@ export default function DistributionHistoryScreen() {
     setRefreshing(true);
     void loadDistributions();
   }, [loadDistributions]);
+
+  const handleToggleDrip = React.useCallback(async (assetId: string, enrolled: boolean) => {
+    setDripToggling(assetId);
+    // Optimistic update
+    setDripEnrollments((prev) => ({ ...prev, [assetId]: enrolled }));
+    try {
+      await updateDripEnrollment(assetId, enrolled);
+      haptics.success();
+      showToast(enrolled ? 'DRIP enabled — distributions will be reinvested' : 'DRIP disabled — distributions will be paid as cash', 'success');
+    } catch {
+      // Revert
+      setDripEnrollments((prev) => ({ ...prev, [assetId]: !enrolled }));
+      showToast('Failed to update DRIP setting', 'error');
+    } finally {
+      setDripToggling(null);
+    }
+  }, [showToast]);
 
   const totalReceived = distributions.reduce((sum, d) => sum + d.amountGbpMinor, 0);
 
@@ -146,6 +174,48 @@ export default function DistributionHistoryScreen() {
               <Text style={[styles.summaryCount, { color: colors.textSecondary }]}>
                 {distributions.length} distribution{distributions.length !== 1 ? 's' : ''}
               </Text>
+            </View>
+          </Reanimated.View>
+
+          {/* DRIP enrollment card */}
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(50)}>
+            <View style={[styles.dripCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={styles.dripHeader}>
+                <View style={[styles.dripIcon, { backgroundColor: colors.brand + '15' }]}>
+                  <Ionicons name="repeat" size={18} color={colors.brand} />
+                </View>
+                <View style={styles.dripHeaderText}>
+                  <Text style={[styles.dripTitle, { color: colors.textPrimary }]}>Dividend reinvestment (DRIP)</Text>
+                  <Text style={[styles.dripBody, { color: colors.textSecondary }]}>
+                    Automatically reinvest distributions into additional units of the same asset.
+                  </Text>
+                </View>
+              </View>
+              {/* Per-asset DRIP toggles */}
+              {Object.keys(dripEnrollments).length > 0 ? (
+                <View style={[styles.dripAssetList, { borderTopColor: colors.borderSubtle }]}>
+                  {Object.entries(dripEnrollments).map(([assetId, enrolled]) => (
+                    <View key={assetId} style={styles.dripAssetRow}>
+                      <Text style={[styles.dripAssetName, { color: colors.textPrimary }]} numberOfLines={1}>
+                        {assetId.slice(0, 20)}…
+                      </Text>
+                      <Switch
+                        value={enrolled}
+                        onValueChange={(v) => void handleToggleDrip(assetId, v)}
+                        disabled={dripToggling === assetId}
+                        trackColor={{ false: colors.surfaceAlt, true: colors.brand }}
+                        thumbColor="#fff"
+                        accessibilityRole="switch"
+                        accessibilityLabel={`DRIP for ${assetId}`}
+                      />
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <Text style={[styles.dripEmpty, { color: colors.textMuted }]}>
+                  Enroll from an asset's distribution card to automatically reinvest future payments.
+                </Text>
+              )}
             </View>
           </Reanimated.View>
 
@@ -304,6 +374,59 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     letterSpacing: Type.caption.letterSpacing,
+  },
+  dripCard: {
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Space.md,
+    gap: Space.sm,
+  },
+  dripHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.sm,
+  },
+  dripIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dripHeaderText: {
+    flex: 1,
+  },
+  dripTitle: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.body.letterSpacing,
+  },
+  dripBody: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    marginTop: 2,
+    lineHeight: 18,
+  },
+  dripAssetList: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: Space.sm,
+    gap: Space.sm,
+  },
+  dripAssetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dripAssetName: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+    flex: 1,
+    marginRight: Space.sm,
+  },
+  dripEmpty: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.regular,
+    lineHeight: 16,
   },
 });
 }
