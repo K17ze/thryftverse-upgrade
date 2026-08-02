@@ -1151,7 +1151,7 @@ function createStyles(colors: ThemeColors) {
   mediaGridSelectionText: {
     color: '#000',
     fontSize: 13,
-    fontWeight: '700',
+    fontFamily: Typography.family.bold,
   },
   headerRight: {
     flexDirection: 'row',
