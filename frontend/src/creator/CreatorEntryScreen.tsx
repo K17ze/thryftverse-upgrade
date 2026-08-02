@@ -378,7 +378,7 @@ const styles = StyleSheet.create({
   },
   galleryTitle: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: Typography.family.semibold,
     color: '#fff',
   },
   topRightRow: {
@@ -402,12 +402,13 @@ const styles = StyleSheet.create({
   },
   permissionTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontFamily: Typography.family.semibold,
     color: '#fff',
     marginTop: 12,
   },
   permissionText: {
     fontSize: 14,
+    fontFamily: Typography.family.regular,
     color: 'rgba(255,255,255,0.6)',
     textAlign: 'center',
     lineHeight: 20,
@@ -422,7 +423,7 @@ const styles = StyleSheet.create({
   permissionBtnText: {
     color: '#000',
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: Typography.family.semibold,
   },
   blankBtn: {
     flexDirection: 'row',
@@ -434,6 +435,7 @@ const styles = StyleSheet.create({
   blankBtnText: {
     color: 'rgba(255,255,255,0.6)',
     fontSize: 14,
+    fontFamily: Typography.family.regular,
   },
   // Gallery grid
   grid: {
@@ -464,7 +466,7 @@ const styles = StyleSheet.create({
   videoDuration: {
     color: '#fff',
     fontSize: 10,
-    fontWeight: '500',
+    fontFamily: Typography.family.medium,
   },
   thumbOverlay: {
     ...StyleSheet.absoluteFill,
@@ -484,7 +486,7 @@ const styles = StyleSheet.create({
   selectionBadgeText: {
     color: '#000',
     fontSize: 13,
-    fontWeight: '700',
+    fontFamily: Typography.family.bold,
   },
   // Gallery add button
   addBtn: {
@@ -496,7 +498,7 @@ const styles = StyleSheet.create({
   addBtnText: {
     color: '#000',
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: Typography.family.semibold,
   },
   // Bottom bar gradient
   bottomBarGradient: {
