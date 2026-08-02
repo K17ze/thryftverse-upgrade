@@ -5,11 +5,9 @@ import {
   StyleSheet,
   Pressable,
   Animated,
-  useWindowDimensions,
   StatusBar,
   Easing,
   PanResponder,
-  GestureResponderEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { StackScreenProps } from '@react-navigation/stack';
@@ -30,19 +28,13 @@ type CreateMode = 'visual-search' | 'look' | 'poster';
 const MODES: { key: CreateMode; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { key: 'visual-search', label: 'Search', icon: 'search-outline' },
   { key: 'look', label: 'Look', icon: 'shirt-outline' },
-  { key: 'poster', label: 'Poster', icon: 'images-outline' },
+  { key: 'poster', label: 'Story', icon: 'images-outline' },
 ];
 
 const OVERFLOW_ACTIONS = [
   { key: 'auction', label: 'Create auction', route: 'CreateAuction' as const },
   { key: 'coown', label: 'Create Co-Own', route: 'CreateCoOwn' as const },
 ];
-
-const MODE_CONTEXT: Record<CreateMode, string> = {
-  'visual-search': 'Find an item',
-  look: 'Build a look',
-  poster: 'Create a poster',
-};
 
 // Swipe threshold — how far the user needs to swipe to trigger a mode change
 const SWIPE_THRESHOLD = 60;
@@ -57,11 +49,9 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
   const reducedMotion = useReducedMotion();
   const { show } = useToast();
   const { colors } = useAppTheme();
-  const { width: screenWidth } = useWindowDimensions();
 
   const [mode, setMode] = useState<CreateMode>(initialMode);
   const [showOverflow, setShowOverflow] = useState(false);
-  const indicatorX = useRef(new Animated.Value(0)).current;
   const opacity = useRef(new Animated.Value(0)).current;
   const modeTransition = useRef(new Animated.Value(1)).current;
 
@@ -77,23 +67,6 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
       easing: Easing.out(Easing.ease),
     }).start();
   }, [opacity, reducedMotion]);
-
-  const activeIndex = MODES.findIndex((m) => m.key === mode);
-  const deckWidth = Math.min(screenWidth - (Space.md * 2), 520);
-  const segmentWidth = (deckWidth - (Space.xs * 2)) / MODES.length;
-
-  useEffect(() => {
-    if (reducedMotion) {
-      indicatorX.setValue(activeIndex * segmentWidth);
-      return;
-    }
-    Animated.spring(indicatorX, {
-      toValue: activeIndex * segmentWidth,
-      useNativeDriver: true,
-      friction: 9,
-      tension: 70,
-    }).start();
-  }, [activeIndex, indicatorX, reducedMotion, segmentWidth]);
 
   // ── Swipe gesture to switch modes (Snapchat/TikTok pattern) ──
   // Use a ref to hold the current mode so the PanResponder doesn't capture
@@ -233,76 +206,43 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
     return (
       <Animated.View
         style={[
-          s.creatorDeck,
+          s.modeBar,
           {
-            bottom: Math.max(insets.bottom, 12) + 126,
-            width: deckWidth,
+            bottom: Math.max(insets.bottom, 16) + 4,
             opacity,
           },
         ]}
+        pointerEvents="box-none"
+        accessibilityRole="radiogroup"
       >
-        {/* Elevated context header — upgraded typography hierarchy */}
-        <View style={s.contextHeader}>
-          <Text style={s.contextTitle}>{MODE_CONTEXT[mode]}</Text>
-          <View style={s.toolRow}>
-            {contextualTools.map((tool) => (
-              <Pressable
-                key={tool.key}
-                style={({ pressed }) => [s.toolButton, pressed && s.controlPressed]}
-                onPress={tool.onPress}
-                accessibilityRole="button"
-                accessibilityLabel={tool.label}
-              >
-                <Ionicons name={tool.icon} size={17} color="#fff" />
-                <Text style={s.toolLabel} numberOfLines={1}>{tool.label}</Text>
-              </Pressable>
-            ))}
-          </View>
-        </View>
-
-        <View style={[s.switcherContainer, { width: deckWidth }]} accessibilityRole="radiogroup">
-          <Animated.View
-            style={[
-              s.activeIndicator,
-              {
-                width: segmentWidth,
-                transform: [{ translateX: indicatorX }],
-              },
-            ]}
-          />
-          {MODES.map((m) => (
+        {MODES.map((m, i) => {
+          const isActive = mode === m.key;
+          return (
             <Pressable
               key={m.key}
-              style={({ pressed }) => [
-                s.modeButton,
-                { width: segmentWidth },
-                pressed && s.controlPressed,
-              ]}
+              style={({ pressed }) => [s.modeTab, pressed && s.controlPressed]}
               onPress={() => handleModeChange(m.key)}
+              hitSlop={12}
               accessibilityRole="radio"
-              accessibilityState={{ checked: mode === m.key }}
+              accessibilityState={{ checked: isActive }}
               accessibilityLabel={m.label}
             >
-              <Ionicons
-                name={m.icon}
-                size={16}
-                color={mode === m.key ? '#fff' : 'rgba(255,255,255,0.55)'}
-                style={s.modeIcon}
-              />
               <Text
                 style={[
-                  s.modeLabel,
-                  { color: mode === m.key ? '#fff' : 'rgba(255,255,255,0.55)' },
+                  s.modeTabText,
+                  isActive ? s.modeTabTextActive : s.modeTabTextInactive,
                 ]}
+                numberOfLines={1}
               >
                 {m.label}
               </Text>
+              {isActive && <View style={s.modeTabUnderline} />}
             </Pressable>
-          ))}
-        </View>
+          );
+        })}
       </Animated.View>
     );
-  }, [contextualTools, deckWidth, handleModeChange, indicatorX, insets.bottom, mode, opacity, segmentWidth]);
+  }, [handleModeChange, insets.bottom, mode, opacity]);
 
   const renderOverflowButton = useCallback(() => (
     <Pressable
@@ -345,6 +285,35 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
               { top: Math.max(insets.top, 16) + 52, right: 12, backgroundColor: colors.surface },
             ]}
           >
+            {/* Contextual creator tools */}
+            {contextualTools.map((tool) => (
+              <Pressable
+                key={tool.key}
+                style={({ pressed }) => [
+                  s.overflowItem,
+                  pressed && { opacity: 0.7 },
+                ]}
+                onPress={() => {
+                  haptic.selection();
+                  setShowOverflow(false);
+                  tool.onPress();
+                }}
+                accessibilityRole="menuitem"
+                accessibilityLabel={tool.label}
+              >
+                <Ionicons name={tool.icon} size={18} color={colors.textSecondary} style={s.overflowIcon} />
+                <Text style={[s.overflowItemText, { color: colors.textPrimary }]}>
+                  {tool.label}
+                </Text>
+              </Pressable>
+            ))}
+
+            {/* Divider between creator tools and other actions */}
+            {contextualTools.length > 0 && OVERFLOW_ACTIONS.length > 0 && (
+              <View style={[s.overflowDivider, { backgroundColor: colors.border }]} />
+            )}
+
+            {/* Other create actions */}
             {OVERFLOW_ACTIONS.map((action) => (
               <Pressable
                 key={action.key}
@@ -373,81 +342,45 @@ const s = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
-  creatorDeck: {
+  // ── Snapchat-style flat mode bar ───────────────────────────────────
+  // No background panel — just text labels over the camera feed.
+  // Active mode is solid white with a subtle underline.
+  // Inactive modes are semi-transparent white.
+  // The bar sits at the very bottom, below the shutter.
+  modeBar: {
     position: 'absolute',
-    alignSelf: 'center',
-    borderRadius: Radius.xl,
-    padding: Space.xs,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.12)',
-    overflow: 'hidden',
-  },
-  contextHeader: {
-    paddingHorizontal: Space.xs,
-    paddingTop: 2,
-    paddingBottom: Space.xs,
-  },
-  // Elevated context title — upgraded from Type.meta to Type.bodyEmphasis for visual weight
-  contextTitle: {
-    paddingHorizontal: 4,
-    paddingBottom: 6,
-    color: 'rgba(255,255,255,0.85)',
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyEmphasis.size,
-    letterSpacing: 0.2,
-    textTransform: 'uppercase',
-  },
-  toolRow: {
-    minHeight: 40,
+    left: 0,
+    right: 0,
     flexDirection: 'row',
-    gap: Space.xs,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: Space.xl,
   },
-  // Tool buttons — flat, no background (AGENTS.md §4: no card-on-card)
-  toolButton: {
-    flex: 1,
-    minHeight: 40,
-    flexDirection: 'row',
+  modeTab: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingHorizontal: Space.xs,
+    paddingHorizontal: Space.sm,
+    paddingVertical: 6,
+    minWidth: 64,
   },
-  toolLabel: {
+  modeTabText: {
+    fontFamily: Typography.family.medium,
+    fontSize: Type.body.size,
+    letterSpacing: 0.3,
+  },
+  modeTabTextActive: {
     color: '#fff',
-    fontFamily: Typography.family.medium,
-    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
   },
-  // Switcher — flat within the deck, no nested background (AGENTS.md §4)
-  switcherContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 48,
-    borderRadius: Radius.lg,
-    padding: Space.xs,
+  modeTabTextInactive: {
+    color: 'rgba(255,255,255,0.5)',
   },
-  activeIndicator: {
-    position: 'absolute',
-    left: Space.xs,
-    top: Space.xs,
-    bottom: Space.xs,
-    borderRadius: Radius.md,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-  },
-  modeButton: {
-    height: 40,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: Space.xs,
-    zIndex: 1,
-  },
-  modeIcon: {
-    marginRight: 4,
-  },
-  modeLabel: {
-    fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
+  modeTabUnderline: {
+    width: 20,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: '#fff',
+    marginTop: 4,
   },
   topIconBtn: {
     width: 44,
@@ -465,7 +398,7 @@ const s = StyleSheet.create({
     borderRadius: Radius.lg,
     paddingVertical: Space.xs,
     paddingHorizontal: Space.sm,
-    minWidth: 180,
+    minWidth: 200,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
@@ -474,11 +407,22 @@ const s = StyleSheet.create({
     zIndex: 20,
   },
   overflowItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
     paddingVertical: Space.sm,
     paddingHorizontal: Space.sm,
+  },
+  overflowIcon: {
+    width: 20,
   },
   overflowItemText: {
     fontFamily: Typography.family.medium,
     fontSize: Type.body.size,
+  },
+  overflowDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginVertical: Space.xs,
+    marginHorizontal: Space.sm,
   },
 });

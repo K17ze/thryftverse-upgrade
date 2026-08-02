@@ -161,7 +161,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.3)',
   },
   topCenter: {
     flexDirection: 'row',
@@ -208,7 +207,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.3)',
   },
   pageDots: {
     flexDirection: 'row',

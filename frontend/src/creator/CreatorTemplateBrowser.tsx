@@ -76,7 +76,7 @@ export function CreatorTemplateBrowser({
           accessibilityLabel={`Apply template ${item.name}`}
           accessibilityRole="button"
         >
-          <View style={[styles.previewContainer, { backgroundColor: colors.surfaceAlt }]}>
+          <View style={[styles.previewContainer, { borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border }]}>
             <CreatorCanvas
               document={previewDoc}
               page={previewDoc.pages[0]}

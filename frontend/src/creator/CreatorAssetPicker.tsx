@@ -283,7 +283,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
       return (
         <Pressable
           onPress={handleTakePhoto}
-          style={[styles.mediaGridCell, { backgroundColor: colors.surfaceAlt }]}
+          style={[styles.mediaGridCell, { borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border }]}
           accessibilityLabel="Take photo with camera"
           accessibilityRole="button"
           hitSlop={12}
@@ -296,7 +296,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
       return (
         <Pressable
           onPress={handlePickVideo}
-          style={[styles.mediaGridCell, { backgroundColor: colors.surfaceAlt }]}
+          style={[styles.mediaGridCell, { borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border }]}
           accessibilityLabel="Pick video from gallery"
           accessibilityRole="button"
           hitSlop={12}
@@ -822,7 +822,7 @@ const TEXT_STYLES: Array<{ key: string; label: string }> = [
   { key: 'compact', label: 'Compact' },
 ];
 
-const TEXT_COLORS = ['#ffffff', '#000000', '#ff6b6b', '#4cd964', '#5ac8fa', '#ffcc00', '#ff9500', '#5856d6'];
+const TEXT_COLORS = ['#ffffff', '#000000', '#9b0202', '#215634', '#06489A', '#C9A46A', '#8A6A3F', '#6B3245'];
 
 const TEXT_ALIGNMENTS: Array<{ key: 'left' | 'center' | 'right'; icon: string }> = [
   { key: 'left', icon: 'text-outline' },
@@ -1202,7 +1202,7 @@ function createStyles(colors: ThemeColors) {
   emptyText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textMuted },
   errorBody: { paddingVertical: Space.xl, alignItems: 'center', gap: Space.sm },
   errorText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textMuted },
-  retryBtn: { paddingHorizontal: Space.lg, paddingVertical: Space.sm, borderRadius: Radius.md, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border },
+  retryBtn: { paddingHorizontal: Space.lg, paddingVertical: Space.sm, borderRadius: Radius.md, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
   retryBtnText: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: colors.brand },
   textPickerBody: { paddingHorizontal: Space.md, paddingBottom: Space.xl, gap: Space.sm },
   sectionLabel: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 },
@@ -1215,7 +1215,7 @@ function createStyles(colors: ThemeColors) {
   saveBtnText: { color: '#fff', fontFamily: Typography.family.semibold, fontSize: Type.body.size },
   pickerSectionLabel: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: Space.xs },
   styleScroll: { marginHorizontal: -Space.md },
-  styleOption: { paddingHorizontal: Space.md, paddingVertical: Space.sm, borderRadius: Radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceAlt, marginRight: Space.sm },
+  styleOption: { paddingHorizontal: Space.md, paddingVertical: Space.sm, borderRadius: Radius.md, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, marginRight: Space.sm },
   styleOptionActive: { borderColor: colors.brand, backgroundColor: `${colors.brand}15` },
   styleOptionText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textPrimary },
   styleOptionTextActive: { color: colors.brand },
@@ -1223,7 +1223,7 @@ function createStyles(colors: ThemeColors) {
   colorOption: { width: 32, height: 32, borderRadius: 16, borderWidth: 2, borderColor: 'transparent' },
   colorOptionActive: { borderColor: colors.brand },
   alignmentRow: { flexDirection: 'row', gap: Space.sm },
-  alignmentOption: { width: 44, height: 44, borderRadius: Radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center' },
+  alignmentOption: { width: 44, height: 44, borderRadius: Radius.md, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' },
   alignmentOptionActive: { borderColor: colors.brand, backgroundColor: `${colors.brand}15` },
   shapeGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: Space.md, paddingVertical: Space.lg, paddingHorizontal: Space.md },
   shapeOption: { alignItems: 'center', gap: 6, width: 80, paddingVertical: Space.sm },

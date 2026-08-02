@@ -383,7 +383,8 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.sm,
     paddingVertical: 4,
     borderRadius: Radius.sm,
-    backgroundColor: colors.surfaceAlt,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
   },
   retryText: {
     fontFamily: Typography.family.semibold,
@@ -414,7 +415,6 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.sm,
     paddingHorizontal: Space.md,
     borderRadius: Radius.md,
-    backgroundColor: colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
