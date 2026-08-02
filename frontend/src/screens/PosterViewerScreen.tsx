@@ -27,15 +27,19 @@ import {
   createPosterReply,
   deletePosterStory,
   archivePosterStory,
+  fetchPosterTags,
+  recordPosterTagClick,
 } from '../services/postersApi';
 import type {
   PosterStory,
   PosterFrame,
   PosterReactionType,
+  PosterTag,
 } from '../services/postersApi';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
-import { Type, Typography, Space } from '../theme/designTokens';
+import { useHaptic } from '../hooks/useHaptic';
+import { Type, Typography, Space, Radius } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { PosterProgressSegments } from '../components/poster/PosterProgressSegments';
 import { PosterStickerLayer } from '../components/poster/PosterStickerLayer';
@@ -62,6 +66,7 @@ export default function PosterViewerScreen() {
   const { show } = useToast();
   const currentUser = useStore((state) => state.currentUser);
   const { colors } = useAppTheme();
+  const haptic = useHaptic();
 
   const [stories, setStories] = React.useState<PosterStory[]>([]);
   const [storyIndex, setStoryIndex] = React.useState(0);
@@ -71,6 +76,7 @@ export default function PosterViewerScreen() {
   const [isLoading, setIsLoading] = React.useState(true);
   const [mediaError, setMediaError] = React.useState(false);
   const [recordedFrames, setRecordedFrames] = React.useState<Set<string>>(new Set());
+  const [posterTags, setPosterTags] = React.useState<PosterTag[]>([]);
 
   const storyId = route.params?.storyId;
   const startFrameIndex = route.params?.startFrameIndex ?? 0;
@@ -190,6 +196,41 @@ export default function PosterViewerScreen() {
     setRecordedFrames((prev) => new Set(prev).add(activeFrame.id));
     recordPosterFrameView(activeFrame.id).catch(() => {});
   }, [activeFrame?.id, activeStory, isOwner, recordedFrames]);
+
+  // Fetch shoppable product tags for the active poster story. Tags are
+  // scoped to the poster (story), so we refetch whenever the active story
+  // changes. The hotspots themselves are only rendered for the current frame.
+  React.useEffect(() => {
+    if (!activeStory) {
+      setPosterTags([]);
+      return;
+    }
+    let mounted = true;
+    fetchPosterTags(activeStory.id)
+      .then((res) => {
+        if (mounted) setPosterTags(res.tags ?? []);
+      })
+      .catch(() => {
+        if (mounted) setPosterTags([]);
+      });
+    return () => { mounted = false; };
+  }, [activeStory?.id]);
+
+  const handleTagPress = React.useCallback(
+    (tag: PosterTag) => {
+      haptic.selection();
+      // Fire-and-forget click analytics
+      recordPosterTagClick(activeStory?.id ?? '', tag.id).catch(() => {});
+      // Navigate to the listing detail screen
+      if (tag.listingId) {
+        (navigation as unknown as { navigate: (route: string, params: Record<string, unknown>) => void })
+          .navigate('ItemDetail', { itemId: tag.listingId });
+      } else {
+        show('This product is no longer available', 'info');
+      }
+    },
+    [activeStory?.id, haptic, navigation, show]
+  );
 
   // Pause when app goes to background
   React.useEffect(() => {
@@ -436,6 +477,43 @@ export default function PosterViewerScreen() {
           />
         )}
 
+        {/* Shoppable product tag hotspots — only for the current frame.
+            Coordinates are normalized (0–1) relative to the frame media. */}
+        {posterTags.length > 0 && (
+          <View style={styles.tagLayer} pointerEvents="box-none">
+            {posterTags.map((tag) => (
+              <View
+                key={tag.id}
+                style={[
+                  styles.tagHotspot,
+                  {
+                    left: tag.x * SCREEN_WIDTH,
+                    top: tag.y * SCREEN_HEIGHT,
+                  },
+                ]}
+              >
+                <Pressable
+                  hitSlop={12}
+                  accessibilityLabel={tag.label}
+                  accessibilityRole="button"
+                  onPress={() => handleTagPress(tag)}
+                  style={({ pressed }) => [
+                    styles.tagDot,
+                    pressed && styles.tagDotPressed,
+                  ]}
+                >
+                  <View style={[styles.tagDotInner, { backgroundColor: colors.brand }]} />
+                </Pressable>
+                <View style={styles.tagLabelWrap}>
+                  <Text style={styles.tagLabelText} numberOfLines={1}>
+                    {tag.label}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
         {/* Caption — skipped when rendering canonical composition */}
         <View style={[styles.viewerFooter, { bottom: insets.bottom }]} pointerEvents="box-none">
           {!compositionDoc && activeFrame.caption && activeFrame.mediaType !== 'text' && (
@@ -644,5 +722,49 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.medium,
     fontSize: 16,
     color: '#fff',
+  },
+  tagLayer: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 15,
+  },
+  tagHotspot: {
+    position: 'absolute',
+    alignItems: 'center',
+  },
+  tagDot: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  tagDotPressed: {
+    opacity: 0.7,
+    transform: [{ scale: 0.9 }],
+  },
+  tagDotInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  tagLabelWrap: {
+    marginTop: Space.xs,
+    paddingHorizontal: Space.sm,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    maxWidth: 140,
+  },
+  tagLabelText: {
+    color: '#fff',
+    fontSize: 11,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: 0.1,
   },
 });

@@ -23,6 +23,7 @@ import { useStore } from '../store/useStore';
 import { fetchLooksFromApi } from '../services/looksApi';
 import { createStableId } from '../utils/createStableId';
 import { SheetContainer, PressScale } from './CreatorAnimations';
+import { useHaptic } from '../hooks/useHaptic';
 import type { CreatorLayer } from './composition';
 
 export type AssetPickerMode = 'media' | 'product' | 'mention' | 'look' | 'text' | 'shape' | 'vote';
@@ -36,6 +37,7 @@ export interface CreatorAssetPickerProps {
 }
 
 export function CreatorAssetPicker({ visible, mode, onClose, onAddLayer, editingLayer }: CreatorAssetPickerProps) {
+  const haptic = useHaptic();
   if (!visible) return null;
 
   return (
@@ -72,7 +74,7 @@ function PickerShell({ title, onClose, children }: { title: string; onClose: () 
       <KeyboardAwareScrollView contentContainerStyle={{ flex: 1 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" style={{ maxHeight: '100%' }}>
         <View style={styles.header}>
           <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
-          <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close picker">
+          <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close picker" hitSlop={12}>
             <Ionicons name="close" size={22} color={colors.textSecondary} />
           </PressScale>
         </View>
@@ -115,6 +117,7 @@ interface MediaAsset {
 
 function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
+  const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [status, requestPermission] = MediaLibrary.usePermissions();
   const [assets, setAssets] = useState<MediaAsset[]>([]);
@@ -183,6 +186,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
   }, [status, loadRecentMedia]);
 
   const toggleSelect = useCallback((asset: MediaAsset) => {
+    haptic.selection();
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(asset.id)) {
@@ -197,6 +201,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
 
   const handleAddSelected = useCallback(() => {
     if (selectedIds.size === 0) return;
+    haptic.light();
     const selected = assets.filter((a) => selectedIds.has(a.id));
     selected.forEach((asset, i) => {
       onAddLayer({
@@ -217,6 +222,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
   }, [selectedIds, assets, onAddLayer, onClose]);
 
   const handleTakePhoto = useCallback(async () => {
+    haptic.light();
     const { status: camStatus } = await ImagePicker.requestCameraPermissionsAsync();
     if (camStatus !== 'granted') return;
     const result = await ImagePicker.launchCameraAsync({
@@ -241,6 +247,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
   }, [onAddLayer, onClose]);
 
   const handlePickVideo = useCallback(async () => {
+    haptic.light();
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Videos,
       quality: 0.9,
@@ -279,6 +286,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
           style={[styles.mediaGridCell, { backgroundColor: colors.surfaceAlt }]}
           accessibilityLabel="Take photo with camera"
           accessibilityRole="button"
+          hitSlop={12}
         >
           <Ionicons name="camera-outline" size={28} color={colors.textPrimary} />
         </Pressable>
@@ -291,6 +299,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
           style={[styles.mediaGridCell, { backgroundColor: colors.surfaceAlt }]}
           accessibilityLabel="Pick video from gallery"
           accessibilityRole="button"
+          hitSlop={12}
         >
           <Ionicons name="videocam-outline" size={28} color={colors.textPrimary} />
         </Pressable>
@@ -305,6 +314,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
         style={styles.mediaGridCell}
         accessibilityLabel={`Select ${asset.mediaType}${isSelected ? `, selected ${selectionOrder}` : ''}`}
         accessibilityRole="button"
+        hitSlop={12}
       >
         <Image
           source={{ uri: asset.uri }}
@@ -363,6 +373,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
             style={[styles.mediaPermissionBtn, { backgroundColor: colors.brand }]}
             accessibilityLabel="Open settings"
             accessibilityRole="button"
+            hitSlop={12}
           >
             <Text style={[styles.mediaPermissionBtnText, { color: colors.textInverse }]}>Open settings</Text>
           </Pressable>
@@ -387,6 +398,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
             style={[styles.mediaPermissionBtn, { backgroundColor: colors.brand }]}
             accessibilityLabel="Grant access"
             accessibilityRole="button"
+            hitSlop={12}
           >
             <Text style={[styles.mediaPermissionBtnText, { color: colors.textInverse }]}>Allow access</Text>
           </Pressable>
@@ -409,11 +421,12 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
               onPress={handleAddSelected}
               style={[styles.addBtn, { backgroundColor: colors.brand }]}
               accessibilityLabel="Add selected media"
+              hitSlop={12}
             >
               <Text style={[styles.addBtnText, { color: colors.textInverse }]}>Add</Text>
             </PressScale>
           )}
-          <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close picker">
+          <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close picker" hitSlop={12}>
             <Ionicons name="close" size={22} color={colors.textSecondary} />
           </PressScale>
         </View>
@@ -434,6 +447,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
             style={[styles.mediaPermissionBtn, { backgroundColor: colors.brand }]}
             accessibilityLabel="Take photo"
             accessibilityRole="button"
+            hitSlop={12}
           >
             <Text style={[styles.mediaPermissionBtnText, { color: colors.textInverse }]}>Take photo</Text>
           </Pressable>
@@ -463,6 +477,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
 
 function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
+  const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<ListingSearchResult[]>([]);
@@ -512,6 +527,7 @@ function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
   const handleRetry = useCallback(() => doSearch(query), [doSearch, query]);
 
   const handleSelect = useCallback((item: ListingSearchResult) => {
+    haptic.selection();
     onAddLayer({
       ...baseLayer(createStableId('product'), 10),
       type: 'product',
@@ -548,7 +564,7 @@ function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
       {error ? (
         <View style={styles.errorBody}>
           <Text style={styles.errorText}>Couldn't search listings</Text>
-          <Pressable onPress={handleRetry} style={styles.retryBtn} accessibilityLabel="Retry search" accessibilityRole="button">
+          <Pressable onPress={handleRetry} style={styles.retryBtn} accessibilityLabel="Retry search" accessibilityRole="button" hitSlop={12}>
             <Text style={styles.retryBtnText}>Retry</Text>
           </Pressable>
         </View>
@@ -557,7 +573,7 @@ function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
           data={results}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
-            <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select ${item.title}`} accessibilityRole="button">
+            <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select ${item.title}`} accessibilityRole="button" hitSlop={12}>
               <View style={styles.resultThumb}>
                 {item.imageUrl ? <Image source={{ uri: item.imageUrl }} style={styles.resultThumbImg} /> : <Ionicons name="pricetag" size={16} color={colors.textSecondary} />}
               </View>
@@ -580,6 +596,7 @@ function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
 
 function MentionPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
+  const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const currentUserId = useStore((state) => state.currentUser?.id);
   const [query, setQuery] = useState('');
@@ -631,6 +648,7 @@ function MentionPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
   const handleRetry = useCallback(() => doSearch(query), [doSearch, query]);
 
   const handleSelect = useCallback((user: UserSearchResult) => {
+    haptic.selection();
     onAddLayer({
       ...baseLayer(createStableId('mention'), 10),
       type: 'mention',
@@ -661,7 +679,7 @@ function MentionPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
       {error ? (
         <View style={styles.errorBody}>
           <Text style={styles.errorText}>Couldn't search users</Text>
-          <Pressable onPress={handleRetry} style={styles.retryBtn} accessibilityLabel="Retry search" accessibilityRole="button">
+          <Pressable onPress={handleRetry} style={styles.retryBtn} accessibilityLabel="Retry search" accessibilityRole="button" hitSlop={12}>
             <Text style={styles.retryBtnText}>Retry</Text>
           </Pressable>
         </View>
@@ -670,7 +688,7 @@ function MentionPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
           data={results}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
-            <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select @${item.username}`} accessibilityRole="button">
+            <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select @${item.username}`} accessibilityRole="button" hitSlop={12}>
               <View style={styles.resultAvatar}>
                 {item.avatar ? <Image source={{ uri: item.avatar }} style={styles.resultThumbImg} /> : <Text style={styles.resultAvatarText}>{item.username[0]?.toUpperCase()}</Text>}
               </View>
@@ -693,6 +711,7 @@ function MentionPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
 
 function LookPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
+  const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [query, setQuery] = useState('');
   const [allLooks, setAllLooks] = useState<Array<{ id: string; caption: string; mediaUrl: string; creatorId: string }>>([]);
@@ -738,6 +757,7 @@ function LookPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
   }, [allLooks, query]);
 
   const handleSelect = useCallback((item: { id: string; caption: string; mediaUrl: string }) => {
+    haptic.selection();
     onAddLayer({
       ...baseLayer(createStableId('look'), 10),
       type: 'look',
@@ -768,7 +788,7 @@ function LookPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
       {error ? (
         <View style={styles.errorBody}>
           <Text style={styles.errorText}>Couldn't load looks</Text>
-          <Pressable onPress={loadLooks} style={styles.retryBtn} accessibilityLabel="Retry loading looks" accessibilityRole="button">
+          <Pressable onPress={loadLooks} style={styles.retryBtn} accessibilityLabel="Retry loading looks" accessibilityRole="button" hitSlop={12}>
             <Text style={styles.retryBtnText}>Retry</Text>
           </Pressable>
         </View>
@@ -777,7 +797,7 @@ function LookPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
           data={filtered}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
-            <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select look ${item.caption}`} accessibilityRole="button">
+            <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select look ${item.caption}`} accessibilityRole="button" hitSlop={12}>
               <View style={styles.resultAvatar}><Ionicons name="shirt-outline" size={16} color={colors.textSecondary} /></View>
               <View style={styles.resultInfo}>
                 <Text style={styles.resultName} numberOfLines={2}>{item.caption}</Text>
@@ -812,6 +832,7 @@ const TEXT_ALIGNMENTS: Array<{ key: 'left' | 'center' | 'right'; icon: string }>
 
 function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   const { colors } = useAppTheme();
+  const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const isEditing = editingLayer?.type === 'text';
   const existingPayload = isEditing ? (editingLayer as any).payload : null;
@@ -873,10 +894,11 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
           {TEXT_STYLES.map((s) => (
             <Pressable
               key={s.key}
-              onPress={() => setTextStyle(s.key)}
+              onPress={() => { haptic.selection(); setTextStyle(s.key); }}
               style={[styles.styleOption, textStyle === s.key && styles.styleOptionActive]}
               accessibilityLabel={`Text style ${s.label}`}
               accessibilityRole="button"
+              hitSlop={12}
             >
               <Text style={[styles.styleOptionText, textStyle === s.key && styles.styleOptionTextActive]}>{s.label}</Text>
             </Pressable>
@@ -889,10 +911,11 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
           {TEXT_COLORS.map((c) => (
             <Pressable
               key={c}
-              onPress={() => setTextColor(c)}
+              onPress={() => { haptic.selection(); setTextColor(c); }}
               style={[styles.colorOption, { backgroundColor: c }, textColor === c && styles.colorOptionActive]}
               accessibilityLabel={`Text color ${c}`}
               accessibilityRole="button"
+              hitSlop={12}
             />
           ))}
         </View>
@@ -903,17 +926,18 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
           {TEXT_ALIGNMENTS.map((a) => (
             <Pressable
               key={a.key}
-              onPress={() => setAlignment(a.key)}
+              onPress={() => { haptic.selection(); setAlignment(a.key); }}
               style={[styles.alignmentOption, alignment === a.key && styles.alignmentOptionActive]}
               accessibilityLabel={`Align ${a.key}`}
               accessibilityRole="button"
+              hitSlop={12}
             >
               <Ionicons name={a.icon as any} size={18} color={alignment === a.key ? colors.brand : colors.textSecondary} />
             </Pressable>
           ))}
         </View>
 
-        <Pressable onPress={handleAdd} style={[styles.saveBtn, !text.trim() && styles.saveBtnDisabled]} disabled={!text.trim()} accessibilityLabel={isEditing ? 'Update text' : 'Add text'} accessibilityRole="button">
+        <Pressable onPress={handleAdd} style={[styles.saveBtn, !text.trim() && styles.saveBtnDisabled]} disabled={!text.trim()} accessibilityLabel={isEditing ? 'Update text' : 'Add text'} accessibilityRole="button" hitSlop={12}>
           <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Text'}</Text>
         </Pressable>
       </View>
@@ -934,8 +958,10 @@ const SHAPES: Array<{ shape: 'circle' | 'square' | 'line' | 'arrow' | 'star' | '
 
 function ShapePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
+  const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const handleSelect = useCallback((shape: typeof SHAPES[0]) => {
+    haptic.selection();
     onAddLayer({
       ...baseLayer(createStableId('shape'), 5),
       type: 'decorative',
@@ -950,7 +976,7 @@ function ShapePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
     <PickerShell title="Add Shape" onClose={onClose}>
       <View style={styles.shapeGrid}>
         {SHAPES.map((s) => (
-          <Pressable key={s.shape} onPress={() => handleSelect(s)} style={styles.shapeOption} accessibilityLabel={`Add ${s.label}`} accessibilityRole="button">
+          <Pressable key={s.shape} onPress={() => handleSelect(s)} style={styles.shapeOption} accessibilityLabel={`Add ${s.label}`} accessibilityRole="button" hitSlop={12}>
             <Ionicons name={s.icon as any} size={28} color={colors.textPrimary} />
             <Text style={styles.shapeLabel}>{s.label}</Text>
           </Pressable>
@@ -964,6 +990,7 @@ function ShapePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
 
 function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
+  const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [question, setQuestion] = useState('');
   const [option1, setOption1] = useState('');
@@ -973,6 +1000,7 @@ function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
 
   const handleAdd = useCallback(() => {
     if (!canSave) return;
+    haptic.selection();
     onAddLayer({
       ...baseLayer(createStableId('vote'), 10),
       type: 'vote',
@@ -1023,7 +1051,7 @@ function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
           maxLength={50}
           accessibilityLabel="Vote option 2"
         />
-        <Pressable onPress={handleAdd} style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]} disabled={!canSave} accessibilityLabel="Add vote" accessibilityRole="button">
+        <Pressable onPress={handleAdd} style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]} disabled={!canSave} accessibilityLabel="Add vote" accessibilityRole="button" hitSlop={12}>
           <Text style={styles.saveBtnText}>Add Vote</Text>
         </Pressable>
       </View>

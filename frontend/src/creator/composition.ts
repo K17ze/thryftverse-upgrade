@@ -119,6 +119,7 @@ export const CreatorMetadataSchema = z.object({
   allowRemix: z.boolean().default(false),
   sourceDocumentId: z.string().optional(),
   sourceCreatorId: z.string().optional(),
+  scheduledFor: z.string().datetime().optional(),
 });
 
 export type CreatorMetadata = z.infer<typeof CreatorMetadataSchema>;

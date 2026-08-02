@@ -18,6 +18,7 @@ import { Typography } from '../theme/designTokens';
 import { createStableId } from '../utils/createStableId';
 import type { CreatorLayer } from './composition';
 import CreatorCamera from './CreatorCamera';
+import { useHaptic } from '../hooks/useHaptic';
 
 // ── Creator Entry Screen ───────────────────────────────────────────
 // Camera-first entry for the creator. Modeled on VisualSearchScreen:
@@ -57,6 +58,7 @@ export function CreatorEntryScreen({
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
   const isPoster = documentType === 'poster';
+  const haptic = useHaptic();
 
   // ── View state: 'camera' (default) or 'gallery' ──
   const [view, setView] = useState<'camera' | 'gallery'>('camera');
@@ -166,6 +168,7 @@ export function CreatorEntryScreen({
 
   // ── Gallery selection → create media layers → enter editor ──
   const toggleSelect = useCallback((asset: MediaAsset) => {
+    haptic.selection();
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(asset.id)) {
@@ -203,6 +206,7 @@ export function CreatorEntryScreen({
         opacity: 1,
       },
     } as any));
+    haptic.light();
     onMediaSelected(layers);
   }, [selectedIds, assets, onMediaSelected]);
 
@@ -237,7 +241,8 @@ export function CreatorEntryScreen({
       >
         <Pressable
           style={styles.topIconBtn}
-          onPress={() => setView('camera')}
+          hitSlop={12}
+          onPress={() => { haptic.selection(); setView('camera'); }}
           accessibilityLabel="Back to camera"
         >
           <Ionicons name="camera" size={24} color="#fff" />
@@ -251,6 +256,7 @@ export function CreatorEntryScreen({
           {selectedCount > 0 && (
             <Pressable
               style={styles.addBtn}
+              hitSlop={12}
               onPress={handleAddSelected}
               accessibilityLabel={isPoster ? 'Create story' : 'Create collage'}
             >
@@ -259,7 +265,7 @@ export function CreatorEntryScreen({
               </Text>
             </Pressable>
           )}
-          <Pressable style={styles.topIconBtn} onPress={onClose} accessibilityLabel="Close">
+          <Pressable style={styles.topIconBtn} hitSlop={12} onPress={() => { haptic.light(); onClose(); }} accessibilityLabel="Close">
             <Ionicons name="close" size={26} color="#fff" />
           </Pressable>
         </View>
@@ -277,7 +283,7 @@ export function CreatorEntryScreen({
           <Text style={styles.permissionText}>
             Select photos from your library for your {isPoster ? 'story' : 'collage'}.
           </Text>
-          <Pressable style={styles.permissionBtn} onPress={() => requestMediaPerm()}>
+          <Pressable style={styles.permissionBtn} hitSlop={12} onPress={() => { haptic.light(); requestMediaPerm(); }}>
             <Text style={styles.permissionBtnText}>Allow access</Text>
           </Pressable>
         </View>
@@ -285,7 +291,7 @@ export function CreatorEntryScreen({
         <View style={styles.centerState}>
           <Ionicons name="images-outline" size={48} color="rgba(255,255,255,0.3)" />
           <Text style={styles.permissionText}>No photos found</Text>
-          <Pressable style={styles.blankBtn} onPress={() => setView('camera')}>
+          <Pressable style={styles.blankBtn} hitSlop={12} onPress={() => { haptic.selection(); setView('camera'); }}>
             <Text style={styles.blankBtnText}>Use camera instead</Text>
           </Pressable>
         </View>
@@ -306,6 +312,7 @@ export function CreatorEntryScreen({
             return (
               <Pressable
                 style={[styles.thumb, { width: thumbSize, height: thumbSize }]}
+                hitSlop={12}
                 onPress={() => toggleSelect(item)}
                 accessibilityLabel={`Select ${item.mediaType}${isSelected ? `, selected ${selectionOrder}` : ''}`}
               >
@@ -339,7 +346,7 @@ export function CreatorEntryScreen({
           colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.6)']}
           style={[styles.bottomBarGradient, { paddingBottom: insets.bottom + 8 }]}
         >
-          <Pressable style={styles.blankBtn} onPress={onBlankStart}>
+          <Pressable style={styles.blankBtn} hitSlop={12} onPress={() => { haptic.light(); onBlankStart(); }}>
             <Ionicons name="create-outline" size={18} color="rgba(255,255,255,0.6)" />
             <Text style={styles.blankBtnText}>Blank canvas</Text>
           </Pressable>

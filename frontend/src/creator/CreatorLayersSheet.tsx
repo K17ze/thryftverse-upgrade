@@ -6,6 +6,7 @@ import { useAppTheme } from '../theme/ThemeContext';
 import { useCreator } from './CreatorContext';
 import { getAllLayersSorted } from './composition';
 import { SheetContainer, PressScale } from './CreatorAnimations';
+import { useHaptic } from '../hooks/useHaptic';
 import type { CreatorLayer } from './composition';
 
 export interface CreatorLayersSheetProps {
@@ -29,16 +30,39 @@ const THUMB = 40;
 export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps) {
   const { document, activePageIndex, selectedLayerId, selectLayer, removeLayer, duplicateLayer, reorderLayer, toggleLayerLock, toggleLayerVisibility } = useCreator();
   const { colors } = useAppTheme();
+  const haptic = useHaptic();
 
   const page = document.pages[activePageIndex];
   const layers = getAllLayersSorted(page).reverse();
 
   const handleClose = useCallback(() => {
+    haptic.selection();
     onClose();
-  }, [onClose]);
+  }, [haptic, onClose]);
+
+  const handleSelect = useCallback((id: string) => {
+    haptic.selection();
+    selectLayer(id);
+  }, [haptic, selectLayer]);
+
+  const handleReorder = useCallback((id: string, dir: 'forward' | 'backward') => {
+    haptic.selection();
+    reorderLayer(id, dir);
+  }, [haptic, reorderLayer]);
+
+  const handleVisibility = useCallback((id: string) => {
+    haptic.light();
+    toggleLayerVisibility(id);
+  }, [haptic, toggleLayerVisibility]);
+
+  const handleLock = useCallback((id: string) => {
+    haptic.light();
+    toggleLayerLock(id);
+  }, [haptic, toggleLayerLock]);
 
   const openOverflow = useCallback(
     (layer: CreatorLayer) => {
+      haptic.selection();
       const name = getLayerDisplayName(layer);
       Alert.alert(
         name,
@@ -46,26 +70,26 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
         [
           {
             text: 'Bring to front',
-            onPress: () => reorderLayer(layer.id, 'front'),
+            onPress: () => { haptic.selection(); reorderLayer(layer.id, 'front'); },
           },
           {
             text: 'Send to back',
-            onPress: () => reorderLayer(layer.id, 'back'),
+            onPress: () => { haptic.selection(); reorderLayer(layer.id, 'back'); },
           },
           {
             text: 'Duplicate',
-            onPress: () => duplicateLayer(layer.id),
+            onPress: () => { haptic.selection(); duplicateLayer(layer.id); },
           },
           {
             text: 'Delete',
             style: 'destructive',
-            onPress: () => removeLayer(layer.id),
+            onPress: () => { haptic.medium(); removeLayer(layer.id); },
           },
           { text: 'Cancel', style: 'cancel' },
         ],
       );
     },
-    [reorderLayer, duplicateLayer, removeLayer],
+    [haptic, reorderLayer, duplicateLayer, removeLayer],
   );
 
   return (
@@ -93,16 +117,18 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
                 key={layer.id}
                 style={[
                   styles.layerRow,
-                  { backgroundColor: colors.surfaceAlt },
-                  isSelected ? { backgroundColor: `${colors.brand}15`, borderWidth: 1, borderColor: `${colors.brand}40` } : {},
+                  { borderBottomColor: colors.border },
+                  isSelected ? { backgroundColor: `${colors.brand}10` } : {},
                 ]}
               >
+                {isSelected && <View style={[styles.selectionAccent, { backgroundColor: colors.brand }]} />}
                 <PressScale
-                  onPress={() => selectLayer(layer.id)}
+                  onPress={() => handleSelect(layer.id)}
                   style={styles.rowMain}
                   accessibilityLabel={`Layer ${getLayerDisplayName(layer)}${layer.locked ? ', locked' : ''}${layer.hidden ? ', hidden' : ''}${isSelected ? ', selected' : ''}`}
                   accessibilityHint="Double tap to select layer"
                   accessibilityRole="button"
+                  hitSlop={8}
                 >
                   <View style={[styles.thumbnail, { backgroundColor: `${getLayerColor(layer.type)}20` }, layer.hidden && styles.thumbnailHidden]}>
                     {thumbSource ? (
@@ -131,34 +157,38 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
 
                 <View style={styles.rowActions}>
                   <PressScale
-                    onPress={() => reorderLayer(layer.id, 'forward')}
+                    onPress={() => handleReorder(layer.id, 'forward')}
                     style={styles.actionBtn}
                     accessibilityLabel="Move layer up"
                     accessibilityRole="button"
+                    hitSlop={8}
                   >
                     <Ionicons name="chevron-up" size={22} color={colors.textSecondary} />
                   </PressScale>
                   <PressScale
-                    onPress={() => reorderLayer(layer.id, 'backward')}
+                    onPress={() => handleReorder(layer.id, 'backward')}
                     style={styles.actionBtn}
                     accessibilityLabel="Move layer down"
                     accessibilityRole="button"
+                    hitSlop={8}
                   >
                     <Ionicons name="chevron-down" size={22} color={colors.textSecondary} />
                   </PressScale>
                   <PressScale
-                    onPress={() => toggleLayerVisibility(layer.id)}
+                    onPress={() => handleVisibility(layer.id)}
                     style={styles.actionBtn}
                     accessibilityLabel={layer.hidden ? 'Show layer' : 'Hide layer'}
                     accessibilityRole="button"
+                    hitSlop={8}
                   >
                     <Ionicons name={layer.hidden ? 'eye-off-outline' : 'eye-outline'} size={22} color={colors.textSecondary} />
                   </PressScale>
                   <PressScale
-                    onPress={() => toggleLayerLock(layer.id)}
+                    onPress={() => handleLock(layer.id)}
                     style={styles.actionBtn}
                     accessibilityLabel={layer.locked ? 'Unlock layer' : 'Lock layer'}
                     accessibilityRole="button"
+                    hitSlop={8}
                   >
                     <Ionicons
                       name={layer.locked ? 'lock-closed' : 'lock-open-outline'}
@@ -172,6 +202,7 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
                     accessibilityLabel="More layer actions"
                     accessibilityHint="Opens duplicate, delete and reorder options"
                     accessibilityRole="button"
+                    hitSlop={8}
                   >
                     <Ionicons name="ellipsis-horizontal" size={22} color={colors.textSecondary} />
                   </PressScale>
@@ -283,8 +314,16 @@ const styles = StyleSheet.create({
     gap: Space.xs,
     paddingVertical: Space.xs,
     paddingHorizontal: Space.sm,
-    borderRadius: Radius.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     minHeight: 56,
+  },
+  selectionAccent: {
+    position: 'absolute',
+    left: 0,
+    top: Space.xs,
+    bottom: Space.xs,
+    width: 3,
+    borderRadius: 2,
   },
   rowMain: {
     flex: 1,

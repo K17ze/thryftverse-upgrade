@@ -184,9 +184,10 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
   }, [navigation]);
 
   const handleOverflowAction = useCallback((route: string) => {
+    haptic.selection();
     setShowOverflow(false);
     navigation.navigate(route as any);
-  }, [navigation]);
+  }, [haptic, navigation]);
 
   const handleOpenTemplates = useCallback(() => {
     if (mode === 'visual-search') return;

@@ -7,6 +7,7 @@ import Reanimated, {
   useAnimatedStyle,
   runOnJS,
   withTiming,
+  withSpring,
   withRepeat,
   cancelAnimation,
   Easing,
@@ -186,7 +187,7 @@ function triggerHaptic() {
   try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
 }
 
-function LayerRenderer({
+const LayerRenderer = React.memo(function LayerRenderer({
   layer,
   canvasWidth,
   canvasHeight,
@@ -214,11 +215,11 @@ function LayerRenderer({
 
   useEffect(() => {
     if (isSelected) {
-      selectionOpacity.value = withTiming(1, { duration: 150 });
-      handleScale.value = withTiming(1, { duration: 150 });
+      selectionOpacity.value = withSpring(1, { damping: 15, stiffness: 180 });
+      handleScale.value = withSpring(1, { damping: 14, stiffness: 200 });
     } else {
-      selectionOpacity.value = withTiming(0, { duration: 120 });
-      handleScale.value = withTiming(0.5, { duration: 120 });
+      selectionOpacity.value = withSpring(0, { damping: 16, stiffness: 200 });
+      handleScale.value = withSpring(0.5, { damping: 16, stiffness: 200 });
     }
   }, [isSelected, selectionOpacity, handleScale]);
 
@@ -227,10 +228,10 @@ function LayerRenderer({
 
   // Sync shared values when document state changes (undo/redo/draft load/page change)
   useEffect(() => {
-    translateX.value = withTiming(layer.x * canvasWidth, { duration: 150 });
-    translateY.value = withTiming(layer.y * canvasHeight, { duration: 150 });
-    scaleSV.value = withTiming(layer.scale, { duration: 150 });
-    rotationSV.value = withTiming(normaliseDegrees(layer.rotation), { duration: 150 });
+    translateX.value = withSpring(layer.x * canvasWidth, { damping: 18, stiffness: 220 });
+    translateY.value = withSpring(layer.y * canvasHeight, { damping: 18, stiffness: 220 });
+    scaleSV.value = withSpring(layer.scale, { damping: 18, stiffness: 220 });
+    rotationSV.value = withSpring(normaliseDegrees(layer.rotation), { damping: 18, stiffness: 220 });
   }, [layer.x, layer.y, layer.scale, layer.rotation, canvasWidth, canvasHeight]);
 
   const handlePress = useCallback(() => {
@@ -506,7 +507,7 @@ function LayerRenderer({
       </View>
     </View>
   );
-}
+});
 
 // ── Per-type layer corner radius ───────────────────────────────────
 // Media: 0 (full-bleed), text: conditional on background, pill content: 8px, decorative: 0

@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useCreator } from './CreatorContext';
 import { PressScale } from './CreatorAnimations';
+import { useHaptic } from '../hooks/useHaptic';
 import type { CreatorLayer } from './composition';
 import type { AssetPickerMode } from './CreatorAssetPicker';
 
@@ -50,12 +51,32 @@ export function CreatorToolDock({
 }: CreatorToolDockProps) {
   const { document } = useCreator();
   const { colors } = useAppTheme();
+  const haptic = useHaptic();
   const isLook = document.type === 'look';
 
   // Build contextual tools based on selection state and mode
   const tools: RailTool[] = selectedLayer
     ? buildSelectionTools(selectedLayer, isLook, onEditLayer, onDeleteLayer, onDuplicateLayer, onReorderLayer)
     : buildDefaultTools(isLook, onToolPress, onAddPage, onLayoutPresets);
+
+  const handleToolPress = useCallback((tool: RailTool) => {
+    if (tool.danger) {
+      haptic.medium();
+    } else {
+      haptic.selection();
+    }
+    tool.action();
+  }, [haptic]);
+
+  const handlePublish = useCallback(() => {
+    haptic.medium();
+    onPublish();
+  }, [haptic, onPublish]);
+
+  const handleMore = useCallback(() => {
+    haptic.selection();
+    onMore();
+  }, [haptic, onMore]);
 
   // When floating over canvas: transparent background, white icons
   // When solid (in a sheet): surface background, theme icons
@@ -74,9 +95,10 @@ export function CreatorToolDock({
         {tools.map((tool, i) => (
           <PressScale
             key={tool.label}
-            onPress={tool.action}
+            onPress={() => handleToolPress(tool)}
             style={styles.toolBtn}
             accessibilityLabel={tool.label}
+            hitSlop={12}
           >
             <View style={[
               styles.toolIconWrap,
@@ -101,18 +123,20 @@ export function CreatorToolDock({
       {/* Primary action — separated from editing tools */}
       <View style={[styles.actions, { borderLeftColor: floating ? 'rgba(255,255,255,0.15)' : colors.border }]}>
         <PressScale
-          onPress={onMore}
+          onPress={handleMore}
           style={styles.actionBtn}
           accessibilityLabel="More options"
+          hitSlop={12}
         >
           <Ionicons name="ellipsis-horizontal" size={24} color={iconColor} />
         </PressScale>
         {!floating && (
           <PressScale
-            onPress={onPublish}
+            onPress={handlePublish}
             style={[styles.publishBtn, { backgroundColor: colors.brand }]}
             accessibilityLabel="Next"
             scale={0.97}
+            hitSlop={16}
           >
             <Text style={[styles.publishBtnText, { color: colors.textInverse }]}>Next</Text>
           </PressScale>
@@ -235,10 +259,9 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
   },
   toolIconWrapDanger: {
-    backgroundColor: 'rgba(255,107,107,0.12)',
+    // No fill — danger is communicated via icon color, not background
   },
   toolLabel: {
     fontSize: 11,

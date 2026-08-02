@@ -493,3 +493,60 @@ export async function fetchPosterByIdFromApi(posterId: string): Promise<PosterSi
 export async function deletePosterOnApi(posterId: string): Promise<{ ok: boolean }> {
   return fetchJson<{ ok: boolean }>(`/posters/${posterId}`, { method: 'DELETE' });
 }
+
+// ── Poster Product Tags (Shoppable Pins) ────────────────────────────
+
+export interface PosterTag {
+  id: string;
+  posterId: string;
+  listingId: string;
+  label: string;
+  x: number;
+  y: number;
+  clickCount: number;
+  lastClickedAt: string | null;
+  createdAt: string;
+}
+
+export interface PosterTagListResponse {
+  tags: PosterTag[];
+}
+
+export interface PosterTagCreateBody {
+  listingId: string;
+  label: string;
+  x: number;
+  y: number;
+}
+
+export async function addPosterTag(posterId: string, body: PosterTagCreateBody): Promise<{ ok: boolean; tagId: string }> {
+  return fetchJson<{ ok: boolean; tagId: string }>(`/posters/${posterId}/tags`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function fetchPosterTags(posterId: string): Promise<PosterTagListResponse> {
+  return fetchJson<PosterTagListResponse>(`/posters/${posterId}/tags`);
+}
+
+export async function deletePosterTag(posterId: string, tagId: string): Promise<{ ok: boolean }> {
+  return fetchJson<{ ok: boolean }>(`/posters/${posterId}/tags/${tagId}`, { method: 'DELETE' });
+}
+
+export async function recordPosterTagClick(posterId: string, tagId: string): Promise<{ ok: boolean }> {
+  return fetchJson<{ ok: boolean }>(`/posters/${posterId}/tags/${tagId}/click`, {
+    method: 'POST',
+  });
+}
+
+// ── Creator Content Scheduling ──────────────────────────────────────
+
+export async function scheduleCreatorDocument(documentId: string, scheduledFor: string | null): Promise<{ ok: boolean }> {
+  return fetchJson<{ ok: boolean }>(`/creator/documents/${documentId}/schedule`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ scheduledFor }),
+  });
+}

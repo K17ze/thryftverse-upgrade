@@ -30,6 +30,7 @@ import { CreatorTemplateBrowser } from './CreatorTemplateBrowser';
 import { CreatorPreviewOverlay } from './CreatorPreviewOverlay';
 import { CreatorEntryScreen } from './CreatorEntryScreen';
 import { PressScale } from './CreatorAnimations';
+import { useHaptic } from '../hooks/useHaptic';
 import type { CreatorTemplate } from './templates';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -550,13 +551,19 @@ interface OverflowItemProps {
   disabled?: boolean;
 }
 
-function OverflowItem({ icon, label, colors, onPress, disabled }: OverflowItemProps) {
+const OverflowItem = React.memo(function OverflowItem({ icon, label, colors, onPress, disabled }: OverflowItemProps) {
+  const haptic = useHaptic();
   return (
     <PressScale
-      onPress={onPress}
+      onPress={() => {
+        if (disabled) return;
+        haptic.selection();
+        onPress();
+      }}
       disabled={disabled}
       style={[styles.overflowItem, disabled ? { opacity: 0.4 } : {}]}
       accessibilityLabel={label}
+      hitSlop={12}
     >
       <Ionicons
         name={icon as any}
@@ -573,7 +580,7 @@ function OverflowItem({ icon, label, colors, onPress, disabled }: OverflowItemPr
       </Text>
     </PressScale>
   );
-}
+});
 
 export function CreatorStudioScreen() {
   const route = useRoute<any>();

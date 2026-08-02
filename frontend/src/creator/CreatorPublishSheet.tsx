@@ -16,8 +16,9 @@ import { useAppTheme } from '../theme/ThemeContext';
 import { useCreator } from './CreatorContext';
 import { CreatorCanvas } from './CreatorCanvas';
 import { SheetContainer, PressScale } from './CreatorAnimations';
+import { useHaptic } from '../hooks/useHaptic';
 import { createLookOnApi } from '../services/looksApi';
-import { createPosterStory } from '../services/postersApi';
+import { createPosterStory, scheduleCreatorDocument } from '../services/postersApi';
 import { CreatorAnalytics } from './creatorAnalytics';
 import { uploadAllLocalMedia, hasLocalUris } from './mediaUploadPipeline';
 import {
@@ -36,6 +37,7 @@ export function CreatorPublishSheet({ visible, onClose }: CreatorPublishSheetPro
   const { document, saveDraft } = useCreator();
   const navigation = useNavigation<any>();
   const { colors } = useAppTheme();
+  const haptic = useHaptic();
   const [stage, setStage] = useState<'review' | 'uploading' | 'publishing' | 'success' | 'error'>('review');
   const [errorMessage, setErrorMessage] = useState('');
   const [publishedId, setPublishedId] = useState('');
@@ -45,18 +47,20 @@ export function CreatorPublishSheet({ visible, onClose }: CreatorPublishSheetPro
 
   const handleClose = useCallback(() => {
     if (stage === 'publishing' || stage === 'uploading') return;
+    haptic.selection();
     setStage('review');
     setErrorMessage('');
     setUploadProgress('');
     publishGuardRef.current.reset();
     onClose();
-  }, [stage, onClose]);
+  }, [stage, haptic, onClose]);
 
   const handlePublish = useCallback(async () => {
     // Prevent duplicate submissions
     if (!publishGuardRef.current.begin(document.id)) {
       return;
     }
+    haptic.medium();
 
     CreatorAnalytics.publishStart(document.type);
     try {
@@ -94,7 +98,16 @@ export function CreatorPublishSheet({ visible, onClose }: CreatorPublishSheetPro
         // 5. Send real publish request
         const result = await createLookOnApi(payload);
 
-        // 6. Confirm server success
+        // 6. If scheduled, set the scheduled_for timestamp on the document
+        if (workingDoc.metadata.scheduledFor) {
+          try {
+            await scheduleCreatorDocument(workingDoc.id, workingDoc.metadata.scheduledFor);
+          } catch {
+            // Scheduling failure is non-fatal — the content is already published
+          }
+        }
+
+        // 7. Confirm server success
         publishGuardRef.current.complete(workingDoc.id);
         setPublishedId(result.lookId);
         setStage('success');
@@ -106,7 +119,16 @@ export function CreatorPublishSheet({ visible, onClose }: CreatorPublishSheetPro
         // 5. Send real publish request
         const result = await createPosterStory(payload);
 
-        // 6. Confirm server success
+        // 6. If scheduled, set the scheduled_for timestamp on the document
+        if (workingDoc.metadata.scheduledFor) {
+          try {
+            await scheduleCreatorDocument(workingDoc.id, workingDoc.metadata.scheduledFor);
+          } catch {
+            // Scheduling failure is non-fatal — the content is already published
+          }
+        }
+
+        // 7. Confirm server success
         publishGuardRef.current.complete(workingDoc.id);
         setPublishedId(result.storyId);
         setStage('success');
@@ -156,6 +178,7 @@ export function CreatorPublishSheet({ visible, onClose }: CreatorPublishSheetPro
             <Text style={styles.centerStateText}>Your {document.type} is now live.</Text>
             <Pressable
               onPress={() => {
+                haptic.success();
                 onClose();
                 setStage('review');
                 if (document.type === 'look') {
@@ -167,6 +190,7 @@ export function CreatorPublishSheet({ visible, onClose }: CreatorPublishSheetPro
               style={styles.retryBtn}
               accessibilityLabel="View published content"
               accessibilityRole="button"
+              hitSlop={16}
             >
               <Text style={styles.retryBtnText}>View</Text>
             </Pressable>
@@ -178,7 +202,13 @@ export function CreatorPublishSheet({ visible, onClose }: CreatorPublishSheetPro
             <Ionicons name="warning" size={48} color={colors.danger} />
             <Text style={styles.centerStateTitle}>Publishing failed</Text>
             <Text style={styles.centerStateText}>{errorMessage}</Text>
-            <Pressable onPress={() => setStage('review')} style={styles.retryBtn}>
+            <Pressable
+              onPress={() => { haptic.light(); setStage('review'); }}
+              style={styles.retryBtn}
+              accessibilityLabel="Try again"
+              accessibilityRole="button"
+              hitSlop={16}
+            >
               <Text style={styles.retryBtnText}>Try again</Text>
             </Pressable>
           </View>
@@ -198,6 +228,7 @@ function PublishReview({
 }) {
   const { updateMetadata } = useCreator();
   const { colors } = useAppTheme();
+  const haptic = useHaptic();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const canvasWidth = 280;
   const canvasHeight = Math.floor(canvasWidth / document.canvas.aspectRatio);
@@ -276,14 +307,76 @@ function PublishReview({
         </>
       )}
 
+      {/* Scheduling — Instagram-style "Schedule for later" */}
+      <Text style={styles.sectionLabel}>Schedule</Text>
+      <View style={styles.scheduleRow}>
+        <Pressable
+          style={[styles.schedulePill, !document.metadata.scheduledFor && styles.schedulePillActive]}
+          onPress={() => { haptic.selection(); updateMetadata({ scheduledFor: undefined }); }}
+          accessibilityLabel="Publish now"
+          accessibilityRole="button"
+          hitSlop={12}
+        >
+          <Ionicons name="flash-outline" size={16} color={!document.metadata.scheduledFor ? colors.brand : colors.textSecondary} />
+          <Text style={[styles.schedulePillText, !document.metadata.scheduledFor && { color: colors.brand }]}>Now</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.schedulePill, document.metadata.scheduledFor && styles.schedulePillActive]}
+          onPress={() => {
+            haptic.selection();
+            // Default: tomorrow at 12:00 local
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            tomorrow.setHours(12, 0, 0, 0);
+            updateMetadata({ scheduledFor: tomorrow.toISOString() });
+          }}
+          accessibilityLabel="Schedule for later"
+          accessibilityRole="button"
+          hitSlop={12}
+        >
+          <Ionicons name="time-outline" size={16} color={document.metadata.scheduledFor ? colors.brand : colors.textSecondary} />
+          <Text style={[styles.schedulePillText, document.metadata.scheduledFor && { color: colors.brand }]}>Later</Text>
+        </Pressable>
+      </View>
+      {document.metadata.scheduledFor && (
+        <View style={styles.scheduleDateTime}>
+          <Ionicons name="calendar-outline" size={18} color={colors.textSecondary} />
+          <Text style={styles.scheduleDateTimeText}>
+            {new Date(document.metadata.scheduledFor).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+            {' at '}
+            {new Date(document.metadata.scheduledFor).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
+          </Text>
+          <Pressable
+            onPress={() => { haptic.light(); updateMetadata({ scheduledFor: undefined }); }}
+            hitSlop={12}
+            accessibilityLabel="Clear schedule"
+            accessibilityRole="button"
+          >
+            <Ionicons name="close-circle" size={20} color={colors.textMuted} />
+          </Pressable>
+        </View>
+      )}
+
       {/* Actions */}
       <View style={styles.actionRow}>
-        <Pressable onPress={onSaveDraft} style={styles.draftBtn} accessibilityLabel="Save as draft" accessibilityRole="button">
+        <Pressable
+          onPress={() => { haptic.selection(); onSaveDraft(); }}
+          style={styles.draftBtn}
+          accessibilityLabel="Save as draft"
+          accessibilityRole="button"
+          hitSlop={12}
+        >
           <Ionicons name="save-outline" size={18} color={colors.textSecondary} />
           <Text style={styles.draftBtnText}>Save draft</Text>
         </Pressable>
-        <Pressable onPress={onPublish} style={styles.publishBtn} accessibilityLabel="Publish now" accessibilityRole="button">
-          <Text style={styles.publishBtnText}>Publish now</Text>
+        <Pressable
+          onPress={() => { haptic.medium(); onPublish(); }}
+          style={styles.publishBtn}
+          accessibilityLabel={document.metadata.scheduledFor ? 'Schedule post' : 'Publish now'}
+          accessibilityRole="button"
+          hitSlop={16}
+        >
+          <Text style={styles.publishBtnText}>{document.metadata.scheduledFor ? 'Schedule' : 'Publish now'}</Text>
         </Pressable>
       </View>
     </ScrollView>
@@ -358,6 +451,41 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.body.size,
       color: colors.textPrimary,
     },
+    scheduleRow: {
+      flexDirection: 'row',
+      gap: Space.sm,
+    },
+    schedulePill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
+      borderRadius: Radius.full,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+    },
+    schedulePillActive: {
+      borderColor: colors.brand,
+    },
+    schedulePillText: {
+      fontFamily: Typography.family.medium,
+      fontSize: Type.body.size,
+      color: colors.textSecondary,
+    },
+    scheduleDateTime: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
+    },
+    scheduleDateTimeText: {
+      flex: 1,
+      fontFamily: Typography.family.regular,
+      fontSize: Type.body.size,
+      color: colors.textPrimary,
+    },
     actionRow: {
       flexDirection: 'row',
       gap: Space.sm,
@@ -370,7 +498,8 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       height: 44,
       borderRadius: Radius.md,
-      backgroundColor: colors.surfaceAlt,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
     },
     draftBtnText: {
       fontFamily: Typography.family.medium,

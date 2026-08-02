@@ -176,9 +176,10 @@ export default function CreatorCamera({
         setCountdown(i);
         if (!reducedMotion) {
           countdownAnim.setValue(0);
-          Animated.timing(countdownAnim, {
+          Animated.spring(countdownAnim, {
             toValue: 1,
-            duration: 800,
+            friction: 8,
+            tension: 50,
             useNativeDriver: true,
           }).start();
         }
@@ -216,9 +217,10 @@ export default function CreatorCamera({
         reviewOpacity.setValue(1);
       } else {
         reviewOpacity.setValue(0);
-        Animated.timing(reviewOpacity, {
+        Animated.spring(reviewOpacity, {
           toValue: 1,
-          duration: 200,
+          friction: 9,
+          tension: 60,
           useNativeDriver: true,
         }).start();
       }
@@ -228,9 +230,10 @@ export default function CreatorCamera({
   const handleRetake = useCallback(() => {
     haptic.selection();
     if (!reducedMotion) {
-      Animated.timing(reviewOpacity, {
+      Animated.spring(reviewOpacity, {
         toValue: 0,
-        duration: 160,
+        friction: 9,
+        tension: 60,
         useNativeDriver: true,
       }).start(() => setCapturedUri(null));
     } else {
@@ -476,7 +479,7 @@ export default function CreatorCamera({
         <Pressable
           style={({ pressed }) => [styles.railBtn, pressed && styles.btnPressed]}
           onPress={toggleFacing}
-          hitSlop={8}
+          hitSlop={12}
           accessibilityLabel="Flip camera"
           accessibilityRole="button"
         >
@@ -488,7 +491,7 @@ export default function CreatorCamera({
         <Pressable
           style={({ pressed }) => [styles.railBtn, pressed && styles.btnPressed]}
           onPress={cycleZoom}
-          hitSlop={8}
+          hitSlop={12}
           accessibilityLabel={`Zoom ${zoom}x`}
           accessibilityRole="button"
         >
@@ -500,7 +503,7 @@ export default function CreatorCamera({
         <Pressable
           style={({ pressed }) => [styles.railBtn, pressed && styles.btnPressed]}
           onPress={cycleTimer}
-          hitSlop={8}
+          hitSlop={12}
           accessibilityLabel={timerOption === 0 ? 'Timer off' : `Timer ${timerOption} seconds`}
           accessibilityRole="button"
         >
@@ -516,7 +519,7 @@ export default function CreatorCamera({
         <Pressable
           style={({ pressed }) => [styles.railBtn, pressed && styles.btnPressed]}
           onPress={toggleGrid}
-          hitSlop={8}
+          hitSlop={12}
           accessibilityLabel={showGrid ? 'Grid on' : 'Grid off'}
           accessibilityRole="button"
         >
@@ -542,9 +545,13 @@ export default function CreatorCamera({
                 key={`${uri}-${i}`}
                 style={({ pressed }) => [styles.recentThumbWrap, pressed && styles.btnPressed]}
                 onPress={() => {
+                  haptic.selection();
                   setShowRecentCarousel(false);
                   onGallery();
                 }}
+                hitSlop={12}
+                accessibilityLabel={`Recent photo ${i + 1}`}
+                accessibilityRole="button"
               >
                 <Image source={{ uri }} style={styles.recentThumb} />
               </Pressable>
@@ -617,6 +624,7 @@ export default function CreatorCamera({
             <Pressable
               style={({ pressed }) => [styles.reviewBtn, pressed && styles.btnPressed]}
               onPress={handleRetake}
+              hitSlop={12}
               accessibilityLabel="Retake photo"
               accessibilityRole="button"
             >
@@ -628,6 +636,7 @@ export default function CreatorCamera({
             <Pressable
               style={({ pressed }) => [styles.reviewPrimaryBtn, pressed && styles.btnPressed]}
               onPress={handleConfirmCapture}
+              hitSlop={16}
               accessibilityLabel={isVisualSearch ? 'Search with this photo' : 'Edit in studio'}
               accessibilityRole="button"
             >
@@ -641,6 +650,7 @@ export default function CreatorCamera({
             <Pressable
               style={({ pressed }) => [styles.reviewBtn, pressed && styles.btnPressed]}
               onPress={handleSaveToGallery}
+              hitSlop={12}
               accessibilityLabel="Save to gallery"
               accessibilityRole="button"
             >

@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Typography } from '../theme/designTokens';
 import { useToast } from '../context/ToastContext';
+import { useHaptic } from '../hooks/useHaptic';
 import { Linking } from 'react-native';
 
 const SHUTTER_SIZE = 80;
@@ -39,6 +40,7 @@ export default function VisualSearchCamera({
   const { show } = useToast();
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
+  const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const cameraRef = React.useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
@@ -81,8 +83,14 @@ export default function VisualSearchCamera({
     return () => { cancelled = true; };
   }, []);
 
-  const toggleFlash = () => setFlash((prev) => (prev === 'off' ? 'on' : 'off'));
-  const toggleFacing = () => setFacing((prev) => (prev === 'back' ? 'front' : 'back'));
+  const toggleFlash = () => {
+    haptic.selection();
+    setFlash((prev) => (prev === 'off' ? 'on' : 'off'));
+  };
+  const toggleFacing = () => {
+    haptic.light();
+    setFacing((prev) => (prev === 'back' ? 'front' : 'back'));
+  };
 
   const takePhoto = async () => {
     if (!cameraRef.current) return;
@@ -92,6 +100,7 @@ export default function VisualSearchCamera({
         skipProcessing: false,
       });
       if (photo?.uri) {
+        haptic.medium();
         onPhotoCapture(photo.uri);
       }
     } catch {
@@ -240,6 +249,7 @@ export default function VisualSearchCamera({
           onPress={toggleFacing}
           hitSlop={16}
           accessibilityLabel="Switch camera"
+          accessibilityRole="button"
         >
           <Ionicons name="camera-reverse-outline" size={24} color="#fff" />
           <Text style={styles.bottomLabel}>Flip</Text>
