@@ -325,6 +325,7 @@ const styles = StyleSheet.create({
   backdrop: {
     ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.7)',
+    zIndex: 300,
   },
   sheet: {
     position: 'absolute',
@@ -335,6 +336,8 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingTop: 8,
+    zIndex: 301,
+    elevation: 24,
   },
   handleRow: {
     alignItems: 'center',
