@@ -6,7 +6,8 @@ import type { AuctionMarketItem, AuctionViewModel, CoOwnAsset } from '../data/tr
 import type { ChatBot, Conversation, Message as ConversationMessage } from '../data/mockData';
 import { MOCK_CHAT_BOTS, MOCK_CONVERSATIONS } from '../data/mockData';
 import { ENABLE_RUNTIME_MOCKS } from '../constants/runtimeFlags';
-import { updateUserAccountPreferences, updateUserPostagePreferences } from '../services/accountApi';
+import { updateUserAccountPreferences, updateUserPostagePreferences, updateUserPersonalisation } from '../services/accountApi';
+import { addToCoOwnWatchlist, removeFromCoOwnWatchlist } from '../services/marketApi';
 import {
   fetchSystemBotsFromApi,
   fetchCustomBotsFromApi,
@@ -1047,6 +1048,12 @@ export const useStore = create<StoreState>()(
   toggleCoOwnWatch: (assetId) =>
     set((state) => {
       const isWatched = state.coOwnWatchlist.includes(assetId);
+      // Fire-and-forget backend sync
+      if (isWatched) {
+        void removeFromCoOwnWatchlist(assetId);
+      } else {
+        void addToCoOwnWatchlist(assetId);
+      }
       return {
         coOwnWatchlist: isWatched
           ? state.coOwnWatchlist.filter((id) => id !== assetId)
@@ -1174,10 +1181,12 @@ export const useStore = create<StoreState>()(
     brandsPref: 'Any',
     membersPref: 'Everyone',
   },
-  updatePersonalisationPreferences: (updates) =>
+  updatePersonalisationPreferences: (updates) => {
     set((state) => ({
       personalisationPreferences: { ...state.personalisationPreferences, ...updates },
-    })),
+    }));
+    void updateUserPersonalisation(updates);
+  },
 
   notificationCount: ENABLE_RUNTIME_MOCKS ? 3 : 0,
   setNotificationCount: (count) => set({ notificationCount: count }),

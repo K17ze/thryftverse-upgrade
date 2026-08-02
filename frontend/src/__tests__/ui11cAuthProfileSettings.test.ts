@@ -114,10 +114,11 @@ describe('UI-11C auth + profile + settings flagship account experience', () => {
   });
 
   // 6. No fake sessions/blocked users/2FA states
-  it('ActiveSessionsScreen shows honest local-only state', () => {
+  it('ActiveSessionsScreen uses real backend session API', () => {
     const src = readSrc('screens/ActiveSessionsScreen.tsx');
-    expect(src).toContain('Only this device is tracked locally');
+    expect(src).toContain('fetchActiveSessions');
     expect(src).not.toContain('MOCK_SESSIONS');
+    expect(src).not.toContain('Only this device is tracked locally');
   });
 
   it('BlockedUsersScreen does not invent fake blocked users', () => {

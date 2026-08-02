@@ -2025,3 +2025,107 @@ export async function fetchSellerLiability(
     `/co-own/seller/${encodeURIComponent(userId)}/liability`
   );
 }
+
+/* ─── Distributions ─── */
+
+export interface CoOwnDistribution {
+  id: string;
+  assetId: string;
+  amountGbpMinor: number;
+  unitsAtRecord: number;
+  perUnitGbpMinor: number;
+  distributionType: string;
+  status: string;
+  reference: string | null;
+  createdAt: string;
+  settledAt: string | null;
+}
+
+interface ListDistributionsResponse {
+  ok: true;
+  items: CoOwnDistribution[];
+  nextCursor: string | null;
+}
+
+export async function fetchCoOwnDistributions(
+  options: { assetId?: string; limit?: number; cursor?: string } = {}
+): Promise<{ items: CoOwnDistribution[]; nextCursor: string | null }> {
+  const query = toQuery({
+    assetId: options.assetId,
+    limit: options.limit,
+    cursor: options.cursor,
+  });
+  const payload = await fetchJson<ListDistributionsResponse>(`/co-own/distributions${query}`);
+  return { items: payload.items, nextCursor: payload.nextCursor };
+}
+
+/* ─── Corporate Actions ─── */
+
+export interface CoOwnCorporateAction {
+  id: string;
+  assetId: string;
+  actionType: string;
+  title: string;
+  description: string | null;
+  perUnitValueGbpMinor: number | null;
+  totalValueGbpMinor: number | null;
+  recordDate: string | null;
+  exDate: string | null;
+  payableDate: string | null;
+  status: string;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+interface ListCorporateActionsResponse {
+  ok: true;
+  items: CoOwnCorporateAction[];
+}
+
+export async function fetchCoOwnCorporateActions(
+  options: { assetId?: string; type?: string; limit?: number } = {}
+): Promise<CoOwnCorporateAction[]> {
+  const query = toQuery({
+    assetId: options.assetId,
+    type: options.type,
+    limit: options.limit,
+  });
+  const payload = await fetchJson<ListCorporateActionsResponse>(`/co-own/corporate-actions${query}`);
+  return payload.items;
+}
+
+export async function fetchCoOwnAssetCorporateActions(
+  assetId: string,
+  options: { type?: string; limit?: number } = {}
+): Promise<CoOwnCorporateAction[]> {
+  const query = toQuery({
+    type: options.type,
+    limit: options.limit,
+  });
+  const payload = await fetchJson<ListCorporateActionsResponse>(
+    `/co-own/assets/${encodeURIComponent(assetId)}/corporate-actions${query}`
+  );
+  return payload.items;
+}
+
+/* ─── Watchlist ─── */
+
+export async function addToCoOwnWatchlist(assetId: string): Promise<void> {
+  await fetchJson<{ ok: true }>('/co-own/watchlist', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ assetId }),
+  });
+}
+
+export async function removeFromCoOwnWatchlist(assetId: string): Promise<void> {
+  await fetchJson<{ ok: true }>(`/co-own/watchlist/${encodeURIComponent(assetId)}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function fetchCoOwnWatchlist(limit: number = 50): Promise<MarketCoOwnAsset[]> {
+  const query = toQuery({ limit });
+  const payload = await fetchJson<{ ok: true; items: MarketCoOwnAsset[] }>(`/co-own/watchlist${query}`);
+  return payload.items;
+}

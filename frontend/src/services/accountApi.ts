@@ -138,3 +138,52 @@ export async function updateUserPostagePreferences(input: UpdatePostagePreferenc
     body: JSON.stringify(input),
   });
 }
+
+export interface UpdatePersonalisationInput {
+  genderFilter?: string[];
+  categoriesAndSizesPref?: string;
+  brandsPref?: string;
+  membersPref?: string;
+}
+
+export async function updateUserPersonalisation(input: UpdatePersonalisationInput): Promise<void> {
+  await fetchJson<{ ok: true }>('/users/me/personalisation', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function fetchUserPersonalisation(): Promise<UpdatePersonalisationInput> {
+  const payload = await fetchJson<{ ok: true; personalisation: UpdatePersonalisationInput }>('/users/me/personalisation');
+  return payload.personalisation;
+}
+
+export interface SessionInfo {
+  id: string;
+  userAgent: string | null;
+  ipAddress: string | null;
+  createdAt: string;
+  lastSeenAt: string | null;
+  isCurrent: boolean;
+  deviceName: string;
+  platform: string;
+}
+
+export async function fetchActiveSessions(): Promise<SessionInfo[]> {
+  const payload = await fetchJson<{ ok: true; sessions: SessionInfo[] }>('/users/me/sessions');
+  return payload.sessions;
+}
+
+export async function revokeSession(sessionId: string): Promise<void> {
+  await fetchJson<{ ok: true }>(`/users/me/sessions/${encodeURIComponent(sessionId)}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function revokeOtherSessions(): Promise<number> {
+  const payload = await fetchJson<{ ok: true; revokedCount: number }>('/users/me/sessions/others', {
+    method: 'DELETE',
+  });
+  return payload.revokedCount;
+}

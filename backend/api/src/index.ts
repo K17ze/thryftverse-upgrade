@@ -949,6 +949,10 @@ function isPublicRoute(method: string, path: string) {
     return true;
   }
 
+  if (method === 'GET' && path === '/co-own/corporate-actions') {
+    return true;
+  }
+
   if (method === 'GET' && /^\/users\/[^/]+\/profile$/.test(path)) {
     return true;
   }
@@ -13834,6 +13838,298 @@ app.patch('/users/me/postage', async (request, reply) => {
       carrierKey: row.postage_carrier_key,
       freeShipping: row.postage_free_shipping,
       bundleDiscount: row.postage_bundle_discount,
+    },
+  };
+});
+
+// GET /users/me/sessions — list all active (non-revoked) sessions for the current user
+app.get('/users/me/sessions', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const result = await db.query<{
+    id: string;
+    user_agent: string | null;
+    ip_address: string | null;
+    created_at: string;
+    last_seen_at: string | null;
+    revoked_at: string | null;
+  }>(
+    `
+      SELECT id, user_agent, ip_address, created_at, last_seen_at, revoked_at
+      FROM user_sessions
+      WHERE user_id = $1 AND revoked_at IS NULL
+      ORDER BY created_at DESC
+    `,
+    [request.authUser.userId]
+  );
+
+  const currentSessionId = request.authUser.sessionId ?? null;
+
+  function parseDeviceInfo(userAgent: string | null): { deviceName: string; platform: string } {
+    if (!userAgent) {
+      return { deviceName: 'Unknown device', platform: 'Unknown' };
+    }
+    const ua = userAgent.toLowerCase();
+    let platform = 'Unknown';
+    if (ua.includes('iphone') || ua.includes('ipad') || ua.includes('ios')) {
+      platform = 'iOS';
+    } else if (ua.includes('android')) {
+      platform = 'Android';
+    } else if (ua.includes('mobile')) {
+      platform = 'Mobile';
+    } else if (ua.includes('mozilla') || ua.includes('chrome') || ua.includes('safari') || ua.includes('edge') || ua.includes('firefox')) {
+      platform = 'Web';
+    }
+
+    let deviceName = 'Unknown device';
+    if (platform === 'iOS') {
+      if (ua.includes('ipad')) {
+        deviceName = 'iPad';
+      } else if (ua.includes('iphone')) {
+        deviceName = 'iPhone';
+      } else {
+        deviceName = 'iOS device';
+      }
+    } else if (platform === 'Android') {
+      deviceName = 'Android device';
+    } else if (platform === 'Web') {
+      if (ua.includes('edg/')) {
+        deviceName = 'Edge browser';
+      } else if (ua.includes('chrome/') && !ua.includes('edg/')) {
+        deviceName = 'Chrome browser';
+      } else if (ua.includes('firefox/')) {
+        deviceName = 'Firefox browser';
+      } else if (ua.includes('safari/') && !ua.includes('chrome/')) {
+        deviceName = 'Safari browser';
+      } else {
+        deviceName = 'Web browser';
+      }
+    } else {
+      deviceName = userAgent;
+    }
+
+    return { deviceName, platform };
+  }
+
+  const sessions = result.rows.map((row) => {
+    const { deviceName, platform } = parseDeviceInfo(row.user_agent);
+    return {
+      id: row.id,
+      userAgent: row.user_agent,
+      ipAddress: row.ip_address,
+      createdAt: row.created_at,
+      lastSeenAt: row.last_seen_at,
+      isCurrent: currentSessionId ? row.id === currentSessionId : false,
+      deviceName,
+      platform,
+    };
+  });
+
+  return { ok: true, sessions };
+});
+
+// DELETE /users/me/sessions/:sessionId — revoke a specific session for the current user
+app.delete('/users/me/sessions/:sessionId', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const paramsSchema = z.object({ sessionId: z.string().min(1) });
+  const { sessionId } = paramsSchema.parse(request.params);
+
+  const sessionResult = await db.query<{ id: string }>(
+    `
+      UPDATE user_sessions
+      SET revoked_at = NOW()
+      WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL
+      RETURNING id
+    `,
+    [sessionId, request.authUser.userId]
+  );
+
+  if (sessionResult.rows.length === 0) {
+    const existing = await db.query<{ revoked_at: string | null }>(
+      `SELECT revoked_at FROM user_sessions WHERE id = $1 AND user_id = $2 LIMIT 1`,
+      [sessionId, request.authUser.userId]
+    );
+
+    if (existing.rows.length === 0) {
+      reply.code(404);
+      return { ok: false, error: 'Session not found' };
+    }
+
+    reply.code(404);
+    return { ok: false, error: 'Session already revoked' };
+  }
+
+  await db.query(
+    `
+      UPDATE refresh_tokens
+      SET revoked_at = COALESCE(revoked_at, NOW())
+      WHERE session_id = $1 AND revoked_at IS NULL
+    `,
+    [sessionId]
+  );
+
+  return { ok: true };
+});
+
+// DELETE /users/me/sessions/others — revoke all other sessions (not the current one)
+app.delete('/users/me/sessions/others', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  let keepSessionId: string | null = request.authUser.sessionId ?? null;
+
+  if (!keepSessionId) {
+    const latestResult = await db.query<{ id: string }>(
+      `
+        SELECT id FROM user_sessions
+        WHERE user_id = $1 AND revoked_at IS NULL
+        ORDER BY created_at DESC
+        LIMIT 1
+      `,
+      [request.authUser.userId]
+    );
+
+    keepSessionId = latestResult.rows[0]?.id ?? null;
+  }
+
+  if (!keepSessionId) {
+    return { ok: true, revokedCount: 0 };
+  }
+
+  const revokeResult = await db.query<{ id: string }>(
+    `
+      UPDATE user_sessions
+      SET revoked_at = NOW()
+      WHERE user_id = $1 AND revoked_at IS NULL AND id <> $2
+      RETURNING id
+    `,
+    [request.authUser.userId, keepSessionId]
+  );
+
+  const revokedSessionIds = revokeResult.rows.map((row) => row.id);
+
+  if (revokedSessionIds.length > 0) {
+    await db.query(
+      `
+        UPDATE refresh_tokens
+        SET revoked_at = COALESCE(revoked_at, NOW())
+        WHERE user_id = $1
+          AND revoked_at IS NULL
+          AND session_id = ANY($2::text[])
+      `,
+      [request.authUser.userId, revokedSessionIds]
+    );
+  }
+
+  return { ok: true, revokedCount: revokedSessionIds.length };
+});
+
+// GET /users/me/personalisation — retrieve the current user's feed personalisation preferences
+app.get('/users/me/personalisation', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const result = await db.query<{
+    personalisation_gender_filter: string[];
+    personalisation_categories_pref: string;
+    personalisation_brands_pref: string;
+    personalisation_members_pref: string;
+  }>(
+    `
+      SELECT personalisation_gender_filter, personalisation_categories_pref,
+             personalisation_brands_pref, personalisation_members_pref
+      FROM users WHERE id = $1 LIMIT 1
+    `,
+    [request.authUser.userId]
+  );
+
+  const row = result.rows[0];
+  if (!row) {
+    reply.code(404);
+    return { ok: false, error: 'User not found' };
+  }
+
+  return {
+    ok: true,
+    personalisation: {
+      genderFilter: row.personalisation_gender_filter,
+      categoriesAndSizesPref: row.personalisation_categories_pref,
+      brandsPref: row.personalisation_brands_pref,
+      membersPref: row.personalisation_members_pref,
+    },
+  };
+});
+
+// PATCH /users/me/personalisation — sync feed personalisation preferences
+app.patch('/users/me/personalisation', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const bodySchema = z.object({
+    genderFilter: z.array(z.string()).min(0).max(20).optional(),
+    categoriesAndSizesPref: z.string().trim().min(1).max(64).optional(),
+    brandsPref: z.string().trim().min(1).max(64).optional(),
+    membersPref: z.string().trim().min(1).max(64).optional(),
+  });
+
+  const payload = bodySchema.parse(request.body ?? {});
+
+  const allowed: Record<string, unknown> = {};
+  if (payload.genderFilter !== undefined) allowed.personalisation_gender_filter = payload.genderFilter;
+  if (payload.categoriesAndSizesPref !== undefined) allowed.personalisation_categories_pref = payload.categoriesAndSizesPref;
+  if (payload.brandsPref !== undefined) allowed.personalisation_brands_pref = payload.brandsPref;
+  if (payload.membersPref !== undefined) allowed.personalisation_members_pref = payload.membersPref;
+
+  if (Object.keys(allowed).length === 0) {
+    reply.code(400);
+    return { ok: false, error: 'No fields provided to update' };
+  }
+
+  const setClauses = Object.keys(allowed).map((key, idx) => `${key} = $${idx + 2}`);
+  const values = Object.values(allowed);
+
+  const result = await db.query<{
+    personalisation_gender_filter: string[];
+    personalisation_categories_pref: string;
+    personalisation_brands_pref: string;
+    personalisation_members_pref: string;
+  }>(
+    `
+      UPDATE users
+      SET ${setClauses.join(', ')}, updated_at = NOW()
+      WHERE id = $1
+      RETURNING personalisation_gender_filter, personalisation_categories_pref,
+                personalisation_brands_pref, personalisation_members_pref
+    `,
+    [request.authUser.userId, ...values]
+  );
+
+  const row = result.rows[0];
+  if (!row) {
+    reply.code(404);
+    return { ok: false, error: 'User not found' };
+  }
+
+  return {
+    ok: true,
+    personalisation: {
+      genderFilter: row.personalisation_gender_filter,
+      categoriesAndSizesPref: row.personalisation_categories_pref,
+      brandsPref: row.personalisation_brands_pref,
+      membersPref: row.personalisation_members_pref,
     },
   };
 });
@@ -43271,6 +43567,336 @@ app.get('/users/:userId/co-own/holdings', async (request, reply) => {
   }));
 
   return { ok: true, items };
+});
+
+// GET /co-own/distributions
+// Lists distributions (dividend / revenue-share payments) for the current
+// user's holdings. Supports optional assetId filter and cursor pagination.
+app.get('/co-own/distributions', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const querySchema = z.object({
+    assetId: z.string().min(2).max(128).optional(),
+    limit: z.coerce.number().int().min(1).max(200).default(50),
+    cursor: z.string().optional(),
+  });
+  const { assetId, limit, cursor } = querySchema.parse(request.query);
+
+  const whereConditions: string[] = ['recipient_user_id = $1'];
+  const whereParams: Array<string | number> = [request.authUser.userId];
+
+  if (assetId) {
+    whereParams.push(assetId);
+    whereConditions.push(`asset_id = $${whereParams.length}`);
+  }
+
+  if (cursor) {
+    whereParams.push(cursor);
+    whereConditions.push(`created_at < $${whereParams.length}`);
+  }
+
+  whereParams.push(limit + 1);
+  const limitPlaceholder = `$${whereParams.length}`;
+
+  const result = await db.query<{
+    id: string;
+    asset_id: string;
+    amount_gbp_minor: string | number;
+    units_at_record: string | number;
+    per_unit_gbp_minor: string | number;
+    distribution_type: string;
+    status: string;
+    reference: string | null;
+    created_at: string;
+    settled_at: string | null;
+  }>(
+    `SELECT * FROM coown_distributions
+     WHERE ${whereConditions.join(' AND ')}
+     ORDER BY created_at DESC
+     LIMIT ${limitPlaceholder}`,
+    whereParams
+  );
+
+  const hasNext = result.rows.length > limit;
+  const rows = hasNext ? result.rows.slice(0, limit) : result.rows;
+  const nextCursor = hasNext && rows.length > 0
+    ? rows[rows.length - 1].created_at
+    : null;
+
+  return {
+    ok: true,
+    items: rows.map((row) => ({
+      id: row.id,
+      assetId: row.asset_id,
+      amountGbpMinor: Number(row.amount_gbp_minor),
+      unitsAtRecord: Number(row.units_at_record),
+      perUnitGbpMinor: Number(row.per_unit_gbp_minor),
+      distributionType: row.distribution_type,
+      status: row.status,
+      reference: row.reference,
+      createdAt: row.created_at,
+      settledAt: row.settled_at,
+    })),
+    nextCursor,
+  };
+});
+
+// GET /co-own/corporate-actions
+// Lists corporate actions (distributions, buybacks, splits, governance votes)
+// across all Co-Own assets. Public endpoint — no auth required. Supports
+// optional assetId and type filters.
+app.get('/co-own/corporate-actions', async (request) => {
+  const querySchema = z.object({
+    assetId: z.string().min(2).max(128).optional(),
+    type: z.enum(['distribution', 'buyback', 'split', 'governance']).optional(),
+    limit: z.coerce.number().int().min(1).max(200).default(50),
+  });
+  const { assetId, type, limit } = querySchema.parse(request.query);
+
+  const whereConditions: string[] = [];
+  const whereParams: Array<string | number> = [];
+
+  if (assetId) {
+    whereParams.push(assetId);
+    whereConditions.push(`asset_id = $${whereParams.length}`);
+  }
+
+  if (type) {
+    whereParams.push(type);
+    whereConditions.push(`action_type = $${whereParams.length}`);
+  }
+
+  whereParams.push(limit);
+  const limitPlaceholder = `$${whereParams.length}`;
+  const whereClause = whereConditions.length > 0
+    ? `WHERE ${whereConditions.join(' AND ')}`
+    : '';
+
+  const result = await db.query<{
+    id: string;
+    asset_id: string;
+    action_type: string;
+    title: string;
+    description: string | null;
+    per_unit_value_gbp_minor: string | number | null;
+    total_value_gbp_minor: string | number | null;
+    record_date: string | null;
+    ex_date: string | null;
+    payable_date: string | null;
+    status: string;
+    metadata: Record<string, unknown> | null;
+    created_at: string;
+  }>(
+    `SELECT * FROM coown_corporate_actions
+     ${whereClause}
+     ORDER BY created_at DESC
+     LIMIT ${limitPlaceholder}`,
+    whereParams
+  );
+
+  return {
+    ok: true,
+    items: result.rows.map((row) => ({
+      id: row.id,
+      assetId: row.asset_id,
+      actionType: row.action_type,
+      title: row.title,
+      description: row.description,
+      perUnitValueGbpMinor: row.per_unit_value_gbp_minor == null
+        ? null
+        : Number(row.per_unit_value_gbp_minor),
+      totalValueGbpMinor: row.total_value_gbp_minor == null
+        ? null
+        : Number(row.total_value_gbp_minor),
+      recordDate: row.record_date,
+      exDate: row.ex_date,
+      payableDate: row.payable_date,
+      status: row.status,
+      metadata: row.metadata,
+      createdAt: row.created_at,
+    })),
+  };
+});
+
+// GET /co-own/assets/:assetId/corporate-actions
+// Lists corporate actions for a specific Co-Own asset. Public endpoint.
+app.get('/co-own/assets/:assetId/corporate-actions', async (request) => {
+  const paramsSchema = z.object({ assetId: z.string().min(2).max(128) });
+  const { assetId } = paramsSchema.parse(request.params);
+
+  const querySchema = z.object({
+    type: z.enum(['distribution', 'buyback', 'split', 'governance']).optional(),
+    limit: z.coerce.number().int().min(1).max(200).default(50),
+  });
+  const { type, limit } = querySchema.parse(request.query);
+
+  const whereConditions: string[] = ['asset_id = $1'];
+  const whereParams: Array<string | number> = [assetId];
+
+  if (type) {
+    whereParams.push(type);
+    whereConditions.push(`action_type = $${whereParams.length}`);
+  }
+
+  whereParams.push(limit);
+  const limitPlaceholder = `$${whereParams.length}`;
+
+  const result = await db.query<{
+    id: string;
+    asset_id: string;
+    action_type: string;
+    title: string;
+    description: string | null;
+    per_unit_value_gbp_minor: string | number | null;
+    total_value_gbp_minor: string | number | null;
+    record_date: string | null;
+    ex_date: string | null;
+    payable_date: string | null;
+    status: string;
+    metadata: Record<string, unknown> | null;
+    created_at: string;
+  }>(
+    `SELECT * FROM coown_corporate_actions
+     WHERE ${whereConditions.join(' AND ')}
+     ORDER BY created_at DESC
+     LIMIT ${limitPlaceholder}`,
+    whereParams
+  );
+
+  return {
+    ok: true,
+    items: result.rows.map((row) => ({
+      id: row.id,
+      assetId: row.asset_id,
+      actionType: row.action_type,
+      title: row.title,
+      description: row.description,
+      perUnitValueGbpMinor: row.per_unit_value_gbp_minor == null
+        ? null
+        : Number(row.per_unit_value_gbp_minor),
+      totalValueGbpMinor: row.total_value_gbp_minor == null
+        ? null
+        : Number(row.total_value_gbp_minor),
+      recordDate: row.record_date,
+      exDate: row.ex_date,
+      payableDate: row.payable_date,
+      status: row.status,
+      metadata: row.metadata,
+      createdAt: row.created_at,
+    })),
+  };
+});
+
+// POST /co-own/watchlist
+// Adds an asset to the current user's watchlist. Idempotent — inserting a
+// duplicate (user_id, asset_id) pair is a no-op via ON CONFLICT DO NOTHING.
+app.post('/co-own/watchlist', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const bodySchema = z.object({
+    assetId: z.string().min(2).max(128),
+  });
+  const { assetId } = bodySchema.parse(request.body);
+
+  await db.query(
+    `INSERT INTO coown_watchlist (user_id, asset_id)
+     VALUES ($1, $2)
+     ON CONFLICT DO NOTHING`,
+    [request.authUser.userId, assetId]
+  );
+
+  return { ok: true };
+});
+
+// GET /co-own/watchlist
+// Lists the current user's watchlisted Co-Own assets with full asset details
+// (same shape as the /co-own/assets list endpoint).
+app.get('/co-own/watchlist', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const querySchema = z.object({
+    limit: z.coerce.number().int().min(1).max(200).default(50),
+  });
+  const { limit } = querySchema.parse(request.query);
+
+  const result = await db.query<{
+    id: string;
+    listing_id: string;
+    issuer_id: string;
+    title: string;
+    image_url: string | null;
+    total_units: number;
+    available_units: number;
+    unit_price_gbp: number | string;
+    unit_price_stable: number | string;
+    settlement_mode: 'GBP' | 'TVUSD' | 'HYBRID' | 'ONEZE';
+    issuer_jurisdiction: string | null;
+    market_move_pct_24h: number | string;
+    holders: number;
+    volume_24h_gbp: number | string;
+    is_open: boolean;
+    created_at: string;
+    updated_at: string;
+  }>(
+    `SELECT sa.*
+     FROM coOwn_assets sa
+     INNER JOIN coown_watchlist w ON w.asset_id = sa.id
+     WHERE w.user_id = $1
+     ORDER BY w.created_at DESC
+     LIMIT $2`,
+    [request.authUser.userId, limit]
+  );
+
+  return {
+    ok: true,
+    items: result.rows.map((row) => ({
+      id: row.id,
+      listingId: row.listing_id,
+      issuerId: row.issuer_id,
+      title: row.title,
+      imageUrl: row.image_url,
+      totalUnits: row.total_units,
+      availableUnits: row.available_units,
+      unitPriceGbp: Number(row.unit_price_gbp),
+      unitPriceStable: Number(row.unit_price_stable),
+      settlementMode: row.settlement_mode,
+      issuerJurisdiction: row.issuer_jurisdiction,
+      marketMovePct24h: row.market_move_pct_24h == null ? null : Number(row.market_move_pct_24h),
+      holders: row.holders,
+      volume24hGbp: row.volume_24h_gbp == null ? null : Number(row.volume_24h_gbp),
+      isOpen: row.is_open,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    })),
+  };
+});
+
+// DELETE /co-own/watchlist/:assetId
+// Removes an asset from the current user's watchlist.
+app.delete('/co-own/watchlist/:assetId', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const paramsSchema = z.object({ assetId: z.string().min(2).max(128) });
+  const { assetId } = paramsSchema.parse(request.params);
+
+  await db.query(
+    `DELETE FROM coown_watchlist WHERE user_id = $1 AND asset_id = $2`,
+    [request.authUser.userId, assetId]
+  );
+
+  return { ok: true };
 });
 
 let isShuttingDown = false;
