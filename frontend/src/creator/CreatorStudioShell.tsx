@@ -46,6 +46,7 @@ function layerTypeLabel(type: CreatorLayer['type']): string {
     case 'look': return 'Look';
     case 'vote': return 'Vote';
     case 'decorative': return 'Shape';
+    case 'draw': return 'Drawing';
     default: return 'Layer';
   }
 }
@@ -416,6 +417,7 @@ function CreatorStudioInner() {
               else if (layer.type === 'product') setPickerMode('product');
               else if (layer.type === 'mention') setPickerMode('mention');
               else if (layer.type === 'vote') setPickerMode('vote');
+              else if (layer.type === 'draw') setPickerMode('draw');
             }}
             onCropLayer={(layer) => setCropTarget(layer)}
             onCutoutLayer={(layer) => setCutoutTarget(layer)}

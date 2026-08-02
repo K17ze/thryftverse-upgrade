@@ -6,12 +6,14 @@ import type { ComposerFrame } from '../components/poster/PosterFrameStrip';
 
 const TextLayerPayloadSchema = z.object({
   text: z.string().min(1).max(500),
-  textStyle: z.enum(['headline', 'editorial', 'clean', 'compact', 'handwritten']).default('clean'),
+  textStyle: z.enum(['headline', 'editorial', 'clean', 'compact', 'handwritten', 'bubble', 'deco', 'poster', 'squeeze', 'signature']).default('clean'),
   textColor: z.string().default('#ffffff'),
   backgroundColor: z.string().optional(),
   alignment: z.enum(['left', 'center', 'right']).default('center'),
   lineHeight: z.number().min(0.8).max(3).optional(),
   opacity: z.number().min(0).max(1).default(1),
+  textEffect: z.enum(['none', 'shadow', 'neon', 'outline', 'glow']).optional(),
+  textAnimation: z.enum(['none', 'typewriter', 'bounce', 'fade', 'slide']).optional(),
 });
 
 const MediaLayerPayloadSchema = z.object({
@@ -54,6 +56,20 @@ const DecorativeLayerPayloadSchema = z.object({
   opacity: z.number().min(0).max(1).default(1),
 });
 
+// Draw layer — freehand strokes (Instagram/Snapchat parity: pen, marker,
+// highlighter, neon, eraser). Points are normalized 0-1 relative to layer bounds.
+const DrawStrokeSchema = z.object({
+  points: z.array(z.object({ x: z.number(), y: z.number() })),
+  color: z.string().default('#ffffff'),
+  width: z.number().min(1).max(50).default(4),
+  tool: z.enum(['pen', 'marker', 'highlighter', 'neon', 'eraser']).default('pen'),
+});
+
+const DrawLayerPayloadSchema = z.object({
+  strokes: z.array(DrawStrokeSchema).default([]),
+  opacity: z.number().min(0).max(1).default(1),
+});
+
 // ── Base layer schema ──────────────────────────────────────────────
 
 const BaseLayerSchema = z.object({
@@ -80,6 +96,7 @@ export const CreatorLayerSchema = z.discriminatedUnion('type', [
   BaseLayerSchema.extend({ type: z.literal('look'), payload: LookLayerPayloadSchema }),
   BaseLayerSchema.extend({ type: z.literal('vote'), payload: VoteLayerPayloadSchema }),
   BaseLayerSchema.extend({ type: z.literal('decorative'), payload: DecorativeLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('draw'), payload: DrawLayerPayloadSchema }),
 ]);
 
 export type CreatorLayer = z.infer<typeof CreatorLayerSchema>;

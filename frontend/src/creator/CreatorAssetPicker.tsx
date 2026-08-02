@@ -25,8 +25,11 @@ import { createStableId } from '../utils/createStableId';
 import { SheetContainer, PressScale } from './CreatorAnimations';
 import { useHaptic } from '../hooks/useHaptic';
 import type { CreatorLayer } from './composition';
+import { Canvas, Path, Skia } from '@shopify/react-native-skia';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import Reanimated, { useSharedValue, runOnJS } from 'react-native-reanimated';
 
-export type AssetPickerMode = 'media' | 'product' | 'mention' | 'look' | 'text' | 'shape' | 'vote';
+export type AssetPickerMode = 'media' | 'product' | 'mention' | 'look' | 'text' | 'shape' | 'vote' | 'draw';
 
 export interface CreatorAssetPickerProps {
   visible: boolean;
@@ -61,6 +64,8 @@ function AssetPickerContent({ mode, onClose, onAddLayer, editingLayer }: { mode:
       return <ShapePicker onClose={onClose} onAddLayer={onAddLayer} />;
     case 'vote':
       return <VotePicker onClose={onClose} onAddLayer={onAddLayer} />;
+    case 'draw':
+      return <DrawPicker onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />;
     default:
       return null;
   }
@@ -814,6 +819,9 @@ function LookPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
 }
 
 // ── Text Picker ────────────────────────────────────────────────────
+// Instagram 2025-2026 parity: 10 fonts, text effects, background color,
+// text animations (typewriter, bounce, fade). Each style label renders
+// in its own font (Snapchat pattern).
 
 const TEXT_STYLES: Array<{ key: string; label: string }> = [
   { key: 'clean', label: 'Clean' },
@@ -821,9 +829,34 @@ const TEXT_STYLES: Array<{ key: string; label: string }> = [
   { key: 'editorial', label: 'Editorial' },
   { key: 'compact', label: 'Compact' },
   { key: 'handwritten', label: 'Handwritten' },
+  { key: 'bubble', label: 'Bubble' },
+  { key: 'deco', label: 'Deco' },
+  { key: 'poster', label: 'Poster' },
+  { key: 'squeeze', label: 'Squeeze' },
+  { key: 'signature', label: 'Signature' },
 ];
 
-const TEXT_COLORS = ['#ffffff', '#000000', '#9b0202', '#215634', '#06489A', '#C9A46A', '#8A6A3F', '#6B3245'];
+// Text effect types (Instagram 2025-2026)
+const TEXT_EFFECTS: Array<{ key: string; label: string; icon: string }> = [
+  { key: 'none', label: 'None', icon: 'close-circle-outline' },
+  { key: 'shadow', label: 'Shadow', icon: 'moon-outline' },
+  { key: 'neon', label: 'Neon', icon: 'flash-outline' },
+  { key: 'outline', label: 'Outline', icon: 'square-outline' },
+  { key: 'glow', label: 'Glow', icon: 'sunny-outline' },
+];
+
+// Text animation types (Instagram 2025-2026)
+const TEXT_ANIMATIONS: Array<{ key: string; label: string }> = [
+  { key: 'none', label: 'None' },
+  { key: 'typewriter', label: 'Typewriter' },
+  { key: 'bounce', label: 'Bounce' },
+  { key: 'fade', label: 'Fade In' },
+  { key: 'slide', label: 'Slide Up' },
+];
+
+const TEXT_COLORS = ['#ffffff', '#000000', '#9b0202', '#215634', '#06489A', '#C9A46A', '#8A6A3F', '#6B3245', '#E06666', '#B85566'];
+
+const TEXT_BG_COLORS = ['transparent', '#000000', '#ffffff', '#9b0202', '#215634', '#06489A', '#C9A46A', '#6B3245'];
 
 const TEXT_ALIGNMENTS: Array<{ key: 'left' | 'center' | 'right'; icon: string }> = [
   { key: 'left', icon: 'text-outline' },
@@ -832,12 +865,19 @@ const TEXT_ALIGNMENTS: Array<{ key: 'left' | 'center' | 'right'; icon: string }>
 ];
 
 // Text style preview mapping — mirrors CreatorCanvas styleMap
+// Instagram 2025-2026: 10 fonts covering clean, bold, editorial,
+// compact, handwritten, bubble, deco, poster, squeeze, signature
 const TEXT_STYLE_PREVIEW: Record<string, { fontFamily: string; fontSize: number; lineHeight: number }> = {
   clean: { fontFamily: Typography.family.medium, fontSize: Type.body.size, lineHeight: Type.body.size * 1.3 },
   headline: { fontFamily: Typography.family.bold, fontSize: Type.title.size, lineHeight: Type.title.size * 1.15 },
   editorial: { fontFamily: Typography.family.bold, fontSize: Type.bodyEmphasis.size + 2, lineHeight: (Type.bodyEmphasis.size + 2) * 1.2 },
   compact: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, lineHeight: Type.caption.size * 1.3 },
   handwritten: { fontFamily: Typography.family.regular, fontSize: Type.body.size, lineHeight: Type.body.size * 1.35 },
+  bubble: { fontFamily: Typography.family.bold, fontSize: Type.bodyEmphasis.size + 4, lineHeight: (Type.bodyEmphasis.size + 4) * 1.2 },
+  deco: { fontFamily: Typography.family.bold, fontSize: Type.bodyEmphasis.size, lineHeight: Type.bodyEmphasis.size * 1.3 },
+  poster: { fontFamily: Typography.family.bold, fontSize: Type.title.size - 4, lineHeight: (Type.title.size - 4) * 1.1 },
+  squeeze: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, lineHeight: Type.body.size * 1.1 },
+  signature: { fontFamily: Typography.family.regular, fontSize: Type.bodyEmphasis.size, lineHeight: Type.bodyEmphasis.size * 1.4 },
 };
 
 function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
@@ -851,18 +891,28 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
   const [textStyle, setTextStyle] = useState(existingPayload?.textStyle ?? 'clean');
   const [textColor, setTextColor] = useState(existingPayload?.textColor ?? '#ffffff');
   const [alignment, setAlignment] = useState<'left' | 'center' | 'right'>(existingPayload?.alignment ?? 'center');
+  const [textEffect, setTextEffect] = useState(existingPayload?.textEffect ?? 'none');
+  const [textAnimation, setTextAnimation] = useState(existingPayload?.textAnimation ?? 'none');
+  const [textBgColor, setTextBgColor] = useState(existingPayload?.backgroundColor ?? 'transparent');
 
   const handleAdd = useCallback(() => {
     if (!text.trim()) return;
+    const payload: any = {
+      text: text.trim(),
+      textStyle,
+      textColor,
+      alignment,
+      opacity: 1,
+      textEffect,
+      textAnimation,
+      backgroundColor: textBgColor !== 'transparent' ? textBgColor : undefined,
+    };
     if (isEditing && editingLayer) {
       onAddLayer({
         ...editingLayer,
         payload: {
           ...editingLayer.payload,
-          text: text.trim(),
-          textStyle,
-          textColor,
-          alignment,
+          ...payload,
         },
       } as CreatorLayer);
     } else {
@@ -871,17 +921,11 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
         type: 'text',
         width: 0.6,
         height: 0.1,
-        payload: {
-          text: text.trim(),
-          textStyle,
-          textColor,
-          alignment,
-          opacity: 1,
-        },
+        payload,
       });
     }
     onClose();
-  }, [text, textStyle, textColor, alignment, isEditing, editingLayer, onAddLayer, onClose]);
+  }, [text, textStyle, textColor, alignment, textEffect, textAnimation, textBgColor, isEditing, editingLayer, onAddLayer, onClose]);
 
   return (
     <PickerShell title={isEditing ? 'Edit Text' : 'Add Text'} onClose={onClose}>
@@ -969,9 +1013,336 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
           ))}
         </View>
 
+        {/* Text effect — Instagram 2025-2026: shadow, neon, outline, glow */}
+        <Text style={styles.pickerSectionLabel}>Effect</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.styleScroll}>
+          {TEXT_EFFECTS.map((e) => (
+            <Pressable
+              key={e.key}
+              onPress={() => { haptic.selection(); setTextEffect(e.key); }}
+              style={[styles.styleOption, textEffect === e.key && styles.styleOptionActive]}
+              accessibilityLabel={`Text effect ${e.label}`}
+              accessibilityRole="button"
+              hitSlop={12}
+            >
+              <Ionicons name={e.icon as any} size={18} color={textEffect === e.key ? colors.brand : colors.textSecondary} />
+              <Text
+                style={[
+                  styles.styleOptionText,
+                  textEffect === e.key && styles.styleOptionTextActive,
+                ]}
+              >
+                {e.label}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+
+        {/* Text animation — Instagram 2025-2026: typewriter, bounce, fade, slide */}
+        <Text style={styles.pickerSectionLabel}>Animation</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.styleScroll}>
+          {TEXT_ANIMATIONS.map((a) => (
+            <Pressable
+              key={a.key}
+              onPress={() => { haptic.selection(); setTextAnimation(a.key); }}
+              style={[styles.styleOption, textAnimation === a.key && styles.styleOptionActive]}
+              accessibilityLabel={`Text animation ${a.label}`}
+              accessibilityRole="button"
+              hitSlop={12}
+            >
+              <Text
+                style={[
+                  styles.styleOptionText,
+                  textAnimation === a.key && styles.styleOptionTextActive,
+                ]}
+              >
+                {a.label}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+
+        {/* Background color — Instagram 2025-2026: colored text background */}
+        <Text style={styles.pickerSectionLabel}>Background</Text>
+        <View style={styles.colorRow}>
+          {TEXT_BG_COLORS.map((c) => (
+            <Pressable
+              key={c}
+              onPress={() => { haptic.selection(); setTextBgColor(c); }}
+              style={[
+                styles.colorOption,
+                { backgroundColor: c === 'transparent' ? 'transparent' : c },
+                c === 'transparent' && styles.colorOptionTransparent,
+                textBgColor === c && styles.colorOptionActive,
+              ]}
+              accessibilityLabel={`Background ${c === 'transparent' ? 'none' : c}`}
+              accessibilityRole="button"
+              hitSlop={12}
+            >
+              {c === 'transparent' && (
+                <Ionicons name="close" size={16} color={colors.textSecondary} />
+              )}
+            </Pressable>
+          ))}
+        </View>
+
         <Pressable onPress={handleAdd} style={[styles.saveBtn, !text.trim() && styles.saveBtnDisabled]} disabled={!text.trim()} accessibilityLabel={isEditing ? 'Update text' : 'Add text'} accessibilityRole="button" hitSlop={12}>
           <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Text'}</Text>
         </Pressable>
+      </View>
+    </PickerShell>
+  );
+}
+
+// ── Draw Picker ───────────────────────────────────────────────────
+// Instagram/Snapchat parity: freehand drawing with pen, marker,
+// highlighter, neon, and eraser. Uses Skia for performant stroke
+// rendering and react-native-gesture-handler for pan capture.
+
+const DRAW_TOOLS: Array<{ key: 'pen' | 'marker' | 'highlighter' | 'neon' | 'eraser'; label: string; icon: string }> = [
+  { key: 'pen', label: 'Pen', icon: 'create-outline' },
+  { key: 'marker', label: 'Marker', icon: 'brush-outline' },
+  { key: 'highlighter', label: 'Highlight', icon: 'color-highlight-outline' },
+  { key: 'neon', label: 'Neon', icon: 'flash-outline' },
+  { key: 'eraser', label: 'Eraser', icon: 'backspace-outline' },
+];
+
+const DRAW_COLORS = ['#ffffff', '#000000', '#9b0202', '#215634', '#06489A', '#C9A46A', '#E06666', '#B85566', '#F5D547', '#7B68EE'];
+const BRUSH_SIZES = [2, 4, 8, 14, 22];
+
+interface DrawPoint { x: number; y: number; }
+interface DrawStroke {
+  points: DrawPoint[];
+  color: string;
+  width: number;
+  tool: 'pen' | 'marker' | 'highlighter' | 'neon' | 'eraser';
+}
+
+function buildSkiaPath(points: DrawPoint[], canvasW: number, canvasH: number): any {
+  if (points.length === 0) return null;
+  const path = Skia.Path.Make();
+  const first = points[0];
+  path.moveTo(first.x * canvasW, first.y * canvasH);
+  for (let i = 1; i < points.length; i++) {
+    const prev = points[i - 1];
+    const curr = points[i];
+    const midX = ((prev.x + curr.x) / 2) * canvasW;
+    const midY = ((prev.y + curr.y) / 2) * canvasH;
+    path.quadTo(prev.x * canvasW, prev.y * canvasH, midX, midY);
+  }
+  const last = points[points.length - 1];
+  path.lineTo(last.x * canvasW, last.y * canvasH);
+  return path;
+}
+
+function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+  const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const isEditing = editingLayer?.type === 'draw';
+  const existingStrokes: DrawStroke[] = isEditing ? (editingLayer as any).payload.strokes ?? [] : [];
+
+  const [strokes, setStrokes] = useState<DrawStroke[]>(existingStrokes);
+  const [activeTool, setActiveTool] = useState<'pen' | 'marker' | 'highlighter' | 'neon' | 'eraser'>('pen');
+  const [activeColor, setActiveColor] = useState('#ffffff');
+  const [brushSize, setBrushSize] = useState(4);
+  const [canvasLayout, setCanvasLayout] = useState({ width: 320, height: 400 });
+
+  // Current stroke being drawn
+  const currentStroke = useSharedValue<DrawStroke | null>(null);
+  const renderTick = useSharedValue(0);
+
+  const panGesture = React.useMemo(() => {
+    let currentPoints: DrawPoint[] = [];
+    return Gesture.Pan()
+      .onBegin((e) => {
+        currentPoints = [{ x: e.x / canvasLayout.width, y: e.y / canvasLayout.height }];
+        currentStroke.value = {
+          points: [...currentPoints],
+          color: activeTool === 'eraser' ? '#000000' : activeColor,
+          width: activeTool === 'highlighter' ? brushSize * 3 : activeTool === 'neon' ? brushSize * 1.5 : brushSize,
+          tool: activeTool,
+        };
+      })
+      .onUpdate((e) => {
+        currentPoints.push({ x: e.x / canvasLayout.width, y: e.y / canvasLayout.height });
+        currentStroke.value = {
+          points: [...currentPoints],
+          color: activeTool === 'eraser' ? '#000000' : activeColor,
+          width: activeTool === 'highlighter' ? brushSize * 3 : activeTool === 'neon' ? brushSize * 1.5 : brushSize,
+          tool: activeTool,
+        };
+        renderTick.value = renderTick.value + 1;
+      })
+      .onEnd(() => {
+        if (currentPoints.length > 1) {
+          runOnJS(commitStroke)({
+            points: [...currentPoints],
+            color: activeTool === 'eraser' ? '#000000' : activeColor,
+            width: activeTool === 'highlighter' ? brushSize * 3 : activeTool === 'neon' ? brushSize * 1.5 : brushSize,
+            tool: activeTool,
+          });
+        }
+        currentStroke.value = null;
+        currentPoints = [];
+      })
+      .minDistance(1)
+      .maxPointers(1);
+  }, [activeTool, activeColor, brushSize, canvasLayout.width, canvasLayout.height]);
+
+  const commitStroke = useCallback((stroke: DrawStroke) => {
+    setStrokes((prev) => [...prev, stroke]);
+  }, []);
+
+  const handleUndo = useCallback(() => {
+    haptic.selection();
+    setStrokes((prev) => prev.slice(0, -1));
+  }, [haptic]);
+
+  const handleClear = useCallback(() => {
+    haptic.medium();
+    setStrokes([]);
+  }, [haptic]);
+
+  const handleDone = useCallback(() => {
+    haptic.medium();
+    const payload: any = {
+      strokes,
+      opacity: 1,
+    };
+    if (isEditing && editingLayer) {
+      onAddLayer({
+        ...editingLayer,
+        payload: { ...editingLayer.payload, ...payload },
+      } as CreatorLayer);
+    } else {
+      onAddLayer({
+        ...baseLayer(createStableId('draw'), 10),
+        type: 'draw',
+        width: 0.9,
+        height: 0.9,
+        payload,
+      });
+    }
+    onClose();
+  }, [strokes, isEditing, editingLayer, onAddLayer, onClose, haptic]);
+
+  // Build Skia paths for rendering
+  const renderStrokes = useMemo(() => {
+    const allStrokes = [...strokes];
+    // Include current stroke for live preview
+    const live = currentStroke.value;
+    if (live && live.points.length > 1) allStrokes.push(live);
+    return allStrokes;
+  }, [strokes, renderTick]);
+
+  return (
+    <PickerShell title={isEditing ? 'Edit Drawing' : 'Draw'} onClose={onClose}>
+      <View style={styles.drawBody}>
+        {/* Drawing canvas */}
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <View
+            style={styles.drawCanvasWrap}
+            onLayout={(e) => setCanvasLayout({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
+          >
+            <GestureDetector gesture={panGesture}>
+              <View style={StyleSheet.absoluteFill} collapsable={false}>
+                <Canvas style={StyleSheet.absoluteFill}>
+                  {renderStrokes.map((stroke, i) => {
+                    const skPath = buildSkiaPath(stroke.points, canvasLayout.width, canvasLayout.height);
+                    if (!skPath) return null;
+                    const isEraser = stroke.tool === 'eraser';
+                    const isMarker = stroke.tool === 'marker';
+                    const isHighlighter = stroke.tool === 'highlighter';
+                    const isNeon = stroke.tool === 'neon';
+                    return (
+                      <Path
+                        key={i}
+                        path={skPath}
+                        style="stroke"
+                        strokeWidth={stroke.width}
+                        color={stroke.color}
+                        strokeCap="round"
+                        strokeJoin="round"
+                        opacity={isHighlighter ? 0.35 : isMarker ? 0.6 : 1}
+                        blendMode={isEraser ? "clear" : isNeon ? "screen" : "srcOver"}
+                      />
+                    );
+                  })}
+                </Canvas>
+              </View>
+            </GestureDetector>
+          </View>
+        </GestureHandlerRootView>
+
+        {/* Tool selector */}
+        <Text style={styles.pickerSectionLabel}>Brush</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.styleScroll}>
+          {DRAW_TOOLS.map((t) => (
+            <Pressable
+              key={t.key}
+              onPress={() => { haptic.selection(); setActiveTool(t.key); }}
+              style={[styles.styleOption, activeTool === t.key && styles.styleOptionActive]}
+              accessibilityLabel={`Brush ${t.label}`}
+              accessibilityRole="button"
+              hitSlop={12}
+            >
+              <Ionicons name={t.icon as any} size={18} color={activeTool === t.key ? colors.brand : colors.textSecondary} />
+              <Text style={[styles.styleOptionText, activeTool === t.key && styles.styleOptionTextActive]}>{t.label}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+
+        {/* Color selector (hidden for eraser) */}
+        {activeTool !== 'eraser' && (
+          <>
+            <Text style={styles.pickerSectionLabel}>Color</Text>
+            <View style={styles.colorRow}>
+              {DRAW_COLORS.map((c) => (
+                <Pressable
+                  key={c}
+                  onPress={() => { haptic.selection(); setActiveColor(c); }}
+                  style={[styles.colorOption, { backgroundColor: c }, activeColor === c && styles.colorOptionActive]}
+                  accessibilityLabel={`Draw color ${c}`}
+                  accessibilityRole="button"
+                  hitSlop={12}
+                />
+              ))}
+            </View>
+          </>
+        )}
+
+        {/* Brush size */}
+        <Text style={styles.pickerSectionLabel}>Size</Text>
+        <View style={styles.brushSizeRow}>
+          {BRUSH_SIZES.map((s) => (
+            <Pressable
+              key={s}
+              onPress={() => { haptic.selection(); setBrushSize(s); }}
+              style={[styles.brushSizeOption, brushSize === s && styles.brushSizeOptionActive]}
+              accessibilityLabel={`Brush size ${s}`}
+              accessibilityRole="button"
+              hitSlop={12}
+            >
+              <View style={[styles.brushSizeDot, { width: s + 4, height: s + 4, backgroundColor: brushSize === s ? colors.brand : colors.textSecondary }]} />
+            </Pressable>
+          ))}
+        </View>
+
+        {/* Actions */}
+        <View style={styles.drawActions}>
+          <PressScale onPress={handleUndo} style={styles.drawActionBtn} accessibilityLabel="Undo stroke" hitSlop={12}>
+            <Ionicons name="arrow-undo-outline" size={20} color={colors.textSecondary} />
+            <Text style={styles.drawActionLabel}>Undo</Text>
+          </PressScale>
+          <PressScale onPress={handleClear} style={styles.drawActionBtn} accessibilityLabel="Clear drawing" hitSlop={12}>
+            <Ionicons name="trash-outline" size={20} color={colors.danger} />
+            <Text style={[styles.drawActionLabel, { color: colors.danger }]}>Clear</Text>
+          </PressScale>
+          <PressScale onPress={handleDone} style={[styles.drawDoneBtn, { backgroundColor: colors.brand }]} accessibilityLabel="Done drawing" hitSlop={12}>
+            <Text style={styles.drawDoneBtnText}>Done</Text>
+          </PressScale>
+        </View>
       </View>
     </PickerShell>
   );
@@ -1268,11 +1639,31 @@ function createStyles(colors: ThemeColors) {
   colorRow: { flexDirection: 'row', gap: Space.sm, flexWrap: 'wrap' },
   colorOption: { width: 32, height: 32, borderRadius: 16, borderWidth: 2, borderColor: 'transparent' },
   colorOptionActive: { borderColor: colors.brand },
+  colorOptionTransparent: { borderWidth: 1, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' },
   alignmentRow: { flexDirection: 'row', gap: Space.sm },
   alignmentOption: { width: 44, height: 44, borderRadius: Radius.md, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' },
   alignmentOptionActive: { borderColor: colors.brand, backgroundColor: `${colors.brand}15` },
   shapeGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: Space.md, paddingVertical: Space.lg, paddingHorizontal: Space.md },
   shapeOption: { alignItems: 'center', gap: 6, width: 80, paddingVertical: Space.sm },
   shapeLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary },
-  });
+  // ── Draw picker ──
+  drawBody: { paddingHorizontal: Space.md, paddingBottom: Space.xl, gap: Space.xs },
+  drawCanvasWrap: {
+    flex: 1,
+    minHeight: 280,
+    borderRadius: Radius.md,
+    backgroundColor: '#1a1a1a',
+    overflow: 'hidden',
+    marginBottom: Space.sm,
+  },
+  brushSizeRow: { flexDirection: 'row', gap: Space.md, alignItems: 'center', paddingVertical: Space.xs },
+  brushSizeOption: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+  brushSizeOptionActive: { borderColor: colors.brand, backgroundColor: `${colors.brand}15` },
+  brushSizeDot: { borderRadius: 100 },
+  drawActions: { flexDirection: 'row', alignItems: 'center', gap: Space.md, marginTop: Space.md },
+  drawActionBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: Space.md, paddingVertical: Space.sm, borderRadius: Radius.md, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+  drawActionLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary },
+  drawDoneBtn: { paddingHorizontal: Space.xl, paddingVertical: Space.sm, borderRadius: Radius.full, marginLeft: 'auto' },
+  drawDoneBtnText: { fontFamily: Typography.family.semibold, fontSize: Type.bodyEmphasis.size, color: '#fff' },
+  }) as any;
 }

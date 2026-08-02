@@ -5,6 +5,7 @@ import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-g
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
+  useAnimatedReaction,
   runOnJS,
   withTiming,
   withSpring,
@@ -14,6 +15,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Canvas as SkiaCanvas, Path as SkiaPath, Skia } from '@shopify/react-native-skia';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Video, ResizeMode } from '../components/compat/Video';
@@ -524,6 +526,8 @@ function getLayerRadius(layer: CreatorLayer): number {
       return Radius.md;
     case 'decorative':
       return 0;
+    case 'draw':
+      return 0;
     default:
       return 0;
   }
@@ -545,6 +549,8 @@ function renderLayerContent(layer: CreatorLayer, width: number, height: number):
       return <VoteLayerContent layer={layer} />;
     case 'decorative':
       return <DecorativeLayerContent layer={layer} />;
+    case 'draw':
+      return <DrawLayerContent layer={layer} width={width} height={height} />;
     default:
       return null;
   }
@@ -608,7 +614,61 @@ function MediaLayerContent({ layer, width, height }: { layer: Extract<CreatorLay
 function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'text' }> }) {
   const { payload } = layer;
 
+  // Text entrance animation (Instagram 2025-2026: typewriter, bounce, fade, slide)
+  const animProgress = useSharedValue(0);
+  const animOpacity = useSharedValue(0);
+  const animTranslateY = useSharedValue(0);
+  const [typewriterText, setTypewriterText] = useState(payload.text);
+
+  useEffect(() => {
+    const animation = payload.textAnimation ?? 'none';
+    animProgress.value = 0;
+    animOpacity.value = 0;
+    animTranslateY.value = 0;
+    if (animation === 'none') {
+      animOpacity.value = 1;
+      animProgress.value = 1;
+      setTypewriterText(payload.text);
+      return;
+    }
+    if (animation === 'fade') {
+      animOpacity.value = withTiming(1, { duration: 600, easing: Easing.out(Easing.ease) });
+      setTypewriterText(payload.text);
+    } else if (animation === 'slide') {
+      animTranslateY.value = 24;
+      animOpacity.value = 0;
+      animOpacity.value = withTiming(1, { duration: 500, easing: Easing.out(Easing.ease) });
+      animTranslateY.value = withTiming(0, { duration: 500, easing: Easing.out(Easing.exp) });
+      setTypewriterText(payload.text);
+    } else if (animation === 'bounce') {
+      animOpacity.value = 1;
+      animTranslateY.value = -16;
+      animTranslateY.value = withSpring(0, { damping: 8, stiffness: 120, mass: 0.8 });
+      setTypewriterText(payload.text);
+    } else if (animation === 'typewriter') {
+      animOpacity.value = 1;
+      setTypewriterText('');
+      animProgress.value = withTiming(1, { duration: Math.max(800, (payload.text?.length ?? 0) * 60), easing: Easing.linear });
+    }
+  }, [payload.textAnimation, payload.text, animProgress, animOpacity, animTranslateY]);
+
+  // Typewriter: react to progress shared value and update visible substring on JS thread
+  useAnimatedReaction(
+    () => animProgress.value,
+    (progress) => {
+      const full = payload.text ?? '';
+      runOnJS(setTypewriterText)(full.substring(0, Math.ceil(progress * full.length)));
+    },
+    [payload.text],
+  );
+
+  const animStyle = useAnimatedStyle(() => ({
+    opacity: animOpacity.value,
+    transform: [{ translateY: animTranslateY.value }],
+  }));
+
   // Per-style typography — real visual distinction, not just font size
+  // Instagram 2025-2026: 10 fonts with distinct visual character
   const styleMap: Record<string, any> = {
     headline: {
       fontFamily: Typography.family.bold,
@@ -647,7 +707,57 @@ function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tex
       lineHeight: (Type.body.size + 2) * 1.3,
       fontStyle: 'italic',
     },
+    bubble: {
+      fontFamily: Typography.family.bold,
+      fontSize: Type.bodyEmphasis.size + 6,
+      lineHeight: (Type.bodyEmphasis.size + 6) * 1.2,
+      letterSpacing: 0.5,
+    },
+    deco: {
+      fontFamily: Typography.family.bold,
+      fontSize: Type.bodyEmphasis.size + 2,
+      lineHeight: (Type.bodyEmphasis.size + 2) * 1.3,
+      letterSpacing: 1.5,
+    },
+    poster: {
+      fontFamily: Typography.family.bold,
+      fontSize: Type.title.size - 2,
+      lineHeight: (Type.title.size - 2) * 1.1,
+      letterSpacing: -0.5,
+    },
+    squeeze: {
+      fontFamily: Typography.family.semibold,
+      fontSize: Type.body.size,
+      lineHeight: Type.body.size * 1.1,
+      letterSpacing: -0.3,
+    },
+    signature: {
+      fontFamily: Typography.family.regular,
+      fontSize: Type.bodyEmphasis.size + 2,
+      lineHeight: (Type.bodyEmphasis.size + 2) * 1.4,
+      fontStyle: 'italic',
+    },
   };
+
+  // Text effect styles (Instagram 2025-2026)
+  const effectStyle: any = {};
+  if (payload.textEffect === 'shadow') {
+    effectStyle.textShadowColor = 'rgba(0,0,0,0.6)';
+    effectStyle.textShadowOffset = { width: 2, height: 2 };
+    effectStyle.textShadowRadius = 4;
+  } else if (payload.textEffect === 'neon') {
+    effectStyle.textShadowColor = payload.textColor;
+    effectStyle.textShadowOffset = { width: 0, height: 0 };
+    effectStyle.textShadowRadius = 8;
+  } else if (payload.textEffect === 'glow') {
+    effectStyle.textShadowColor = payload.textColor;
+    effectStyle.textShadowOffset = { width: 0, height: 0 };
+    effectStyle.textShadowRadius = 12;
+  } else if (payload.textEffect === 'outline') {
+    effectStyle.textShadowColor = '#000';
+    effectStyle.textShadowOffset = { width: 0, height: 0 };
+    effectStyle.textShadowRadius = 1;
+  }
 
   return (
     <View
@@ -658,16 +768,19 @@ function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tex
         payload.alignment === 'right' && { alignItems: 'flex-end' },
       ]}
     >
-      <Text
-        style={[
-          textStyles.text,
-          { color: payload.textColor },
-          styleMap[payload.textStyle] ?? styleMap.clean,
-        ]}
-        numberOfLines={undefined}
-      >
-        {payload.text}
-      </Text>
+      <Reanimated.View style={animStyle}>
+        <Text
+          style={[
+            textStyles.text,
+            { color: payload.textColor },
+            styleMap[payload.textStyle] ?? styleMap.clean,
+            effectStyle,
+          ]}
+          numberOfLines={undefined}
+        >
+          {typewriterText}
+        </Text>
+      </Reanimated.View>
     </View>
   );
 }
@@ -798,6 +911,56 @@ function DecorativeLayerContent({ layer }: { layer: Extract<CreatorLayer, { type
     default:
       return null;
   }
+}
+
+// ── Draw layer content ─────────────────────────────────────────────
+// Renders freehand strokes using Skia. Points are normalized 0-1
+// relative to the layer bounds; scaled to the rendered pixel size.
+function DrawLayerContent({ layer, width, height }: { layer: Extract<CreatorLayer, { type: 'draw' }>; width: number; height: number }) {
+  const { payload } = layer;
+
+  const strokePaths = useMemo(() => {
+    return payload.strokes.map((stroke, i) => {
+      if (stroke.points.length === 0) return null;
+      const path = Skia.Path.Make();
+      const first = stroke.points[0];
+      path.moveTo(first.x * width, first.y * height);
+      for (let j = 1; j < stroke.points.length; j++) {
+        const prev = stroke.points[j - 1];
+        const curr = stroke.points[j];
+        const midX = ((prev.x + curr.x) / 2) * width;
+        const midY = ((prev.y + curr.y) / 2) * height;
+        path.quadTo(prev.x * width, prev.y * height, midX, midY);
+      }
+      const last = stroke.points[stroke.points.length - 1];
+      path.lineTo(last.x * width, last.y * height);
+      return { key: i, path, stroke };
+    }).filter(Boolean);
+  }, [payload.strokes, width, height]);
+
+  return (
+    <SkiaCanvas style={{ width, height }}>
+      {strokePaths.map((sp: any) => {
+        const isEraser = sp.stroke.tool === 'eraser';
+        const isMarker = sp.stroke.tool === 'marker';
+        const isHighlighter = sp.stroke.tool === 'highlighter';
+        const isNeon = sp.stroke.tool === 'neon';
+        return (
+          <SkiaPath
+            key={sp.key}
+            path={sp.path}
+            style="stroke"
+            strokeWidth={sp.stroke.width}
+            color={sp.stroke.color}
+            strokeCap="round"
+            strokeJoin="round"
+            opacity={isHighlighter ? 0.35 : isMarker ? 0.6 : 1}
+            blendMode={isEraser ? "clear" : isNeon ? "screen" : "srcOver"}
+          />
+        );
+      })}
+    </SkiaCanvas>
+  );
 }
 
 // ── Selection handles ──────────────────────────────────────────────

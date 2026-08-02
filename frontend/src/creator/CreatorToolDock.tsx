@@ -171,6 +171,7 @@ function buildDefaultTools(
       { icon: 'images-outline', label: 'Media', action: () => onToolPress('media') },
       { icon: 'pricetag-outline', label: 'Product', action: () => onToolPress('product') },
       { icon: 'text-outline', label: 'Text', action: () => onToolPress('text') },
+      { icon: 'brush-outline', label: 'Draw', action: () => onToolPress('draw') },
       { icon: 'shapes-outline', label: 'Elements', action: () => onToolPress('shape') },
       ...(onLayoutPresets ? [{ icon: 'grid-outline' as const, label: 'Layout', action: onLayoutPresets }] : []),
     ];
@@ -180,6 +181,7 @@ function buildDefaultTools(
   return [
     { icon: 'images-outline', label: 'Media', action: () => onToolPress('media') },
     { icon: 'text-outline', label: 'Text', action: () => onToolPress('text') },
+    { icon: 'brush-outline', label: 'Draw', action: () => onToolPress('draw') },
     { icon: 'stats-chart-outline', label: 'Poll', action: () => onToolPress('vote') },
     { icon: 'at-outline', label: 'Mention', action: () => onToolPress('mention') },
     { icon: 'shapes-outline', label: 'Elements', action: () => onToolPress('shape') },
@@ -229,6 +231,8 @@ function buildSelectionTools(
     tools.push({ icon: 'person-outline', label: 'Edit', action: () => onEditLayer(layer) });
   } else if (layer.type === 'vote') {
     tools.push({ icon: 'stats-chart-outline', label: 'Edit', action: () => onEditLayer(layer) });
+  } else if (layer.type === 'draw') {
+    tools.push({ icon: 'brush-outline', label: 'Edit', action: () => onEditLayer(layer) });
   } else {
     tools.push({ icon: 'create-outline', label: 'Edit', action: () => onEditLayer(layer) });
   }
