@@ -21,6 +21,10 @@ const LAYER_ICONS: Record<CreatorLayer['type'], string> = {
   mention: 'at-outline',
   look: 'shirt-outline',
   vote: 'stats-chart-outline',
+  quiz: 'help-circle-outline',
+  question: 'chatbubble-outline',
+  emojiSlider: 'happy-outline',
+  countdown: 'time-outline',
   decorative: 'happy-outline',
   draw: 'brush-outline',
   gif: 'image-outline',
@@ -233,6 +237,14 @@ function getLayerDisplayName(layer: CreatorLayer): string {
       return layer.payload.snapshotCaption?.slice(0, 30) || 'Look';
     case 'vote':
       return layer.payload.question.slice(0, 30) || 'Vote';
+    case 'quiz':
+      return layer.payload.question.slice(0, 30) || 'Quiz';
+    case 'question':
+      return layer.payload.prompt.slice(0, 30) || 'Question';
+    case 'emojiSlider':
+      return layer.payload.question.slice(0, 30) || 'Slider';
+    case 'countdown':
+      return layer.payload.label.slice(0, 30) || 'Countdown';
     case 'decorative':
       return layer.payload.shape;
     case 'draw':
@@ -273,6 +285,10 @@ function getLayerColor(type: CreatorLayer['type'], colors: ThemeColors): string 
     case 'mention': return colors.social;
     case 'look': return colors.discovery;
     case 'vote': return colors.success;
+    case 'quiz': return colors.brand;
+    case 'question': return colors.social;
+    case 'emojiSlider': return colors.antiqueGold;
+    case 'countdown': return colors.bronze;
     case 'decorative': return colors.coownUp;
     case 'draw': return colors.brand;
     case 'gif': return colors.social;

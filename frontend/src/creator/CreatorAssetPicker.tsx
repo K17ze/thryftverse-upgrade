@@ -29,7 +29,7 @@ import { Canvas, Path, Skia } from '@shopify/react-native-skia';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Reanimated, { useSharedValue, runOnJS } from 'react-native-reanimated';
 
-export type AssetPickerMode = 'media' | 'product' | 'mention' | 'look' | 'text' | 'shape' | 'vote' | 'draw' | 'gif' | 'music';
+export type AssetPickerMode = 'media' | 'product' | 'mention' | 'look' | 'text' | 'shape' | 'vote' | 'draw' | 'gif' | 'music' | 'quiz' | 'question' | 'emojiSlider' | 'countdown';
 
 export interface CreatorAssetPickerProps {
   visible: boolean;
@@ -70,6 +70,14 @@ function AssetPickerContent({ mode, onClose, onAddLayer, editingLayer }: { mode:
       return <GifPicker onClose={onClose} onAddLayer={onAddLayer} />;
     case 'music':
       return <MusicPicker onClose={onClose} onAddLayer={onAddLayer} />;
+    case 'quiz':
+      return <QuizPicker onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />;
+    case 'question':
+      return <QuestionPicker onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />;
+    case 'emojiSlider':
+      return <EmojiSliderPicker onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />;
+    case 'countdown':
+      return <CountdownPicker onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />;
     default:
       return null;
   }
@@ -1637,6 +1645,463 @@ function MusicPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
   );
 }
 
+// ── Quiz Picker ───────────────────────────────────────────────────
+// Instagram 2026 parity: multiple-choice quiz with correct answer.
+
+const QUIZ_EMOJIS = ['🎯', '🔥', '💡', '❓', '✅', '⭐', '🎨', '👍'];
+
+function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+  const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const isEditing = editingLayer?.type === 'quiz';
+  const existing = isEditing ? (editingLayer as any).payload : null;
+
+  const [question, setQuestion] = useState(existing?.question ?? '');
+  const [options, setOptions] = useState<string[]>(existing?.options?.map((o: any) => o.label) ?? ['', '']);
+  const [correctIdx, setCorrectIdx] = useState<number>(() => {
+    if (existing?.correctOptionId && existing?.options) {
+      return existing.options.findIndex((o: any) => o.id === existing.correctOptionId);
+    }
+    return 0;
+  });
+  const [emoji, setEmoji] = useState(existing?.emoji ?? '🎯');
+
+  const handleAdd = useCallback(() => {
+    if (!question.trim() || options.filter(o => o.trim()).length < 2) return;
+    const cleanOptions = options.filter(o => o.trim()).slice(0, 4);
+    const optionObjs = cleanOptions.map((label, i) => ({ id: `opt_${i}_${Date.now()}`, label: label.trim() }));
+    const payload: any = {
+      question: question.trim(),
+      options: optionObjs,
+      correctOptionId: optionObjs[correctIdx]?.id ?? optionObjs[0].id,
+      emoji,
+    };
+    if (isEditing && editingLayer) {
+      onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
+    } else {
+      onAddLayer({
+        ...baseLayer(createStableId('quiz'), 10),
+        type: 'quiz',
+        width: 0.7,
+        height: 0.25,
+        payload,
+      });
+    }
+    onClose();
+  }, [question, options, correctIdx, emoji, isEditing, editingLayer, onAddLayer, onClose]);
+
+  return (
+    <PickerShell title={isEditing ? 'Edit Quiz' : 'Add Quiz'} onClose={onClose}>
+      <View style={styles.textPickerBody}>
+        <TextInput
+          style={styles.textInput}
+          placeholder="Ask a question..."
+          placeholderTextColor={colors.textMuted}
+          value={question}
+          onChangeText={setQuestion}
+          maxLength={100}
+          autoFocus
+          accessibilityLabel="Quiz question"
+        />
+        <Text style={styles.pickerSectionLabel}>Options (tap to mark correct)</Text>
+        {options.map((opt, i) => (
+          <View key={i} style={styles.quizOptionRow}>
+            <Pressable
+              onPress={() => { haptic.selection(); setCorrectIdx(i); }}
+              style={[styles.quizCorrectDot, correctIdx === i && { backgroundColor: colors.success }]}
+              accessibilityLabel={`Mark option ${i + 1} as correct`}
+              accessibilityRole="button"
+            >
+              {correctIdx === i && <Ionicons name="checkmark" size={14} color="#fff" />}
+            </Pressable>
+            <TextInput
+              style={[styles.textInput, { flex: 1, minHeight: 44 }]}
+              placeholder={`Option ${i + 1}`}
+              placeholderTextColor={colors.textMuted}
+              value={opt}
+              onChangeText={(v) => setOptions(prev => prev.map((o, idx) => idx === i ? v : o))}
+              maxLength={50}
+              accessibilityLabel={`Quiz option ${i + 1}`}
+            />
+            {options.length > 2 && (
+              <Pressable
+                onPress={() => {
+                  setOptions(prev => prev.filter((_, idx) => idx !== i));
+                  if (correctIdx >= i && correctIdx > 0) setCorrectIdx(correctIdx - 1);
+                }}
+                style={styles.quizRemoveBtn}
+                accessibilityLabel={`Remove option ${i + 1}`}
+                hitSlop={12}
+              >
+                <Ionicons name="close-circle" size={20} color={colors.danger} />
+              </Pressable>
+            )}
+          </View>
+        ))}
+        {options.length < 4 && (
+          <Pressable
+            onPress={() => { haptic.selection(); setOptions(prev => [...prev, '']); }}
+            style={styles.quizAddOptionBtn}
+            accessibilityLabel="Add option"
+            hitSlop={12}
+          >
+            <Ionicons name="add-circle-outline" size={20} color={colors.brand} />
+            <Text style={styles.quizAddOptionText}>Add Option</Text>
+          </Pressable>
+        )}
+        <Text style={styles.pickerSectionLabel}>Emoji</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.styleScroll}>
+          {QUIZ_EMOJIS.map((e) => (
+            <Pressable
+              key={e}
+              onPress={() => { haptic.selection(); setEmoji(e); }}
+              style={[styles.styleOption, emoji === e && styles.styleOptionActive]}
+              accessibilityLabel={`Emoji ${e}`}
+              accessibilityRole="button"
+              hitSlop={12}
+            >
+              <Text style={{ fontSize: 24 }}>{e}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+        <Pressable
+          onPress={handleAdd}
+          disabled={!question.trim() || options.filter(o => o.trim()).length < 2}
+          style={[styles.saveBtn, (!question.trim() || options.filter(o => o.trim()).length < 2) && styles.saveBtnDisabled]}
+          accessibilityLabel={isEditing ? 'Update quiz' : 'Add quiz'}
+          accessibilityRole="button"
+        >
+          <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Quiz'}</Text>
+        </Pressable>
+      </View>
+    </PickerShell>
+  );
+}
+
+// ── Question Picker ───────────────────────────────────────────────
+// Instagram 2026 parity: open-ended question box sticker.
+
+function QuestionPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const isEditing = editingLayer?.type === 'question';
+  const existing = isEditing ? (editingLayer as any).payload : null;
+
+  const [prompt, setPrompt] = useState(existing?.prompt ?? '');
+  const [placeholder, setPlaceholder] = useState(existing?.placeholder ?? 'Type something...');
+  const [bgColor, setBgColor] = useState(existing?.backgroundColor ?? '#9b0202');
+
+  const QUESTION_BG_COLORS = ['#9b0202', '#215634', '#06489A', '#6B3245', '#1a1a1a', '#C9A46A'];
+
+  const handleAdd = useCallback(() => {
+    if (!prompt.trim()) return;
+    const payload: any = {
+      prompt: prompt.trim(),
+      placeholder: placeholder.trim() || 'Type something...',
+      backgroundColor: bgColor,
+      textColor: '#ffffff',
+    };
+    if (isEditing && editingLayer) {
+      onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
+    } else {
+      onAddLayer({
+        ...baseLayer(createStableId('question'), 10),
+        type: 'question',
+        width: 0.6,
+        height: 0.12,
+        payload,
+      });
+    }
+    onClose();
+  }, [prompt, placeholder, bgColor, isEditing, editingLayer, onAddLayer, onClose]);
+
+  return (
+    <PickerShell title={isEditing ? 'Edit Question' : 'Ask Me'} onClose={onClose}>
+      <View style={styles.textPickerBody}>
+        <View style={[styles.textPreview, { backgroundColor: bgColor }]}>
+          <Text style={{ color: '#fff', fontFamily: Typography.family.semibold, fontSize: Type.bodyEmphasis.size }}>
+            {prompt.trim() || 'Ask me a question'}
+          </Text>
+          <Text style={{ color: 'rgba(255,255,255,0.6)', fontFamily: Typography.family.regular, fontSize: Type.caption.size, marginTop: 4 }}>
+            {placeholder.trim() || 'Type something...'}
+          </Text>
+        </View>
+        <TextInput
+          style={styles.textInput}
+          placeholder="Question prompt..."
+          placeholderTextColor={colors.textMuted}
+          value={prompt}
+          onChangeText={setPrompt}
+          maxLength={100}
+          autoFocus
+          accessibilityLabel="Question prompt"
+        />
+        <TextInput
+          style={styles.textInput}
+          placeholder="Placeholder text..."
+          placeholderTextColor={colors.textMuted}
+          value={placeholder}
+          onChangeText={setPlaceholder}
+          maxLength={80}
+          accessibilityLabel="Question placeholder"
+        />
+        <Text style={styles.pickerSectionLabel}>Background</Text>
+        <View style={styles.colorRow}>
+          {QUESTION_BG_COLORS.map((c) => (
+            <Pressable
+              key={c}
+              onPress={() => setBgColor(c)}
+              style={[styles.colorOption, { backgroundColor: c }, bgColor === c && styles.colorOptionActive]}
+              accessibilityLabel={`Background ${c}`}
+              accessibilityRole="button"
+              hitSlop={12}
+            />
+          ))}
+        </View>
+        <Pressable
+          onPress={handleAdd}
+          disabled={!prompt.trim()}
+          style={[styles.saveBtn, !prompt.trim() && styles.saveBtnDisabled]}
+          accessibilityLabel={isEditing ? 'Update question' : 'Add question'}
+          accessibilityRole="button"
+        >
+          <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Question'}</Text>
+        </Pressable>
+      </View>
+    </PickerShell>
+  );
+}
+
+// ── Emoji Slider Picker ───────────────────────────────────────────
+// Instagram 2026 parity: emoji slider for intensity measurement.
+
+const SLIDER_EMOJIS = ['😍', '🔥', '💯', '😂', '🤔', '👍', '❤️', '✨', '🎨', '🛍️'];
+
+function EmojiSliderPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+  const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const isEditing = editingLayer?.type === 'emojiSlider';
+  const existing = isEditing ? (editingLayer as any).payload : null;
+
+  const [question, setQuestion] = useState(existing?.question ?? '');
+  const [emoji, setEmoji] = useState(existing?.emoji ?? '😍');
+  const [endLabel, setEndLabel] = useState(existing?.endLabel ?? '');
+  const [sliderColor, setSliderColor] = useState(existing?.sliderColor ?? '#C9A46A');
+
+  const SLIDER_COLORS = ['#C9A46A', '#9b0202', '#215634', '#06489A', '#6B3245', '#E06666'];
+
+  const handleAdd = useCallback(() => {
+    if (!question.trim()) return;
+    const payload: any = {
+      question: question.trim(),
+      emoji,
+      endLabel: endLabel.trim(),
+      sliderColor,
+    };
+    if (isEditing && editingLayer) {
+      onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
+    } else {
+      onAddLayer({
+        ...baseLayer(createStableId('emojiSlider'), 10),
+        type: 'emojiSlider',
+        width: 0.6,
+        height: 0.1,
+        payload,
+      });
+    }
+    onClose();
+  }, [question, emoji, endLabel, sliderColor, isEditing, editingLayer, onAddLayer, onClose]);
+
+  return (
+    <PickerShell title={isEditing ? 'Edit Slider' : 'Emoji Slider'} onClose={onClose}>
+      <View style={styles.textPickerBody}>
+        <View style={[styles.textPreview, { backgroundColor: '#1a1a1a' }]}>
+          <Text style={{ color: '#fff', fontFamily: Typography.family.semibold, fontSize: Type.body.size, marginBottom: 8 }}>
+            {question.trim() || 'How much do you love it?'}
+          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={{ fontSize: 28 }}>{emoji}</Text>
+            <View style={{ flex: 1, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.2)' }}>
+              <View style={{ width: '60%', height: '100%', borderRadius: 3, backgroundColor: sliderColor }} />
+            </View>
+          </View>
+        </View>
+        <TextInput
+          style={styles.textInput}
+          placeholder="Ask something..."
+          placeholderTextColor={colors.textMuted}
+          value={question}
+          onChangeText={setQuestion}
+          maxLength={80}
+          autoFocus
+          accessibilityLabel="Slider question"
+        />
+        <TextInput
+          style={styles.textInput}
+          placeholder="End label (optional)..."
+          placeholderTextColor={colors.textMuted}
+          value={endLabel}
+          onChangeText={setEndLabel}
+          maxLength={20}
+          accessibilityLabel="Slider end label"
+        />
+        <Text style={styles.pickerSectionLabel}>Emoji</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.styleScroll}>
+          {SLIDER_EMOJIS.map((e) => (
+            <Pressable
+              key={e}
+              onPress={() => { haptic.selection(); setEmoji(e); }}
+              style={[styles.styleOption, emoji === e && styles.styleOptionActive]}
+              accessibilityLabel={`Emoji ${e}`}
+              accessibilityRole="button"
+              hitSlop={12}
+            >
+              <Text style={{ fontSize: 24 }}>{e}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+        <Text style={styles.pickerSectionLabel}>Slider Color</Text>
+        <View style={styles.colorRow}>
+          {SLIDER_COLORS.map((c) => (
+            <Pressable
+              key={c}
+              onPress={() => setSliderColor(c)}
+              style={[styles.colorOption, { backgroundColor: c }, sliderColor === c && styles.colorOptionActive]}
+              accessibilityLabel={`Slider color ${c}`}
+              accessibilityRole="button"
+              hitSlop={12}
+            />
+          ))}
+        </View>
+        <Pressable
+          onPress={handleAdd}
+          disabled={!question.trim()}
+          style={[styles.saveBtn, !question.trim() && styles.saveBtnDisabled]}
+          accessibilityLabel={isEditing ? 'Update slider' : 'Add slider'}
+          accessibilityRole="button"
+        >
+          <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Slider'}</Text>
+        </Pressable>
+      </View>
+    </PickerShell>
+  );
+}
+
+// ── Countdown Picker ──────────────────────────────────────────────
+// Instagram 2026 parity: countdown to a date/time sticker.
+
+function CountdownPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const isEditing = editingLayer?.type === 'countdown';
+  const existing = isEditing ? (editingLayer as any).payload : null;
+
+  const [label, setLabel] = useState(existing?.label ?? '');
+  const [endDate, setEndDate] = useState(() => {
+    if (existing?.endDateTime) return new Date(existing.endDateTime);
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    d.setHours(18, 0, 0, 0);
+    return d;
+  });
+  const [color, setColor] = useState(existing?.color ?? '#C9A46A');
+
+  const COUNTDOWN_COLORS = ['#C9A46A', '#9b0202', '#215634', '#06489A', '#6B3245', '#1a1a1a'];
+
+  const handleAdd = useCallback(() => {
+    if (!label.trim()) return;
+    const payload: any = {
+      label: label.trim(),
+      endDateTime: endDate.toISOString(),
+      color,
+      textColor: '#ffffff',
+    };
+    if (isEditing && editingLayer) {
+      onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
+    } else {
+      onAddLayer({
+        ...baseLayer(createStableId('countdown'), 10),
+        type: 'countdown',
+        width: 0.5,
+        height: 0.12,
+        payload,
+      });
+    }
+    onClose();
+  }, [label, endDate, color, isEditing, editingLayer, onAddLayer, onClose]);
+
+  const formatDate = (d: Date) => {
+    const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' };
+    return d.toLocaleDateString('en-US', opts);
+  };
+
+  return (
+    <PickerShell title={isEditing ? 'Edit Countdown' : 'Countdown'} onClose={onClose}>
+      <View style={styles.textPickerBody}>
+        <View style={[styles.textPreview, { backgroundColor: color }]}>
+          <Text style={{ color: '#fff', fontFamily: Typography.family.semibold, fontSize: Type.bodyEmphasis.size }}>
+            {label.trim() || 'Event countdown'}
+          </Text>
+          <Text style={{ color: 'rgba(255,255,255,0.8)', fontFamily: Typography.family.medium, fontSize: Type.title.size, marginTop: 4 }}>
+            {formatDate(endDate)}
+          </Text>
+        </View>
+        <TextInput
+          style={styles.textInput}
+          placeholder="Countdown label..."
+          placeholderTextColor={colors.textMuted}
+          value={label}
+          onChangeText={setLabel}
+          maxLength={40}
+          autoFocus
+          accessibilityLabel="Countdown label"
+        />
+        <Text style={styles.pickerSectionLabel}>End Date & Time</Text>
+        <Pressable
+          onPress={() => {
+            // Simple date adjustment: cycle through next 7 days at 6pm
+            const d = new Date(endDate);
+            d.setDate(d.getDate() + 1);
+            if (d.getDate() === 1) d.setDate(endDate.getDate() - 6);
+            setEndDate(d);
+          }}
+          style={styles.countdownDateBtn}
+          accessibilityLabel="Adjust end date"
+          accessibilityRole="button"
+        >
+          <Ionicons name="calendar-outline" size={20} color={colors.brand} />
+          <Text style={styles.countdownDateText}>{formatDate(endDate)}</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </Pressable>
+        <Text style={styles.pickerSectionLabel}>Color</Text>
+        <View style={styles.colorRow}>
+          {COUNTDOWN_COLORS.map((c) => (
+            <Pressable
+              key={c}
+              onPress={() => setColor(c)}
+              style={[styles.colorOption, { backgroundColor: c }, color === c && styles.colorOptionActive]}
+              accessibilityLabel={`Countdown color ${c}`}
+              accessibilityRole="button"
+              hitSlop={12}
+            />
+          ))}
+        </View>
+        <Pressable
+          onPress={handleAdd}
+          disabled={!label.trim()}
+          style={[styles.saveBtn, !label.trim() && styles.saveBtnDisabled]}
+          accessibilityLabel={isEditing ? 'Update countdown' : 'Add countdown'}
+          accessibilityRole="button"
+        >
+          <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Countdown'}</Text>
+        </Pressable>
+      </View>
+    </PickerShell>
+  );
+}
+
 // ── Shape Picker ───────────────────────────────────────────────────
 
 const SHAPES: Array<{ shape: 'circle' | 'square' | 'line' | 'arrow' | 'star' | 'heart'; icon: string; label: string }> = [
@@ -1971,5 +2436,14 @@ function createStyles(colors: ThemeColors) {
   musicInfo: { flex: 1, gap: 2 },
   musicTrackName: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textPrimary },
   musicArtistName: { fontFamily: Typography.family.regular, fontSize: Type.caption.size, color: colors.textSecondary },
+  // ── Quiz picker ──
+  quizOptionRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginBottom: Space.xs },
+  quizCorrectDot: { width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' },
+  quizRemoveBtn: { padding: 4 },
+  quizAddOptionBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: Space.sm },
+  quizAddOptionText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.brand },
+  // ── Countdown picker ──
+  countdownDateBtn: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.md, borderRadius: Radius.md, borderWidth: 1, borderColor: colors.border },
+  countdownDateText: { flex: 1, fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textPrimary },
   }) as any;
 }

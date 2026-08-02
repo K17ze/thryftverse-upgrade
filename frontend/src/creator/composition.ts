@@ -50,6 +50,38 @@ const VoteLayerPayloadSchema = z.object({
   options: z.array(z.object({ id: z.string(), label: z.string().min(1).max(50) })).length(2),
 });
 
+// Quiz sticker — multiple-choice with a correct answer (Instagram 2026 parity)
+const QuizLayerPayloadSchema = z.object({
+  question: z.string().min(1).max(100),
+  options: z.array(z.object({ id: z.string(), label: z.string().min(1).max(50) })).min(2).max(4),
+  correctOptionId: z.string().min(1),
+  emoji: z.string().default('🎯'),
+});
+
+// Question box sticker — open-ended text responses (Instagram 2026 parity)
+const QuestionLayerPayloadSchema = z.object({
+  prompt: z.string().min(1).max(100),
+  placeholder: z.string().max(80).default('Type something...'),
+  backgroundColor: z.string().default('#9b0202'),
+  textColor: z.string().default('#ffffff'),
+});
+
+// Emoji slider sticker — intensity measurement (Instagram 2026 parity)
+const EmojiSliderLayerPayloadSchema = z.object({
+  question: z.string().min(1).max(80),
+  emoji: z.string().default('😍'),
+  endLabel: z.string().max(20).default(''),
+  sliderColor: z.string().default('#C9A46A'),
+});
+
+// Countdown sticker — count down to a date/time (Instagram 2026 parity)
+const CountdownLayerPayloadSchema = z.object({
+  label: z.string().min(1).max(40),
+  endDateTime: z.string().datetime(),
+  color: z.string().default('#C9A46A'),
+  textColor: z.string().default('#ffffff'),
+});
+
 const DecorativeLayerPayloadSchema = z.object({
   shape: z.enum(['circle', 'square', 'line', 'arrow', 'star', 'heart']),
   color: z.string().default('#ffffff'),
@@ -114,6 +146,10 @@ export const CreatorLayerSchema = z.discriminatedUnion('type', [
   BaseLayerSchema.extend({ type: z.literal('mention'), payload: MentionLayerPayloadSchema }),
   BaseLayerSchema.extend({ type: z.literal('look'), payload: LookLayerPayloadSchema }),
   BaseLayerSchema.extend({ type: z.literal('vote'), payload: VoteLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('quiz'), payload: QuizLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('question'), payload: QuestionLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('emojiSlider'), payload: EmojiSliderLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('countdown'), payload: CountdownLayerPayloadSchema }),
   BaseLayerSchema.extend({ type: z.literal('decorative'), payload: DecorativeLayerPayloadSchema }),
   BaseLayerSchema.extend({ type: z.literal('draw'), payload: DrawLayerPayloadSchema }),
   BaseLayerSchema.extend({ type: z.literal('gif'), payload: GifLayerPayloadSchema }),

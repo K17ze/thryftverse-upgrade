@@ -525,6 +525,14 @@ function getLayerRadius(layer: CreatorLayer): number {
     case 'look':
     case 'vote':
       return Radius.md;
+    case 'quiz':
+      return Radius.md;
+    case 'question':
+      return Radius.md;
+    case 'emojiSlider':
+      return Radius.lg;
+    case 'countdown':
+      return Radius.md;
     case 'decorative':
       return 0;
     case 'draw':
@@ -552,6 +560,14 @@ function renderLayerContent(layer: CreatorLayer, width: number, height: number):
       return <LookLayerContent layer={layer} />;
     case 'vote':
       return <VoteLayerContent layer={layer} />;
+    case 'quiz':
+      return <QuizLayerContent layer={layer} />;
+    case 'question':
+      return <QuestionLayerContent layer={layer} />;
+    case 'emojiSlider':
+      return <EmojiSliderLayerContent layer={layer} />;
+    case 'countdown':
+      return <CountdownLayerContent layer={layer} />;
     case 'decorative':
       return <DecorativeLayerContent layer={layer} />;
     case 'draw':
@@ -892,6 +908,182 @@ function VoteLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'vot
           <Text style={voteStyles.optionText}>{opt.label}</Text>
         </View>
       ))}
+    </View>
+  );
+}
+
+// ── Quiz layer content ─────────────────────────────────────────────
+// Instagram 2026: multiple-choice quiz with emoji and correct answer indicator.
+function QuizLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'quiz' }> }) {
+  const { payload } = layer;
+  return (
+    <View style={voteStyles.container}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+        <Text style={{ fontSize: 20 }}>{payload.emoji}</Text>
+        <Text style={voteStyles.question}>{payload.question}</Text>
+      </View>
+      {payload.options.map((opt) => (
+        <View
+          key={opt.id}
+          style={[
+            voteStyles.option,
+            opt.id === payload.correctOptionId && { borderColor: '#C9A46A', borderWidth: 1.5 },
+          ]}
+        >
+          <Text style={voteStyles.optionText}>{opt.label}</Text>
+          {opt.id === payload.correctOptionId && (
+            <Ionicons name="checkmark-circle" size={16} color="#C9A46A" style={{ marginLeft: 6 }} />
+          )}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+// ── Question box layer content ─────────────────────────────────────
+// Instagram 2026: open-ended question box sticker.
+function QuestionLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'question' }> }) {
+  const { payload } = layer;
+  return (
+    <View style={{
+      backgroundColor: payload.backgroundColor,
+      borderRadius: Radius.md,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      minWidth: 160,
+      maxWidth: '100%',
+    }}>
+      <Text style={{
+        color: payload.textColor,
+        fontFamily: Typography.family.semibold,
+        fontSize: Type.bodyEmphasis.size,
+        marginBottom: 6,
+      }}>
+        {payload.prompt}
+      </Text>
+      <View style={{
+        backgroundColor: 'rgba(255,255,255,0.15)',
+        borderRadius: Radius.sm,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+      }}>
+        <Ionicons name="chatbubble-outline" size={14} color="rgba(255,255,255,0.6)" />
+        <Text style={{
+          color: 'rgba(255,255,255,0.6)',
+          fontFamily: Typography.family.regular,
+          fontSize: Type.caption.size,
+        }}>
+          {payload.placeholder}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+// ── Emoji slider layer content ─────────────────────────────────────
+// Instagram 2026: emoji slider for intensity measurement.
+function EmojiSliderLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'emojiSlider' }> }) {
+  const { payload } = layer;
+  return (
+    <View style={{
+      backgroundColor: 'rgba(26,26,26,0.9)',
+      borderRadius: Radius.lg,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      minWidth: 180,
+      maxWidth: '100%',
+    }}>
+      <Text style={{
+        color: '#fff',
+        fontFamily: Typography.family.semibold,
+        fontSize: Type.body.size,
+        marginBottom: 10,
+        textAlign: 'center',
+      }}>
+        {payload.question}
+      </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <Text style={{ fontSize: 28 }}>{payload.emoji}</Text>
+        <View style={{
+          flex: 1,
+          height: 8,
+          borderRadius: 4,
+          backgroundColor: 'rgba(255,255,255,0.15)',
+          flexDirection: 'row',
+        }}>
+          <View style={{
+            width: '50%',
+            height: '100%',
+            borderRadius: 4,
+            backgroundColor: payload.sliderColor,
+          }} />
+        </View>
+        {payload.endLabel ? (
+          <Text style={{
+            color: 'rgba(255,255,255,0.7)',
+            fontFamily: Typography.family.medium,
+            fontSize: 11,
+          }}>
+            {payload.endLabel}
+          </Text>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+// ── Countdown layer content ────────────────────────────────────────
+// Instagram 2026: countdown to a date/time with live timer.
+function CountdownLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'countdown' }> }) {
+  const { payload } = layer;
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const endMs = new Date(payload.endDateTime).getTime();
+  const remaining = Math.max(0, endMs - now);
+  const hours = Math.floor(remaining / 3600000);
+  const mins = Math.floor((remaining % 3600000) / 60000);
+  const secs = Math.floor((remaining % 60000) / 1000);
+  const days = Math.floor(hours / 24);
+  const displayHours = hours % 24;
+
+  const timeStr = days > 0
+    ? `${days}d ${displayHours}h ${mins}m`
+    : `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+  return (
+    <View style={{
+      backgroundColor: payload.color,
+      borderRadius: Radius.md,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      minWidth: 140,
+      maxWidth: '100%',
+      alignItems: 'center',
+    }}>
+      <Text style={{
+        color: payload.textColor,
+        fontFamily: Typography.family.semibold,
+        fontSize: Type.caption.size,
+        marginBottom: 2,
+      }}>
+        {payload.label}
+      </Text>
+      <Text style={{
+        color: payload.textColor,
+        fontFamily: Typography.family.bold,
+        fontSize: Type.title.size,
+        fontVariant: ['tabular-nums'],
+      }}>
+        {timeStr}
+      </Text>
     </View>
   );
 }

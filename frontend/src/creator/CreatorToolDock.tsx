@@ -187,6 +187,10 @@ function buildDefaultTools(
     { icon: 'image-outline', label: 'GIF', action: () => onToolPress('gif') },
     { icon: 'musical-notes-outline', label: 'Music', action: () => onToolPress('music') },
     { icon: 'stats-chart-outline', label: 'Poll', action: () => onToolPress('vote') },
+    { icon: 'help-circle-outline', label: 'Quiz', action: () => onToolPress('quiz') },
+    { icon: 'chatbubble-outline', label: 'Ask', action: () => onToolPress('question') },
+    { icon: 'happy-outline', label: 'Slider', action: () => onToolPress('emojiSlider') },
+    { icon: 'time-outline', label: 'Countdown', action: () => onToolPress('countdown') },
     { icon: 'at-outline', label: 'Mention', action: () => onToolPress('mention') },
     { icon: 'shapes-outline', label: 'Elements', action: () => onToolPress('shape') },
     ...(onAddPage ? [{ icon: 'add-circle-outline' as const, label: 'Add Page', action: onAddPage }] : []),
@@ -235,6 +239,14 @@ function buildSelectionTools(
     tools.push({ icon: 'person-outline', label: 'Edit', action: () => onEditLayer(layer) });
   } else if (layer.type === 'vote') {
     tools.push({ icon: 'stats-chart-outline', label: 'Edit', action: () => onEditLayer(layer) });
+  } else if (layer.type === 'quiz') {
+    tools.push({ icon: 'help-circle-outline', label: 'Edit', action: () => onEditLayer(layer) });
+  } else if (layer.type === 'question') {
+    tools.push({ icon: 'chatbubble-outline', label: 'Edit', action: () => onEditLayer(layer) });
+  } else if (layer.type === 'emojiSlider') {
+    tools.push({ icon: 'happy-outline', label: 'Edit', action: () => onEditLayer(layer) });
+  } else if (layer.type === 'countdown') {
+    tools.push({ icon: 'time-outline', label: 'Edit', action: () => onEditLayer(layer) });
   } else if (layer.type === 'draw') {
     tools.push({ icon: 'brush-outline', label: 'Edit', action: () => onEditLayer(layer) });
   } else if (layer.type === 'gif') {

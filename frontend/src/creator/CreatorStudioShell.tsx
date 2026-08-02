@@ -46,6 +46,10 @@ function layerTypeLabel(type: CreatorLayer['type']): string {
     case 'mention': return 'Mention';
     case 'look': return 'Look';
     case 'vote': return 'Vote';
+    case 'quiz': return 'Quiz';
+    case 'question': return 'Question';
+    case 'emojiSlider': return 'Slider';
+    case 'countdown': return 'Countdown';
     case 'decorative': return 'Shape';
     case 'draw': return 'Drawing';
     case 'gif': return 'GIF';
@@ -428,6 +432,10 @@ function CreatorStudioInner() {
               else if (layer.type === 'product') setPickerMode('product');
               else if (layer.type === 'mention') setPickerMode('mention');
               else if (layer.type === 'vote') setPickerMode('vote');
+              else if (layer.type === 'quiz') setPickerMode('quiz');
+              else if (layer.type === 'question') setPickerMode('question');
+              else if (layer.type === 'emojiSlider') setPickerMode('emojiSlider');
+              else if (layer.type === 'countdown') setPickerMode('countdown');
               else if (layer.type === 'draw') setPickerMode('draw');
               else if (layer.type === 'gif') setPickerMode('gif');
               else if (layer.type === 'music') setPickerMode('music');
