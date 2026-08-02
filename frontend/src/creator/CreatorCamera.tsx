@@ -47,11 +47,11 @@ const CORNER_STROKE = 2;
 const GALLERY_THUMB_SIZE = 64;
 const CONTROL_RAIL_ICON = 22;
 const ZOOM_LEVELS = [0.5, 1, 2];
-const TIMER_OPTIONS = [0, 3, 10] as const;
+const TIMER_OPTIONS = [0, 3, 5, 10] as const;
 
 type FlashMode = 'off' | 'on' | 'auto';
 type ZoomLevel = 0 | 1 | 2;
-type TimerOption = 0 | 3 | 10;
+type TimerOption = 0 | 3 | 5 | 10;
 
 export interface CreatorCameraProps {
   /** Camera mode — determines framing guide + labels */

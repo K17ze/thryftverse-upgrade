@@ -17,7 +17,7 @@ const DRAWER_HEIGHT = SCREEN_H * 0.6;
 
 export interface StickerItem {
   id: string;
-  type: 'mention' | 'hashtag' | 'poll' | 'question' | 'emoji' | 'shape' | 'countdown';
+  type: 'mention' | 'hashtag' | 'poll' | 'question' | 'emoji' | 'shape' | 'countdown' | 'location' | 'time' | 'weather' | 'temperature';
   content: string;
   color?: string;
   x?: number;
@@ -26,6 +26,7 @@ export interface StickerItem {
   listingId?: string;
   options?: string[];
   votes?: number[];
+  icon?: string;
 }
 
 interface StickerPickerProps {
@@ -256,6 +257,90 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
                   </Pressable>
                 ))}
               </View>
+
+              {/* Location sticker — Instagram/Snapchat geotag */}
+              <Text style={[styles.sectionLabel, { marginTop: 20 }]}>Location</Text>
+              <Pressable
+                style={styles.locationCard}
+                onPress={() => {
+                  onStickerSelect({
+                    id: `location_${Date.now()}`,
+                    type: 'location',
+                    content: 'Current Location',
+                    icon: 'location',
+                    color: '#06489A',
+                  });
+                  onClose();
+                }}
+              >
+                <Ionicons name="location" size={18} color="#fff" />
+                <Text style={styles.locationText}>Add location</Text>
+                <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.4)" />
+              </Pressable>
+
+              {/* Time sticker — current time/date */}
+              <Text style={[styles.sectionLabel, { marginTop: 20 }]}>Time</Text>
+              <View style={styles.pillRowWrap}>
+                <Pressable
+                  style={styles.pillBtn}
+                  onPress={() => {
+                    const now = new Date();
+                    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    onStickerSelect({
+                      id: `time_${Date.now()}`,
+                      type: 'time',
+                      content: timeStr,
+                      icon: 'time',
+                    });
+                    onClose();
+                  }}
+                >
+                  <Text style={styles.pillBtnText}>Current time</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.pillBtn}
+                  onPress={() => {
+                    const now = new Date();
+                    const dateStr = now.toLocaleDateString([], { month: 'short', day: 'numeric' });
+                    onStickerSelect({
+                      id: `time_${Date.now()}`,
+                      type: 'time',
+                      content: dateStr,
+                      icon: 'calendar',
+                    });
+                    onClose();
+                  }}
+                >
+                  <Text style={styles.pillBtnText}>Today's date</Text>
+                </Pressable>
+              </View>
+
+              {/* Weather sticker */}
+              <Text style={[styles.sectionLabel, { marginTop: 20 }]}>Weather</Text>
+              <View style={styles.pillRowWrap}>
+                {[
+                  { icon: 'sunny', label: 'Sunny', content: '☀️ 22°C' },
+                  { icon: 'cloudy', label: 'Cloudy', content: '☁️ 18°C' },
+                  { icon: 'rainy', label: 'Rainy', content: '🌧️ 15°C' },
+                  { icon: 'partly-sunny', label: 'Partly', content: '⛅ 20°C' },
+                ].map((w) => (
+                  <Pressable
+                    key={w.label}
+                    style={styles.pillBtn}
+                    onPress={() => {
+                      onStickerSelect({
+                        id: `weather_${Date.now()}`,
+                        type: 'weather',
+                        content: w.content,
+                        icon: w.icon,
+                      });
+                      onClose();
+                    }}
+                  >
+                    <Text style={styles.pillBtnText}>{w.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
             </View>
           )}
 
@@ -436,6 +521,22 @@ const styles = StyleSheet.create({
   pillBtnText: {
     color: 'rgba(255,255,255,0.85)',
     fontSize: 12,
+    fontFamily: Typography.family.medium,
+  },
+  locationCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    marginTop: 8,
+  },
+  locationText: {
+    flex: 1,
+    color: '#fff',
+    fontSize: 14,
     fontFamily: Typography.family.medium,
   },
   shapeGrid: {
