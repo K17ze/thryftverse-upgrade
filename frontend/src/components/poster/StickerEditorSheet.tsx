@@ -35,8 +35,8 @@ const TEXT_STYLES: Array<{ value: PosterTextStyle; label: string }> = [
   { value: 'outline', label: 'Outline' },
 ];
 
-const TEXT_COLORS = ['#ffffff', '#000000', '#ff3b30', '#ff9500', '#ffcc00', '#4cd964', '#5ac8fa', '#007aff', '#5856d6', '#ff2d55'];
-const BG_COLORS = ['transparent', '#000000', '#ffffff', '#ff3b30', '#007aff', '#5856d6', '#4cd964'];
+const TEXT_COLORS = ['#ffffff', '#000000', '#9b0202', '#8A6A3F', '#C9A46A', '#215634', '#06489A', '#4A7AC4', '#6B3245', '#7B0E1E'];
+const BG_COLORS = ['transparent', '#000000', '#ffffff', '#9b0202', '#06489A', '#6B3245', '#215634'];
 const ALIGNMENTS: Array<{ value: 'left' | 'center' | 'right'; icon: string }> = [
   { value: 'left', icon: 'text-align-left' },
   { value: 'center', icon: 'text-align-center' },

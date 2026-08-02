@@ -43,9 +43,9 @@ function computeGradients(colors: GradientColorSource) {
     /** Surface gradient — subtle depth on backgrounds */
     dark: [colors.background, colors.surface] as [string, string],
     /** Danger gradient for destructive states */
-    danger: ['#FF6B6B', colors.danger] as [string, string],
+    danger: ['#E06666', colors.danger] as [string, string],
     /** Success gradient for positive states */
-    success: ['#4ADE80', colors.success] as [string, string],
+    success: ['#3A7D4E', colors.success] as [string, string],
   };
 }
 

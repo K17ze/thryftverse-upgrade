@@ -95,7 +95,7 @@ export function AnimatedHeart({
   isActive,
   onToggle,
   size = 24,
-  activeColor = '#FF6B6B',
+  activeColor = '#E06666',
   inactiveColor = '#ffffff',
 }: Props) {
   const haptic = useHaptic();

@@ -23,7 +23,7 @@ const { width: SCREEN_W } = Dimensions.get('window');
 const CANVAS_W = Math.min(SCREEN_W - 40, 360);
 const CANVAS_H = CANVAS_W * (16 / 9);
 
-const BG_COLORS = ['#1a1a1a', '#ffffff', '#ff3b30', '#ff9500', '#4cd964', '#5ac8fa', '#007aff', '#5856d6', '#ff2d55', '#f2f2f2'];
+const BG_COLORS = ['#1a1a1a', '#ffffff', '#9b0202', '#8A6A3F', '#215634', '#06489A', '#4A7AC4', '#6B3245', '#7B0E1E', '#f2f2f2'];
 
 const SCALE_MIN = 0.4;
 const SCALE_MAX = 3;
@@ -351,7 +351,7 @@ export function PosterFrameComposer({
               style={styles.stickerToolBtn}
               onPress={() => {
                 const currentColor = (selectedSticker.payload as any).textColor ?? '#ffffff';
-                const colors = ['#ffffff', '#000000', '#ff3b30', '#ff9500', '#ffcc00', '#4cd964', '#5ac8fa', '#007aff', '#5856d6', '#ff2d55'];
+                const colors = ['#ffffff', '#000000', '#9b0202', '#8A6A3F', '#C9A46A', '#215634', '#06489A', '#4A7AC4', '#6B3245', '#7B0E1E'];
                 const idx = colors.indexOf(currentColor);
                 const nextColor = colors[(idx + 1) % colors.length];
                 onUpdateSticker(selectedSticker.id, { payload: { ...selectedSticker.payload, textColor: nextColor } });

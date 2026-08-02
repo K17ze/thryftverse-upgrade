@@ -55,21 +55,21 @@ const FONT_OPTIONS: { key: FontFamily; label: string }[] = [
 ];
 
 const COLOR_OPTIONS = [
-  '#ffffff', '#000000', '#ff3b30', '#ff9500', '#ffcc00',
-  '#4cd964', '#5ac8fa', '#007aff', '#5856d6', '#ff2d55',
-  '#e2d5c2', '#ffd9b5', '#d6f5de', '#ffccda', '#c7c7cc',
+  '#ffffff', '#000000', '#9b0202', '#8A6A3F', '#C9A46A',
+  '#215634', '#06489A', '#4A7AC4', '#6B3245', '#7B0E1E',
+  '#e2d5c2', '#d4b896', '#b8d4c0', '#d4b8c0', '#c7c7cc',
 ];
 
 const BG_OPTIONS = [
   undefined,
   'rgba(0,0,0,0.6)',
   'rgba(255,255,255,0.8)',
-  '#ff3b30',
-  '#007aff',
-  '#4cd964',
-  '#ff9500',
-  '#5856d6',
-  '#ff2d55',
+  '#9b0202',
+  '#06489A',
+  '#215634',
+  '#8A6A3F',
+  '#6B3245',
+  '#7B0E1E',
 ];
 
 export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, isActive }: TextOverlayCanvasProps) {
@@ -257,7 +257,7 @@ export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, 
                 onPress={() => removeLayer(layer.id)}
                 hitSlop={8}
               >
-                <Ionicons name="close-circle" size={20} color="#ff3b30" />
+                <Ionicons name="close-circle" size={20} color={colors.danger} />
               </Pressable>
             )}
           </View>
@@ -338,7 +338,7 @@ export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, 
                     <Ionicons
                       name="checkmark"
                       size={14}
-                      color={c === '#ffffff' || c === '#c7c7cc' || c === '#e2d5c2' || c === '#ffd9b5' || c === '#d6f5de' || c === '#ffccda' ? '#000' : '#fff'}
+                      color={c === '#ffffff' || c === '#c7c7cc' || c === '#e2d5c2' || c === '#d4b896' || c === '#b8d4c0' || c === '#d4b8c0' ? '#000' : '#fff'}
                     />
                   )}
                 </Pressable>

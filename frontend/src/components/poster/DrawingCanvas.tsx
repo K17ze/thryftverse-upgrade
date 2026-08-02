@@ -31,9 +31,9 @@ interface DrawingCanvasProps {
 }
 
 const BRUSH_COLORS = [
-  '#ffffff', '#000000', '#ff3b30', '#ff9500', '#ffcc00',
-  '#4cd964', '#5ac8fa', '#007aff', '#5856d6', '#ff2d55',
-  '#e2d5c2', '#ffd9b5', '#d6f5de', '#ffccda', '#c7c7cc',
+  '#ffffff', '#000000', '#9b0202', '#8A6A3F', '#C9A46A',
+  '#215634', '#06489A', '#4A7AC4', '#6B3245', '#7B0E1E',
+  '#e2d5c2', '#d4b896', '#b8d4c0', '#d4b8c0', '#c7c7cc',
 ];
 
 const BRUSH_WIDTHS = [3, 6, 10, 16];
@@ -50,7 +50,7 @@ function pointsToSvgPath(points: { x: number; y: number }[]): string {
 
 export default function DrawingCanvas({ strokes, onStrokesChange, canvasSize, isActive, onClose }: DrawingCanvasProps) {
   const [currentStroke, setCurrentStroke] = React.useState<BrushStroke | null>(null);
-  const [brushColor, setBrushColor] = React.useState('#ff3b30');
+  const [brushColor, setBrushColor] = React.useState('#9b0202');
   const [brushWidth, setBrushWidth] = React.useState(6);
 
   const panResponder = React.useMemo(
@@ -213,7 +213,7 @@ export default function DrawingCanvas({ strokes, onStrokesChange, canvasSize, is
                 <Ionicons
                   name="checkmark"
                   size={12}
-                  color={c === '#ffffff' || c === '#c7c7cc' || c === '#e2d5c2' || c === '#ffd9b5' || c === '#d6f5de' || c === '#ffccda' ? '#000' : '#fff'}
+                  color={c === '#ffffff' || c === '#c7c7cc' || c === '#e2d5c2' || c === '#d4b896' || c === '#b8d4c0' || c === '#d4b8c0' ? '#000' : '#fff'}
                 />
               )}
             </Pressable>

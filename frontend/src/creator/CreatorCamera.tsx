@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Typography } from '../theme/designTokens';
+import { useAppTheme } from '../theme/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -79,6 +80,7 @@ export default function CreatorCamera({
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
+  const { colors } = useAppTheme();
   const cameraRef = useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState<CameraType>('back');
@@ -545,7 +547,7 @@ export default function CreatorCamera({
             <Ionicons
               name={flash === 'off' ? 'flash-off' : flash === 'auto' ? 'flash-outline' : 'flash'}
               size={22}
-              color={flash === 'off' ? '#fff' : '#C9A46A'}
+              color={flash === 'off' ? '#fff' : colors.antiqueGold}
             />
           </Pressable>
         </View>
@@ -591,7 +593,7 @@ export default function CreatorCamera({
           <Ionicons
             name={timerOption === 0 ? 'timer-outline' : 'timer'}
             size={CONTROL_RAIL_ICON}
-            color={timerOption > 0 ? '#C9A46A' : '#fff'}
+            color={timerOption > 0 ? colors.antiqueGold : '#fff'}
           />
           <Text style={styles.railLabel}>{timerOption === 0 ? 'Timer' : `${timerOption}s`}</Text>
         </Pressable>
@@ -607,7 +609,7 @@ export default function CreatorCamera({
           <Ionicons
             name="grid-outline"
             size={CONTROL_RAIL_ICON}
-            color={showGrid ? '#C9A46A' : '#fff'}
+            color={showGrid ? colors.antiqueGold : '#fff'}
           />
           <Text style={styles.railLabel}>Grid</Text>
         </Pressable>
