@@ -551,11 +551,23 @@ export default function CreatorCamera({
         </View>
       )}
 
-      {/* Corner brackets — refined 2pt stroke */}
-      <View style={styles.bracketTL} />
-      <View style={styles.bracketTR} />
-      <View style={[styles.bracketBL, renderBottomOverlay && styles.bracketBottomWithDeck]} />
-      <View style={[styles.bracketBR, renderBottomOverlay && styles.bracketBottomWithDeck]} />
+      {/* Corner brackets — mode-specific framing guide (Instagram/Snapchat pattern) */}
+      {/* Visual Search: square crop area. Look (4:5): squarer. Poster (9:16): taller. */}
+      {(() => {
+        const bracketTop = isVisualSearch ? '22%' : isPoster ? '14%' : '16%';
+        const bracketBottom = isVisualSearch ? '32%' : isPoster ? '30%' : '30%';
+        const bracketLeft = isVisualSearch ? '20%' : isPoster ? '8%' : '10%';
+        const bracketRight = isVisualSearch ? '20%' : isPoster ? '8%' : '10%';
+        const bracketColor = isVisualSearch ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.85)';
+        return (
+          <>
+            <View style={[styles.bracketTL, { top: bracketTop, left: bracketLeft, borderColor: bracketColor }]} />
+            <View style={[styles.bracketTR, { top: bracketTop, right: bracketRight, borderColor: bracketColor }]} />
+            <View style={[styles.bracketBL, { bottom: bracketBottom, left: bracketLeft, borderColor: bracketColor }, renderBottomOverlay && styles.bracketBottomWithDeck]} />
+            <View style={[styles.bracketBR, { bottom: bracketBottom, right: bracketRight, borderColor: bracketColor }, renderBottomOverlay && styles.bracketBottomWithDeck]} />
+          </>
+        );
+      })()}
 
       {/* Center crosshair */}
       <View style={styles.crosshair} pointerEvents="none">
@@ -932,7 +944,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 200,
+    height: 160,
   },
   // Grid overlay (rule-of-thirds)
   gridOverlay: {
@@ -1060,13 +1072,13 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 12,
   },
   bracketBottomWithDeck: {
-    bottom: '35%',
+    bottom: '38%',
   },
-  // Crosshair
+  // Crosshair — centered in the framing guide area
   crosshair: {
     position: 'absolute',
     left: '50%',
-    top: '40%',
+    top: '42%',
     width: 24,
     height: 24,
     marginLeft: -12,
