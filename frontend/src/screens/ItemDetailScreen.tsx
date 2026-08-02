@@ -69,6 +69,8 @@ import {
   CommerceDetailOfflineBanner,
   COMMERCE_DETAIL_COMPACT_WIDTH,
 } from '../components/commerce/detail';
+import { VerificationBadge } from '../components/profile/VerificationBadge';
+import { SellerStandardsBadges } from '../components/profile/SellerStandardsBadges';
 import { resolveEvidenceGroups } from '../platform/commerce/categoryEvidence';
 import {
   useListingDetail,
@@ -716,6 +718,21 @@ export default function ItemDetailScreen() {
                   : undefined
               }
             />
+          </View>
+        )}
+
+        {/* ── Seller verification + standards badges ──
+            Per 2026 marketplace UX research: trust signals above the fold
+            on the listing page increase conversion more than any other
+            single change. Show verification tier and earned badges here. */}
+        {seller && (seller.verificationTier || seller.verified) && (
+          <View style={styles.sellerBadgesRow}>
+            {(() => {
+              const tier = seller.verificationTier ?? (seller.verified ? 'email' : null);
+              if (!tier) return null;
+              return <VerificationBadge tier={tier} />;
+            })()}
+            <SellerStandardsBadges sellerTrust={seller} size="sm" limit={2} />
           </View>
         )}
 
@@ -1381,6 +1398,14 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm + Space.xs,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'transparent', // overridden inline with theme color
+  },
+  sellerBadgesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: Space.xs,
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.sm,
   },
   // ── Purchase details ──
   // Trust chips — flat inline icon+text pairs. No card, no surface fill,
