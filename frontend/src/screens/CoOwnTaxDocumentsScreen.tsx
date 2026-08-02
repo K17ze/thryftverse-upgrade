@@ -3,6 +3,10 @@
  *
  * Generates a tax-year summary of purchases, sales, distributions, and
  * realized P&L. Supports UK tax year (April 6 – April 5).
+ *
+ * Per Design.md Component G: financial UI must be truthful and legible.
+ * The realized P&L is the dominant number — prices dominate commerce
+ * summaries. Tabular nums for all financial values.
  */
 
 import React from 'react';
@@ -18,6 +22,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
@@ -89,6 +94,8 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
     );
   }
 
+  const pnlPositive = (doc?.summary.realizedPnlGbpMinor ?? 0) >= 0;
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScreenHeader title="Tax Documents" onBack={() => navigation.goBack()} />
@@ -113,53 +120,76 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
           />
         ) : (
           <>
-            {/* Tax year header */}
-            <View style={styles.yearCard}>
-              <View style={styles.yearHeader}>
-                <Ionicons name="document-text" size={24} color={colors.brand} />
-                <View>
-                  <Text style={styles.yearTitle}>Tax Year {doc.taxYear}</Text>
-                  <Text style={styles.yearPeriod}>
-                    {formatDate(doc.startDate)} – {formatDate(doc.endDate)}
+            {/* Hero — tax year with P&L as dominant number */}
+            <Reanimated.View entering={FadeInDown.duration(300)}>
+              <View style={styles.heroCard}>
+                <View style={styles.heroTop}>
+                  <View style={styles.heroIconWrap}>
+                    <Ionicons name="document-text" size={22} color={colors.textInverse} />
+                  </View>
+                  <View style={styles.heroYearWrap}>
+                    <Text style={styles.heroYear}>Tax Year {doc.taxYear}</Text>
+                    <Text style={styles.heroPeriod}>
+                      {formatDate(doc.startDate)} – {formatDate(doc.endDate)}
+                    </Text>
+                  </View>
+                </View>
+                {/* P&L as the dominant number */}
+                <View style={styles.heroPnlWrap}>
+                  <Text style={styles.heroPnlLabel}>Realized P&L</Text>
+                  <Text style={[styles.heroPnlValue, { color: pnlPositive ? colors.success : colors.danger }]}>
+                    {formatGbp(doc.summary.realizedPnlGbpMinor)}
                   </Text>
+                  <View style={[styles.heroPnlBadge, { backgroundColor: (pnlPositive ? colors.success : colors.danger) + '18' }]}>
+                    <Ionicons
+                      name={pnlPositive ? 'arrow-up' : 'arrow-down'}
+                      size={12}
+                      color={pnlPositive ? colors.success : colors.danger}
+                    />
+                    <Text style={[styles.heroPnlBadgeText, { color: pnlPositive ? colors.success : colors.danger }]}>
+                      {pnlPositive ? 'Profit' : 'Loss'}
+                    </Text>
+                  </View>
                 </View>
               </View>
-            </View>
+            </Reanimated.View>
 
-            {/* Summary */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Summary</Text>
+            {/* Summary breakdown */}
+            <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Summary</Text>
+              </View>
               <View style={styles.summaryCard}>
                 <View style={styles.summaryRow}>
+                  <View style={styles.summaryIconWrap}>
+                    <Ionicons name="add-circle-outline" size={18} color={colors.textSecondary} />
+                  </View>
                   <Text style={styles.summaryLabel}>Total purchases</Text>
                   <Text style={styles.summaryValue}>{formatGbp(doc.summary.totalPurchasesGbpMinor)}</Text>
                 </View>
-                <View style={styles.summaryRow}>
+                <View style={[styles.summaryRow, styles.summaryRowBorder, { borderBottomColor: colors.borderSubtle }]}>
+                  <View style={styles.summaryIconWrap}>
+                    <Ionicons name="remove-circle-outline" size={18} color={colors.textSecondary} />
+                  </View>
                   <Text style={styles.summaryLabel}>Total sales</Text>
                   <Text style={styles.summaryValue}>{formatGbp(doc.summary.totalSalesGbpMinor)}</Text>
                 </View>
                 <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Distributions received</Text>
+                  <View style={styles.summaryIconWrap}>
+                    <Ionicons name="cash-outline" size={18} color={colors.textSecondary} />
+                  </View>
+                  <Text style={styles.summaryLabel}>Distributions</Text>
                   <Text style={styles.summaryValue}>{formatGbp(doc.summary.totalDistributionsGbpMinor)}</Text>
                 </View>
-                <View style={[styles.summaryRow, styles.summaryTotalRow, { borderTopColor: colors.border }]}>
-                  <Text style={styles.summaryTotalLabel}>Realized P&L</Text>
-                  <Text
-                    style={[
-                      styles.summaryTotalValue,
-                      { color: doc.summary.realizedPnlGbpMinor >= 0 ? colors.success : colors.danger },
-                    ]}
-                  >
-                    {formatGbp(doc.summary.realizedPnlGbpMinor)}
-                  </Text>
-                </View>
               </View>
-            </View>
+            </Reanimated.View>
 
             {/* Purchases breakdown */}
             {doc.purchases.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Purchases by Asset</Text>
+              <Reanimated.View entering={FadeInDown.duration(300).delay(160)}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Purchases by asset</Text>
+                </View>
                 <View style={styles.breakdownCard}>
                   {doc.purchases.map((p, i) => (
                     <View key={p.assetId} style={[styles.breakdownRow, i < doc.purchases.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.borderSubtle }]}>
@@ -171,13 +201,15 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
                     </View>
                   ))}
                 </View>
-              </View>
+              </Reanimated.View>
             )}
 
             {/* Sales breakdown */}
             {doc.sales.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Sales by Asset</Text>
+              <Reanimated.View entering={FadeInDown.duration(300).delay(240)}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Sales by asset</Text>
+                </View>
                 <View style={styles.breakdownCard}>
                   {doc.sales.map((s, i) => (
                     <View key={s.assetId} style={[styles.breakdownRow, i < doc.sales.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.borderSubtle }]}>
@@ -189,13 +221,15 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
                     </View>
                   ))}
                 </View>
-              </View>
+              </Reanimated.View>
             )}
 
             {/* Distributions breakdown */}
             {doc.distributions.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Distributions by Asset</Text>
+              <Reanimated.View entering={FadeInDown.duration(300).delay(320)}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Distributions by asset</Text>
+                </View>
                 <View style={styles.breakdownCard}>
                   {doc.distributions.map((d, i) => (
                     <View key={d.assetId} style={[styles.breakdownRow, i < doc.distributions.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.borderSubtle }]}>
@@ -207,16 +241,23 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
                     </View>
                   ))}
                 </View>
-              </View>
+              </Reanimated.View>
             )}
 
             {/* Disclaimer */}
-            <View style={styles.disclaimer}>
-              <Ionicons name="information-circle-outline" size={16} color={colors.textMuted} />
-              <Text style={styles.disclaimerText}>
-                This statement is for informational purposes only and does not constitute tax advice. Please consult a qualified tax professional for guidance on your specific circumstances.
-              </Text>
-            </View>
+            <Reanimated.View entering={FadeInDown.duration(300).delay(400)}>
+              <View style={styles.disclaimerCard}>
+                <View style={styles.disclaimerIconWrap}>
+                  <Ionicons name="information-circle" size={18} color={colors.textMuted} />
+                </View>
+                <View style={styles.disclaimerTextWrap}>
+                  <Text style={styles.disclaimerTitle}>For information only</Text>
+                  <Text style={styles.disclaimerText}>
+                    This statement does not constitute tax advice. Please consult a qualified tax professional for guidance on your specific circumstances.
+                  </Text>
+                </View>
+              </View>
+            </Reanimated.View>
 
             <Text style={styles.generatedAt}>Generated {formatDate(doc.generatedAt)}</Text>
 
@@ -230,7 +271,7 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
               style={{ marginTop: Space.md }}
             />
 
-            <View style={{ height: 40 }} />
+            <View style={{ height: Space.xxl }} />
           </>
         )}
       </ScrollView>
@@ -243,38 +284,89 @@ function createStyles(colors: ThemeColors) {
     container: { flex: 1, backgroundColor: colors.background },
     loadingBody: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     scrollContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
-    yearCard: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
+
+    // Hero card — P&L dominant
+    heroCard: {
+      borderRadius: Radius.xl,
       backgroundColor: colors.surface,
-      borderRadius: Radius.lg,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
-      padding: Space.md,
-      marginTop: Space.md,
+      padding: Space.lg,
+      marginTop: Space.sm,
     },
-    yearHeader: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
-    yearTitle: {
+    heroTop: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.md,
+    },
+    heroIconWrap: {
+      width: 44,
+      height: 44,
+      borderRadius: Radius.full,
+      backgroundColor: colors.brand,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    heroYearWrap: { flex: 1 },
+    heroYear: {
       fontSize: Type.subtitle.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
+      letterSpacing: Type.subtitle.letterSpacing,
     },
-    yearPeriod: {
+    heroPeriod: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
       marginTop: 2,
     },
-    section: { marginTop: Space.lg },
-    sectionTitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textSecondary,
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
-      marginBottom: Space.sm,
+    heroPnlWrap: {
+      marginTop: Space.lg,
+      alignItems: 'center',
+      gap: Space.xs,
     },
+    heroPnlLabel: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.medium,
+      color: colors.textMuted,
+      textTransform: 'uppercase',
+      letterSpacing: 0.8,
+    },
+    heroPnlValue: {
+      fontSize: Type.priceLarge.size,
+      fontFamily: Typography.family.bold,
+      fontVariant: ['tabular-nums'],
+      letterSpacing: Type.priceLarge.letterSpacing,
+    },
+    heroPnlBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      borderRadius: Radius.full,
+      paddingHorizontal: Space.sm + 2,
+      paddingVertical: 3,
+    },
+    heroPnlBadgeText: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.semibold,
+    },
+
+    // Section headers
+    sectionHeader: {
+      marginTop: Space.lg,
+      marginBottom: Space.sm,
+      paddingHorizontal: Space.xs,
+    },
+    sectionTitle: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.semibold,
+      color: colors.textPrimary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.8,
+      opacity: 0.7,
+    },
+
+    // Summary card
     summaryCard: {
       backgroundColor: colors.surface,
       borderRadius: Radius.lg,
@@ -284,34 +376,35 @@ function createStyles(colors: ThemeColors) {
     },
     summaryRow: {
       flexDirection: 'row',
-      justifyContent: 'space-between',
       alignItems: 'center',
-      paddingVertical: Space.sm,
+      paddingVertical: Space.sm + 2,
+      gap: Space.sm,
     },
-    summaryTotalRow: {
-      borderTopWidth: 1,
-      marginTop: Space.xs,
-      paddingTop: Space.md,
+    summaryRowBorder: {
+      borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    summaryIconWrap: {
+      width: 32,
+      height: 32,
+      borderRadius: Radius.md,
+      backgroundColor: colors.surfaceAlt,
+      justifyContent: 'center',
+      alignItems: 'center',
     },
     summaryLabel: {
       fontSize: Type.body.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
+      flex: 1,
     },
     summaryValue: {
-      fontSize: Type.body.size,
+      fontSize: Type.bodyEmphasis.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
+      fontVariant: ['tabular-nums'],
     },
-    summaryTotalLabel: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.bold,
-      color: colors.textPrimary,
-    },
-    summaryTotalValue: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.bold,
-    },
+
+    // Breakdown cards
     breakdownCard: {
       backgroundColor: colors.surface,
       borderRadius: Radius.lg,
@@ -323,7 +416,7 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      paddingVertical: Space.sm,
+      paddingVertical: Space.sm + 2,
     },
     breakdownInfo: { flex: 1 },
     breakdownAsset: {
@@ -341,19 +434,40 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.body.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
+      fontVariant: ['tabular-nums'],
     },
-    disclaimer: {
+
+    // Disclaimer — elevated card
+    disclaimerCard: {
       flexDirection: 'row',
-      gap: Space.xs,
+      gap: Space.md,
       marginTop: Space.lg,
-      paddingHorizontal: Space.sm,
+      backgroundColor: colors.surface,
+      borderRadius: Radius.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      padding: Space.md,
+    },
+    disclaimerIconWrap: {
+      width: 32,
+      height: 32,
+      borderRadius: Radius.full,
+      backgroundColor: colors.surfaceAlt,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    disclaimerTextWrap: { flex: 1 },
+    disclaimerTitle: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.semibold,
+      color: colors.textPrimary,
+      marginBottom: 2,
     },
     disclaimerText: {
       fontSize: Type.meta.size,
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
       lineHeight: 16,
-      flex: 1,
     },
     generatedAt: {
       fontSize: Type.meta.size,

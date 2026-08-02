@@ -177,28 +177,36 @@ export default function DistributionHistoryScreen() {
             </View>
           </Reanimated.View>
 
-          {/* DRIP enrollment card */}
+          {/* DRIP enrollment card — flagship treatment with count badge and status indicators */}
           <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(50)}>
             <View style={[styles.dripCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <View style={styles.dripHeader}>
-                <View style={[styles.dripIcon, { backgroundColor: colors.brand + '15' }]}>
-                  <Ionicons name="repeat" size={18} color={colors.brand} />
+                <View style={[styles.dripIcon, { backgroundColor: colors.brand }]}>
+                  <Ionicons name="repeat" size={20} color={colors.textInverse} />
                 </View>
                 <View style={styles.dripHeaderText}>
-                  <Text style={[styles.dripTitle, { color: colors.textPrimary }]}>Dividend reinvestment (DRIP)</Text>
+                  <Text style={[styles.dripTitle, { color: colors.textPrimary }]}>Dividend reinvestment</Text>
                   <Text style={[styles.dripBody, { color: colors.textSecondary }]}>
                     Automatically reinvest distributions into additional units of the same asset.
                   </Text>
                 </View>
               </View>
-              {/* Per-asset DRIP toggles */}
+              {/* Per-asset DRIP toggles with status indicators */}
               {Object.keys(dripEnrollments).length > 0 ? (
                 <View style={[styles.dripAssetList, { borderTopColor: colors.borderSubtle }]}>
                   {Object.entries(dripEnrollments).map(([assetId, enrolled]) => (
                     <View key={assetId} style={styles.dripAssetRow}>
-                      <Text style={[styles.dripAssetName, { color: colors.textPrimary }]} numberOfLines={1}>
-                        {assetId.slice(0, 20)}…
-                      </Text>
+                      <View style={styles.dripAssetInfo}>
+                        <View style={[styles.dripAssetDot, { backgroundColor: enrolled ? colors.success : colors.textMuted }]} />
+                        <Text style={[styles.dripAssetName, { color: colors.textPrimary }]} numberOfLines={1}>
+                          {assetId.slice(0, 20)}…
+                        </Text>
+                        {enrolled && (
+                          <View style={[styles.dripEnrolledBadge, { backgroundColor: colors.success + '18' }]}>
+                            <Text style={[styles.dripEnrolledText, { color: colors.success }]}>Active</Text>
+                          </View>
+                        )}
+                      </View>
                       <Switch
                         value={enrolled}
                         onValueChange={(v) => void handleToggleDrip(assetId, v)}
@@ -212,9 +220,12 @@ export default function DistributionHistoryScreen() {
                   ))}
                 </View>
               ) : (
-                <Text style={[styles.dripEmpty, { color: colors.textMuted }]}>
-                  Enroll from an asset's distribution card to automatically reinvest future payments.
-                </Text>
+                <View style={styles.dripEmptyWrap}>
+                  <Ionicons name="information-circle-outline" size={16} color={colors.textMuted} />
+                  <Text style={[styles.dripEmpty, { color: colors.textMuted }]}>
+                    Enroll from an asset's distribution card to automatically reinvest future payments.
+                  </Text>
+                </View>
               )}
             </View>
           </Reanimated.View>
@@ -384,12 +395,12 @@ function createStyles(colors: ThemeColors) {
   dripHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: Space.sm,
+    gap: Space.md,
   },
   dripIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.md,
+    width: 40,
+    height: 40,
+    borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -397,7 +408,7 @@ function createStyles(colors: ThemeColors) {
     flex: 1,
   },
   dripTitle: {
-    fontSize: Type.body.size,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: Type.body.letterSpacing,
   },
@@ -410,23 +421,49 @@ function createStyles(colors: ThemeColors) {
   dripAssetList: {
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingTop: Space.sm,
-    gap: Space.sm,
+    gap: Space.sm + 2,
   },
   dripAssetRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  dripAssetInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    flex: 1,
+  },
+  dripAssetDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
   dripAssetName: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     flex: 1,
-    marginRight: Space.sm,
+  },
+  dripEnrolledBadge: {
+    borderRadius: Radius.full,
+    paddingHorizontal: Space.xs + 2,
+    paddingVertical: 2,
+  },
+  dripEnrolledText: {
+    fontSize: 10,
+    fontFamily: Typography.family.semibold,
+  },
+  dripEmptyWrap: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.xs,
+    paddingTop: Space.xs,
   },
   dripEmpty: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
     lineHeight: 16,
+    flex: 1,
   },
 });
 }

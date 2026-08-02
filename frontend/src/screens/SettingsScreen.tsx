@@ -84,7 +84,6 @@ export default function SettingsScreen({ navigation }: Props) {
     pushEnabledCount,
     pushTotalCount,
     setLanguage,
-    toggleEmailNotifications,
   } = useSettingsPreferences();
 
   const [currencyPickerVisible, setCurrencyPickerVisible] = React.useState(false);
@@ -151,15 +150,6 @@ export default function SettingsScreen({ navigation }: Props) {
     if (nextLanguage === selectedLanguage) return;
     setLanguage(nextLanguage);
   };
-
-  const handleToggleEmailNotifications = React.useCallback(() => {
-    const next = !emailNotificationsEnabled;
-    toggleEmailNotifications();
-    show(
-      next ? t('settings.toast.emailEnabled') : t('settings.toast.emailPaused'),
-      next ? 'success' : 'info'
-    );
-  }, [emailNotificationsEnabled, show, toggleEmailNotifications]);
 
   const handleOpenExternal = React.useCallback(
     async (url: string) => {
@@ -337,6 +327,12 @@ export default function SettingsScreen({ navigation }: Props) {
           icon="phone-portrait-outline"
           title="Devices & sessions"
           onPress={() => navigation.navigate('ActiveSessions')}
+        />
+        <SettingsRow
+          icon="link-outline"
+          title="Connected accounts"
+          subtitle="Google, Apple sign-in"
+          onPress={() => navigation.navigate('ConnectedAccounts')}
           isLast
         />
       </SettingsSection>
@@ -410,8 +406,8 @@ export default function SettingsScreen({ navigation }: Props) {
         <SettingsRow
           icon="mail-outline"
           title="Email notifications"
-          toggleValue={emailNotificationsEnabled}
-          onToggle={handleToggleEmailNotifications}
+          subtitle={emailNotificationsEnabled ? 'On' : 'Off'}
+          onPress={() => navigation.navigate('EmailNotifications')}
           isLast
         />
       </SettingsSection>
@@ -448,6 +444,36 @@ export default function SettingsScreen({ navigation }: Props) {
           title="Content preferences"
           subtitle="Feed and recommendations"
           onPress={() => navigation.navigate('Personalisation')}
+        />
+        <SettingsRow
+          icon="accessibility-outline"
+          title="Accessibility"
+          subtitle="Text size, motion, contrast"
+          onPress={() => navigation.navigate('AccessibilitySettings')}
+          isLast
+        />
+      </SettingsSection>
+
+      {/* ── CO-OWN (card) ── */}
+      <SettingsSection title="Co-Own" noCard>
+        <SettingsRow
+          icon="notifications-outline"
+          title="Price alerts"
+          subtitle="Notify on price thresholds"
+          onPress={() => navigation.navigate('CoOwnPriceAlerts')}
+          isFirst
+        />
+        <SettingsRow
+          icon="repeat-outline"
+          title="Auto-invest plans"
+          subtitle="Recurring buy schedules"
+          onPress={() => navigation.navigate('CoOwnRecurringOrders')}
+        />
+        <SettingsRow
+          icon="document-text-outline"
+          title="Tax documents"
+          subtitle="Annual statements & P&L"
+          onPress={() => navigation.navigate('CoOwnTaxDocuments')}
           isLast
         />
       </SettingsSection>

@@ -30,6 +30,15 @@ export interface ThemeColors {
    * Used for price deltas, position P/L, and market direction. */
   coownUp: string;
   coownDown: string;
+  /** Semantic accent colors from Design.md proposed-semantic section.
+   * Used for category icon badges and contextual accents — never decorative. */
+  social: string;
+  discovery: string;
+  commerceTrust: string;
+  /** Premium accent from Design.md proposed-luxury. Used sparingly for
+   * verified status, authenticated value, or curated distinction. */
+  antiqueGold: string;
+  bronze: string;
   overlay: string;
   input: string;
   inputText: string;
@@ -57,9 +66,14 @@ const DARK_COLORS: ThemeColors = {
   borderSubtle: '#333333',
   danger: '#9b0202',
   success: '#215634',
-  warning: '#ffc765',
+  warning: '#C9A46A',
   coownUp: '#1C5631',
   coownDown: '#5F1616',
+  social: '#9A6B7A',
+  discovery: '#B85566',
+  commerceTrust: '#4A7AC4',
+  antiqueGold: '#C9A46A',
+  bronze: '#8A6A3F',
   overlay: 'rgba(0,0,0,0.6)',
   input: '#1A1A1A',
   inputText: '#FFFFFF',
@@ -87,9 +101,14 @@ const LIGHT_COLORS: ThemeColors = {
   borderSubtle: '#F0F0F0',
   danger: '#9b0202',
   success: '#215634',
-  warning: '#ffc765',
+  warning: '#8A6A3F',
   coownUp: '#1C5631',
   coownDown: '#5F1616',
+  social: '#6B3245',
+  discovery: '#7B0E1E',
+  commerceTrust: '#06489A',
+  antiqueGold: '#C9A46A',
+  bronze: '#8A6A3F',
   overlay: 'rgba(0,0,0,0.4)',
   input: '#FFFFFF',
   inputText: '#000000',

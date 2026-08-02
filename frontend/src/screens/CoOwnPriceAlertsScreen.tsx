@@ -3,6 +3,10 @@
  *
  * Users can create alerts that trigger when an asset's price crosses
  * a target threshold (above or below). Shows active and triggered alerts.
+ *
+ * Per Design.md Component G: financial UI must be truthful and legible.
+ * Numeric values use tabular/mono style. Condition badges use semantic
+ * colours (success for above, danger for below, warning for triggered).
  */
 
 import React from 'react';
@@ -19,6 +23,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
@@ -132,70 +137,121 @@ export default function CoOwnPriceAlertsScreen({ navigation }: Props) {
           />
         ) : (
           <>
-            {activeAlerts.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Active ({activeAlerts.length})</Text>
-                {activeAlerts.map((alert) => (
-                  <Pressable
-                    key={alert.id}
-                    style={styles.alertCard}
-                    onPress={() => navigation.navigate('AssetDetail', { assetId: alert.assetId })}
-                  >
-                    <View style={styles.alertInfo}>
-                      <View style={[styles.conditionBadge, { backgroundColor: alert.condition === 'above' ? colors.success + '15' : colors.danger + '15' }]}>
-                        <Ionicons
-                          name={alert.condition === 'above' ? 'arrow-up' : 'arrow-down'}
-                          size={14}
-                          color={alert.condition === 'above' ? colors.success : colors.danger}
-                        />
-                      </View>
-                      <View style={styles.alertText}>
-                        <Text style={styles.alertAsset}>{alert.assetId.slice(0, 12)}…</Text>
-                        <Text style={styles.alertCondition}>
-                          {alert.condition === 'above' ? 'Above' : 'Below'} {formatGbp(alert.targetPriceGbpMinor)}
-                        </Text>
-                        <Text style={styles.alertDate}>Created {formatDate(alert.createdAt)}</Text>
-                      </View>
-                    </View>
-                    <Pressable
-                      style={styles.deleteButton}
-                      onPress={() => { haptic.light(); handleDelete(alert); }}
-                      accessibilityRole="button"
-                      accessibilityLabel="Delete alert"
-                    >
-                      <Ionicons name="trash-outline" size={18} color={colors.danger} />
-                    </Pressable>
-                  </Pressable>
-                ))}
+            {/* Hero summary */}
+            <Reanimated.View entering={FadeInDown.duration(300)}>
+              <View style={styles.heroCard}>
+                <View style={styles.heroIconRow}>
+                  <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
+                    <Ionicons name="notifications" size={20} color={colors.textInverse} />
+                  </View>
+                  <View style={styles.heroText}>
+                    <Text style={styles.heroTitle}>Price alerts</Text>
+                    <Text style={styles.heroSubtitle}>
+                      {activeAlerts.length} active · {triggeredAlerts.length} triggered
+                    </Text>
+                  </View>
+                </View>
               </View>
+            </Reanimated.View>
+
+            {/* Active alerts */}
+            {activeAlerts.length > 0 && (
+              <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Active</Text>
+                  <View style={styles.sectionCount}>
+                    <Text style={styles.sectionCountText}>{activeAlerts.length}</Text>
+                  </View>
+                </View>
+                {activeAlerts.map((alert, idx) => {
+                  const isAbove = alert.condition === 'above';
+                  const badgeColor = isAbove ? colors.success : colors.danger;
+                  return (
+                    <Reanimated.View
+                      key={alert.id}
+                      entering={FadeInDown.duration(300).delay((idx + 2) * 60)}
+                    >
+                      <Pressable
+                        style={styles.alertCard}
+                        onPress={() => navigation.navigate('AssetDetail', { assetId: alert.assetId })}
+                      >
+                        <View style={styles.alertInfo}>
+                          {/* Condition badge — semantic colour */}
+                          <View style={[styles.conditionBadge, { backgroundColor: badgeColor + '18' }]}>
+                            <Ionicons
+                              name={isAbove ? 'arrow-up' : 'arrow-down'}
+                              size={18}
+                              color={badgeColor}
+                            />
+                          </View>
+                          <View style={styles.alertText}>
+                            <Text style={styles.alertCondition}>
+                              {isAbove ? 'Above' : 'Below'}
+                            </Text>
+                            <Text style={styles.alertPrice}>
+                              {formatGbp(alert.targetPriceGbpMinor)}
+                            </Text>
+                            <Text style={styles.alertDate}>Created {formatDate(alert.createdAt)}</Text>
+                          </View>
+                        </View>
+                        <Pressable
+                          style={styles.deleteButton}
+                          onPress={() => { haptic.light(); handleDelete(alert); }}
+                          accessibilityRole="button"
+                          accessibilityLabel="Delete alert"
+                          hitSlop={12}
+                        >
+                          <Ionicons name="trash-outline" size={20} color={colors.danger} />
+                        </Pressable>
+                      </Pressable>
+                    </Reanimated.View>
+                  );
+                })}
+              </Reanimated.View>
             )}
 
+            {/* Triggered alerts */}
             {triggeredAlerts.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Triggered ({triggeredAlerts.length})</Text>
-                {triggeredAlerts.map((alert) => (
-                  <View key={alert.id} style={[styles.alertCard, { opacity: 0.6 }]}>
-                    <View style={styles.alertInfo}>
-                      <View style={[styles.conditionBadge, { backgroundColor: colors.warning + '15' }]}>
-                        <Ionicons name="checkmark" size={14} color={colors.warning} />
-                      </View>
-                      <View style={styles.alertText}>
-                        <Text style={styles.alertAsset}>{alert.assetId.slice(0, 12)}…</Text>
-                        <Text style={styles.alertCondition}>
-                          {alert.condition === 'above' ? 'Above' : 'Below'} {formatGbp(alert.targetPriceGbpMinor)}
-                        </Text>
-                        <Text style={styles.alertDate}>
-                          Triggered {alert.triggeredAt ? formatDate(alert.triggeredAt) : ''}
-                        </Text>
-                      </View>
-                    </View>
+              <Reanimated.View entering={FadeInDown.duration(300).delay(160)}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Triggered</Text>
+                  <View style={styles.sectionCount}>
+                    <Text style={styles.sectionCountText}>{triggeredAlerts.length}</Text>
                   </View>
-                ))}
-              </View>
+                </View>
+                {triggeredAlerts.map((alert, idx) => {
+                  const isAbove = alert.condition === 'above';
+                  return (
+                    <Reanimated.View
+                      key={alert.id}
+                      entering={FadeInDown.duration(300).delay((idx + 4) * 60)}
+                    >
+                      <View style={[styles.alertCard, { opacity: 0.65 }]}>
+                        <View style={styles.alertInfo}>
+                          <View style={[styles.conditionBadge, { backgroundColor: colors.warning + '18' }]}>
+                            <Ionicons name="checkmark" size={18} color={colors.warning} />
+                          </View>
+                          <View style={styles.alertText}>
+                            <Text style={styles.alertCondition}>
+                              {isAbove ? 'Above' : 'Below'}
+                            </Text>
+                            <Text style={styles.alertPrice}>
+                              {formatGbp(alert.targetPriceGbpMinor)}
+                            </Text>
+                            <Text style={styles.alertDate}>
+                              Triggered {alert.triggeredAt ? formatDate(alert.triggeredAt) : ''}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                    </Reanimated.View>
+                  );
+                })}
+              </Reanimated.View>
             )}
           </>
         )}
-        <View style={{ height: 40 }} />
+        <View style={{ height: Space.xxl }} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -206,15 +262,74 @@ function createStyles(colors: ThemeColors) {
     container: { flex: 1, backgroundColor: colors.background },
     loadingBody: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     scrollContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
-    section: { marginTop: Space.md },
-    sectionTitle: {
+
+    // Hero summary
+    heroCard: {
+      borderRadius: Radius.xl,
+      backgroundColor: colors.surface,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      padding: Space.lg,
+      marginTop: Space.sm,
+    },
+    heroIconRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.md,
+    },
+    heroIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: Radius.full,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    heroText: { flex: 1 },
+    heroTitle: {
+      fontSize: Type.subtitle.size,
+      fontFamily: Typography.family.semibold,
+      color: colors.textPrimary,
+      letterSpacing: Type.subtitle.letterSpacing,
+    },
+    heroSubtitle: {
       fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+      color: colors.textSecondary,
+      marginTop: 2,
+    },
+
+    // Section headers
+    sectionHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm,
+      marginTop: Space.lg,
+      marginBottom: Space.sm,
+      paddingHorizontal: Space.xs,
+    },
+    sectionTitle: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.semibold,
+      color: colors.textPrimary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.8,
+      opacity: 0.7,
+    },
+    sectionCount: {
+      backgroundColor: colors.surfaceAlt,
+      borderRadius: Radius.full,
+      paddingHorizontal: Space.sm,
+      paddingVertical: 2,
+      minWidth: 24,
+      alignItems: 'center',
+    },
+    sectionCountText: {
+      fontSize: Type.meta.size,
       fontFamily: Typography.family.semibold,
       color: colors.textSecondary,
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
-      marginBottom: Space.sm,
     },
+
+    // Alert cards
     alertCard: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -233,29 +348,33 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
     },
     conditionBadge: {
-      width: 32,
-      height: 32,
+      width: 40,
+      height: 40,
       borderRadius: Radius.full,
       justifyContent: 'center',
       alignItems: 'center',
     },
     alertText: { flex: 1 },
-    alertAsset: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
     alertCondition: {
-      fontSize: Type.body.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.medium,
+      color: colors.textSecondary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    alertPrice: {
+      fontSize: Type.priceList.size,
+      fontFamily: Typography.family.bold,
       color: colors.textPrimary,
       marginTop: 2,
+      fontVariant: ['tabular-nums'],
+      letterSpacing: Type.priceList.letterSpacing,
     },
     alertDate: {
       fontSize: Type.meta.size,
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
-      marginTop: 2,
+      marginTop: 4,
     },
     deleteButton: {
       padding: Space.sm,

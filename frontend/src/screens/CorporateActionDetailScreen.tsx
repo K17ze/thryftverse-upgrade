@@ -340,27 +340,41 @@ export default function CorporateActionDetailScreen() {
           </View>
         </Reanimated.View>
 
-        {/* Governance voting */}
+        {/* Governance voting — flagship treatment with tally bars, quorum, voting power */}
         {isGovernanceAction && actionId && (
           <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(300)}>
             <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Cast your vote</Text>
-              <Text style={[styles.sectionBody, { color: colors.textSecondary, marginBottom: Space.md }]}>
-                Your voting power is proportional to your unit holdings. You can change your vote while the action remains open.
-              </Text>
+              <View style={styles.voteHeaderRow}>
+                <View style={[styles.voteHeaderIcon, { backgroundColor: colors.brand }]}>
+                  <Ionicons name="checkmark-circle" size={20} color={colors.textInverse} />
+                </View>
+                <View style={styles.voteHeaderText}>
+                  <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginBottom: 2 }]}>Cast your vote</Text>
+                  <Text style={[styles.voteHeaderSubtitle, { color: colors.textSecondary }]}>
+                    {myVote ? 'You can change your vote while open' : 'Your voting power is proportional to your holdings'}
+                  </Text>
+                </View>
+              </View>
 
-              {/* Vote results */}
+              {/* Vote results — tally bars with semantic colours */}
               {voteSummary.length > 0 && totalVotingPower > 0 && (
                 <View style={[styles.voteResults, { borderColor: colors.borderSubtle }]} key={`votes-${myVote}-${totalVotingPower}`}>
+                  <Text style={[styles.voteResultsTitle, { color: colors.textMuted }]}>Current tally</Text>
                   {(['for', 'against', 'abstain'] as const).map((v) => {
                     const entry = voteSummary.find((s) => s.vote === v);
                     const power = entry?.votingPowerUnits ?? 0;
                     const pct = totalVotingPower > 0 ? (power / totalVotingPower) * 100 : 0;
                     const label = v === 'for' ? 'For' : v === 'against' ? 'Against' : 'Abstain';
                     const color = v === 'for' ? colors.success : v === 'against' ? colors.danger : colors.textMuted;
+                    const isMyVote = myVote === v;
                     return (
                       <View key={v} style={styles.voteResultRow}>
-                        <Text style={[styles.voteResultLabel, { color: colors.textSecondary }]}>{label}</Text>
+                        <View style={styles.voteResultLabelRow}>
+                          {isMyVote && (
+                            <View style={[styles.voteResultDot, { backgroundColor: color }]} />
+                          )}
+                          <Text style={[styles.voteResultLabel, { color: colors.textSecondary }]}>{label}</Text>
+                        </View>
                         <View style={styles.voteResultBar}>
                           <View style={[styles.voteResultFill, { width: `${pct}%`, backgroundColor: color }]} />
                         </View>
@@ -370,17 +384,20 @@ export default function CorporateActionDetailScreen() {
                       </View>
                     );
                   })}
-                  <Text style={[styles.voteTotal, { color: colors.textMuted }]}>
-                    {totalVotingPower.toLocaleString()} units voted
-                  </Text>
+                  <View style={[styles.voteTotalRow, { borderTopColor: colors.borderSubtle }]}>
+                    <Ionicons name="people-outline" size={12} color={colors.textMuted} />
+                    <Text style={[styles.voteTotal, { color: colors.textMuted }]}>
+                      {totalVotingPower.toLocaleString()} units voted
+                    </Text>
+                  </View>
                 </View>
               )}
 
-              {/* My vote indicator */}
+              {/* My vote indicator — elevated badge */}
               {myVote && (
-                <View style={[styles.myVoteBadge, { backgroundColor: colors.brand + '15' }]}>
-                  <Ionicons name="checkmark-circle" size={16} color={colors.brand} />
-                  <Text style={[styles.myVoteText, { color: colors.brand }]}>
+                <View style={[styles.myVoteBadge, { backgroundColor: (myVote === 'for' ? colors.success : myVote === 'against' ? colors.danger : colors.textMuted) + '18' }]}>
+                  <Ionicons name="checkmark-circle" size={16} color={myVote === 'for' ? colors.success : myVote === 'against' ? colors.danger : colors.textMuted} />
+                  <Text style={[styles.myVoteText, { color: myVote === 'for' ? colors.success : myVote === 'against' ? colors.danger : colors.textMuted }]}>
                     You voted {myVote}
                   </Text>
                 </View>
@@ -401,7 +418,7 @@ export default function CorporateActionDetailScreen() {
                 accessibilityLabel="Vote rationale"
               />
 
-              {/* Vote buttons */}
+              {/* Vote buttons — semantic colours */}
               <View style={styles.voteButtons}>
                 {(['for', 'against', 'abstain'] as const).map((v) => {
                   const label = v === 'for' ? 'For' : v === 'against' ? 'Against' : 'Abstain';
@@ -507,15 +524,32 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.md,
     gap: Space.sm,
   },
+  voteResultsTitle: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: Space.xs,
+  },
   voteResultRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
   },
+  voteResultLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    width: 72,
+  },
+  voteResultDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
   voteResultLabel: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    width: 64,
   },
   voteResultBar: {
     flex: 1,
@@ -535,11 +569,38 @@ function createStyles(colors: ThemeColors) {
     textAlign: 'right',
     fontVariant: ['tabular-nums'],
   },
+  voteTotalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: Space.sm,
+    marginTop: Space.xs,
+    justifyContent: 'center',
+  },
   voteTotal: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    textAlign: 'center',
-    marginTop: Space.xs,
+    fontVariant: ['tabular-nums'],
+  },
+  voteHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+    marginBottom: Space.md,
+  },
+  voteHeaderIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  voteHeaderText: { flex: 1 },
+  voteHeaderSubtitle: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    lineHeight: 18,
   },
   myVoteBadge: {
     flexDirection: 'row',

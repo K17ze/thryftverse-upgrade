@@ -11,18 +11,18 @@ interface BackgroundPickerProps {
 }
 
 const GRADIENTS = [
-  { label: 'Sunset', colors: ['#ff6b6b', '#feca57'] },
-  { label: 'Ocean', colors: ['#48dbfb', '#1dd1a1'] },
-  { label: 'Berry', colors: ['#5f27cd', '#ff9f43'] },
+  { label: 'Bronze', colors: ['#8A6A3F', '#C9A46A'] },
+  { label: 'Ocean', colors: ['#06489A', '#4A7AC4'] },
+  { label: 'Berry', colors: ['#6B3245', '#9A6B7A'] },
   { label: 'Midnight', colors: ['#1a1a2e', '#16213e'] },
-  { label: 'Coral', colors: ['#ff9f43', '#ff6b6b'] },
-  { label: 'Forest', colors: ['#10ac84', '#1dd1a1'] },
+  { label: 'Coral', colors: ['#7B0E1E', '#9A6B7A'] },
+  { label: 'Forest', colors: ['#1C5631', '#215634'] },
 ];
 
 const SOLIDS = [
-  '#1a1a2e', '#16213e', '#0f3460', '#e94560', '#ff6b6b',
-  '#feca57', '#48dbfb', '#1dd1a1', '#5f27cd', '#ff9f43',
-  '#10ac84', '#00d2d3', '#54a0ff', '#341f97',
+  '#1a1a2e', '#16213e', '#0f3460', '#7B0E1E', '#9A6B7A',
+  '#C9A46A', '#06489A', '#215634', '#6B3245', '#8A6A3F',
+  '#1C5631', '#0A0A0A', '#4A7AC4', '#5F1616',
   '#222f3e', '#576574', '#8395a7', '#c8d6e5', '#dfe6e9',
   '#ffffff', '#000000',
 ];

@@ -1578,7 +1578,7 @@ export default function AssetDetailScreen() {
         }}
       />
 
-      {/* Price alert creation modal */}
+      {/* Price alert creation modal — flagship treatment with semantic condition colours */}
       <Modal
         visible={priceAlertVisible}
         transparent
@@ -1587,27 +1587,43 @@ export default function AssetDetailScreen() {
       >
         <Pressable style={priceAlertStyles.overlay} onPress={() => setPriceAlertVisible(false)}>
           <Pressable style={[priceAlertStyles.sheet, { backgroundColor: colors.surface }]} onPress={(e) => e.stopPropagation()}>
-            <Text style={[priceAlertStyles.sheetTitle, { color: colors.textPrimary }]}>Create price alert</Text>
-            <Text style={[priceAlertStyles.sheetSubtitle, { color: colors.textSecondary }]}>
-              Get notified when the price {alertCondition === 'above' ? 'rises above' : 'drops below'} your target.
-            </Text>
+            {/* Header with icon */}
+            <View style={priceAlertStyles.headerRow}>
+              <View style={[priceAlertStyles.headerIcon, { backgroundColor: colors.brand }]}>
+                <Ionicons name="notifications" size={20} color={colors.textInverse} />
+              </View>
+              <View style={priceAlertStyles.headerText}>
+                <Text style={[priceAlertStyles.sheetTitle, { color: colors.textPrimary }]}>Create price alert</Text>
+                <Text style={[priceAlertStyles.sheetSubtitle, { color: colors.textSecondary }]}>
+                  Get notified when the price {alertCondition === 'above' ? 'rises above' : 'drops below'} your target.
+                </Text>
+              </View>
+            </View>
 
-            {/* Condition selector */}
+            {/* Condition selector — semantic colours */}
+            <Text style={[priceAlertStyles.inputLabel, { color: colors.textSecondary }]}>Condition</Text>
             <View style={priceAlertStyles.conditionRow}>
               {(['above', 'below'] as const).map((c) => {
                 const isSelected = alertCondition === c;
+                const semanticColor = c === 'above' ? colors.success : colors.danger;
                 return (
                   <Pressable
                     key={c}
                     style={[
                       priceAlertStyles.conditionTab,
-                      { backgroundColor: isSelected ? colors.brand : colors.surfaceAlt, borderColor: isSelected ? colors.brand : colors.border },
+                      {
+                        backgroundColor: isSelected ? semanticColor : colors.surfaceAlt,
+                        borderColor: isSelected ? semanticColor : colors.border,
+                      },
                     ]}
                     onPress={() => { haptics.tap(); setAlertCondition(c); }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Alert when price goes ${c}`}
+                    accessibilityState={{ selected: isSelected }}
                   >
                     <Ionicons
                       name={c === 'above' ? 'arrow-up' : 'arrow-down'}
-                      size={16}
+                      size={18}
                       color={isSelected ? '#fff' : colors.textSecondary}
                     />
                     <Text style={[priceAlertStyles.conditionText, { color: isSelected ? '#fff' : colors.textSecondary }]}>
@@ -2024,15 +2040,31 @@ const priceAlertStyles = StyleSheet.create({
     padding: Space.lg,
     paddingBottom: Space.xl,
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.md,
+    marginBottom: Space.lg,
+  },
+  headerIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerText: {
+    flex: 1,
+  },
   sheetTitle: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
-    marginBottom: Space.xs,
+    letterSpacing: Type.subtitle.letterSpacing,
+    marginBottom: 2,
   },
   sheetSubtitle: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    marginBottom: Space.md,
     lineHeight: 18,
   },
   conditionRow: {
@@ -2046,7 +2078,7 @@ const priceAlertStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.xs,
-    paddingVertical: Space.sm,
+    paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
     borderWidth: 1,
   },
@@ -2063,7 +2095,7 @@ const priceAlertStyles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: Radius.md,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
+    paddingVertical: Space.sm + 2,
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     marginBottom: Space.lg,

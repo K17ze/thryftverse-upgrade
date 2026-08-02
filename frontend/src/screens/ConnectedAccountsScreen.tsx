@@ -4,6 +4,9 @@
  * Shows which third-party providers are linked to the user's account,
  * allows unlinking with safety checks (must keep at least one auth method),
  * and provides education about the security implications.
+ *
+ * Per Design.md: utility canvas mode. Quality from composition, hierarchy,
+ * and visual identity — each provider has its own brand-coloured badge.
  */
 
 import React from 'react';
@@ -19,6 +22,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
@@ -35,10 +39,10 @@ import { RootStackParamList } from '../navigation/types';
 
 type Props = StackScreenProps<RootStackParamList, 'ConnectedAccounts'>;
 
-const PROVIDER_META: Record<string, { label: string; icon: string; color: string }> = {
-  google: { label: 'Google', icon: 'logo-google', color: '#4285F4' },
-  apple: { label: 'Apple', icon: 'logo-apple', color: '#000000' },
-  facebook: { label: 'Facebook', icon: 'logo-facebook', color: '#1877F2' },
+const PROVIDER_META: Record<string, { label: string; icon: string; color: string; gradient: string }> = {
+  google: { label: 'Google', icon: 'logo-google', color: '#4285F4', gradient: '#4285F4' },
+  apple: { label: 'Apple', icon: 'logo-apple', color: '#000000', gradient: '#333333' },
+  facebook: { label: 'Facebook', icon: 'logo-facebook', color: '#1877F2', gradient: '#1877F2' },
 };
 
 function formatDate(iso: string): string {
@@ -50,7 +54,7 @@ function formatDate(iso: string): string {
 }
 
 export default function ConnectedAccountsScreen({ navigation }: Props) {
-  const { colors } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
   const { show } = useToast();
@@ -126,6 +130,25 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => { setIsRefreshing(true); void load(); }} tintColor={colors.textSecondary} />}
         showsVerticalScrollIndicator={false}
       >
+        {/* Hero summary — visual identity for the screen */}
+        <Reanimated.View entering={FadeInDown.duration(300)}>
+          <View style={styles.heroCard}>
+            <View style={styles.heroIconRow}>
+              <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
+                <Ionicons name="lock-closed" size={20} color={isDark ? '#0A0A0A' : '#FFFFFF'} />
+              </View>
+              <View style={styles.heroText}>
+                <Text style={styles.heroTitle}>Sign-in methods</Text>
+                <Text style={styles.heroSubtitle}>
+                  {accounts.length === 0
+                    ? 'Email and password'
+                    : `${accounts.length} connected account${accounts.length !== 1 ? 's' : ''}`}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </Reanimated.View>
+
         <Text style={styles.introText}>
           Manage the third-party accounts you use to sign in. You can unlink an account as long as you have another way to access your ThryftVerse account.
         </Text>
@@ -139,53 +162,79 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
             onCtaPress={() => { setIsLoading(true); void load(); }}
           />
         ) : accounts.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Ionicons name="link-outline" size={32} color={colors.textMuted} />
-            <Text style={styles.emptyTitle}>No connected accounts</Text>
-            <Text style={styles.emptyBody}>
-              You sign in with your email and password. You can connect Google or Apple from the sign-in screen.
-            </Text>
-          </View>
+          <Reanimated.View entering={FadeInDown.duration(300).delay(100)}>
+            <View style={styles.emptyCard}>
+              <View style={styles.emptyIconWrap}>
+                <Ionicons name="link-outline" size={36} color={colors.textMuted} />
+              </View>
+              <Text style={styles.emptyTitle}>No connected accounts</Text>
+              <Text style={styles.emptyBody}>
+                You sign in with your email and password. Connect Google or Apple from the sign-in screen for faster access.
+              </Text>
+            </View>
+          </Reanimated.View>
         ) : (
           <View style={styles.accountsList}>
-            {accounts.map((account) => {
-              const meta = PROVIDER_META[account.provider] ?? { label: account.provider, icon: 'key-outline', color: colors.textMuted };
+            {accounts.map((account, idx) => {
+              const meta = PROVIDER_META[account.provider] ?? {
+                label: account.provider,
+                icon: 'key-outline',
+                color: colors.textMuted,
+                gradient: colors.textMuted,
+              };
               const isUnlinking = unlinkingId === account.id;
               return (
-                <View key={account.id} style={styles.accountCard}>
-                  <View style={styles.accountHeader}>
-                    <View style={[styles.providerIcon, { backgroundColor: meta.color + '15' }]}>
-                      <Ionicons name={meta.icon as any} size={22} color={meta.color} />
+                <Reanimated.View
+                  key={account.id}
+                  entering={FadeInDown.duration(300).delay(idx * 60)}
+                >
+                  <View style={styles.accountCard}>
+                    <View style={styles.accountHeader}>
+                      {/* Provider badge with brand colour */}
+                      <View style={[styles.providerIcon, { backgroundColor: meta.color + '18' }]}>
+                        <Ionicons name={meta.icon as any} size={24} color={meta.color} />
+                      </View>
+                      <View style={styles.accountInfo}>
+                        <Text style={styles.providerName}>{meta.label}</Text>
+                        {account.providerEmail ? (
+                          <Text style={styles.providerEmail}>{account.providerEmail}</Text>
+                        ) : null}
+                        <View style={styles.linkedRow}>
+                          <Ionicons name="checkmark-circle" size={12} color={colors.success} />
+                          <Text style={styles.linkedDate}>Linked {formatDate(account.linkedAt)}</Text>
+                        </View>
+                      </View>
                     </View>
-                    <View style={styles.accountInfo}>
-                      <Text style={styles.providerName}>{meta.label}</Text>
-                      {account.providerEmail ? (
-                        <Text style={styles.providerEmail}>{account.providerEmail}</Text>
-                      ) : null}
-                      <Text style={styles.linkedDate}>Linked {formatDate(account.linkedAt)}</Text>
-                    </View>
+                    <AppButton
+                      title={isUnlinking ? 'Unlinking…' : 'Unlink'}
+                      onPress={() => { haptic.light(); handleUnlink(account); }}
+                      variant="secondary"
+                      size="sm"
+                      disabled={isUnlinking}
+                    />
                   </View>
-                  <AppButton
-                    title={isUnlinking ? 'Unlinking…' : 'Unlink'}
-                    onPress={() => { haptic.light(); handleUnlink(account); }}
-                    variant="secondary"
-                    size="sm"
-                    disabled={isUnlinking}
-                  />
-                </View>
+                </Reanimated.View>
               );
             })}
           </View>
         )}
 
-        <View style={styles.securityNote}>
-          <Ionicons name="shield-checkmark-outline" size={18} color={colors.success} />
-          <Text style={styles.securityNoteText}>
-            For your security, you must keep at least one way to sign in. If you unlink your only connected account, make sure you have a password set.
-          </Text>
-        </View>
+        {/* Security note — elevated with icon and card */}
+        <Reanimated.View entering={FadeInDown.duration(300).delay(200)}>
+          <View style={styles.securityNote}>
+            <View style={styles.securityIconWrap}>
+              <Ionicons name="shield-checkmark" size={20} color={colors.success} />
+            </View>
+            <View style={styles.securityTextWrap}>
+              <Text style={styles.securityTitle}>Account safety</Text>
+              <Text style={styles.securityNoteText}>
+                For your security, you must keep at least one way to sign in. If you unlink your only connected account, make sure you have a password set.
+              </Text>
+            </View>
+          </View>
+        </Reanimated.View>
 
-        <View style={{ height: 40 }} />
+        <View style={{ height: Space.xxl }} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -196,21 +245,70 @@ function createStyles(colors: ThemeColors) {
     container: { flex: 1, backgroundColor: colors.background },
     loadingBody: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     scrollContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
+
+    // Hero summary card
+    heroCard: {
+      borderRadius: Radius.xl,
+      backgroundColor: colors.surface,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      padding: Space.lg,
+      marginTop: Space.sm,
+    },
+    heroIconRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.md,
+    },
+    heroIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: Radius.full,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    heroText: {
+      flex: 1,
+    },
+    heroTitle: {
+      fontSize: Type.subtitle.size,
+      fontFamily: Typography.family.semibold,
+      color: colors.textPrimary,
+      letterSpacing: Type.subtitle.letterSpacing,
+    },
+    heroSubtitle: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+      color: colors.textSecondary,
+      marginTop: 2,
+    },
+
     introText: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
       lineHeight: 20,
-      marginTop: Space.md,
-      marginBottom: Space.lg,
+      marginTop: Space.lg,
+      marginBottom: Space.md,
     },
+
+    // Empty state
     emptyCard: {
       alignItems: 'center',
       padding: Space.xl,
       gap: Space.sm,
     },
+    emptyIconWrap: {
+      width: 64,
+      height: 64,
+      borderRadius: Radius.full,
+      backgroundColor: colors.surface,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: Space.xs,
+    },
     emptyTitle: {
-      fontSize: Type.body.size,
+      fontSize: Type.bodyEmphasis.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
     },
@@ -220,7 +318,10 @@ function createStyles(colors: ThemeColors) {
       color: colors.textSecondary,
       textAlign: 'center',
       lineHeight: 18,
+      paddingHorizontal: Space.lg,
     },
+
+    // Account cards
     accountsList: { gap: Space.sm },
     accountCard: {
       flexDirection: 'row',
@@ -239,15 +340,15 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
     },
     providerIcon: {
-      width: 40,
-      height: 40,
+      width: 44,
+      height: 44,
       borderRadius: Radius.full,
       justifyContent: 'center',
       alignItems: 'center',
     },
     accountInfo: { flex: 1 },
     providerName: {
-      fontSize: Type.body.size,
+      fontSize: Type.bodyEmphasis.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
     },
@@ -257,24 +358,51 @@ function createStyles(colors: ThemeColors) {
       color: colors.textSecondary,
       marginTop: 2,
     },
+    linkedRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      marginTop: 4,
+    },
     linkedDate: {
       fontSize: Type.meta.size,
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
-      marginTop: 2,
     },
+
+    // Security note — elevated card
     securityNote: {
       flexDirection: 'row',
-      gap: Space.sm,
+      gap: Space.md,
       marginTop: Space.lg,
-      paddingHorizontal: Space.sm,
+      backgroundColor: colors.surface,
+      borderRadius: Radius.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      padding: Space.md,
+    },
+    securityIconWrap: {
+      width: 36,
+      height: 36,
+      borderRadius: Radius.full,
+      backgroundColor: colors.success + '15',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    securityTextWrap: {
+      flex: 1,
+    },
+    securityTitle: {
+      fontSize: Type.captionElevated.size,
+      fontFamily: Typography.family.semibold,
+      color: colors.textPrimary,
+      marginBottom: 2,
     },
     securityNoteText: {
-      fontSize: Type.meta.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-      lineHeight: 16,
-      flex: 1,
+      color: colors.textSecondary,
+      lineHeight: 17,
     },
   });
 }

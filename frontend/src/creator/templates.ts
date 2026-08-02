@@ -117,8 +117,8 @@ export const LOOK_TEMPLATES: CreatorTemplate[] = [
       version: 1,
       canvas: { aspectRatio: 1, background: { type: 'color', value: '#2c2c2c' } },
       pages: [page([
-        { ...baseLayer(createStableId('decorative'), 1), type: 'decorative', width: 0.5, height: 0.5, x: 0.3, y: 0.3, payload: { shape: 'circle', color: '#ff6b6b', opacity: 0.8 } },
-        { ...baseLayer(createStableId('decorative'), 2), type: 'decorative', width: 0.4, height: 0.4, x: 0.7, y: 0.7, payload: { shape: 'circle', color: '#4cd964', opacity: 0.6 } },
+        { ...baseLayer(createStableId('decorative'), 1), type: 'decorative', width: 0.5, height: 0.5, x: 0.3, y: 0.3, payload: { shape: 'circle', color: '#9A6B7A', opacity: 0.8 } },
+        { ...baseLayer(createStableId('decorative'), 2), type: 'decorative', width: 0.4, height: 0.4, x: 0.7, y: 0.7, payload: { shape: 'circle', color: '#215634', opacity: 0.6 } },
         { ...baseLayer(createStableId('text'), 3), type: 'text', width: 0.6, height: 0.08, y: 0.9, payload: { text: 'Colour Story', textStyle: 'editorial', textColor: '#ffffff', alignment: 'center', opacity: 1 } },
       ])],
       metadata: { title: 'Colour Story', caption: '', visibility: 'public', allowReplies: true, allowReactions: true, allowRemix: false },

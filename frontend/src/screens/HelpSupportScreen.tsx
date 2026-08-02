@@ -69,6 +69,23 @@ export default function HelpSupportScreen({ navigation }: Props) {
 
   return (
     <FlagshipScreen header={<FlagshipHeader title="Help & Support" subtitle="Get answers and contact us" onBack={() => navigation.goBack()} />} keyboardAvoiding>
+        {/* Hero summary */}
+        <Reanimated.View entering={FadeIn.duration(300)}>
+          <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.heroRow}>
+              <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
+                <Ionicons name="help-circle" size={20} color={colors.textInverse} />
+              </View>
+              <View style={styles.heroText}>
+                <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>We're here to help</Text>
+                <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
+                  Average response time ~2 hours
+                </Text>
+              </View>
+            </View>
+          </View>
+        </Reanimated.View>
+
         {/* Contact options */}
         <Reanimated.View entering={FadeIn.duration(300)}>
           <SettingsSection title="Contact us">
@@ -194,6 +211,35 @@ export default function HelpSupportScreen({ navigation }: Props) {
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
+  heroCard: {
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Space.md,
+    marginBottom: Space.md,
+  },
+  heroRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+  },
+  heroIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  heroText: { flex: 1 },
+  heroTitle: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.body.letterSpacing,
+  },
+  heroSubtitle: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    marginTop: 2,
+  },
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',

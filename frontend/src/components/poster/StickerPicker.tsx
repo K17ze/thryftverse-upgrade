@@ -37,12 +37,12 @@ interface StickerPickerProps {
 const EMOJIS = ['🔥', '❤️', '😂', '😍', '👀', '✨', '🎉', '💯', '🙌', '⚡', '🌟', '💥', '🏷️', '📌', '🚀', '💎'];
 
 const SHAPES = [
-  { icon: 'heart', label: 'Heart', color: '#ff2d55' },
-  { icon: 'star', label: 'Star', color: '#ffcc00' },
-  { icon: 'flash', label: 'Bolt', color: '#ff9500' },
-  { icon: 'sunny', label: 'Sun', color: '#ffcc00' },
-  { icon: 'moon', label: 'Moon', color: '#5856d6' },
-  { icon: 'location', label: 'Pin', color: '#ff3b30' },
+  { icon: 'heart', label: 'Heart', color: '#7B0E1E' },
+  { icon: 'star', label: 'Star', color: '#C9A46A' },
+  { icon: 'flash', label: 'Bolt', color: '#8A6A3F' },
+  { icon: 'sunny', label: 'Sun', color: '#C9A46A' },
+  { icon: 'moon', label: 'Moon', color: '#6B3245' },
+  { icon: 'location', label: 'Pin', color: '#9b0202' },
 ];
 
 const PRESET_POLLS = [
@@ -100,7 +100,7 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
   const handleHashtagSubmit = () => {
     const text = hashtagInput.trim().replace(/^#/, '');
     if (text) {
-      onStickerSelect({ id: `hashtag_${Date.now()}`, type: 'hashtag', content: `#${text}`, color: '#5ac8fa' });
+      onStickerSelect({ id: `hashtag_${Date.now()}`, type: 'hashtag', content: `#${text}`, color: '#06489A' });
       setHashtagInput('');
       onClose();
     }
@@ -112,7 +112,7 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
       id: `countdown_${Date.now()}`,
       type: 'countdown',
       content: `${hours}h left`,
-      color: '#ff3b30',
+      color: '#9b0202',
       targetDate: target,
     });
     onClose();

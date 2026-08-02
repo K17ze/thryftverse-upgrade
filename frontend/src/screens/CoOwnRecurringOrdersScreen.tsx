@@ -3,6 +3,10 @@
  *
  * Users can view, create, and cancel recurring buy orders for Co-Own assets.
  * Supports weekly, biweekly, and monthly frequencies with optional max price.
+ *
+ * Per Design.md Component G: financial UI must be truthful and legible.
+ * Each order card shows frequency badge, next execution date, and execution
+ * count with clear visual hierarchy.
  */
 
 import React from 'react';
@@ -21,6 +25,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
@@ -50,6 +55,12 @@ const FREQUENCY_LABELS: Record<string, string> = {
   weekly: 'Weekly',
   biweekly: 'Every 2 weeks',
   monthly: 'Monthly',
+};
+
+const FREQUENCY_SHORT: Record<string, string> = {
+  weekly: 'W',
+  biweekly: '2W',
+  monthly: 'M',
 };
 
 export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
@@ -162,6 +173,25 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => { setIsRefreshing(true); void load(); }} tintColor={colors.textSecondary} />}
         showsVerticalScrollIndicator={false}
       >
+        {/* Hero summary */}
+        <Reanimated.View entering={FadeInDown.duration(300)}>
+          <View style={styles.heroCard}>
+            <View style={styles.heroIconRow}>
+              <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
+                <Ionicons name="repeat" size={22} color={colors.textInverse} />
+              </View>
+              <View style={styles.heroText}>
+                <Text style={styles.heroTitle}>Auto-invest plans</Text>
+                <Text style={styles.heroSubtitle}>
+                  {activeOrders.length === 0
+                    ? 'No active plans'
+                    : `${activeOrders.length} active plan${activeOrders.length !== 1 ? 's' : ''}`}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </Reanimated.View>
+
         <Text style={styles.introText}>
           Set up recurring purchases to automatically buy units on a schedule. You can cancel at any time.
         </Text>
@@ -182,67 +212,115 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
           />
         ) : (
           <>
+            {/* Active orders */}
             {activeOrders.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Active ({activeOrders.length})</Text>
-                {activeOrders.map((order) => (
-                  <View key={order.id} style={styles.orderCard}>
-                    <Pressable
-                      style={styles.orderInfo}
-                      onPress={() => navigation.navigate('AssetDetail', { assetId: order.assetId })}
-                    >
-                      <View style={styles.orderHeader}>
-                        <Ionicons name="repeat" size={18} color={colors.brand} />
-                        <Text style={styles.orderAsset}>{order.assetId.slice(0, 16)}…</Text>
-                      </View>
-                      <Text style={styles.orderDetail}>
-                        {order.unitsPerExecution} units · {FREQUENCY_LABELS[order.frequency]}
-                      </Text>
-                      {order.maxPriceGbpMinor != null && (
-                        <Text style={styles.orderMaxPrice}>
-                          Max price: {formatGbp(order.maxPriceGbpMinor)}
-                        </Text>
-                      )}
-                      <Text style={styles.orderNext}>
-                        Next: {formatDate(order.nextExecutionAt)}
-                      </Text>
-                      <Text style={styles.orderExecutions}>
-                        {order.executionsCount} execution{order.executionsCount !== 1 ? 's' : ''} completed
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      style={styles.cancelButton}
-                      onPress={() => { haptic.light(); handleCancel(order); }}
-                      accessibilityRole="button"
-                      accessibilityLabel="Cancel recurring order"
-                    >
-                      <Ionicons name="close-circle-outline" size={22} color={colors.danger} />
-                    </Pressable>
+              <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Active</Text>
+                  <View style={styles.sectionCount}>
+                    <Text style={styles.sectionCountText}>{activeOrders.length}</Text>
                   </View>
+                </View>
+                {activeOrders.map((order, idx) => (
+                  <Reanimated.View
+                    key={order.id}
+                    entering={FadeInDown.duration(300).delay((idx + 2) * 60)}
+                  >
+                    <View style={styles.orderCard}>
+                      <Pressable
+                        style={styles.orderInfo}
+                        onPress={() => navigation.navigate('AssetDetail', { assetId: order.assetId })}
+                      >
+                        <View style={styles.orderHeader}>
+                          {/* Frequency badge — visual identity */}
+                          <View style={[styles.freqBadge, { backgroundColor: colors.brand + '18' }]}>
+                            <Text style={styles.freqBadgeText}>
+                              {FREQUENCY_SHORT[order.frequency] ?? order.frequency}
+                            </Text>
+                          </View>
+                          <View style={styles.orderHeaderText}>
+                            <Text style={styles.orderAsset}>{order.assetId.slice(0, 16)}…</Text>
+                            <Text style={styles.orderDetail}>
+                              {order.unitsPerExecution} units · {FREQUENCY_LABELS[order.frequency]}
+                            </Text>
+                          </View>
+                        </View>
+                        {order.maxPriceGbpMinor != null && (
+                          <View style={styles.orderMetaRow}>
+                            <Ionicons name="pricetag-outline" size={12} color={colors.textMuted} />
+                            <Text style={styles.orderMaxPrice}>
+                              Max {formatGbp(order.maxPriceGbpMinor)}/unit
+                            </Text>
+                          </View>
+                        )}
+                        <View style={styles.orderMetaRow}>
+                          <Ionicons name="calendar-outline" size={12} color={colors.brand} />
+                          <Text style={styles.orderNext}>
+                            Next {formatDate(order.nextExecutionAt)}
+                          </Text>
+                        </View>
+                        <View style={styles.orderMetaRow}>
+                          <Ionicons name="checkmark-circle-outline" size={12} color={colors.textMuted} />
+                          <Text style={styles.orderExecutions}>
+                            {order.executionsCount} execution{order.executionsCount !== 1 ? 's' : ''} completed
+                          </Text>
+                        </View>
+                      </Pressable>
+                      <Pressable
+                        style={styles.cancelButton}
+                        onPress={() => { haptic.light(); handleCancel(order); }}
+                        accessibilityRole="button"
+                        accessibilityLabel="Cancel recurring order"
+                        hitSlop={12}
+                      >
+                        <Ionicons name="close-circle-outline" size={24} color={colors.danger} />
+                      </Pressable>
+                    </View>
+                  </Reanimated.View>
                 ))}
-              </View>
+              </Reanimated.View>
             )}
 
+            {/* Inactive orders */}
             {inactiveOrders.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Cancelled ({inactiveOrders.length})</Text>
-                {inactiveOrders.map((order) => (
-                  <View key={order.id} style={[styles.orderCard, { opacity: 0.5 }]}>
-                    <View style={styles.orderInfo}>
-                      <View style={styles.orderHeader}>
-                        <Ionicons name="repeat" size={18} color={colors.textMuted} />
-                        <Text style={styles.orderAsset}>{order.assetId.slice(0, 16)}…</Text>
-                      </View>
-                      <Text style={styles.orderDetail}>
-                        {order.unitsPerExecution} units · {FREQUENCY_LABELS[order.frequency]}
-                      </Text>
-                      <Text style={styles.orderExecutions}>
-                        {order.executionsCount} execution{order.executionsCount !== 1 ? 's' : ''} completed
-                      </Text>
-                    </View>
+              <Reanimated.View entering={FadeInDown.duration(300).delay(160)}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Cancelled</Text>
+                  <View style={styles.sectionCount}>
+                    <Text style={styles.sectionCountText}>{inactiveOrders.length}</Text>
                   </View>
+                </View>
+                {inactiveOrders.map((order, idx) => (
+                  <Reanimated.View
+                    key={order.id}
+                    entering={FadeInDown.duration(300).delay((idx + 4) * 60)}
+                  >
+                    <View style={[styles.orderCard, { opacity: 0.55 }]}>
+                      <View style={styles.orderInfo}>
+                        <View style={styles.orderHeader}>
+                          <View style={[styles.freqBadge, { backgroundColor: colors.surfaceAlt }]}>
+                            <Text style={[styles.freqBadgeText, { color: colors.textMuted }]}>
+                              {FREQUENCY_SHORT[order.frequency] ?? order.frequency}
+                            </Text>
+                          </View>
+                          <View style={styles.orderHeaderText}>
+                            <Text style={styles.orderAsset}>{order.assetId.slice(0, 16)}…</Text>
+                            <Text style={styles.orderDetail}>
+                              {order.unitsPerExecution} units · {FREQUENCY_LABELS[order.frequency]}
+                            </Text>
+                          </View>
+                        </View>
+                        <View style={styles.orderMetaRow}>
+                          <Ionicons name="checkmark-circle-outline" size={12} color={colors.textMuted} />
+                          <Text style={styles.orderExecutions}>
+                            {order.executionsCount} execution{order.executionsCount !== 1 ? 's' : ''} completed
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  </Reanimated.View>
                 ))}
-              </View>
+              </Reanimated.View>
             )}
           </>
         )}
@@ -256,14 +334,22 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
           style={{ marginTop: Space.lg }}
         />
 
-        <View style={{ height: 40 }} />
+        <View style={{ height: Space.xxl }} />
       </ScrollView>
 
       {/* Create Modal */}
       <Modal visible={showCreate} animationType="slide" transparent onRequestClose={() => setShowCreate(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>New Auto-Invest Plan</Text>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalIconWrap}>
+                <Ionicons name="add-circle" size={22} color={colors.textInverse} />
+              </View>
+              <View style={styles.modalHeaderText}>
+                <Text style={styles.modalTitle}>New auto-invest plan</Text>
+                <Text style={styles.modalSubtitle}>Automatically buy units on a schedule</Text>
+              </View>
+            </View>
 
             <Text style={styles.inputLabel}>Asset ID</Text>
             <TextInput
@@ -292,8 +378,11 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
                 return (
                   <Pressable
                     key={f}
-                    style={[styles.frequencyTab, isSelected && { backgroundColor: colors.brand }]}
+                    style={[styles.frequencyTab, isSelected && { backgroundColor: colors.brand, borderColor: colors.brand }]}
                     onPress={() => { haptic.selection(); setFrequency(f); }}
+                    accessibilityRole="button"
+                    accessibilityLabel={FREQUENCY_LABELS[f]}
+                    accessibilityState={{ selected: isSelected }}
                   >
                     <Text style={[styles.frequencyText, isSelected && { color: '#fff' }]}>
                       {FREQUENCY_LABELS[f]}
@@ -342,23 +431,83 @@ function createStyles(colors: ThemeColors) {
     container: { flex: 1, backgroundColor: colors.background },
     loadingBody: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     scrollContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
+
+    // Hero summary
+    heroCard: {
+      borderRadius: Radius.xl,
+      backgroundColor: colors.surface,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      padding: Space.lg,
+      marginTop: Space.sm,
+    },
+    heroIconRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.md,
+    },
+    heroIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: Radius.full,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    heroText: { flex: 1 },
+    heroTitle: {
+      fontSize: Type.subtitle.size,
+      fontFamily: Typography.family.semibold,
+      color: colors.textPrimary,
+      letterSpacing: Type.subtitle.letterSpacing,
+    },
+    heroSubtitle: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+      color: colors.textSecondary,
+      marginTop: 2,
+    },
+
     introText: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
       lineHeight: 20,
-      marginTop: Space.md,
-      marginBottom: Space.lg,
+      marginTop: Space.lg,
+      marginBottom: Space.md,
     },
-    section: { marginTop: Space.md },
+
+    // Section headers
+    sectionHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm,
+      marginTop: Space.lg,
+      marginBottom: Space.sm,
+      paddingHorizontal: Space.xs,
+    },
     sectionTitle: {
-      fontSize: Type.caption.size,
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.semibold,
+      color: colors.textPrimary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.8,
+      opacity: 0.7,
+    },
+    sectionCount: {
+      backgroundColor: colors.surfaceAlt,
+      borderRadius: Radius.full,
+      paddingHorizontal: Space.sm,
+      paddingVertical: 2,
+      minWidth: 24,
+      alignItems: 'center',
+    },
+    sectionCountText: {
+      fontSize: Type.meta.size,
       fontFamily: Typography.family.semibold,
       color: colors.textSecondary,
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
-      marginBottom: Space.sm,
     },
+
+    // Order cards
     orderCard: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -376,8 +525,21 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       gap: Space.sm,
     },
+    freqBadge: {
+      width: 36,
+      height: 36,
+      borderRadius: Radius.md,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    freqBadgeText: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.bold,
+      color: colors.brand,
+    },
+    orderHeaderText: { flex: 1 },
     orderAsset: {
-      fontSize: Type.body.size,
+      fontSize: Type.bodyEmphasis.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
     },
@@ -385,27 +547,32 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
-      marginTop: Space.xs,
+      marginTop: 2,
+    },
+    orderMetaRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      marginTop: 6,
     },
     orderMaxPrice: {
       fontSize: Type.meta.size,
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
-      marginTop: 2,
     },
     orderNext: {
       fontSize: Type.meta.size,
       fontFamily: Typography.family.medium,
       color: colors.brand,
-      marginTop: 4,
     },
     orderExecutions: {
       fontSize: Type.meta.size,
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
-      marginTop: 2,
     },
     cancelButton: { padding: Space.sm },
+
+    // Modal
     modalOverlay: {
       flex: 1,
       justifyContent: 'center',
@@ -417,17 +584,38 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.xl,
       padding: Space.lg,
     },
+    modalHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.md,
+      marginBottom: Space.lg,
+    },
+    modalIconWrap: {
+      width: 44,
+      height: 44,
+      borderRadius: Radius.full,
+      backgroundColor: colors.brand,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    modalHeaderText: { flex: 1 },
     modalTitle: {
       fontSize: Type.subtitle.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
-      marginBottom: Space.md,
+      letterSpacing: Type.subtitle.letterSpacing,
+    },
+    modalSubtitle: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+      color: colors.textSecondary,
+      marginTop: 2,
     },
     inputLabel: {
       fontSize: Type.meta.size,
       fontFamily: Typography.family.medium,
       color: colors.textSecondary,
-      marginTop: Space.sm,
+      marginTop: Space.sm + 2,
       marginBottom: Space.xs,
     },
     input: {
@@ -435,7 +623,7 @@ function createStyles(colors: ThemeColors) {
       borderColor: colors.border,
       borderRadius: Radius.md,
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
+      paddingVertical: Space.sm + 2,
       fontSize: Type.body.size,
       fontFamily: Typography.family.regular,
       color: colors.textPrimary,
@@ -446,9 +634,11 @@ function createStyles(colors: ThemeColors) {
     },
     frequencyTab: {
       flex: 1,
-      paddingVertical: Space.sm,
+      paddingVertical: Space.sm + 2,
       borderRadius: Radius.md,
       backgroundColor: colors.surfaceAlt,
+      borderWidth: 1,
+      borderColor: colors.border,
       alignItems: 'center',
     },
     frequencyText: {

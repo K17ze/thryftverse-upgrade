@@ -116,11 +116,11 @@ export function CreatorDraftListScreen() {
           />
         </View>
       ) : (
-        <View style={[styles.draftIcon, { backgroundColor: item.type === 'look' ? '#5856d620' : '#ff950020' }]}>
+        <View style={[styles.draftIcon, { backgroundColor: item.type === 'look' ? colors.discovery + '20' : colors.bronze + '20' }]}>
           <Ionicons
             name={item.type === 'look' ? 'shirt-outline' : 'film-outline'}
             size={20}
-            color={item.type === 'look' ? '#5856d6' : '#ff9500'}
+            color={item.type === 'look' ? colors.discovery : colors.bronze}
           />
         </View>
       )}

@@ -165,7 +165,7 @@ export function PosterFrameStrip({
               )}
               {pubState === 'uploaded' && (
                 <View style={styles.pubStateBadge}>
-                  <Ionicons name="checkmark-circle" size={14} color="#4cd964" />
+                  <Ionicons name="checkmark-circle" size={14} color={colors.success} />
                 </View>
               )}
               {pubState === 'failed' && (

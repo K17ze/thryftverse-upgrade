@@ -95,7 +95,7 @@ export const POSTER_TEMPLATES: PosterTemplate[] = [
     backgroundColor: '#1a1a2e', filter: 'clarendon',
     textLayers: [
       { text: 'FRESH DROP', color: '#ffffff', fontFamily: 'bold', fontSize: 32, x: 40, y: 120 },
-      { text: 'Just listed', color: '#ffcc00', fontFamily: 'modern', fontSize: 18, x: 40, y: 170 },
+      { text: 'Just listed', color: '#C9A46A', fontFamily: 'modern', fontSize: 18, x: 40, y: 170 },
     ],
     stickers: [{ type: 'emoji', content: '🔥', x: 280, y: 120 }],
     thumbnailColor: '#1a1a2e', icon: 'flame',
@@ -104,11 +104,11 @@ export const POSTER_TEMPLATES: PosterTemplate[] = [
     id: 'tpl_auction_live', name: 'Auction Live', category: 'auction', layout: 'single',
     backgroundColor: '#0f3460', filter: 'juno',
     textLayers: [
-      { text: 'LIVE AUCTION', color: '#ff3b30', fontFamily: 'bold', fontSize: 28, x: 30, y: 100 },
+      { text: 'LIVE AUCTION', color: '#9b0202', fontFamily: 'bold', fontSize: 28, x: 30, y: 100 },
       { text: 'Bid now!', color: '#ffffff', fontFamily: 'classic', fontSize: 18, x: 30, y: 150 },
     ],
     stickers: [
-      { type: 'countdown', content: 'Ends in 2h', color: '#ff3b30', x: 30, y: 200 },
+      { type: 'countdown', content: 'Ends in 2h', color: '#9b0202', x: 30, y: 200 },
       { type: 'emoji', content: '🔨', x: 300, y: 100 },
     ],
     thumbnailColor: '#0f3460', icon: 'hammer',
@@ -117,7 +117,7 @@ export const POSTER_TEMPLATES: PosterTemplate[] = [
     id: 'tpl_coown_open', name: 'Co-Own Open', category: 'coown', layout: 'single',
     backgroundColor: '#16213e', filter: 'ludwig',
     textLayers: [
-      { text: 'CO-OWN', color: '#4cd964', fontFamily: 'bold', fontSize: 30, x: 40, y: 110 },
+      { text: 'CO-OWN', color: '#215634', fontFamily: 'bold', fontSize: 30, x: 40, y: 110 },
       { text: 'Split the cost', color: '#ffffff', fontFamily: 'modern', fontSize: 16, x: 40, y: 160 },
     ],
     stickers: [{ type: 'emoji', content: '🤝', x: 290, y: 110 }],
@@ -125,23 +125,23 @@ export const POSTER_TEMPLATES: PosterTemplate[] = [
   },
   {
     id: 'tpl_price_drop', name: 'Price Drop', category: 'sale', layout: 'single',
-    backgroundColor: '#e94560', filter: 'clarendon',
+    backgroundColor: '#7B0E1E', filter: 'clarendon',
     textLayers: [
       { text: 'PRICE DROP', color: '#ffffff', fontFamily: 'bold', fontSize: 32, x: 30, y: 120, backgroundColor: 'rgba(0,0,0,0.3)' },
-      { text: 'Was £120  →  Now £80', color: '#ffcc00', fontFamily: 'classic', fontSize: 20, x: 30, y: 180 },
+      { text: 'Was £120  →  Now £80', color: '#C9A46A', fontFamily: 'classic', fontSize: 20, x: 30, y: 180 },
     ],
     stickers: [{ type: 'emoji', content: '📉', x: 300, y: 120 }],
-    thumbnailColor: '#e94560', icon: 'trending-down',
+    thumbnailColor: '#7B0E1E', icon: 'trending-down',
   },
   {
     id: 'tpl_new_tags', name: 'New With Tags', category: 'drop', layout: 'single',
-    backgroundColor: '#1dd1a1', filter: 'perpetua',
+    backgroundColor: '#1C5631', filter: 'perpetua',
     textLayers: [
       { text: 'NEW WITH TAGS', color: '#ffffff', fontFamily: 'bold', fontSize: 26, x: 30, y: 120 },
       { text: 'Never worn', color: '#16213e', fontFamily: 'modern', fontSize: 16, x: 30, y: 170 },
     ],
     stickers: [{ type: 'emoji', content: '🏷️', x: 300, y: 120 }],
-    thumbnailColor: '#1dd1a1', icon: 'pricetag',
+    thumbnailColor: '#1C5631', icon: 'pricetag',
   },
   {
     id: 'tpl_vintage', name: 'Vintage Find', category: 'general', layout: 'single',
@@ -155,7 +155,7 @@ export const POSTER_TEMPLATES: PosterTemplate[] = [
   },
   {
     id: 'tpl_flash_sale', name: 'Flash Sale', category: 'sale', layout: 'single',
-    backgroundColor: '#ff6b6b', filter: 'clarendon',
+    backgroundColor: '#9A6B7A', filter: 'clarendon',
     textLayers: [
       { text: 'FLASH SALE', color: '#ffffff', fontFamily: 'bold', fontSize: 32, x: 30, y: 100 },
       { text: '24 hours only', color: '#ffffff', fontFamily: 'modern', fontSize: 18, x: 30, y: 155 },
@@ -164,42 +164,42 @@ export const POSTER_TEMPLATES: PosterTemplate[] = [
       { type: 'countdown', content: '23:59:59', color: '#ffffff', x: 30, y: 200 },
       { type: 'emoji', content: '⚡', x: 300, y: 100 },
     ],
-    thumbnailColor: '#ff6b6b', icon: 'flash',
+    thumbnailColor: '#9A6B7A', icon: 'flash',
   },
   {
     id: 'tpl_mystery', name: 'Mystery Box', category: 'general', layout: 'single',
-    backgroundColor: '#5f27cd', filter: 'slumber',
+    backgroundColor: '#6B3245', filter: 'slumber',
     textLayers: [
       { text: 'MYSTERY BOX', color: '#ffffff', fontFamily: 'bold', fontSize: 28, x: 30, y: 120 },
-      { text: 'Worth £200+ inside', color: '#ffcc00', fontFamily: 'modern', fontSize: 16, x: 30, y: 170 },
+      { text: 'Worth £200+ inside', color: '#C9A46A', fontFamily: 'modern', fontSize: 16, x: 30, y: 170 },
     ],
     stickers: [{ type: 'emoji', content: '🎁', x: 300, y: 120 }],
-    thumbnailColor: '#5f27cd', icon: 'gift',
+    thumbnailColor: '#6B3245', icon: 'gift',
   },
   {
     id: 'tpl_quick_sell', name: 'Quick Sell', category: 'sale', layout: 'split-h',
-    backgroundColor: '#ff9500', filter: 'juno',
+    backgroundColor: '#8A6A3F', filter: 'juno',
     textLayers: [
       { text: 'QUICK SELL', color: '#ffffff', fontFamily: 'bold', fontSize: 28, x: 30, y: 80 },
     ],
     stickers: [{ type: 'emoji', content: '💨', x: 280, y: 80 }],
-    thumbnailColor: '#ff9500', icon: 'speedometer',
+    thumbnailColor: '#8A6A3F', icon: 'speedometer',
   },
   {
     id: 'tpl_bundle', name: 'Bundle Deal', category: 'sale', layout: 'grid-2x2',
-    backgroundColor: '#48dbfb', filter: 'lark',
+    backgroundColor: '#06489A', filter: 'lark',
     textLayers: [
       { text: 'BUNDLE', color: '#ffffff', fontFamily: 'bold', fontSize: 28, x: 30, y: 80 },
       { text: '3 for £50', color: '#0f3460', fontFamily: 'classic', fontSize: 18, x: 30, y: 130 },
     ],
     stickers: [{ type: 'emoji', content: '📦', x: 280, y: 80 }],
-    thumbnailColor: '#48dbfb', icon: 'cube',
+    thumbnailColor: '#06489A', icon: 'cube',
   },
   {
     id: 'tpl_rare', name: 'Rare Find', category: 'general', layout: 'single',
     backgroundColor: '#222f3e', filter: 'moon',
     textLayers: [
-      { text: 'RARE', color: '#ffcc00', fontFamily: 'bold', fontSize: 36, x: 40, y: 120 },
+      { text: 'RARE', color: '#C9A46A', fontFamily: 'bold', fontSize: 36, x: 40, y: 120 },
       { text: 'Limited edition', color: '#c8d6e5', fontFamily: 'modern', fontSize: 16, x: 40, y: 180 },
     ],
     stickers: [{ type: 'emoji', content: '💎', x: 290, y: 120 }],
@@ -207,13 +207,13 @@ export const POSTER_TEMPLATES: PosterTemplate[] = [
   },
   {
     id: 'tpl_swap', name: 'Swap Request', category: 'general', layout: 'single',
-    backgroundColor: '#54a0ff', filter: 'aden',
+    backgroundColor: '#4A7AC4', filter: 'aden',
     textLayers: [
       { text: 'SWAP?', color: '#ffffff', fontFamily: 'bold', fontSize: 36, x: 40, y: 120 },
       { text: 'Open to trades', color: '#ffffff', fontFamily: 'modern', fontSize: 16, x: 40, y: 180 },
     ],
     stickers: [{ type: 'emoji', content: '🔄', x: 280, y: 120 }],
-    thumbnailColor: '#54a0ff', icon: 'repeat',
+    thumbnailColor: '#4A7AC4', icon: 'repeat',
   },
 ];
 

@@ -173,7 +173,7 @@ export function CreatorPublishSheet({ visible, onClose }: CreatorPublishSheetPro
 
         {stage === 'success' && (
           <View style={styles.centerState}>
-            <Ionicons name="checkmark-circle" size={48} color="#4cd964" />
+            <Ionicons name="checkmark-circle" size={48} color={colors.success} />
             <Text style={styles.centerStateTitle}>Published!</Text>
             <Text style={styles.centerStateText}>Your {document.type} is now live.</Text>
             <Pressable

@@ -2,7 +2,7 @@ import React, { useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, Image, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
-import { useAppTheme } from '../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useCreator } from './CreatorContext';
 import { getAllLayersSorted } from './composition';
 import { SheetContainer, PressScale } from './CreatorAnimations';
@@ -130,11 +130,11 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
                   accessibilityRole="button"
                   hitSlop={8}
                 >
-                  <View style={[styles.thumbnail, { backgroundColor: `${getLayerColor(layer.type)}20` }, layer.hidden && styles.thumbnailHidden]}>
+                  <View style={[styles.thumbnail, { backgroundColor: `${getLayerColor(layer.type, colors)}20` }, layer.hidden && styles.thumbnailHidden]}>
                     {thumbSource ? (
                       <Image source={thumbSource} style={styles.thumbnailImage} resizeMode="cover" />
                     ) : (
-                      <Ionicons name={LAYER_ICONS[layer.type] as any} size={20} color={layer.hidden ? colors.textMuted : getLayerColor(layer.type)} />
+                      <Ionicons name={LAYER_ICONS[layer.type] as any} size={20} color={layer.hidden ? colors.textMuted : getLayerColor(layer.type, colors)} />
                     )}
                     {layer.type === 'media' && layer.payload.mediaType === 'video' && (
                       <View style={styles.videoBadge}>
@@ -256,16 +256,16 @@ function getLayerThumbnailSource(layer: CreatorLayer): { uri: string } | null {
   }
 }
 
-function getLayerColor(type: CreatorLayer['type']): string {
+function getLayerColor(type: CreatorLayer['type'], colors: ThemeColors): string {
   switch (type) {
-    case 'media': return '#5ac8fa';
-    case 'text': return '#ffcc00';
-    case 'product': return '#ff9500';
-    case 'mention': return '#ff2d55';
-    case 'look': return '#5856d6';
-    case 'vote': return '#34c759';
-    case 'decorative': return '#4cd964';
-    default: return '#aaa';
+    case 'media': return colors.commerceTrust;
+    case 'text': return colors.antiqueGold;
+    case 'product': return colors.bronze;
+    case 'mention': return colors.social;
+    case 'look': return colors.discovery;
+    case 'vote': return colors.success;
+    case 'decorative': return colors.coownUp;
+    default: return colors.textMuted;
   }
 }
 

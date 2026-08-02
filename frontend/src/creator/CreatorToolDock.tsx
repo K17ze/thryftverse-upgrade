@@ -82,8 +82,8 @@ export function CreatorToolDock({
   // When solid (in a sheet): surface background, theme icons
   const iconColor = floating ? '#fff' : (selectedLayer ? colors.textSecondary : colors.textSecondary);
   const labelColor = floating ? 'rgba(255,255,255,0.7)' : colors.textMuted;
-  const dangerIconColor = floating ? '#ff6b6b' : colors.danger;
-  const dangerLabelColor = floating ? 'rgba(255,107,107,0.8)' : colors.danger;
+  const dangerIconColor = floating ? '#E06666' : colors.danger;
+  const dangerLabelColor = floating ? 'rgba(224,102,102,0.8)' : colors.danger;
 
   return (
     <View style={[styles.container, floating ? styles.containerFloating : { backgroundColor: colors.surface, borderTopColor: colors.border }]}>

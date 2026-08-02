@@ -4,6 +4,10 @@
  * Separate from push notifications, this screen lets users control which
  * categories of events trigger email notifications. All categories default
  * to sensible values (security alerts on, marketing off).
+ *
+ * Categories are grouped into sections (Essential, Shopping, Co-Own, Marketing)
+ * with coloured icon badges for visual identity — Pinterest/Instagram-quality
+ * information hierarchy, not a flat list.
  */
 
 import React from 'react';
@@ -19,6 +23,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
@@ -38,65 +43,106 @@ interface CategoryConfig {
   label: string;
   description: string;
   icon: string;
+  iconColor?: string;
   defaultEnabled: boolean;
+  locked?: boolean;
 }
 
-const CATEGORIES: CategoryConfig[] = [
+interface CategoryGroup {
+  title: string;
+  description: string;
+  categories: CategoryConfig[];
+}
+
+const GROUPS: CategoryGroup[] = [
   {
-    key: 'securityAlerts',
-    label: 'Security alerts',
-    description: 'New device logins, password changes, 2FA updates',
-    icon: 'shield-checkmark-outline',
-    defaultEnabled: true,
+    title: 'Essential',
+    description: 'Critical account and transaction emails',
+    categories: [
+      {
+        key: 'securityAlerts',
+        label: 'Security alerts',
+        description: 'New device logins, password changes, 2FA updates',
+        icon: 'shield-checkmark',
+        iconColor: '#215634',
+        defaultEnabled: true,
+        locked: true,
+      },
+      {
+        key: 'orderUpdates',
+        label: 'Order updates',
+        description: 'Purchases, shipping, delivery confirmations',
+        icon: 'bag',
+        iconColor: '#06489A',
+        defaultEnabled: true,
+      },
+      {
+        key: 'messageNotifications',
+        label: 'Messages',
+        description: 'New messages from buyers and sellers',
+        icon: 'mail',
+        iconColor: '#6B3245',
+        defaultEnabled: true,
+      },
+    ],
   },
   {
-    key: 'orderUpdates',
-    label: 'Order updates',
-    description: 'Purchases, shipping, delivery confirmations',
-    icon: 'bag-outline',
-    defaultEnabled: true,
+    title: 'Shopping',
+    description: 'Items, prices, and sellers you follow',
+    categories: [
+      {
+        key: 'priceDropAlerts',
+        label: 'Price drop alerts',
+        description: 'When saved items drop in price',
+        icon: 'trending-down',
+        iconColor: '#5F1616',
+        defaultEnabled: true,
+      },
+      {
+        key: 'newListingsFromFollowing',
+        label: 'New listings from followed sellers',
+        description: 'When a followed seller posts a new item',
+        icon: 'person-add',
+        iconColor: '#7B0E1E',
+        defaultEnabled: true,
+      },
+    ],
   },
   {
-    key: 'messageNotifications',
-    label: 'Messages',
-    description: 'New messages from buyers and sellers',
-    icon: 'mail-outline',
-    defaultEnabled: true,
+    title: 'Co-Own',
+    description: 'Distribution payments and governance events',
+    categories: [
+      {
+        key: 'distributionNotices',
+        label: 'Distribution notices',
+        description: 'Dividend and revenue-share payments',
+        icon: 'cash',
+        iconColor: '#1C5631',
+        defaultEnabled: true,
+      },
+      {
+        key: 'corporateActionNotices',
+        label: 'Corporate actions',
+        description: 'Governance votes, buybacks, splits',
+        icon: 'briefcase',
+        iconColor: '#8A6A3F',
+        defaultEnabled: true,
+      },
+    ],
   },
   {
-    key: 'priceDropAlerts',
-    label: 'Price drop alerts',
-    description: 'When saved items drop in price',
-    icon: 'trending-down-outline',
-    defaultEnabled: true,
-  },
-  {
-    key: 'newListingsFromFollowing',
-    label: 'New listings from sellers you follow',
-    description: 'When a followed seller posts a new item',
-    icon: 'person-add-outline',
-    defaultEnabled: true,
-  },
-  {
-    key: 'distributionNotices',
-    label: 'Co-Own distribution notices',
-    description: 'Dividend and revenue-share payments',
-    icon: 'cash-outline',
-    defaultEnabled: true,
-  },
-  {
-    key: 'corporateActionNotices',
-    label: 'Co-Own corporate actions',
-    description: 'Governance votes, buybacks, splits',
-    icon: 'briefcase-outline',
-    defaultEnabled: true,
-  },
-  {
-    key: 'marketing',
-    label: 'Promotions and offers',
-    description: 'Featured collections, seasonal campaigns',
-    icon: 'sparkles-outline',
-    defaultEnabled: false,
+    title: 'Marketing',
+    description: 'Optional promotional content',
+    categories: [
+      {
+        key: 'marketing',
+        label: 'Promotions and offers',
+        description: 'Featured collections, seasonal campaigns',
+        icon: 'sparkles',
+        iconColor: '#C9A46A',
+        defaultEnabled: false,
+      },
+    ],
   },
 ];
 
@@ -148,6 +194,10 @@ export default function EmailNotificationsScreen({ navigation }: Props) {
     }
   };
 
+  // Count enabled categories for hero summary
+  const allCategories = GROUPS.flatMap(g => g.categories);
+  const enabledCount = allCategories.filter(c => preferences?.[c.key] ?? c.defaultEnabled).length;
+
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -167,9 +217,22 @@ export default function EmailNotificationsScreen({ navigation }: Props) {
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => { setIsRefreshing(true); void load(); }} tintColor={colors.textSecondary} />}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.introText}>
-          Choose which emails you'd like to receive. You can change these at any time.
-        </Text>
+        {/* Hero summary — visual identity */}
+        <Reanimated.View entering={FadeInDown.duration(300)}>
+          <View style={styles.heroCard}>
+            <View style={styles.heroIconRow}>
+              <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
+                <Ionicons name="mail" size={22} color={colors.textInverse} />
+              </View>
+              <View style={styles.heroText}>
+                <Text style={styles.heroTitle}>Email preferences</Text>
+                <Text style={styles.heroSubtitle}>
+                  {enabledCount} of {allCategories.length} categories active
+                </Text>
+              </View>
+            </View>
+          </View>
+        </Reanimated.View>
 
         {error && !preferences ? (
           <EmptyState
@@ -180,35 +243,66 @@ export default function EmailNotificationsScreen({ navigation }: Props) {
             onCtaPress={() => { setIsLoading(true); void load(); }}
           />
         ) : (
-          <View style={styles.categoriesList}>
-            {CATEGORIES.map((category) => {
-              const isEnabled = preferences?.[category.key] ?? category.defaultEnabled;
-              const isUpdating = updatingKeys.has(category.key);
-              return (
-                <View key={category.key} style={styles.categoryRow}>
-                  <View style={styles.categoryIcon}>
-                    <Ionicons name={category.icon as any} size={20} color={colors.textSecondary} />
-                  </View>
-                  <View style={styles.categoryInfo}>
-                    <Text style={styles.categoryLabel}>{category.label}</Text>
-                    <Text style={styles.categoryDescription}>{category.description}</Text>
-                  </View>
-                  <Switch
-                    value={isEnabled}
-                    onValueChange={(v) => handleToggle(category, v)}
-                    disabled={isUpdating}
-                    trackColor={{ false: colors.surfaceAlt, true: colors.brand }}
-                    thumbColor="#fff"
-                    accessibilityRole="switch"
-                    accessibilityLabel={category.label}
-                  />
-                </View>
-              );
-            })}
-          </View>
+          GROUPS.map((group, groupIdx) => (
+            <Reanimated.View
+              key={group.title}
+              entering={FadeInDown.duration(300).delay((groupIdx + 1) * 80)}
+            >
+              {/* Section header */}
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>{group.title}</Text>
+                <Text style={styles.sectionDescription}>{group.description}</Text>
+              </View>
+
+              {/* Grouped card with category rows */}
+              <View style={styles.categoriesList}>
+                {group.categories.map((category, catIdx) => {
+                  const isEnabled = preferences?.[category.key] ?? category.defaultEnabled;
+                  const isUpdating = updatingKeys.has(category.key);
+                  const isLocked = category.locked;
+                  const iconColor = category.iconColor ?? colors.textSecondary;
+                  return (
+                    <View
+                      key={category.key}
+                      style={[
+                        styles.categoryRow,
+                        catIdx < group.categories.length - 1 && styles.categoryRowBorder,
+                      ]}
+                    >
+                      {/* Coloured icon badge — visual identity per category */}
+                      <View style={[styles.categoryIcon, { backgroundColor: iconColor + '18' }]}>
+                        <Ionicons name={category.icon as any} size={20} color={iconColor} />
+                      </View>
+                      <View style={styles.categoryInfo}>
+                        <View style={styles.categoryLabelRow}>
+                          <Text style={styles.categoryLabel}>{category.label}</Text>
+                          {isLocked && (
+                            <View style={styles.lockedBadge}>
+                              <Ionicons name="lock-closed" size={10} color={colors.textMuted} />
+                              <Text style={styles.lockedText}>Always on</Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={styles.categoryDescription}>{category.description}</Text>
+                      </View>
+                      <Switch
+                        value={isEnabled}
+                        onValueChange={(v) => handleToggle(category, v)}
+                        disabled={isUpdating || isLocked}
+                        trackColor={{ false: colors.surfaceAlt, true: colors.brand }}
+                        thumbColor="#fff"
+                        accessibilityRole="switch"
+                        accessibilityLabel={category.label}
+                      />
+                    </View>
+                  );
+                })}
+              </View>
+            </Reanimated.View>
+          ))
         )}
 
-        <View style={{ height: 40 }} />
+        <View style={{ height: Space.xxl }} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -219,14 +313,64 @@ function createStyles(colors: ThemeColors) {
     container: { flex: 1, backgroundColor: colors.background },
     loadingBody: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     scrollContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
-    introText: {
+
+    // Hero summary
+    heroCard: {
+      borderRadius: Radius.xl,
+      backgroundColor: colors.surface,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      padding: Space.lg,
+      marginTop: Space.sm,
+    },
+    heroIconRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.md,
+    },
+    heroIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: Radius.full,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    heroText: { flex: 1 },
+    heroTitle: {
+      fontSize: Type.subtitle.size,
+      fontFamily: Typography.family.semibold,
+      color: colors.textPrimary,
+      letterSpacing: Type.subtitle.letterSpacing,
+    },
+    heroSubtitle: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
-      lineHeight: 20,
-      marginTop: Space.md,
-      marginBottom: Space.lg,
+      marginTop: 2,
     },
+
+    // Section headers
+    sectionHeader: {
+      marginTop: Space.lg,
+      marginBottom: Space.sm,
+      paddingHorizontal: Space.xs,
+    },
+    sectionTitle: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.semibold,
+      color: colors.textPrimary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.8,
+      opacity: 0.7,
+    },
+    sectionDescription: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+      color: colors.textMuted,
+      marginTop: 2,
+    },
+
+    // Category cards
     categoriesList: {
       backgroundColor: colors.surface,
       borderRadius: Radius.lg,
@@ -240,6 +384,8 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.md,
       paddingHorizontal: Space.md,
       gap: Space.md,
+    },
+    categoryRowBorder: {
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.borderSubtle,
     },
@@ -247,21 +393,39 @@ function createStyles(colors: ThemeColors) {
       width: 36,
       height: 36,
       borderRadius: Radius.md,
-      backgroundColor: colors.surfaceAlt,
       justifyContent: 'center',
       alignItems: 'center',
     },
     categoryInfo: { flex: 1 },
+    categoryLabelRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm,
+    },
     categoryLabel: {
       fontSize: Type.body.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
     },
+    lockedBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 3,
+      backgroundColor: colors.surfaceAlt,
+      borderRadius: Radius.full,
+      paddingHorizontal: Space.xs + 2,
+      paddingVertical: 2,
+    },
+    lockedText: {
+      fontSize: 10,
+      fontFamily: Typography.family.medium,
+      color: colors.textMuted,
+    },
     categoryDescription: {
       fontSize: Type.meta.size,
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
-      marginTop: 2,
+      marginTop: 3,
       lineHeight: 16,
     },
   });
