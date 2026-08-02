@@ -10,6 +10,7 @@ import {
   GestureResponderEvent,
   Linking,
   ScrollView,
+  PanResponder,
 } from 'react-native';
 import { CameraView, useCameraPermissions, CameraType } from 'expo-camera';
 import * as MediaLibrary from 'expo-media-library/legacy';
@@ -95,6 +96,7 @@ export default function CreatorCamera({
   const [countdown, setCountdown] = useState<number | null>(null);
   const reviewOpacity = useRef(new Animated.Value(0)).current;
   const countdownAnim = useRef(new Animated.Value(0)).current;
+  const captureFlash = useRef(new Animated.Value(0)).current;
 
   const isPoster = mode === 'poster';
   const isVisualSearch = mode === 'visual-search';
@@ -165,6 +167,61 @@ export default function CreatorCamera({
     setShowGrid((p) => !p);
   }, [haptic]);
 
+  // ── Pinch-to-zoom (Snapchat pattern) ──
+  // Tracks two-finger pinch distance and maps it to a smooth zoom factor.
+  // The zoom factor is separate from the stepped zoomIndex — it provides
+  // a continuous 1x–4x range that snaps to the nearest step on release.
+  const pinchBaseDist = useRef(0);
+  const pinchStartZoom = useRef(1);
+  const [pinchZoom, setPinchZoom] = useState(1);
+
+  const pinchResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_evt, gestureState) => gestureState.numberActiveTouches === 2,
+      onPanResponderGrant: (evt) => {
+        const touches = evt.nativeEvent.touches;
+        if (touches.length >= 2) {
+          const dx = touches[0].pageX - touches[1].pageX;
+          const dy = touches[0].pageY - touches[1].pageY;
+          pinchBaseDist.current = Math.sqrt(dx * dx + dy * dy);
+          pinchStartZoom.current = zoom;
+        }
+      },
+      onPanResponderMove: (evt) => {
+        if (pinchBaseDist.current === 0) return;
+        const touches = evt.nativeEvent.touches;
+        if (touches.length < 2) return;
+        const dx = touches[0].pageX - touches[1].pageX;
+        const dy = touches[0].pageY - touches[1].pageY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const ratio = dist / pinchBaseDist.current;
+        const newZoom = Math.max(1, Math.min(4, pinchStartZoom.current * ratio));
+        setPinchZoom(newZoom);
+      },
+      onPanResponderRelease: () => {
+        // Snap to nearest zoom step on release
+        pinchBaseDist.current = 0;
+        setPinchZoom((currentZoom) => {
+          // Find nearest step
+          if (currentZoom < 0.75) setZoomIndex(0); // 0.5x
+          else if (currentZoom < 1.5) setZoomIndex(1); // 1x
+          else if (currentZoom < 2.5) setZoomIndex(2); // 2x
+          else setZoomIndex(2); // cap at 2x
+          return 1; // reset pinch zoom
+        });
+        haptic.selection();
+      },
+      onPanResponderTerminate: () => {
+        pinchBaseDist.current = 0;
+        setPinchZoom(1);
+      },
+    }),
+  ).current;
+
+  // Effective zoom = stepped zoom × pinch multiplier (clamped)
+  const effectiveZoom = Math.max(0.5, Math.min(4, zoom * pinchZoom));
+
   // ── Capture with optional timer ──
   const takePhoto = useCallback(async () => {
     if (!cameraRef.current || countdown !== null) return;
@@ -195,6 +252,15 @@ export default function CreatorCamera({
       });
       if (photo?.uri) {
         haptic.medium();
+        // Capture flash — subtle white overlay (Snapchat pattern)
+        if (!reducedMotion) {
+          captureFlash.setValue(1);
+          Animated.timing(captureFlash, {
+            toValue: 0,
+            duration: 200,
+            useNativeDriver: true,
+          }).start();
+        }
         setCapturedUri(photo.uri);
       }
     } catch {
@@ -348,7 +414,7 @@ export default function CreatorCamera({
 
   // ── Camera viewfinder ──
   return (
-    <View style={StyleSheet.absoluteFill}>
+    <View style={StyleSheet.absoluteFill} {...pinchResponder.panHandlers}>
       {/* Full-screen camera feed with tap-to-focus */}
       <Pressable style={StyleSheet.absoluteFill} onPress={handleTapFocus}>
         <CameraView
@@ -358,9 +424,15 @@ export default function CreatorCamera({
           flash={flash}
           mode="picture"
           enableTorch={flash === 'on'}
-          zoom={zoom}
+          zoom={effectiveZoom}
         />
       </Pressable>
+
+      {/* Capture flash — subtle white overlay on capture (Snapchat pattern) */}
+      <Animated.View
+        style={[styles.captureFlash, { opacity: captureFlash }]}
+        pointerEvents="none"
+      />
 
       {/* Refined gradient overlays — 0.25 top, 0.35 bottom (less heavy, more premium) */}
       <LinearGradient
@@ -399,6 +471,15 @@ export default function CreatorCamera({
             },
           ]}
         />
+      )}
+
+      {/* Pinch zoom indicator — subtle pill at bottom center during pinch */}
+      {pinchZoom > 1.05 && (
+        <View style={styles.zoomIndicator} pointerEvents="none">
+          <Text style={styles.zoomIndicatorText}>
+            {effectiveZoom.toFixed(1)}×
+          </Text>
+        </View>
       )}
 
       {/* Countdown overlay */}
@@ -464,7 +545,7 @@ export default function CreatorCamera({
             <Ionicons
               name={flash === 'off' ? 'flash-off' : flash === 'auto' ? 'flash-outline' : 'flash'}
               size={22}
-              color={flash === 'off' ? '#fff' : '#FFD60A'}
+              color={flash === 'off' ? '#fff' : '#C9A46A'}
             />
           </Pressable>
         </View>
@@ -510,7 +591,7 @@ export default function CreatorCamera({
           <Ionicons
             name={timerOption === 0 ? 'timer-outline' : 'timer'}
             size={CONTROL_RAIL_ICON}
-            color={timerOption > 0 ? '#FFD60A' : '#fff'}
+            color={timerOption > 0 ? '#C9A46A' : '#fff'}
           />
           <Text style={styles.railLabel}>{timerOption === 0 ? 'Timer' : `${timerOption}s`}</Text>
         </Pressable>
@@ -526,7 +607,7 @@ export default function CreatorCamera({
           <Ionicons
             name="grid-outline"
             size={CONTROL_RAIL_ICON}
-            color={showGrid ? '#FFD60A' : '#fff'}
+            color={showGrid ? '#C9A46A' : '#fff'}
           />
           <Text style={styles.railLabel}>Grid</Text>
         </Pressable>
@@ -792,6 +873,26 @@ const styles = StyleSheet.create({
     borderColor: '#fff',
     borderRadius: 4,
     pointerEvents: 'none',
+  },
+  // Pinch zoom indicator — subtle pill at bottom center
+  zoomIndicator: {
+    position: 'absolute',
+    bottom: 220,
+    alignSelf: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+  },
+  zoomIndicatorText: {
+    fontFamily: Typography.family.bold,
+    fontSize: 16,
+    color: '#fff',
+  },
+  // Capture flash — full-screen white overlay
+  captureFlash: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: '#fff',
   },
   // Countdown overlay
   countdownOverlay: {
