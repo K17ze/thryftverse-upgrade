@@ -397,7 +397,7 @@ function CreatorStudioInner() {
           blur. The tool dock sits on top of this gradient. */}
       <View style={[styles.bottomRailContainer, { paddingBottom: insets.bottom }]}>
         <LinearGradient
-          colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.7)']}
+          colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.15)', 'rgba(0,0,0,0.4)']}
           style={styles.bottomRailGradient}
         >
           <CreatorToolDock
@@ -438,7 +438,8 @@ function CreatorStudioInner() {
               {
                 backgroundColor: colors.surfaceElevated,
                 borderColor: colors.border,
-                bottom: insets.bottom + 72,
+                top: insets.top + 52,
+                right: 12,
               },
             ]}
           >
@@ -670,12 +671,12 @@ const styles = StyleSheet.create({
   },
   pageDotSegment: {
     flex: 1,
-    height: 3,
-    borderRadius: 2,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
   },
   pageDotFill: {
-    flex: 1,
-    height: 3,
+    height: 4,
     borderRadius: 2,
   },
   // ── Top bar row ──
@@ -762,7 +763,6 @@ const styles = StyleSheet.create({
   },
   overflowMenu: {
     position: 'absolute',
-    right: Space.sm,
     minWidth: 220,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,

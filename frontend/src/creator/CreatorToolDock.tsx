@@ -136,17 +136,16 @@ export function CreatorToolDock({
         >
           <Ionicons name="ellipsis-horizontal" size={24} color={iconColor} />
         </PressScale>
-        {!floating && (
-          <PressScale
-            onPress={handlePublish}
-            style={[styles.publishBtn, { backgroundColor: colors.brand }]}
-            accessibilityLabel="Next"
-            scale={0.97}
-            hitSlop={16}
-          >
-            <Text style={[styles.publishBtnText, { color: colors.textInverse }]}>Next</Text>
-          </PressScale>
-        )}
+        {/* Publish button — always visible, floating or solid */}
+        <PressScale
+          onPress={handlePublish}
+          style={[styles.publishBtn, { backgroundColor: colors.brand }]}
+          accessibilityLabel="Next"
+          scale={0.97}
+          hitSlop={16}
+        >
+          <Text style={[styles.publishBtnText, { color: colors.textInverse }]}>Next</Text>
+        </PressScale>
       </View>
     </View>
   );
@@ -172,6 +171,7 @@ function buildDefaultTools(
       { icon: 'images-outline', label: 'Media', action: () => onToolPress('media') },
       { icon: 'pricetag-outline', label: 'Product', action: () => onToolPress('product') },
       { icon: 'text-outline', label: 'Text', action: () => onToolPress('text') },
+      { icon: 'shapes-outline', label: 'Elements', action: () => onToolPress('shape') },
       ...(onLayoutPresets ? [{ icon: 'grid-outline' as const, label: 'Layout', action: onLayoutPresets }] : []),
     ];
   }
@@ -182,6 +182,7 @@ function buildDefaultTools(
     { icon: 'text-outline', label: 'Text', action: () => onToolPress('text') },
     { icon: 'stats-chart-outline', label: 'Poll', action: () => onToolPress('vote') },
     { icon: 'at-outline', label: 'Mention', action: () => onToolPress('mention') },
+    { icon: 'shapes-outline', label: 'Elements', action: () => onToolPress('shape') },
     ...(onAddPage ? [{ icon: 'add-circle-outline' as const, label: 'Add Page', action: onAddPage }] : []),
   ];
 }

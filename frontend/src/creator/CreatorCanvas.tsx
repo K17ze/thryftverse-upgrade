@@ -139,7 +139,7 @@ function EmptyCanvasState({ colors }: { colors: ReturnType<typeof useAppTheme>['
 
   useEffect(() => {
     scaleSV.value = withRepeat(
-      withTiming(1.08, { duration: 2200, easing: Easing.inOut(Easing.ease) }),
+      withTiming(1.06, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
       -1,
       true,
     );
@@ -154,14 +154,14 @@ function EmptyCanvasState({ colors }: { colors: ReturnType<typeof useAppTheme>['
     <View style={styles.emptyState} pointerEvents="none">
       <View style={styles.emptyStateIconWrap}>
         <Reanimated.View style={animatedIconStyle}>
-          <Ionicons name="add-circle-outline" size={56} color="rgba(255,255,255,0.25)" />
+          <Ionicons name="add-circle-outline" size={64} color="rgba(255,255,255,0.4)" />
         </Reanimated.View>
       </View>
       <Text style={styles.emptyStateTitle}>
-        Start creating
+        Tap a tool to start
       </Text>
       <Text style={styles.emptyStateSubtitle}>
-        Use the tools below to add media, text, and more
+        Media · Text · Product · Elements · Layout
       </Text>
     </View>
   );
