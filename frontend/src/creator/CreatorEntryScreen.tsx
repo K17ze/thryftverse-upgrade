@@ -143,27 +143,55 @@ export function CreatorEntryScreen({
 
   // ── Camera capture → create media layer → enter editor ──
   const handleCapture = useCallback((uri: string) => {
-    const layer: CreatorLayer = {
-      id: createStableId('media'),
-      type: 'media',
-      x: 0.5,
-      y: 0.5,
-      width: 1,
-      height: 1,
-      scale: 1,
-      rotation: 0,
-      zIndex: 0,
-      locked: false,
-      hidden: false,
-      opacity: 1,
-      payload: {
-        mediaUri: uri,
-        mediaType: 'image',
-        contentFit: 'cover',
+    // Get image dimensions to preserve aspect ratio
+    Image.getSize(uri, (imgW, imgH) => {
+      const imgRatio = imgW / imgH;
+      // Fit within canvas while preserving aspect ratio
+      const layer: CreatorLayer = {
+        id: createStableId('media'),
+        type: 'media',
+        x: 0.5,
+        y: 0.5,
+        width: 1,
+        height: 1 / imgRatio,
+        scale: 1,
+        rotation: 0,
+        zIndex: 0,
+        locked: false,
+        hidden: false,
         opacity: 1,
-      },
-    } as any;
-    onMediaSelected([layer]);
+        payload: {
+          mediaUri: uri,
+          mediaType: 'image',
+          contentFit: 'cover',
+          opacity: 1,
+        },
+      } as any;
+      onMediaSelected([layer]);
+    }, () => {
+      // Fallback: full-bleed if we can't get dimensions
+      const layer: CreatorLayer = {
+        id: createStableId('media'),
+        type: 'media',
+        x: 0.5,
+        y: 0.5,
+        width: 1,
+        height: 1,
+        scale: 1,
+        rotation: 0,
+        zIndex: 0,
+        locked: false,
+        hidden: false,
+        opacity: 1,
+        payload: {
+          mediaUri: uri,
+          mediaType: 'image',
+          contentFit: 'cover',
+          opacity: 1,
+        },
+      } as any;
+      onMediaSelected([layer]);
+    });
   }, [onMediaSelected]);
 
   // ── Gallery selection → create media layers → enter editor ──
