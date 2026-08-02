@@ -214,8 +214,9 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
         style={[
           s.modeBar,
           {
-            // Position ABOVE the shutter button (shutter is 80pt + 16pt padding)
-            bottom: Math.max(insets.bottom, 16) + 108,
+            // Position ABOVE the bottom bar (bottom bar is ~140pt tall
+            // including safe area padding + shutter + gallery thumbnail)
+            bottom: Math.max(insets.bottom, 16) + 156,
             opacity,
           },
         ]}
