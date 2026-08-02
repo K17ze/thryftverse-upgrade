@@ -272,8 +272,10 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
     <View style={s.container} {...panResponder.panHandlers}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      {/* Crossfade layer for mode transitions */}
-      <Animated.View style={[StyleSheet.absoluteFill, { opacity: modeTransition }]} pointerEvents="none">
+      {/* Camera — full interaction. The crossfade opacity is applied
+          via modeTransition but pointer events must stay enabled so
+          the shutter, mode switcher, and all controls remain tappable. */}
+      <Animated.View style={[StyleSheet.absoluteFill, { opacity: modeTransition }]} pointerEvents="box-none">
         <CreatorCamera
           mode={mode}
           onCapture={handleCapture}
@@ -367,6 +369,7 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: 8,
+    zIndex: 10,
   },
   modeContextText: {
     fontFamily: Typography.family.medium,
