@@ -62,6 +62,7 @@ import { DiscoverySectionHeader } from '../components/discover/DiscoverySectionH
 import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGrid';
 import { ProductAnalytics } from '../platform/product/productAnalytics';
 import { useFollowingFeed } from '../hooks/useFollowingFeed';
+import { useForYouFeed } from '../hooks/useForYouFeed';
 import { resolveListingMediaHeightRatio } from '../utils/listingMediaGeometry';
 import { safeValidateDocument, type CreatorDocument } from '../creator/composition';
 import { CreatorCanvas } from '../creator/CreatorCanvas';
@@ -400,6 +401,7 @@ export default function HomeScreen() {
   const haptic = useHaptic();
   const { listings, source, isSyncing, lastError, refreshListings, loadMoreListings, hasMore, isLoadingMore } = useBackendData();
   const followingFeed = useFollowingFeed();
+  const forYouFeed = useForYouFeed();
 
   const [refreshing, setRefreshing] = React.useState(false);
   const [peekItem, setPeekItem] = React.useState<ExploreTile | null>(null);
@@ -544,6 +546,7 @@ export default function HomeScreen() {
     setRefreshing(true);
     await refreshListings();
     void followingFeed.refresh();
+    void forYouFeed.refresh();
     setPostersLoading(true);
     fetchPosterStories({ active: true, limit: 20 })
       .then((res) => setRealPosters(res.items))
@@ -642,11 +645,43 @@ export default function HomeScreen() {
     });
   }, [followingFeed.listings, wishlist]);
 
-  const activeFeedData = feedMode === 'following' ? followingExploreData : exploreData;
-  const activeListings = feedMode === 'following' ? followingFeed.listings : listings;
+  // For You feed: transform personalised recommendations into ExploreTile shape
+  const forYouExploreData = React.useMemo<ExploreTile[]>(() => {
+    return forYouFeed.listings.map((item): ExploreTile => {
+      const primaryMediaUri = item.images?.[0] ?? '';
+      const posterUri = item.images?.find((uri) => !isVideoUri(uri));
+
+      return {
+        id: `item_${item.id}`,
+        type: 'listing',
+        mediaType: isVideoUri(primaryMediaUri) ? 'video' : 'image',
+        mediaUri: primaryMediaUri,
+        posterUri: isVideoUri(primaryMediaUri) ? posterUri : undefined,
+        likes: item.likes,
+        price: item.price,
+        routeId: item.id,
+        sellerId: item.sellerId,
+        caption: item.title,
+        category: item.subcategory || item.category,
+        aspectRatio: primaryMediaUri
+          ? resolveListingMediaHeightRatio(item)
+          : MISSING_MEDIA_HEIGHT_RATIO,
+        isSaved: wishlist.includes(item.id),
+      };
+    });
+  }, [forYouFeed.listings, wishlist]);
+
+  // For You mode uses personalised recommendations; fall back to all listings
+  // when the recommendation feed is empty or errored with no cached results.
+  const effectiveForYouData = forYouFeed.listings.length > 0 ? forYouExploreData : exploreData;
+  const effectiveForYouListings = forYouFeed.listings.length > 0 ? forYouFeed.listings : listings;
+
+  const activeFeedData = feedMode === 'following' ? followingExploreData : effectiveForYouData;
+  const activeListings = feedMode === 'following' ? followingFeed.listings : effectiveForYouListings;
   const showFollowingLoading = feedMode === 'following' && followingFeed.isLoading && !followingFeed.isRefreshing;
   const showFollowingRefreshing = feedMode === 'following' && followingFeed.isRefreshing;
-  const feedGridData = (showFeedLoadingSkeleton || showFollowingLoading) ? [] : activeFeedData;
+  const showForYouLoading = feedMode === 'foryou' && forYouFeed.isLoading && !forYouFeed.isRefreshing && forYouFeed.listings.length === 0;
+  const feedGridData = (showFeedLoadingSkeleton || showFollowingLoading || showForYouLoading) ? [] : activeFeedData;
 
   const closePeek = React.useCallback(() => {
     setPeekItem(null);

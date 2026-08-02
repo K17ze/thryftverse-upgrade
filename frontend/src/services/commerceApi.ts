@@ -645,3 +645,93 @@ export async function listUserTransactions(userId: string, limit = 50, offset = 
     `/users/${encodeURIComponent(userId)}/transactions?limit=${limit}&offset=${offset}`
   );
 }
+
+/* ─── Buyer Protection ─── */
+
+export interface BuyerProtectionClaim {
+  ticketId: string;
+  topic: string;
+  status: string;
+  createdAt: string;
+}
+
+export interface BuyerProtectionInfo {
+  orderId: string;
+  feeGbpMinor: number;
+  status: 'covered' | 'not_covered';
+  coverageAmountGbpMinor: number;
+  eligibleUntil: string;
+  claims: BuyerProtectionClaim[];
+}
+
+export async function fetchBuyerProtection(orderId: string): Promise<BuyerProtectionInfo> {
+  const payload = await fetchJson<{ ok: true; protection: BuyerProtectionInfo }>(
+    `/orders/${encodeURIComponent(orderId)}/protection`
+  );
+  return payload.protection;
+}
+
+export async function createBuyerProtectionClaim(
+  orderId: string,
+  input: { reason: string; description: string; evidenceUrls?: string[] }
+): Promise<{ ticketId: string; status: string; createdAt: string }> {
+  const payload = await fetchJson<{ ok: true; claim: { ticketId: string; status: string; createdAt: string } }>(
+    `/orders/${encodeURIComponent(orderId)}/protection/claim`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    }
+  );
+  return payload.claim;
+}
+
+/* ─── Seller Analytics ─── */
+
+export interface SellerAnalytics {
+  totalListings: number;
+  totalViews: number;
+  totalLikes: number;
+  totalSaves: number;
+  itemsSold: number;
+  revenueGbpMinor: number;
+  avgRating: number | null;
+  reviewCount: number;
+  responseRate: number | null;
+  shipWithinDays: number | null;
+  totalSales: number | null;
+  positiveRatingPct: number | null;
+  period: string;
+}
+
+export async function fetchSellerAnalytics(
+  sellerId: string,
+  period: '7d' | '30d' | '90d' = '30d'
+): Promise<SellerAnalytics> {
+  const payload = await fetchJson<{ ok: true; analytics: SellerAnalytics }>(
+    `/sellers/${encodeURIComponent(sellerId)}/analytics?period=${period}`
+  );
+  return payload.analytics;
+}
+
+export interface TopPerformerListing {
+  id: string;
+  title: string;
+  priceGbpMinor: number;
+  viewsCount: number;
+  likesCount: number;
+  savedCount: number;
+  status: string;
+  createdAt: string;
+  engagementScore: number;
+}
+
+export async function fetchTopPerformers(
+  sellerId: string,
+  limit: number = 10
+): Promise<TopPerformerListing[]> {
+  const payload = await fetchJson<{ ok: true; items: TopPerformerListing[] }>(
+    `/sellers/${encodeURIComponent(sellerId)}/analytics/top-performers?limit=${limit}`
+  );
+  return payload.items;
+}

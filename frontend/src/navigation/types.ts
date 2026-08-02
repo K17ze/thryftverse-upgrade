@@ -203,6 +203,7 @@ export type RootStackParamList = {
   ManageCollectionItems: { collectionId: string };
   CreateCollection: undefined;
   OrderSupport: { orderId: string };
+  BuyerProtection: { orderId: string };
   ChatMediaPreview: { mediaUri: string; mediaType?: 'image' | 'video'; senderLabel?: string; timestamp?: string; messageId?: string };
   // UI-18 — Reference-perfect product UX
   EditCollection: { collectionId: string };

@@ -129,6 +129,7 @@ import SharedConversationMediaScreen from '../screens/SharedConversationMediaScr
 import ManageCollectionItemsScreen from '../screens/ManageCollectionItemsScreen';
 import CreateCollectionScreen from '../screens/CreateCollectionScreen';
 import OrderSupportScreen from '../screens/OrderSupportScreen';
+import BuyerProtectionScreen from '../screens/BuyerProtectionScreen';
 import ChatMediaPreviewScreen from '../screens/ChatMediaPreviewScreen';
 // UI-18 — Reference-perfect product UX
 import EditCollectionScreen from '../screens/EditCollectionScreen';
@@ -353,6 +354,7 @@ export default function AppNavigator() {
       <Stack.Screen name="ManageCollectionItems" component={ManageCollectionItemsScreen} />
       <Stack.Screen name="CreateCollection" component={CreateCollectionScreen} options={modalScreenOptions} />
       <Stack.Screen name="OrderSupport" component={OrderSupportScreen} />
+      <Stack.Screen name="BuyerProtection" component={BuyerProtectionScreen} />
       <Stack.Screen name="ChatMediaPreview" component={ChatMediaPreviewScreen} options={modalScreenOptions} />
       {/* UI-18 — Reference-perfect product UX */}
       <Stack.Screen name="EditCollection" component={EditCollectionScreen} options={modalScreenOptions} />

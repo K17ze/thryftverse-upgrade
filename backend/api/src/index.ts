@@ -953,6 +953,14 @@ function isPublicRoute(method: string, path: string) {
     return true;
   }
 
+  if (method === 'GET' && path === '/feed/trending') {
+    return true;
+  }
+
+  if (method === 'GET' && path === '/feed/home') {
+    return true;
+  }
+
   if (method === 'GET' && /^\/users\/[^/]+\/profile$/.test(path)) {
     return true;
   }
@@ -14481,6 +14489,160 @@ app.get('/sellers/:sellerId/reviews', async (request, reply) => {
   };
 });
 
+/* ── Seller Analytics ── */
+
+// GET /sellers/:sellerId/analytics — seller performance dashboard data
+app.get('/sellers/:sellerId/analytics', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const paramsSchema = z.object({ sellerId: z.string().min(2) });
+  const { sellerId } = paramsSchema.parse(request.params);
+
+  if (request.authUser.userId !== sellerId) {
+    reply.code(403);
+    return { ok: false, error: 'You can only view your own analytics' };
+  }
+
+  const querySchema = z.object({
+    period: z.enum(['7d', '30d', '90d']).default('30d'),
+  });
+  const { period } = querySchema.parse(request.query);
+
+  const intervalMap: Record<string, string> = {
+    '7d': "INTERVAL '7 days'",
+    '30d': "INTERVAL '30 days'",
+    '90d': "INTERVAL '90 days'",
+  };
+  const interval = intervalMap[period];
+
+  const listingsResult = await db.query<{
+    total_listings: string | number;
+    total_views: string | number;
+    total_likes: string | number;
+    total_saves: string | number;
+    items_sold: string | number;
+    revenue_gbp_minor: string | number;
+  }>(
+    `
+      SELECT
+        COUNT(DISTINCT l.id) AS total_listings,
+        COALESCE(SUM(l.views_count), 0) AS total_views,
+        COALESCE(SUM(l.likes_count), 0) AS total_likes,
+        COALESCE(SUM(l.saved_count), 0) AS total_saves,
+        COUNT(CASE WHEN l.sold_at IS NOT NULL AND l.sold_at > NOW() - ${interval} THEN 1 END) AS items_sold,
+        COALESCE(SUM(CASE WHEN l.sold_at IS NOT NULL AND l.sold_at > NOW() - ${interval} THEN l.price_gbp_minor ELSE 0 END), 0) AS revenue_gbp_minor
+      FROM listings l
+      WHERE l.seller_id = $1
+    `,
+    [sellerId]
+  );
+
+  const reviewsResult = await db.query<{
+    avg_rating: string | number | null;
+    review_count: string | number;
+  }>(
+    `
+      SELECT AVG(r.rating) AS avg_rating, COUNT(r.id) AS review_count
+      FROM order_reviews r
+      WHERE r.reviewee_id = $1 AND r.created_at > NOW() - ${interval}
+    `,
+    [sellerId]
+  );
+
+  const trustResult = await db.query<{
+    response_rate: string | number | null;
+    ship_within_days: number | null;
+    total_sales: string | number | null;
+    positive_rating_pct: string | number | null;
+  }>(
+    `SELECT response_rate, ship_within_days, total_sales, positive_rating_pct
+     FROM seller_trust WHERE user_id = $1 LIMIT 1`,
+    [sellerId]
+  );
+
+  const row = listingsResult.rows[0] ?? {};
+  const reviews = reviewsResult.rows[0] ?? {};
+  const trust = trustResult.rows[0] ?? {};
+
+  return {
+    ok: true,
+    analytics: {
+      totalListings: Number(row.total_listings ?? 0),
+      totalViews: Number(row.total_views ?? 0),
+      totalLikes: Number(row.total_likes ?? 0),
+      totalSaves: Number(row.total_saves ?? 0),
+      itemsSold: Number(row.items_sold ?? 0),
+      revenueGbpMinor: Number(row.revenue_gbp_minor ?? 0),
+      avgRating: reviews.avg_rating ? Number(reviews.avg_rating) : null,
+      reviewCount: Number(reviews.review_count ?? 0),
+      responseRate: trust.response_rate ? Number(trust.response_rate) : null,
+      shipWithinDays: trust.ship_within_days ?? null,
+      totalSales: trust.total_sales ? Number(trust.total_sales) : null,
+      positiveRatingPct: trust.positive_rating_pct ? Number(trust.positive_rating_pct) : null,
+      period,
+    },
+  };
+});
+
+// GET /sellers/:sellerId/analytics/top-performers — top performing listings
+app.get('/sellers/:sellerId/analytics/top-performers', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const paramsSchema = z.object({ sellerId: z.string().min(2) });
+  const { sellerId } = paramsSchema.parse(request.params);
+
+  if (request.authUser.userId !== sellerId) {
+    reply.code(403);
+    return { ok: false, error: 'You can only view your own analytics' };
+  }
+
+  const querySchema = z.object({
+    limit: z.coerce.number().int().min(1).max(50).default(10),
+  });
+  const { limit } = querySchema.parse(request.query);
+
+  const result = await db.query<{
+    id: string;
+    title: string;
+    price_gbp_minor: number | string;
+    views_count: number;
+    likes_count: number;
+    saved_count: number;
+    status: string;
+    created_at: string;
+  }>(
+    `
+      SELECT id, title, price_gbp_minor, views_count, likes_count, saved_count, status, created_at
+      FROM listings
+      WHERE seller_id = $1
+      ORDER BY (views_count + likes_count * 3 + saved_count * 5) DESC
+      LIMIT $2
+    `,
+    [sellerId, limit]
+  );
+
+  return {
+    ok: true,
+    items: result.rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      priceGbpMinor: Number(row.price_gbp_minor),
+      viewsCount: row.views_count,
+      likesCount: row.likes_count,
+      savedCount: row.saved_count,
+      status: row.status,
+      createdAt: row.created_at,
+      engagementScore: row.views_count + row.likes_count * 3 + row.saved_count * 5,
+    })),
+  };
+});
+
 // ── Follow counts + follower/following lists ─────────────────────────
 
 app.get('/users/:userId/follow-counts', async (request, reply) => {
@@ -17123,6 +17285,207 @@ app.get('/feed/home', async () => {
       createdAt: row.created_at,
     })),
   };
+});
+
+// GET /feed/trending — trending listings based on engagement velocity.
+// Public endpoint. Supports window (24h/7d/30d), category filter, and limit.
+app.get('/feed/trending', async (request) => {
+  const querySchema = z.object({
+    window: z.enum(['24h', '7d', '30d']).default('24h'),
+    category: z.string().max(64).optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+  });
+  const { window: timeWindow, category, limit } = querySchema.parse(request.query);
+
+  const intervalMap: Record<string, string> = {
+    '24h': "INTERVAL '24 hours'",
+    '7d': "INTERVAL '7 days'",
+    '30d': "INTERVAL '30 days'",
+  };
+  const interval = intervalMap[timeWindow];
+
+  const params: Array<string | number> = [];
+  let categoryClause = '';
+  if (category) {
+    params.push(category);
+    categoryClause = `AND l.category = $${params.length}`;
+  }
+  params.push(limit);
+
+  const result = await readDb.query<{
+    id: string;
+    seller_id: string;
+    title: string;
+    description: string;
+    price_gbp: number | string;
+    image_url: string | null;
+    status: string;
+    category: string | null;
+    brand: string | null;
+    size: string | null;
+    condition: string | null;
+    original_price_gbp: number | string | null;
+    created_at: string;
+    recent_events: string | number;
+    velocity: string | number;
+  }>(
+    `
+      SELECT l.id, l.seller_id, l.title, l.description, l.price_gbp, l.image_url,
+             l.status, l.category, l.brand, l.size, l.condition,
+             l.original_price_gbp, l.created_at,
+             COALESCE(e.recent_events, 0) AS recent_events,
+             COALESCE(e.recent_events, 0)::float /
+               GREATEST(EXTRACT(EPOCH FROM (NOW() - l.created_at)) / 3600, 1) AS velocity
+      FROM listings l
+      LEFT JOIN (
+        SELECT listing_id, COUNT(*) AS recent_events
+        FROM listing_events
+        WHERE created_at > NOW() - ${interval}
+        GROUP BY listing_id
+      ) e ON e.listing_id = l.id
+      WHERE l.status = 'active'
+        AND l.sold_at IS NULL
+        ${categoryClause}
+        AND l.created_at > NOW() - INTERVAL '30 days'
+      ORDER BY velocity DESC, l.created_at DESC
+      LIMIT $${params.length}
+    `,
+    params
+  );
+
+  const listingIds = result.rows.map((r) => r.id);
+  const imagesResult = listingIds.length
+    ? await readDb.query<{ listing_id: string; image_url: string; sort_order: number }>(
+        `SELECT listing_id, image_url, sort_order FROM listing_images WHERE listing_id = ANY($1) ORDER BY sort_order`,
+        [listingIds]
+      )
+    : { rows: [] };
+
+  const imagesByListing = new Map<string, string[]>();
+  for (const img of imagesResult.rows) {
+    const arr = imagesByListing.get(img.listing_id) ?? [];
+    arr.push(img.image_url);
+    imagesByListing.set(img.listing_id, arr);
+  }
+
+  return {
+    ok: true,
+    window: timeWindow,
+    items: result.rows.map((row) => ({
+      id: row.id,
+      sellerId: row.seller_id,
+      title: row.title,
+      description: row.description,
+      priceGbp: Number(row.price_gbp),
+      imageUrl: row.image_url,
+      images: imagesByListing.get(row.id) ?? (row.image_url ? [row.image_url] : []),
+      status: row.status,
+      category: row.category,
+      brand: row.brand,
+      size: row.size,
+      condition: row.condition,
+      originalPriceGbp: row.original_price_gbp === null ? null : Number(row.original_price_gbp),
+      createdAt: row.created_at,
+      velocity: Number(row.velocity),
+    })),
+  };
+});
+
+// GET /feed/following — social activity feed from followed users.
+// Auth required. Returns recent listings and looks from followed sellers.
+app.get('/feed/following', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const querySchema = z.object({
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+    cursor: z.string().optional(),
+  });
+  const { limit, cursor } = querySchema.parse(request.query);
+
+  const cursorCondition = cursor
+    ? `AND created_at < $2`
+    : `AND created_at > NOW() - INTERVAL '7 days'`;
+  const cursorParams = cursor ? [request.authUser.userId, cursor, limit] : [request.authUser.userId, limit];
+
+  // Union of listings and looks from followed users
+  const listingsResult = await db.query<{
+    id: string;
+    seller_id: string;
+    title: string;
+    price_gbp: number | string;
+    image_url: string | null;
+    created_at: string;
+  }>(
+    `
+      SELECT l.id, l.seller_id, l.title, l.price_gbp, l.image_url, l.created_at
+      FROM listings l
+      JOIN user_follows uf ON uf.followee_id = l.seller_id
+      WHERE uf.follower_id = $1
+        AND l.status = 'active'
+        ${cursorCondition}
+      ORDER BY l.created_at DESC
+      LIMIT $${cursorParams.length}
+    `,
+    cursorParams
+  );
+
+  const looksResult = await db.query<{
+    id: string;
+    creator_id: string;
+    title: string;
+    media_url: string | null;
+    created_at: string;
+  }>(
+    `
+      SELECT lk.id, lk.creator_id, lk.title, lk.media_url, lk.created_at
+      FROM looks lk
+      JOIN user_follows uf ON uf.followee_id = lk.creator_id
+      WHERE uf.follower_id = $1
+        AND lk.status = 'published'
+        ${cursorCondition}
+      ORDER BY lk.created_at DESC
+      LIMIT $${cursorParams.length}
+    `,
+    cursorParams
+  );
+
+  // Merge and sort by created_at DESC
+  const items: Array<{
+    activityType: string;
+    entityId: string;
+    entityTitle: string;
+    actorId: string;
+    createdAt: string;
+    images: string[] | null;
+    priceGbpMinor: number | null;
+  }> = [
+    ...listingsResult.rows.map((r) => ({
+      activityType: 'listing',
+      entityId: r.id,
+      entityTitle: r.title,
+      actorId: r.seller_id,
+      createdAt: r.created_at,
+      images: r.image_url ? [r.image_url] : [],
+      priceGbpMinor: Math.round(Number(r.price_gbp) * 100),
+    })),
+    ...looksResult.rows.map((r) => ({
+      activityType: 'look',
+      entityId: r.id,
+      entityTitle: r.title,
+      actorId: r.creator_id,
+      createdAt: r.created_at,
+      images: r.media_url ? [r.media_url] : null,
+      priceGbpMinor: null,
+    })),
+  ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  const sliced = items.slice(0, limit);
+  const nextCursor = items.length > limit ? sliced[sliced.length - 1]?.createdAt ?? null : null;
+
+  return { ok: true, items: sliced, nextCursor };
 });
 
 app.post('/visual-search', async (request, reply) => {
@@ -35822,6 +36185,139 @@ app.get('/users/:userId/orders', async (request) => {
       sellerUsername: row.seller_username,
     })),
     nextCursor,
+  };
+});
+
+/* ── Buyer Protection ── */
+
+// GET /orders/:orderId/protection — buyer protection status for an order
+app.get('/orders/:orderId/protection', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
+  const { orderId } = paramsSchema.parse(request.params);
+
+  const orderResult = await db.query<{
+    buyer_id: string;
+    total_gbp: number | string;
+    buyer_protection_fee_gbp: number | string;
+    status: string;
+    delivered_at: string | null;
+    created_at: string;
+  }>(
+    `SELECT buyer_id, total_gbp, buyer_protection_fee_gbp, status, delivered_at, created_at
+     FROM orders WHERE id = $1 LIMIT 1`,
+    [orderId]
+  );
+
+  if (orderResult.rows.length === 0) {
+    reply.code(404);
+    return { ok: false, error: 'Order not found' };
+  }
+
+  const order = orderResult.rows[0];
+  if (order.buyer_id !== request.authUser.userId) {
+    reply.code(403);
+    return { ok: false, error: 'Only the buyer can view protection status' };
+  }
+
+  const feeGbpMinor = Math.round(Number(order.buyer_protection_fee_gbp) * 100);
+  const totalGbpMinor = Math.round(Number(order.total_gbp) * 100);
+  const coverageAmountGbpMinor = Math.min(totalGbpMinor, 50000); // capped at £500
+  const eligibleUntil = order.delivered_at
+    ? new Date(new Date(order.delivered_at).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString()
+    : new Date(new Date(order.created_at).getTime() + 60 * 24 * 60 * 60 * 1000).toISOString();
+
+  const claimsResult = await db.query<{
+    id: string;
+    topic: string;
+    status: string;
+    created_at: string;
+  }>(
+    `SELECT id, topic, status, created_at FROM support_tickets
+     WHERE order_id = $1 AND topic IN ('buyer_protection', 'buyer_protection_claim', 'item_not_as_described')
+     ORDER BY created_at DESC`,
+    [orderId]
+  );
+
+  return {
+    ok: true,
+    protection: {
+      orderId,
+      feeGbpMinor,
+      status: feeGbpMinor > 0 ? 'covered' : 'not_covered',
+      coverageAmountGbpMinor,
+      eligibleUntil,
+      claims: claimsResult.rows.map((r) => ({
+        ticketId: r.id,
+        topic: r.topic,
+        status: r.status,
+        createdAt: r.created_at,
+      })),
+    },
+  };
+});
+
+// POST /orders/:orderId/protection/claim — initiate a buyer protection claim
+app.post('/orders/:orderId/protection/claim', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
+  const { orderId } = paramsSchema.parse(request.params);
+
+  const bodySchema = z.object({
+    reason: z.string().trim().min(2).max(120),
+    description: z.string().trim().min(10).max(2000),
+    evidenceUrls: z.array(z.string().url()).max(5).optional(),
+  });
+  const { reason, description, evidenceUrls } = bodySchema.parse(request.body ?? {});
+
+  const orderResult = await db.query<{ buyer_id: string; status: string }>(
+    `SELECT buyer_id, status FROM orders WHERE id = $1 LIMIT 1`,
+    [orderId]
+  );
+
+  if (orderResult.rows.length === 0) {
+    reply.code(404);
+    return { ok: false, error: 'Order not found' };
+  }
+
+  if (orderResult.rows[0].buyer_id !== request.authUser.userId) {
+    reply.code(403);
+    return { ok: false, error: 'Only the buyer can file a protection claim' };
+  }
+
+  const ticketResult = await db.query<{ id: string; status: string; created_at: string }>(
+    `INSERT INTO support_tickets (user_id, order_id, topic, subject, body, status)
+     VALUES ($1, $2, 'buyer_protection_claim', $3, $4, 'open')
+     RETURNING id, status, created_at`,
+    [request.authUser.userId, orderId, reason, description]
+  );
+
+  const ticket = ticketResult.rows[0];
+  if (evidenceUrls && evidenceUrls.length > 0) {
+    for (const url of evidenceUrls) {
+      await db.query(
+        `INSERT INTO support_ticket_attachments (ticket_id, url) VALUES ($1, $2)`,
+        [ticket.id, url]
+      );
+    }
+  }
+
+  reply.code(201);
+  return {
+    ok: true,
+    claim: {
+      ticketId: ticket.id,
+      status: ticket.status,
+      createdAt: ticket.created_at,
+    },
   };
 });
 

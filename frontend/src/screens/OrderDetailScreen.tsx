@@ -1031,6 +1031,15 @@ export default function OrderDetailScreen() {
       onPress: () => navigation.navigate('OrderSupport', { orderId }),
     });
 
+    if (isBuyer) {
+      actions.push({
+        key: 'buyer_protection',
+        label: 'Buyer protection',
+        icon: 'shield-checkmark-outline',
+        onPress: () => navigation.navigate('BuyerProtection', { orderId }),
+      });
+    }
+
     if (openTicket) {
       actions.push({
         key: 'view_resolution',

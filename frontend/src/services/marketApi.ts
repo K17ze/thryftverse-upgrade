@@ -2129,3 +2129,55 @@ export async function fetchCoOwnWatchlist(limit: number = 50): Promise<MarketCoO
   const payload = await fetchJson<{ ok: true; items: MarketCoOwnAsset[] }>(`/co-own/watchlist${query}`);
   return payload.items;
 }
+
+/* ─── Feed: Trending ─── */
+
+export interface TrendingListing {
+  id: string;
+  sellerId: string;
+  title: string;
+  description: string;
+  priceGbp: number;
+  imageUrl: string | null;
+  images: string[];
+  status: string;
+  category: string | null;
+  brand: string | null;
+  size: string | null;
+  condition: string | null;
+  originalPriceGbp: number | null;
+  createdAt: string;
+  velocity: number;
+}
+
+export async function fetchTrendingListings(
+  options: { window?: '24h' | '7d' | '30d'; category?: string; limit?: number } = {}
+): Promise<TrendingListing[]> {
+  const query = toQuery({
+    window: options.window,
+    category: options.category,
+    limit: options.limit,
+  });
+  const payload = await fetchJson<{ ok: true; items: TrendingListing[] }>(`/feed/trending${query}`);
+  return payload.items;
+}
+
+/* ─── Feed: Following Activity ─── */
+
+export interface FollowingActivityItem {
+  activityType: 'listing' | 'look';
+  entityId: string;
+  entityTitle: string;
+  actorId: string;
+  createdAt: string;
+  images: string[] | null;
+  priceGbpMinor: number | null;
+}
+
+export async function fetchFollowingActivity(
+  options: { limit?: number; cursor?: string } = {}
+): Promise<{ items: FollowingActivityItem[]; nextCursor: string | null }> {
+  const query = toQuery({ limit: options.limit, cursor: options.cursor });
+  const payload = await fetchJson<{ ok: true; items: FollowingActivityItem[]; nextCursor: string | null }>(`/feed/following${query}`);
+  return { items: payload.items, nextCursor: payload.nextCursor };
+}
