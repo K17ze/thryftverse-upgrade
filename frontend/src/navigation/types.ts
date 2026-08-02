@@ -57,6 +57,7 @@ export type RootStackParamList = {
     status: string;
     recordDateLabel?: string;
     paymentDateLabel?: string;
+    actionId?: string;
   };
   DistributionHistory: { assetId?: string } | undefined;
   Chat: {

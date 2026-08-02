@@ -2,15 +2,15 @@
  * CorporateActionDetailScreen — detail view for a single corporate action event.
  *
  * Spec 10 §7: corporate actions (distributions, votes, buyouts, etc.) must be
- * first-class timeline entries with detail views. This screen shows the full
- * details of a single event passed via route params.
+ * first-class timeline entries with detail views. When an actionId is provided,
+ * this screen fetches the full record from the backend /co-own/corporate-actions
+ * endpoint. When no actionId is available, it falls back to route params.
  *
- * Per AGENTS.md §11: all data is passed via route params from the timeline.
- * No fabricated data. Missing fields show "—".
+ * Per AGENTS.md §11: no fabricated data. Missing fields show "—".
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, RefreshControl } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,6 +18,7 @@ import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
+import type { ThemeColors } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { Space, Radius, Type, Typography, DockConstants } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -26,10 +27,12 @@ import {
   CoOwnMarketHeader,
   CoOwnStickyActionDock,
   CoOwnCorporateActionRow,
+  CoOwnStateCanvas,
   type CoOwnCorporateActionType,
   type CoOwnCorporateActionStatus,
 } from '../components/coown';
 import { AppButton } from '../components/ui/AppButton';
+import { fetchCoOwnAssetCorporateActions, type CoOwnCorporateAction } from '../services/marketApi';
 
 type RouteT = RouteProp<RootStackParamList, 'CorporateActionDetail'>;
 type NavT = StackNavigationProp<RootStackParamList>;
@@ -48,12 +51,26 @@ const ACTION_DESCRIPTIONS: Record<string, string> = {
   vote: 'A holder vote on a specified resolution.',
 };
 
+function formatDate(iso: string | null): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function formatAmount(minor: number | null): string | null {
+  if (minor === null || minor === undefined) return null;
+  const major = minor / 100;
+  const sign = major >= 0 ? '+' : '−';
+  return `${sign}£${Math.abs(major).toFixed(2)}`;
+}
+
 export default function CorporateActionDetailScreen() {
   const navigation = useNavigation<NavT>();
   const route = useRoute<RouteT>();
   const { colors, isDark } = useAppTheme();
   const reducedMotionEnabled = useReducedMotion();
   const insets = useSafeAreaInsets();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   const {
     assetId,
@@ -64,11 +81,58 @@ export default function CorporateActionDetailScreen() {
     status,
     recordDateLabel,
     paymentDateLabel,
+    actionId,
   } = route.params;
 
-  const typedActionType = actionType as CoOwnCorporateActionType;
-  const typedStatus = status as CoOwnCorporateActionStatus;
-  const description = ACTION_DESCRIPTIONS[actionType] ?? '—';
+  const [fetchedAction, setFetchedAction] = React.useState<CoOwnCorporateAction | null>(null);
+  const [loading, setLoading] = React.useState(!!actionId);
+  const [refreshing, setRefreshing] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const loadAction = React.useCallback(async () => {
+    if (!actionId) return;
+    try {
+      setError(null);
+      const actions = await fetchCoOwnAssetCorporateActions(assetId, { limit: 100 });
+      const found = actions.find((a) => a.id === actionId);
+      if (found) {
+        setFetchedAction(found);
+      } else {
+        setError('Corporate action not found');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load corporate action');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [actionId, assetId]);
+
+  React.useEffect(() => {
+    void loadAction();
+  }, [loadAction]);
+
+  const handleRefresh = React.useCallback(() => {
+    haptics.tap();
+    setRefreshing(true);
+    void loadAction();
+  }, [loadAction]);
+
+  // Use fetched data if available, otherwise fall back to route params
+  const displayActionType = fetchedAction?.actionType ?? actionType;
+  const displayStatus = fetchedAction?.status ?? status;
+  const displayDateLabel = fetchedAction ? formatDate(fetchedAction.createdAt) : dateLabel;
+  const displayEffectLabel = fetchedAction?.description ?? effectLabel;
+  const displayAmountLabel = fetchedAction
+    ? formatAmount(fetchedAction.perUnitValueGbpMinor) ?? amountLabel ?? null
+    : amountLabel;
+  const displayRecordDate = fetchedAction ? formatDate(fetchedAction.recordDate) : (recordDateLabel ?? null);
+  const displayPaymentDate = fetchedAction ? formatDate(fetchedAction.payableDate) : (paymentDateLabel ?? null);
+  const displayTitle = fetchedAction?.title ?? actionType;
+
+  const typedActionType = displayActionType as CoOwnCorporateActionType;
+  const typedStatus = displayStatus as CoOwnCorporateActionStatus;
+  const description = ACTION_DESCRIPTIONS[displayActionType] ?? fetchedAction?.description ?? '—';
   const scrollBottomPadding = Math.max(insets.bottom, Space.md) + DockConstants.singleActionHeight;
 
   const handleBack = React.useCallback(() => {
@@ -77,32 +141,86 @@ export default function CorporateActionDetailScreen() {
     else navigation.navigate('CoOwnHub');
   }, [navigation, assetId]);
 
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
+        <CoOwnMarketHeader
+          title="Corporate action"
+          subtitle={dateLabel}
+          onBack={handleBack}
+        />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.brand} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error && !fetchedAction) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
+        <CoOwnMarketHeader
+          title="Corporate action"
+          subtitle={dateLabel}
+          onBack={handleBack}
+        />
+        <CoOwnStateCanvas
+          variant="error"
+          title="Couldn't load corporate action"
+          subtitle={error}
+          actionLabel="Retry"
+          onAction={() => { haptics.tap(); setLoading(true); void loadAction(); }}
+        />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
 
       <CoOwnMarketHeader
         title="Corporate action"
-        subtitle={dateLabel}
+        subtitle={displayDateLabel}
         onBack={handleBack}
       />
 
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: scrollBottomPadding }]}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          actionId ? (
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={colors.textSecondary}
+            />
+          ) : undefined
+        }
       >
         {/* Event summary — the corporate action row as a non-interactive card */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <CoOwnCorporateActionRow
             type={typedActionType}
             status={typedStatus}
-            dateLabel={dateLabel}
-            effectLabel={effectLabel}
-            amountLabel={amountLabel}
-            recordDateLabel={recordDateLabel}
-            paymentDateLabel={paymentDateLabel}
+            dateLabel={displayDateLabel}
+            effectLabel={displayEffectLabel}
+            amountLabel={displayAmountLabel ?? undefined}
+            recordDateLabel={displayRecordDate ?? undefined}
+            paymentDateLabel={displayPaymentDate ?? undefined}
           />
         </Reanimated.View>
+
+        {/* Title (from backend if available) */}
+        {fetchedAction && (
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(30)}>
+            <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{displayTitle}</Text>
+            </View>
+          </Reanimated.View>
+        )}
 
         {/* Description */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
@@ -120,18 +238,24 @@ export default function CorporateActionDetailScreen() {
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Key dates</Text>
             <View style={styles.dateRow}>
               <Text style={[styles.dateLabel, { color: colors.textMuted }]}>Event date</Text>
-              <Text style={[styles.dateValue, { color: colors.textPrimary }]}>{dateLabel}</Text>
+              <Text style={[styles.dateValue, { color: colors.textPrimary }]}>{displayDateLabel}</Text>
             </View>
-            {recordDateLabel && (
+            {displayRecordDate && (
               <View style={styles.dateRow}>
                 <Text style={[styles.dateLabel, { color: colors.textMuted }]}>Record date</Text>
-                <Text style={[styles.dateValue, { color: colors.textPrimary }]}>{recordDateLabel}</Text>
+                <Text style={[styles.dateValue, { color: colors.textPrimary }]}>{displayRecordDate}</Text>
               </View>
             )}
-            {paymentDateLabel && (
+            {displayPaymentDate && (
               <View style={styles.dateRow}>
                 <Text style={[styles.dateLabel, { color: colors.textMuted }]}>Payment date</Text>
-                <Text style={[styles.dateValue, { color: colors.textPrimary }]}>{paymentDateLabel}</Text>
+                <Text style={[styles.dateValue, { color: colors.textPrimary }]}>{displayPaymentDate}</Text>
+              </View>
+            )}
+            {fetchedAction?.exDate && (
+              <View style={styles.dateRow}>
+                <Text style={[styles.dateLabel, { color: colors.textMuted }]}>Ex-date</Text>
+                <Text style={[styles.dateValue, { color: colors.textPrimary }]}>{formatDate(fetchedAction.exDate)}</Text>
               </View>
             )}
           </View>
@@ -142,11 +266,16 @@ export default function CorporateActionDetailScreen() {
           <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Effect on your position</Text>
             <Text style={[styles.sectionBody, { color: colors.textSecondary }]}>
-              {effectLabel}
+              {displayEffectLabel}
             </Text>
-            {amountLabel && (
-              <Text style={[styles.amountLabel, { color: amountLabel.startsWith('+') ? colors.success : amountLabel.startsWith('−') ? colors.danger : colors.textPrimary }]}>
-                {amountLabel}
+            {displayAmountLabel && (
+              <Text style={[styles.amountLabel, { color: displayAmountLabel.startsWith('+') ? colors.success : displayAmountLabel.startsWith('−') ? colors.danger : colors.textPrimary }]}>
+                {displayAmountLabel}
+              </Text>
+            )}
+            {fetchedAction?.totalValueGbpMinor !== null && fetchedAction?.totalValueGbpMinor !== undefined && (
+              <Text style={[styles.totalLabel, { color: colors.textMuted }]}>
+                Total: {formatAmount(fetchedAction.totalValueGbpMinor) ?? '—'}
               </Text>
             )}
           </View>
@@ -157,10 +286,12 @@ export default function CorporateActionDetailScreen() {
           <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Status</Text>
             <Text style={[styles.sectionBody, { color: colors.textSecondary }]}>
-              {status === 'pending' && 'This event is pending and has not yet taken effect.'}
-              {status === 'effective' && 'This event is effective — it has been applied to your position.'}
-              {status === 'completed' && 'This event is completed.'}
-              {status === 'cancelled' && 'This event was cancelled and will not take effect.'}
+              {displayStatus === 'pending' && 'This event is pending and has not yet taken effect.'}
+              {displayStatus === 'announced' && 'This event has been announced and is awaiting the record date.'}
+              {displayStatus === 'effective' && 'This event is effective — it has been applied to your position.'}
+              {displayStatus === 'completed' && 'This event is completed.'}
+              {displayStatus === 'cancelled' && 'This event was cancelled and will not take effect.'}
+              {!['pending', 'announced', 'effective', 'completed', 'cancelled'].includes(displayStatus) && displayStatus}
             </Text>
           </View>
         </Reanimated.View>
@@ -181,12 +312,18 @@ export default function CorporateActionDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: { flex: 1 },
   content: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
     gap: Space.md,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   sectionCard: {
     borderRadius: Radius.lg,
@@ -226,7 +363,13 @@ const styles = StyleSheet.create({
     fontSize: Type.priceLarge.size,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.5,
-    fontVariant: ['tabular-nums'],
     marginTop: Space.sm,
   },
+  totalLabel: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.caption.letterSpacing,
+    marginTop: Space.xs,
+  },
 });
+}
