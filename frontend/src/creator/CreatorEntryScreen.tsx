@@ -261,7 +261,7 @@ export function CreatorEntryScreen({
               accessibilityLabel={isPoster ? 'Create story' : 'Create collage'}
             >
               <Text style={styles.addBtnText}>
-                {isPoster ? 'Create Story' : 'Create Collage'}
+                {isPoster ? 'Create Story' : 'Create Look'}
               </Text>
             </Pressable>
           )}

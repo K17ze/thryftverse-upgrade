@@ -105,7 +105,7 @@ export default function CreatorCamera({
 
   const isPoster = mode === 'poster';
   const isVisualSearch = mode === 'visual-search';
-  const modeLabel = isVisualSearch ? 'Search' : isPoster ? 'Story' : 'Collage';
+  const modeLabel = isVisualSearch ? 'Search' : isPoster ? 'Story' : 'Look';
   const zoom = ZOOM_LEVELS[zoomIndex];
 
   // ── Permission ──

@@ -350,7 +350,7 @@ function CreatorStudioInner() {
                     </Text>
                   ) : (
                     <Text style={styles.titleText} numberOfLines={1}>
-                      {isLook ? 'Collage' : 'Story'}
+                      {isLook ? 'Look' : 'Story'}
                       {isDirty ? ' ·' : ''}
                     </Text>
                   )}
