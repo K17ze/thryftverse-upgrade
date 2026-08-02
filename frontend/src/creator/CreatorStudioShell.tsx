@@ -143,7 +143,9 @@ function CreatorStudioInner() {
         e.preventDefault();
         if (canRedo) redo();
       } else if (e.key === 'Escape') {
-        if (showPreview) setShowPreview(false);
+        if (cropTarget) setCropTarget(null);
+        else if (cutoutTarget) setCutoutTarget(null);
+        else if (showPreview) setShowPreview(false);
         else if (showOverflow) setShowOverflow(false);
         else if (showPublish) setShowPublish(false);
         else if (showTemplates) setShowTemplates(false);
@@ -159,12 +161,14 @@ function CreatorStudioInner() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [canUndo, canRedo, undo, redo, showPreview, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, selectedLayerId, selectLayer, removeLayer, handleBack]);
+  }, [canUndo, canRedo, undo, redo, cropTarget, cutoutTarget, showPreview, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, selectedLayerId, selectLayer, removeLayer, handleBack]);
 
   // Hardware back button — intercept to close sheets first
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {
+        if (cropTarget) { setCropTarget(null); return true; }
+        if (cutoutTarget) { setCutoutTarget(null); return true; }
         if (showPreview) { setShowPreview(false); return true; }
         if (showOverflow) { setShowOverflow(false); return true; }
         if (showPublish) { setShowPublish(false); return true; }
@@ -176,7 +180,7 @@ function CreatorStudioInner() {
         return false;
       };
       return onBackPress;
-    }, [showPreview, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, selectedLayerId, selectLayer])
+    }, [cropTarget, cutoutTarget, showPreview, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, selectedLayerId, selectLayer])
   );
 
   const handleCanvasPress = useCallback(() => {
