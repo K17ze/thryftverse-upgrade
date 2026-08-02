@@ -70,6 +70,25 @@ const DrawLayerPayloadSchema = z.object({
   opacity: z.number().min(0).max(1).default(1),
 });
 
+// GIF layer — animated sticker from GIPHY search
+const GifLayerPayloadSchema = z.object({
+  gifUrl: z.string(),
+  stillUrl: z.string().optional(),
+  altText: z.string().max(100).default(''),
+  source: z.string().optional(),
+  opacity: z.number().min(0).max(1).default(1),
+});
+
+// Music layer — track sticker (Instagram-style music sticker)
+const MusicLayerPayloadSchema = z.object({
+  trackName: z.string().min(1).max(120),
+  artistName: z.string().max(120).default(''),
+  artworkUrl: z.string().optional(),
+  previewUrl: z.string().optional(),
+  trackId: z.string().optional(),
+  opacity: z.number().min(0).max(1).default(1),
+});
+
 // ── Base layer schema ──────────────────────────────────────────────
 
 const BaseLayerSchema = z.object({
@@ -97,6 +116,8 @@ export const CreatorLayerSchema = z.discriminatedUnion('type', [
   BaseLayerSchema.extend({ type: z.literal('vote'), payload: VoteLayerPayloadSchema }),
   BaseLayerSchema.extend({ type: z.literal('decorative'), payload: DecorativeLayerPayloadSchema }),
   BaseLayerSchema.extend({ type: z.literal('draw'), payload: DrawLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('gif'), payload: GifLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('music'), payload: MusicLayerPayloadSchema }),
 ]);
 
 export type CreatorLayer = z.infer<typeof CreatorLayerSchema>;

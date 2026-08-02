@@ -172,6 +172,8 @@ function buildDefaultTools(
       { icon: 'pricetag-outline', label: 'Product', action: () => onToolPress('product') },
       { icon: 'text-outline', label: 'Text', action: () => onToolPress('text') },
       { icon: 'brush-outline', label: 'Draw', action: () => onToolPress('draw') },
+      { icon: 'image-outline', label: 'GIF', action: () => onToolPress('gif') },
+      { icon: 'musical-notes-outline', label: 'Music', action: () => onToolPress('music') },
       { icon: 'shapes-outline', label: 'Elements', action: () => onToolPress('shape') },
       ...(onLayoutPresets ? [{ icon: 'grid-outline' as const, label: 'Layout', action: onLayoutPresets }] : []),
     ];
@@ -182,6 +184,8 @@ function buildDefaultTools(
     { icon: 'images-outline', label: 'Media', action: () => onToolPress('media') },
     { icon: 'text-outline', label: 'Text', action: () => onToolPress('text') },
     { icon: 'brush-outline', label: 'Draw', action: () => onToolPress('draw') },
+    { icon: 'image-outline', label: 'GIF', action: () => onToolPress('gif') },
+    { icon: 'musical-notes-outline', label: 'Music', action: () => onToolPress('music') },
     { icon: 'stats-chart-outline', label: 'Poll', action: () => onToolPress('vote') },
     { icon: 'at-outline', label: 'Mention', action: () => onToolPress('mention') },
     { icon: 'shapes-outline', label: 'Elements', action: () => onToolPress('shape') },
@@ -233,6 +237,10 @@ function buildSelectionTools(
     tools.push({ icon: 'stats-chart-outline', label: 'Edit', action: () => onEditLayer(layer) });
   } else if (layer.type === 'draw') {
     tools.push({ icon: 'brush-outline', label: 'Edit', action: () => onEditLayer(layer) });
+  } else if (layer.type === 'gif') {
+    tools.push({ icon: 'swap-horizontal-outline', label: 'Replace', action: () => onEditLayer(layer) });
+  } else if (layer.type === 'music') {
+    tools.push({ icon: 'swap-horizontal-outline', label: 'Replace', action: () => onEditLayer(layer) });
   } else {
     tools.push({ icon: 'create-outline', label: 'Edit', action: () => onEditLayer(layer) });
   }

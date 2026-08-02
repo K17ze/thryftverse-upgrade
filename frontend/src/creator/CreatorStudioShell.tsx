@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Keyboard,
   useWindowDimensions,
   Platform,
+  PanResponder,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -47,6 +48,8 @@ function layerTypeLabel(type: CreatorLayer['type']): string {
     case 'vote': return 'Vote';
     case 'decorative': return 'Shape';
     case 'draw': return 'Drawing';
+    case 'gif': return 'GIF';
+    case 'music': return 'Music';
     default: return 'Layer';
   }
 }
@@ -405,6 +408,14 @@ function CreatorStudioInner() {
           colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.15)', 'rgba(0,0,0,0.4)']}
           style={styles.bottomRailGradient}
         >
+          {/* Opacity slider — appears when a layer is selected (Instagram pattern) */}
+          {selectedLayer && (
+            <OpacityBar
+              value={selectedLayer.opacity ?? 1}
+              onChange={(v) => updateLayer(selectedLayer.id, { opacity: v }, 'Adjust opacity')}
+              onCommit={(v) => commitLayerTransform(selectedLayer.id, { opacity: v }, 'Adjust opacity')}
+            />
+          )}
           <CreatorToolDock
             selectedLayer={selectedLayer}
             onPublish={() => setShowPublish(true)}
@@ -418,6 +429,8 @@ function CreatorStudioInner() {
               else if (layer.type === 'mention') setPickerMode('mention');
               else if (layer.type === 'vote') setPickerMode('vote');
               else if (layer.type === 'draw') setPickerMode('draw');
+              else if (layer.type === 'gif') setPickerMode('gif');
+              else if (layer.type === 'music') setPickerMode('music');
             }}
             onCropLayer={(layer) => setCropTarget(layer)}
             onCutoutLayer={(layer) => setCutoutTarget(layer)}
@@ -632,6 +645,64 @@ const OverflowItem = React.memo(function OverflowItem({ icon, label, colors, onP
   );
 });
 
+// ── Opacity bar — drag-based slider for layer opacity (Instagram pattern) ──
+const OpacityBar = React.memo(function OpacityBar({ value, onChange, onCommit }: { value: number; onChange: (v: number) => void; onCommit: (v: number) => void }) {
+  const trackRef = useRef<View | null>(null);
+  const draggingRef = useRef(false);
+  const haptic = useHaptic();
+
+  const updateFromTouch = useCallback((locationX: number, width: number) => {
+    if (width <= 0) return;
+    const ratio = Math.max(0, Math.min(1, locationX / width));
+    const snapped = Math.round(ratio * 20) / 20; // snap to 5% increments
+    if (snapped !== value) {
+      haptic.selection();
+      onChange(snapped);
+    }
+  }, [value, onChange, haptic]);
+
+  const panResponder = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    onPanResponderGrant: (e) => {
+      draggingRef.current = true;
+      trackRef.current?.measure((x, y, w, h, pageX) => {
+        updateFromTouch(e.nativeEvent.pageX - pageX, w);
+      });
+    },
+    onPanResponderMove: (e) => {
+      trackRef.current?.measure((x, y, w, h, pageX) => {
+        updateFromTouch(e.nativeEvent.pageX - pageX, w);
+      });
+    },
+    onPanResponderRelease: () => {
+      draggingRef.current = false;
+      onCommit(value);
+    },
+    onPanResponderTerminate: () => {
+      draggingRef.current = false;
+      onCommit(value);
+    },
+  }), [updateFromTouch, onCommit, value]);
+
+  const pct = Math.round(value * 100);
+
+  return (
+    <View style={styles.opacityBar}>
+      <Ionicons name="contrast-outline" size={16} color="rgba(255,255,255,0.7)" />
+      <View
+        ref={trackRef}
+        style={styles.opacitySliderTrack}
+        {...panResponder.panHandlers}
+      >
+        <View style={[styles.opacitySliderFill, { width: `${pct}%` }]} />
+        <View style={[styles.opacitySliderThumb, { left: `${pct}%` }]} />
+      </View>
+      <Text style={styles.opacityLabel}>{pct}%</Text>
+    </View>
+  );
+});
+
 export function CreatorStudioScreen() {
   const route = useRoute<any>();
   const initialType = route.params?.type === 'poster' ? 'poster' : 'look';
@@ -761,6 +832,43 @@ const styles = StyleSheet.create({
   },
   bottomRailGradient: {
     paddingTop: Space.md,
+  },
+  // ── Opacity bar ──
+  opacityBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingHorizontal: Space.lg,
+    paddingVertical: Space.xs,
+  },
+  opacitySliderTrack: {
+    flex: 1,
+    height: 28,
+    justifyContent: 'center',
+  },
+  opacitySliderFill: {
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: 'rgba(255,255,255,0.8)',
+  },
+  opacitySliderThumb: {
+    position: 'absolute',
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    marginLeft: -8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowRadius: 3,
+    shadowOpacity: 0.3,
+  },
+  opacityLabel: {
+    fontFamily: Typography.family.medium,
+    fontSize: Type.caption.size,
+    color: 'rgba(255,255,255,0.8)',
+    minWidth: 36,
+    textAlign: 'right',
   },
   // ── Overflow menu ──
   overflowBackdrop: {

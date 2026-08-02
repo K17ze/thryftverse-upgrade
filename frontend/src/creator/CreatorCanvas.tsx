@@ -16,6 +16,7 @@ import Reanimated, {
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Canvas as SkiaCanvas, Path as SkiaPath, Skia } from '@shopify/react-native-skia';
+import { Image as ExpoImage } from 'expo-image';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Video, ResizeMode } from '../components/compat/Video';
@@ -528,6 +529,10 @@ function getLayerRadius(layer: CreatorLayer): number {
       return 0;
     case 'draw':
       return 0;
+    case 'gif':
+      return Radius.sm;
+    case 'music':
+      return Radius.md;
     default:
       return 0;
   }
@@ -551,6 +556,10 @@ function renderLayerContent(layer: CreatorLayer, width: number, height: number):
       return <DecorativeLayerContent layer={layer} />;
     case 'draw':
       return <DrawLayerContent layer={layer} width={width} height={height} />;
+    case 'gif':
+      return <GifLayerContent layer={layer} />;
+    case 'music':
+      return <MusicLayerContent layer={layer} />;
     default:
       return null;
   }
@@ -960,6 +969,65 @@ function DrawLayerContent({ layer, width, height }: { layer: Extract<CreatorLaye
         );
       })}
     </SkiaCanvas>
+  );
+}
+
+// ── GIF layer content ──────────────────────────────────────────────
+// Renders animated GIF using expo-image (supports animated GIF playback).
+function GifLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'gif' }> }) {
+  const { payload } = layer;
+  return (
+    <ExpoImage
+      source={{ uri: payload.gifUrl }}
+      style={{ width: '100%', height: '100%' }}
+      contentFit="contain"
+      accessible
+      accessibilityLabel={payload.altText || 'GIF sticker'}
+    />
+  );
+}
+
+// ── Music layer content ────────────────────────────────────────────
+// Instagram-style music sticker: album art + track name + artist.
+// Compact pill-shaped card with music note icon.
+function MusicLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'music' }> }) {
+  const { payload } = layer;
+  const { colors } = useAppTheme();
+  return (
+    <View style={{
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      borderRadius: Radius.md,
+      backgroundColor: 'rgba(0,0,0,0.55)',
+      minWidth: 140,
+      maxWidth: '100%',
+    }}>
+      {payload.artworkUrl ? (
+        <Image
+          source={{ uri: payload.artworkUrl }}
+          style={{ width: 36, height: 36, borderRadius: Radius.sm }}
+          resizeMode="cover"
+        />
+      ) : (
+        <View style={{ width: 36, height: 36, borderRadius: Radius.sm, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' }}>
+          <Ionicons name="musical-notes" size={18} color="#fff" />
+        </View>
+      )}
+      <View style={{ flex: 1, gap: 1 }}>
+        <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: '#fff' }} numberOfLines={1}>
+          {payload.trackName}
+        </Text>
+        {payload.artistName ? (
+          <Text style={{ fontFamily: Typography.family.regular, fontSize: 11, color: 'rgba(255,255,255,0.7)' }} numberOfLines={1}>
+            {payload.artistName}
+          </Text>
+        ) : null}
+      </View>
+      <Ionicons name="musical-notes" size={14} color="rgba(255,255,255,0.6)" />
+    </View>
   );
 }
 

@@ -23,6 +23,8 @@ const LAYER_ICONS: Record<CreatorLayer['type'], string> = {
   vote: 'stats-chart-outline',
   decorative: 'happy-outline',
   draw: 'brush-outline',
+  gif: 'image-outline',
+  music: 'musical-notes-outline',
 };
 
 const TOUCH = 44;
@@ -235,6 +237,10 @@ function getLayerDisplayName(layer: CreatorLayer): string {
       return layer.payload.shape;
     case 'draw':
       return `Drawing (${layer.payload.strokes.length})`;
+    case 'gif':
+      return layer.payload.altText || 'GIF';
+    case 'music':
+      return `${layer.payload.trackName}${layer.payload.artistName ? ' — ' + layer.payload.artistName : ''}`;
     default:
       return 'Layer';
   }
@@ -269,6 +275,8 @@ function getLayerColor(type: CreatorLayer['type'], colors: ThemeColors): string 
     case 'vote': return colors.success;
     case 'decorative': return colors.coownUp;
     case 'draw': return colors.brand;
+    case 'gif': return colors.social;
+    case 'music': return colors.antiqueGold;
     default: return colors.textMuted;
   }
 }

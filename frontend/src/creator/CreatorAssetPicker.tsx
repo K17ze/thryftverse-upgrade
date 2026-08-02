@@ -29,7 +29,7 @@ import { Canvas, Path, Skia } from '@shopify/react-native-skia';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Reanimated, { useSharedValue, runOnJS } from 'react-native-reanimated';
 
-export type AssetPickerMode = 'media' | 'product' | 'mention' | 'look' | 'text' | 'shape' | 'vote' | 'draw';
+export type AssetPickerMode = 'media' | 'product' | 'mention' | 'look' | 'text' | 'shape' | 'vote' | 'draw' | 'gif' | 'music';
 
 export interface CreatorAssetPickerProps {
   visible: boolean;
@@ -66,6 +66,10 @@ function AssetPickerContent({ mode, onClose, onAddLayer, editingLayer }: { mode:
       return <VotePicker onClose={onClose} onAddLayer={onAddLayer} />;
     case 'draw':
       return <DrawPicker onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />;
+    case 'gif':
+      return <GifPicker onClose={onClose} onAddLayer={onAddLayer} />;
+    case 'music':
+      return <MusicPicker onClose={onClose} onAddLayer={onAddLayer} />;
     default:
       return null;
   }
@@ -1348,6 +1352,291 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
   );
 }
 
+// ── GIF Picker ────────────────────────────────────────────────────
+// GIPHY-style search: trending GIFs on load, search by query.
+// Uses GIPHY public API with configurable key (EXPO_PUBLIC_GIPHY_API_KEY).
+
+const GIPHY_API_KEY = process.env.EXPO_PUBLIC_GIPHY_API_KEY?.trim() || 'dc6zaTOxFJmzC';
+const GIPHY_BASE = 'https://api.giphy.com/v1/gifs';
+
+interface GifResult {
+  id: string;
+  gifUrl: string;
+  stillUrl: string;
+  altText: string;
+  width: number;
+  height: number;
+}
+
+function GifPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+  const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<GifResult[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  const fetchGifs = useCallback(async (searchQuery: string) => {
+    if (!mountedRef.current) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const endpoint = searchQuery.trim()
+        ? `${GIPHY_BASE}/search?api_key=${GIPHY_API_KEY}&q=${encodeURIComponent(searchQuery.trim())}&limit=24&rating=g`
+        : `${GIPHY_BASE}/trending?api_key=${GIPHY_API_KEY}&limit=24&rating=g`;
+      const res = await fetch(endpoint);
+      if (!res.ok) throw new Error(`GIPHY ${res.status}`);
+      const json = await res.json();
+      if (!mountedRef.current) return;
+      const gifs: GifResult[] = (json.data ?? []).map((g: any) => ({
+        id: g.id,
+        gifUrl: g.images?.fixed_height?.url ?? g.images?.original?.url ?? '',
+        stillUrl: g.images?.fixed_height_still?.url ?? g.images?.original_still?.url,
+        altText: g.title?.slice(0, 80) ?? 'GIF',
+        width: parseInt(g.images?.fixed_height?.width ?? '200', 10),
+        height: parseInt(g.images?.fixed_height?.height ?? '200', 10),
+      })).filter((g: GifResult) => g.gifUrl);
+      setResults(gifs);
+    } catch (err) {
+      if (!mountedRef.current) return;
+      setError((err as Error).message || 'Failed to load GIFs');
+    } finally {
+      if (mountedRef.current) setIsLoading(false);
+    }
+  }, []);
+
+  // Load trending on mount
+  useEffect(() => {
+    fetchGifs('');
+  }, [fetchGifs]);
+
+  // Debounced search
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      fetchGifs(query);
+    }, 350);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [query, fetchGifs]);
+
+  const handleSelect = useCallback((gif: GifResult) => {
+    haptic.selection();
+    onAddLayer({
+      ...baseLayer(createStableId('gif'), 10),
+      type: 'gif',
+      width: 0.25,
+      height: 0.25 * (gif.height / gif.width),
+      payload: {
+        gifUrl: gif.gifUrl,
+        stillUrl: gif.stillUrl,
+        altText: gif.altText,
+        source: 'giphy',
+        opacity: 1,
+      },
+    });
+    onClose();
+  }, [onAddLayer, onClose, haptic]);
+
+  return (
+    <PickerShell title="GIF" onClose={onClose}>
+      <View style={styles.searchRow}>
+        <Ionicons name="search" size={18} color={colors.textMuted} style={styles.searchIcon} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search GIFs..."
+          placeholderTextColor={colors.textMuted}
+          value={query}
+          onChangeText={setQuery}
+          autoCapitalize="none"
+          autoCorrect={false}
+          autoFocus
+          accessibilityLabel="Search GIFs"
+        />
+        {isLoading && <ActivityIndicator size="small" color={colors.brand} />}
+      </View>
+      {error ? (
+        <View style={styles.errorBody}>
+          <Text style={styles.errorText}>Couldn't load GIFs</Text>
+          <Pressable onPress={() => fetchGifs(query)} style={styles.retryBtn} accessibilityLabel="Retry GIF search" accessibilityRole="button" hitSlop={12}>
+            <Text style={styles.retryBtnText}>Retry</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <FlatList
+          data={results}
+          keyExtractor={(item) => item.id}
+          numColumns={2}
+          renderItem={({ item }) => (
+            <Pressable
+              onPress={() => handleSelect(item)}
+              style={styles.gifCell}
+              accessibilityLabel={`Select GIF ${item.altText}`}
+              accessibilityRole="button"
+            >
+              <Image
+                source={{ uri: item.stillUrl || item.gifUrl }}
+                style={styles.gifThumb}
+                resizeMode="cover"
+              />
+            </Pressable>
+          )}
+          style={styles.gifList}
+          columnWrapperStyle={styles.gifRow}
+          keyboardShouldPersistTaps="handled"
+          ListEmptyComponent={!isLoading ? <View style={styles.emptyState}><Text style={styles.emptyText}>No GIFs found</Text></View> : null}
+        />
+      )}
+    </PickerShell>
+  );
+}
+
+// ── Music Picker ──────────────────────────────────────────────────
+// Instagram-style music sticker: search trending tracks via iTunes API
+// (free, no auth required). Shows album art + track name + artist.
+
+interface MusicTrack {
+  trackId: string;
+  trackName: string;
+  artistName: string;
+  artworkUrl: string;
+  previewUrl: string;
+}
+
+function MusicPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+  const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<MusicTrack[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  const fetchTracks = useCallback(async (searchQuery: string) => {
+    if (!mountedRef.current) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const endpoint = searchQuery.trim()
+        ? `https://itunes.apple.com/search?term=${encodeURIComponent(searchQuery.trim())}&media=music&limit=25`
+        : `https://itunes.apple.com/search?term=top+hits&media=music&limit=25`;
+      const res = await fetch(endpoint);
+      if (!res.ok) throw new Error(`iTunes ${res.status}`);
+      const json = await res.json();
+      if (!mountedRef.current) return;
+      const tracks: MusicTrack[] = (json.results ?? []).map((t: any) => ({
+        trackId: String(t.trackId ?? t.collectionId ?? ''),
+        trackName: t.trackName ?? t.collectionName ?? 'Unknown Track',
+        artistName: t.artistName ?? '',
+        artworkUrl: (t.artworkUrl100 ?? t.artworkUrl60 ?? '').replace('100x100', '200x200'),
+        previewUrl: t.previewUrl ?? '',
+      })).filter((t: MusicTrack) => t.trackId && t.artworkUrl);
+      setResults(tracks);
+    } catch (err) {
+      if (!mountedRef.current) return;
+      setError((err as Error).message || 'Failed to load tracks');
+    } finally {
+      if (mountedRef.current) setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchTracks('');
+  }, [fetchTracks]);
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      fetchTracks(query);
+    }, 400);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [query, fetchTracks]);
+
+  const handleSelect = useCallback((track: MusicTrack) => {
+    haptic.selection();
+    onAddLayer({
+      ...baseLayer(createStableId('music'), 10),
+      type: 'music',
+      width: 0.5,
+      height: 0.12,
+      payload: {
+        trackName: track.trackName,
+        artistName: track.artistName,
+        artworkUrl: track.artworkUrl,
+        previewUrl: track.previewUrl,
+        trackId: track.trackId,
+        opacity: 1,
+      },
+    });
+    onClose();
+  }, [onAddLayer, onClose, haptic]);
+
+  return (
+    <PickerShell title="Music" onClose={onClose}>
+      <View style={styles.searchRow}>
+        <Ionicons name="search" size={18} color={colors.textMuted} style={styles.searchIcon} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search songs, artists..."
+          placeholderTextColor={colors.textMuted}
+          value={query}
+          onChangeText={setQuery}
+          autoCapitalize="none"
+          autoCorrect={false}
+          autoFocus
+          accessibilityLabel="Search music"
+        />
+        {isLoading && <ActivityIndicator size="small" color={colors.brand} />}
+      </View>
+      {error ? (
+        <View style={styles.errorBody}>
+          <Text style={styles.errorText}>Couldn't load music</Text>
+          <Pressable onPress={() => fetchTracks(query)} style={styles.retryBtn} accessibilityLabel="Retry music search" accessibilityRole="button" hitSlop={12}>
+            <Text style={styles.retryBtnText}>Retry</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <FlatList
+          data={results}
+          keyExtractor={(item) => item.trackId}
+          renderItem={({ item }) => (
+            <Pressable
+              onPress={() => handleSelect(item)}
+              style={styles.musicRow}
+              accessibilityLabel={`Select ${item.trackName} by ${item.artistName}`}
+              accessibilityRole="button"
+            >
+              <Image source={{ uri: item.artworkUrl }} style={styles.musicArtwork} resizeMode="cover" />
+              <View style={styles.musicInfo}>
+                <Text style={styles.musicTrackName} numberOfLines={1}>{item.trackName}</Text>
+                <Text style={styles.musicArtistName} numberOfLines={1}>{item.artistName}</Text>
+              </View>
+              <Ionicons name="add-circle-outline" size={22} color={colors.brand} />
+            </Pressable>
+          )}
+          style={styles.resultList}
+          keyboardShouldPersistTaps="handled"
+          ListEmptyComponent={!isLoading ? <View style={styles.emptyState}><Text style={styles.emptyText}>No tracks found</Text></View> : null}
+        />
+      )}
+    </PickerShell>
+  );
+}
+
 // ── Shape Picker ───────────────────────────────────────────────────
 
 const SHAPES: Array<{ shape: 'circle' | 'square' | 'line' | 'arrow' | 'star' | 'heart'; icon: string; label: string }> = [
@@ -1665,5 +1954,22 @@ function createStyles(colors: ThemeColors) {
   drawActionLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary },
   drawDoneBtn: { paddingHorizontal: Space.xl, paddingVertical: Space.sm, borderRadius: Radius.full, marginLeft: 'auto' },
   drawDoneBtnText: { fontFamily: Typography.family.semibold, fontSize: Type.bodyEmphasis.size, color: '#fff' },
+  // ── GIF picker ──
+  gifList: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
+  gifRow: { gap: Space.xs, marginBottom: Space.xs },
+  gifCell: {
+    flex: 1,
+    aspectRatio: 1,
+    borderRadius: Radius.sm,
+    overflow: 'hidden',
+    backgroundColor: colors.surfaceAlt,
+  },
+  gifThumb: { width: '100%', height: '100%' },
+  // ── Music picker ──
+  musicRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  musicArtwork: { width: 48, height: 48, borderRadius: Radius.sm },
+  musicInfo: { flex: 1, gap: 2 },
+  musicTrackName: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textPrimary },
+  musicArtistName: { fontFamily: Typography.family.regular, fontSize: Type.caption.size, color: colors.textSecondary },
   }) as any;
 }
