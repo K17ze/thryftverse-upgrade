@@ -31,6 +31,12 @@ const MODES: { key: CreateMode; label: string; icon: keyof typeof Ionicons.glyph
   { key: 'poster', label: 'Story', icon: 'images-outline' },
 ];
 
+const MODE_CONTEXT: Record<CreateMode, string> = {
+  'visual-search': 'Find an item',
+  look: 'Build a look',
+  poster: 'Create a story',
+};
+
 const OVERFLOW_ACTIONS = [
   { key: 'auction', label: 'Create auction', route: 'CreateAuction' as const },
   { key: 'coown', label: 'Create Co-Own', route: 'CreateCoOwn' as const },
@@ -208,38 +214,44 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
         style={[
           s.modeBar,
           {
-            bottom: Math.max(insets.bottom, 16) + 4,
+            // Position ABOVE the shutter button (shutter is 80pt + 16pt padding)
+            bottom: Math.max(insets.bottom, 16) + 108,
             opacity,
           },
         ]}
         pointerEvents="box-none"
         accessibilityRole="radiogroup"
       >
-        {MODES.map((m, i) => {
-          const isActive = mode === m.key;
-          return (
-            <Pressable
-              key={m.key}
-              style={({ pressed }) => [s.modeTab, pressed && s.controlPressed]}
-              onPress={() => handleModeChange(m.key)}
-              hitSlop={12}
-              accessibilityRole="radio"
-              accessibilityState={{ checked: isActive }}
-              accessibilityLabel={m.label}
-            >
-              <Text
-                style={[
-                  s.modeTabText,
-                  isActive ? s.modeTabTextActive : s.modeTabTextInactive,
-                ]}
-                numberOfLines={1}
+        {/* Context label — flat transparent text, no grey deck */}
+        <Text style={s.modeContextText}>{MODE_CONTEXT[mode]}</Text>
+
+        <View style={s.modeTabsRow}>
+          {MODES.map((m) => {
+            const isActive = mode === m.key;
+            return (
+              <Pressable
+                key={m.key}
+                style={({ pressed }) => [s.modeTab, pressed && s.controlPressed]}
+                onPress={() => handleModeChange(m.key)}
+                hitSlop={12}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: isActive }}
+                accessibilityLabel={m.label}
               >
-                {m.label}
-              </Text>
-              {isActive && <View style={s.modeTabUnderline} />}
-            </Pressable>
-          );
-        })}
+                <Text
+                  style={[
+                    s.modeTabText,
+                    isActive ? s.modeTabTextActive : s.modeTabTextInactive,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {m.label}
+                </Text>
+                {isActive && <View style={s.modeTabUnderline} />}
+              </Pressable>
+            );
+          })}
+        </View>
       </Animated.View>
     );
   }, [handleModeChange, insets.bottom, mode, opacity]);
@@ -346,11 +358,23 @@ const s = StyleSheet.create({
   // No background panel — just text labels over the camera feed.
   // Active mode is solid white with a subtle underline.
   // Inactive modes are semi-transparent white.
-  // The bar sits at the very bottom, below the shutter.
+  // The bar sits above the shutter button.
   modeBar: {
     position: 'absolute',
     left: 0,
     right: 0,
+    flexDirection: 'column',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+  },
+  modeContextText: {
+    fontFamily: Typography.family.medium,
+    fontSize: Type.caption.size,
+    color: 'rgba(255,255,255,0.6)',
+    letterSpacing: 0.3,
+  },
+  modeTabsRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
