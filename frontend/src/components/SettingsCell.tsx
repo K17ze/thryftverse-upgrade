@@ -6,7 +6,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Type, Space, Radius } from '../theme/designTokens';
 import { haptics } from '../utils/haptics';
 import { Typography } from '../theme/designTokens';
@@ -52,6 +52,8 @@ export function SettingsCell({
   style,
   accessibilityHint,
 }: SettingsCellProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const showChevron = variant === 'default' || variant === 'value';
   const isInteractive = variant !== 'toggle' && variant !== 'custom';
 
@@ -63,7 +65,7 @@ export function SettingsCell({
           <Ionicons
             name={icon as any}
             size={20}
-            color={iconColor ? `${iconColor}cc` : Colors.textMuted}
+            color={iconColor ? `${iconColor}cc` : colors.textMuted}
           />
         </View>
       )}
@@ -117,7 +119,7 @@ export function SettingsCell({
           <Ionicons
             name="chevron-forward"
             size={16}
-            color={Colors.textMuted}
+            color={colors.textMuted}
             style={styles.chevron}
           />
         )}
@@ -149,6 +151,8 @@ interface SettingsSectionHeaderProps {
 }
 
 export function SettingsSectionHeader({ title, importance = 'medium' }: SettingsSectionHeaderProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   return (
     <Text style={[styles.sectionHeader, styles[`sectionHeader_${importance}` as keyof typeof styles]]}>
       {title.toUpperCase()}
@@ -162,6 +166,8 @@ interface SettingsSectionFooterProps {
 }
 
 export function SettingsSectionFooter({ text }: SettingsSectionFooterProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   return (
     <Text style={styles.sectionFooter}>{text}</Text>
   );
@@ -174,6 +180,8 @@ interface SettingsGroupProps {
 }
 
 export function SettingsGroup({ children, style }: SettingsGroupProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   return (
     <View style={[styles.group, style]}>
       {children}
@@ -181,129 +189,131 @@ export function SettingsGroup({ children, style }: SettingsGroupProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  group: {
-    marginBottom: Space.md,
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.xl,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 3,
-  },
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: Space.sm + 6,
-    paddingHorizontal: Space.md,
-    minHeight: 52,
-    backgroundColor: Colors.surface,
-  },
-  rowBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
-  },
-  iconCol: {
-    width: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: Space.sm + 2,
-  },
-  textContainer: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  title: {
-    fontSize: Type.body.size,
-    fontFamily: 'Inter_500Medium',
-    color: Colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-    lineHeight: Type.body.lineHeight,
-  },
-  destructiveTitle: {
-    color: Colors.danger,
-    textAlign: 'center',
-  },
-  buttonTitle: {
-    color: Colors.brand,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: 'Inter_400Regular',
-    color: Colors.textMuted,
-    marginTop: 2,
-    lineHeight: Type.caption.lineHeight,
-    letterSpacing: Type.caption.letterSpacing,
-  },
-  rightContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-  },
-  valueText: {
-    fontSize: Type.body.size,
-    fontFamily: 'Inter_400Regular',
-    color: Colors.textMuted,
-    maxWidth: 150,
-    letterSpacing: Type.body.letterSpacing,
-  },
-  chevron: {
-    marginLeft: 2,
-  },
-  badge: {
-    backgroundColor: Colors.brand,
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-  },
-  badgeText: {
-    fontSize: Type.caption.size,
-    fontFamily: 'Inter_600SemiBold',
-    color: '#FFFFFF',
-    letterSpacing: Type.caption.letterSpacing,
-  },
-  sectionHeader: {
-    fontSize: Type.meta.size,
-    fontFamily: 'Inter_600SemiBold',
-    color: Colors.textMuted,
-    marginHorizontal: Space.md,
-    marginTop: Space.lg,
-    marginBottom: Space.sm,
-    letterSpacing: Type.meta.letterSpacing,
-    textTransform: 'uppercase',
-  },
-  sectionHeader_high: {
-    color: Colors.textSecondary,
-    fontSize: Type.caption.size,
-    marginTop: Space.lg + Space.sm,
-    marginBottom: Space.sm + 2,
-  },
-  sectionHeader_medium: {
-    // defaults
-  },
-  sectionHeader_low: {
-    fontFamily: 'Inter_500Medium',
-    marginTop: Space.md,
-  },
-  sectionHeader_lowest: {
-    fontFamily: 'Inter_500Medium',
-    color: `${Colors.textMuted}99`,
-    marginTop: Space.md,
-  },
-  sectionFooter: {
-    fontSize: Type.caption.size,
-    fontFamily: 'Inter_400Regular',
-    color: Colors.textMuted,
-    marginHorizontal: Space.md,
-    marginTop: Space.sm,
-    marginBottom: Space.md,
-    lineHeight: Type.caption.lineHeight,
-    letterSpacing: Type.caption.letterSpacing,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    group: {
+      marginBottom: Space.md,
+      backgroundColor: colors.surface,
+      borderRadius: Radius.xl,
+      overflow: 'hidden',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.06,
+      shadowRadius: 10,
+      elevation: 3,
+    },
+    container: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: Space.sm + 6,
+      paddingHorizontal: Space.md,
+      minHeight: 52,
+      backgroundColor: colors.surface,
+    },
+    rowBorder: {
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    iconCol: {
+      width: 28,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: Space.sm + 2,
+    },
+    textContainer: {
+      flex: 1,
+      justifyContent: 'center',
+    },
+    title: {
+      fontSize: Type.body.size,
+      fontFamily: 'Inter_500Medium',
+      color: colors.textPrimary,
+      letterSpacing: Type.body.letterSpacing,
+      lineHeight: Type.body.lineHeight,
+    },
+    destructiveTitle: {
+      color: colors.danger,
+      textAlign: 'center',
+    },
+    buttonTitle: {
+      color: colors.brand,
+      textAlign: 'center',
+    },
+    subtitle: {
+      fontSize: Type.caption.size,
+      fontFamily: 'Inter_400Regular',
+      color: colors.textMuted,
+      marginTop: 2,
+      lineHeight: Type.caption.lineHeight,
+      letterSpacing: Type.caption.letterSpacing,
+    },
+    rightContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+    },
+    valueText: {
+      fontSize: Type.body.size,
+      fontFamily: 'Inter_400Regular',
+      color: colors.textMuted,
+      maxWidth: 150,
+      letterSpacing: Type.body.letterSpacing,
+    },
+    chevron: {
+      marginLeft: 2,
+    },
+    badge: {
+      backgroundColor: colors.brand,
+      borderRadius: 10,
+      minWidth: 20,
+      height: 20,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: 6,
+    },
+    badgeText: {
+      fontSize: Type.caption.size,
+      fontFamily: 'Inter_600SemiBold',
+      color: '#FFFFFF',
+      letterSpacing: Type.caption.letterSpacing,
+    },
+    sectionHeader: {
+      fontSize: Type.meta.size,
+      fontFamily: 'Inter_600SemiBold',
+      color: colors.textMuted,
+      marginHorizontal: Space.md,
+      marginTop: Space.lg,
+      marginBottom: Space.sm,
+      letterSpacing: Type.meta.letterSpacing,
+      textTransform: 'uppercase',
+    },
+    sectionHeader_high: {
+      color: colors.textSecondary,
+      fontSize: Type.caption.size,
+      marginTop: Space.lg + Space.sm,
+      marginBottom: Space.sm + 2,
+    },
+    sectionHeader_medium: {
+      // defaults
+    },
+    sectionHeader_low: {
+      fontFamily: 'Inter_500Medium',
+      marginTop: Space.md,
+    },
+    sectionHeader_lowest: {
+      fontFamily: 'Inter_500Medium',
+      color: `${colors.textMuted}99`,
+      marginTop: Space.md,
+    },
+    sectionFooter: {
+      fontSize: Type.caption.size,
+      fontFamily: 'Inter_400Regular',
+      color: colors.textMuted,
+      marginHorizontal: Space.md,
+      marginTop: Space.sm,
+      marginBottom: Space.md,
+      lineHeight: Type.caption.lineHeight,
+      letterSpacing: Type.caption.letterSpacing,
+    },
+  });
+}

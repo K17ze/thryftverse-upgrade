@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
-import { Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { AnimatedPressable } from './AnimatedPressable';
 import { trackTelemetryEvent } from '../lib/telemetry';
 import { Typography } from '../theme/designTokens';
@@ -34,6 +34,8 @@ export function SyncRetryBanner({
   telemetryContext,
   trackImpression = true,
 }: SyncRetryBannerProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const actionDisabled = disabled || isRetrying;
   const trackedImpressionContext = React.useRef<string | null>(null);
 
@@ -78,36 +80,38 @@ export function SyncRetryBanner({
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surfaceAlt,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  message: {
-    flex: 1,
-    color: Colors.textSecondary,
-    fontSize: 11,
-    lineHeight: 15,
-    fontFamily: Typography.family.medium,
-  },
-  actionBtn: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  actionText: {
-    color: Colors.textPrimary,
-    fontSize: 11,
-    fontFamily: Typography.family.semibold,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: {
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surfaceAlt,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    message: {
+      flex: 1,
+      color: colors.textSecondary,
+      fontSize: 11,
+      lineHeight: 15,
+      fontFamily: Typography.family.medium,
+    },
+    actionBtn: {
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+    },
+    actionText: {
+      color: colors.textPrimary,
+      fontSize: 11,
+      fontFamily: Typography.family.semibold,
+    },
+  });
+}

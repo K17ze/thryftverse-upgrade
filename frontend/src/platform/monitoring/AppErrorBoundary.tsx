@@ -1,13 +1,14 @@
 import React, { ErrorInfo, ReactNode } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { RetryState } from '../../components/RetryState';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { trackTelemetryEvent } from '../../lib/telemetry';
 import { Sentry } from './sentry';
 
 interface AppErrorBoundaryProps {
   children: ReactNode;
   fallback?: ReactNode;
+  colors: ThemeColors;
 }
 
 interface AppErrorBoundaryState {
@@ -15,7 +16,7 @@ interface AppErrorBoundaryState {
   errorMsg: string;
 }
 
-export class AppErrorBoundary extends React.Component<AppErrorBoundaryProps, AppErrorBoundaryState> {
+class AppErrorBoundaryInner extends React.Component<AppErrorBoundaryProps, AppErrorBoundaryState> {
   constructor(props: AppErrorBoundaryProps) {
     super(props);
     this.state = { hasError: false, errorMsg: '' };
@@ -48,6 +49,7 @@ export class AppErrorBoundary extends React.Component<AppErrorBoundaryProps, App
       if (this.props.fallback) {
         return <>{this.props.fallback}</>;
       }
+      const styles = createStyles(this.props.colors);
       return (
         <View style={styles.container}>
           <RetryState onRetry={this.handleRetry} message={this.state.errorMsg} />
@@ -58,9 +60,20 @@ export class AppErrorBoundary extends React.Component<AppErrorBoundaryProps, App
   }
 }
 
-const styles = StyleSheet.create({
+export function AppErrorBoundary({ children, fallback }: Omit<AppErrorBoundaryProps, 'colors'>) {
+  const { colors } = useAppTheme();
+  return (
+    <AppErrorBoundaryInner colors={colors} fallback={fallback}>
+      {children}
+    </AppErrorBoundaryInner>
+  );
+}
+
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
-});
+  });
+}

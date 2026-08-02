@@ -15,8 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library/legacy';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
-import { useAppTheme } from '../theme/ThemeContext';
-import { Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { searchListingsFromApi, type ListingSearchResult } from '../services/listingsApi';
 import { searchUsers, type UserSearchResult } from '../services/profileApi';
@@ -67,6 +66,7 @@ function AssetPickerContent({ mode, onClose, onAddLayer, editingLayer }: { mode:
 
 function PickerShell({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   return (
     <SheetContainer visible={true} onClose={onClose} maxHeight={0.85}>
       <KeyboardAwareScrollView contentContainerStyle={{ flex: 1 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" style={{ maxHeight: '100%' }}>
@@ -115,6 +115,7 @@ interface MediaAsset {
 
 function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [status, requestPermission] = MediaLibrary.usePermissions();
   const [assets, setAssets] = useState<MediaAsset[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -461,6 +462,8 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
 // ── Product Picker ─────────────────────────────────────────────────
 
 function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<ListingSearchResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -528,11 +531,11 @@ function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
   return (
     <PickerShell title="Add Product" onClose={onClose}>
       <View style={styles.searchRow}>
-        <Ionicons name="search" size={18} color={Colors.textMuted} style={styles.searchIcon} />
+        <Ionicons name="search" size={18} color={colors.textMuted} style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
           placeholder="Search listings..."
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={colors.textMuted}
           value={query}
           onChangeText={setQuery}
           autoCapitalize="none"
@@ -540,7 +543,7 @@ function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
           autoFocus
           accessibilityLabel="Search listings"
         />
-        {isLoading && <ActivityIndicator size="small" color={Colors.brand} />}
+        {isLoading && <ActivityIndicator size="small" color={colors.brand} />}
       </View>
       {error ? (
         <View style={styles.errorBody}>
@@ -556,7 +559,7 @@ function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
           renderItem={({ item }) => (
             <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select ${item.title}`} accessibilityRole="button">
               <View style={styles.resultThumb}>
-                {item.imageUrl ? <Image source={{ uri: item.imageUrl }} style={styles.resultThumbImg} /> : <Ionicons name="pricetag" size={16} color={Colors.textSecondary} />}
+                {item.imageUrl ? <Image source={{ uri: item.imageUrl }} style={styles.resultThumbImg} /> : <Ionicons name="pricetag" size={16} color={colors.textSecondary} />}
               </View>
               <View style={styles.resultInfo}>
                 <Text style={styles.resultName} numberOfLines={1}>{item.title}</Text>
@@ -576,6 +579,8 @@ function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
 // ── Mention Picker ─────────────────────────────────────────────────
 
 function MentionPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const currentUserId = useStore((state) => state.currentUser?.id);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<UserSearchResult[]>([]);
@@ -639,11 +644,11 @@ function MentionPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
   return (
     <PickerShell title="Add Mention" onClose={onClose}>
       <View style={styles.searchRow}>
-        <Ionicons name="search" size={18} color={Colors.textMuted} style={styles.searchIcon} />
+        <Ionicons name="search" size={18} color={colors.textMuted} style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
           placeholder="Search by username..."
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={colors.textMuted}
           value={query}
           onChangeText={setQuery}
           autoCapitalize="none"
@@ -651,7 +656,7 @@ function MentionPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
           autoFocus
           accessibilityLabel="Search users"
         />
-        {isSearching && <ActivityIndicator size="small" color={Colors.brand} />}
+        {isSearching && <ActivityIndicator size="small" color={colors.brand} />}
       </View>
       {error ? (
         <View style={styles.errorBody}>
@@ -687,6 +692,8 @@ function MentionPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
 // ── Look Picker ────────────────────────────────────────────────────
 
 function LookPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [query, setQuery] = useState('');
   const [allLooks, setAllLooks] = useState<Array<{ id: string; caption: string; mediaUrl: string; creatorId: string }>>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -744,11 +751,11 @@ function LookPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
   return (
     <PickerShell title="Add Look" onClose={onClose}>
       <View style={styles.searchRow}>
-        <Ionicons name="search" size={18} color={Colors.textMuted} style={styles.searchIcon} />
+        <Ionicons name="search" size={18} color={colors.textMuted} style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
           placeholder="Search looks..."
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={colors.textMuted}
           value={query}
           onChangeText={setQuery}
           autoCapitalize="none"
@@ -756,7 +763,7 @@ function LookPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
           autoFocus
           accessibilityLabel="Search looks"
         />
-        {isLoading && <ActivityIndicator size="small" color={Colors.brand} />}
+        {isLoading && <ActivityIndicator size="small" color={colors.brand} />}
       </View>
       {error ? (
         <View style={styles.errorBody}>
@@ -771,7 +778,7 @@ function LookPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select look ${item.caption}`} accessibilityRole="button">
-              <View style={styles.resultAvatar}><Ionicons name="shirt-outline" size={16} color={Colors.textSecondary} /></View>
+              <View style={styles.resultAvatar}><Ionicons name="shirt-outline" size={16} color={colors.textSecondary} /></View>
               <View style={styles.resultInfo}>
                 <Text style={styles.resultName} numberOfLines={2}>{item.caption}</Text>
               </View>
@@ -804,6 +811,8 @@ const TEXT_ALIGNMENTS: Array<{ key: 'left' | 'center' | 'right'; icon: string }>
 ];
 
 function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const isEditing = editingLayer?.type === 'text';
   const existingPayload = isEditing ? (editingLayer as any).payload : null;
 
@@ -849,7 +858,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
         <TextInput
           style={styles.textInput}
           placeholder="Type your text..."
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={colors.textMuted}
           value={text}
           onChangeText={setText}
           multiline
@@ -899,7 +908,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               accessibilityLabel={`Align ${a.key}`}
               accessibilityRole="button"
             >
-              <Ionicons name={a.icon as any} size={18} color={alignment === a.key ? Colors.brand : Colors.textSecondary} />
+              <Ionicons name={a.icon as any} size={18} color={alignment === a.key ? colors.brand : colors.textSecondary} />
             </Pressable>
           ))}
         </View>
@@ -924,6 +933,8 @@ const SHAPES: Array<{ shape: 'circle' | 'square' | 'line' | 'arrow' | 'star' | '
 ];
 
 function ShapePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const handleSelect = useCallback((shape: typeof SHAPES[0]) => {
     onAddLayer({
       ...baseLayer(createStableId('shape'), 5),
@@ -940,7 +951,7 @@ function ShapePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
       <View style={styles.shapeGrid}>
         {SHAPES.map((s) => (
           <Pressable key={s.shape} onPress={() => handleSelect(s)} style={styles.shapeOption} accessibilityLabel={`Add ${s.label}`} accessibilityRole="button">
-            <Ionicons name={s.icon as any} size={28} color={Colors.textPrimary} />
+            <Ionicons name={s.icon as any} size={28} color={colors.textPrimary} />
             <Text style={styles.shapeLabel}>{s.label}</Text>
           </Pressable>
         ))}
@@ -952,6 +963,8 @@ function ShapePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
 // ── Vote Picker ────────────────────────────────────────────────────
 
 function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [question, setQuestion] = useState('');
   const [option1, setOption1] = useState('');
   const [option2, setOption2] = useState('');
@@ -983,7 +996,7 @@ function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
         <TextInput
           style={styles.textInput}
           placeholder="e.g. Which outfit is better?"
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={colors.textMuted}
           value={question}
           onChangeText={setQuestion}
           maxLength={100}
@@ -994,7 +1007,7 @@ function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
         <TextInput
           style={styles.textInput}
           placeholder="First option"
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={colors.textMuted}
           value={option1}
           onChangeText={setOption1}
           maxLength={50}
@@ -1004,7 +1017,7 @@ function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
         <TextInput
           style={styles.textInput}
           placeholder="Second option"
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={colors.textMuted}
           value={option2}
           onChangeText={setOption2}
           maxLength={50}
@@ -1020,13 +1033,14 @@ function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
 
 // ── Styles ─────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Space.md, paddingVertical: Space.sm },
-  title: { fontFamily: Typography.family.semibold, fontSize: Type.subtitle.size, color: Colors.textPrimary },
+  title: { fontFamily: Typography.family.semibold, fontSize: Type.subtitle.size, color: colors.textPrimary },
   closeBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center', borderRadius: Radius.sm },
   mediaOptions: { flexDirection: 'row', justifyContent: 'center', gap: Space.lg, paddingVertical: Space.xl },
   mediaOption: { alignItems: 'center', gap: 8, minWidth: 80 },
-  mediaOptionLabel: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: Colors.textPrimary },
+  mediaOptionLabel: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textPrimary },
   // ── Media grid ──
   mediaGridContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
   mediaGridRow: { gap: Space.xs, marginBottom: Space.xs },
@@ -1142,48 +1156,49 @@ const styles = StyleSheet.create({
   searchRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Space.md, paddingVertical: Space.sm, gap: 8 },
   searchIcon: {},
   searchInput: {
-    flex: 1, borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.md,
-    paddingHorizontal: Space.md, paddingVertical: Space.sm, fontSize: Type.body.size, color: Colors.textPrimary,
+    flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: Radius.md,
+    paddingHorizontal: Space.md, paddingVertical: Space.sm, fontSize: Type.body.size, color: colors.textPrimary,
   },
   resultList: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
-  resultRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.border },
-  resultThumb: { width: 40, height: 40, borderRadius: Radius.sm, backgroundColor: Colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
+  resultRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  resultThumb: { width: 40, height: 40, borderRadius: Radius.sm, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
   resultThumbImg: { width: '100%', height: '100%' },
-  resultAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.surfaceAlt, justifyContent: 'center', alignItems: 'center' },
-  resultAvatarText: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: Colors.textSecondary },
+  resultAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center' },
+  resultAvatarText: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: colors.textSecondary },
   resultInfo: { flex: 1, gap: 2 },
-  resultName: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: Colors.textPrimary },
-  resultPrice: { fontFamily: Typography.family.bold, fontSize: Type.caption.size, color: Colors.brand },
-  resultSubtext: { fontFamily: Typography.family.regular, fontSize: Type.caption.size, color: Colors.textMuted },
+  resultName: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textPrimary },
+  resultPrice: { fontFamily: Typography.family.bold, fontSize: Type.caption.size, color: colors.brand },
+  resultSubtext: { fontFamily: Typography.family.regular, fontSize: Type.caption.size, color: colors.textMuted },
   loadingBody: { paddingVertical: Space.xl, alignItems: 'center' },
   emptyState: { paddingVertical: Space.xl, alignItems: 'center' },
-  emptyText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: Colors.textMuted },
+  emptyText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textMuted },
   errorBody: { paddingVertical: Space.xl, alignItems: 'center', gap: Space.sm },
-  errorText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: Colors.textMuted },
-  retryBtn: { paddingHorizontal: Space.lg, paddingVertical: Space.sm, borderRadius: Radius.md, backgroundColor: Colors.surfaceAlt, borderWidth: 1, borderColor: Colors.border },
-  retryBtnText: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: Colors.brand },
+  errorText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textMuted },
+  retryBtn: { paddingHorizontal: Space.lg, paddingVertical: Space.sm, borderRadius: Radius.md, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border },
+  retryBtnText: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: colors.brand },
   textPickerBody: { paddingHorizontal: Space.md, paddingBottom: Space.xl, gap: Space.sm },
-  sectionLabel: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: Colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 },
+  sectionLabel: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 },
   textInput: {
-    borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.md,
-    paddingHorizontal: Space.md, paddingVertical: Space.sm, fontSize: Type.body.size, color: Colors.textPrimary, minHeight: 80,
+    borderWidth: 1, borderColor: colors.border, borderRadius: Radius.md,
+    paddingHorizontal: Space.md, paddingVertical: Space.sm, fontSize: Type.body.size, color: colors.textPrimary, minHeight: 80,
   },
-  saveBtn: { height: 44, borderRadius: Radius.md, backgroundColor: Colors.brand, justifyContent: 'center', alignItems: 'center' },
+  saveBtn: { height: 44, borderRadius: Radius.md, backgroundColor: colors.brand, justifyContent: 'center', alignItems: 'center' },
   saveBtnDisabled: { opacity: 0.4 },
   saveBtnText: { color: '#fff', fontFamily: Typography.family.semibold, fontSize: Type.body.size },
-  pickerSectionLabel: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: Colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: Space.xs },
+  pickerSectionLabel: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: Space.xs },
   styleScroll: { marginHorizontal: -Space.md },
-  styleOption: { paddingHorizontal: Space.md, paddingVertical: Space.sm, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surfaceAlt, marginRight: Space.sm },
-  styleOptionActive: { borderColor: Colors.brand, backgroundColor: `${Colors.brand}15` },
-  styleOptionText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: Colors.textPrimary },
-  styleOptionTextActive: { color: Colors.brand },
+  styleOption: { paddingHorizontal: Space.md, paddingVertical: Space.sm, borderRadius: Radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceAlt, marginRight: Space.sm },
+  styleOptionActive: { borderColor: colors.brand, backgroundColor: `${colors.brand}15` },
+  styleOptionText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textPrimary },
+  styleOptionTextActive: { color: colors.brand },
   colorRow: { flexDirection: 'row', gap: Space.sm, flexWrap: 'wrap' },
   colorOption: { width: 32, height: 32, borderRadius: 16, borderWidth: 2, borderColor: 'transparent' },
-  colorOptionActive: { borderColor: Colors.brand },
+  colorOptionActive: { borderColor: colors.brand },
   alignmentRow: { flexDirection: 'row', gap: Space.sm },
-  alignmentOption: { width: 44, height: 44, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surfaceAlt, justifyContent: 'center', alignItems: 'center' },
-  alignmentOptionActive: { borderColor: Colors.brand, backgroundColor: `${Colors.brand}15` },
+  alignmentOption: { width: 44, height: 44, borderRadius: Radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center' },
+  alignmentOptionActive: { borderColor: colors.brand, backgroundColor: `${colors.brand}15` },
   shapeGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: Space.md, paddingVertical: Space.lg, paddingHorizontal: Space.md },
   shapeOption: { alignItems: 'center', gap: 6, width: 80, paddingVertical: Space.sm },
-  shapeLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: Colors.textSecondary },
-});
+  shapeLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary },
+  });
+}

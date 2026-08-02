@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, View, Text, Pressable } from 'react-native';
 import { Controller, Control, FieldError, RegisterOptions } from 'react-hook-form';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography } from '../../theme/designTokens';
 import { NativePicker, type NativePickerOption } from '../native/NativePicker';
 
@@ -23,6 +23,9 @@ export function ControlledSelect({
   rules,
   options,
 }: ControlledSelectProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={styles.container}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
@@ -43,20 +46,22 @@ export function ControlledSelect({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     marginBottom: 12,
   },
   label: {
     fontSize: 13,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginBottom: 6,
   },
   errorText: {
     fontSize: 12,
-    color: Colors.danger,
+    color: colors.danger,
     marginTop: 4,
     fontFamily: Typography.family.regular,
   },
-});
+  });
+}

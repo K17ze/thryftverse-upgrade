@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { StyleSheet, View, Text, Pressable, ScrollView, useWindowDimensions } from 'react-native';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography } from '../../theme/designTokens';
 
 export interface NativePagerPage {
@@ -24,6 +24,8 @@ export function NativePager({
   tabBarStyle = 'full',
   testID,
 }: NativePagerProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width: screenWidth } = useWindowDimensions();
   const scrollRef = useRef<ScrollView>(null);
 
@@ -79,14 +81,15 @@ export function NativePager({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
   },
   tabBar: {
     flexDirection: 'row',
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   tabBarCompact: {
     paddingHorizontal: 8,
@@ -101,10 +104,10 @@ const styles = StyleSheet.create({
   tabText: {
     fontSize: 14,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   tabTextActive: {
-    color: Colors.brand,
+    color: colors.brand,
     fontFamily: Typography.family.semibold,
   },
   tabIndicator: {
@@ -112,7 +115,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: 30,
     height: 2,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     borderRadius: 1,
   },
   pager: {
@@ -121,4 +124,5 @@ const styles = StyleSheet.create({
   page: {
     flex: 1,
   },
-});
+  });
+}

@@ -14,8 +14,7 @@ import Reanimated, {
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
-import { useAppTheme } from '../theme/ThemeContext';
-import { Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Video, ResizeMode } from '../components/compat/Video';
 import type { CreatorLayer, CreatorDocument, CreatorPage } from './composition';
 import { getVisibleLayersSorted } from './composition';
@@ -674,6 +673,8 @@ function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tex
 
 function ProductLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'product' }> }) {
   const { payload } = layer;
+  const { colors } = useAppTheme();
+  const productStyles = React.useMemo(() => createProductStyles(colors), [colors]);
   const isSold = payload.availability === 'sold';
   const isDeleted = payload.availability === 'deleted';
   const hasImage = !!payload.snapshotImageUrl;
@@ -1091,7 +1092,8 @@ const textStyles = StyleSheet.create({
   },
 });
 
-const productStyles = StyleSheet.create({
+function createProductStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     backgroundColor: 'rgba(0,0,0,0.55)',
     borderRadius: Radius.md,
@@ -1112,12 +1114,12 @@ const productStyles = StyleSheet.create({
     fontSize: Type.caption.size,
   },
   price: {
-    color: Colors.brand,
+    color: colors.brand,
     fontFamily: Typography.family.bold,
     fontSize: Type.body.size,
   },
   soldPrice: {
-    color: Colors.danger,
+    color: colors.danger,
   },
   deletedPrice: {
     color: '#888',
@@ -1149,7 +1151,7 @@ const productStyles = StyleSheet.create({
     fontSize: 10,
   },
   imagePrice: {
-    color: Colors.brand,
+    color: colors.brand,
     fontFamily: Typography.family.bold,
     fontSize: Type.caption.size,
   },
@@ -1157,7 +1159,7 @@ const productStyles = StyleSheet.create({
     position: 'absolute',
     top: Space.sm,
     right: Space.sm,
-    backgroundColor: Colors.danger,
+    backgroundColor: colors.danger,
     borderRadius: Radius.sm,
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -1187,7 +1189,7 @@ const productStyles = StyleSheet.create({
     borderRadius: 3.5,
     backgroundColor: '#fff',
     borderWidth: 1.5,
-    borderColor: Colors.brand,
+    borderColor: colors.brand,
   },
   hotspotLabel: {
     color: '#fff',
@@ -1196,11 +1198,12 @@ const productStyles = StyleSheet.create({
     flex: 1,
   },
   hotspotPrice: {
-    color: Colors.brand,
+    color: colors.brand,
     fontFamily: Typography.family.bold,
     fontSize: 11,
   },
-});
+  });
+}
 
 const mentionStyles = StyleSheet.create({
   container: {

@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, View, Text, Pressable, StyleProp, ViewStyle } from 'react-native';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography } from '../../theme/designTokens';
 
 export interface NativeSegmentedControlOption<T extends string> {
@@ -23,6 +23,9 @@ export function NativeSegmentedControl<T extends string>({
   style,
   testID,
 }: NativeSegmentedControlProps<T>) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={[styles.container, style]} testID={testID}>
       {options.map((opt) => {
@@ -46,10 +49,11 @@ export function NativeSegmentedControl<T extends string>({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flexDirection: 'row',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: 10,
     padding: 3,
     gap: 2,
@@ -63,7 +67,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   optionActive: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.08,
@@ -73,10 +77,11 @@ const styles = StyleSheet.create({
   optionText: {
     fontSize: 13,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   optionTextActive: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
   },
-});
+  });
+}

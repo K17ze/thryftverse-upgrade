@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, View, Text, ScrollView } from 'react-native';
 import { FieldErrors } from 'react-hook-form';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography } from '../../theme/designTokens';
 
 export interface FormErrorSummaryProps {
@@ -10,6 +10,9 @@ export interface FormErrorSummaryProps {
 }
 
 export function FormErrorSummary({ errors, title = 'Please fix the following:' }: FormErrorSummaryProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   const errorMessages = Object.entries(errors)
     .filter(([, err]) => err?.message)
     .map(([field, err]) => ({ field, message: err!.message as string }));
@@ -28,25 +31,27 @@ export function FormErrorSummary({ errors, title = 'Please fix the following:' }
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
-    backgroundColor: `${Colors.danger}10`,
+    backgroundColor: `${colors.danger}10`,
     borderRadius: 10,
     padding: 12,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: `${Colors.danger}30`,
+    borderColor: `${colors.danger}30`,
   },
   title: {
     fontSize: 14,
     fontFamily: Typography.family.semibold,
-    color: Colors.danger,
+    color: colors.danger,
     marginBottom: 6,
   },
   errorItem: {
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.danger,
+    color: colors.danger,
     marginBottom: 2,
   },
-});
+  });
+}

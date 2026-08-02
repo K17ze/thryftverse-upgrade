@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { Meta, Caption } from './ui/Text';
 
@@ -23,16 +23,19 @@ export function FinancialDisclosure({
   items = DEFAULT_ITEMS,
   style,
 }: FinancialDisclosureProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={[styles.card, style]}>
       <View style={styles.header}>
-        <Ionicons name="warning-outline" size={20} color={Colors.textMuted} />
+        <Ionicons name="warning-outline" size={20} color={colors.textMuted} />
         <Meta style={styles.headerTitle}>{title}</Meta>
       </View>
       {items.map((item, i) => (
         <View key={i} style={styles.itemRow}>
           <View style={styles.bullet} />
-          <Caption color={Colors.textMuted} style={styles.itemText}>
+          <Caption color={colors.textMuted} style={styles.itemText}>
             {item}
           </Caption>
         </View>
@@ -41,39 +44,41 @@ export function FinancialDisclosure({
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: Colors.surfaceAlt,
-    borderRadius: Radius.lg,
-    padding: Space.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    marginBottom: Space.sm,
-  },
-  headerTitle: {
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-  },
-  itemRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Space.sm,
-    marginTop: Space.xs,
-  },
-  bullet: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.textMuted,
-    marginTop: 6,
-  },
-  itemText: {
-    flex: 1,
-    lineHeight: Type.caption.lineHeight + 2,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    card: {
+      backgroundColor: colors.surfaceAlt,
+      borderRadius: Radius.lg,
+      padding: Space.md,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm,
+      marginBottom: Space.sm,
+    },
+    headerTitle: {
+      fontFamily: Typography.family.semibold,
+      color: colors.textPrimary,
+    },
+    itemRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: Space.sm,
+      marginTop: Space.xs,
+    },
+    bullet: {
+      width: 4,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: colors.textMuted,
+      marginTop: 6,
+    },
+    itemText: {
+      flex: 1,
+      lineHeight: Type.caption.lineHeight + 2,
+    },
+  });
+}

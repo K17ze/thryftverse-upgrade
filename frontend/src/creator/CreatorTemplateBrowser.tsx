@@ -10,8 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
-import { useAppTheme } from '../theme/ThemeContext';
-import { Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import {
   getTemplatesByType,
   type CreatorTemplate,
@@ -35,6 +34,7 @@ export function CreatorTemplateBrowser({
   hasExistingWork,
 }: CreatorTemplateBrowserProps) {
   const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const templates = getTemplatesByType(documentType);
 
   const handleApply = useCallback(
@@ -124,7 +124,8 @@ export function CreatorTemplateBrowser({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -181,6 +182,7 @@ const styles = StyleSheet.create({
   emptyText: {
     fontFamily: Typography.family.medium,
     fontSize: Type.body.size,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
-});
+  });
+}

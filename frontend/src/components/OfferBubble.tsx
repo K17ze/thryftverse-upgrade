@@ -6,7 +6,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type } from '../theme/designTokens';
 import { CachedImage } from './CachedImage';
 import { AppButton } from './ui/AppButton';
@@ -52,42 +52,45 @@ export function OfferBubble({
   onViewItem,
   style,
 }: OfferBubbleProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   const getTypeConfig = () => {
     switch (type) {
       case 'offer':
         return {
           icon: 'pricetag',
-          color: Colors.brand,
+          color: colors.brand,
           label: 'Offer',
-          bgColor: `${Colors.brand}15`,
+          bgColor: `${colors.brand}15`,
         };
       case 'counter':
         return {
           icon: 'swap-horizontal',
-          color: Colors.textSecondary,
+          color: colors.textSecondary,
           label: 'Counter Offer',
-          bgColor: Colors.surfaceAlt,
+          bgColor: colors.surfaceAlt,
         };
       case 'accept':
         return {
           icon: 'checkmark-circle',
-          color: Colors.success,
+          color: colors.success,
           label: 'Accepted',
-          bgColor: `${Colors.success}15`,
+          bgColor: `${colors.success}15`,
         };
       case 'decline':
         return {
           icon: 'close-circle',
-          color: Colors.danger,
+          color: colors.danger,
           label: 'Declined',
-          bgColor: `${Colors.danger}15`,
+          bgColor: `${colors.danger}15`,
         };
       case 'expired':
         return {
           icon: 'time',
-          color: Colors.textMuted,
+          color: colors.textMuted,
           label: 'Expired',
-          bgColor: Colors.border,
+          bgColor: colors.border,
         };
     }
   };
@@ -131,7 +134,7 @@ export function OfferBubble({
             <View style={styles.itemInfo}>
               <BodyEmphasis numberOfLines={1}>{itemName}</BodyEmphasis>
               {originalPrice && (
-                <Caption color={Colors.textMuted} style={styles.originalPrice}>
+                <Caption color={colors.textMuted} style={styles.originalPrice}>
                   Listed: {currency}{originalPrice.toLocaleString()}
                 </Caption>
               )}
@@ -146,7 +149,7 @@ export function OfferBubble({
           </Text>
           {discountPercent > 0 && type === 'offer' && (
             <View style={styles.discountBadge}>
-              <Caption color={Colors.textInverse} style={styles.discountText}>-{discountPercent}%</Caption>
+              <Caption color={colors.textInverse} style={styles.discountText}>-{discountPercent}%</Caption>
             </View>
           )}
         </View>
@@ -165,19 +168,19 @@ export function OfferBubble({
               size={16}
               color={
                 status === 'accepted'
-                  ? Colors.success
+                  ? colors.success
                   : status === 'declined'
-                  ? Colors.danger
-                  : Colors.textMuted
+                  ? colors.danger
+                  : colors.textMuted
               }
             />
             <Caption
               color={
                 status === 'accepted'
-                  ? Colors.success
+                  ? colors.success
                   : status === 'declined'
-                  ? Colors.danger
-                  : Colors.textMuted
+                  ? colors.danger
+                  : colors.textMuted
               }
               style={styles.statusText}
             >
@@ -226,115 +229,117 @@ export function OfferBubble({
 
       {/* Footer */}
       <View style={styles.footer}>
-        <Caption color={Colors.textMuted}>{timestamp}</Caption>
+        <Caption color={colors.textMuted}>{timestamp}</Caption>
         {senderName && (
-          <Caption color={Colors.textMuted}> \u00b7 {senderName}</Caption>
+          <Caption color={colors.textMuted}> \u00b7 {senderName}</Caption>
         )}
       </View>
     </ChatCard>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    maxWidth: 300,
-    borderRadius: Radius.xl,
-    overflow: 'hidden',
-    marginVertical: Space.xs,
-  },
-  containerMe: {
-    alignSelf: 'flex-end',
-    borderBottomRightRadius: Space.xs,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: Space.sm + 4,
-    paddingVertical: Space.sm,
-  },
-  typeLabel: {
-    fontFamily: Typography.family.semibold,
-  },
-  content: {
-    padding: Space.sm + 4,
-    paddingTop: Space.sm,
-  },
-  itemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm + 2,
-    backgroundColor: `${Colors.textPrimary}08`,
-    padding: Space.sm,
-    borderRadius: Radius.md,
-    marginBottom: Space.sm + 4,
-  },
-  itemImage: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.sm,
-  },
-  itemInfo: {
-    flex: 1,
-  },
-  originalPrice: {
-    textDecorationLine: 'line-through',
-  },
-  amountRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm + 2,
-    marginBottom: Space.xs + 4,
-  },
-  amount: {
-    fontSize: Type.priceLarge.size,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    letterSpacing: -1,
-  },
-  discountBadge: {
-    backgroundColor: Colors.success,
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.xs,
-    borderRadius: Radius.full,
-  },
-  discountText: {
-    fontFamily: Typography.family.bold,
-  },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: Space.xs + 4,
-  },
-  statusText: {
-    fontFamily: Typography.family.medium,
-  },
-  actions: {
-    flexDirection: 'row',
-    gap: Space.sm + 2,
-    marginTop: Space.sm + 4,
-  },
-  actionButton: {
-    flex: 1,
-    height: 38,
-    borderRadius: Radius.md,
-  },
-  declineButton: {
-    backgroundColor: Colors.surfaceAlt,
-  },
-  counterButton: {
-    backgroundColor: Colors.surfaceAlt,
-  },
-  acceptButton: {
-    backgroundColor: Colors.brand,
-  },
-  footer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Space.sm + 4,
-    paddingVertical: Space.sm,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: {
+      maxWidth: 300,
+      borderRadius: Radius.xl,
+      overflow: 'hidden',
+      marginVertical: Space.xs,
+    },
+    containerMe: {
+      alignSelf: 'flex-end',
+      borderBottomRightRadius: Space.xs,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: Space.sm + 4,
+      paddingVertical: Space.sm,
+    },
+    typeLabel: {
+      fontFamily: Typography.family.semibold,
+    },
+    content: {
+      padding: Space.sm + 4,
+      paddingTop: Space.sm,
+    },
+    itemRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm + 2,
+      backgroundColor: `${colors.textPrimary}08`,
+      padding: Space.sm,
+      borderRadius: Radius.md,
+      marginBottom: Space.sm + 4,
+    },
+    itemImage: {
+      width: 40,
+      height: 40,
+      borderRadius: Radius.sm,
+    },
+    itemInfo: {
+      flex: 1,
+    },
+    originalPrice: {
+      textDecorationLine: 'line-through',
+    },
+    amountRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm + 2,
+      marginBottom: Space.xs + 4,
+    },
+    amount: {
+      fontSize: Type.priceLarge.size,
+      fontFamily: Typography.family.bold,
+      color: colors.textPrimary,
+      letterSpacing: -1,
+    },
+    discountBadge: {
+      backgroundColor: colors.success,
+      paddingHorizontal: Space.sm,
+      paddingVertical: Space.xs,
+      borderRadius: Radius.full,
+    },
+    discountText: {
+      fontFamily: Typography.family.bold,
+    },
+    statusRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginBottom: Space.xs + 4,
+    },
+    statusText: {
+      fontFamily: Typography.family.medium,
+    },
+    actions: {
+      flexDirection: 'row',
+      gap: Space.sm + 2,
+      marginTop: Space.sm + 4,
+    },
+    actionButton: {
+      flex: 1,
+      height: 38,
+      borderRadius: Radius.md,
+    },
+    declineButton: {
+      backgroundColor: colors.surfaceAlt,
+    },
+    counterButton: {
+      backgroundColor: colors.surfaceAlt,
+    },
+    acceptButton: {
+      backgroundColor: colors.brand,
+    },
+    footer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: Space.sm + 4,
+      paddingVertical: Space.sm,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+  });
+}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, Modal, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Typography, Space, Radius } from '../theme/designTokens';
 import {
   getBackendDiagnostics,
@@ -18,6 +18,8 @@ import {
  * sync error. NEVER rendered in production — the exporter checks `__DEV__`.
  */
 export function BackendDiagnosticsOverlay() {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [open, setOpen] = useState(false);
   const [diag, setDiag] = useState<BackendDiagnosticsState>(getBackendDiagnostics());
   const [probing, setProbing] = useState(false);
@@ -34,10 +36,10 @@ export function BackendDiagnosticsOverlay() {
 
   const statusColor =
     diag.isReachable === null
-      ? Colors.textMuted
+      ? colors.textMuted
       : diag.isReachable
-        ? Colors.success
-        : Colors.danger;
+        ? colors.success
+        : colors.danger;
   const statusLabel =
     diag.isReachable === null
       ? 'unknown'
@@ -63,25 +65,28 @@ export function BackendDiagnosticsOverlay() {
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetTitle}>Backend Diagnostics</Text>
               <Pressable onPress={() => setOpen(false)} accessibilityLabel="Close diagnostics">
-                <Ionicons name="close" size={22} color={Colors.textPrimary} />
+                <Ionicons name="close" size={22} color={colors.textPrimary} />
               </Pressable>
             </View>
 
             <ScrollView style={styles.sheetBody} showsVerticalScrollIndicator={false}>
-              <DiagRow label="API base URL" value={diag.apiBaseUrl || '(unresolved)'} />
-              <DiagRow label="Reachability" value={statusLabel} valueColor={statusColor} />
+              <DiagRow label="API base URL" value={diag.apiBaseUrl || '(unresolved)'} styles={styles} />
+              <DiagRow label="Reachability" value={statusLabel} valueColor={statusColor} styles={styles} />
               <DiagRow
                 label="Last response count"
                 value={diag.lastResponseCount == null ? '—' : String(diag.lastResponseCount)}
+                styles={styles}
               />
               <DiagRow
                 label="Last sync"
                 value={diag.lastSyncAt ? new Date(diag.lastSyncAt).toLocaleTimeString() : '—'}
+                styles={styles}
               />
               <DiagRow
                 label="Last error"
                 value={diag.lastError ?? '—'}
-                valueColor={diag.lastError ? Colors.danger : undefined}
+                valueColor={diag.lastError ? colors.danger : undefined}
+                styles={styles}
               />
 
               <Pressable
@@ -111,10 +116,12 @@ function DiagRow({
   label,
   value,
   valueColor,
+  styles,
 }: {
   label: string;
   value: string;
   valueColor?: string;
+  styles: ReturnType<typeof createStyles>;
 }) {
   return (
     <View style={styles.row}>
@@ -126,101 +133,103 @@ function DiagRow({
   );
 }
 
-const styles = StyleSheet.create({
-  chip: {
-    position: 'absolute',
-    bottom: Space.lg,
-    left: Space.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    zIndex: 40,
-  },
-  chipDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  chipText: {
-    color: '#fff',
-    fontSize: 11,
-    fontFamily: Typography.family.bold,
-    letterSpacing: 0.4,
-  },
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: Space.lg,
-  },
-  sheet: {
-    width: '100%',
-    maxWidth: 420,
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    padding: Space.md,
-    maxHeight: '80%',
-  },
-  sheetHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: Space.md,
-  },
-  sheetTitle: {
-    fontSize: 17,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-  },
-  sheetBody: {
-    gap: Space.sm,
-  },
-  row: {
-    paddingVertical: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
-    gap: 2,
-  },
-  rowLabel: {
-    fontSize: 11,
-    fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-  },
-  rowValue: {
-    fontSize: 14,
-    fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
-  },
-  probeBtn: {
-    marginTop: Space.md,
-    paddingVertical: Space.sm,
-    paddingHorizontal: Space.md,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.textPrimary,
-    alignItems: 'center',
-  },
-  probeBtnBusy: {
-    opacity: 0.6,
-  },
-  probeBtnText: {
-    color: Colors.background,
-    fontSize: 14,
-    fontFamily: Typography.family.bold,
-  },
-  footnote: {
-    marginTop: Space.md,
-    fontSize: 11,
-    fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-    textAlign: 'center',
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    chip: {
+      position: 'absolute',
+      bottom: Space.lg,
+      left: Space.md,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: Radius.full,
+      backgroundColor: 'rgba(0,0,0,0.6)',
+      zIndex: 40,
+    },
+    chipDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+    },
+    chipText: {
+      color: '#fff',
+      fontSize: 11,
+      fontFamily: Typography.family.bold,
+      letterSpacing: 0.4,
+    },
+    backdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: Space.lg,
+    },
+    sheet: {
+      width: '100%',
+      maxWidth: 420,
+      backgroundColor: colors.surface,
+      borderRadius: Radius.lg,
+      padding: Space.md,
+      maxHeight: '80%',
+    },
+    sheetHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: Space.md,
+    },
+    sheetTitle: {
+      fontSize: 17,
+      fontFamily: Typography.family.bold,
+      color: colors.textPrimary,
+    },
+    sheetBody: {
+      gap: Space.sm,
+    },
+    row: {
+      paddingVertical: Space.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+      gap: 2,
+    },
+    rowLabel: {
+      fontSize: 11,
+      fontFamily: Typography.family.medium,
+      color: colors.textMuted,
+      textTransform: 'uppercase',
+      letterSpacing: 0.6,
+    },
+    rowValue: {
+      fontSize: 14,
+      fontFamily: Typography.family.regular,
+      color: colors.textPrimary,
+    },
+    probeBtn: {
+      marginTop: Space.md,
+      paddingVertical: Space.sm,
+      paddingHorizontal: Space.md,
+      borderRadius: Radius.md,
+      backgroundColor: colors.textPrimary,
+      alignItems: 'center',
+    },
+    probeBtnBusy: {
+      opacity: 0.6,
+    },
+    probeBtnText: {
+      color: colors.background,
+      fontSize: 14,
+      fontFamily: Typography.family.bold,
+    },
+    footnote: {
+      marginTop: Space.md,
+      fontSize: 11,
+      fontFamily: Typography.family.regular,
+      color: colors.textMuted,
+      textAlign: 'center',
+    },
+  });
+}
 
 export default BackendDiagnosticsOverlay;

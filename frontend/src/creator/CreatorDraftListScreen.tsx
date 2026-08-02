@@ -12,13 +12,15 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
-import { Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { CreatorDraftService, type DraftMeta } from './drafts';
 import { createStableId } from '../utils/createStableId';
 import { CreatorCanvas } from './CreatorCanvas';
 import type { CreatorDocument } from './composition';
 
 export function CreatorDraftListScreen() {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<any>();
   const [drafts, setDrafts] = useState<DraftMeta[]>([]);
   const [draftDocs, setDraftDocs] = useState<Record<string, CreatorDocument | null>>({});
@@ -129,7 +131,7 @@ export function CreatorDraftListScreen() {
         </Text>
         <View style={styles.statusRow}>
           <View style={styles.statusBadge}>
-            <Ionicons name="phone-portrait-outline" size={10} color={Colors.textMuted} />
+            <Ionicons name="phone-portrait-outline" size={10} color={colors.textMuted} />
             <Text style={styles.statusText}>Local</Text>
           </View>
         </View>
@@ -142,7 +144,7 @@ export function CreatorDraftListScreen() {
           accessibilityLabel={`Duplicate draft ${item.title}`}
           accessibilityRole="button"
         >
-          <Ionicons name="copy-outline" size={16} color={Colors.textSecondary} />
+          <Ionicons name="copy-outline" size={16} color={colors.textSecondary} />
         </Pressable>
         <Pressable
           onPress={() => handleDeleteDraft(item)}
@@ -151,7 +153,7 @@ export function CreatorDraftListScreen() {
           accessibilityLabel={`Delete draft ${item.title}`}
           accessibilityRole="button"
         >
-          <Ionicons name="trash-outline" size={16} color={Colors.danger} />
+          <Ionicons name="trash-outline" size={16} color={colors.danger} />
         </Pressable>
       </View>
     </Pressable>
@@ -160,7 +162,7 @@ export function CreatorDraftListScreen() {
   if (loading) {
     return (
       <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color={Colors.brand} />
+        <ActivityIndicator size="large" color={colors.brand} />
       </View>
     );
   }
@@ -174,7 +176,7 @@ export function CreatorDraftListScreen() {
           accessibilityLabel="Back"
           accessibilityRole="button"
         >
-          <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
         </Pressable>
         <Text style={styles.headerTitle}>Drafts</Text>
         <View style={styles.backBtn} />
@@ -190,7 +192,7 @@ export function CreatorDraftListScreen() {
         }
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Ionicons name="document-outline" size={40} color={Colors.textMuted} />
+            <Ionicons name="document-outline" size={40} color={colors.textMuted} />
             <Text style={styles.emptyTitle}>No drafts</Text>
             <Text style={styles.emptySubtext}>Drafts are saved automatically as you create</Text>
           </View>
@@ -200,16 +202,17 @@ export function CreatorDraftListScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -218,7 +221,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm,
     paddingVertical: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   backBtn: {
     width: 40,
@@ -229,7 +232,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontFamily: Typography.family.semibold,
     fontSize: Type.title.size,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   listContent: {
     padding: Space.md,
@@ -242,15 +245,15 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm,
     paddingHorizontal: Space.md,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   draftThumb: {
     width: 44,
     borderRadius: Radius.sm,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   draftIcon: {
     width: 40,
@@ -274,12 +277,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: Radius.sm,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   statusText: {
     fontFamily: Typography.family.regular,
     fontSize: 10,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   actions: {
     flexDirection: 'row',
@@ -295,12 +298,12 @@ const styles = StyleSheet.create({
   draftTitle: {
     fontFamily: Typography.family.medium,
     fontSize: Type.body.size,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   draftMeta: {
     fontFamily: Typography.family.regular,
     fontSize: Type.caption.size,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   emptyState: {
     alignItems: 'center',
@@ -310,12 +313,13 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontFamily: Typography.family.semibold,
     fontSize: Type.body.size,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   emptySubtext: {
     fontFamily: Typography.family.regular,
     fontSize: Type.caption.size,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textAlign: 'center',
   },
-});
+  });
+}

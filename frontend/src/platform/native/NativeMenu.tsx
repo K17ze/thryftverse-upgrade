@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { StyleSheet, View, Text, Pressable, BackHandler } from 'react-native';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography } from '../../theme/designTokens';
 import { Space } from '../../theme/designTokens';
 
@@ -19,6 +19,9 @@ export interface NativeMenuProps {
 }
 
 export function NativeMenu({ visible, onDismiss, options, testID }: NativeMenuProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   useEffect(() => {
     if (!visible) return;
     const handler = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -58,7 +61,8 @@ export function NativeMenu({ visible, onDismiss, options, testID }: NativeMenuPr
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.3)',
@@ -66,7 +70,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   menu: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 14,
     paddingVertical: 4,
     minWidth: 200,
@@ -83,12 +87,13 @@ const styles = StyleSheet.create({
   optionText: {
     fontSize: 15,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   optionTextDestructive: {
-    color: Colors.danger,
+    color: colors.danger,
   },
   optionTextDisabled: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
-});
+  });
+}

@@ -1,7 +1,7 @@
 import React from 'react';
 import { TextInput, TextInputProps, StyleSheet, View, Text } from 'react-native';
 import { Controller, Control, FieldError, RegisterOptions } from 'react-hook-form';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography } from '../../theme/designTokens';
 
 export interface ControlledAppInputProps {
@@ -21,6 +21,9 @@ export function ControlledAppInput({
   rules,
   inputProps,
 }: ControlledAppInputProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={styles.container}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
@@ -34,7 +37,7 @@ export function ControlledAppInput({
             onChangeText={onChange}
             onBlur={onBlur}
             value={value ?? ''}
-            placeholderTextColor={Colors.textMuted}
+            placeholderTextColor={colors.textMuted}
             {...inputProps}
           />
         )}
@@ -44,33 +47,35 @@ export function ControlledAppInput({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     marginBottom: 12,
   },
   label: {
     fontSize: 13,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginBottom: 6,
   },
   input: {
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.regular,
   },
   inputError: {
-    borderColor: Colors.danger,
+    borderColor: colors.danger,
   },
   errorText: {
     fontSize: 12,
-    color: Colors.danger,
+    color: colors.danger,
     marginTop: 4,
     fontFamily: Typography.family.regular,
   },
-});
+  });
+}

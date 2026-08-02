@@ -10,7 +10,7 @@ import {
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Space, Radius } from '../../theme/designTokens';
 import type { RecommendationSection } from '../../platform/product';
 import { isRecommendationLook } from '../../platform/product';
@@ -46,6 +46,8 @@ function RailCard({
   cardHeight,
   showAccent,
 }: RailCardProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { formatFromFiat } = useFormattedPrice();
   const formattedPrice = formatFromFiat(item.price, 'GBP');
   const imageUri = item.images?.[0];
@@ -107,6 +109,8 @@ export function RecommendationRail({
   onPressItem,
   onSeeAll,
 }: RecommendationRailProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width: screenWidth } = useWindowDimensions();
 
   if (section.items.length === 0) return null;
@@ -148,7 +152,7 @@ export function RecommendationRail({
           >
             <View style={styles.seeAllRow}>
               <Text style={styles.seeAll}>See all</Text>
-              <Ionicons name="chevron-forward" size={14} color={Colors.textMuted} />
+              <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
             </View>
           </Pressable>
         ) : null}
@@ -159,7 +163,7 @@ export function RecommendationRail({
           <Ionicons
             name={section.personalised ? 'sparkles' : 'pricetag'}
             size={12}
-            color={Colors.textMuted}
+            color={colors.textMuted}
           />
           <Text style={styles.reasonText}>{section.reason}</Text>
         </View>
@@ -191,112 +195,114 @@ export function RecommendationRail({
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    marginTop: Space.lg,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    marginBottom: Space.xs,
-  },
-  headerLeft: {
-    flex: 1,
-    minWidth: 0,
-  },
-  title: {
-    fontSize: 17,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-  },
-  subtitle: {
-    fontSize: 13,
-    fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-    marginTop: 2,
-  },
-  seeAllRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
-  seeAll: {
-    fontSize: 13,
-    fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
-  },
-  reasonRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: Space.md,
-    marginBottom: Space.sm,
-  },
-  reasonText: {
-    fontSize: 12,
-    fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-  },
-  listContent: {
-    paddingHorizontal: Space.md,
-  },
-  card: {
-    width: 140,
-  },
-  cardAccent: {
-    borderWidth: 1.5,
-    borderColor: Colors.brand,
-    borderRadius: Radius.md + 2,
-    padding: 2,
-  },
-  cardImageWrap: {
-    width: 140,
-    height: 175,
-    borderRadius: Radius.md,
-    overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
-  },
-  cardImage: {
-    width: '100%',
-    height: '100%',
-  },
-  cardImageFallback: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: Colors.surfaceAlt,
-  },
-  cardSoldBadge: {
-    position: 'absolute',
-    bottom: 6,
-    left: 6,
-    backgroundColor: Colors.success,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: Radius.sm,
-  },
-  cardSoldText: {
-    fontSize: 10,
-    fontFamily: Typography.family.bold,
-    color: Colors.background,
-  },
-  cardBrand: {
-    fontSize: 11,
-    fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
-    marginTop: 6,
-  },
-  cardTitle: {
-    fontSize: 13,
-    fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
-    marginTop: 1,
-  },
-  cardPrice: {
-    fontSize: 15,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    marginTop: 2,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: {
+      marginTop: Space.lg,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      paddingHorizontal: Space.md,
+      marginBottom: Space.xs,
+    },
+    headerLeft: {
+      flex: 1,
+      minWidth: 0,
+    },
+    title: {
+      fontSize: 17,
+      fontFamily: Typography.family.semibold,
+      color: colors.textPrimary,
+    },
+    subtitle: {
+      fontSize: 13,
+      fontFamily: Typography.family.regular,
+      color: colors.textMuted,
+      marginTop: 2,
+    },
+    seeAllRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 2,
+    },
+    seeAll: {
+      fontSize: 13,
+      fontFamily: Typography.family.medium,
+      color: colors.textMuted,
+    },
+    reasonRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: Space.md,
+      marginBottom: Space.sm,
+    },
+    reasonText: {
+      fontSize: 12,
+      fontFamily: Typography.family.regular,
+      color: colors.textMuted,
+    },
+    listContent: {
+      paddingHorizontal: Space.md,
+    },
+    card: {
+      width: 140,
+    },
+    cardAccent: {
+      borderWidth: 1.5,
+      borderColor: colors.brand,
+      borderRadius: Radius.md + 2,
+      padding: 2,
+    },
+    cardImageWrap: {
+      width: 140,
+      height: 175,
+      borderRadius: Radius.md,
+      overflow: 'hidden',
+      backgroundColor: colors.surfaceAlt,
+    },
+    cardImage: {
+      width: '100%',
+      height: '100%',
+    },
+    cardImageFallback: {
+      width: '100%',
+      height: '100%',
+      backgroundColor: colors.surfaceAlt,
+    },
+    cardSoldBadge: {
+      position: 'absolute',
+      bottom: 6,
+      left: 6,
+      backgroundColor: colors.success,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: Radius.sm,
+    },
+    cardSoldText: {
+      fontSize: 10,
+      fontFamily: Typography.family.bold,
+      color: colors.background,
+    },
+    cardBrand: {
+      fontSize: 11,
+      fontFamily: Typography.family.medium,
+      color: colors.textMuted,
+      marginTop: 6,
+    },
+    cardTitle: {
+      fontSize: 13,
+      fontFamily: Typography.family.regular,
+      color: colors.textPrimary,
+      marginTop: 1,
+    },
+    cardPrice: {
+      fontSize: 15,
+      fontFamily: Typography.family.bold,
+      color: colors.textPrimary,
+      marginTop: 2,
+    },
+  });
+}

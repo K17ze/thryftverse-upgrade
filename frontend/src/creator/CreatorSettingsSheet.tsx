@@ -10,10 +10,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
-import { useAppTheme } from '../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useCreator } from './CreatorContext';
 import { SheetContainer, PressScale } from './CreatorAnimations';
-import { Colors } from '../constants/colors';
 
 export interface CreatorSettingsSheetProps {
   visible: boolean;
@@ -23,6 +22,7 @@ export interface CreatorSettingsSheetProps {
 export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetProps) {
   const { document, updateMetadata, updateCanvas, saveDraft, isDirty, autosaveStatus, retryAutosave } = useCreator();
   const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [title, setTitle] = useState(document.metadata.title || '');
   const [caption, setCaption] = useState(document.metadata.caption || '');
   const [accessibilityDesc, setAccessibilityDesc] = useState(document.metadata.accessibilityDescription || '');
@@ -59,7 +59,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
             onChangeText={setTitle}
             onBlur={handleSaveTitle}
             placeholder="Untitled"
-            placeholderTextColor={Colors.textMuted}
+            placeholderTextColor={colors.textMuted}
             accessibilityLabel="Document title"
           />
 
@@ -76,7 +76,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
             onChangeText={setCaption}
             onBlur={handleSaveCaption}
             placeholder="Add a caption..."
-            placeholderTextColor={Colors.textMuted}
+            placeholderTextColor={colors.textMuted}
             multiline
             maxLength={2200}
             accessibilityLabel="Caption"
@@ -90,7 +90,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
             onChangeText={setAccessibilityDesc}
             onBlur={handleSaveAccessibility}
             placeholder="Describe this content for screen readers..."
-            placeholderTextColor={Colors.textMuted}
+            placeholderTextColor={colors.textMuted}
             multiline
             accessibilityLabel="Accessibility description"
           />
@@ -100,7 +100,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
             <>
               <Text style={styles.sectionLabel}>Remix Attribution</Text>
               <View style={styles.attributionBox}>
-                <Ionicons name="git-branch-outline" size={16} color={Colors.textSecondary} />
+                <Ionicons name="git-branch-outline" size={16} color={colors.textSecondary} />
                 <View style={styles.attributionContent}>
                   <Text style={styles.attributionText}>
                     Remixed from another {document.type}
@@ -127,7 +127,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
                 <Switch
                   value={document.metadata.visibility === 'public'}
                   onValueChange={(v) => updateMetadata({ visibility: v ? 'public' : 'private' })}
-                  trackColor={{ false: Colors.border, true: Colors.brand }}
+                  trackColor={{ false: colors.border, true: colors.brand }}
                   accessibilityLabel="Public visibility"
                 />
               </View>
@@ -138,7 +138,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
                 <Switch
                   value={document.metadata.allowRemix ?? false}
                   onValueChange={(v) => updateMetadata({ allowRemix: v })}
-                  trackColor={{ false: Colors.border, true: Colors.brand }}
+                  trackColor={{ false: colors.border, true: colors.brand }}
                   accessibilityLabel="Allow remix"
                 />
               </View>
@@ -154,7 +154,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
                 <Switch
                   value={document.metadata.visibility === 'public'}
                   onValueChange={(v) => updateMetadata({ visibility: v ? 'public' : 'private' })}
-                  trackColor={{ false: Colors.border, true: Colors.brand }}
+                  trackColor={{ false: colors.border, true: colors.brand }}
                   accessibilityLabel="Public audience"
                 />
               </View>
@@ -165,7 +165,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
                 <Switch
                   value={document.metadata.allowReplies ?? true}
                   onValueChange={(v) => updateMetadata({ allowReplies: v })}
-                  trackColor={{ false: Colors.border, true: Colors.brand }}
+                  trackColor={{ false: colors.border, true: colors.brand }}
                   accessibilityLabel="Allow replies"
                 />
               </View>
@@ -176,7 +176,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
                 <Switch
                   value={document.metadata.allowReactions ?? true}
                   onValueChange={(v) => updateMetadata({ allowReactions: v })}
-                  trackColor={{ false: Colors.border, true: Colors.brand }}
+                  trackColor={{ false: colors.border, true: colors.brand }}
                   accessibilityLabel="Allow reactions"
                 />
               </View>
@@ -236,7 +236,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
               accessibilityLabel="Save draft manually"
               accessibilityRole="button"
             >
-              <Ionicons name="save-outline" size={16} color={Colors.surface} />
+              <Ionicons name="save-outline" size={16} color={colors.surface} />
               <Text style={styles.saveBtnText}>Save Draft</Text>
             </Pressable>
           </View>
@@ -247,6 +247,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
 
 function RatioButton({ label, ratio, current, onSelect }: { label: string; ratio: number; current: number; onSelect: (r: number) => void }) {
   const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const isActive = Math.abs(current - ratio) < 0.01;
   // Visual preview: a rectangle showing the aspect ratio shape
   // Max dimensions: 32x40 box
@@ -271,7 +272,8 @@ function RatioButton({ label, ratio, current, onSelect }: { label: string; ratio
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -300,7 +302,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontFamily: Typography.family.semibold,
     fontSize: Type.caption.size,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginTop: Space.sm,
@@ -308,13 +310,13 @@ const styles = StyleSheet.create({
   },
   input: {
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     borderRadius: Radius.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   textArea: {
     minHeight: 80,
@@ -329,7 +331,7 @@ const styles = StyleSheet.create({
   rowLabel: {
     fontFamily: Typography.family.medium,
     fontSize: Type.body.size,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   ratioRow: {
     flexDirection: 'row',
@@ -375,18 +377,18 @@ const styles = StyleSheet.create({
   autosaveLabel: {
     fontFamily: Typography.family.medium,
     fontSize: Type.caption.size,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   retryBtn: {
     paddingHorizontal: Space.sm,
     paddingVertical: 4,
     borderRadius: Radius.sm,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   retryText: {
     fontFamily: Typography.family.semibold,
     fontSize: Type.caption.size,
-    color: Colors.brand,
+    color: colors.brand,
   },
   saveBtn: {
     flexDirection: 'row',
@@ -395,7 +397,7 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
   },
   saveBtnDisabled: {
     opacity: 0.4,
@@ -403,7 +405,7 @@ const styles = StyleSheet.create({
   saveBtnText: {
     fontFamily: Typography.family.semibold,
     fontSize: Type.body.size,
-    color: Colors.surface,
+    color: colors.surface,
   },
   attributionBox: {
     flexDirection: 'row',
@@ -412,9 +414,9 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm,
     paddingHorizontal: Space.md,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   attributionContent: {
     flex: 1,
@@ -423,11 +425,12 @@ const styles = StyleSheet.create({
   attributionText: {
     fontFamily: Typography.family.medium,
     fontSize: Type.caption.size,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   attributionDetail: {
     fontFamily: Typography.family.regular,
     fontSize: Type.caption.size - 2,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
-});
+  });
+}
