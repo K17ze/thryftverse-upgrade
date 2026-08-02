@@ -820,6 +820,7 @@ const TEXT_STYLES: Array<{ key: string; label: string }> = [
   { key: 'headline', label: 'Headline' },
   { key: 'editorial', label: 'Editorial' },
   { key: 'compact', label: 'Compact' },
+  { key: 'handwritten', label: 'Handwritten' },
 ];
 
 const TEXT_COLORS = ['#ffffff', '#000000', '#9b0202', '#215634', '#06489A', '#C9A46A', '#8A6A3F', '#6B3245'];
@@ -829,6 +830,15 @@ const TEXT_ALIGNMENTS: Array<{ key: 'left' | 'center' | 'right'; icon: string }>
   { key: 'center', icon: 'text' },
   { key: 'right', icon: 'text-right' },
 ];
+
+// Text style preview mapping — mirrors CreatorCanvas styleMap
+const TEXT_STYLE_PREVIEW: Record<string, { fontFamily: string; fontSize: number; lineHeight: number }> = {
+  clean: { fontFamily: Typography.family.medium, fontSize: Type.body.size, lineHeight: Type.body.size * 1.3 },
+  headline: { fontFamily: Typography.family.bold, fontSize: Type.title.size, lineHeight: Type.title.size * 1.15 },
+  editorial: { fontFamily: Typography.family.bold, fontSize: Type.bodyEmphasis.size + 2, lineHeight: (Type.bodyEmphasis.size + 2) * 1.2 },
+  compact: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, lineHeight: Type.caption.size * 1.3 },
+  handwritten: { fontFamily: Typography.family.regular, fontSize: Type.body.size, lineHeight: Type.body.size * 1.35 },
+};
 
 function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   const { colors } = useAppTheme();
@@ -876,6 +886,20 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
   return (
     <PickerShell title={isEditing ? 'Edit Text' : 'Add Text'} onClose={onClose}>
       <View style={styles.textPickerBody}>
+        {/* Live preview — shows text with selected style + color (Snapchat pattern) */}
+        <View style={styles.textPreview}>
+          <Text
+            style={[
+              styles.textPreviewText,
+              { color: textColor, textAlign: alignment },
+              TEXT_STYLE_PREVIEW[textStyle] ?? TEXT_STYLE_PREVIEW.clean,
+            ]}
+            numberOfLines={3}
+          >
+            {text.trim() || 'Your text preview'}
+          </Text>
+        </View>
+
         <TextInput
           style={styles.textInput}
           placeholder="Type your text..."
@@ -888,7 +912,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
           accessibilityLabel="Text content"
         />
 
-        {/* Style selector */}
+        {/* Style selector — each label rendered in its own style (Snapchat pattern) */}
         <Text style={styles.pickerSectionLabel}>Style</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.styleScroll}>
           {TEXT_STYLES.map((s) => (
@@ -900,7 +924,15 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               accessibilityRole="button"
               hitSlop={12}
             >
-              <Text style={[styles.styleOptionText, textStyle === s.key && styles.styleOptionTextActive]}>{s.label}</Text>
+              <Text
+                style={[
+                  styles.styleOptionText,
+                  textStyle === s.key && styles.styleOptionTextActive,
+                  TEXT_STYLE_PREVIEW[s.key] ?? TEXT_STYLE_PREVIEW.clean,
+                ]}
+              >
+                {s.label}
+              </Text>
             </Pressable>
           ))}
         </ScrollView>
@@ -1205,6 +1237,20 @@ function createStyles(colors: ThemeColors) {
   retryBtn: { paddingHorizontal: Space.lg, paddingVertical: Space.sm, borderRadius: Radius.md, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
   retryBtnText: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: colors.brand },
   textPickerBody: { paddingHorizontal: Space.md, paddingBottom: Space.xl, gap: Space.sm },
+  // Live preview area — dark canvas mimicking the poster/look background
+  textPreview: {
+    minHeight: 80,
+    borderRadius: Radius.md,
+    backgroundColor: '#1a1a1a',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: Space.md,
+    paddingHorizontal: Space.lg,
+  },
+  textPreviewText: {
+    fontFamily: Typography.family.medium,
+    fontSize: Type.body.size,
+  },
   sectionLabel: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 },
   textInput: {
     borderWidth: 1, borderColor: colors.border, borderRadius: Radius.md,
