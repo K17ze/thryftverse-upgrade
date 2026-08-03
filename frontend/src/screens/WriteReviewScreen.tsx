@@ -207,6 +207,7 @@ export default function WriteReviewScreen() {
                       scaleValue={0.9}
                       accessibilityRole="button"
                       accessibilityLabel={`${star} star${star > 1 ? 's' : ''}`}
+                      accessibilityState={{ selected: rating === star }}
                     >
                       <Ionicons
                         name={rating >= star ? 'star' : 'star-outline'}
@@ -236,6 +237,8 @@ export default function WriteReviewScreen() {
                     value={review}
                     onChangeText={setReview}
                     maxLength={2000}
+                    accessibilityLabel="Detailed review"
+                    accessibilityHint="Share your experience with this item and seller, up to 2000 characters"
                   />
                   <Text style={styles.charCount}>{review.length}/2000</Text>
                 </View>

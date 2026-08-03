@@ -78,7 +78,7 @@ function OrderLedgerRowImpl({ order, formattedTotal, onPress }: OrderLedgerRowPr
     <Pressable
       style={styles.row}
       onPress={onPress}
-      hitSlop={{ top: 4, bottom: 4 }}
+      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
     >
