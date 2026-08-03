@@ -14,6 +14,7 @@ import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Colors, ActiveTheme } from '../../constants/colors';
 import { Typography, Space, Radius } from '../../theme/designTokens';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -36,6 +37,7 @@ export function EditorialDiscoveryHero({ items, autoPlayInterval = 5000 }: Props
   const flatListRef = useRef<FlatList<HeroItem>>(null);
   const autoPlayTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isInteractingRef = useRef(false);
+  const reducedMotion = useReducedMotion();
 
   const startAutoPlay = useCallback(() => {
     if (autoPlayTimerRef.current) clearInterval(autoPlayTimerRef.current);
@@ -115,7 +117,7 @@ export function EditorialDiscoveryHero({ items, autoPlayInterval = 5000 }: Props
   if (items.length === 0) return null;
 
   return (
-    <Reanimated.View entering={FadeIn.duration(400)}>
+    <Reanimated.View entering={reducedMotion ? undefined : FadeIn.duration(400)}>
       <FlatList
         ref={flatListRef}
         data={items}

@@ -19,6 +19,7 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../navigation/types';
 import { useHaptic } from '../../hooks/useHaptic';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useToast } from '../../context/ToastContext';
 import { EmptyState } from '../EmptyState';
 import { formatCountdown } from '../../data/tradeHub';
@@ -53,10 +54,10 @@ interface LiveAuctionItem {
 }
 
 /* ── Sub-components ── */
-function LiveNowCard({ auction, index, onPress, styles }: { auction: LiveAuctionItem; index: number; onPress: () => void; styles: ReturnType<typeof createStyles> }) {
+function LiveNowCard({ auction, index, onPress, styles, reducedMotion }: { auction: LiveAuctionItem; index: number; onPress: () => void; styles: ReturnType<typeof createStyles>; reducedMotion: boolean }) {
   const countdown = formatCountdown(Math.max(0, auction.endsAtMs - Date.now()));
   return (
-    <Reanimated.View entering={FadeInDown.duration(350).delay(index * 60).springify()}>
+    <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(350).delay(index * 60).springify()}>
       <AnimatedPressable style={styles.liveCard} onPress={onPress} activeOpacity={0.92}>
         <CachedImage uri={auction.image} style={styles.liveImage} containerStyle={{ borderRadius: Radius.md }} contentFit="cover" />
         <View style={styles.liveContent}>
@@ -72,7 +73,7 @@ function LiveNowCard({ auction, index, onPress, styles }: { auction: LiveAuction
   );
 }
 
-function ActivityCard({ item, onPress, index, colors, styles }: { item: ActivityItem; onPress: () => void; index: number; colors: ThemeColors; styles: ReturnType<typeof createStyles> }) {
+function ActivityCard({ item, onPress, index, colors, styles, reducedMotion }: { item: ActivityItem; onPress: () => void; index: number; colors: ThemeColors; styles: ReturnType<typeof createStyles>; reducedMotion: boolean }) {
   const iconMap: Record<ActivityType, React.ComponentProps<typeof Ionicons>['name']> = {
     auction_live: 'flame-outline',
     fresh_drop: 'cube-outline',
@@ -85,7 +86,7 @@ function ActivityCard({ item, onPress, index, colors, styles }: { item: Activity
   };
 
   return (
-    <Reanimated.View entering={FadeInDown.duration(350).delay(index * 60).springify()}>
+    <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(350).delay(index * 60).springify()}>
       <AnimatedPressable style={styles.activityCard} onPress={onPress} activeOpacity={0.92}>
         <CachedImage uri={item.image} style={styles.activityImage} containerStyle={{ borderRadius: Radius.md }} contentFit="cover" />
         <View style={styles.activityContent}>
@@ -122,6 +123,7 @@ export default function PulseTab() {
   const { listings } = useBackendData();
   const customAuctions = useStore((state) => state.customAuctions);
   const auctionRuntime = useStore((state) => state.auctionRuntime);
+  const reducedMotion = useReducedMotion();
 
   const now = Date.now();
 
@@ -199,7 +201,7 @@ export default function PulseTab() {
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
       {/* Live Now Rail */}
       {liveAuctions.length > 0 && (
-        <Reanimated.View entering={FadeInDown.duration(300)}>
+        <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300)}>
           <DiscoverySectionHeader
             kicker="Bidding now"
             title="Live Now"
@@ -214,6 +216,7 @@ export default function PulseTab() {
                 index={i}
                 onPress={() => { haptic.light(); navigation.push('ItemDetail', { itemId: auction.listingId }); }}
                 styles={styles}
+                reducedMotion={reducedMotion}
               />
             ))}
           </HorizontalRail>
@@ -221,7 +224,7 @@ export default function PulseTab() {
       )}
 
       {/* Live Pulse Banner */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(40)}>
+      <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300).delay(40)}>
         <AnimatedPressable style={styles.pulseBanner} onPress={handleViewAll} activeOpacity={0.92}>
           <View style={styles.pulseDot}>
             <View style={styles.pulseRing} />
@@ -236,7 +239,7 @@ export default function PulseTab() {
       </Reanimated.View>
 
       {/* Activity feed */}
-      <Reanimated.View entering={FadeInDown.duration(350).delay(80)} style={{ marginTop: Space.lg }}>
+      <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(350).delay(80)} style={{ marginTop: Space.lg }}>
         <DiscoverySectionHeader
           kicker="Updates"
           title="Live Feed"
@@ -244,7 +247,7 @@ export default function PulseTab() {
           onAction={handleViewAll}
         />
         {activities.map((item, i) => (
-          <ActivityCard key={item.id} item={item} onPress={() => handleActivityPress(item)} index={i} colors={colors} styles={styles} />
+          <ActivityCard key={item.id} item={item} onPress={() => handleActivityPress(item)} index={i} colors={colors} styles={styles} reducedMotion={reducedMotion} />
         ))}
       </Reanimated.View>
 

@@ -8,6 +8,7 @@ import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Type } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { PremiumStatusPill } from '../ui/PremiumStatusPill';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 interface FlagshipOrderCardProps {
   imageUri?: string | null;
@@ -34,6 +35,7 @@ export function FlagshipOrderCard({
 }: FlagshipOrderCardProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const reducedMotion = useReducedMotion();
   const tone =
     status === 'delivered'
       ? 'delivered'
@@ -46,7 +48,7 @@ export function FlagshipOrderCard({
   const actorLabel = buyerName ? `To ${buyerName}` : sellerName ? `From ${sellerName}` : '';
 
   return (
-    <Reanimated.View entering={FadeInDown.delay(index * 40).duration(350)}>
+    <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.delay(index * 40).duration(350)}>
       <AnimatedPressable onPress={onPress} style={styles.root} {...PressPresets.listRow}>
         {/* Product Image */}
         <View style={styles.imageWrap}>

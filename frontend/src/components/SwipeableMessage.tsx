@@ -14,6 +14,7 @@ import Reanimated, {
 import { useAppTheme } from '../theme/ThemeContext';
 import { Radius } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 interface SwipeableMessageProps {
   children: React.ReactNode;
@@ -22,8 +23,6 @@ interface SwipeableMessageProps {
   onActions?: () => void;
   replyThreshold?: number;
 }
-
-const SWIPE_TIMING = { duration: 200, easing: Easing.out(Easing.cubic) };
 
 export function SwipeableMessage({
   children,
@@ -35,6 +34,7 @@ export function SwipeableMessage({
   const translateX = useSharedValue(0);
   const haptic = useHaptic();
   const { colors } = useAppTheme();
+  const reducedMotion = useReducedMotion();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   const triggerReply = React.useCallback(() => {
@@ -70,7 +70,7 @@ export function SwipeableMessage({
       }
 
       // Snap back to original position with timing
-      translateX.value = withTiming(0, SWIPE_TIMING);
+      translateX.value = withTiming(0, { duration: reducedMotion ? 0 : 200, easing: Easing.out(Easing.cubic) });
     });
 
   const foregroundStyle = useAnimatedStyle(() => ({

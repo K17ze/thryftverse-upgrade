@@ -8,6 +8,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 interface PremiumToggleProps {
   value: boolean;
@@ -20,11 +21,12 @@ const ReanimatedPressable = Reanimated.createAnimatedComponent(Pressable);
 export function PremiumToggle({ value, onValueChange, disabled = false }: PremiumToggleProps) {
   const haptic = useHaptic();
   const { colors } = useAppTheme();
+  const reducedMotion = useReducedMotion();
   const progress = useSharedValue(value ? 1 : 0);
 
   React.useEffect(() => {
-    progress.value = withTiming(value ? 1 : 0, { duration: 180 });
-  }, [value]);
+    progress.value = withTiming(value ? 1 : 0, { duration: reducedMotion ? 0 : 180 });
+  }, [value, reducedMotion]);
 
   const trackStyle = useAnimatedStyle(() => ({
     backgroundColor: interpolateColor(

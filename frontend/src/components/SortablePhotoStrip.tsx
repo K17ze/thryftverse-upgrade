@@ -17,6 +17,7 @@ import { AnimatedPressable } from './AnimatedPressable';
 import { isVideoUri } from '../utils/media';
 import { haptics } from '../utils/haptics';
 import { Typography } from '../theme/designTokens';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 const { width } = Dimensions.get('window');
 const ITEM_SIZE = 80;
@@ -43,6 +44,7 @@ interface Props {
 export function SortablePhotoStrip({ photos, onReorder, onAddPhoto, itemIds, renderItem, showAddButton = true, reorderEnabled = true }: Props) {
   const ids = itemIds ?? photos;
   const { colors } = useAppTheme();
+  const reducedMotion = useReducedMotion();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   return (
     <View style={styles.container}>
@@ -64,6 +66,7 @@ export function SortablePhotoStrip({ photos, onReorder, onAddPhoto, itemIds, ren
               onReorder={onReorder}
               renderItem={renderItem}
               reorderEnabled={reorderEnabled}
+              reducedMotion={reducedMotion}
             />
           ))}
           {/* Add more button */}
@@ -100,9 +103,10 @@ interface ItemProps {
   onReorder: (newOrder: string[]) => void;
   renderItem?: (index: number) => React.ReactNode;
   reorderEnabled?: boolean;
+  reducedMotion?: boolean;
 }
 
-function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, renderItem, reorderEnabled = true }: ItemProps) {
+function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, renderItem, reorderEnabled = true, reducedMotion = false }: ItemProps) {
   const isVideo = isVideoUri(id);
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -116,10 +120,10 @@ function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, re
     () => index,
     (currIndex) => {
       if (!isDragging.value) {
-        position.value = withTiming(currIndex * TOTAL_SIZE, { duration: 200, easing: Easing.out(Easing.cubic) });
+        position.value = withTiming(currIndex * TOTAL_SIZE, { duration: reducedMotion ? 0 : 200, easing: Easing.out(Easing.cubic) });
       }
     },
-    [index]
+    [index, reducedMotion]
   );
 
   const panGesture = Gesture.Pan()
@@ -134,7 +138,7 @@ function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, re
     .onEnd((e) => {
       const newIndex = Math.max(0, Math.min(total - 1, Math.round(position.value / TOTAL_SIZE)));
       isDragging.value = false;
-      position.value = withTiming(newIndex * TOTAL_SIZE, { duration: 200, easing: Easing.out(Easing.cubic) }, () => {
+      position.value = withTiming(newIndex * TOTAL_SIZE, { duration: reducedMotion ? 0 : 200, easing: Easing.out(Easing.cubic) }, () => {
         zIndex.value = 0;
       });
 
@@ -155,9 +159,9 @@ function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, re
       zIndex: zIndex.value,
       transform: [
         { translateX: position.value },
-        { scale: withTiming(isDragging.value ? 1.05 : 1, { duration: 120 }) }
+        { scale: withTiming(isDragging.value ? 1.05 : 1, { duration: reducedMotion ? 0 : 120 }) }
       ],
-      shadowOpacity: withTiming(isDragging.value ? 0.3 : 0),
+      shadowOpacity: withTiming(isDragging.value ? 0.3 : 0, { duration: reducedMotion ? 0 : 120 }),
     };
   });
 

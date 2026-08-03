@@ -6,6 +6,7 @@ import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Type } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { AppButton } from '../ui/AppButton';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 interface FlagshipHeroSectionProps {
   imageUri?: string;
@@ -27,6 +28,7 @@ export function FlagshipHeroSection({
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width } = useWindowDimensions();
+  const reducedMotion = useReducedMotion();
 
   return (
     <View style={[styles.root, { width, height }]}>
@@ -42,16 +44,16 @@ export function FlagshipHeroSection({
       />
 
       <View style={styles.textWrap}>
-        <Reanimated.Text entering={FadeInUp.duration(500)} style={styles.title}>
+        <Reanimated.Text entering={reducedMotion ? undefined : FadeInUp.duration(500)} style={styles.title}>
           {title}
         </Reanimated.Text>
         {subtitle && (
-          <Reanimated.Text entering={FadeInUp.delay(100).duration(500)} style={styles.subtitle}>
+          <Reanimated.Text entering={reducedMotion ? undefined : FadeInUp.delay(100).duration(500)} style={styles.subtitle}>
             {subtitle}
           </Reanimated.Text>
         )}
         {ctaLabel && onCta && (
-          <Reanimated.View entering={FadeInUp.delay(180).duration(500)} style={styles.ctaWrap}>
+          <Reanimated.View entering={reducedMotion ? undefined : FadeInUp.delay(180).duration(500)} style={styles.ctaWrap}>
             <AppButton title={ctaLabel} variant="primary" onPress={onCta} size="sm" />
           </Reanimated.View>
         )}

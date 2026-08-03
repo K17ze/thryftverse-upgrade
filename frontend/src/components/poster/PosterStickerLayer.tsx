@@ -11,6 +11,7 @@ import Reanimated, {
 import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { PosterSticker as ApiPosterSticker } from '../../services/postersApi';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 interface PosterStickerLayerProps {
   stickers: ApiPosterSticker[];
@@ -52,6 +53,7 @@ export function PosterStickerLayer({
   containerHeight,
   style,
 }: PosterStickerLayerProps) {
+  const reducedMotion = useReducedMotion();
   return (
     <View style={[StyleSheet.absoluteFill, style]} pointerEvents="box-none">
       {stickers.map((sticker) => (
@@ -64,6 +66,7 @@ export function PosterStickerLayer({
           containerHeight={containerHeight}
           onPress={onStickerPress}
           onPositionChange={onStickerPositionChange}
+          reducedMotion={reducedMotion}
         />
       ))}
     </View>
@@ -78,6 +81,7 @@ interface DraggableStickerProps {
   containerHeight: number;
   onPress?: (sticker: ApiPosterSticker) => void;
   onPositionChange?: (id: string, x: number, y: number) => void;
+  reducedMotion?: boolean;
 }
 
 function DraggableSticker({
@@ -88,6 +92,7 @@ function DraggableSticker({
   containerHeight,
   onPress,
   onPositionChange,
+  reducedMotion = false,
 }: DraggableStickerProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -100,11 +105,11 @@ function DraggableSticker({
     (finalX: number, finalY: number) => {
       const normX = clampNormalizedScaled(finalX / containerWidth, sticker.scale, containerWidth, STICKER_BASE_HALF_W);
       const normY = clampNormalizedScaled(finalY / containerHeight, sticker.scale, containerHeight, STICKER_BASE_HALF_H);
-      translateX.value = withTiming(normX * containerWidth, { duration: 0 });
-      translateY.value = withTiming(normY * containerHeight, { duration: 0 });
+      translateX.value = withTiming(normX * containerWidth, { duration: reducedMotion ? 0 : 0 });
+      translateY.value = withTiming(normY * containerHeight, { duration: reducedMotion ? 0 : 0 });
       onPositionChange?.(sticker.id, normX, normY);
     },
-    [containerWidth, containerHeight, onPositionChange, sticker.id, translateX, translateY]
+    [containerWidth, containerHeight, onPositionChange, sticker.id, translateX, translateY, reducedMotion]
   );
 
   const panGesture = useMemo(

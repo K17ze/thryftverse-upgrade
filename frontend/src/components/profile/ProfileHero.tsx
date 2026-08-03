@@ -21,6 +21,7 @@ import type { PublicProfileStats, PublicProfileViewer } from '../../services/pro
 import type { SellerTrustSummary, VerificationTier } from '../../platform/product';
 import { VERIFICATION_TIERS } from '../../platform/product';
 import { ProfileTrustSignals } from './ProfileTrustSignals';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const COVER_HEIGHT = 160;
 const AVATAR_SIZE = 88; // design contract: 88-96pt seam avatar
@@ -103,9 +104,10 @@ export function ProfileHero({
   onShopSegmentSelect,
 }: ProfileHeroProps) {
   const { colors } = useAppTheme();
+  const reducedMotionHook = useReducedMotion();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const coverParallaxStyle = useAnimatedStyle(() => {
-    if (reducedMotion) return {};
+    if (reducedMotion || reducedMotionHook) return {};
     const overscroll = Math.min(scrollY.value, 0);
     const scale = interpolate(overscroll, [-120, 0], [1.2, 1], Extrapolation.CLAMP);
     return { transform: [{ scale }] };

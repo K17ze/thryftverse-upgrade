@@ -15,6 +15,7 @@ import { ImageViewer } from '../ImageViewer';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AnimatedHeart } from '../AnimatedHeart';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -52,10 +53,12 @@ export function ListingMediaHero({
   scrollY,
 }: ListingMediaHeroProps) {
   const { colors } = useAppTheme();
+  const reducedMotion = useReducedMotion();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [activeIndex, setActiveIndex] = useState(0);
 
   const heroStyle = useAnimatedStyle(() => {
+    if (reducedMotion) return {};
     const overscroll = Math.min(scrollY.value, 0);
     const pullDownTranslate = interpolate(overscroll, [-120, 0], [-56, 0], Extrapolation.CLAMP);
     const parallaxTranslate = interpolate(scrollY.value, [0, 360], [0, 90], Extrapolation.CLAMP);

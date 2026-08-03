@@ -38,6 +38,7 @@ import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { useToast } from '../context/ToastContext';
 import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 import { haptics } from '../utils/haptics';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 const { height, width } = Dimensions.get('window');
 const SNAP_HALF = height * 0.5;
@@ -100,6 +101,7 @@ export default function FilterScreen() {
   const { show } = useToast();
   const { mySizes, setMySizes, toggleMySize, filterPresets, saveFilterPreset, removeFilterPreset } = useSettingsPreferences();
   const { colors } = useAppTheme();
+  const reducedMotion = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const categoryId = route.params?.categoryId ?? 'search';
   const title = route.params?.title;
@@ -117,11 +119,11 @@ export default function FilterScreen() {
   const contextY = useSharedValue(0);
 
   useEffect(() => {
-    translateY.value = withTiming(SNAP_HALF, { duration: 200 });
-  }, []);
+    translateY.value = withTiming(SNAP_HALF, { duration: reducedMotion ? 0 : 200 });
+  }, [reducedMotion]);
 
   const closeBottomSheet = () => {
-    translateY.value = withTiming(height, { duration: 180 }, () => {
+    translateY.value = withTiming(height, { duration: reducedMotion ? 0 : 180 }, () => {
       runOnJS(navigation.goBack)();
     });
   };
@@ -140,10 +142,10 @@ export default function FilterScreen() {
         runOnJS(closeBottomSheet)();
       } else if (translateY.value < SNAP_HALF - 50) {
         // Snap to full (90% height)
-        translateY.value = withTiming(SNAP_FULL, { duration: 180 });
+        translateY.value = withTiming(SNAP_FULL, { duration: reducedMotion ? 0 : 180 });
       } else {
         // Snap back to half
-        translateY.value = withTiming(SNAP_HALF, { duration: 180 });
+        translateY.value = withTiming(SNAP_HALF, { duration: reducedMotion ? 0 : 180 });
       }
     });
 

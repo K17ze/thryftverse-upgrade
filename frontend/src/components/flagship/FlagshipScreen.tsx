@@ -16,6 +16,7 @@ import Reanimated, {
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space } from '../../theme/designTokens';
 import { KeyboardStickyView } from '../../platform/keyboard/KeyboardProvider';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 export interface FlagshipScreenProps {
   children: React.ReactNode;
@@ -46,6 +47,7 @@ export function FlagshipScreen({
   footerInsetHeight,
 }: FlagshipScreenProps) {
   const { colors, isDark } = useAppTheme();
+  const reducedMotion = useReducedMotion();
   const scrollY = useSharedValue(0);
 
   const scrollHandler = useAnimatedScrollHandler({
@@ -57,21 +59,26 @@ export function FlagshipScreen({
     },
   });
 
-  const headerBorderStyle = useAnimatedStyle(() => ({
-    borderBottomWidth: interpolate(
-      scrollY.value,
-      [0, 10],
-      [0, StyleSheet.hairlineWidth],
-      Extrapolation.CLAMP
-    ),
-    borderBottomColor: colors.border,
-    shadowOpacity: interpolate(
-      scrollY.value,
-      [0, 20],
-      [0, 0.04],
-      Extrapolation.CLAMP
-    ),
-  }));
+  const headerBorderStyle = useAnimatedStyle(() => {
+    if (reducedMotion) {
+      return { borderBottomWidth: 0, borderBottomColor: colors.border, shadowOpacity: 0 };
+    }
+    return {
+      borderBottomWidth: interpolate(
+        scrollY.value,
+        [0, 10],
+        [0, StyleSheet.hairlineWidth],
+        Extrapolation.CLAMP
+      ),
+      borderBottomColor: colors.border,
+      shadowOpacity: interpolate(
+        scrollY.value,
+        [0, 20],
+        [0, 0.04],
+        Extrapolation.CLAMP
+      ),
+    };
+  });
 
   const innerContent = (
     <View style={[styles.container, { backgroundColor: colors.background }, style]}>

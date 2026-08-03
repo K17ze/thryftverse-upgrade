@@ -7,6 +7,7 @@ import { AnimatedPressable } from './AnimatedPressable';
 import { Typography } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import Reanimated, { useSharedValue, useAnimatedStyle, withTiming, runOnJS, Easing } from 'react-native-reanimated';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 // Info toast uses a warm brand-gold accent (#d7b98f) — a ThryftVerse signature color
 // not yet in the token system. Success and error use theme tokens.
@@ -29,25 +30,26 @@ interface ToastItemProps {
 function ToastItem({ id, message, type }: ToastItemProps) {
   const { dismiss } = useToast();
   const { colors } = useAppTheme();
+  const reducedMotion = useReducedMotion();
   const config = getTypeConfig(colors)[type];
 
   const translateY = useSharedValue(-60);
   const opacity = useSharedValue(0);
 
   useEffect(() => {
-    translateY.value = withTiming(0, { duration: 280, easing: Easing.out(Easing.quad) });
-    opacity.value = withTiming(1, { duration: 150 });
+    translateY.value = withTiming(0, { duration: reducedMotion ? 0 : 280, easing: Easing.out(Easing.quad) });
+    opacity.value = withTiming(1, { duration: reducedMotion ? 0 : 150 });
 
     const timer = setTimeout(() => {
       handleDismiss();
     }, 3200);
 
     return () => clearTimeout(timer);
-  }, []);
+  }, [reducedMotion]);
 
   const handleDismiss = () => {
-    translateY.value = withTiming(-60, { duration: 250 });
-    opacity.value = withTiming(0, { duration: 200 }, (finished) => {
+    translateY.value = withTiming(-60, { duration: reducedMotion ? 0 : 250 });
+    opacity.value = withTiming(0, { duration: reducedMotion ? 0 : 200 }, (finished) => {
       if (finished) {
         runOnJS(dismiss)(id);
       }

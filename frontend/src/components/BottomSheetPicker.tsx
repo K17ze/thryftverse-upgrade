@@ -4,12 +4,14 @@ import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   runOnJS,
+  withTiming,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { ActiveTheme, Colors } from '../constants/colors';
 import { Typography } from '../theme/designTokens';
 import { AnimatedPressable } from './AnimatedPressable';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 const { height, width } = Dimensions.get('window');
 const IS_LIGHT = ActiveTheme === 'light';
@@ -35,6 +37,7 @@ export function BottomSheetPicker({ visible, onClose, title, options, selectedVa
   const [shouldRender, setShouldRender] = useState(visible);
   const translateY = useSharedValue(height);
   const contextY = useSharedValue(0);
+  const reducedMotion = useReducedMotion();
 
   // Derived filtered options
   const filteredOptions = options.filter(o => o?.toLowerCase()?.includes(searchQuery.toLowerCase()) ?? false);
@@ -43,15 +46,15 @@ export function BottomSheetPicker({ visible, onClose, title, options, selectedVa
     if (visible) {
       setShouldRender(true);
       setSearchQuery('');
-      translateY.value = height * 0.4;
+      translateY.value = reducedMotion ? withTiming(height * 0.4, { duration: 0 }) : height * 0.4;
     } else if (shouldRender) {
-      translateY.value = height;
+      translateY.value = reducedMotion ? withTiming(height, { duration: 0 }) : height;
       setShouldRender(false);
     }
-  }, [shouldRender, visible]);
+  }, [shouldRender, visible, reducedMotion]);
 
   const handleClose = () => {
-    translateY.value = height;
+    translateY.value = reducedMotion ? withTiming(height, { duration: 0 }) : height;
     onClose();
   };
 
@@ -73,7 +76,7 @@ export function BottomSheetPicker({ visible, onClose, title, options, selectedVa
       } else if (translateY.value > height * 0.7) {
         runOnJS(handleClose)();
       } else {
-        translateY.value = height * 0.4;
+        translateY.value = reducedMotion ? withTiming(height * 0.4, { duration: 0 }) : height * 0.4;
       }
     });
 

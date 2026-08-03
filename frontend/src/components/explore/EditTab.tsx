@@ -30,9 +30,9 @@ const { width: SCREEN_W } = Dimensions.get('window');
 type NavT = StackNavigationProp<RootStackParamList>;
 
 /* ── Sub-components ── */
-function TrendingRailItem({ item, index, onPress, styles }: { item: { id: string; title: string; brand: string; price: number; image: string }; index: number; onPress: () => void; styles: ReturnType<typeof createStyles> }) {
+function TrendingRailItem({ item, index, onPress, styles, reducedMotion }: { item: { id: string; title: string; brand: string; price: number; image: string }; index: number; onPress: () => void; styles: ReturnType<typeof createStyles>; reducedMotion: boolean }) {
   return (
-    <Reanimated.View entering={FadeInDown.duration(350).delay(index * 60).springify()}>
+    <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(350).delay(index * 60).springify()}>
       <AnimatedPressable style={styles.trendingItem} onPress={onPress} activeOpacity={0.92}>
         <CachedImage uri={item.image} style={styles.trendingImage} containerStyle={{ borderRadius: Radius.md }} contentFit="cover" />
         <Text style={styles.trendingBrand} numberOfLines={1}>{item.brand}</Text>
@@ -154,6 +154,7 @@ export default function EditTab() {
                 index={i}
                 onPress={() => { haptic.light(); navigation.push('ItemDetail', { itemId: item.id }); }}
                 styles={styles}
+                reducedMotion={reducedMotionEnabled}
               />
             ))}
           </HorizontalRail>
@@ -177,6 +178,7 @@ export default function EditTab() {
                 index={i}
                 onPress={() => { haptic.light(); navigation.push('ItemDetail', { itemId: item.id }); }}
                 styles={styles}
+                reducedMotion={reducedMotionEnabled}
               />
             ))}
           </HorizontalRail>
@@ -200,6 +202,7 @@ export default function EditTab() {
                 index={i}
                 onPress={() => { haptic.light(); navigation.push('ItemDetail', { itemId: item.id }); }}
                 styles={styles}
+                reducedMotion={reducedMotionEnabled}
               />
             ))}
           </HorizontalRail>

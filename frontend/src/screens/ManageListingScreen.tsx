@@ -36,6 +36,7 @@ import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { fetchListingByIdFromApi, patchListingOnApi, deleteListingOnApi } from '../services/listingsApi';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../platform/server/queryKeys';
 
@@ -50,6 +51,7 @@ export default function ManageListingScreen() {
   const route = useRoute<RouteT>();
   const insets = useSafeAreaInsets();
   const { formatFromFiat } = useFormattedPrice();
+  const reducedMotion = useReducedMotion();
   const { show } = useToast();
   const { itemId } = route.params;
   const { refreshListings } = useBackendData();
@@ -174,11 +176,17 @@ export default function ManageListingScreen() {
   }
 
   const headerBgStyle = useAnimatedStyle(() => {
+    if (reducedMotion) {
+      return { backgroundColor: isDark ? '#0A0A0A' : '#FFFFFF' };
+    }
     const opacity = interpolate(scrollY.value, [0, 120], [0, 1], Extrapolation.CLAMP);
     return { backgroundColor: `${isDark ? '#0A0A0A' : '#FFFFFF'}${Math.round(opacity * 255).toString(16).padStart(2, '0')}` };
   });
 
   const headerTitleStyle = useAnimatedStyle(() => {
+    if (reducedMotion) {
+      return { opacity: 1 };
+    }
     const opacity = interpolate(scrollY.value, [60, 140], [0, 1], Extrapolation.CLAMP);
     return { opacity };
   });

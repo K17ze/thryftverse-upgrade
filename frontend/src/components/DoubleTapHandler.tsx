@@ -11,6 +11,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 interface DoubleTapHandlerProps {
   children: React.ReactNode;
@@ -20,8 +21,10 @@ interface DoubleTapHandlerProps {
 export function DoubleTapHandler({ children, onDoubleTap }: DoubleTapHandlerProps) {
   const scale = useSharedValue(0);
   const opacity = useSharedValue(0);
+  const reducedMotion = useReducedMotion();
 
   const triggerAnimation = useCallback(() => {
+    if (reducedMotion) return;
     scale.value = 0;
     opacity.value = 1;
 
@@ -34,7 +37,7 @@ export function DoubleTapHandler({ children, onDoubleTap }: DoubleTapHandlerProp
       withTiming(1, { duration: 100 }),
       withDelay(400, withTiming(0, { duration: 150 }))
     );
-  }, [scale, opacity]);
+  }, [scale, opacity, reducedMotion]);
 
   const onDoubleTapJS = useCallback(async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);

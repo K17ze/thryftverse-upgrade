@@ -14,6 +14,7 @@ import { Colors, ActiveTheme } from '../../constants/colors';
 import { Typography, Space, Radius } from '../../theme/designTokens';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 import { useHaptic } from '../../hooks/useHaptic';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -64,8 +65,9 @@ export function ProfileVisualHeader({
   hideCover = false,
 }: ProfileVisualHeaderProps) {
   const haptic = useHaptic();
+  const reducedMotion = useReducedMotion();
   return (
-    <Reanimated.View entering={FadeInDown.duration(350).delay(30)} style={styles.root}>
+    <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(350).delay(30)} style={styles.root}>
       {/* Cover with gradient scrim */}
       {!hideCover && (
       <View style={styles.coverWrap}>

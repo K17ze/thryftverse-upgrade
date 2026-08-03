@@ -24,6 +24,7 @@ import { RootStackParamList } from '../../navigation/types';
 import { EmptyState } from '../EmptyState';
 import { DiscoverySectionHeader } from '../discover/DiscoverySectionHeader';
 import { fetchLooksFromApi, type LookApiItem } from '../../services/looksApi';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -35,17 +36,19 @@ function LookCard({
   index,
   colors,
   styles,
+  reducedMotion,
 }: {
   look: LookApiItem;
   onPress: () => void;
   index: number;
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
+  reducedMotion: boolean;
 }) {
   const [activeTag, setActiveTag] = useState<string | null>(null);
 
   return (
-    <Reanimated.View entering={FadeInDown.duration(350).delay(index * 80).springify()}>
+    <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(350).delay(index * 80).springify()}>
       <AnimatedPressable style={styles.card} onPress={onPress} activeOpacity={0.92} accessibilityRole="button" accessibilityLabel={`Look by ${look.creator.username ?? 'unknown'}`}>
         <View style={styles.imageWrap}>
           <SharedTransitionView style={styles.imageShared} sharedTransitionTag={`look-${look.id}`}>
@@ -75,7 +78,7 @@ function LookCard({
               >
                 <View style={styles.tagDot} />
                 {isActive && (
-                  <Reanimated.View entering={FadeInDown.duration(180)} style={styles.tagPill}>
+                  <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(180)} style={styles.tagPill}>
                     <Text style={styles.tagPillText} numberOfLines={1}>{tag.label || 'Untitled'}</Text>
                   </Reanimated.View>
                 )}
@@ -129,6 +132,7 @@ export default function LooksTab() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const reducedMotion = useReducedMotion();
 
   const loadLooks = useCallback(async (isRefresh: boolean = false) => {
     if (isRefresh) {
@@ -172,7 +176,7 @@ export default function LooksTab() {
 
   if (loadError && looks.length === 0) {
     return (
-      <Reanimated.View entering={FadeInDown.duration(400)} style={styles.errorWrap}>
+      <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(400)} style={styles.errorWrap}>
         <Ionicons name="cloud-offline-outline" size={40} color={colors.textMuted} />
         <Text style={styles.errorTitle}>Looks could not be loaded</Text>
         <Text style={styles.errorSubtitle}>Check your connection and try again.</Text>
@@ -194,7 +198,7 @@ export default function LooksTab() {
 
   if (looks.length === 0 && !loadError) {
     return (
-      <Reanimated.View entering={FadeInDown.duration(400)}>
+      <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(400)}>
         <EmptyState
           icon="camera-outline"
           title="No looks yet"
@@ -244,6 +248,7 @@ export default function LooksTab() {
           index={index}
           colors={colors}
           styles={styles}
+          reducedMotion={reducedMotion}
         />
       )}
     />

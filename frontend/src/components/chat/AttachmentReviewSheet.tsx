@@ -16,6 +16,7 @@ import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const { height } = Dimensions.get('window');
 
@@ -35,6 +36,7 @@ export function AttachmentReviewSheet({
   onSend,
 }: AttachmentReviewSheetProps) {
   const { colors } = useAppTheme();
+  const reducedMotion = useReducedMotion();
   const [caption, setCaption] = useState('');
   const [shouldRender, setShouldRender] = useState(visible);
   const translateY = useSharedValue(height);
@@ -46,10 +48,10 @@ export function AttachmentReviewSheet({
       translateY.value = 0;
     } else if (shouldRender) {
       translateY.value = height;
-      const t = setTimeout(() => setShouldRender(false), 300);
+      const t = setTimeout(() => setShouldRender(false), reducedMotion ? 0 : 300);
       return () => clearTimeout(t);
     }
-  }, [visible]);
+  }, [visible, reducedMotion]);
 
   const overlayStyle = useAnimatedStyle(() => ({
     opacity: 1 - translateY.value / height,

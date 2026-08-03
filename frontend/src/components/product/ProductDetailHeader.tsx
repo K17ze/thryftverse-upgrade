@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Space, Radius } from '../../theme/designTokens';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 export interface ProductDetailHeaderProps {
   brand?: string;
@@ -35,10 +36,14 @@ export function ProductDetailHeader({
   onToggleFav,
 }: ProductDetailHeaderProps) {
   const { colors } = useAppTheme();
+  const reducedMotion = useReducedMotion();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
 
   const containerStyle = useAnimatedStyle(() => {
+    if (reducedMotion) {
+      return { opacity: 1, transform: [{ translateY: 0 }] };
+    }
     const threshold = heroHeight - 60;
     const opacity = interpolate(
       scrollY.value,

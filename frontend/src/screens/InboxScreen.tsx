@@ -59,6 +59,7 @@ import { MessagingSegmentRail, MessagingSegment } from '../components/chat/Messa
 import { classifyConversation } from '../utils/conversationClassification';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 
 
@@ -97,6 +98,8 @@ function ListingContextThumbnail({ itemId }: { itemId: string }) {
 export default function InboxScreen() {
 
   const { colors, isDark } = useAppTheme();
+
+  const reducedMotion = useReducedMotion();
 
   const navigation = useNavigation<NavT>();
 
@@ -150,7 +153,11 @@ export default function InboxScreen() {
 
     onScroll: (e) => {
 
-      scrollY.value = e.contentOffset.y;
+      if (!reducedMotion) {
+
+        scrollY.value = e.contentOffset.y;
+
+      }
 
     },
 

@@ -90,6 +90,7 @@ import {
 } from '../components/coown';
 import { AppButton } from '../components/ui/AppButton';
 import { useConnectivity } from '../hooks/useConnectivity';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 type RouteT = RouteProp<RootStackParamList, 'AssetDetail'>;
 type NavT = StackNavigationProp<RootStackParamList>;
@@ -119,6 +120,7 @@ export default function AssetDetailScreen() {
   const route = useRoute<RouteT>();
   const { colors, isDark } = useAppTheme();
   const { isOffline } = useConnectivity();
+  const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
   const isCompact = screenWidth < COMMERCE_DETAIL_COMPACT_WIDTH;
@@ -201,7 +203,9 @@ export default function AssetDetailScreen() {
 
   const scrollY = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler((event) => {
-    scrollY.value = event.contentOffset.y;
+    if (!reducedMotion) {
+      scrollY.value = event.contentOffset.y;
+    }
   });
 
   React.useEffect(() => {

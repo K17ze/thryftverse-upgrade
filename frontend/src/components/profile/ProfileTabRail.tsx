@@ -8,6 +8,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Typography } from '../../theme/designTokens';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const TAB_HEIGHT = 44;
 const TIMING_CONFIG = { duration: 220, easing: Easing.out(Easing.cubic) };
@@ -30,6 +31,7 @@ interface TabRailProps {
  */
 export function TabRail({ tabs, activeKey, onChange, reducedMotion = false }: TabRailProps) {
   const { colors } = useAppTheme();
+  const reducedMotionHook = useReducedMotion();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const tabWidths = useRef<Record<string, number>>({});
   const tabOffsets = useRef<Record<string, number>>({});
@@ -58,7 +60,7 @@ export function TabRail({ tabs, activeKey, onChange, reducedMotion = false }: Ta
       underlineTranslateX.value = withTiming(targetX, TIMING_CONFIG);
       underlineWidth.value = withTiming(underlineW, TIMING_CONFIG);
     }
-  }, [measureTabs, reducedMotion, underlineTranslateX, underlineWidth]);
+  }, [measureTabs, reducedMotion, reducedMotionHook, underlineTranslateX, underlineWidth]);
 
   const onTabLayout = useCallback((key: string) => (e: LayoutChangeEvent) => {
     tabWidths.current[key] = e.nativeEvent.layout.width;
@@ -128,6 +130,7 @@ interface SegmentedControlProps<K extends string = SegmentKey> {
  */
 export function SegmentedControl<K extends string = SegmentKey>({ segments, activeKey, onChange, reducedMotion = false }: SegmentedControlProps<K>) {
   const { colors } = useAppTheme();
+  const reducedMotionHook = useReducedMotion();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const segWidths = useRef<Record<string, number>>({});
   const segOffsets = useRef<Record<string, number>>({});
@@ -154,7 +157,7 @@ export function SegmentedControl<K extends string = SegmentKey>({ segments, acti
       segUnderlineX.value = withTiming(offsetX, TIMING_CONFIG);
       segUnderlineW.value = withTiming(segW, TIMING_CONFIG);
     }
-  }, [measureSegments, reducedMotion, segUnderlineX, segUnderlineW]);
+  }, [measureSegments, reducedMotion, reducedMotionHook, segUnderlineX, segUnderlineW]);
 
   const onSegLayout = useCallback((key: string) => (e: LayoutChangeEvent) => {
     segWidths.current[key] = e.nativeEvent.layout.width;
