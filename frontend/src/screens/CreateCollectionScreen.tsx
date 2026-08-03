@@ -15,6 +15,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme } from '../theme/ThemeContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import type { ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography, Elevation } from '../theme/designTokens';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
@@ -29,6 +30,7 @@ type NavT = StackNavigationProp<RootStackParamList>;
 export default function CreateCollectionScreen() {
   const navigation = useNavigation<NavT>();
   const { colors, isDark } = useAppTheme();
+  const reducedMotionEnabled = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
@@ -88,7 +90,7 @@ export default function CreateCollectionScreen() {
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
-        <Reanimated.View entering={FadeInDown.duration(300).delay(40)} style={styles.card}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(40)} style={styles.card}>
           <Text style={styles.label}>Name</Text>
           <AppInput
             value={name}
@@ -101,7 +103,7 @@ export default function CreateCollectionScreen() {
           <Text style={styles.charCount}>{name.length}/40</Text>
         </Reanimated.View>
 
-        <Reanimated.View entering={FadeInDown.duration(300).delay(80)} style={styles.card}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)} style={styles.card}>
           <Text style={styles.label}>Description</Text>
           <AppInput
             value={description}
@@ -115,7 +117,7 @@ export default function CreateCollectionScreen() {
           <Text style={styles.charCount}>{description.length}/200</Text>
         </Reanimated.View>
 
-        <Reanimated.View entering={FadeInDown.duration(300).delay(120)} style={styles.card}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)} style={styles.card}>
           <View style={styles.toggleRow}>
             <View style={styles.toggleIconWrap}>
               <Ionicons name={isPrivate ? 'lock-closed-outline' : 'lock-open-outline'} size={20} color={colors.textSecondary} />
@@ -142,7 +144,7 @@ export default function CreateCollectionScreen() {
           </View>
         </Reanimated.View>
 
-        <Reanimated.View entering={FadeInDown.duration(300).delay(160)} style={styles.footer}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(160)} style={styles.footer}>
           <AppButton
             title={isSubmitting ? 'Creating...' : 'Create Collection'}
             onPress={handleCreate}

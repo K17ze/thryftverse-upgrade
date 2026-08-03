@@ -18,6 +18,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
@@ -38,6 +39,7 @@ type ResultStatus = 'idle' | 'loading' | 'populated' | 'empty' | 'error';
 
 export default function VisualSearchScreen({ navigation, route }: Props) {
   const { colors, isDark } = useAppTheme();
+  const reducedMotionEnabled = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const initialImageUri = route.params?.initialImageUri;
   const { show } = useToast();
@@ -720,7 +722,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
         }
         keyboardShouldPersistTaps="handled"
       >
-        <Reanimated.View entering={FadeIn.duration(300)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
           {renderVisualQueryHeader()}
           {renderRefinementBar()}
           {renderResults()}
