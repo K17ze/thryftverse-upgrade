@@ -47,7 +47,7 @@ const STATUS_LABELS: Record<CoOwnActivityStatus, { label: string; color: 'succes
   expired: { label: 'Expired', color: 'textSecondary' },
 };
 
-const SETTLEMENT_LABELS: Record<CoOwnSettlementState, { label: string; icon: string }> = {
+const SETTLEMENT_LABELS: Record<CoOwnSettlementState, { label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }> = {
   executed: { label: 'Executed · settling', icon: 'sync-outline' },
   settling: { label: 'Settling', icon: 'hourglass-outline' },
   settled: { label: 'Settled', icon: 'checkmark-circle-outline' },
@@ -135,7 +135,7 @@ export function CoOwnActivityRow({
           {/* Doc 10 §3.3: settlement finality badge */}
           {settlementCfg && (
             <View style={[styles.settlementPill, { backgroundColor: settlementColor + '12' }]}>
-              <Ionicons name={settlementCfg.icon as any} size={10} color={settlementColor} />
+              <Ionicons name={settlementCfg.icon} size={10} color={settlementColor} />
               <Text style={[styles.settlementText, { color: settlementColor }]} numberOfLines={1}>
                 {settlementCfg.label}{settlementEtaLabel ? ` · ${settlementEtaLabel}` : ''}
               </Text>

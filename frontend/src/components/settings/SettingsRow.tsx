@@ -10,7 +10,7 @@ export interface SettingsRowProps {
   title: string;
   subtitle?: string;
   value?: string;
-  icon?: string;
+  icon?: React.ComponentProps<typeof Ionicons>['name'];
   iconColor?: string;
   danger?: boolean;
   disabled?: boolean;
@@ -53,7 +53,7 @@ export function SettingsRow({
         {icon ? (
           <View style={styles.iconWrap}>
             <Ionicons
-              name={icon as any}
+              name={icon}
               size={20}
               color={iconColor ?? (danger ? colors.danger : colors.textPrimary)}
             />

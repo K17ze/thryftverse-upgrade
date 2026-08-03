@@ -12,10 +12,10 @@ export interface ChatListingContextBarProps {
   price: string;
   availability: string;
   primaryActionLabel: string;
-  primaryActionIcon: string;
+  primaryActionIcon: React.ComponentProps<typeof Ionicons>['name'];
   onPrimaryAction: () => void;
   secondaryActionLabel?: string;
-  secondaryActionIcon?: string;
+  secondaryActionIcon?: React.ComponentProps<typeof Ionicons>['name'];
   onSecondaryAction?: () => void;
   onTitlePress?: () => void;
   defaultCollapsed?: boolean;
@@ -95,7 +95,7 @@ export function ChatListingContextBar({
             accessibilityRole="button"
             accessibilityLabel={primaryActionLabel}
           >
-            <Ionicons name={primaryActionIcon as any} size={14} color={colors.textInverse} />
+            <Ionicons name={primaryActionIcon} size={14} color={colors.textInverse} />
             <Text style={styles.primaryBtnText}>{primaryActionLabel}</Text>
           </AnimatedPressable>
           {secondaryActionLabel && onSecondaryAction ? (
@@ -108,7 +108,7 @@ export function ChatListingContextBar({
               accessibilityRole="button"
               accessibilityLabel={secondaryActionLabel}
             >
-              <Ionicons name={(secondaryActionIcon ?? 'chatbubbles-outline') as any} size={14} color={colors.textPrimary} />
+              <Ionicons name={secondaryActionIcon ?? 'chatbubbles-outline'} size={14} color={colors.textPrimary} />
               <Text style={styles.secondaryBtnText}>{secondaryActionLabel}</Text>
             </AnimatedPressable>
           ) : null}

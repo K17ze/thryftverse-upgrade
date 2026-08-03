@@ -52,18 +52,18 @@ export interface CoOwnCorporateActionRowProps {
   onPress?: () => void;
 }
 
-const ACTION_CONFIG: Record<CoOwnCorporateActionType, { label: string; icon: string }> = {
+const ACTION_CONFIG: Record<CoOwnCorporateActionType, { label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }> = {
   distribution: { label: 'Distribution', icon: 'cash-outline' },
   operating_cost: { label: 'Operating cost', icon: 'receipt-outline' },
   new_issuance: { label: 'New issuance', icon: 'add-circle-outline' },
   split: { label: 'Split', icon: 'git-branch-outline' },
-  consolidation: { label: 'Consolidation', icon: 'merge-outline' },
+  consolidation: { label: 'Consolidation', icon: 'git-merge-outline' },
   buyback: { label: 'Buyback', icon: 'arrow-undo-circle-outline' },
   compulsory_buyout: { label: 'Compulsory buyout', icon: 'exit-outline' },
   revaluation: { label: 'Revaluation', icon: 'trending-up-outline' },
   insurance_proceeds: { label: 'Insurance proceeds', icon: 'shield-checkmark-outline' },
   liquidation: { label: 'Liquidation', icon: 'cube-outline' },
-  vote: { label: 'Vote', icon: 'ballot-outline' },
+  vote: { label: 'Vote', icon: 'ribbon-outline' },
 };
 
 const STATUS_CONFIG: Record<CoOwnCorporateActionStatus, { label: string; color: 'success' | 'textSecondary' | 'danger' | 'warning' }> = {
@@ -107,7 +107,7 @@ export function CoOwnCorporateActionRow({
     >
       {/* Icon */}
       <View style={[styles.iconWrap, { backgroundColor: colors.brand + '12' }]}>
-        <Ionicons name={actionCfg.icon as any} size={16} color={colors.brand} />
+        <Ionicons name={actionCfg.icon} size={16} color={colors.brand} />
       </View>
 
       {/* Body */}

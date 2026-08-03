@@ -275,7 +275,7 @@ export function MarketplaceChatCard({
   return null;
 }
 
-function StatusBadge({ tone, label, icon }: { tone: 'positive' | 'negative' | 'neutral'; label: string; icon: string }) {
+function StatusBadge({ tone, label, icon }: { tone: 'positive' | 'negative' | 'neutral'; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const toneColors = {
@@ -286,7 +286,7 @@ function StatusBadge({ tone, label, icon }: { tone: 'positive' | 'negative' | 'n
   const c = toneColors[tone];
   return (
     <View style={styles.offerStatusRow}>
-      <Ionicons name={icon as any} size={12} color={c.text} />
+      <Ionicons name={icon} size={12} color={c.text} />
       <Text style={[styles.offerStatusText, { color: c.text }]}>{label}</Text>
     </View>
   );

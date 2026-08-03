@@ -33,7 +33,7 @@ export interface HoldToSubmitButtonProps {
   /** Button label (e.g. "Confirm buy"). */
   title: string;
   /** Icon name to show inside the button. */
-  iconName?: string;
+  iconName?: React.ComponentProps<typeof Ionicons>['name'];
   /** Whether the button is disabled. */
   disabled?: boolean;
   /** Called when the hold completes (or tap, if below threshold). */
@@ -132,7 +132,7 @@ export function HoldToSubmitButton({
 
       <View style={styles.content}>
         {iconName && (
-          <Ionicons name={iconName as any} size={16} color={textColor} />
+          <Ionicons name={iconName} size={16} color={textColor} />
         )}
         <Reanimated.Text
           style={[styles.label, { color: textColor }]}

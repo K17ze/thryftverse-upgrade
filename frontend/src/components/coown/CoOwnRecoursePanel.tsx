@@ -38,7 +38,7 @@ export function CoOwnRecoursePanel({
 }: CoOwnRecoursePanelProps) {
   const { colors } = useAppTheme();
 
-  const items: Array<{ icon: string; label: string; value: string; positive: boolean; warning?: boolean }> = [];
+  const items: Array<{ icon: React.ComponentProps<typeof Ionicons>['name']; label: string; value: string; positive: boolean; warning?: boolean }> = [];
 
   // ── Recourse agreement status ──
   if (recourseAgreementSigned && agreement) {
@@ -156,7 +156,7 @@ export function CoOwnRecoursePanel({
             style={[styles.itemRow, i < items.length - 1 && { borderBottomColor: colors.borderSubtle }]}
           >
             <Ionicons
-              name={item.icon as any}
+              name={item.icon}
               size={16}
               color={item.positive ? colors.brand : item.warning ? colors.warning : colors.textMuted}
             />

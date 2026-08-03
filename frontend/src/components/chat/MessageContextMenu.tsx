@@ -125,7 +125,7 @@ export function MessageContextMenu({
                 hapticFeedback="light"
               >
                 <Ionicons
-                  name={action.icon as any}
+                  name={action.icon}
                   size={22}
                   color={action.destructive ? colors.danger : colors.textPrimary}
                 />

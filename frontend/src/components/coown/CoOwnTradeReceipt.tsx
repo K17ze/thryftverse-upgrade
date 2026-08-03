@@ -48,7 +48,7 @@ export interface CoOwnTradeReceiptProps {
   vehicleName?: string;
 }
 
-const STATUS_CONFIG: Record<CoOwnReceiptStatus, { label: string; icon: string; positive: boolean }> = {
+const STATUS_CONFIG: Record<CoOwnReceiptStatus, { label: string; icon: React.ComponentProps<typeof Ionicons>['name']; positive: boolean }> = {
   pending: { label: 'Pending', icon: 'time-outline', positive: false },
   open: { label: 'Open', icon: 'hourglass-outline', positive: true },
   partially_filled: { label: 'Partially filled', icon: 'swap-horizontal-outline', positive: true },
@@ -113,7 +113,7 @@ export function CoOwnTradeReceipt({
       {/* Status header */}
       <View style={styles.statusHeader}>
         <View style={[styles.statusIconWrap, { backgroundColor: statusColor + '22' }]}>
-          <Ionicons name={statusCfg.icon as any} size={28} color={statusColor} />
+          <Ionicons name={statusCfg.icon} size={28} color={statusColor} />
         </View>
         <Text style={[styles.statusTitle, { color: colors.textPrimary }]} numberOfLines={1}>{statusCfg.label}</Text>
         {timestamp ? (

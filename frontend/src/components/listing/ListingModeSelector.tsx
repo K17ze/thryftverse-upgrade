@@ -12,7 +12,7 @@ interface ListingModeSelectorProps {
   onChange: (mode: ListingMode) => void;
 }
 
-const MODES: { key: ListingMode; label: string; icon: string; description: string }[] = [
+const MODES: { key: ListingMode; label: string; icon: React.ComponentProps<typeof Ionicons>['name']; description: string }[] = [
   { key: 'sell_now', label: 'Sell now', icon: 'pricetag-outline', description: 'List at a fixed price for immediate purchase.' },
   { key: 'auction', label: 'Auction', icon: 'hammer-outline', description: 'Let buyers bid over a set duration.' },
   { key: 'co_own', label: 'Co-Own', icon: 'people-outline', description: 'Offer fractional shares to investors.' },
@@ -38,7 +38,7 @@ export function ListingModeSelector({ mode, onChange }: ListingModeSelectorProps
               accessibilityState={{ selected: active }}
             >
               <Ionicons
-                name={m.icon as any}
+                name={m.icon}
                 size={15}
                 color={active ? colors.textInverse : colors.textMuted}
                 style={{ marginRight: 6 }}

@@ -1,3 +1,5 @@
+import type React from 'react';
+import type { Ionicons } from '@expo/vector-icons';
 import { MOCK_LISTINGS, MOCK_USERS, User } from './mockData';
 import { ENABLE_RUNTIME_MOCKS } from '../constants/runtimeFlags';
 
@@ -60,7 +62,7 @@ export interface PosterTemplate {
   textLayers?: PosterTemplateLayer[];
   stickers?: PosterTemplateSticker[];
   thumbnailColor: string;
-  icon: string;
+  icon: React.ComponentProps<typeof Ionicons>['name'];
 }
 
 export interface Poster {

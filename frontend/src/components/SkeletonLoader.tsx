@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, StyleSheet, ViewStyle, StyleProp } from 'react-native';
+import { View, StyleSheet, ViewStyle, StyleProp, DimensionValue } from 'react-native';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -86,7 +86,7 @@ export function SkeletonLoader({ width, height, borderRadius = 8, style }: Skele
     <Reanimated.View
       style={[
         {
-          width: width as any,
+          width: width as DimensionValue,
           height,
           borderRadius,
           backgroundColor: BASE_BG,
@@ -125,7 +125,7 @@ export function ProductGridSkeleton({ columns = 2, count = 6 }: { columns?: numb
   return (
     <View style={gridStyles.container}>
       {items.map((i) => (
-        <View key={i} style={[gridStyles.card, { width: `${(100 / columns) - 3}%` as any }]}>
+        <View key={i} style={[gridStyles.card, { width: `${(100 / columns) - 3}%` }]}>
           <SkeletonLoader width="100%" height={180} borderRadius={14} />
           <SkeletonLoader width="60%" height={12} borderRadius={6} style={{ marginTop: 10 }} />
           <SkeletonLoader width="40%" height={10} borderRadius={6} style={{ marginTop: 6 }} />

@@ -11,7 +11,7 @@ import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { PosterReactionType } from '../../services/postersApi';
 
-const REACTIONS: Array<{ type: PosterReactionType; icon: string; label: string }> = [
+const REACTIONS: Array<{ type: PosterReactionType; icon: React.ComponentProps<typeof Ionicons>['name']; label: string }> = [
   { type: 'love', icon: 'heart', label: 'Love' },
   { type: 'fire', icon: 'flame', label: 'Fire' },
   { type: 'style', icon: 'shirt', label: 'Style' },
@@ -93,7 +93,7 @@ export function PosterReactionReplyBar({
               accessibilityLabel={`${r.label} reaction`}
               accessibilityRole="button"
             >
-              <Ionicons name={r.icon as any} size={22} color={viewerReaction === r.type ? colors.brand : '#fff'} />
+              <Ionicons name={r.icon} size={22} color={viewerReaction === r.type ? colors.brand : '#fff'} />
             </Pressable>
           ))}
         </View>

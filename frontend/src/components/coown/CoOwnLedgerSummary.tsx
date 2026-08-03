@@ -32,7 +32,7 @@ export function CoOwnLedgerSummary({
 }: CoOwnLedgerSummaryProps) {
   const { colors } = useAppTheme();
 
-  const items = [
+  const items: Array<{ icon: React.ComponentProps<typeof Ionicons>['name']; label: string; value: number }> = [
     { icon: 'add-circle-outline', label: 'Issued', value: issuedCount },
     { icon: 'arrow-down-circle-outline', label: 'Bought', value: boughtCount },
     { icon: 'arrow-up-circle-outline', label: 'Sold', value: soldCount },
@@ -59,7 +59,7 @@ export function CoOwnLedgerSummary({
             i < items.length - 1 && { borderRightWidth: StyleSheet.hairlineWidth, borderRightColor: colors.border },
           ]}
         >
-          <Ionicons name={item.icon as any} size={18} color={colors.textSecondary} />
+          <Ionicons name={item.icon} size={18} color={colors.textSecondary} />
           <Text
             style={[styles.itemValue, { color: colors.textPrimary }]}
             accessibilityLabel={`${item.label}: ${item.value}`}

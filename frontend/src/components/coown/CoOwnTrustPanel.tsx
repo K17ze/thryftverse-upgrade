@@ -37,7 +37,7 @@ export function CoOwnTrustPanel({
 }: CoOwnTrustPanelProps) {
   const { colors } = useAppTheme();
 
-  const items: Array<{ icon: string; label: string; value: string; positive: boolean }> = [];
+  const items: Array<{ icon: React.ComponentProps<typeof Ionicons>['name']; label: string; value: string; positive: boolean }> = [];
 
   // Legal vehicle — equity-market front-cover pattern: the legal wrapper
   // is the first trust signal. 'none' is shown truthfully (not hidden).
@@ -106,7 +106,7 @@ export function CoOwnTrustPanel({
       <View style={styles.itemsList}>
         {items.map((item, i) => (
           <View key={`${item.label}-${i}`} style={[styles.itemRow, i < items.length - 1 && { borderBottomColor: colors.borderSubtle }]}>
-            <Ionicons name={item.icon as any} size={16} color={item.positive ? colors.brand : colors.textMuted} />
+            <Ionicons name={item.icon} size={16} color={item.positive ? colors.brand : colors.textMuted} />
             <View style={styles.itemBody}>
               <Text style={[styles.itemLabel, { color: colors.textMuted }]}>{item.label}</Text>
               <Text style={[styles.itemValue, { color: item.positive ? colors.textPrimary : colors.textSecondary }]}>

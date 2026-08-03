@@ -16,7 +16,7 @@ import { PremiumToggle } from './settings/PremiumToggle';
 export type SettingsCellVariant = 'default' | 'value' | 'toggle' | 'button' | 'destructive' | 'custom';
 
 interface SettingsCellProps {
-  icon?: string;
+  icon?: React.ComponentProps<typeof Ionicons>['name'];
   iconColor?: string;
   title: string;
   subtitle?: string;
@@ -63,7 +63,7 @@ export function SettingsCell({
       {icon && (
         <View style={styles.iconCol}>
           <Ionicons
-            name={icon as any}
+            name={icon}
             size={20}
             color={iconColor ? `${iconColor}cc` : colors.textMuted}
           />

@@ -15,7 +15,7 @@ import { Caption, Headline } from './ui/Text';
 
 interface AttachmentOption {
   id: string;
-  icon: string;
+  icon: React.ComponentProps<typeof Ionicons>['name'];
   label: string;
   color: string;
   onPress?: () => void;
@@ -125,7 +125,7 @@ export function AttachmentMenu({
                   ]}
                 >
                   <Ionicons
-                    name={option.icon as any}
+                    name={option.icon}
                     size={28}
                     color={option.color}
                   />

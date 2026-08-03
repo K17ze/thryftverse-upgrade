@@ -99,7 +99,7 @@ export function OrderStatusStepper({
                   isCurrent && styles.stageIconWrapActive,
                 ]}
               >
-                <Ionicons name={config.icon as any} size={16} color={iconColor} />
+                <Ionicons name={config.icon} size={16} color={iconColor} />
               </View>
               <Text
                 style={[

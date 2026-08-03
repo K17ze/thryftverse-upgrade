@@ -15,7 +15,7 @@ interface ChatActionSheetProps {
 
 interface ActionDef {
   id: ChatAction;
-  icon: string;
+  icon: React.ComponentProps<typeof Ionicons>['name'];
   label: string;
   description: string;
   disabled?: boolean;
@@ -88,7 +88,7 @@ export function ChatActionSheet({
                   ]}
                 >
                   <Ionicons
-                    name={action.icon as any}
+                    name={action.icon}
                     size={22}
                     color={action.disabled ? colors.textMuted : colors.brand}
                   />

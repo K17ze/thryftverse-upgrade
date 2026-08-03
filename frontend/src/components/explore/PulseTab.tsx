@@ -73,7 +73,7 @@ function LiveNowCard({ auction, index, onPress, styles }: { auction: LiveAuction
 }
 
 function ActivityCard({ item, onPress, index, colors, styles }: { item: ActivityItem; onPress: () => void; index: number; colors: ThemeColors; styles: ReturnType<typeof createStyles> }) {
-  const iconMap: Record<ActivityType, string> = {
+  const iconMap: Record<ActivityType, React.ComponentProps<typeof Ionicons>['name']> = {
     auction_live: 'flame-outline',
     fresh_drop: 'cube-outline',
     price_drop: 'trending-down-outline',
@@ -90,7 +90,7 @@ function ActivityCard({ item, onPress, index, colors, styles }: { item: Activity
         <CachedImage uri={item.image} style={styles.activityImage} containerStyle={{ borderRadius: Radius.md }} contentFit="cover" />
         <View style={styles.activityContent}>
           <View style={styles.activityHeader}>
-            <Ionicons name={iconMap[item.type] as any} size={14} color={accentMap[item.type]} />
+            <Ionicons name={iconMap[item.type]} size={14} color={accentMap[item.type]} />
             <Text style={[styles.activityTypeLabel, { color: accentMap[item.type] }]}>
               {item.type === 'auction_live' ? 'LIVE AUCTION'
                 : item.type === 'fresh_drop' ? 'FRESH DROP'

@@ -37,10 +37,10 @@ const TEXT_STYLES: Array<{ value: PosterTextStyle; label: string }> = [
 
 const TEXT_COLORS = ['#ffffff', '#000000', '#9b0202', '#8A6A3F', '#C9A46A', '#215634', '#06489A', '#4A7AC4', '#6B3245', '#7B0E1E'];
 const BG_COLORS = ['transparent', '#000000', '#ffffff', '#9b0202', '#06489A', '#6B3245', '#215634'];
-const ALIGNMENTS: Array<{ value: 'left' | 'center' | 'right'; icon: string }> = [
-  { value: 'left', icon: 'text-align-left' },
-  { value: 'center', icon: 'text-align-center' },
-  { value: 'right', icon: 'text-align-right' },
+const ALIGNMENTS: Array<{ value: 'left' | 'center' | 'right'; icon: React.ComponentProps<typeof Ionicons>['name'] }> = [
+  { value: 'left', icon: 'chevron-back' },
+  { value: 'center', icon: 'text-outline' },
+  { value: 'right', icon: 'chevron-forward' },
 ];
 
 const MAX_TEXT_LENGTH = 200;
@@ -357,7 +357,7 @@ function TextStickerEditor({
               accessibilityLabel={`Align ${a.value}`}
               accessibilityRole="button"
             >
-              <Ionicons name={a.icon as any} size={18} color={alignment === a.value ? '#fff' : colors.textSecondary} />
+              <Ionicons name={a.icon} size={18} color={alignment === a.value ? '#fff' : colors.textSecondary} />
             </Pressable>
           ))}
         </View>

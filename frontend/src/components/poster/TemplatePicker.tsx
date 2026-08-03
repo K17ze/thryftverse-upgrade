@@ -97,7 +97,7 @@ export default function TemplatePicker({ visible, onClose, onSelect, currentTemp
                 }}
               >
                 <View style={[styles.thumb, { backgroundColor: template.thumbnailColor }]}>
-                  <Ionicons name={template.icon as any} size={28} color="#fff" />
+                  <Ionicons name={template.icon} size={28} color="#fff" />
                   {isActive && (
                     <View style={styles.checkBadge}>
                       <Ionicons name="checkmark" size={12} color="#fff" />

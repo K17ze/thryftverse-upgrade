@@ -37,7 +37,7 @@ interface StickerPickerProps {
 
 const EMOJIS = ['🔥', '❤️', '😂', '😍', '👀', '✨', '🎉', '💯', '🙌', '⚡', '🌟', '💥', '🏷️', '📌', '🚀', '💎'];
 
-const SHAPES = [
+const SHAPES: Array<{ icon: React.ComponentProps<typeof Ionicons>['name']; label: string; color: string }> = [
   { icon: 'heart', label: 'Heart', color: '#7B0E1E' },
   { icon: 'star', label: 'Star', color: '#C9A46A' },
   { icon: 'flash', label: 'Bolt', color: '#8A6A3F' },
@@ -355,7 +355,7 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
                     onClose();
                   }}
                 >
-                  <Ionicons name={shape.icon as any} size={28} color="#fff" />
+                  <Ionicons name={shape.icon} size={28} color="#fff" />
                   <Text style={styles.shapeLabel}>{shape.label}</Text>
                 </Pressable>
               ))}

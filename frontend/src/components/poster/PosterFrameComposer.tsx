@@ -263,7 +263,7 @@ export function PosterFrameComposer({
   const isVideo = frame.mediaType === 'video';
   const showDurationSelector = !isVideo;
 
-  const toolRailItems: Array<{ type: PosterStickerType | 'media'; icon: string; label: string }> = posterMode === 'look'
+  const toolRailItems: Array<{ type: PosterStickerType | 'media'; icon: React.ComponentProps<typeof Ionicons>['name']; label: string }> = posterMode === 'look'
     ? [
         { type: 'media', icon: 'images-outline', label: 'Media' },
         { type: 'look', icon: 'shirt-outline', label: 'Look' },
@@ -350,7 +350,7 @@ export function PosterFrameComposer({
             <Pressable
               style={styles.stickerToolBtn}
               onPress={() => {
-                const currentColor = (selectedSticker.payload as any).textColor ?? '#ffffff';
+                const currentColor = (selectedSticker.payload as PosterStickerPayload).textColor ?? '#ffffff';
                 const colors = ['#ffffff', '#000000', '#9b0202', '#8A6A3F', '#C9A46A', '#215634', '#06489A', '#4A7AC4', '#6B3245', '#7B0E1E'];
                 const idx = colors.indexOf(currentColor);
                 const nextColor = colors[(idx + 1) % colors.length];
@@ -369,8 +369,8 @@ export function PosterFrameComposer({
               style={styles.stickerToolBtn}
               onPress={() => {
                 const styles_arr = ['editorial', 'minimal', 'label', 'outline'] as const;
-                const current = (selectedSticker.payload as any).textStyle ?? 'editorial';
-                const idx = styles_arr.indexOf(current as any);
+                const current = (selectedSticker.payload as PosterStickerPayload).textStyle ?? 'editorial';
+                const idx = styles_arr.indexOf(current);
                 const nextStyle = styles_arr[(idx + 1) % styles_arr.length];
                 onUpdateSticker(selectedSticker.id, { payload: { ...selectedSticker.payload, textStyle: nextStyle } });
               }}
@@ -455,7 +455,7 @@ export function PosterFrameComposer({
             accessibilityLabel={`Add ${item.label}`}
             accessibilityRole="button"
           >
-            <Ionicons name={item.icon as any} size={22} color={colors.textPrimary} />
+            <Ionicons name={item.icon} size={22} color={colors.textPrimary} />
             <Text style={styles.railLabel}>{item.label}</Text>
           </Pressable>
         ))}
@@ -468,11 +468,11 @@ export function PosterFrameComposer({
             <View style={styles.sheetHandle} />
             <Text style={styles.sheetTitle}>Add media</Text>
             {([
-              { action: 'take_photo' as const, icon: 'camera-outline', label: 'Take photo' },
-              { action: 'choose_photo' as const, icon: 'images-outline', label: 'Choose photo' },
-              { action: 'record_video' as const, icon: 'videocam-outline', label: 'Record video' },
-              { action: 'choose_video' as const, icon: 'film-outline', label: 'Choose video' },
-              { action: 'text_canvas' as const, icon: 'text-outline', label: 'Text canvas' },
+              { action: 'take_photo' as const, icon: 'camera-outline' as const, label: 'Take photo' },
+              { action: 'choose_photo' as const, icon: 'images-outline' as const, label: 'Choose photo' },
+              { action: 'record_video' as const, icon: 'videocam-outline' as const, label: 'Record video' },
+              { action: 'choose_video' as const, icon: 'film-outline' as const, label: 'Choose video' },
+              { action: 'text_canvas' as const, icon: 'text-outline' as const, label: 'Text canvas' },
             ]).map((item) => (
               <Pressable
                 key={item.action}
@@ -481,7 +481,7 @@ export function PosterFrameComposer({
                 accessibilityLabel={item.label}
                 accessibilityRole="button"
               >
-                <Ionicons name={item.icon as any} size={22} color={colors.textPrimary} />
+                <Ionicons name={item.icon} size={22} color={colors.textPrimary} />
                 <Text style={styles.actionLabel}>{item.label}</Text>
               </Pressable>
             ))}

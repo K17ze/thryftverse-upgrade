@@ -55,7 +55,7 @@ export function OfferBubble({
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
-  const getTypeConfig = () => {
+  const getTypeConfig = (): { icon: React.ComponentProps<typeof Ionicons>['name']; color: string; label: string; bgColor: string } => {
     switch (type) {
       case 'offer':
         return {
@@ -109,7 +109,7 @@ export function OfferBubble({
     >
       {/* Header */}
       <View style={[styles.header, { backgroundColor: typeConfig.bgColor }]}>
-        <Ionicons name={typeConfig.icon as any} size={18} color={typeConfig.color} />
+        <Ionicons name={typeConfig.icon} size={18} color={typeConfig.color} />
         <Caption color={typeConfig.color} style={styles.typeLabel}>
           {typeConfig.label}
         </Caption>

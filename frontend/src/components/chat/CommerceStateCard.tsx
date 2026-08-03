@@ -164,7 +164,7 @@ export function CommerceStateCard({
       {/* Header row */}
       <View style={styles.headerRow}>
         <View style={[styles.headerIcon, { backgroundColor: config.iconBg }]}>
-          <Ionicons name={config.icon as any} size={16} color={config.iconColor} />
+          <Ionicons name={config.icon} size={16} color={config.iconColor} />
         </View>
         <View style={styles.headerBody}>
           <Text style={styles.title} numberOfLines={1}>{config.title}</Text>

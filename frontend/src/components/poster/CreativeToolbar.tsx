@@ -11,7 +11,7 @@ interface CreativeToolbarProps {
   visible: boolean;
 }
 
-const TOOLS: { key: CreativeTool; icon: string; label: string }[] = [
+const TOOLS: { key: CreativeTool; icon: React.ComponentProps<typeof Ionicons>['name']; label: string }[] = [
   { key: 'text', icon: 'text-outline', label: 'Text' },
   { key: 'stickers', icon: 'happy-outline', label: 'Stickers' },
   { key: 'draw', icon: 'pencil-outline', label: 'Draw' },
@@ -35,7 +35,7 @@ export default function CreativeToolbar({ activeTool, onToolSelect, visible }: C
               hitSlop={8}
             >
               <Ionicons
-                name={tool.icon as any}
+                name={tool.icon}
                 size={20}
                 color={isActive ? '#000' : 'rgba(255,255,255,0.9)'}
               />

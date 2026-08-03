@@ -6,7 +6,7 @@ import { Space, Type , Typography  } from '../../theme/designTokens';
 
 export interface SettingsInfoBannerProps {
   text: string;
-  icon?: string;
+  icon?: React.ComponentProps<typeof Ionicons>['name'];
   variant?: 'info' | 'warning' | 'error';
 }
 
@@ -25,7 +25,7 @@ export function SettingsInfoBanner({
 
   return (
     <View style={[styles.container, { backgroundColor: colors.surfaceAlt }]}>
-      <Ionicons name={icon as any} size={18} color={color} />
+      <Ionicons name={icon} size={18} color={color} />
       <Text style={[styles.text, { color }]}>{text}</Text>
     </View>
   );

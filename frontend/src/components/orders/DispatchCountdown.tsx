@@ -66,7 +66,7 @@ export function DispatchCountdown({ createdAt, windowHours = 24, shipped }: Prop
     urgency === 'warning' ? `${colors.warning}10` :
     colors.surface;
 
-  const icon =
+  const icon: React.ComponentProps<typeof Ionicons>['name'] =
     urgency === 'overdue' ? 'alert-circle' :
     urgency === 'urgent' ? 'time' :
     urgency === 'warning' ? 'time' :
@@ -83,7 +83,7 @@ export function DispatchCountdown({ createdAt, windowHours = 24, shipped }: Prop
   return (
     <View style={[styles.container, { backgroundColor: bgColor }]}>
       <View style={styles.row}>
-        <Ionicons name={icon as any} size={14} color={color} />
+        <Ionicons name={icon} size={14} color={color} />
         <Text style={[styles.label, { color }]} numberOfLines={1}>
           {label}
         </Text>

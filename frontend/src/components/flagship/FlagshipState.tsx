@@ -65,7 +65,7 @@ export function FlagshipState({
   return (
     <View style={styles.center}>
       <View style={[styles.iconCircle, { backgroundColor: colors.surfaceAlt }]}>
-        <Ionicons name={effectiveIcon as any} size={28} color={colors.textMuted} />
+        <Ionicons name={effectiveIcon} size={28} color={colors.textMuted} />
       </View>
       <Text style={[styles.title, { color: colors.textPrimary }]}>
         {title ?? DEFAULT_TITLES[variant]}

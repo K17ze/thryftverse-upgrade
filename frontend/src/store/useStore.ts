@@ -36,6 +36,7 @@ export interface User {
   id: string;
   username: string;
   avatar: string | null;
+  handle?: string;
   coverPhoto?: string | null;
   coverVideo?: string | null;
   bio?: string | null;
@@ -50,6 +51,9 @@ export interface User {
   role?: string;
   emailVerified?: boolean;
   twoFactorEnabled?: boolean;
+  rating?: number;
+  reviewCount?: number;
+  isVerified?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
