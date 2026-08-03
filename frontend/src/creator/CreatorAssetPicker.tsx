@@ -29,7 +29,7 @@ import { Canvas, Path, Skia } from '@shopify/react-native-skia';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Reanimated, { useSharedValue, runOnJS } from 'react-native-reanimated';
 
-export type AssetPickerMode = 'media' | 'product' | 'mention' | 'look' | 'text' | 'shape' | 'vote' | 'draw' | 'gif' | 'music' | 'quiz' | 'question' | 'emojiSlider' | 'countdown';
+export type AssetPickerMode = 'media' | 'product' | 'mention' | 'look' | 'text' | 'shape' | 'vote' | 'draw' | 'gif' | 'music' | 'quiz' | 'question' | 'emojiSlider' | 'countdown' | 'stickers' | 'link' | 'location' | 'hashtag' | 'time' | 'weather';
 
 export interface CreatorAssetPickerProps {
   visible: boolean;
@@ -78,6 +78,18 @@ function AssetPickerContent({ mode, onClose, onAddLayer, editingLayer }: { mode:
       return <EmojiSliderPicker onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />;
     case 'countdown':
       return <CountdownPicker onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />;
+    case 'stickers':
+      return <StickerTray onClose={onClose} onAddLayer={onAddLayer} />;
+    case 'link':
+      return <LinkPicker onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />;
+    case 'location':
+      return <LocationPicker onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />;
+    case 'hashtag':
+      return <HashtagPicker onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />;
+    case 'time':
+      return <TimePicker onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />;
+    case 'weather':
+      return <WeatherPicker onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />;
     default:
       return null;
   }
@@ -2226,6 +2238,583 @@ function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
   );
 }
 
+// ── Unified Sticker Tray ──────────────────────────────────────────
+// Instagram-pattern: ONE sticker entry point that opens a tray with
+// search + categories. Replaces the cluttered dock of individual
+// sticker tools (Poll, Quiz, Ask, Slider, Countdown, Mention, GIF, Elements).
+//
+// Categories:
+//   Interactive: Poll, Quiz, Question, Emoji Slider, Countdown
+//   Mentions:    @Mention, Location, Hashtag
+//   Media:       GIF, Music, Link
+//   Utility:     Time, Weather, Shapes
+
+interface StickerCategoryDef {
+  key: string;
+  label: string;
+  stickers: StickerDef[];
+}
+
+interface StickerDef {
+  key: string;
+  label: string;
+  icon: string;
+  emoji?: string;
+  mode: AssetPickerMode;
+  description?: string;
+}
+
+const STICKER_CATEGORIES: StickerCategoryDef[] = [
+  {
+    key: 'interactive',
+    label: 'Interactive',
+    stickers: [
+      { key: 'poll', label: 'Poll', icon: 'stats-chart-outline', mode: 'vote', description: '2-option vote' },
+      { key: 'quiz', label: 'Quiz', icon: 'help-circle-outline', mode: 'quiz', description: 'Trivia with answer' },
+      { key: 'question', label: 'Ask', icon: 'chatbubble-outline', mode: 'question', description: 'Open Q&A' },
+      { key: 'emojiSlider', label: 'Slider', icon: 'happy-outline', mode: 'emojiSlider', description: 'Emoji rating' },
+      { key: 'countdown', label: 'Countdown', icon: 'time-outline', mode: 'countdown', description: 'Count to a date' },
+    ],
+  },
+  {
+    key: 'mentions',
+    label: 'Tags',
+    stickers: [
+      { key: 'mention', label: '@Mention', icon: 'at-outline', mode: 'mention', description: 'Tag a user' },
+      { key: 'location', label: 'Location', icon: 'location-outline', mode: 'location', description: 'Tag a place' },
+      { key: 'hashtag', label: 'Hashtag', icon: 'pricetag-outline', mode: 'hashtag', description: 'Topic tag' },
+    ],
+  },
+  {
+    key: 'media',
+    label: 'Media',
+    stickers: [
+      { key: 'gif', label: 'GIF', icon: 'image-outline', mode: 'gif', description: 'Animated sticker' },
+      { key: 'music', label: 'Music', icon: 'musical-notes-outline', mode: 'music', description: 'Song sticker' },
+      { key: 'link', label: 'Link', icon: 'link-outline', mode: 'link', description: 'Clickable URL' },
+    ],
+  },
+  {
+    key: 'utility',
+    label: 'Utility',
+    stickers: [
+      { key: 'time', label: 'Time', icon: 'time-outline', mode: 'time', description: 'Current timestamp' },
+      { key: 'weather', label: 'Weather', icon: 'partly-sunny-outline', mode: 'weather', description: 'Conditions' },
+      { key: 'shape', label: 'Shapes', icon: 'shapes-outline', mode: 'shape', description: 'Decorative shapes' },
+    ],
+  },
+];
+
+function StickerTray({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+  const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const [search, setSearch] = useState('');
+  const [activeCategory, setActiveCategory] = useState<string>('interactive');
+
+  // Filter stickers by search
+  const filteredCategories = useMemo(() => {
+    if (!search.trim()) return STICKER_CATEGORIES;
+    const q = search.toLowerCase();
+    return STICKER_CATEGORIES
+      .map((cat) => ({
+        ...cat,
+        stickers: cat.stickers.filter((s) =>
+          s.label.toLowerCase().includes(q) || s.description?.toLowerCase().includes(q)
+        ),
+      }))
+      .filter((cat) => cat.stickers.length > 0);
+  }, [search]);
+
+  const activeCategoryDef = filteredCategories.find((c) => c.key === activeCategory) ?? filteredCategories[0];
+
+  // StickerTray doesn't add layers directly — it navigates to the
+  // specific picker. We use a callback to switch modes.
+  const onNavigateRef = useRef<(mode: AssetPickerMode) => void>(() => {});
+  // This is set by the parent via a prop — but since StickerTray is
+  // rendered inside AssetPickerContent, we need a way to switch modes.
+  // We'll use a local state to re-render with a different picker.
+  const [subMode, setSubMode] = useState<AssetPickerMode | null>(null);
+
+  if (subMode) {
+    // Render the specific picker, passing through onAddLayer
+    // This re-uses the existing picker components
+    return (
+      <AssetPickerContent
+        mode={subMode}
+        onClose={onClose}
+        onAddLayer={onAddLayer}
+        editingLayer={null}
+      />
+    );
+  }
+
+  return (
+    <SheetContainer visible={true} onClose={onClose} maxHeight={0.85}>
+      <View style={styles.header}>
+        <Text style={[styles.title, { color: colors.textPrimary }]}>Stickers</Text>
+        <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close stickers" hitSlop={12}>
+          <Ionicons name="close" size={22} color={colors.textSecondary} />
+        </PressScale>
+      </View>
+
+      {/* Search bar */}
+      <View style={styles.stickerSearchWrap}>
+        <Ionicons name="search-outline" size={18} color={colors.textMuted} />
+        <TextInput
+          style={styles.stickerSearchInput}
+          placeholder="Search stickers..."
+          placeholderTextColor={colors.textMuted}
+          value={search}
+          onChangeText={setSearch}
+          accessibilityLabel="Search stickers"
+        />
+        {search.length > 0 && (
+          <PressScale onPress={() => setSearch('')} style={styles.stickerSearchClear} accessibilityLabel="Clear search">
+            <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+          </PressScale>
+        )}
+      </View>
+
+      {/* Category chips */}
+      {!search.trim() && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.stickerCategoryScroll} contentContainerStyle={styles.stickerCategoryContent}>
+          {STICKER_CATEGORIES.map((cat) => {
+            const isActive = activeCategory === cat.key;
+            return (
+              <Pressable
+                key={cat.key}
+                onPress={() => { haptic.selection(); setActiveCategory(cat.key); }}
+                style={[styles.stickerCategoryChip, isActive && { backgroundColor: colors.brand }]}
+                accessibilityLabel={`Category ${cat.label}`}
+                accessibilityRole="button"
+              >
+                <Text style={[styles.stickerCategoryChipText, isActive && { color: colors.textInverse }]}>
+                  {cat.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      )}
+
+      {/* Sticker grid */}
+      <ScrollView style={styles.stickerGridScroll} contentContainerStyle={styles.stickerGridContent}>
+        {filteredCategories.length === 0 ? (
+          <View style={styles.stickerEmptyState}>
+            <Ionicons name="search-outline" size={40} color={colors.textMuted} />
+            <Text style={styles.stickerEmptyText}>No stickers found</Text>
+          </View>
+        ) : (
+          (search.trim() ? filteredCategories : [activeCategoryDef]).map((cat) => (
+            <View key={cat.key} style={styles.stickerCategorySection}>
+              {search.trim() && (
+                <Text style={styles.stickerCategoryTitle}>{cat.label}</Text>
+              )}
+              <View style={styles.stickerGrid}>
+                {cat.stickers.map((sticker) => (
+                  <Pressable
+                    key={sticker.key}
+                    onPress={() => { haptic.selection(); setSubMode(sticker.mode); }}
+                    style={styles.stickerCell}
+                    accessibilityLabel={`Add ${sticker.label} sticker`}
+                    accessibilityRole="button"
+                  >
+                    <View style={styles.stickerCellIcon}>
+                      <Ionicons name={sticker.icon as any} size={28} color={colors.brand} />
+                    </View>
+                    <Text style={styles.stickerCellLabel} numberOfLines={1}>{sticker.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          ))
+        )}
+      </ScrollView>
+    </SheetContainer>
+  );
+}
+
+// ── Link Picker ───────────────────────────────────────────────────
+
+function LinkPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+  const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const isEditing = editingLayer?.type === 'link';
+  const existingPayload = isEditing ? (editingLayer as any).payload : null;
+
+  const [url, setUrl] = useState(existingPayload?.url ?? '');
+  const [ctaText, setCtaText] = useState(existingPayload?.ctaText ?? 'Link');
+  const [bgColor, setBgColor] = useState(existingPayload?.backgroundColor ?? '#C9A46A');
+
+  const canSave = url.trim().length > 0 && (url.startsWith('http://') || url.startsWith('https://'));
+
+  const handleAdd = useCallback(() => {
+    if (!canSave) return;
+    const payload: any = {
+      url: url.trim(),
+      ctaText: ctaText.trim() || 'Link',
+      backgroundColor: bgColor,
+      textColor: '#ffffff',
+    };
+    if (isEditing && editingLayer) {
+      onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
+    } else {
+      onAddLayer({
+        ...baseLayer(createStableId('link'), 10),
+        type: 'link',
+        width: 0.5,
+        height: 0.08,
+        payload,
+      });
+    }
+    haptic.medium();
+    onClose();
+  }, [url, ctaText, bgColor, canSave, isEditing, editingLayer, onAddLayer, onClose, haptic]);
+
+  return (
+    <PickerShell title={isEditing ? 'Edit Link' : 'Add Link'} onClose={onClose}>
+      <View style={styles.textPickerBody}>
+        <View style={styles.stickerPreviewPill}>
+          <Ionicons name="link-outline" size={18} color="#fff" />
+          <Text style={styles.stickerPreviewPillText}>{ctaText || 'Link'}</Text>
+        </View>
+        <Text style={styles.pickerSectionLabel}>URL</Text>
+        <TextInput
+          style={styles.textInput}
+          placeholder="https://..."
+          placeholderTextColor={colors.textMuted}
+          value={url}
+          onChangeText={setUrl}
+          keyboardType="url"
+          autoCapitalize="none"
+          autoCorrect={false}
+          accessibilityLabel="Link URL"
+        />
+        <Text style={styles.pickerSectionLabel}>Button Text</Text>
+        <TextInput
+          style={styles.textInput}
+          placeholder="Link"
+          placeholderTextColor={colors.textMuted}
+          value={ctaText}
+          onChangeText={setCtaText}
+          maxLength={40}
+          accessibilityLabel="Link button text"
+        />
+        <Text style={styles.pickerSectionLabel}>Color</Text>
+        <View style={styles.colorRow}>
+          {['#C9A46A', '#9b0202', '#215634', '#06489A', '#000000', '#ffffff'].map((c) => (
+            <Pressable
+              key={c}
+              onPress={() => { haptic.selection(); setBgColor(c); }}
+              style={[styles.colorOption, { backgroundColor: c }, bgColor === c && styles.colorOptionActive]}
+              accessibilityLabel={`Link color ${c}`}
+              accessibilityRole="button"
+              hitSlop={12}
+            />
+          ))}
+        </View>
+        <Pressable onPress={handleAdd} style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]} disabled={!canSave} accessibilityLabel={isEditing ? 'Update link' : 'Add link'} accessibilityRole="button" hitSlop={12}>
+          <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Link'}</Text>
+        </Pressable>
+      </View>
+    </PickerShell>
+  );
+}
+
+// ── Location Picker ───────────────────────────────────────────────
+
+function LocationPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+  const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const isEditing = editingLayer?.type === 'location';
+  const existingPayload = isEditing ? (editingLayer as any).payload : null;
+
+  const [placeName, setPlaceName] = useState(existingPayload?.placeName ?? '');
+
+  const canSave = placeName.trim().length > 0;
+
+  const handleAdd = useCallback(() => {
+    if (!canSave) return;
+    const payload: any = {
+      placeName: placeName.trim(),
+    };
+    if (isEditing && editingLayer) {
+      onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
+    } else {
+      onAddLayer({
+        ...baseLayer(createStableId('location'), 10),
+        type: 'location',
+        width: 0.4,
+        height: 0.06,
+        payload,
+      });
+    }
+    haptic.medium();
+    onClose();
+  }, [placeName, canSave, isEditing, editingLayer, onAddLayer, onClose, haptic]);
+
+  return (
+    <PickerShell title={isEditing ? 'Edit Location' : 'Add Location'} onClose={onClose}>
+      <View style={styles.textPickerBody}>
+        <View style={styles.stickerPreviewPill}>
+          <Ionicons name="location-outline" size={18} color="#fff" />
+          <Text style={styles.stickerPreviewPillText}>{placeName || 'Location'}</Text>
+        </View>
+        <Text style={styles.pickerSectionLabel}>Place Name</Text>
+        <TextInput
+          style={styles.textInput}
+          placeholder="e.g. London, UK"
+          placeholderTextColor={colors.textMuted}
+          value={placeName}
+          onChangeText={setPlaceName}
+          maxLength={80}
+          accessibilityLabel="Location name"
+        />
+        <Pressable onPress={handleAdd} style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]} disabled={!canSave} accessibilityLabel={isEditing ? 'Update location' : 'Add location'} accessibilityRole="button" hitSlop={12}>
+          <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Location'}</Text>
+        </Pressable>
+      </View>
+    </PickerShell>
+  );
+}
+
+// ── Hashtag Picker ────────────────────────────────────────────────
+
+function HashtagPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+  const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const isEditing = editingLayer?.type === 'hashtag';
+  const existingPayload = isEditing ? (editingLayer as any).payload : null;
+
+  const [tag, setTag] = useState(existingPayload?.tag ?? '');
+
+  const canSave = tag.trim().length > 0;
+
+  const handleAdd = useCallback(() => {
+    if (!canSave) return;
+    const cleanTag = tag.trim().replace(/^#/, '');
+    const payload: any = {
+      tag: cleanTag,
+      backgroundColor: '#C9A46A',
+      textColor: '#ffffff',
+    };
+    if (isEditing && editingLayer) {
+      onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
+    } else {
+      onAddLayer({
+        ...baseLayer(createStableId('hashtag'), 10),
+        type: 'hashtag',
+        width: 0.4,
+        height: 0.06,
+        payload,
+      });
+    }
+    haptic.medium();
+    onClose();
+  }, [tag, canSave, isEditing, editingLayer, onAddLayer, onClose, haptic]);
+
+  return (
+    <PickerShell title={isEditing ? 'Edit Hashtag' : 'Add Hashtag'} onClose={onClose}>
+      <View style={styles.textPickerBody}>
+        <View style={styles.stickerPreviewPill}>
+          <Ionicons name="pricetag-outline" size={18} color="#fff" />
+          <Text style={styles.stickerPreviewPillText}>#{tag.replace(/^#/, '') || 'hashtag'}</Text>
+        </View>
+        <Text style={styles.pickerSectionLabel}>Hashtag</Text>
+        <TextInput
+          style={styles.textInput}
+          placeholder="thryftverse"
+          placeholderTextColor={colors.textMuted}
+          value={tag}
+          onChangeText={setTag}
+          maxLength={100}
+          autoCapitalize="none"
+          autoCorrect={false}
+          accessibilityLabel="Hashtag"
+        />
+        <Pressable onPress={handleAdd} style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]} disabled={!canSave} accessibilityLabel={isEditing ? 'Update hashtag' : 'Add hashtag'} accessibilityRole="button" hitSlop={12}>
+          <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Hashtag'}</Text>
+        </Pressable>
+      </View>
+    </PickerShell>
+  );
+}
+
+// ── Time Picker ───────────────────────────────────────────────────
+
+function TimePicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+  const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const isEditing = editingLayer?.type === 'time';
+  const existingPayload = isEditing ? (editingLayer as any).payload : null;
+
+  const [format, setFormat] = useState<'time' | 'date' | 'datetime'>(existingPayload?.format ?? 'time');
+  const now = new Date();
+  const previewStr = format === 'time'
+    ? now.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+    : format === 'date'
+    ? now.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    : now.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+  const handleAdd = useCallback(() => {
+    const payload: any = {
+      displayTime: new Date().toISOString(),
+      format,
+      textColor: '#ffffff',
+    };
+    if (isEditing && editingLayer) {
+      onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
+    } else {
+      onAddLayer({
+        ...baseLayer(createStableId('time'), 10),
+        type: 'time',
+        width: 0.3,
+        height: 0.06,
+        payload,
+      });
+    }
+    haptic.medium();
+    onClose();
+  }, [format, isEditing, editingLayer, onAddLayer, onClose, haptic]);
+
+  return (
+    <PickerShell title={isEditing ? 'Edit Time' : 'Add Time'} onClose={onClose}>
+      <View style={styles.textPickerBody}>
+        <View style={styles.stickerPreviewPill}>
+          <Ionicons name="time-outline" size={18} color="#fff" />
+          <Text style={styles.stickerPreviewPillText}>{previewStr}</Text>
+        </View>
+        <Text style={styles.pickerSectionLabel}>Format</Text>
+        <View style={styles.alignmentRow}>
+          {[
+            { key: 'time' as const, label: 'Time', icon: 'time-outline' },
+            { key: 'date' as const, label: 'Date', icon: 'calendar-outline' },
+            { key: 'datetime' as const, label: 'Both', icon: 'calendar-number-outline' },
+          ].map((f) => (
+            <Pressable
+              key={f.key}
+              onPress={() => { haptic.selection(); setFormat(f.key); }}
+              style={[styles.alignmentOption, format === f.key && styles.alignmentOptionActive]}
+              accessibilityLabel={`Time format ${f.label}`}
+              accessibilityRole="button"
+              hitSlop={12}
+            >
+              <Ionicons name={f.icon as any} size={18} color={format === f.key ? colors.brand : colors.textSecondary} />
+            </Pressable>
+          ))}
+        </View>
+        <Pressable onPress={handleAdd} style={styles.saveBtn} accessibilityLabel={isEditing ? 'Update time' : 'Add time'} accessibilityRole="button" hitSlop={12}>
+          <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Time'}</Text>
+        </Pressable>
+      </View>
+    </PickerShell>
+  );
+}
+
+// ── Weather Picker ────────────────────────────────────────────────
+
+function WeatherPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+  const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const isEditing = editingLayer?.type === 'weather';
+  const existingPayload = isEditing ? (editingLayer as any).payload : null;
+
+  const [temperature, setTemperature] = useState(existingPayload?.temperature ?? 22);
+  const [condition, setCondition] = useState(existingPayload?.condition ?? 'Sunny');
+  const [emoji, setEmoji] = useState(existingPayload?.emoji ?? '☀️');
+  const [locationName, setLocationName] = useState(existingPayload?.locationName ?? '');
+
+  const WEATHER_OPTIONS = [
+    { condition: 'Sunny', emoji: '☀️' },
+    { condition: 'Partly Cloudy', emoji: '⛅' },
+    { condition: 'Cloudy', emoji: '☁️' },
+    { condition: 'Rainy', emoji: '🌧️' },
+    { condition: 'Stormy', emoji: '⛈️' },
+    { condition: 'Snowy', emoji: '❄️' },
+    { condition: 'Foggy', emoji: '🌫️' },
+    { condition: 'Windy', emoji: '💨' },
+  ];
+
+  const handleAdd = useCallback(() => {
+    const payload: any = {
+      temperature,
+      condition,
+      emoji,
+      locationName: locationName.trim(),
+      textColor: '#ffffff',
+    };
+    if (isEditing && editingLayer) {
+      onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
+    } else {
+      onAddLayer({
+        ...baseLayer(createStableId('weather'), 10),
+        type: 'weather',
+        width: 0.35,
+        height: 0.08,
+        payload,
+      });
+    }
+    haptic.medium();
+    onClose();
+  }, [temperature, condition, emoji, locationName, isEditing, editingLayer, onAddLayer, onClose, haptic]);
+
+  return (
+    <PickerShell title={isEditing ? 'Edit Weather' : 'Add Weather'} onClose={onClose}>
+      <View style={styles.textPickerBody}>
+        <View style={styles.stickerPreviewPill}>
+          <Text style={styles.stickerPreviewPillEmoji}>{emoji}</Text>
+          <Text style={styles.stickerPreviewPillText}>{temperature}° {condition}</Text>
+        </View>
+        <Text style={styles.pickerSectionLabel}>Condition</Text>
+        <View style={styles.weatherGrid}>
+          {WEATHER_OPTIONS.map((w) => (
+            <Pressable
+              key={w.condition}
+              onPress={() => { haptic.selection(); setCondition(w.condition); setEmoji(w.emoji); }}
+              style={[styles.weatherCell, condition === w.condition && styles.weatherCellActive]}
+              accessibilityLabel={`Weather ${w.condition}`}
+              accessibilityRole="button"
+              hitSlop={8}
+            >
+              <Text style={styles.weatherCellEmoji}>{w.emoji}</Text>
+              <Text style={styles.weatherCellLabel} numberOfLines={1}>{w.condition}</Text>
+            </Pressable>
+          ))}
+        </View>
+        <Text style={styles.pickerSectionLabel}>Temperature (°C)</Text>
+        <TextInput
+          style={styles.textInput}
+          placeholder="22"
+          placeholderTextColor={colors.textMuted}
+          value={String(temperature)}
+          onChangeText={(v) => { const n = parseInt(v, 10); if (!isNaN(n)) setTemperature(n); }}
+          keyboardType="numeric"
+          accessibilityLabel="Temperature"
+        />
+        <Text style={styles.pickerSectionLabel}>Location (optional)</Text>
+        <TextInput
+          style={styles.textInput}
+          placeholder="London, UK"
+          placeholderTextColor={colors.textMuted}
+          value={locationName}
+          onChangeText={setLocationName}
+          maxLength={80}
+          accessibilityLabel="Weather location"
+        />
+        <Pressable onPress={handleAdd} style={styles.saveBtn} accessibilityLabel={isEditing ? 'Update weather' : 'Add weather'} accessibilityRole="button" hitSlop={12}>
+          <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Weather'}</Text>
+        </Pressable>
+      </View>
+    </PickerShell>
+  );
+}
+
 // ── Styles ─────────────────────────────────────────────────────────
 
 function createStyles(colors: ThemeColors) {
@@ -2473,5 +3062,33 @@ function createStyles(colors: ThemeColors) {
   // ── Countdown picker ──
   countdownDateBtn: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.md, borderRadius: Radius.md, borderWidth: 1, borderColor: colors.border },
   countdownDateText: { flex: 1, fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textPrimary },
+  // ── Sticker tray ──
+  stickerSearchWrap: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.sm, backgroundColor: colors.surfaceAlt, borderRadius: Radius.lg, marginHorizontal: Space.md, marginBottom: Space.sm },
+  stickerSearchInput: { flex: 1, fontSize: Type.body.size, color: colors.textPrimary, fontFamily: Typography.family.regular, paddingVertical: 4 },
+  stickerSearchClear: { width: 32, height: 32, justifyContent: 'center', alignItems: 'center' },
+  stickerCategoryScroll: { marginHorizontal: -Space.md, marginBottom: Space.xs },
+  stickerCategoryContent: { paddingHorizontal: Space.md, gap: Space.xs },
+  stickerCategoryChip: { paddingHorizontal: Space.md + 2, paddingVertical: Space.xs + 2, borderRadius: Radius.full, backgroundColor: colors.surfaceAlt },
+  stickerCategoryChipText: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary },
+  stickerGridScroll: { flex: 1 },
+  stickerGridContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
+  stickerCategorySection: { marginBottom: Space.lg },
+  stickerCategoryTitle: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: Space.sm },
+  stickerGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.md },
+  stickerCell: { width: '30%', aspectRatio: 1, borderRadius: Radius.lg, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', gap: Space.xs },
+  stickerCellIcon: { width: 48, height: 48, borderRadius: 24, backgroundColor: `${colors.brand}15`, justifyContent: 'center', alignItems: 'center' },
+  stickerCellLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textPrimary },
+  stickerEmptyState: { paddingVertical: Space.xxl, alignItems: 'center', gap: Space.md },
+  stickerEmptyText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textMuted },
+  // ── Sticker preview pill (shared by Link/Location/Hashtag/Time/Weather) ──
+  stickerPreviewPill: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.md, borderRadius: Radius.lg, backgroundColor: 'rgba(201,164,106,0.9)', alignSelf: 'center', marginBottom: Space.sm },
+  stickerPreviewPillText: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: '#fff' },
+  stickerPreviewPillEmoji: { fontSize: 20 },
+  // ── Weather picker ──
+  weatherGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
+  weatherCell: { width: '23%', aspectRatio: 1, borderRadius: Radius.md, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', gap: 4 },
+  weatherCellActive: { backgroundColor: `${colors.brand}18`, borderWidth: 1.5, borderColor: colors.brand },
+  weatherCellEmoji: { fontSize: 24 },
+  weatherCellLabel: { fontFamily: Typography.family.medium, fontSize: 9, color: colors.textSecondary, textAlign: 'center' },
   }) as any;
 }

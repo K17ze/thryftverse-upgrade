@@ -9,10 +9,23 @@ import {
   Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useCreator } from './CreatorContext';
 import { SheetContainer, PressScale } from './CreatorAnimations';
+import { useHaptic } from '../hooks/useHaptic';
+
+const BG_PRESETS = [
+  { label: 'Black', type: 'color' as const, value: '#000000' },
+  { label: 'Dark', type: 'color' as const, value: '#1a1a1a' },
+  { label: 'White', type: 'color' as const, value: '#ffffff' },
+  { label: 'Gold', type: 'color' as const, value: '#C9A46A' },
+  { label: 'Gold Fade', type: 'gradient' as const, value: '#1a1a1a', secondaryValue: '#C9A46A' },
+  { label: 'Sunset', type: 'gradient' as const, value: '#9b0202', secondaryValue: '#F5D547' },
+  { label: 'Ocean', type: 'gradient' as const, value: '#06489A', secondaryValue: '#215634' },
+  { label: 'Plum', type: 'gradient' as const, value: '#2d1b3d', secondaryValue: '#7B68EE' },
+];
 
 export interface CreatorSettingsSheetProps {
   visible: boolean;
@@ -22,6 +35,7 @@ export interface CreatorSettingsSheetProps {
 export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetProps) {
   const { document, updateMetadata, updateCanvas, saveDraft, isDirty, autosaveStatus, retryAutosave } = useCreator();
   const { colors } = useAppTheme();
+  const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [title, setTitle] = useState(document.metadata.title || '');
   const [caption, setCaption] = useState(document.metadata.caption || '');
@@ -205,6 +219,39 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
               />
             </>
           )}
+
+          {/* Shared: Canvas background */}
+          <Text style={styles.sectionLabel}>Background</Text>
+          <View style={styles.bgRow}>
+            {BG_PRESETS.map((bg) => {
+              const isActive = document.canvas.background.type === bg.type &&
+                document.canvas.background.value === bg.value &&
+                (bg.secondaryValue ? document.canvas.background.secondaryValue === bg.secondaryValue : true);
+              return (
+                <Pressable
+                  key={bg.label}
+                  onPress={() => {
+                    haptic.selection();
+                    updateCanvas({ background: { type: bg.type, value: bg.value, secondaryValue: bg.secondaryValue } });
+                  }}
+                  style={[styles.bgSwatch, isActive && styles.bgSwatchActive]}
+                  accessibilityLabel={`Background ${bg.label}`}
+                  accessibilityRole="button"
+                >
+                  {bg.type === 'color' ? (
+                    <View style={[styles.bgSwatchFill, { backgroundColor: bg.value }]} />
+                  ) : (
+                    <LinearGradient
+                      colors={[bg.value, bg.secondaryValue!]}
+                      style={styles.bgSwatchFill}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 0, y: 1 }}
+                    />
+                  )}
+                </Pressable>
+              );
+            })}
+          </View>
 
           {/* Shared: Canvas ratio */}
           <Text style={styles.sectionLabel}>Canvas Ratio</Text>
@@ -453,6 +500,27 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.regular,
     fontSize: Type.caption.size - 2,
     color: colors.textMuted,
+  },
+  // ── Background picker ──
+  bgRow: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    flexWrap: 'wrap',
+  },
+  bgSwatch: {
+    width: 56,
+    height: 56,
+    borderRadius: Radius.md,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    overflow: 'hidden',
+  },
+  bgSwatchActive: {
+    borderColor: colors.brand,
+  },
+  bgSwatchFill: {
+    width: '100%',
+    height: '100%',
   },
   });
 }

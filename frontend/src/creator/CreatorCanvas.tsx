@@ -541,6 +541,12 @@ function getLayerRadius(layer: CreatorLayer): number {
       return Radius.sm;
     case 'music':
       return Radius.md;
+    case 'link':
+    case 'location':
+    case 'hashtag':
+    case 'time':
+    case 'weather':
+      return Radius.md;
     default:
       return 0;
   }
@@ -576,6 +582,16 @@ function renderLayerContent(layer: CreatorLayer, width: number, height: number):
       return <GifLayerContent layer={layer} />;
     case 'music':
       return <MusicLayerContent layer={layer} />;
+    case 'link':
+      return <LinkLayerContent layer={layer} />;
+    case 'location':
+      return <LocationLayerContent layer={layer} />;
+    case 'hashtag':
+      return <HashtagLayerContent layer={layer} />;
+    case 'time':
+      return <TimeLayerContent layer={layer} />;
+    case 'weather':
+      return <WeatherLayerContent layer={layer} />;
     default:
       return null;
   }
@@ -1179,6 +1195,128 @@ function MusicLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'mu
         alignItems: 'center',
       }}>
         <Ionicons name="play" size={10} color="#fff" />
+      </View>
+    </View>
+  );
+}
+
+// ── Link layer content ─────────────────────────────────────────────
+function LinkLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'link' }> }) {
+  const { payload } = layer;
+  return (
+    <View style={{
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderRadius: Radius.md,
+      backgroundColor: payload.backgroundColor,
+      minWidth: 120,
+    }}>
+      <Ionicons name="link-outline" size={16} color={payload.textColor} />
+      <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.caption.size + 1, color: payload.textColor }} numberOfLines={1}>
+        {payload.ctaText}
+      </Text>
+    </View>
+  );
+}
+
+// ── Location layer content ─────────────────────────────────────────
+function LocationLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'location' }> }) {
+  const { payload } = layer;
+  return (
+    <View style={{
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: Radius.md,
+      backgroundColor: 'rgba(0,0,0,0.6)',
+      minWidth: 100,
+    }}>
+      <Ionicons name="location-outline" size={16} color="#fff" />
+      <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.caption.size + 1, color: '#fff' }} numberOfLines={1}>
+        {payload.placeName}
+      </Text>
+    </View>
+  );
+}
+
+// ── Hashtag layer content ──────────────────────────────────────────
+function HashtagLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'hashtag' }> }) {
+  const { payload } = layer;
+  return (
+    <View style={{
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: Radius.md,
+      backgroundColor: payload.backgroundColor,
+      minWidth: 80,
+    }}>
+      <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.caption.size + 1, color: payload.textColor }} numberOfLines={1}>
+        #{payload.tag}
+      </Text>
+    </View>
+  );
+}
+
+// ── Time layer content ─────────────────────────────────────────────
+function TimeLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'time' }> }) {
+  const { payload } = layer;
+  const date = new Date(payload.displayTime);
+  const timeStr = payload.format === 'time'
+    ? date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+    : payload.format === 'date'
+    ? date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    : date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  return (
+    <View style={{
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: Radius.md,
+      backgroundColor: payload.backgroundColor ?? 'rgba(0,0,0,0.6)',
+      minWidth: 80,
+    }}>
+      <Ionicons name="time-outline" size={16} color={payload.textColor} />
+      <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.caption.size + 1, color: payload.textColor }} numberOfLines={1}>
+        {timeStr}
+      </Text>
+    </View>
+  );
+}
+
+// ── Weather layer content ──────────────────────────────────────────
+function WeatherLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'weather' }> }) {
+  const { payload } = layer;
+  return (
+    <View style={{
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderRadius: Radius.md,
+      backgroundColor: payload.backgroundColor ?? 'rgba(0,0,0,0.6)',
+      minWidth: 120,
+    }}>
+      <Text style={{ fontSize: 20 }}>{payload.emoji}</Text>
+      <View style={{ gap: 1 }}>
+        <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.caption.size + 1, color: payload.textColor }} numberOfLines={1}>
+          {payload.temperature}° {payload.condition}
+        </Text>
+        {payload.locationName ? (
+          <Text style={{ fontFamily: Typography.family.regular, fontSize: 10, color: payload.textColor, opacity: 0.7 }} numberOfLines={1}>
+            {payload.locationName}
+          </Text>
+        ) : null}
       </View>
     </View>
   );

@@ -82,6 +82,46 @@ const CountdownLayerPayloadSchema = z.object({
   textColor: z.string().default('#ffffff'),
 });
 
+// Link sticker — clickable URL with custom CTA text (Instagram 2026 parity)
+const LinkLayerPayloadSchema = z.object({
+  url: z.string().url(),
+  ctaText: z.string().max(40).default('Link'),
+  backgroundColor: z.string().default('#C9A46A'),
+  textColor: z.string().default('#ffffff'),
+});
+
+// Location sticker — place name with optional place ID (Instagram/Snapchat parity)
+const LocationLayerPayloadSchema = z.object({
+  placeName: z.string().min(1).max(80),
+  placeId: z.string().optional(),
+  countryCode: z.string().max(3).optional(),
+});
+
+// Hashtag sticker — clickable hashtag (Instagram parity)
+const HashtagLayerPayloadSchema = z.object({
+  tag: z.string().min(1).max(100),
+  backgroundColor: z.string().default('#C9A46A'),
+  textColor: z.string().default('#ffffff'),
+});
+
+// Time sticker — current timestamp, live-updating (Instagram/Snapchat parity)
+const TimeLayerPayloadSchema = z.object({
+  displayTime: z.string().default(() => new Date().toISOString()),
+  format: z.enum(['time', 'date', 'datetime']).default('time'),
+  textColor: z.string().default('#ffffff'),
+  backgroundColor: z.string().optional(),
+});
+
+// Weather sticker — current conditions at a location (Instagram/Snapchat parity)
+const WeatherLayerPayloadSchema = z.object({
+  temperature: z.number(),
+  condition: z.string().min(1).max(40),
+  locationName: z.string().max(80).default(''),
+  emoji: z.string().default('☀️'),
+  textColor: z.string().default('#ffffff'),
+  backgroundColor: z.string().optional(),
+});
+
 const DecorativeLayerPayloadSchema = z.object({
   shape: z.enum(['circle', 'square', 'line', 'arrow', 'star', 'heart']),
   color: z.string().default('#ffffff'),
@@ -154,6 +194,11 @@ export const CreatorLayerSchema = z.discriminatedUnion('type', [
   BaseLayerSchema.extend({ type: z.literal('draw'), payload: DrawLayerPayloadSchema }),
   BaseLayerSchema.extend({ type: z.literal('gif'), payload: GifLayerPayloadSchema }),
   BaseLayerSchema.extend({ type: z.literal('music'), payload: MusicLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('link'), payload: LinkLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('location'), payload: LocationLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('hashtag'), payload: HashtagLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('time'), payload: TimeLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('weather'), payload: WeatherLayerPayloadSchema }),
 ]);
 
 export type CreatorLayer = z.infer<typeof CreatorLayerSchema>;

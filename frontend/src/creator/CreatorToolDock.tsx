@@ -228,20 +228,13 @@ function buildDefaultTools(
       ...(onLayoutPresets ? [{ icon: 'grid-outline' as const, label: 'Layout', action: onLayoutPresets }] : []),
     ];
   }
-  // Poster: story-first, interactive stickers, temporal
+  // Poster: story-first, unified sticker tray (Instagram pattern)
   return [
     { icon: 'images', label: 'Media', action: () => onToolPress('media'), primary: true },
     { icon: 'text', label: 'Text', action: () => onToolPress('text'), primary: true },
+    { icon: 'happy-outline', label: 'Stickers', action: () => onToolPress('stickers'), primary: true },
     { icon: 'brush-outline', label: 'Draw', action: () => onToolPress('draw') },
-    { icon: 'image-outline', label: 'GIF', action: () => onToolPress('gif') },
     { icon: 'musical-notes-outline', label: 'Music', action: () => onToolPress('music') },
-    { icon: 'stats-chart-outline', label: 'Poll', action: () => onToolPress('vote') },
-    { icon: 'help-circle-outline', label: 'Quiz', action: () => onToolPress('quiz') },
-    { icon: 'chatbubble-outline', label: 'Ask', action: () => onToolPress('question') },
-    { icon: 'happy-outline', label: 'Slider', action: () => onToolPress('emojiSlider') },
-    { icon: 'time-outline', label: 'Countdown', action: () => onToolPress('countdown') },
-    { icon: 'at-outline', label: 'Mention', action: () => onToolPress('mention') },
-    { icon: 'shapes-outline', label: 'Elements', action: () => onToolPress('shape') },
     ...(onAddPage ? [{ icon: 'add-circle-outline' as const, label: 'Add Page', action: onAddPage }] : []),
   ];
 }
@@ -302,6 +295,16 @@ function buildSelectionTools(
     tools.push({ icon: 'swap-horizontal-outline', label: 'Replace', action: () => onEditLayer(layer) });
   } else if (layer.type === 'music') {
     tools.push({ icon: 'swap-horizontal-outline', label: 'Replace', action: () => onEditLayer(layer) });
+  } else if (layer.type === 'link') {
+    tools.push({ icon: 'create-outline', label: 'Edit', action: () => onEditLayer(layer) });
+  } else if (layer.type === 'location') {
+    tools.push({ icon: 'create-outline', label: 'Edit', action: () => onEditLayer(layer) });
+  } else if (layer.type === 'hashtag') {
+    tools.push({ icon: 'create-outline', label: 'Edit', action: () => onEditLayer(layer) });
+  } else if (layer.type === 'time') {
+    tools.push({ icon: 'create-outline', label: 'Edit', action: () => onEditLayer(layer) });
+  } else if (layer.type === 'weather') {
+    tools.push({ icon: 'create-outline', label: 'Edit', action: () => onEditLayer(layer) });
   } else {
     tools.push({ icon: 'create-outline', label: 'Edit', action: () => onEditLayer(layer) });
   }

@@ -29,6 +29,11 @@ const LAYER_ICONS: Record<CreatorLayer['type'], string> = {
   draw: 'brush-outline',
   gif: 'image-outline',
   music: 'musical-notes-outline',
+  link: 'link-outline',
+  location: 'location-outline',
+  hashtag: 'pricetag-outline',
+  time: 'time-outline',
+  weather: 'partly-sunny-outline',
 };
 
 const TOUCH = 44;
@@ -253,6 +258,16 @@ function getLayerDisplayName(layer: CreatorLayer): string {
       return layer.payload.altText || 'GIF';
     case 'music':
       return `${layer.payload.trackName}${layer.payload.artistName ? ' — ' + layer.payload.artistName : ''}`;
+    case 'link':
+      return layer.payload.ctaText || 'Link';
+    case 'location':
+      return layer.payload.placeName || 'Location';
+    case 'hashtag':
+      return `#${layer.payload.tag}`;
+    case 'time':
+      return 'Time';
+    case 'weather':
+      return `${layer.payload.emoji} ${layer.payload.condition}`;
     default:
       return 'Layer';
   }
@@ -293,6 +308,11 @@ function getLayerColor(type: CreatorLayer['type'], colors: ThemeColors): string 
     case 'draw': return colors.brand;
     case 'gif': return colors.social;
     case 'music': return colors.antiqueGold;
+    case 'link': return colors.brand;
+    case 'location': return colors.discovery;
+    case 'hashtag': return colors.social;
+    case 'time': return colors.bronze;
+    case 'weather': return colors.discovery;
     default: return colors.textMuted;
   }
 }

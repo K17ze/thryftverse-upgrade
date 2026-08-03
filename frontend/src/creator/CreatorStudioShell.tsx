@@ -32,7 +32,7 @@ import { CreatorPreviewOverlay } from './CreatorPreviewOverlay';
 import { CreatorEntryScreen } from './CreatorEntryScreen';
 import { CreatorCropSheet } from './CreatorCropSheet';
 import { CreatorCutoutSheet } from './CreatorCutoutSheet';
-import { PressScale } from './CreatorAnimations';
+import { PressScale, SheetContainer } from './CreatorAnimations';
 import { useHaptic } from '../hooks/useHaptic';
 import type { CreatorTemplate } from './templates';
 
@@ -54,6 +54,11 @@ function layerTypeLabel(type: CreatorLayer['type']): string {
     case 'draw': return 'Drawing';
     case 'gif': return 'GIF';
     case 'music': return 'Music';
+    case 'link': return 'Link';
+    case 'location': return 'Location';
+    case 'hashtag': return 'Hashtag';
+    case 'time': return 'Time';
+    case 'weather': return 'Weather';
     default: return 'Layer';
   }
 }
@@ -63,7 +68,7 @@ function CreatorStudioInner() {
   const route = useRoute<any>();
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
-  const { document, activePageIndex, setActivePageIndex, selectedLayerId, selectLayer, canUndo, canRedo, undo, redo, isDirty, removeLayer, duplicateLayer, reorderLayer, updateLayer, addLayer, addPage, removePage, duplicatePage, updatePageDuration, commitLayerTransform, autosaveStatus, isLoadingDraft, setDocument, saveDraft } = useCreator();
+  const { document, activePageIndex, setActivePageIndex, selectedLayerId, selectLayer, canUndo, canRedo, undo, redo, isDirty, removeLayer, duplicateLayer, reorderLayer, updateLayer, addLayer, addPage, removePage, duplicatePage, updatePageDuration, reorderPages, commitLayerTransform, autosaveStatus, isLoadingDraft, setDocument, saveDraft } = useCreator();
 
   const [showLayers, setShowLayers] = useState(false);
   const [showPublish, setShowPublish] = useState(false);
@@ -76,6 +81,7 @@ function CreatorStudioInner() {
   const [entryComplete, setEntryComplete] = useState(Boolean(route.params?.startBlank));
   const [cropTarget, setCropTarget] = useState<CreatorLayer | null>(null);
   const [cutoutTarget, setCutoutTarget] = useState<CreatorLayer | null>(null);
+  const [pageMenuIndex, setPageMenuIndex] = useState<number | null>(null);
 
   // Show entry screen when document is empty and not loading a draft/template
   const hasContent = document.pages.some((p) => p.layers.length > 0);
@@ -284,64 +290,7 @@ function CreatorStudioInner() {
                 <PressScale
                   key={p.id}
                   onPress={() => { selectLayer(null); setActivePageIndex(i); }}
-                  onLongPress={() => {
-                    if (document.pages.length > 1) {
-                      const currentDuration = document.pages[i]?.durationMs ?? 5000;
-                      Alert.alert(
-                        `Page ${i + 1}`,
-                        undefined,
-                        [
-                          { text: 'Duplicate', onPress: () => duplicatePage(i) },
-                          {
-                            text: `Duration: ${Math.round(currentDuration / 1000)}s`,
-                            onPress: () => {
-                              Alert.alert(
-                                'Page Duration',
-                                'Choose how long this page displays',
-                                [
-                                  { text: '3s', onPress: () => updatePageDuration(i, 3000) },
-                                  { text: '5s', onPress: () => updatePageDuration(i, 5000) },
-                                  { text: '7s', onPress: () => updatePageDuration(i, 7000) },
-                                  { text: '10s', onPress: () => updatePageDuration(i, 10000) },
-                                  { text: '15s', onPress: () => updatePageDuration(i, 15000) },
-                                  { text: 'Cancel', style: 'cancel' },
-                                ],
-                              );
-                            },
-                          },
-                          { text: 'Delete', style: 'destructive', onPress: () => removePage(i) },
-                          { text: 'Cancel', style: 'cancel' },
-                        ],
-                      );
-                    } else {
-                      const currentDuration = document.pages[i]?.durationMs ?? 5000;
-                      Alert.alert(
-                        `Page ${i + 1}`,
-                        undefined,
-                        [
-                          {
-                            text: `Duration: ${Math.round(currentDuration / 1000)}s`,
-                            onPress: () => {
-                              Alert.alert(
-                                'Page Duration',
-                                'Choose how long this page displays',
-                                [
-                                  { text: '3s', onPress: () => updatePageDuration(i, 3000) },
-                                  { text: '5s', onPress: () => updatePageDuration(i, 5000) },
-                                  { text: '7s', onPress: () => updatePageDuration(i, 7000) },
-                                  { text: '10s', onPress: () => updatePageDuration(i, 10000) },
-                                  { text: '15s', onPress: () => updatePageDuration(i, 15000) },
-                                  { text: 'Cancel', style: 'cancel' },
-                                ],
-                              );
-                            },
-                          },
-                          { text: 'Duplicate', onPress: () => duplicatePage(i) },
-                          { text: 'Cancel', style: 'cancel' },
-                        ],
-                      );
-                    }
-                  }}
+                  onLongPress={() => setPageMenuIndex(i)}
                   style={styles.pageDotSegment}
                   accessibilityLabel={`Page ${i + 1}`}
                 >
@@ -484,6 +433,11 @@ function CreatorStudioInner() {
               else if (layer.type === 'draw') setPickerMode('draw');
               else if (layer.type === 'gif') setPickerMode('gif');
               else if (layer.type === 'music') setPickerMode('music');
+              else if (layer.type === 'link') setPickerMode('link');
+              else if (layer.type === 'location') setPickerMode('location');
+              else if (layer.type === 'hashtag') setPickerMode('hashtag');
+              else if (layer.type === 'time') setPickerMode('time');
+              else if (layer.type === 'weather') setPickerMode('weather');
             }}
             onCropLayer={(layer) => setCropTarget(layer)}
             onCutoutLayer={(layer) => setCutoutTarget(layer)}
@@ -545,10 +499,10 @@ function CreatorStudioInner() {
               />
             ) : (
               <OverflowItem
-                icon="stats-chart-outline"
-                label="Vote"
+                icon="happy-outline"
+                label="Stickers"
                 colors={colors}
-                onPress={() => { setPickerMode('vote'); setShowOverflow(false); }}
+                onPress={() => { setPickerMode('stickers'); setShowOverflow(false); }}
               />
             )}
             <View style={[styles.overflowDivider, { backgroundColor: colors.border }]} />
@@ -653,6 +607,20 @@ function CreatorStudioInner() {
           }
         }}
       />
+      {/* ── Page options sheet (duration + duplicate + reorder + delete) ── */}
+      {pageMenuIndex !== null && (
+        <PageOptionsSheet
+          pageIndex={pageMenuIndex}
+          pageCount={document.pages.length}
+          currentDuration={document.pages[pageMenuIndex]?.durationMs ?? 5000}
+          onClose={() => setPageMenuIndex(null)}
+          onSetDuration={(ms) => { updatePageDuration(pageMenuIndex, ms); }}
+          onDuplicate={() => { duplicatePage(pageMenuIndex); setPageMenuIndex(null); }}
+          onDelete={() => { removePage(pageMenuIndex); setPageMenuIndex(null); }}
+          onMoveLeft={() => { if (pageMenuIndex > 0) { reorderPages(pageMenuIndex, pageMenuIndex - 1); setActivePageIndex(pageMenuIndex - 1); } setPageMenuIndex(null); }}
+          onMoveRight={() => { if (pageMenuIndex < document.pages.length - 1) { reorderPages(pageMenuIndex, pageMenuIndex + 1); setActivePageIndex(pageMenuIndex + 1); } setPageMenuIndex(null); }}
+        />
+      )}
     </View>
   );
 }
@@ -756,6 +724,125 @@ const OpacityBar = React.memo(function OpacityBar({ value, onChange, onCommit }:
     </View>
   );
 });
+
+// ── Page options sheet ─────────────────────────────────────────────
+// Replaces the old Alert.alert-based page menu with a proper designed
+// sheet: segmented duration control, duplicate, move left/right, delete.
+function PageOptionsSheet({
+  pageIndex,
+  pageCount,
+  currentDuration,
+  onClose,
+  onSetDuration,
+  onDuplicate,
+  onDelete,
+  onMoveLeft,
+  onMoveRight,
+}: {
+  pageIndex: number;
+  pageCount: number;
+  currentDuration: number;
+  onClose: () => void;
+  onSetDuration: (ms: number) => void;
+  onDuplicate: () => void;
+  onDelete: () => void;
+  onMoveLeft: () => void;
+  onMoveRight: () => void;
+}) {
+  const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const DURATIONS = [
+    { label: '3s', ms: 3000 },
+    { label: '5s', ms: 5000 },
+    { label: '7s', ms: 7000 },
+    { label: '10s', ms: 10000 },
+    { label: '15s', ms: 15000 },
+  ];
+  const canMoveLeft = pageIndex > 0;
+  const canMoveRight = pageIndex < pageCount - 1;
+  const canDelete = pageCount > 1;
+
+  return (
+    <SheetContainer visible={true} onClose={onClose} maxHeight={0.6}>
+      <View style={styles.pageSheetHeader}>
+        <Text style={[styles.pageSheetTitle, { color: colors.textPrimary }]}>Page {pageIndex + 1}</Text>
+        <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close page options">
+          <Ionicons name="close" size={22} color={colors.textSecondary} />
+        </PressScale>
+      </View>
+      <View style={styles.pageSheetBody}>
+        {/* Duration — segmented control */}
+        <Text style={[styles.pageSheetLabel, { color: colors.textSecondary }]}>Duration</Text>
+        <View style={styles.pageSheetDurationRow}>
+          {DURATIONS.map((d) => {
+            const isActive = currentDuration === d.ms;
+            return (
+              <Pressable
+                key={d.ms}
+                onPress={() => { haptic.selection(); onSetDuration(d.ms); }}
+                style={[styles.pageSheetDurationBtn, isActive && { backgroundColor: colors.brand }]}
+                accessibilityLabel={`Set duration to ${d.label}`}
+                accessibilityRole="button"
+              >
+                <Text style={[styles.pageSheetDurationText, isActive && { color: colors.textInverse }]}>
+                  {d.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {/* Reorder */}
+        <Text style={[styles.pageSheetLabel, { color: colors.textSecondary, marginTop: Space.md }]}>Order</Text>
+        <View style={styles.pageSheetActions}>
+          <Pressable
+            onPress={() => { if (canMoveLeft) { haptic.selection(); onMoveLeft(); } }}
+            disabled={!canMoveLeft}
+            style={[styles.pageSheetActionBtn, !canMoveLeft && { opacity: 0.35 }]}
+            accessibilityLabel="Move page left"
+            accessibilityRole="button"
+          >
+            <Ionicons name="arrow-back" size={20} color={colors.textPrimary} />
+            <Text style={[styles.pageSheetActionLabel, { color: colors.textPrimary }]}>Move Left</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => { if (canMoveRight) { haptic.selection(); onMoveRight(); } }}
+            disabled={!canMoveRight}
+            style={[styles.pageSheetActionBtn, !canMoveRight && { opacity: 0.35 }]}
+            accessibilityLabel="Move page right"
+            accessibilityRole="button"
+          >
+            <Ionicons name="arrow-forward" size={20} color={colors.textPrimary} />
+            <Text style={[styles.pageSheetActionLabel, { color: colors.textPrimary }]}>Move Right</Text>
+          </Pressable>
+        </View>
+
+        {/* Duplicate + Delete */}
+        <View style={styles.pageSheetActions}>
+          <Pressable
+            onPress={() => { haptic.medium(); onDuplicate(); }}
+            style={styles.pageSheetActionBtn}
+            accessibilityLabel="Duplicate page"
+            accessibilityRole="button"
+          >
+            <Ionicons name="copy-outline" size={20} color={colors.textPrimary} />
+            <Text style={[styles.pageSheetActionLabel, { color: colors.textPrimary }]}>Duplicate</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => { if (canDelete) { haptic.medium(); onDelete(); } }}
+            disabled={!canDelete}
+            style={[styles.pageSheetActionBtn, !canDelete && { opacity: 0.35 }]}
+            accessibilityLabel="Delete page"
+            accessibilityRole="button"
+          >
+            <Ionicons name="trash-outline" size={20} color={canDelete ? colors.danger : colors.textMuted} />
+            <Text style={[styles.pageSheetActionLabel, { color: canDelete ? colors.danger : colors.textMuted }]}>Delete</Text>
+          </Pressable>
+        </View>
+      </View>
+    </SheetContainer>
+  );
+}
 
 export function CreatorStudioScreen() {
   const route = useRoute<any>();
@@ -965,5 +1052,72 @@ const styles = StyleSheet.create({
   overflowDivider: {
     height: StyleSheet.hairlineWidth,
     marginVertical: Space.xs,
+  },
+  // ── Page options sheet ──
+  pageSheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+  },
+  pageSheetTitle: {
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.subtitle.size,
+  },
+  closeBtn: {
+    width: 44,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: Radius.sm,
+  },
+  pageSheetBody: {
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.xl,
+    gap: Space.xs,
+  },
+  pageSheetLabel: {
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.caption.size,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  pageSheetDurationRow: {
+    flexDirection: 'row',
+    gap: Space.xs,
+    marginTop: 4,
+  },
+  pageSheetDurationBtn: {
+    flex: 1,
+    paddingVertical: Space.sm + 2,
+    borderRadius: Radius.md,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    alignItems: 'center',
+  },
+  pageSheetDurationText: {
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.body.size,
+    color: '#fff',
+  },
+  pageSheetActions: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    marginTop: 4,
+  },
+  pageSheetActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.xs + 2,
+    paddingVertical: Space.md,
+    borderRadius: Radius.md,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  pageSheetActionLabel: {
+    fontFamily: Typography.family.medium,
+    fontSize: Type.body.size,
+    color: '#fff',
   },
 });
