@@ -444,6 +444,7 @@ export default function MyProfileScreen() {
               scaleValue={0.98}
               accessibilityRole="button"
               accessibilityLabel="Retry cover upload"
+              hitSlop={5}
             >
               <Text style={[styles.coverFailureActionText, t.coverFailureActionText]}>Retry</Text>
             </AnimatedPressable>
@@ -454,6 +455,7 @@ export default function MyProfileScreen() {
               scaleValue={0.98}
               accessibilityRole="button"
               accessibilityLabel="Cancel cover change"
+              hitSlop={5}
             >
               <Text style={[styles.coverFailureActionText, t.coverFailureActionText]}>Cancel</Text>
             </AnimatedPressable>
@@ -570,6 +572,7 @@ export default function MyProfileScreen() {
                   activeOpacity={0.85}
                   accessibilityRole="button"
                   accessibilityLabel="Start selling"
+                  hitSlop={1}
                 >
                   <Text style={[styles.listingsEmptyCtaText, t.listingsEmptyCtaText]}>Start selling</Text>
                 </AnimatedPressable>
@@ -582,6 +585,7 @@ export default function MyProfileScreen() {
                     onPress={() => navigation.navigate('MyListings')}
                     accessibilityRole="button"
                     accessibilityLabel="View all listings"
+                    hitSlop={13}
                   >
                     <Text style={[styles.gridHeaderAction, t.gridHeaderAction]}>View All</Text>
                   </Pressable>

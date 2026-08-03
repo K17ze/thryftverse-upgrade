@@ -259,6 +259,7 @@ function ListingMediaPlaceholder({ category }: { category?: string }) {
       end={{ x: 1, y: 1 }}
       style={styles.listingMediaPlaceholder}
       accessibilityLabel="Product image unavailable"
+      accessibilityRole="image"
     >
       <View style={styles.listingMediaPlaceholderOrbLarge} />
       <View style={styles.listingMediaPlaceholderOrbSmall} />
@@ -758,6 +759,7 @@ export default function HomeScreen() {
                     style={isUnwatched ? styles.posterFreshDot : styles.posterSeenDot}
                     accessible
                     accessibilityLabel={isUnwatched ? 'New poster' : 'Seen poster'}
+                    accessibilityRole="image"
                   />
                 </View>
 
@@ -807,6 +809,7 @@ export default function HomeScreen() {
           onPress={acknowledgeNewListings}
           accessibilityLabel="Jump to new listings"
           accessibilityHint="Scrolls feed focus to newly added listings"
+          accessibilityRole="button"
         />
       </View>
     );
@@ -1118,6 +1121,7 @@ export default function HomeScreen() {
                     onPress={closePeek}
                     accessibilityLabel="Close preview"
                     accessibilityHint="Closes the quick listing preview"
+                    accessibilityRole="button"
                   />
 
                   <AppButton
@@ -1137,6 +1141,7 @@ export default function HomeScreen() {
                     }}
                     accessibilityLabel="Open listing details"
                     accessibilityHint="Navigates to full listing details"
+                    accessibilityRole="button"
                   />
                 </View>
               </View>

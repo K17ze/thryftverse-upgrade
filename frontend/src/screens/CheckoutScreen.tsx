@@ -61,6 +61,7 @@ import {
   configureStripeMobile,
   getStripeReturnUrl,
 } from '../platform/payments/stripeMobile';
+import { t } from '../i18n';
 
 type RouteT = RouteProp<RootStackParamList, 'Checkout'>;
 
@@ -85,8 +86,8 @@ interface CheckoutPostageOption {
 const DEFAULT_POSTAGE_OPTION: CheckoutPostageOption = {
   quoteId: null,
   carrierId: null,
-  label: 'Standard shipping',
-  etaLabel: '2-3 working days',
+  label: t('checkout.postage.default.label'),
+  etaLabel: t('checkout.postage.default.eta'),
   priceFromGbp: 2.89,
   liveQuote: false,
   tracking: false,

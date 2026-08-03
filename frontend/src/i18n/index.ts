@@ -229,6 +229,13 @@ const EN_TRANSLATIONS = {
   'checkout.a11y.completeDetails': 'Complete delivery and payment details to pay',
   'checkout.a11y.hint.doubleTapConfirm': 'Double tap to confirm payment',
   'checkout.a11y.hint.addAddressPayment': 'Add address and payment method first',
+  'chat.fallbackUserName': 'Thryft user',
+  'chat.groupChatLabel': 'Group chat',
+  'chat.marketplaceChatLabel': 'Marketplace chat',
+  'chat.messagesRestored': 'Messages restored',
+  'product.buyNow': 'Buy now',
+  'product.browseSimilar': 'Browse similar',
+  'product.manageListing': 'Manage listing',
 } as const;
 
 export type SupportedLocale = 'en' | 'es' | 'fr' | 'de';

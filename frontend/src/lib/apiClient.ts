@@ -3,8 +3,37 @@ import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import * as Network from 'expo-network';
+import { Sentry } from './sentry';
 
 const AUTH_SESSION_STORAGE_KEY = 'thryftverse.auth.session.v1';
+
+/**
+ * Raised in production when SecureStore is unavailable or a SecureStore write
+ * fails. Auth tokens must never fall back to unencrypted AsyncStorage outside
+ * of __DEV__; callers should treat this as a forced re-login condition.
+ */
+export class AuthSecureStoreUnavailableError extends Error {
+  constructor(message = 'AUTH_SECURE_STORE_UNAVAILABLE') {
+    super(message);
+    this.name = 'AuthSecureStoreUnavailableError';
+  }
+}
+
+function reportSecureStoreRefusal(reason: string, error?: unknown) {
+  // `Sentry` is a runtime Proxy that no-ops when uninitialised, but its
+  // `SentryLike` type declares methods as optional. The non-null assertions
+  // reflect the Proxy's guaranteed-callable behaviour.
+  Sentry.addBreadcrumb!({
+    category: 'auth',
+    message: `SecureStore refused in production: ${reason}`,
+    level: 'error',
+  });
+  if (error !== undefined) {
+    Sentry.captureException!(error);
+  } else {
+    Sentry.captureException!(new AuthSecureStoreUnavailableError(reason));
+  }
+}
 
 interface AuthSessionState {
   accessToken: string;
@@ -29,8 +58,14 @@ async function canUseSecureStore() {
     secureStoreAvailable = false;
   }
 
-  if (secureStoreAvailable === false && __DEV__) {
-    console.warn('[apiClient] SecureStore unavailable — auth tokens will fall back to unencrypted AsyncStorage');
+  if (secureStoreAvailable === false) {
+    if (__DEV__) {
+      console.warn('[apiClient] SecureStore unavailable — auth tokens will fall back to unencrypted AsyncStorage');
+    } else {
+      // Production: never fall back to AsyncStorage. Surface the refusal to
+      // Sentry so we have visibility on devices where the keystore is broken.
+      reportSecureStoreRefusal('SecureStore.isAvailableAsync() returned false');
+    }
   }
 
   return secureStoreAvailable;
@@ -40,12 +75,23 @@ async function readStoredAuthSessionRaw() {
   if (await canUseSecureStore()) {
     try {
       return await SecureStore.getItemAsync(AUTH_SESSION_STORAGE_KEY);
-    } catch {
-      // Fall back to AsyncStorage on secure-store read failures.
+    } catch (error) {
+      if (__DEV__) {
+        // Fall back to AsyncStorage on secure-store read failures in dev.
+        return AsyncStorage.getItem(AUTH_SESSION_STORAGE_KEY);
+      }
+      reportSecureStoreRefusal('SecureStore.getItemAsync threw', error);
+      return null;
     }
   }
 
-  return AsyncStorage.getItem(AUTH_SESSION_STORAGE_KEY);
+  if (__DEV__) {
+    return AsyncStorage.getItem(AUTH_SESSION_STORAGE_KEY);
+  }
+
+  // Production: refuse to read from unencrypted storage. Caller will treat
+  // this as no stored session and force re-login.
+  return null;
 }
 
 async function writeStoredAuthSessionRaw(value: string) {
@@ -53,15 +99,31 @@ async function writeStoredAuthSessionRaw(value: string) {
     try {
       await SecureStore.setItemAsync(AUTH_SESSION_STORAGE_KEY, value);
       return;
-    } catch {
-      // Fall back to AsyncStorage on secure-store write failures.
+    } catch (error) {
+      if (__DEV__) {
+        // Fall back to AsyncStorage on secure-store write failures in dev.
+        await AsyncStorage.setItem(AUTH_SESSION_STORAGE_KEY, value);
+        return;
+      }
+      reportSecureStoreRefusal('SecureStore.setItemAsync threw', error);
+      throw new AuthSecureStoreUnavailableError();
     }
   }
 
-  await AsyncStorage.setItem(AUTH_SESSION_STORAGE_KEY, value);
+  if (__DEV__) {
+    await AsyncStorage.setItem(AUTH_SESSION_STORAGE_KEY, value);
+    return;
+  }
+
+  // Production: refuse to persist auth tokens to unencrypted storage.
+  reportSecureStoreRefusal('SecureStore unavailable before write');
+  throw new AuthSecureStoreUnavailableError();
 }
 
 async function clearStoredAuthSessionRaw() {
+  // Clearing is safe in both dev and production: deleting a token from
+  // AsyncStorage is harmless and helps cleanup even when SecureStore is
+  // unavailable. Always try SecureStore first, then fall back.
   if (await canUseSecureStore()) {
     try {
       await SecureStore.deleteItemAsync(AUTH_SESSION_STORAGE_KEY);

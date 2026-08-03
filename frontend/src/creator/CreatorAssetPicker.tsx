@@ -1017,6 +1017,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               style={[styles.styleOption, textStyle === s.key && styles.styleOptionActive]}
               accessibilityLabel={`Text style ${s.label}`}
               accessibilityRole="button"
+              accessibilityState={{ selected: textStyle === s.key }}
               hitSlop={12}
             >
               <Text
@@ -1048,6 +1049,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               style={[styles.colorOption, { backgroundColor: c }, textColor === c && !showSpectrum && styles.colorOptionActive]}
               accessibilityLabel={`Text color ${c}`}
               accessibilityRole="button"
+              accessibilityState={{ selected: textColor === c && !showSpectrum }}
               hitSlop={12}
             />
           ))}
@@ -1077,7 +1079,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               />
             </LinearGradient>
             <View style={[styles.spectrumIndicator, { backgroundColor: textColor }]} />
-            <PressScale onPress={() => { haptic.selection(); setShowSpectrum(false); }} style={styles.spectrumClose} accessibilityLabel="Close spectrum">
+            <PressScale onPress={() => { haptic.selection(); setShowSpectrum(false); }} style={styles.spectrumClose} accessibilityLabel="Close spectrum" hitSlop={13}>
               <Ionicons name="chevron-up" size={18} color={colors.textSecondary} />
             </PressScale>
           </View>
@@ -1093,6 +1095,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               style={[styles.alignmentOption, alignment === a.key && styles.alignmentOptionActive]}
               accessibilityLabel={`Align ${a.key}`}
               accessibilityRole="button"
+              accessibilityState={{ selected: alignment === a.key }}
               hitSlop={12}
             >
               <Ionicons name={a.icon} size={18} color={alignment === a.key ? colors.brand : colors.textSecondary} />
@@ -1117,6 +1120,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                 ]}
                 accessibilityLabel={`Text effect ${e.label}`}
                 accessibilityRole="button"
+                accessibilityState={{ selected: isActive }}
                 hitSlop={12}
               >
                 <Text
@@ -1160,6 +1164,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                 ]}
                 accessibilityLabel={`Text animation ${a.label}`}
                 accessibilityRole="button"
+                accessibilityState={{ selected: isActive }}
                 hitSlop={12}
               >
                 <Ionicons name={animIcon[a.key]} size={20} color={isActive ? colors.brand : colors.textSecondary} />
@@ -1184,6 +1189,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               ]}
               accessibilityLabel={`Background ${c === 'transparent' ? 'none' : c}`}
               accessibilityRole="button"
+              accessibilityState={{ selected: textBgColor === c }}
               hitSlop={12}
             >
               {c === 'transparent' && (
@@ -1193,7 +1199,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
           ))}
         </View>
 
-        <Pressable onPress={handleAdd} style={[styles.saveBtn, !text.trim() && styles.saveBtnDisabled]} disabled={!text.trim()} accessibilityLabel={isEditing ? 'Update text' : 'Add text'} accessibilityRole="button" hitSlop={12}>
+        <Pressable onPress={handleAdd} style={[styles.saveBtn, !text.trim() && styles.saveBtnDisabled]} disabled={!text.trim()} accessibilityLabel={isEditing ? 'Update text' : 'Add text'} accessibilityRole="button" accessibilityState={{ disabled: !text.trim() }} hitSlop={12}>
           <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Text'}</Text>
         </Pressable>
       </View>
@@ -1450,6 +1456,7 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                 ]}
                 accessibilityLabel={`Brush ${t.label}`}
                 accessibilityRole="button"
+                accessibilityState={{ selected: isActive }}
                 hitSlop={12}
               >
                 <Ionicons name={t.icon} size={22} color={isActive ? '#fff' : colors.textSecondary} />
@@ -1471,6 +1478,7 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                   style={[styles.colorOption, { backgroundColor: c }, activeColor === c && !showDrawSpectrum && styles.colorOptionActive]}
                   accessibilityLabel={`Draw color ${c}`}
                   accessibilityRole="button"
+                  accessibilityState={{ selected: activeColor === c && !showDrawSpectrum }}
                   hitSlop={12}
                 />
               ))}
@@ -1497,7 +1505,7 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                   />
                 </LinearGradient>
                 <View style={[styles.spectrumIndicator, { backgroundColor: activeColor }]} />
-                <PressScale onPress={() => { haptic.selection(); setShowDrawSpectrum(false); }} style={styles.spectrumClose} accessibilityLabel="Close spectrum">
+                <PressScale onPress={() => { haptic.selection(); setShowDrawSpectrum(false); }} style={styles.spectrumClose} accessibilityLabel="Close spectrum" hitSlop={13}>
                   <Ionicons name="chevron-up" size={18} color={colors.textSecondary} />
                 </PressScale>
               </View>
@@ -1519,6 +1527,7 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                 style={({ pressed }) => [styles.brushSizeOption, isActive && styles.brushSizeOptionActive, pressed && { opacity: 0.7 }]}
                 accessibilityLabel={`Brush size ${s}`}
                 accessibilityRole="button"
+                accessibilityState={{ selected: isActive }}
                 hitSlop={12}
               >
                 <View style={[styles.brushSizeDot, { width: dotSize, height: dotSize, backgroundColor: previewColor }]} />
@@ -1545,11 +1554,11 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
 
         {/* Actions */}
         <View style={styles.drawActions}>
-          <PressScale onPress={handleUndo} style={[styles.drawActionBtn, ...(strokes.length === 0 ? [{ opacity: 0.4 }] : [])]} accessibilityLabel="Undo stroke" hitSlop={12}>
+          <PressScale onPress={handleUndo} disabled={strokes.length === 0} style={[styles.drawActionBtn, ...(strokes.length === 0 ? [{ opacity: 0.4 }] : [])]} accessibilityLabel="Undo stroke" accessibilityState={{ disabled: strokes.length === 0 }} hitSlop={12}>
             <Ionicons name="arrow-undo-outline" size={20} color={colors.textSecondary} />
             <Text style={styles.drawActionLabel}>Undo</Text>
           </PressScale>
-          <PressScale onPress={handleRedo} style={[styles.drawActionBtn, ...(redoStack.length === 0 ? [{ opacity: 0.4 }] : [])]} accessibilityLabel="Redo stroke" hitSlop={12}>
+          <PressScale onPress={handleRedo} disabled={redoStack.length === 0} style={[styles.drawActionBtn, ...(redoStack.length === 0 ? [{ opacity: 0.4 }] : [])]} accessibilityLabel="Redo stroke" accessibilityState={{ disabled: redoStack.length === 0 }} hitSlop={12}>
             <Ionicons name="refresh-outline" size={20} color={colors.textSecondary} />
             <Text style={styles.drawActionLabel}>Redo</Text>
           </PressScale>
@@ -1697,6 +1706,7 @@ function GifPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (
               ]}
               accessibilityLabel={`GIF category ${cat.label}`}
               accessibilityRole="button"
+              accessibilityState={{ selected: isActive }}
               hitSlop={12}
             >
               <Text style={[styles.gifCategoryChipText, isActive && { color: colors.textInverse }]}>
@@ -2052,6 +2062,7 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                 }}
                 style={styles.quizRemoveBtn}
                 accessibilityLabel={`Remove option ${i + 1}`}
+                accessibilityRole="button"
                 hitSlop={12}
               >
                 <Ionicons name="close-circle" size={20} color={colors.danger} />
@@ -2064,6 +2075,7 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
             onPress={() => { haptic.selection(); setOptions(prev => [...prev, '']); }}
             style={styles.quizAddOptionBtn}
             accessibilityLabel="Add option"
+            accessibilityRole="button"
             hitSlop={12}
           >
             <Ionicons name="add-circle-outline" size={20} color={colors.brand} />
@@ -2079,6 +2091,7 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               style={[styles.styleOption, emoji === e && styles.styleOptionActive]}
               accessibilityLabel={`Emoji ${e}`}
               accessibilityRole="button"
+              accessibilityState={{ selected: emoji === e }}
               hitSlop={12}
             >
               <Text style={{ fontSize: 24 }}>{e}</Text>
@@ -2101,6 +2114,7 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                 ]}
                 accessibilityLabel={`Timer: ${t.label}`}
                 accessibilityRole="button"
+                accessibilityState={{ selected: isActive }}
               >
                 <Text style={[styles.timerChipText, isActive && { color: '#fff' }]}>
                   {t.label}
@@ -2115,6 +2129,7 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
           style={[styles.saveBtn, (!question.trim() || options.filter(o => o.trim()).length < 2) && styles.saveBtnDisabled]}
           accessibilityLabel={isEditing ? 'Update quiz' : 'Add quiz'}
           accessibilityRole="button"
+          accessibilityState={{ disabled: !question.trim() || options.filter(o => o.trim()).length < 2 }}
         >
           <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Quiz'}</Text>
         </Pressable>
@@ -2205,6 +2220,7 @@ function QuestionPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => 
               style={[styles.colorOption, { backgroundColor: c }, bgColor === c && styles.colorOptionActive]}
               accessibilityLabel={`Background ${c}`}
               accessibilityRole="button"
+              accessibilityState={{ selected: bgColor === c }}
               hitSlop={12}
             />
           ))}
@@ -2215,6 +2231,7 @@ function QuestionPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => 
           style={[styles.saveBtn, !prompt.trim() && styles.saveBtnDisabled]}
           accessibilityLabel={isEditing ? 'Update question' : 'Add question'}
           accessibilityRole="button"
+          accessibilityState={{ disabled: !prompt.trim() }}
         >
           <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Question'}</Text>
         </Pressable>
@@ -2310,6 +2327,7 @@ function EmojiSliderPicker({ onClose, onAddLayer, editingLayer }: { onClose: () 
               style={[styles.styleOption, emoji === e && styles.styleOptionActive]}
               accessibilityLabel={`Emoji ${e}`}
               accessibilityRole="button"
+              accessibilityState={{ selected: emoji === e }}
               hitSlop={12}
             >
               <Text style={{ fontSize: 24 }}>{e}</Text>
@@ -2325,6 +2343,7 @@ function EmojiSliderPicker({ onClose, onAddLayer, editingLayer }: { onClose: () 
               style={[styles.colorOption, { backgroundColor: c }, sliderColor === c && styles.colorOptionActive]}
               accessibilityLabel={`Slider color ${c}`}
               accessibilityRole="button"
+              accessibilityState={{ selected: sliderColor === c }}
               hitSlop={12}
             />
           ))}
@@ -2335,6 +2354,7 @@ function EmojiSliderPicker({ onClose, onAddLayer, editingLayer }: { onClose: () 
           style={[styles.saveBtn, !question.trim() && styles.saveBtnDisabled]}
           accessibilityLabel={isEditing ? 'Update slider' : 'Add slider'}
           accessibilityRole="button"
+          accessibilityState={{ disabled: !question.trim() }}
         >
           <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Slider'}</Text>
         </Pressable>
@@ -2438,6 +2458,7 @@ function CountdownPicker({ onClose, onAddLayer, editingLayer }: { onClose: () =>
               style={[styles.colorOption, { backgroundColor: c }, color === c && styles.colorOptionActive]}
               accessibilityLabel={`Countdown color ${c}`}
               accessibilityRole="button"
+              accessibilityState={{ selected: color === c }}
               hitSlop={12}
             />
           ))}
@@ -2448,6 +2469,7 @@ function CountdownPicker({ onClose, onAddLayer, editingLayer }: { onClose: () =>
           style={[styles.saveBtn, !label.trim() && styles.saveBtnDisabled]}
           accessibilityLabel={isEditing ? 'Update countdown' : 'Add countdown'}
           accessibilityRole="button"
+          accessibilityState={{ disabled: !label.trim() }}
         >
           <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Countdown'}</Text>
         </Pressable>
@@ -2537,6 +2559,7 @@ function ShapePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
             style={[styles.colorOption, { backgroundColor: c }, activeColor === c && styles.colorOptionActive]}
             accessibilityLabel={`Shape color ${c}`}
             accessibilityRole="button"
+            accessibilityState={{ selected: activeColor === c }}
             hitSlop={12}
           />
         ))}
@@ -2657,7 +2680,7 @@ function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <Text style={styles.sectionLabel}>Option {i + 1}</Text>
               {options.length > 2 && (
-                <Pressable onPress={() => removeOption(i)} hitSlop={12} accessibilityLabel={`Remove option ${i + 1}`}>
+                <Pressable onPress={() => removeOption(i)} hitSlop={14} accessibilityLabel={`Remove option ${i + 1}`} accessibilityRole="button">
                   <Ionicons name="close-circle" size={18} color={colors.danger} />
                 </Pressable>
               )}
@@ -2700,6 +2723,7 @@ function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
                 ]}
                 accessibilityLabel={`Timer: ${t.label}`}
                 accessibilityRole="button"
+                accessibilityState={{ selected: isActive }}
               >
                 <Text style={[styles.timerChipText, isActive && { color: '#fff' }]}>
                   {t.label}
@@ -2708,7 +2732,7 @@ function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
             );
           })}
         </ScrollView>
-        <Pressable onPress={handleAdd} style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]} disabled={!canSave} accessibilityLabel="Add vote" accessibilityRole="button" hitSlop={12}>
+        <Pressable onPress={handleAdd} style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]} disabled={!canSave} accessibilityLabel="Add vote" accessibilityRole="button" accessibilityState={{ disabled: !canSave }} hitSlop={12}>
           <Text style={styles.saveBtnText}>Add Vote</Text>
         </Pressable>
       </View>
@@ -2844,7 +2868,7 @@ function StickerTray({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
           accessibilityLabel="Search stickers"
         />
         {search.length > 0 && (
-          <PressScale onPress={() => setSearch('')} style={styles.stickerSearchClear} accessibilityLabel="Clear search">
+          <PressScale onPress={() => setSearch('')} style={styles.stickerSearchClear} accessibilityLabel="Clear search" hitSlop={6}>
             <Ionicons name="close-circle" size={18} color={colors.textMuted} />
           </PressScale>
         )}
@@ -2862,6 +2886,7 @@ function StickerTray({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
                 style={[styles.stickerCategoryChip, isActive && { backgroundColor: colors.brand }]}
                 accessibilityLabel={`Category ${cat.label}`}
                 accessibilityRole="button"
+                accessibilityState={{ selected: isActive }}
               >
                 <Text style={[styles.stickerCategoryChipText, isActive && { color: colors.textInverse }]}>
                   {cat.label}
@@ -2985,11 +3010,12 @@ function LinkPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               style={[styles.colorOption, { backgroundColor: c }, bgColor === c && styles.colorOptionActive]}
               accessibilityLabel={`Link color ${c}`}
               accessibilityRole="button"
+              accessibilityState={{ selected: bgColor === c }}
               hitSlop={12}
             />
           ))}
         </View>
-        <Pressable onPress={handleAdd} style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]} disabled={!canSave} accessibilityLabel={isEditing ? 'Update link' : 'Add link'} accessibilityRole="button" hitSlop={12}>
+        <Pressable onPress={handleAdd} style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]} disabled={!canSave} accessibilityLabel={isEditing ? 'Update link' : 'Add link'} accessibilityRole="button" accessibilityState={{ disabled: !canSave }} hitSlop={12}>
           <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Link'}</Text>
         </Pressable>
       </View>
@@ -3047,7 +3073,7 @@ function LocationPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => 
           maxLength={80}
           accessibilityLabel="Location name"
         />
-        <Pressable onPress={handleAdd} style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]} disabled={!canSave} accessibilityLabel={isEditing ? 'Update location' : 'Add location'} accessibilityRole="button" hitSlop={12}>
+        <Pressable onPress={handleAdd} style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]} disabled={!canSave} accessibilityLabel={isEditing ? 'Update location' : 'Add location'} accessibilityRole="button" accessibilityState={{ disabled: !canSave }} hitSlop={12}>
           <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Location'}</Text>
         </Pressable>
       </View>
@@ -3110,7 +3136,7 @@ function HashtagPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => v
           autoCorrect={false}
           accessibilityLabel="Hashtag"
         />
-        <Pressable onPress={handleAdd} style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]} disabled={!canSave} accessibilityLabel={isEditing ? 'Update hashtag' : 'Add hashtag'} accessibilityRole="button" hitSlop={12}>
+        <Pressable onPress={handleAdd} style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]} disabled={!canSave} accessibilityLabel={isEditing ? 'Update hashtag' : 'Add hashtag'} accessibilityRole="button" accessibilityState={{ disabled: !canSave }} hitSlop={12}>
           <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Hashtag'}</Text>
         </Pressable>
       </View>
@@ -3176,6 +3202,7 @@ function TimePicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               style={[styles.alignmentOption, format === f.key && styles.alignmentOptionActive]}
               accessibilityLabel={`Time format ${f.label}`}
               accessibilityRole="button"
+              accessibilityState={{ selected: format === f.key }}
               hitSlop={12}
             >
               <Ionicons name={f.icon} size={18} color={format === f.key ? colors.brand : colors.textSecondary} />
@@ -3270,6 +3297,7 @@ function WeatherPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => v
                 ]}
                 accessibilityLabel={`Weather ${w.condition}`}
                 accessibilityRole="button"
+                accessibilityState={{ selected: isActive }}
                 hitSlop={8}
               >
                 <Text style={[styles.weatherCellEmoji, isActive && { color: '#fff' }]}>{w.emoji}</Text>

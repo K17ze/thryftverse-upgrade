@@ -91,6 +91,7 @@ import {
 import type { RecommendationLook } from '../platform/product';
 import { trackTelemetryEvent } from '../lib/telemetry';
 import { Space, Type, Typography, Radius, DockConstants } from '../theme/designTokens';
+import { t } from '../i18n';
 
 export default function ItemDetailScreen() {
   const { isDark, colors } = useAppTheme();
@@ -337,7 +338,7 @@ export default function ItemDetailScreen() {
           title="Item not found"
           message="This listing may have been removed or is no longer available."
           onRetry={() => navigation.navigate('MainTabs', { screen: 'Explore' })}
-          retryLabel="Browse similar"
+          retryLabel={t('product.browseSimilar')}
         />
       </View>
     );
@@ -819,6 +820,7 @@ export default function ItemDetailScreen() {
                 }}
                 accessibilityLabel={descriptionExpanded ? 'Show less' : 'Read more'}
                 accessibilityRole="button"
+                accessibilityState={{ expanded: descriptionExpanded }}
                 disabled={descriptionExpanded || (item.description.length <= 120)}
               >
                 <Text
@@ -844,6 +846,7 @@ export default function ItemDetailScreen() {
                   style={styles.quietTextTarget}
                   accessibilityLabel={descriptionExpanded ? 'Show less' : 'Read more'}
                   accessibilityRole="button"
+                  accessibilityState={{ expanded: descriptionExpanded }}
                 >
                   <Text style={[styles.descriptionToggle, { color: colors.textSecondary }]}>
                     {descriptionExpanded ? 'Show less' : 'Read more'}
@@ -1055,7 +1058,7 @@ export default function ItemDetailScreen() {
               valueLabel="Your listing"
               thumbnailUri={item.images?.[0]}
               primaryAction={{
-                label: 'Manage listing',
+                label: t('product.manageListing'),
                 onPress: () => navigation.navigate('ManageListing', { itemId: item.id }),
               }}
             />
@@ -1107,7 +1110,7 @@ export default function ItemDetailScreen() {
               }
               subtitle={unavailableCopy.subtitle}
               primaryAction={{
-                label: 'Browse similar',
+                label: t('product.browseSimilar'),
                 onPress: () => navigation.navigate('MainTabs', { screen: 'Explore' }),
               }}
             />
@@ -1127,7 +1130,7 @@ export default function ItemDetailScreen() {
             }
             showProtectionStrip={commerce.protectionPolicy?.available ?? false}
             primaryAction={{
-              label: 'Buy now',
+              label: t('product.buyNow'),
               onPress: () => {
                 if (item) ProductAnalytics.checkoutStart(item.id);
                 navigation.navigate('Checkout', { itemId: item.id });
@@ -1329,6 +1332,7 @@ export default function ItemDetailScreen() {
             handleToggleFav();
           }}
           accessibilityRole="button"
+          accessibilityState={{ selected: isFav }}
           accessibilityLabel={isFav ? 'Remove from wishlist' : 'Add to wishlist'}
         >
           <Ionicons name={isFav ? 'heart' : 'heart-outline'} size={20} color={isFav ? colors.danger : colors.textPrimary} />

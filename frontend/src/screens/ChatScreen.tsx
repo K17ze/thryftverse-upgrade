@@ -112,6 +112,8 @@ import {
   resolveSystemMessageProvenance,
 } from "../utils/systemMessageProvenance";
 
+import { t } from "../i18n";
+
 type Props = StackScreenProps<RootStackParamList, "Chat">;
 
 type MsgType =
@@ -524,7 +526,7 @@ export default function ChatScreen({ navigation, route }: Props) {
       const senderLabel =
         botLookup.get(resolvedSenderId) ??
         userLookup.get(resolvedSenderId) ??
-        (resolvedSenderId === "system" ? "System" : "Thryft user");
+        (resolvedSenderId === "system" ? "System" : t('chat.fallbackUserName'));
 
       if (entry.offerPrice !== undefined && entry.originalPrice !== undefined) {
         return {
@@ -940,8 +942,8 @@ export default function ChatScreen({ navigation, route }: Props) {
     : undefined;
 
   const sellerHandle = resolvedPartnerId
-    ? (partnerProfile?.displayName || partnerProfile?.username || partnerSummary?.displayName || partnerSummary?.username || userLookup.get(resolvedPartnerId) || "Thryft user")
-    : "Thryft user";
+    ? (partnerProfile?.displayName || partnerProfile?.username || partnerSummary?.displayName || partnerSummary?.username || userLookup.get(resolvedPartnerId) || t('chat.fallbackUserName'))
+    : t('chat.fallbackUserName');
 
   const searchMatches = useMemo(() => {
     const q = String(searchQuery ?? "")
@@ -1236,7 +1238,7 @@ export default function ChatScreen({ navigation, route }: Props) {
 
     setRecentlyDeleted([]);
 
-    show("Messages restored", "success");
+    show(t('chat.messagesRestored'), "success");
   };
 
   const handleBulkDelete = () => {
@@ -1829,7 +1831,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                     );
                     return parent
                       ? {
-                          senderName: parent.senderLabel ?? "Thryft user",
+                          senderName: parent.senderLabel ?? t('chat.fallbackUserName'),
                           text: parent.text ?? "",
                         }
                       : null;
@@ -1918,11 +1920,11 @@ export default function ChatScreen({ navigation, route }: Props) {
       null
     : null;
   const topBarTitle = isGroup
-    ? (conversation?.title ?? "Group chat")
+    ? (conversation?.title ?? t('chat.groupChatLabel'))
     : sellerHandle;
   const topBarSubtitle = isGroup
     ? `${conversation?.participantIds?.length ?? 0} members`
-    : "Marketplace chat";
+    : t('chat.marketplaceChatLabel');
   const topBarInitials = isGroup
     ? (conversation?.title
         ?.split(" ")
@@ -2181,7 +2183,7 @@ export default function ChatScreen({ navigation, route }: Props) {
               <>
                 {isSlotVisible(resolution, 'replyQuote') && replyTo ? (
                   <ReplyQuote
-                    senderName={replyTo.senderLabel ?? "Thryft user"}
+                    senderName={replyTo.senderLabel ?? t('chat.fallbackUserName')}
                     text={replyTo.text ?? ""}
                     onClose={() => setReplyTo(null)}
                   />

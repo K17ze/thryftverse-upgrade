@@ -366,6 +366,7 @@ function CreatorStudioInner() {
                     disabled={!canUndo}
                     style={[styles.topBtn, ...(canUndo ? [] : [{ opacity: 0.3 }])]}
                     accessibilityLabel="Undo"
+                    accessibilityState={{ disabled: !canUndo }}
                   >
                     <Ionicons name="arrow-undo" size={22} color={colors.textPrimary} />
                   </PressScale>
@@ -374,6 +375,7 @@ function CreatorStudioInner() {
                     disabled={!canRedo}
                     style={[styles.topBtn, ...(canRedo ? [] : [{ opacity: 0.3 }])]}
                     accessibilityLabel="Redo"
+                    accessibilityState={{ disabled: !canRedo }}
                   >
                     <Ionicons name="arrow-redo" size={22} color={colors.textPrimary} />
                   </PressScale>
@@ -397,6 +399,7 @@ function CreatorStudioInner() {
                           onPress={() => { saveDraft(); }}
                           style={styles.autosaveStatus}
                           accessibilityLabel="Retry save"
+                          accessibilityRole="button"
                         >
                           <Ionicons name="warning-outline" size={12} color={colors.danger} />
                           <Text style={[styles.autosaveText, { color: colors.danger }]}>Tap to retry</Text>
@@ -459,6 +462,8 @@ function CreatorStudioInner() {
                 onLongPress={() => setPageMenuIndex(i)}
                 style={styles.pageDotTarget}
                 accessibilityLabel={`Page ${i + 1}`}
+                accessibilityState={{ selected: i === activePageIndex }}
+                hitSlop={8}
               >
                 <View style={[
                   styles.pageDot,
@@ -481,6 +486,7 @@ function CreatorStudioInner() {
               onPress={() => { selectLayer(null); addPage(); }}
               style={[styles.addPageBtn, { backgroundColor: colors.surface, borderColor: colors.brand }]}
               accessibilityLabel="Add page"
+              hitSlop={8}
             >
               <Ionicons name="add" size={18} color={colors.brand} />
             </PressScale>
@@ -739,6 +745,7 @@ const OverflowItem = React.memo(function OverflowItem({ icon, label, colors, onP
       disabled={disabled}
       style={[styles.overflowItem, disabled ? { opacity: 0.4 } : {}]}
       accessibilityLabel={label}
+      accessibilityState={{ disabled }}
       hitSlop={12}
     >
       <Ionicons
@@ -875,6 +882,7 @@ function PageOptionsSheet({
                 style={[styles.pageSheetDurationBtn, isActive && { backgroundColor: colors.brand }]}
                 accessibilityLabel={`Set duration to ${d.label}`}
                 accessibilityRole="button"
+                accessibilityState={{ selected: isActive }}
               >
                 <Text style={[styles.pageSheetDurationText, isActive && { color: colors.textInverse }]}>
                   {d.label}
@@ -893,6 +901,7 @@ function PageOptionsSheet({
             style={[styles.pageSheetActionBtn, !canMoveLeft && { opacity: 0.35 }]}
             accessibilityLabel="Move page left"
             accessibilityRole="button"
+            accessibilityState={{ disabled: !canMoveLeft }}
           >
             <Ionicons name="arrow-back" size={20} color={colors.textPrimary} />
             <Text style={[styles.pageSheetActionLabel, { color: colors.textPrimary }]}>Move Left</Text>
@@ -903,6 +912,7 @@ function PageOptionsSheet({
             style={[styles.pageSheetActionBtn, !canMoveRight && { opacity: 0.35 }]}
             accessibilityLabel="Move page right"
             accessibilityRole="button"
+            accessibilityState={{ disabled: !canMoveRight }}
           >
             <Ionicons name="arrow-forward" size={20} color={colors.textPrimary} />
             <Text style={[styles.pageSheetActionLabel, { color: colors.textPrimary }]}>Move Right</Text>
@@ -926,6 +936,7 @@ function PageOptionsSheet({
             style={[styles.pageSheetActionBtn, !canDelete && { opacity: 0.35 }]}
             accessibilityLabel="Delete page"
             accessibilityRole="button"
+            accessibilityState={{ disabled: !canDelete }}
           >
             <Ionicons name="trash-outline" size={20} color={canDelete ? colors.danger : colors.textMuted} />
             <Text style={[styles.pageSheetActionLabel, { color: canDelete ? colors.danger : colors.textMuted }]}>Delete</Text>
