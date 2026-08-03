@@ -288,6 +288,7 @@ const LayerRenderer = React.memo(function LayerRenderer({
     if (snappedX || snappedY) triggerHaptic();
     setShowGuides(false);
     setSmartGuides({ vertical: [], horizontal: [] });
+    setSmartGuides({ vertical: [], horizontal: [] });
 
     onTransformChange?.(layer.id, { x: normX, y: normY });
   }, [canvasWidth, canvasHeight, layer.id, layer.width, layer.height, layer.scale, onTransformChange, translateX, translateY]);
@@ -1220,7 +1221,7 @@ function DecorativeLayerContent({ layer, width, height }: { layer: Extract<Creat
     case 'hexagon':
       return (
         <View style={{ width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center', opacity: payload.opacity, ...subtleShadow }}>
-          <Ionicons name="stop-outline" size={iconSize * 0.9} color={fillColor} />
+          <Ionicons name="stop" size={iconSize} color={fillColor} style={{ transform: [{ rotate: '45deg' }] }} />
         </View>
       );
     default:
