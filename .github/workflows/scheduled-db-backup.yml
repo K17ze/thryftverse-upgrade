@@ -1,0 +1,121 @@
+name: Scheduled DB Backup
+
+on:
+  schedule:
+    # Daily at 02:00 UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scheduled-db-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: PostgreSQL backup → S3
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # The backup script reads DATABASE_URL, BACKUP_DIR, and BACKUP_RETENTION_DAYS.
+      # BACKUP_RETENTION_DAYS defaults to 14 inside the script; we override to 30
+      # so the scheduled job keeps a full month of local + S3 backups.
+      BACKUP_RETENTION_DAYS: "30"
+      BACKUP_DIR: ${{ github.workspace }}/backups
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/api/package-lock.json
+
+      - name: Install PostgreSQL client tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Install API dependencies
+        run: npm ci
+        working-directory: backend/api
+
+      - name: Run postgres-backup.mjs
+        id: backup
+        working-directory: backend/api
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: node scripts/postgres-backup.mjs
+
+      - name: Configure AWS credentials for S3 upload
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.S3_BACKUP_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.S3_BACKUP_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.S3_BACKUP_REGION }}
+
+      - name: Upload backups to S3
+        env:
+          S3_BACKUP_BUCKET: ${{ secrets.S3_BACKUP_BUCKET }}
+          S3_BACKUP_PREFIX: ${{ secrets.S3_BACKUP_PREFIX }}
+        run: |
+          $bucket = "${env:S3_BACKUP_BUCKET}"
+          $prefix = "${env:S3_BACKUP_PREFIX}"
+          if ([string]::IsNullOrWhiteSpace($prefix)) { $prefix = "db-backups" }
+          $backupDir = "${env:GITHUB_WORKSPACE}/backups"
+          $files = Get-ChildItem -Path $backupDir -Filter "thryftverse_*.dump" -File
+          foreach ($file in $files) {
+            $key = "$prefix/$($file.Name)"
+            Write-Host "Uploading $($file.Name) → s3://$bucket/$key"
+            aws s3 cp $file.FullName "s3://$bucket/$key" --no-progress
+          }
+          Write-Host "Uploaded $($files.Count) backup file(s) to s3://$bucket/$prefix"
+        shell: pwsh
+
+      - name: S3 retention cleanup (keep 30 days)
+        env:
+          S3_BACKUP_BUCKET: ${{ secrets.S3_BACKUP_BUCKET }}
+          S3_BACKUP_PREFIX: ${{ secrets.S3_BACKUP_PREFIX }}
+        run: |
+          $bucket = "${env:S3_BACKUP_BUCKET}"
+          $prefix = "${env:S3_BACKUP_PREFIX}"
+          if ([string]::IsNullOrWhiteSpace($prefix)) { $prefix = "db-backups" }
+          $cutoff = (Get-Date).ToUniversalTime().AddDays(-30).ToString("yyyy-MM-dd")
+          Write-Host "Deleting S3 objects older than $cutoff under s3://$bucket/$prefix"
+          aws s3 ls "s3://$bucket/$prefix/" --page-size 1000 | ForEach-Object {
+            $parts = $_ -split '\s+', 4
+            $dateStr = "$($parts[0]) $($parts[1])"
+            $key = $parts[3]
+            try {
+              $objDate = [DateTime]::Parse($dateStr)
+              if ($objDate -lt (Get-Date).ToUniversalTime().AddDays(-30)) {
+                Write-Host "Deleting expired: $key"
+                aws s3 rm "s3://$bucket/$key" --no-progress
+              }
+            } catch {
+              Write-Host "Skipping non-date line: $_"
+            }
+          }
+        shell: pwsh
+
+      - name: Notify on failure
+        if: failure()
+        env:
+          ALERTING_WEBHOOK_URL: ${{ secrets.ALERTING_WEBHOOK_URL }}
+        run: |
+          $webhook = "${env:ALERTING_WEBHOOK_URL}"
+          if ([string]::IsNullOrWhiteSpace($webhook)) {
+            Write-Host "ALERTING_WEBHOOK_URL secret not set — skipping notification"
+            exit 0
+          }
+          $runUrl = "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+          $payload = @{
+            content = "❌ **Scheduled DB Backup FAILED** in $env:GITHUB_REPOSITORY`nRun: $runUrl`nTriggered by: $env:GITHUB_EVENT_NAME"
+          } | ConvertTo-Json -Depth 5
+          Invoke-RestMethod -Uri $webhook -Method Post -Body $payload -ContentType "application/json"
+          Write-Host "Failure notification sent"
+        shell: pwsh

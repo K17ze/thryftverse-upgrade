@@ -1,0 +1,113 @@
+name: Staging Deploy
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - "frontend/**"
+      - ".github/workflows/staging-deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  pre-build-gates:
+    name: Pre-build quality gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: TypeScript typecheck
+        run: npm run typecheck
+        working-directory: frontend
+
+      - name: Run expo-doctor
+        run: npx expo-doctor
+        working-directory: frontend
+
+  build-and-deploy:
+    name: EAS Build + Update (preview channel)
+    needs: pre-build-gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [ios, android]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build ${{ matrix.platform }} (preview profile)
+        working-directory: frontend
+        run: eas build --platform ${{ matrix.platform }} --non-interactive --profile preview
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Publish OTA update to preview channel
+        working-directory: frontend
+        run: eas update --channel preview --non-interactive --message "staging deploy (${{ github.sha }})"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+  notify-failure:
+    name: Notify on failure
+    needs: build-and-deploy
+    if: failure()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Send Slack/Discord notification
+        env:
+          ALERTING_WEBHOOK_URL: ${{ secrets.ALERTING_WEBHOOK_URL }}
+        run: |
+          $webhook = "${env:ALERTING_WEBHOOK_URL}"
+          if ([string]::IsNullOrWhiteSpace($webhook)) {
+            Write-Host "ALERTING_WEBHOOK_URL secret not set — skipping notification"
+            exit 0
+          }
+          $runUrl = "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+          $payload = @{
+            content = "❌ **Staging Deploy FAILED** in $env:GITHUB_REPOSITORY`nBranch: $env:GITHUB_REF`nRun: $runUrl"
+          } | ConvertTo-Json -Depth 5
+          Invoke-RestMethod -Uri $webhook -Method Post -Body $payload -ContentType "application/json"
+          Write-Host "Failure notification sent"
+        shell: pwsh
