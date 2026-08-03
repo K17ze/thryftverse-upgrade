@@ -110,8 +110,8 @@ export default function VisualSearchCamera({
 
   const handleShutterPress = () => {
     Animated.sequence([
-      Animated.timing(scaleAnim, { toValue: 0.88, duration: 80, useNativeDriver: true }),
-      Animated.timing(scaleAnim, { toValue: 1, duration: 120, useNativeDriver: true }),
+      Animated.timing(scaleAnim, { toValue: 0.88, duration: 80, useNativeDriver: false }),
+      Animated.timing(scaleAnim, { toValue: 1, duration: 120, useNativeDriver: false }),
     ]).start();
     takePhoto();
   };
@@ -121,8 +121,8 @@ export default function VisualSearchCamera({
     setFocusPoint({ x: locationX, y: locationY });
     focusAnim.setValue(0);
     Animated.sequence([
-      Animated.timing(focusAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
-      Animated.timing(focusAnim, { toValue: 0, duration: 200, useNativeDriver: true, delay: 400 }),
+      Animated.timing(focusAnim, { toValue: 1, duration: 200, useNativeDriver: false }),
+      Animated.timing(focusAnim, { toValue: 0, duration: 200, useNativeDriver: false, delay: 400 }),
     ]).start(() => setFocusPoint(null));
   };
 

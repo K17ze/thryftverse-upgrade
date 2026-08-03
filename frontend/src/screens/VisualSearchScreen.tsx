@@ -75,13 +75,13 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
             toValue: 1,
             duration: 1200,
             easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
+            useNativeDriver: false,
           }),
           RNAnimated.timing(scanLineAnim, {
             toValue: 0,
             duration: 800,
             easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
+            useNativeDriver: false,
           }),
         ]),
       ).start();
@@ -89,7 +89,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
       RNAnimated.timing(scanOpacityAnim, {
         toValue: 0,
         duration: 300,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }).start();
     }
   }, [status, scanLineAnim, scanOpacityAnim]);

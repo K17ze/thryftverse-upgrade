@@ -90,7 +90,7 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
     Animated.timing(opacity, {
       toValue: 1,
       duration: 240,
-      useNativeDriver: true,
+      useNativeDriver: false,
       easing: Easing.out(Easing.ease),
     }).start();
   }, [opacity, reducedMotion]);

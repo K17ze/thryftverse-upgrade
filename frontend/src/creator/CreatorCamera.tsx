@@ -242,7 +242,7 @@ export default function CreatorCamera({
             toValue: 1,
             friction: 8,
             tension: 50,
-            useNativeDriver: true,
+            useNativeDriver: false,
           }).start();
         }
         await new Promise((r) => setTimeout(r, 1000));
@@ -263,7 +263,7 @@ export default function CreatorCamera({
           Animated.timing(captureFlash, {
             toValue: 0,
             duration: 200,
-            useNativeDriver: true,
+            useNativeDriver: false,
           }).start();
         }
         setCapturedUri(photo.uri);
@@ -275,8 +275,8 @@ export default function CreatorCamera({
 
   const handleShutterPress = useCallback(() => {
     Animated.sequence([
-      Animated.timing(scaleAnim, { toValue: 0.85, duration: 80, useNativeDriver: true }),
-      Animated.timing(scaleAnim, { toValue: 1, duration: 120, useNativeDriver: true }),
+      Animated.timing(scaleAnim, { toValue: 0.85, duration: 80, useNativeDriver: false }),
+      Animated.timing(scaleAnim, { toValue: 1, duration: 120, useNativeDriver: false }),
     ]).start();
     takePhoto();
   }, [scaleAnim, takePhoto]);
@@ -292,7 +292,7 @@ export default function CreatorCamera({
           toValue: 1,
           friction: 9,
           tension: 60,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }).start();
       }
     }
@@ -305,7 +305,7 @@ export default function CreatorCamera({
         toValue: 0,
         friction: 9,
         tension: 60,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }).start(() => setCapturedUri(null));
     } else {
       setCapturedUri(null);
@@ -371,8 +371,8 @@ export default function CreatorCamera({
     setFocusPoint({ x: locationX, y: locationY });
     focusAnim.setValue(0);
     Animated.sequence([
-      Animated.timing(focusAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
-      Animated.timing(focusAnim, { toValue: 0, duration: 200, useNativeDriver: true, delay: 400 }),
+      Animated.timing(focusAnim, { toValue: 1, duration: 200, useNativeDriver: false }),
+      Animated.timing(focusAnim, { toValue: 0, duration: 200, useNativeDriver: false, delay: 400 }),
     ]).start(() => setFocusPoint(null));
   }, [focusAnim]);
 

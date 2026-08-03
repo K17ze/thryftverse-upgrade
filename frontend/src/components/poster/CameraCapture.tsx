@@ -76,8 +76,8 @@ export default function CameraCapture({ onPhotoCapture, onClose }: CameraCapture
 
     focusAnim.setValue(0);
     Animated.sequence([
-      Animated.timing(focusAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
-      Animated.timing(focusAnim, { toValue: 0, duration: 200, useNativeDriver: true, delay: 400 }),
+      Animated.timing(focusAnim, { toValue: 1, duration: 200, useNativeDriver: false }),
+      Animated.timing(focusAnim, { toValue: 0, duration: 200, useNativeDriver: false, delay: 400 }),
     ]).start(() => setFocusPoint(null));
 
     const focusX = (locationX / SCREEN_W) * 2 - 1;
@@ -96,8 +96,8 @@ export default function CameraCapture({ onPhotoCapture, onClose }: CameraCapture
 
   const handleShutterPress = () => {
     Animated.sequence([
-      Animated.timing(scaleAnim, { toValue: 0.88, duration: 80, useNativeDriver: true }),
-      Animated.timing(scaleAnim, { toValue: 1, duration: 120, useNativeDriver: true }),
+      Animated.timing(scaleAnim, { toValue: 0.88, duration: 80, useNativeDriver: false }),
+      Animated.timing(scaleAnim, { toValue: 1, duration: 120, useNativeDriver: false }),
     ]).start();
     takePhoto();
   };
