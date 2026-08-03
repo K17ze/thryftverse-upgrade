@@ -51,7 +51,7 @@ export default function ChatSettingsScreen({ navigation }: Props) {
 
   const handleAllowSelect = (value: string) => {
     const key = value === 'Everyone' ? 'everyone' : value === 'People I follow' ? 'following' : 'nobody';
-    setAllowFrom(key as any);
+    setAllowFrom(key);
     setShowAllowSheet(false);
   };
 

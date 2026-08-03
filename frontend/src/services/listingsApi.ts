@@ -138,6 +138,8 @@ export interface ListingSearchResult {
   rank: number;
   createdAt: string;
   seller: ListingSeller | null;
+  brand?: string | null;
+  size?: string | null;
 }
 
 export async function searchListingsFromApi(query: string, limit?: number): Promise<{ items: ListingSearchResult[]; fallback: boolean }> {

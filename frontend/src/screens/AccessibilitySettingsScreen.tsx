@@ -44,7 +44,7 @@ interface ToggleConfig {
   key: string;
   label: string;
   description: string;
-  icon: string;
+  icon: React.ComponentProps<typeof Ionicons>['name'];
   iconColor: string;
   value: boolean;
   onToggle: (v: boolean) => void;
@@ -102,7 +102,7 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
     <View key={config.key} style={styles.toggleRow}>
       <View style={styles.toggleInfo}>
         <View style={[styles.toggleIcon, { backgroundColor: config.iconColor + '18' }]}>
-          <Ionicons name={config.icon as any} size={20} color={config.iconColor} />
+          <Ionicons name={config.icon} size={20} color={config.iconColor} />
         </View>
         <View style={styles.toggleText}>
           <Text style={styles.toggleLabel}>{config.label}</Text>

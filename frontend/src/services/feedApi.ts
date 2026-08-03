@@ -85,6 +85,8 @@ export interface SearchApiResult {
     rank: number;
     createdAt: string;
     seller?: ListingSeller | null;
+    brand?: string | null;
+    size?: string | null;
   }>;
   fallback?: boolean;
   error?: string;

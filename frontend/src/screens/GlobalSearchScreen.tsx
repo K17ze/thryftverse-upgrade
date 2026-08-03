@@ -281,8 +281,8 @@ export default function GlobalSearchScreen({ navigation }: Props) {
               id: item.id,
               title: item.title || 'Untitled listing',
               // Safe brand fallback — never blank in the result rows.
-              brand: (item as any).brand || (item.title ? item.title.split(' ').slice(0, 2).join(' ') : 'Thryftverse'),
-              size: (item as any).size || 'One size',
+              brand: item.brand || (item.title ? item.title.split(' ').slice(0, 2).join(' ') : 'Thryftverse'),
+              size: item.size || 'One size',
               condition: 'Very good' as const,
               image: item.imageUrl ?? '',
               price: Number(item.priceGbp ?? 0),

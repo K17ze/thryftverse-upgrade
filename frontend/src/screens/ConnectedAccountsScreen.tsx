@@ -40,7 +40,7 @@ import { RootStackParamList } from '../navigation/types';
 
 type Props = StackScreenProps<RootStackParamList, 'ConnectedAccounts'>;
 
-const PROVIDER_META: Record<string, { label: string; icon: string; color: string; gradient: string }> = {
+const PROVIDER_META: Record<string, { label: string; icon: React.ComponentProps<typeof Ionicons>['name']; color: string; gradient: string }> = {
   google: { label: 'Google', icon: 'logo-google', color: '#4285F4', gradient: '#4285F4' },
   apple: { label: 'Apple', icon: 'logo-apple', color: '#000000', gradient: '#333333' },
   facebook: { label: 'Facebook', icon: 'logo-facebook', color: '#1877F2', gradient: '#1877F2' },
@@ -194,7 +194,7 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
                     <View style={styles.accountHeader}>
                       {/* Provider badge with brand colour */}
                       <View style={[styles.providerIcon, { backgroundColor: meta.color + '18' }]}>
-                        <Ionicons name={meta.icon as any} size={24} color={meta.color} />
+                        <Ionicons name={meta.icon} size={24} color={meta.color} />
                       </View>
                       <View style={styles.accountInfo}>
                         <Text style={styles.providerName}>{meta.label}</Text>

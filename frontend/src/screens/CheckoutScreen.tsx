@@ -1472,13 +1472,13 @@ function PriceRow({ label, value, bold }: { label: string; value: string; bold?:
       fontSize: 14,
       fontFamily: Typography.family.medium,
       color: colors.textPrimary,
-      fontVariant: ['tabular-nums'] as any,
+      fontVariant: ['tabular-nums'],
     },
     valueBold: {
       fontSize: 18,
       fontFamily: Typography.family.bold,
       color: colors.textPrimary,
-      fontVariant: ['tabular-nums'] as any,
+      fontVariant: ['tabular-nums'],
     },
   }), [colors]);
 

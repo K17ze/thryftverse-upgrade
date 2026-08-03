@@ -279,7 +279,7 @@ export default function VerificationResponseScreen() {
   // If demand is no longer pending (expired, failed, etc.)
   if (demand.status !== 'pending') {
     const statusLabel = demand.status === 'expired' ? 'Deadline passed' : demand.status;
-    const statusIcon = demand.status === 'expired' ? 'time-outline'
+    const statusIcon: React.ComponentProps<typeof Ionicons>['name'] = demand.status === 'expired' ? 'time-outline'
       : demand.status === 'failed' ? 'close-circle'
       : 'alert-circle-outline';
 
@@ -287,7 +287,7 @@ export default function VerificationResponseScreen() {
       <FlagshipScreen header={<FlagshipHeader title="Respond to Verification" onBack={() => navigation.goBack()} />}>
         <View style={styles.respondedContainer}>
           <View style={[styles.respondedIcon, { backgroundColor: colors.surfaceAlt }]}>
-            <Ionicons name={statusIcon as any} size={48} color={colors.textMuted} />
+            <Ionicons name={statusIcon} size={48} color={colors.textMuted} />
           </View>
           <Text style={[styles.respondedTitle, { color: colors.textPrimary }]}>
             {statusLabel}
