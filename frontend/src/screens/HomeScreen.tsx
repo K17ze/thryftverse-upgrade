@@ -65,6 +65,22 @@ import { ProductAnalytics } from '../platform/product/productAnalytics';
 import { useFollowingFeed } from '../hooks/useFollowingFeed';
 import { useForYouFeed } from '../hooks/useForYouFeed';
 import { markInteractive } from '../platform/monitoring';
+
+// Lazy-load the monitoring module at call time to avoid circular import
+// issues where the static binding may be undefined during initial module
+// evaluation.
+function safeMarkInteractive(attributes: Record<string, string | number | boolean | null | undefined> | undefined): void {
+  try {
+    // Use a dynamic require to bypass the static import binding which may
+    // be undefined due to circular dependency resolution order.
+    const mod = require('../platform/monitoring');
+    if (mod && typeof mod.markInteractive === 'function') {
+      mod.markInteractive(attributes);
+    }
+  } catch {
+    // Observability must never crash the app.
+  }
+}
 import { resolveListingMediaHeightRatio } from '../utils/listingMediaGeometry';
 import { safeValidateDocument, type CreatorDocument } from '../creator/composition';
 import { CreatorCanvas } from '../creator/CreatorCanvas';
@@ -702,7 +718,7 @@ export default function HomeScreen() {
     }
     if (feedGridData.length > 0) {
       feedFirstRenderRef.current = true;
-      markInteractive({ surface: 'home_feed_first_render', feed_mode: feedMode });
+      safeMarkInteractive({ surface: 'home_feed_first_render', feed_mode: feedMode });
     }
   }, [feedGridData.length, feedMode]);
 
