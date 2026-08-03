@@ -110,7 +110,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
   }, [listingId, listingTitle]);
 
   const handleCreateAnother = React.useCallback(() => {
-    navigation.navigate('Sell' as any);
+    navigation.navigate('Sell');
   }, [navigation]);
 
   const handleViewListing = React.useCallback(() => {
@@ -153,7 +153,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
 
         {/* Published status */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(80)} style={styles.statusRow}>
-          <PremiumStatusPill tone={statusTone as any} label={statusLabel} icon="checkmark-circle" />
+          <PremiumStatusPill tone={statusTone} label={statusLabel} icon="checkmark-circle" />
           {listingId ? (
             <Text style={styles.idText} numberOfLines={1}>
               {listingId}

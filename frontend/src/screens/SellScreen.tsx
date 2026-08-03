@@ -740,7 +740,7 @@ export default function SellScreen() {
         photoUri: coverImage,
       });
     } catch (e: unknown) {
-      const isNetworkError = isOffline || (typeof e === 'object' && e && 'code' in e && (e as any).code === 'NETWORK_ERROR');
+      const isNetworkError = isOffline || (typeof e === 'object' && e !== null && 'code' in e && (e as { code?: string }).code === 'NETWORK_ERROR');
       const rawMsg = typeof e === 'object' && e && 'message' in e && typeof (e as Error).message === 'string' ? (e as Error).message : 'Failed to publish. Please try again.';
       const msg = isNetworkError ? 'You appear to be offline. Check your connection and try again.' : rawMsg;
       const hasListing = !!publishedListingIdRef.current;

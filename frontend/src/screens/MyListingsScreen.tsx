@@ -61,13 +61,13 @@ function ListingRow({ item, onPress }: { item: ListingApiItem; onPress: () => vo
   );
 }
 
-function StatCard({ icon, label, value, tone }: { icon: string; label: string; value: string; tone?: 'default' | 'success' | 'brand' }) {
+function StatCard({ icon, label, value, tone }: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; value: string; tone?: 'default' | 'success' | 'brand' }) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const color = tone === 'success' ? colors.success : tone === 'brand' ? colors.brand : colors.textPrimary;
   return (
     <View style={styles.statCard}>
-      <Ionicons name={icon as any} size={16} color={color} />
+      <Ionicons name={icon} size={16} color={color} />
       <Text style={[styles.statValue, { color }]}>{value}</Text>
       <Text style={styles.statLabel}>{label}</Text>
     </View>

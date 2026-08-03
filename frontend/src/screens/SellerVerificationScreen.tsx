@@ -31,7 +31,7 @@ const DEMAND_TYPE_LABELS: Record<string, string> = {
   inspection: 'In-person inspection',
 };
 
-const STATUS_ICONS: Record<string, string> = {
+const STATUS_ICONS: Record<string, React.ComponentProps<typeof Ionicons>['name']> = {
   pending: 'hourglass-outline',
   responded: 'document-text-outline',
   compliant: 'checkmark-circle',
@@ -162,7 +162,7 @@ export default function SellerVerificationScreen() {
               accessibilityLabel={`Verification status: ${isOverdue ? 'Overdue' : demand.status}`}
             >
               <Ionicons
-                name={statusIcon as any}
+                name={statusIcon}
                 size={14}
                 color={isOverdue ? colors.danger : statusColor}
               />

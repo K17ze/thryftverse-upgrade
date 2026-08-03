@@ -40,7 +40,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../platform/server/queryKeys';
 
 const { width: SCREEN_W } = Dimensions.get('window');
-const WARN_TINT = 'rgba(245,166,35,0.12)';
 
 type RouteT = RouteProp<RootStackParamList, 'ManageListing'>;
 
@@ -176,7 +175,7 @@ export default function ManageListingScreen() {
 
   const headerBgStyle = useAnimatedStyle(() => {
     const opacity = interpolate(scrollY.value, [0, 120], [0, 1], Extrapolation.CLAMP);
-    return { backgroundColor: `rgba(10,10,10,${opacity})` };
+    return { backgroundColor: `${isDark ? '#0A0A0A' : '#FFFFFF'}${Math.round(opacity * 255).toString(16).padStart(2, '0')}` };
   });
 
   const headerTitleStyle = useAnimatedStyle(() => {
@@ -211,7 +210,7 @@ export default function ManageListingScreen() {
       await patchListingOnApi(itemId, {
         // Store offer floor settings — backend may not yet support these fields
         description: item.description, // pass-through to satisfy API
-      } as any);
+      });
       show(
         autoAcceptThreshold > 0
           ? `Auto-accept set for offers ≥ ${autoAcceptThreshold}% of asking price.`
@@ -338,7 +337,7 @@ export default function ManageListingScreen() {
           <View style={styles.heroOverlay} />
 
           <View style={styles.statusPill}>
-            <View style={[styles.statusDot, { backgroundColor: isSold ? colors.danger : isPaused ? WARN_TINT.replace('0.12', '1') : colors.success }]} />
+            <View style={[styles.statusDot, { backgroundColor: isSold ? colors.danger : isPaused ? colors.warning : colors.success }]} />
             <Text style={styles.statusPillText}>{isSold ? 'Sold' : isPaused ? 'Paused' : 'Active'}</Text>
           </View>
 
@@ -510,7 +509,7 @@ export default function ManageListingScreen() {
         <View style={styles.card}>
           <View style={styles.toggleRow}>
             <View style={styles.toggleLeft}>
-              <View style={[styles.toggleIconWrap, { backgroundColor: isSold ? 'rgba(255,59,48,0.12)' : isPaused ? WARN_TINT : 'rgba(52,199,89,0.12)' }]}>
+              <View style={[styles.toggleIconWrap, { backgroundColor: isSold ? colors.danger + '20' : isPaused ? colors.warning + '20' : colors.success + '20' }]}>
                 <Ionicons name={isSold ? 'close-circle-outline' : isPaused ? 'pause-circle-outline' : 'checkmark-circle-outline'} size={20} color={isSold ? colors.danger : isPaused ? colors.warning : colors.success} />
               </View>
               <View>
