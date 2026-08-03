@@ -14,6 +14,13 @@ type SentryLike = {
   [key: string]: unknown;
 };
 
+// Holds the `reactNavigationIntegration` instance (when available) so App.tsx
+// can register the navigation container ref for per-screen transaction tracing.
+type NavigationIntegrationLike = {
+  registerNavigationContainer?: (ref: unknown) => void;
+};
+let reactNavigationIntegrationRef: NavigationIntegrationLike | null = null;
+
 const noop = () => undefined;
 
 const SentryStub: SentryLike = new Proxy({}, {
@@ -53,6 +60,43 @@ export function initSentry(opts?: SentryInitOptions): void {
     }
     if (!dist) dist = Constants?.expoConfig?.version;
 
+    // Build performance integrations defensively — each integration is only
+    // added when the installed SDK actually exports it. This keeps the init
+    // resilient across SDK versions and never crashes the app if an
+    // integration is unavailable.
+    const integrations: unknown[] = [];
+    try {
+      if (typeof realSentry.httpClientIntegration === 'function') {
+        integrations.push(realSentry.httpClientIntegration());
+      }
+    } catch { /* httpClientIntegration unavailable */ }
+
+    // Mobile Session Replay — privacy-safe: never capture text content, mask
+    // all images. Only record on errors (not every session) to limit overhead.
+    try {
+      if (typeof realSentry.mobileReplayIntegration === 'function') {
+        integrations.push(realSentry.mobileReplayIntegration({
+          maskAllText: false, // Privacy: don't capture text content
+          maskAllImages: true,
+        }));
+      }
+    } catch { /* mobileReplayIntegration unavailable */ }
+
+    // React Navigation integration — creates a transaction per screen
+    // transition so Sentry can report per-screen TTI / load times. The
+    // navigation container ref is registered later via
+    // `registerSentryNavigationContainer()` once App.tsx mounts.
+    try {
+      if (typeof realSentry.reactNavigationIntegration === 'function') {
+        const integration = realSentry.reactNavigationIntegration({
+          enableTimeToInitialDisplay: true,
+          ignoreEmptyBackNavigationTransactions: true,
+        });
+        reactNavigationIntegrationRef = integration as NavigationIntegrationLike;
+        integrations.push(integration);
+      }
+    } catch { /* reactNavigationIntegration unavailable */ }
+
     realSentry.init({
       dsn,
       enableInExpoDevelopment: false,
@@ -60,6 +104,35 @@ export function initSentry(opts?: SentryInitOptions): void {
       environment,
       release,
       ...(dist ? { dist } : {}),
+      // Performance monitoring — 2026 RN best practice.
+      // 100% of transactions sampled in dev for fast feedback, 20% in
+      // production to keep volume/cost bounded while still capturing
+      // representative slow/frozen-frame data.
+      tracesSampleRate: __DEV__ ? 1.0 : 0.2,
+      // Profiling — 100% in dev, 10% in production.
+      profilesSampleRate: __DEV__ ? 1.0 : 0.1,
+      // Sessions — automatic start/end on foreground/background.
+      enableAutoSessionTracking: true,
+      // Native crash + watchdog (OOM) termination tracking.
+      enableNativeCrashHandling: true,
+      enableWatchdogTerminationTracking: true,
+      // Auto performance tracing drives screen-load transactions, app-start
+      // measurement, and user-interaction tracing.
+      enableAutoPerformanceTracing: true,
+      enableAppStartTracking: true,
+      enableUserInteractionTracing: true,
+      // Slow frames (>16.67ms) and frozen frames (>700ms) are added as
+      // measurements to every root span/transaction. This is the core
+      // slow-frame-detection signal.
+      enableNativeFramesTracking: true,
+      // Track JS event-loop stalls.
+      enableStallTracking: true,
+      // Session Replay — only capture replays on errors, not every session,
+      // to minimise overhead and storage. 100% of error sessions get a
+      // replay; 0% of normal sessions.
+      replaysOnErrorSampleRate: 1.0,
+      replaysSessionSampleRate: 0.0,
+      integrations,
       beforeSend(event: any) {
         if (!event) return event;
         if (event.request) {
@@ -121,6 +194,21 @@ export function isSentryAvailable(): boolean {
   return sentryInitialised && sentryInstance !== SentryStub;
 }
 
+/**
+ * Register the app's primary navigation container ref with the Sentry React
+ * Navigation integration so each screen transition creates a performance
+ * transaction (per-screen TTI / load time). No-ops when Sentry is unavailable
+ * or the integration was not registered at init time.
+ */
+export function registerSentryNavigationContainer(ref: unknown): void {
+  if (!isSentryAvailable()) return;
+  try {
+    reactNavigationIntegrationRef?.registerNavigationContainer?.(ref);
+  } catch {
+    // Observability must never crash the app.
+  }
+}
+
 export interface SentryUser {
   id: string;
   email?: string | null;
@@ -157,6 +245,7 @@ export function setSentryUser(user: SentryUser | null): void {
 export function resetSentryForTesting(): void {
   sentryInstance = SentryStub;
   sentryInitialised = false;
+  reactNavigationIntegrationRef = null;
 }
 
 export const Sentry: SentryLike = new Proxy({}, {

@@ -1,2 +1,2 @@
-export { Sentry, initSentry, isSentryInitialised, resetSentryForTesting } from '../platform/monitoring/sentry';
+export { Sentry, initSentry, isSentryInitialised, isSentryAvailable, registerSentryNavigationContainer, resetSentryForTesting } from '../platform/monitoring/sentry';
 export type { SentryLike } from '../platform/monitoring/sentry';

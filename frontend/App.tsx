@@ -23,7 +23,7 @@ import { CurrencyProvider } from './src/context/CurrencyContext';
 import { BackendDataProvider } from './src/context/BackendDataContext';
 import { SettingsPreferencesProvider } from './src/context/SettingsPreferencesContext';
 import { ToastContainer } from './src/components/Toast';
-import { AppErrorBoundary, initSentry, ObserveRoot, markInteractive } from './src/platform/monitoring';
+import { AppErrorBoundary, initSentry, ObserveRoot, markInteractive, Sentry, registerSentryNavigationContainer } from './src/platform/monitoring';
 import { registerAppNavigationRef } from './src/platform/monitoring/appNavigation';
 import { KeyboardProvider } from './src/platform/keyboard';
 import { ServerStateProvider, useMobileQueryLifecycle } from './src/platform/server';
@@ -46,6 +46,7 @@ import type { RootStackParamList } from './src/navigation/types';
 import { extractGroupInviteToken } from './src/utils/groupInviteLink';
 import { usePushNotificationTap, setNavigationReady } from './src/hooks/usePushNotificationTap';
 import { useUnreadNotificationCount } from './src/hooks/useUnreadNotificationCount';
+import { trackScreenView } from './src/lib/telemetry';
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   // Keep app startup resilient even if splash API rejects.
@@ -116,6 +117,29 @@ export default function App() {
     }, 4500);
 
     return () => clearTimeout(timeoutId);
+  }, []);
+
+  // Performance: mark the app as interactive as early as possible so Sentry
+  // and EAS Observe can correlate the TTI metric. The first markInteractive()
+  // call wins; later calls are ignored. A Sentry breadcrumb is also recorded
+  // so the timestamp is visible in the event timeline.
+  React.useEffect(() => {
+    try {
+      if (typeof performance !== 'undefined' && typeof performance.mark === 'function') {
+        performance.mark('app:interactive');
+      }
+    } catch {
+      // performance API may be unavailable on some platforms.
+    }
+
+    Sentry.addBreadcrumb?.({
+      category: 'performance',
+      message: 'App interactive',
+      level: 'info',
+      data: { timestamp: Date.now() },
+    });
+
+    markInteractive({ surface: 'app_mounted' });
   }, []);
 
   React.useEffect(() => {
@@ -199,6 +223,36 @@ export default function App() {
   const appReady = fontsReady && themeInitialized && !!ThemeReadyNavigator;
 
   const processedInviteTokensRef = React.useRef<Set<string>>(new Set());
+
+  // Screen-level performance tracking: emit a Sentry breadcrumb on every
+  // navigation state change so screen transitions are visible in the event
+  // timeline and correlate with per-screen transactions created by the
+  // reactNavigationIntegration.
+  const onNavigationStateChange = React.useCallback((state: unknown) => {
+    if (!state) {
+      return;
+    }
+
+    try {
+      const currentRoute = navigationRef.getCurrentRoute();
+      if (currentRoute?.name) {
+        Sentry.addBreadcrumb?.({
+          category: 'navigation',
+          message: `Navigated to ${currentRoute.name}`,
+          level: 'info',
+        });
+
+        // Privacy-first screen view tracking — only the route name and
+        // non-PII params are recorded. PII keys are stripped by the
+        // telemetry module, and the user's analytics opt-out preference
+        // is respected inside trackTelemetryEvent.
+        const params = currentRoute.params as Record<string, string | number> | undefined;
+        trackScreenView(currentRoute.name, params);
+      }
+    } catch {
+      // Navigation observability must never crash the app.
+    }
+  }, []);
 
   const captureInviteFromUrl = React.useCallback((url: string | null) => {
     if (!url) {
@@ -411,8 +465,14 @@ export default function App() {
                       <NavigationContainer
                         ref={navigationRef}
                         theme={premiumNavigationTheme}
+                        onStateChange={onNavigationStateChange}
                         onReady={() => {
                           setNavigationReady(true);
+
+                          // Register the navigation container with Sentry's
+                          // React Navigation integration so each screen
+                          // transition creates a performance transaction.
+                          registerSentryNavigationContainer(navigationRef);
 
                           // EAS Observe: the navigation container is ready and
                           // the user can interact with the real app surface.
