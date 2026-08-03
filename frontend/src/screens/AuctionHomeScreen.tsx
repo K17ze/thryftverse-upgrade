@@ -1031,11 +1031,11 @@ export default function AuctionHomeScreen() {
               </View>
             ))}
             <Pressable
-              onPress={clearAllFilters}
+              onPress={() => { haptics.tap(); clearAllFilters(); }}
               hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel="Clear all filters"
-              style={styles.filterChipClear}
+              style={({ pressed }) => [styles.filterChipClear, pressed && { opacity: 0.6 }]}
             >
               <Text style={styles.filterChipClearText}>Clear all</Text>
             </Pressable>
@@ -1987,7 +1987,7 @@ const FilterSheet = memo(function FilterSheet({
           {(['all', 'live', 'scheduled', 'ended'] as const).map((opt) => (
             <Pressable
               key={opt}
-              style={[styles.filterOption, draftStatus === opt && styles.filterOptionActive]}
+              style={({ pressed }) => [styles.filterOption, draftStatus === opt && styles.filterOptionActive, pressed && styles.filterOptionPressed]}
               onPress={() => { haptics.tap(); setDraftStatus(opt); }}
             >
               <Text style={[styles.filterOptionText, draftStatus === opt && styles.filterOptionTextActive]}>
@@ -2002,7 +2002,7 @@ const FilterSheet = memo(function FilterSheet({
           {(['endingSoon', 'newest', 'mostBids', 'priceLow', 'priceHigh'] as const).map((opt) => (
             <Pressable
               key={opt}
-              style={[styles.filterOption, draftSort === opt && styles.filterOptionActive]}
+              style={({ pressed }) => [styles.filterOption, draftSort === opt && styles.filterOptionActive, pressed && styles.filterOptionPressed]}
               onPress={() => { haptics.tap(); setDraftSort(opt); }}
             >
               <Text style={[styles.filterOptionText, draftSort === opt && styles.filterOptionTextActive]}>
@@ -2017,7 +2017,7 @@ const FilterSheet = memo(function FilterSheet({
             <Text style={styles.filterSectionLabel}>Category</Text>
             <HorizontalRail style={styles.filterCategoryScroll}>
               <Pressable
-                style={[styles.filterOption, draftCategory === null && styles.filterOptionActive]}
+                style={({ pressed }) => [styles.filterOption, draftCategory === null && styles.filterOptionActive, pressed && styles.filterOptionPressed]}
                 onPress={() => { haptics.tap(); setDraftCategory(null); }}
               >
                 <Text style={[styles.filterOptionText, draftCategory === null && styles.filterOptionTextActive]}>All</Text>
@@ -2025,7 +2025,7 @@ const FilterSheet = memo(function FilterSheet({
               {categoryOptions.map((cat) => (
                 <Pressable
                   key={cat}
-                  style={[styles.filterOption, draftCategory === cat && styles.filterOptionActive]}
+                  style={({ pressed }) => [styles.filterOption, draftCategory === cat && styles.filterOptionActive, pressed && styles.filterOptionPressed]}
                   onPress={() => { haptics.tap(); setDraftCategory(cat); }}
                 >
                   <Text style={[styles.filterOptionText, draftCategory === cat && styles.filterOptionTextActive]}>{cat}</Text>
@@ -2509,6 +2509,9 @@ function createStyles(colors: ThemeColors) {
   filterOptionActive: {
     backgroundColor: colors.brand,
     borderColor: colors.brand,
+  },
+  filterOptionPressed: {
+    opacity: 0.7,
   },
   filterOptionText: {
     fontSize: 13,

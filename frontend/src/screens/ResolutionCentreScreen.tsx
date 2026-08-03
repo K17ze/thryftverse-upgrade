@@ -131,7 +131,7 @@ export default function ResolutionCentreScreen() {
           return (
             <Pressable
               key={opt.value}
-              style={[styles.filterChip, isActive && styles.filterChipActive]}
+              style={({ pressed }) => [styles.filterChip, isActive && styles.filterChipActive, pressed && { opacity: 0.7 }]}
               onPress={() => { haptics.selection(); setFilter(opt.value); }}
               accessibilityRole="button"
               accessibilityLabel={opt.accessibilityLabel}

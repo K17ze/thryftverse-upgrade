@@ -212,7 +212,7 @@ export default function MyBidsScreen() {
           {BID_FILTERS.map((opt) => (
             <Pressable
               key={opt.value}
-              style={[styles.stateRailChip, filter === opt.value && styles.stateRailChipActive]}
+              style={({ pressed }) => [styles.stateRailChip, filter === opt.value && styles.stateRailChipActive, pressed && { opacity: 0.7 }]}
               onPress={() => { haptics.selection(); setFilter(opt.value); }}
               accessibilityRole="button"
               accessibilityLabel={opt.accessibilityLabel}
@@ -225,7 +225,7 @@ export default function MyBidsScreen() {
           <View style={styles.filterDivider} />
           <Pressable
             key={WATCHING_FILTER.value}
-            style={[styles.stateRailChip, filter === WATCHING_FILTER.value && styles.stateRailChipActive]}
+            style={({ pressed }) => [styles.stateRailChip, filter === WATCHING_FILTER.value && styles.stateRailChipActive, pressed && { opacity: 0.7 }]}
             onPress={() => { haptics.selection(); setFilter(WATCHING_FILTER.value); }}
             accessibilityRole="button"
             accessibilityLabel={WATCHING_FILTER.accessibilityLabel}
