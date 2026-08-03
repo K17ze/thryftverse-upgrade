@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import * as Network from 'expo-network';
 import { Sentry } from './sentry';
+import { useOfflineQueue, OFFLINE_WRITE_QUEUED_CODE } from './offlineQueue';
 
 const AUTH_SESSION_STORAGE_KEY = 'thryftverse.auth.session.v1';
 

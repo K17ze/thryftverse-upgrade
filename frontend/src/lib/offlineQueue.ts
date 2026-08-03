@@ -13,6 +13,14 @@ const BASE_DELAY = 2000;
 /** Upper bound (ms) for exponential backoff between retries. */
 const MAX_DELAY = 60000;
 
+/**
+ * Error code attached to `ApiRequestError` when a write mutation was enqueued
+ * for later replay instead of being submitted immediately. Callers can inspect
+ * `error.details.code` (or `parseApiError`) to distinguish a queued write from
+ * a hard failure and surface an appropriate "saved offline" message.
+ */
+export const OFFLINE_WRITE_QUEUED_CODE = 'OFFLINE_WRITE_QUEUED';
+
 export interface QueuedRequest {
   id: string;
   url: string;
@@ -226,3 +234,10 @@ export const useOfflineQueue = create<OfflineQueueState>()(
     }
   )
 );
+
+/**
+ * Convenience selector returning the current number of pending offline
+ * actions. Components can subscribe via `useOfflineQueue(selectPendingCount)`
+ * to re-render only when the count changes.
+ */
+export const selectPendingCount = (state: OfflineQueueState): number => state.queue.length;
