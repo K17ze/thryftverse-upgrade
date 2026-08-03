@@ -91,67 +91,69 @@ export function MessageContextMenu({
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
-      <Animated.View style={[styles.backdrop, { opacity: fadeAnim }]}>
-        <AnimatedPressable style={StyleSheet.absoluteFill} onPress={onClose} activeOpacity={1} />
-      </Animated.View>
+      <View style={StyleSheet.absoluteFill}>
+        <Animated.View style={[styles.backdrop, { opacity: fadeAnim }]}>
+          <AnimatedPressable style={StyleSheet.absoluteFill} onPress={onClose} activeOpacity={1} />
+        </Animated.View>
 
-      <Animated.View
-        style={[
-          styles.sheet,
-          { transform: [{ translateY: slideAnim }] },
-        ]}
-      >
-        <View style={styles.handle} />
-
-        {messageText ? (
-          <View style={styles.previewRow}>
-            <Caption color={colors.textSecondary} numberOfLines={2}>
-              {messageText}
-            </Caption>
-          </View>
-        ) : null}
-
-        <View style={styles.actionsList}>
-          {actions.map((action, index) => (
-            <React.Fragment key={action.id}>
-              {action.destructive && index > 0 && <View style={styles.destructiveDivider} />}
-              <AnimatedPressable
-                style={styles.actionRow}
-                onPress={() => handleAction(action.id)}
-                accessibilityRole="button"
-                accessibilityLabel={action.label}
-                activeOpacity={0.7}
-                scaleValue={0.98}
-                hapticFeedback="light"
-              >
-                <Ionicons
-                  name={action.icon}
-                  size={22}
-                  color={action.destructive ? colors.danger : colors.textPrimary}
-                />
-                <BodyEmphasis
-                  color={action.destructive ? colors.danger : colors.textPrimary}
-                  style={styles.actionLabel}
-                >
-                  {action.label}
-                </BodyEmphasis>
-              </AnimatedPressable>
-            </React.Fragment>
-          ))}
-        </View>
-
-        <AnimatedPressable
-          style={styles.cancelBtn}
-          onPress={onClose}
-          accessibilityRole="button"
-          accessibilityLabel="Cancel"
-          activeOpacity={0.7}
-          scaleValue={0.98}
-          hapticFeedback="light"
+        <Animated.View
+          style={[
+            styles.sheet,
+            { transform: [{ translateY: slideAnim }] },
+          ]}
         >
-          <BodyEmphasis color={colors.textPrimary}>Cancel</BodyEmphasis>
-        </AnimatedPressable>
-      </Animated.View>
+          <View style={styles.handle} />
+
+          {messageText ? (
+            <View style={styles.previewRow}>
+              <Caption color={colors.textSecondary} numberOfLines={2}>
+                {messageText}
+              </Caption>
+            </View>
+          ) : null}
+
+          <View style={styles.actionsList}>
+            {actions.map((action, index) => (
+              <React.Fragment key={action.id}>
+                {action.destructive && index > 0 && <View style={styles.destructiveDivider} />}
+                <AnimatedPressable
+                  style={styles.actionRow}
+                  onPress={() => handleAction(action.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={action.label}
+                  activeOpacity={0.7}
+                  scaleValue={0.98}
+                  hapticFeedback="light"
+                >
+                  <Ionicons
+                    name={action.icon}
+                    size={22}
+                    color={action.destructive ? colors.danger : colors.textPrimary}
+                  />
+                  <BodyEmphasis
+                    color={action.destructive ? colors.danger : colors.textPrimary}
+                    style={styles.actionLabel}
+                  >
+                    {action.label}
+                  </BodyEmphasis>
+                </AnimatedPressable>
+              </React.Fragment>
+            ))}
+          </View>
+
+          <AnimatedPressable
+            style={styles.cancelBtn}
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel"
+            activeOpacity={0.7}
+            scaleValue={0.98}
+            hapticFeedback="light"
+          >
+            <BodyEmphasis color={colors.textPrimary}>Cancel</BodyEmphasis>
+          </AnimatedPressable>
+        </Animated.View>
+      </View>
     </Modal>
   );
 }

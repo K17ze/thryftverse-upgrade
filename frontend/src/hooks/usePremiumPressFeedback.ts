@@ -43,7 +43,11 @@ export function usePremiumPressFeedback(
     () => ({
       scaleValue: overrides?.scaleValue ?? config.scale,
       activeOpacity: overrides?.activeOpacity,
-      hapticFeedback: overrides?.haptic === 'none' ? 'none' : (overrides?.haptic ?? config.haptic) as any,
+      hapticFeedback: overrides?.haptic === 'none'
+        ? 'none'
+        : overrides?.haptic
+          ? INTENSITY_MAP[overrides.haptic].haptic
+          : config.haptic,
       disableAnimation: false,
     }),
     [config.scale, config.haptic, overrides]

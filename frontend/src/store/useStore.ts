@@ -485,6 +485,8 @@ interface StoreState {
   loadBotsFromApi: () => Promise<void>;
 
   userLooks: UserLook[];
+  /** Internal: IDs of looks the current user has liked. */
+  __likedLooks?: string[];
   addUserLook: (look: Omit<UserLook, 'id' | 'createdAt'>) => string;
   removeUserLook: (id: string) => void;
   toggleUserLookLike: (lookId: string) => void;
@@ -1778,16 +1780,16 @@ export const useStore = create<StoreState>()(
     })),
   toggleUserLookLike: (lookId) =>
     set((state) => {
-      const likedSet = new Set<string>((state as any).__likedLooks ?? []);
+      const likedSet = new Set<string>(state.__likedLooks ?? []);
       if (likedSet.has(lookId)) {
         likedSet.delete(lookId);
       } else {
         likedSet.add(lookId);
       }
-      return { __likedLooks: Array.from(likedSet) } as any;
+      return { __likedLooks: Array.from(likedSet) };
     }),
   isUserLookLiked: (lookId) => {
-    const likedSet = new Set<string>((get() as any).__likedLooks ?? []);
+    const likedSet = new Set<string>(get().__likedLooks ?? []);
     return likedSet.has(lookId);
   },
 

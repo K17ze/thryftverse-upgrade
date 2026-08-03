@@ -90,7 +90,7 @@ export function resetSentryForTesting(): void {
 
 export const Sentry: SentryLike = new Proxy({}, {
   get: (_target, prop: string) => {
-    return (sentryInstance as any)[prop] ?? noop;
+    return sentryInstance[prop] ?? noop;
   },
 });
 

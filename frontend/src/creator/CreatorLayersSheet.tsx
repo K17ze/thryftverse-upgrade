@@ -14,7 +14,7 @@ export interface CreatorLayersSheetProps {
   onClose: () => void;
 }
 
-const LAYER_ICONS: Record<CreatorLayer['type'], string> = {
+const LAYER_ICONS: Record<CreatorLayer['type'], React.ComponentProps<typeof Ionicons>['name']> = {
   media: 'images-outline',
   text: 'text-outline',
   product: 'pricetag-outline',
@@ -196,7 +196,7 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
                     {thumbSource ? (
                       <Image source={thumbSource} style={styles.thumbnailImage} resizeMode="cover" />
                     ) : (
-                      <Ionicons name={LAYER_ICONS[layer.type] as any} size={20} color={layer.hidden ? colors.textMuted : getLayerColor(layer.type, colors)} />
+                      <Ionicons name={LAYER_ICONS[layer.type]} size={20} color={layer.hidden ? colors.textMuted : getLayerColor(layer.type, colors)} />
                     )}
                     {layer.type === 'media' && layer.payload.mediaType === 'video' && (
                       <View style={styles.videoBadge}>

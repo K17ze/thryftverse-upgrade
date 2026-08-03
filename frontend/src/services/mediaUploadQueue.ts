@@ -19,6 +19,8 @@ export interface UploadQueueItem {
   finalizationId: string | null;
   error: string | null;
   retryable: boolean;
+  /** Internal flag: cancellation requested while in-flight. */
+  _cancelRequested?: boolean;
 }
 
 export interface UploadQueueState {
@@ -142,7 +144,7 @@ export class MediaUploadQueue {
       return true;
     }
     // In-flight (preparing/uploading): mark with special state so processItem can handle it
-    (item as any)._cancelRequested = true;
+    item._cancelRequested = true;
     this.emit();
     return true;
   }
@@ -336,11 +338,11 @@ export class MediaUploadQueue {
       );
 
       // If cancellation was requested while presigning, transition to cancelled and abort
-      if ((item as any)._cancelRequested) {
+      if (item._cancelRequested) {
         item.state = 'cancelled';
         item.error = null;
         item.retryable = false;
-        delete (item as any)._cancelRequested;
+        delete item._cancelRequested;
         this.emit();
         return;
       }
@@ -351,11 +353,11 @@ export class MediaUploadQueue {
       await uploadToPresignedUrl(presign.url, asset.uri, asset.mimeType, blob);
 
       // If cancellation was requested while uploading, transition to cancelled and ignore result
-      if ((item as any)._cancelRequested) {
+      if (item._cancelRequested) {
         item.state = 'cancelled';
         item.error = null;
         item.retryable = false;
-        delete (item as any)._cancelRequested;
+        delete item._cancelRequested;
         this.emit();
         return;
       }
@@ -379,11 +381,11 @@ export class MediaUploadQueue {
       item.retryable = false;
     } catch (err: unknown) {
       // If cancellation was requested during upload, transition to cancelled, not failed
-      if ((item as any)._cancelRequested) {
+      if (item._cancelRequested) {
         item.state = 'cancelled';
         item.error = null;
         item.retryable = false;
-        delete (item as any)._cancelRequested;
+        delete item._cancelRequested;
         this.emit();
         return;
       }

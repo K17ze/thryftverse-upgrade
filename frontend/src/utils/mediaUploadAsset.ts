@@ -107,8 +107,8 @@ export function convertPickerAsset(asset: ImagePicker.ImagePickerAsset): MediaUp
     fileSize: asset.fileSize ?? undefined,
     width: asset.width ?? undefined,
     height: asset.height ?? undefined,
-    durationMs: 'duration' in asset && typeof (asset as any).duration === 'number'
-      ? Math.round((asset as any).duration)
+    durationMs: 'duration' in asset && typeof (asset as { duration?: number }).duration === 'number'
+      ? Math.round((asset as { duration: number }).duration)
       : undefined,
     kind: resolveKind(mimeType),
   };

@@ -5,7 +5,8 @@ const NON_RETRYABLE_STATUS_CODES = new Set([400, 401, 403, 404, 409, 422]);
 function shouldRetry(failureCount: number, error: unknown): boolean {
   if (failureCount >= 2) return false;
 
-  const status = (error as any)?.status ?? (error as any)?.statusCode;
+  const err = error as { status?: number; statusCode?: number };
+  const status = err?.status ?? err?.statusCode;
   if (typeof status === 'number' && NON_RETRYABLE_STATUS_CODES.has(status)) {
     return false;
   }

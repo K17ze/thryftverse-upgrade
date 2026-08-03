@@ -26,11 +26,11 @@ function flushPendingRoute() {
 
   const screen = route.screen;
   const params = 'params' in route ? route.params : undefined;
-  if (params) {
-    (navigationRef as any).navigate(screen, params);
-  } else {
-    (navigationRef as any).navigate(screen);
-  }
+  // ResolvedRoute's fallback case uses Record<string, unknown> for params,
+  // which doesn't satisfy each route's specific param type. Dispatch through
+  // a minimal typed interface to avoid `as any`.
+  const nav = navigationRef as { navigate: (screen: string, params?: unknown) => void };
+  nav.navigate(screen, params);
 }
 
 export function setNavigationReady(ready: boolean) {

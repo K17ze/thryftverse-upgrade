@@ -19,7 +19,7 @@ import type { AssetPickerMode } from './CreatorAssetPicker';
 // Groups are separated by subtle dividers, not flat scrolly bars.
 
 interface RailTool {
-  icon: string;
+  icon: React.ComponentProps<typeof Ionicons>['name'];
   label: string;
   action: () => void;
   danger?: boolean;
@@ -159,7 +159,7 @@ export function CreatorToolDock({
         ]}
       >
         <Ionicons
-          name={tool.icon as any}
+          name={tool.icon}
           size={toolIconSize}
           color={getToolIconColor(tool)}
         />

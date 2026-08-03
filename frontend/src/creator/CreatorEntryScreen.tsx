@@ -167,7 +167,7 @@ export function CreatorEntryScreen({
           contentFit: 'cover',
           opacity: 1,
         },
-      } as any;
+      };
       onMediaSelected([layer]);
     }, () => {
       // Fallback: full-bleed if we can't get dimensions
@@ -190,7 +190,7 @@ export function CreatorEntryScreen({
           contentFit: 'cover',
           opacity: 1,
         },
-      } as any;
+      };
       onMediaSelected([layer]);
     });
   }, [onMediaSelected]);
@@ -234,7 +234,7 @@ export function CreatorEntryScreen({
         videoDurationMs: asset.duration,
         opacity: 1,
       },
-    } as any));
+    }));
     haptic.light();
     onMediaSelected(layers);
   }, [selectedIds, assets, onMediaSelected]);

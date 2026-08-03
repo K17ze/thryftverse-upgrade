@@ -351,11 +351,11 @@ function PublishReview({
       {/* Visibility — 3-option segmented control (Instagram Close Friends pattern) */}
       <Text style={styles.sectionLabel}>Audience</Text>
       <View style={styles.audienceRow}>
-        {[
-          { key: 'public' as const, label: 'Public', icon: 'globe-outline' },
-          { key: 'closeFriends' as const, label: 'Close Friends', icon: 'people-outline' },
-          { key: 'private' as const, label: 'Only Me', icon: 'lock-closed-outline' },
-        ].map((opt) => {
+        {([
+          { key: 'public' as const, label: 'Public', icon: 'globe-outline' as const },
+          { key: 'closeFriends' as const, label: 'Close Friends', icon: 'people-outline' as const },
+          { key: 'private' as const, label: 'Only Me', icon: 'lock-closed-outline' as const },
+        ] as const).map((opt) => {
           const isActive = document.metadata.visibility === opt.key;
           return (
             <Pressable
@@ -366,7 +366,7 @@ function PublishReview({
               accessibilityRole="button"
               hitSlop={8}
             >
-              <Ionicons name={opt.icon as any} size={16} color={isActive ? '#fff' : colors.textSecondary} />
+              <Ionicons name={opt.icon} size={16} color={isActive ? '#fff' : colors.textSecondary} />
               <Text style={[styles.audiencePillText, isActive && styles.audiencePillTextActive]}>{opt.label}</Text>
             </Pressable>
           );
