@@ -310,6 +310,7 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
                     variant="primary"
                     size="md"
                     disabled={submitting}
+                    loading={submitting}
                     style={{ flex: 1 }}
                   />
                 </View>

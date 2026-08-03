@@ -21,6 +21,7 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { getMyAuctionBids, getWatchlist, type MyAuctionBid, type MarketAuction } from '../services/marketApi';
 import { useCurrencyContext } from '../context/CurrencyContext';
 import { toIze, formatIzeAmount } from '../utils/currency';
+import { haptics } from '../utils/haptics';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -212,7 +213,7 @@ export default function MyBidsScreen() {
             <Pressable
               key={opt.value}
               style={[styles.stateRailChip, filter === opt.value && styles.stateRailChipActive]}
-              onPress={() => setFilter(opt.value)}
+              onPress={() => { haptics.selection(); setFilter(opt.value); }}
               accessibilityRole="button"
               accessibilityLabel={opt.accessibilityLabel}
             >
@@ -225,7 +226,7 @@ export default function MyBidsScreen() {
           <Pressable
             key={WATCHING_FILTER.value}
             style={[styles.stateRailChip, filter === WATCHING_FILTER.value && styles.stateRailChipActive]}
-            onPress={() => setFilter(WATCHING_FILTER.value)}
+            onPress={() => { haptics.selection(); setFilter(WATCHING_FILTER.value); }}
             accessibilityRole="button"
             accessibilityLabel={WATCHING_FILTER.accessibilityLabel}
           >
@@ -239,7 +240,7 @@ export default function MyBidsScreen() {
               <View style={styles.filterDivider} />
               <Pressable
                 style={[styles.stateRailChip, styles.sortChip, endingSoonest && styles.sortToggleActive]}
-                onPress={() => setEndingSoonest((v) => !v)}
+                onPress={() => { haptics.selection(); setEndingSoonest((v) => !v); }}
                 accessibilityRole="button"
                 accessibilityLabel={endingSoonest ? 'Stop sorting by ending soonest' : 'Sort by ending soonest'}
                 accessibilityState={{ checked: endingSoonest }}
@@ -532,12 +533,14 @@ function createStyles(colors: ThemeColors) {
     fontWeight: '600',
     color: colors.textPrimary,
     fontFamily: 'Inter_600SemiBold',
+    fontVariant: ['tabular-nums'],
   },
   activityIzeText: {
     fontSize: 11,
     color: colors.textMuted,
     fontFamily: 'Inter_400Regular',
     marginTop: 1,
+    fontVariant: ['tabular-nums'],
   },
   activityMetaRow: {
     flexDirection: 'row',

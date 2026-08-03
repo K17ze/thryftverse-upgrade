@@ -1848,7 +1848,7 @@ export default function AuctionHomeScreen() {
         <AuctionSegmentRail
           segments={segments}
           activeKey={activeSegment}
-          onSelect={(key) => setActiveSegment(key as MarketSegment)}
+          onSelect={(key) => { haptics.selection(); setActiveSegment(key as MarketSegment); }}
         />
 
         {/* Selected market composition */}

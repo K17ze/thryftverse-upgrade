@@ -17,6 +17,7 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { haptics } from '../utils/haptics';
 import { useStore } from '../store/useStore';
 import {
   CommerceUserOrder,
@@ -477,7 +478,7 @@ export default function MyOrdersScreen() {
         activeTab={activeTab}
         buyingCount={0}
         sellingCount={0}
-        onChange={setActiveTab}
+        onChange={(tab) => { haptics.selection(); setActiveTab(tab); }}
       />
 
       {needsActionCount > 0 && !debouncedQuery.trim() && filter.classification === 'all' && (

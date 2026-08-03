@@ -561,6 +561,7 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.meta.size,
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
+      fontVariant: ['tabular-nums'],
     },
     orderNext: {
       fontSize: Type.meta.size,
@@ -629,6 +630,7 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.body.size,
       fontFamily: Typography.family.regular,
       color: colors.textPrimary,
+      fontVariant: ['tabular-nums'],
     },
     frequencyRow: {
       flexDirection: 'row',

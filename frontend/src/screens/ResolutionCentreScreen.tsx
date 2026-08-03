@@ -16,6 +16,7 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Typography, Radius, Type } from '../theme/designTokens';
 import { useStore } from '../store/useStore';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { haptics } from '../utils/haptics';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 
 type TicketFilter = 'all' | 'open' | 'resolved' | 'closed';
@@ -131,7 +132,7 @@ export default function ResolutionCentreScreen() {
             <Pressable
               key={opt.value}
               style={[styles.filterChip, isActive && styles.filterChipActive]}
-              onPress={() => setFilter(opt.value)}
+              onPress={() => { haptics.selection(); setFilter(opt.value); }}
               accessibilityRole="button"
               accessibilityLabel={opt.accessibilityLabel}
             >

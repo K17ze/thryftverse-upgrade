@@ -907,6 +907,7 @@ function createStyles(colors: ThemeColors) {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
     fontSize: 14,
+    fontVariant: ['tabular-nums'],
   },
   termsValueCol: {
     alignItems: 'flex-end',

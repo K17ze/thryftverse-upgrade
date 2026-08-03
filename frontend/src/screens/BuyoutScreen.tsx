@@ -413,6 +413,7 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm,
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
+    fontVariant: ['tabular-nums'],
   },
   formHint: {
     fontSize: Type.meta.size,
