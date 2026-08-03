@@ -403,18 +403,19 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
           onRequestClose={() => setShowOverflow(false)}
           statusBarTranslucent
         >
-          {/* Backdrop — tap to dismiss */}
-          <Pressable
-            style={s.overflowBackdrop}
-            onPress={() => setShowOverflow(false)}
-            accessibilityLabel="Close menu"
-            accessibilityRole="button"
-          />
-          {/* Bottom sheet */}
-          <Reanimated.View
-            style={[s.overflowSheet, { backgroundColor: colors.surface, paddingBottom: Math.max(insets.bottom, Space.md) }]}
-            entering={reducedMotion ? undefined : SlideInDown.duration(280)}
-          >
+          <View style={s.overflowRoot}>
+            {/* Backdrop — tap to dismiss */}
+            <Pressable
+              style={s.overflowBackdrop}
+              onPress={() => setShowOverflow(false)}
+              accessibilityLabel="Close menu"
+              accessibilityRole="button"
+            />
+            {/* Bottom sheet */}
+            <Reanimated.View
+              style={[s.overflowSheet, { backgroundColor: colors.surface, paddingBottom: Math.max(insets.bottom, Space.md) }]}
+              entering={reducedMotion ? undefined : SlideInDown.duration(280)}
+            >
             {/* Grab handle */}
             <View style={s.overflowGrabHandle} />
 
@@ -484,6 +485,7 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
               </Text>
             </Pressable>
           </Reanimated.View>
+          </View>
         </Modal>
       )}
     </View>
@@ -605,6 +607,9 @@ const s = StyleSheet.create({
     transform: [{ scale: 0.97 }],
   },
   // ── Overflow bottom sheet ──
+  overflowRoot: {
+    flex: 1,
+  },
   overflowBackdrop: {
     ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.5)',
