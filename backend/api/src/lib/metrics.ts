@@ -50,6 +50,14 @@ const backgroundJobsTotal = new Counter({
   registers: [registry],
 });
 
+const backgroundJobDurationSeconds = new Histogram({
+  name: 'thryftverse_background_job_duration_seconds',
+  help: 'Background job execution duration by queue/job',
+  labelNames: ['queue', 'job'] as const,
+  buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 120],
+  registers: [registry],
+});
+
 const recommendationServesTotal = new Counter({
   name: 'thryftverse_recommendation_serves_total',
   help: 'Recommendation serves grouped by source, policy, and cold-start status',
@@ -161,6 +169,20 @@ export function recordBackgroundJob(input: {
       result: input.result,
     },
     1
+  );
+}
+
+export function recordBackgroundJobDuration(input: {
+  queue: string;
+  job: string;
+  durationSeconds: number;
+}): void {
+  backgroundJobDurationSeconds.observe(
+    {
+      queue: input.queue,
+      job: input.job,
+    },
+    Math.max(0, input.durationSeconds),
   );
 }
 

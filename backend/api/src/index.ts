@@ -133,6 +133,7 @@ import {
   observeDatabasePool,
   observeRedisConnection,
   recordAuctionSettlement,
+  recordBackgroundJobDuration,
   recordPaymentTransition,
   recordPushDelivery,
   renderMetrics,
@@ -9087,6 +9088,56 @@ async function sweepExpiredAuctions(reason: 'interval' | 'manual'): Promise<numb
   }
 }
 
+/**
+ * withScheduledJobGuard wraps an async job invocation with:
+ * - A re-entrancy lock (prevents concurrent execution when an interval
+ *   fires while a previous run is still in-flight)
+ * - Structured start / completed / failed log lines with duration
+ * - Prometheus duration histogram recording
+ *
+ * The lock is per-job-name and always released in `finally`.
+ * Business logic inside `fn` is not modified.
+ */
+const scheduledJobLocks = new Map<string, boolean>();
+
+async function withScheduledJobGuard<T>(
+  jobName: string,
+  reason: string,
+  fn: () => Promise<T>,
+): Promise<T | undefined> {
+  if (scheduledJobLocks.get(jobName)) {
+    app.log.info({ job: jobName, reason }, 'background_job_skipped_already_running');
+    return undefined;
+  }
+
+  scheduledJobLocks.set(jobName, true);
+  const startMs = Date.now();
+  app.log.info({ job: jobName, reason }, 'background_job_started');
+
+  try {
+    const result = await fn();
+    const durationMs = Date.now() - startMs;
+    recordBackgroundJobDuration({
+      queue: 'in_process',
+      job: jobName,
+      durationSeconds: durationMs / 1000,
+    });
+    app.log.info({ job: jobName, reason, durationMs }, 'background_job_completed');
+    return result;
+  } catch (error) {
+    const durationMs = Date.now() - startMs;
+    recordBackgroundJobDuration({
+      queue: 'in_process',
+      job: jobName,
+      durationSeconds: durationMs / 1000,
+    });
+    app.log.error({ job: jobName, reason, durationMs, err: error }, 'background_job_failed');
+    return undefined;
+  } finally {
+    scheduledJobLocks.set(jobName, false);
+  }
+}
+
 let auctionSweepTimer: NodeJS.Timeout | null = null;
 let domainOutboxTimer: NodeJS.Timeout | null = null;
 
@@ -10542,14 +10593,10 @@ function startOnezeReconciliationScheduler(): void {
     return;
   }
 
-  void runOnezeReconciliation('startup').catch((error) => {
-    app.log.error({ err: error }, 'Failed startup 1ze reconciliation');
-  });
+  void withScheduledJobGuard('oneze_reconciliation', 'startup', () => runOnezeReconciliation('startup'));
 
   onezeReconcileTimer = setInterval(() => {
-    void runOnezeReconciliation('interval').catch((error) => {
-      app.log.error({ err: error }, 'Failed interval 1ze reconciliation');
-    });
+    void withScheduledJobGuard('oneze_reconciliation', 'interval', () => runOnezeReconciliation('interval'));
   }, config.onezeReconcileIntervalMs);
 
   onezeReconcileTimer.unref?.();
@@ -10569,14 +10616,10 @@ function startOnezeDailyAttestationScheduler(): void {
     return;
   }
 
-  void runOnezeDailyAttestation('startup').catch((error) => {
-    app.log.error({ err: error }, 'Failed startup 1ze daily attestation export');
-  });
+  void withScheduledJobGuard('oneze_daily_attestation', 'startup', () => runOnezeDailyAttestation('startup'));
 
   onezeDailyAttestationTimer = setInterval(() => {
-    void runOnezeDailyAttestation('interval').catch((error) => {
-      app.log.error({ err: error }, 'Failed interval 1ze daily attestation export');
-    });
+    void withScheduledJobGuard('oneze_daily_attestation', 'interval', () => runOnezeDailyAttestation('interval'));
   }, config.onezeDailyAttestationIntervalMs);
 
   onezeDailyAttestationTimer.unref?.();
@@ -10596,14 +10639,10 @@ function startOnezeFxSyncScheduler(): void {
     return;
   }
 
-  void syncOnezeInternalFxRatesFromProvider('startup').catch((error) => {
-    app.log.error({ err: error }, 'Failed startup 1ze FX sync');
-  });
+  void withScheduledJobGuard('oneze_fx_sync', 'startup', () => syncOnezeInternalFxRatesFromProvider('startup'));
 
   onezeFxSyncTimer = setInterval(() => {
-    void syncOnezeInternalFxRatesFromProvider('interval').catch((error) => {
-      app.log.error({ err: error }, 'Failed interval 1ze FX sync');
-    });
+    void withScheduledJobGuard('oneze_fx_sync', 'interval', () => syncOnezeInternalFxRatesFromProvider('interval'));
   }, config.onezeFxSyncIntervalMs);
 
   onezeFxSyncTimer.unref?.();
@@ -10623,14 +10662,10 @@ function startOnezeAutoAdjustScheduler(): void {
     return;
   }
 
-  void runOnezeAutomaticSpreadAdjustment('startup').catch((error) => {
-    app.log.error({ err: error }, 'Failed startup 1ze automatic spread adjustment');
-  });
+  void withScheduledJobGuard('oneze_auto_adjust', 'startup', () => runOnezeAutomaticSpreadAdjustment('startup'));
 
   onezeAutoAdjustTimer = setInterval(() => {
-    void runOnezeAutomaticSpreadAdjustment('interval').catch((error) => {
-      app.log.error({ err: error }, 'Failed interval 1ze automatic spread adjustment');
-    });
+    void withScheduledJobGuard('oneze_auto_adjust', 'interval', () => runOnezeAutomaticSpreadAdjustment('interval'));
   }, config.onezeAutoAdjustIntervalMs);
 
   onezeAutoAdjustTimer.unref?.();
@@ -11086,15 +11121,11 @@ function startPlatformRevenueSweepScheduler(): void {
     return;
   }
 
-  void runPlatformRevenueSweep('startup').catch((error) => {
-    app.log.error({ err: error }, 'Failed startup platform revenue sweep run');
-  });
+  void withScheduledJobGuard('platform_revenue_sweep', 'startup', () => runPlatformRevenueSweep('startup'));
 
   const intervalMs = Math.max(60_000, config.platformRevenueSweepIntervalMs);
   platformRevenueSweepTimer = setInterval(() => {
-    void runPlatformRevenueSweep('interval').catch((error) => {
-      app.log.error({ err: error }, 'Failed interval platform revenue sweep run');
-    });
+    void withScheduledJobGuard('platform_revenue_sweep', 'interval', () => runPlatformRevenueSweep('interval'));
   }, intervalMs);
 
   platformRevenueSweepTimer.unref?.();
@@ -11114,15 +11145,11 @@ function startOpsAlertingScheduler(): void {
     return;
   }
 
-  void runOpsAlerting('interval').catch((error) => {
-    app.log.error({ err: error }, 'Failed startup ops alerting run');
-  });
+  void withScheduledJobGuard('ops_alerting', 'startup', () => runOpsAlerting('interval'));
 
   const intervalMs = Math.max(15_000, config.opsAlertIntervalMs);
   opsAlertingTimer = setInterval(() => {
-    void runOpsAlerting('interval').catch((error) => {
-      app.log.error({ err: error }, 'Failed interval ops alerting run');
-    });
+    void withScheduledJobGuard('ops_alerting', 'interval', () => runOpsAlerting('interval'));
   }, intervalMs);
 
   opsAlertingTimer.unref?.();
