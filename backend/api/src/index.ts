@@ -3,6 +3,8 @@ import { shutdownTelemetry } from './telemetry.js';
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import * as Sentry from '@sentry/node';
 import type { Pool, PoolClient } from 'pg';
+import cors from '@fastify/cors';
+import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import websocket from '@fastify/websocket';
 import fastifyRawBody from 'fastify-raw-body';
@@ -261,48 +263,47 @@ void app.register(fastifyRawBody, {
   runFirst: true,
 });
 
+// ── Security Headers (Helmet) & CORS ─────────────────────────────────
+// Registered before rate-limit and routes so every response inherits headers.
+// Helmet locks down CSP to 'none' (this is a JSON API, not a webpage).
+void app.register(helmet, {
+  global: true,
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'none'"],
+    },
+  },
+  hsts: config.nodeEnv === 'production'
+    ? { maxAge: 63072000, includeSubDomains: true, preload: true }
+    : false,
+  frameguard: { action: 'deny' },
+  noSniff: true,
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+});
+
+// CORS — env-driven allowlist. Defaults to empty (no browser origins) which is
+// correct for a native-mobile API. Set CORS_ALLOWED_ORIGINS to enable web clients.
+void app.register(cors, {
+  origin: config.corsAllowedOrigins.length > 0 ? config.corsAllowedOrigins : false,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Service-Token',
+    'X-Security-Admin-Token',
+    'X-Decision-Service-Token',
+    'Stripe-Signature',
+  ],
+  credentials: false,
+  maxAge: 86400,
+});
+
 void app.register(rateLimit, {
   global: true,
   max: config.apiRateLimitMax,
   timeWindow: config.apiRateLimitWindow,
   redis,
   nameSpace: 'thryftverse:rate-limit',
-});
-
-// ── CORS & Security Headers ──────────────────────────────────────────
-const ALLOWED_ORIGINS = config.nodeEnv === 'production'
-  ? [
-      'https://thryftverse.app',
-      'https://www.thryftverse.app',
-      'https://admin.thryftverse.app',
-    ]
-  : true; // Allow all origins in development
-
-app.addHook('onRequest', async (_request, reply) => {
-  reply.header('X-Content-Type-Options', 'nosniff');
-  reply.header('X-Frame-Options', 'DENY');
-  reply.header('X-XSS-Protection', '0');
-  reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
-  if (config.nodeEnv === 'production') {
-    reply.header('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
-  }
-});
-
-app.addHook('onRequest', async (request, reply) => {
-  const origin = request.headers.origin;
-  if (typeof ALLOWED_ORIGINS === 'boolean' && ALLOWED_ORIGINS) {
-    reply.header('Access-Control-Allow-Origin', origin ?? '*');
-  } else if (Array.isArray(ALLOWED_ORIGINS) && origin && ALLOWED_ORIGINS.includes(origin)) {
-    reply.header('Access-Control-Allow-Origin', origin);
-  }
-  reply.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-  reply.header('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Security-Admin-Token');
-  reply.header('Access-Control-Allow-Credentials', 'true');
-  reply.header('Access-Control-Max-Age', '86400');
-
-  if (request.method === 'OPTIONS') {
-    reply.code(204).send();
-  }
 });
 
 // ── Body size limit ──────────────────────────────────────────────────

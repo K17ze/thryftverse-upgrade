@@ -242,6 +242,21 @@ export const config = {
     100_000
   ),
   apiRateLimitWindow: asRateLimitWindow(process.env.API_RATE_LIMIT_WINDOW),
+  corsAllowedOrigins: asCsvList(process.env.CORS_ALLOWED_ORIGINS),
+  authRateLimitMax: asIntegerInRange(
+    'AUTH_RATE_LIMIT_MAX',
+    process.env.AUTH_RATE_LIMIT_MAX,
+    10,
+    1,
+    10_000
+  ),
+  authRateLimitWindowMs: asIntegerInRange(
+    'AUTH_RATE_LIMIT_WINDOW_MS',
+    process.env.AUTH_RATE_LIMIT_WINDOW_MS,
+    900_000,
+    1_000,
+    86_400_000
+  ),
   outboxDrainIntervalMs: asIntegerInRange(
     'OUTBOX_DRAIN_INTERVAL_MS',
     process.env.OUTBOX_DRAIN_INTERVAL_MS,
