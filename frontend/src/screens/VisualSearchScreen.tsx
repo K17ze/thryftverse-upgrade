@@ -66,10 +66,19 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
   const scanLineAnim = useRef(new RNAnimated.Value(0)).current;
   const scanOpacityAnim = useRef(new RNAnimated.Value(0)).current;
 
+  // Guard against async state updates after the component unmounts.
+  // runSearch awaits a network call and then calls setState; without
+  // this guard those calls would fire on an unmounted component.
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => { isMountedRef.current = false; };
+  }, []);
+
   useEffect(() => {
     if (status === 'loading') {
       scanOpacityAnim.setValue(1);
-      RNAnimated.loop(
+      const loop = RNAnimated.loop(
         RNAnimated.sequence([
           RNAnimated.timing(scanLineAnim, {
             toValue: 1,
@@ -84,13 +93,17 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
             useNativeDriver: false,
           }),
         ]),
-      ).start();
+      );
+      loop.start();
+      return () => loop.stop();
     } else {
-      RNAnimated.timing(scanOpacityAnim, {
+      const fadeOut = RNAnimated.timing(scanOpacityAnim, {
         toValue: 0,
         duration: 300,
         useNativeDriver: false,
-      }).start();
+      });
+      fadeOut.start();
+      return () => fadeOut.stop();
     }
   }, [status, scanLineAnim, scanOpacityAnim]);
 
@@ -217,6 +230,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
     const payload = buildFilterPayload();
 
     const apiResult = await visualSearch(payload);
+    if (!isMountedRef.current) return;
     let items: Listing[] = apiResult.listings;
     let usedFallback = apiResult.source === 'fallback';
 
@@ -256,7 +270,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
     if (!imageUri) return;
     setRefreshing(true);
     await runSearch();
-    setTimeout(() => setRefreshing(false), 400);
+    setTimeout(() => { if (isMountedRef.current) setRefreshing(false); }, 400);
   }, [imageUri, runSearch]);
 
   const handleClearFilters = useCallback(() => {
