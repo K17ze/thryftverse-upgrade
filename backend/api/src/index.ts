@@ -1480,6 +1480,20 @@ app.setErrorHandler((error, request, reply) => {
     return;
   }
 
+  // Fastify JSON Schema validation errors — return the same consistent
+  // "Invalid request payload" response shape as Zod errors so clients
+  // receive a uniform 400 regardless of which validation layer caught the
+  // issue. The `validation` property is set by Fastify/Ajv when schema
+  // validation fails (body, params, querystring, or headers).
+  if ((error as { validation?: unknown }).validation) {
+    reply.code(400);
+    reply.send({
+      ok: false,
+      error: 'Invalid request payload',
+    });
+    return;
+  }
+
   const statusCode =
     typeof (error as { statusCode?: unknown }).statusCode === 'number'
       ? (error as { statusCode: number }).statusCode
@@ -12416,6 +12430,21 @@ app.post(
     // Auth routes only accept email/username/password — cap at 4 KB to
     // prevent oversized auth payloads from consuming server resources.
     bodyLimit: 4096,
+    // Fastify JSON Schema — framework-level defence-in-depth per OWASP API
+    // security best practices. Validates structure before the handler runs;
+    // Zod in the handler provides semantic validation (email format, etc.).
+    schema: {
+      body: {
+        type: 'object',
+        required: ['email', 'username', 'password'],
+        properties: {
+          email: { type: 'string', maxLength: 320 },
+          username: { type: 'string', minLength: 3, maxLength: 32 },
+          password: { type: 'string', minLength: 8, maxLength: 128 },
+        },
+        additionalProperties: false,
+      },
+    },
     config: {
       // Account-creation spam protection — 5 req/min per OWASP guidance.
       rateLimit: {
@@ -12494,6 +12523,22 @@ app.post(
     // Auth routes only accept email/password — cap at 4 KB to
     // prevent oversized auth payloads from consuming server resources.
     bodyLimit: 4096,
+    // Fastify JSON Schema — framework-level defence-in-depth per OWASP API
+    // security best practices. Validates structure before the handler runs;
+    // Zod in the handler provides semantic validation (email format, etc.).
+    schema: {
+      body: {
+        type: 'object',
+        required: ['email', 'password'],
+        properties: {
+          email: { type: 'string', maxLength: 320 },
+          password: { type: 'string', minLength: 1, maxLength: 128 },
+          twoFactorCode: { type: 'string', minLength: 4, maxLength: 12 },
+          recoveryCode: { type: 'string', minLength: 6, maxLength: 32 },
+        },
+        additionalProperties: false,
+      },
+    },
     config: {
       // Brute-force protection — 5 req/min per OWASP guidance.
       rateLimit: {
@@ -20137,7 +20182,36 @@ app.delete('/looks/:lookId/comments/:commentId', async (request, reply) => {
 
 
 // ── Listings API ───────────────────────────────────────────────────
-app.post('/listings', async (request, reply) => {
+app.post('/listings', {
+  // Fastify JSON Schema — framework-level defence-in-depth per OWASP API
+  // security best practices. Validates structure before the handler runs;
+  // Zod in the handler provides semantic validation (URL format, etc.).
+  // additionalProperties omitted (defaults to true) so clients sending extra
+  // fields are not rejected — Zod strips unknown keys in the handler.
+  schema: {
+    body: {
+      type: 'object',
+      required: ['id', 'sellerId', 'title', 'description', 'priceGbp'],
+      properties: {
+        id: { type: 'string', minLength: 2 },
+        sellerId: { type: 'string', minLength: 2 },
+        title: { type: 'string', minLength: 3 },
+        description: { type: 'string', minLength: 10 },
+        priceGbp: { type: 'number', minimum: 0 },
+        imageUrl: { type: 'string' },
+        coverFinalizationId: { type: 'string', minLength: 2, maxLength: 120 },
+        status: { type: 'string', enum: ['draft', 'active', 'paused', 'sold', 'deleted'] },
+        category: { type: 'string', minLength: 1 },
+        brand: { type: 'string', minLength: 1 },
+        size: { type: 'string', minLength: 1 },
+        condition: { type: 'string', minLength: 1 },
+        originalPriceGbp: { type: 'number', minimum: 0 },
+        shippingMethod: { type: 'string', minLength: 1 },
+        shippingPayer: { type: 'string', minLength: 1 },
+      },
+    },
+  },
+}, async (request, reply) => {
   const actorUserId = resolveAuthenticatedUserId(request);
   const bodySchema = z.object({
     id: z.string().min(2),
@@ -23152,7 +23226,29 @@ app.get('/chat/conversations/:conversationId/messages', async (request) => {
   };
 });
 
-app.post('/chat/conversations/:conversationId/messages', async (request, reply) => {
+app.post('/chat/conversations/:conversationId/messages', {
+  // Fastify JSON Schema — framework-level defence-in-depth per OWASP API
+  // security best practices. Validates structure before the handler runs;
+  // Zod in the handler provides semantic validation as a second layer.
+  schema: {
+    params: {
+      type: 'object',
+      required: ['conversationId'],
+      properties: {
+        conversationId: { type: 'string', minLength: 2, maxLength: 120 },
+      },
+    },
+    body: {
+      type: 'object',
+      required: ['text'],
+      properties: {
+        text: { type: 'string', minLength: 1, maxLength: 4000 },
+        metadata: { type: 'object' },
+      },
+      additionalProperties: false,
+    },
+  },
+}, async (request, reply) => {
   const paramsSchema = z.object({
     conversationId: z.string().min(2).max(120),
   });
@@ -39276,7 +39372,29 @@ app.get('/auctions/:auctionId/bids', async (request, reply) => {
   };
 });
 
-app.post('/auctions/:auctionId/bids', async (request, reply) => {
+app.post('/auctions/:auctionId/bids', {
+  // Fastify JSON Schema — framework-level defence-in-depth per OWASP API
+  // security best practices. Validates structure before the handler runs;
+  // Zod in the handler provides semantic validation as a second layer.
+  schema: {
+    params: {
+      type: 'object',
+      required: ['auctionId'],
+      properties: {
+        auctionId: { type: 'string', minLength: 2 },
+      },
+    },
+    body: {
+      type: 'object',
+      required: ['amountGbp'],
+      properties: {
+        amountGbp: { type: 'number', exclusiveMinimum: 0 },
+        idempotencyKey: { type: 'string', minLength: 4, maxLength: 140 },
+      },
+      additionalProperties: false,
+    },
+  },
+}, async (request, reply) => {
   if (!request.authUser) {
     reply.code(401);
     return { ok: false, error: 'Unauthorized' };
