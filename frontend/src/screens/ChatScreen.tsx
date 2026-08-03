@@ -114,6 +114,8 @@ import {
 
 import { t } from "../i18n";
 
+import { requestPushPermissionOnce } from "../lib/pushPermission";
+
 type Props = StackScreenProps<RootStackParamList, "Chat">;
 
 type MsgType =
@@ -599,6 +601,13 @@ export default function ChatScreen({ navigation, route }: Props) {
   const [dangerWarningDismissed, setDangerWarningDismissed] = useState(false);
   const [cautionWarningDismissed, setCautionWarningDismissed] = useState(false);
 
+  // Per App Store / Google Play 2026 guidelines, push permission is requested
+  // only after a meaningful user action — here, after the user sends their
+  // first chat message. The ref guards against re-prompting within the same
+  // session; requestPushPermissionOnce also persists an AsyncStorage flag so
+  // the user is never re-prompted across sessions for the same trigger.
+  const pushPermissionAskedRef = useRef(false);
+
   // Real-time composer safety detection — re-evaluates as the user types
   const composerSafetyWarning = React.useMemo(() => {
     if (dangerWarningDismissed && cautionWarningDismissed) return null;
@@ -1070,6 +1079,13 @@ export default function ChatScreen({ navigation, route }: Props) {
 
     scheduleScrollToEnd();
 
+    // Contextual push permission prompt — ask once after the user sends their
+    // first chat message. Best-effort; never blocks the send path.
+    if (!pushPermissionAskedRef.current) {
+      pushPermissionAskedRef.current = true;
+      requestPushPermissionOnce('chat').catch(() => undefined);
+    }
+
     // Performance mark: chat message send initiated.
     performance.mark("chat:send");
 
@@ -1385,6 +1401,13 @@ export default function ChatScreen({ navigation, route }: Props) {
 
         show("Upload failed. Tap media to retry.", "error");
       });
+
+    // Contextual push permission prompt — ask once after the user sends their
+    // first media message. Best-effort; never blocks the send path.
+    if (!pushPermissionAskedRef.current) {
+      pushPermissionAskedRef.current = true;
+      requestPushPermissionOnce('chat').catch(() => undefined);
+    }
   };
 
   const handleRetryUpload = (msgId: string) => {
@@ -1733,6 +1756,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             isMe && styles.msgRowRight,
             { marginTop: spacingTop, marginBottom },
           ]}
+          accessibilityLiveRegion="polite"
         >
           <MarketplaceChatCard
             type="offer"
@@ -2136,6 +2160,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             showsVerticalScrollIndicator={false}
             keyboardDismissMode="on-drag"
             keyboardShouldPersistTaps="always"
+            accessibilityLiveRegion="polite"
             onScroll={(e) => {
               const { contentOffset, contentSize, layoutMeasurement } =
                 e.nativeEvent;

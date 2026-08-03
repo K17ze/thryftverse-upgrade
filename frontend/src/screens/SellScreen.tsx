@@ -951,7 +951,7 @@ export default function SellScreen() {
           </View>
 
           {/* -- 4. PRODUCT DETAILS -- */}
-          <Reanimated.View entering={FadeInDown.duration(300)} style={styles.sectionGroup}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.sectionGroup}>
             <Text style={[styles.sectionHeading, t.sectionHeading]}>Details</Text>
 
             <View style={styles.fieldGroup}>

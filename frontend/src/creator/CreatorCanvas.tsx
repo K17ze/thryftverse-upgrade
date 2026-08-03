@@ -20,6 +20,7 @@ import { Canvas as SkiaCanvas, Path as SkiaPath, Skia } from '@shopify/react-nat
 import { Image as ExpoImage } from 'expo-image';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Video, ResizeMode } from '../components/compat/Video';
 import type { CreatorLayer, CreatorDocument, CreatorPage } from './composition';
 import { getVisibleLayersSorted } from './composition';
@@ -140,16 +141,23 @@ export function CreatorCanvas({
 // Premium empty state with layered icon, title, and guidance.
 // Not just a pulsing icon — a proper designed empty surface.
 function EmptyCanvasState({ colors }: { colors: ReturnType<typeof useAppTheme>['colors'] }) {
+  const reducedMotion = useReducedMotion();
   const scaleSV = useSharedValue(1);
 
   useEffect(() => {
+    if (reducedMotion) {
+      // WCAG 2.2 §2.3.3 — no repeating pulse animation when Reduce Motion is on
+      cancelAnimation(scaleSV);
+      scaleSV.value = 1;
+      return;
+    }
     scaleSV.value = withRepeat(
       withTiming(1.06, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
       -1,
       true,
     );
     return () => cancelAnimation(scaleSV);
-  }, [scaleSV]);
+  }, [scaleSV, reducedMotion]);
 
   const animatedIconStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scaleSV.value }],
@@ -206,6 +214,7 @@ const LayerRenderer = React.memo(function LayerRenderer({
   onLongPress,
 }: LayerRendererProps) {
   const { colors } = useAppTheme();
+  const reducedMotion = useReducedMotion();
   const translateX = useSharedValue(layer.x * canvasWidth);
   const translateY = useSharedValue(layer.y * canvasHeight);
   const scaleSV = useSharedValue(layer.scale);
@@ -225,24 +234,32 @@ const LayerRenderer = React.memo(function LayerRenderer({
 
   useEffect(() => {
     if (isSelected) {
-      selectionOpacity.value = withSpring(1, { damping: 15, stiffness: 180 });
-      handleScale.value = withSpring(1, { damping: 14, stiffness: 200 });
+      selectionOpacity.value = reducedMotion ? withTiming(1, { duration: 0 }) : withSpring(1, { damping: 15, stiffness: 180 });
+      handleScale.value = reducedMotion ? withTiming(1, { duration: 0 }) : withSpring(1, { damping: 14, stiffness: 200 });
     } else {
-      selectionOpacity.value = withSpring(0, { damping: 16, stiffness: 200 });
-      handleScale.value = withSpring(0.5, { damping: 16, stiffness: 200 });
+      selectionOpacity.value = reducedMotion ? withTiming(0, { duration: 0 }) : withSpring(0, { damping: 16, stiffness: 200 });
+      handleScale.value = reducedMotion ? withTiming(0.5, { duration: 0 }) : withSpring(0.5, { damping: 16, stiffness: 200 });
     }
-  }, [isSelected, selectionOpacity, handleScale]);
+  }, [isSelected, selectionOpacity, handleScale, reducedMotion]);
 
   // Gesture feedback badges (scale % and rotation angle)
   const [gestureBadge, setGestureBadge] = useState<string | null>(null);
 
   // Sync shared values when document state changes (undo/redo/draft load/page change)
   useEffect(() => {
-    translateX.value = withSpring(layer.x * canvasWidth, { damping: 18, stiffness: 220 });
-    translateY.value = withSpring(layer.y * canvasHeight, { damping: 18, stiffness: 220 });
-    scaleSV.value = withSpring(layer.scale, { damping: 18, stiffness: 220 });
-    rotationSV.value = withSpring(normaliseDegrees(layer.rotation), { damping: 18, stiffness: 220 });
-  }, [layer.x, layer.y, layer.scale, layer.rotation, canvasWidth, canvasHeight]);
+    if (reducedMotion) {
+      // WCAG 2.2 §2.3.3 — instant snap, no spring bounce
+      translateX.value = withTiming(layer.x * canvasWidth, { duration: 0 });
+      translateY.value = withTiming(layer.y * canvasHeight, { duration: 0 });
+      scaleSV.value = withTiming(layer.scale, { duration: 0 });
+      rotationSV.value = withTiming(normaliseDegrees(layer.rotation), { duration: 0 });
+    } else {
+      translateX.value = withSpring(layer.x * canvasWidth, { damping: 18, stiffness: 220 });
+      translateY.value = withSpring(layer.y * canvasHeight, { damping: 18, stiffness: 220 });
+      scaleSV.value = withSpring(layer.scale, { damping: 18, stiffness: 220 });
+      rotationSV.value = withSpring(normaliseDegrees(layer.rotation), { damping: 18, stiffness: 220 });
+    }
+  }, [layer.x, layer.y, layer.scale, layer.rotation, canvasWidth, canvasHeight, reducedMotion]);
 
   const handlePress = useCallback(() => {
     if (mode === 'edit' && onPress) {
@@ -282,8 +299,8 @@ const LayerRenderer = React.memo(function LayerRenderer({
     normX = Math.max(minX, Math.min(maxX, normX));
     normY = Math.max(minY, Math.min(maxY, normY));
 
-    translateX.value = withTiming(normX * canvasWidth, { duration: 100 });
-    translateY.value = withTiming(normY * canvasHeight, { duration: 100 });
+    translateX.value = withTiming(normX * canvasWidth, { duration: reducedMotion ? 0 : 100 });
+    translateY.value = withTiming(normY * canvasHeight, { duration: reducedMotion ? 0 : 100 });
 
     if (snappedX || snappedY) triggerHaptic();
     setShowGuides(false);
@@ -291,7 +308,7 @@ const LayerRenderer = React.memo(function LayerRenderer({
     setSmartGuides({ vertical: [], horizontal: [] });
 
     onTransformChange?.(layer.id, { x: normX, y: normY });
-  }, [canvasWidth, canvasHeight, layer.id, layer.width, layer.height, layer.scale, onTransformChange, translateX, translateY]);
+  }, [canvasWidth, canvasHeight, layer.id, layer.width, layer.height, layer.scale, onTransformChange, translateX, translateY, reducedMotion]);
 
   const handleTransformCommit = useCallback((finalScale: number, finalRotation: number) => {
     const clampedScale = Math.max(0.2, Math.min(5, finalScale));
@@ -305,10 +322,10 @@ const LayerRenderer = React.memo(function LayerRenderer({
       triggerHaptic();
     }
 
-    scaleSV.value = withTiming(clampedScale, { duration: 100 });
-    rotationSV.value = withTiming(snappedRotation, { duration: 100 });
+    scaleSV.value = withTiming(clampedScale, { duration: reducedMotion ? 0 : 100 });
+    rotationSV.value = withTiming(snappedRotation, { duration: reducedMotion ? 0 : 100 });
     onTransformChange?.(layer.id, { scale: clampedScale, rotation: snappedRotation });
-  }, [layer.id, onTransformChange, scaleSV, rotationSV]);
+  }, [layer.id, onTransformChange, scaleSV, rotationSV, reducedMotion]);
 
   const panGesture = useMemo(
     () =>
@@ -722,6 +739,7 @@ function MediaLayerContent({ layer, width, height }: { layer: Extract<CreatorLay
 
 function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'text' }> }) {
   const { payload } = layer;
+  const reducedMotion = useReducedMotion();
 
   // Text entrance animation (Instagram 2025-2026: typewriter, bounce, fade, slide)
   const animProgress = useSharedValue(0);
@@ -734,9 +752,11 @@ function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tex
     animProgress.value = 0;
     animOpacity.value = 0;
     animTranslateY.value = 0;
-    if (animation === 'none') {
+    if (animation === 'none' || reducedMotion) {
+      // WCAG 2.2 §2.3.3 — show text immediately with no animation when Reduce Motion is on
       animOpacity.value = 1;
       animProgress.value = 1;
+      animTranslateY.value = 0;
       setTypewriterText(payload.text);
       return;
     }
@@ -759,7 +779,7 @@ function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tex
       setTypewriterText('');
       animProgress.value = withTiming(1, { duration: Math.max(800, (payload.text?.length ?? 0) * 60), easing: Easing.linear });
     }
-  }, [payload.textAnimation, payload.text, animProgress, animOpacity, animTranslateY]);
+  }, [payload.textAnimation, payload.text, animProgress, animOpacity, animTranslateY, reducedMotion]);
 
   // Typewriter: react to progress shared value and update visible substring on JS thread
   useAnimatedReaction(

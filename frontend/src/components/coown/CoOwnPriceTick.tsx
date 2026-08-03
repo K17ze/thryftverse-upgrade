@@ -143,6 +143,7 @@ export function CoOwnPriceTick({
           <Text
             style={[sizeStyle, { color: colors.textPrimary }]}
             numberOfLines={1}
+            accessibilityLiveRegion="polite"
             accessibilityLabel={`${label ?? 'Price'} ${value.toFixed(2)}${unit ? ` ${unit}` : ''}${hasChanged ? `, ${direction}` : ''}${ageLabel ? `, ${ageLabel}` : ''}`}
           >
             {showSign && hasChanged ? sign : ''}{value.toFixed(2)}

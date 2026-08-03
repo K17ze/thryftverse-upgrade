@@ -1364,6 +1364,7 @@ export default function CheckoutScreen() {
                 t.feedbackText,
                 stage === 'payment_failed' && t.feedbackTextError,
               ]}
+              accessibilityLiveRegion="polite"
             >
               {STAGE_LABELS[stage]}
             </Text>
@@ -1387,7 +1388,13 @@ export default function CheckoutScreen() {
       <View style={[styles.footer, t.footer, { paddingBottom: insets.bottom > 0 ? insets.bottom : 16 }]}>
         <View style={styles.footerTotalCol}>
           <Text style={[styles.footerTotalLabel, t.footerTotalLabel]}>Total</Text>
-          <Text style={[styles.footerTotalPrice, t.footerTotalPrice]}>{formatFromFiat(TOTAL, 'GBP')}</Text>
+          <Text
+            style={[styles.footerTotalPrice, t.footerTotalPrice]}
+            accessibilityLiveRegion="polite"
+            accessibilityLabel={`Total ${formatFromFiat(TOTAL, 'GBP')}`}
+          >
+            {formatFromFiat(TOTAL, 'GBP')}
+          </Text>
         </View>
 
         {/* Apple Pay as primary CTA on iOS when enabled */}

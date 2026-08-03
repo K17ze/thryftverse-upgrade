@@ -51,6 +51,11 @@ export default function LoginScreen() {
   const shakeOffset = useSharedValue(0);
 
   const shake = () => {
+    if (reducedMotionEnabled) {
+      // WCAG 2.2 §2.3.3 — no shake animation when Reduce Motion is on
+      shakeOffset.value = 0;
+      return;
+    }
     shakeOffset.value = withSequence(
       withTiming(-10, { duration: 50 }),
       withTiming(10, { duration: 50 }),
