@@ -7,6 +7,8 @@ import {
   Dimensions,
   Pressable,
   Share,
+  Alert,
+  Modal,
 } from 'react-native';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -29,7 +31,7 @@ import { EmptyState } from '../components/EmptyState';
 import { LookDetailSkeleton } from '../components/skeletons/LookDetailSkeleton';
 import { LookSocialActions } from '../components/look/LookSocialActions';
 import { LookCommentsSheet } from '../components/look/LookCommentsSheet';
-import { fetchLookByIdFromApi, type LookApiItem } from '../services/looksApi';
+import { fetchLookByIdFromApi, deleteLookOnApi, type LookApiItem } from '../services/looksApi';
 import { Video, ResizeMode } from '../components/compat/Video';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -56,6 +58,9 @@ export default function LookDetailScreen() {
   const [activeTagId, setActiveTagId] = useState<string | null>(null);
   const [commentsVisible, setCommentsVisible] = useState(false);
   const [commentCount, setCommentCount] = useState(0);
+  const [overflowVisible, setOverflowVisible] = useState(false);
+
+  const isOwner = look?.creatorId === currentUser?.id;
 
   const loadLook = useCallback(async () => {
     setIsLoading(true);
@@ -92,6 +97,41 @@ export default function LookDetailScreen() {
       // Share failed or was dismissed — no feedback needed unless it's a real error
     }
   }, [haptic, look]);
+
+  const handleEdit = useCallback(() => {
+    if (!look || !isOwner) return;
+    setOverflowVisible(false);
+    haptic.light();
+    navigation.navigate('CreatorStudio', {
+      type: 'look',
+      sourceDocumentId: look.id,
+    });
+  }, [look, isOwner, navigation, haptic]);
+
+  const handleDelete = useCallback(() => {
+    if (!look || !isOwner) return;
+    setOverflowVisible(false);
+    Alert.alert(
+      'Delete look',
+      'This look will be permanently removed. This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteLookOnApi(look.id);
+              show('Look deleted', 'success');
+              navigation.goBack();
+            } catch {
+              show('Unable to delete look', 'error');
+            }
+          },
+        },
+      ]
+    );
+  }, [look, isOwner, show, navigation]);
 
   const resolveListing = useCallback(
     (listingId: string | null) => {
@@ -178,6 +218,31 @@ export default function LookDetailScreen() {
           >
             <Ionicons name="share-outline" size={20} color="#fff" style={styles.headerGlyph} />
           </AnimatedPressable>
+          {isOwner && (
+            <AnimatedPressable
+              style={styles.headerBtn}
+              onPress={handleEdit}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Edit look"
+            >
+              <Ionicons name="create-outline" size={20} color="#fff" style={styles.headerGlyph} />
+            </AnimatedPressable>
+          )}
+          {isOwner && (
+            <AnimatedPressable
+              style={styles.headerBtn}
+              onPress={() => {
+                haptic.light();
+                setOverflowVisible(true);
+              }}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="More look options"
+            >
+              <Ionicons name="ellipsis-horizontal" size={20} color="#fff" style={styles.headerGlyph} />
+            </AnimatedPressable>
+          )}
         </View>
       </View>
 
@@ -351,6 +416,42 @@ export default function LookDetailScreen() {
           navigation.navigate('Login');
         }}
       />
+
+      {/* Owner Overflow Menu */}
+      <Modal
+        visible={overflowVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setOverflowVisible(false)}
+      >
+        <Pressable style={styles.overflowBackdrop} onPress={() => setOverflowVisible(false)}>
+          <Pressable
+            style={styles.overflowSheet}
+            onPress={(e) => e.stopPropagation()}
+            accessibilityRole="menu"
+          >
+            <Pressable
+              style={styles.overflowItem}
+              onPress={handleEdit}
+              accessibilityRole="menuitem"
+              accessibilityLabel="Edit look"
+            >
+              <Ionicons name="create-outline" size={20} color={colors.textPrimary} />
+              <Text style={styles.overflowItemText}>Edit look</Text>
+            </Pressable>
+            <View style={styles.overflowDivider} />
+            <Pressable
+              style={styles.overflowItem}
+              onPress={handleDelete}
+              accessibilityRole="menuitem"
+              accessibilityLabel="Delete look"
+            >
+              <Ionicons name="trash-outline" size={20} color={colors.danger} />
+              <Text style={[styles.overflowItemText, { color: colors.danger }]}>Delete look</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -573,6 +674,37 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.bold,
     color: colors.danger,
+  },
+
+  // Owner overflow menu
+  overflowBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  overflowSheet: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+    paddingBottom: Space.lg,
+    paddingTop: Space.sm,
+  },
+  overflowItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+    paddingVertical: Space.md,
+    paddingHorizontal: Space.lg,
+  },
+  overflowItemText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.medium,
+    color: colors.textPrimary,
+  },
+  overflowDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border,
+    marginVertical: Space.xs,
   },
   });
 }

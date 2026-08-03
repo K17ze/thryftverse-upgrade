@@ -34,6 +34,8 @@ import { CreatorCropSheet } from './CreatorCropSheet';
 import { CreatorCutoutSheet } from './CreatorCutoutSheet';
 import { PressScale, SheetContainer } from './CreatorAnimations';
 import { useHaptic } from '../hooks/useHaptic';
+import { fetchLookByIdFromApi } from '../services/looksApi';
+import { lookToDocument } from './viewerAdapters';
 import type { CreatorTemplate } from './templates';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -82,10 +84,53 @@ function CreatorStudioInner() {
   const [cropTarget, setCropTarget] = useState<CreatorLayer | null>(null);
   const [cutoutTarget, setCutoutTarget] = useState<CreatorLayer | null>(null);
   const [pageMenuIndex, setPageMenuIndex] = useState<number | null>(null);
+  const [editingLookId, setEditingLookId] = useState<string | null>(null);
+  const [isLoadingSourceLook, setIsLoadingSourceLook] = useState(false);
 
-  // Show entry screen when document is empty and not loading a draft/template
+  const sourceDocumentId = route.params?.sourceDocumentId as string | undefined;
+
+  // ── Edit mode: load an existing published look for editing ────────
+  // When sourceDocumentId refers to a published look (not a local draft),
+  // fetch it from the API and load it into the canvas as the working
+  // document. The remix path in CreatorContext handles local-draft
+  // sourceDocumentIds via CreatorDraftService; a published look ID will
+  // not be found there, so this effect picks it up from the API instead.
+  useEffect(() => {
+    if (!sourceDocumentId || route.params?.draftId || route.params?.templateId) return;
+    let cancelled = false;
+    setIsLoadingSourceLook(true);
+    fetchLookByIdFromApi(sourceDocumentId)
+      .then((res) => {
+        if (cancelled || !res.ok || !res.look) return;
+        const doc = lookToDocument({
+          id: res.look.id,
+          title: res.look.title,
+          caption: res.look.caption,
+          mediaUrl: res.look.mediaUrl,
+          tags: res.look.tags.map((t) => ({
+            id: t.id,
+            label: t.label,
+            listingId: t.listingId,
+            x: t.x,
+            y: t.y,
+          })),
+        });
+        setDocument(doc);
+        setEditingLookId(sourceDocumentId);
+      })
+      .catch(() => {
+        // Not a published look — the remix path in CreatorContext handles
+        // local-draft sourceDocumentIds. Nothing to do here.
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingSourceLook(false);
+      });
+    return () => { cancelled = true; };
+  }, [sourceDocumentId, route.params?.draftId, route.params?.templateId, setDocument]);
+
+  // Show entry screen when document is empty and not loading a draft/template/source look
   const hasContent = document.pages.some((p) => p.layers.length > 0);
-  const showEntryScreen = !entryComplete && !hasContent && !isLoadingDraft;
+  const showEntryScreen = !entryComplete && !hasContent && !isLoadingDraft && !isLoadingSourceLook;
 
   const page = document.pages[activePageIndex];
   const isLook = document.type === 'look';
@@ -545,7 +590,7 @@ function CreatorStudioInner() {
         }}
       />
       <CreatorLayersSheet visible={showLayers} onClose={() => setShowLayers(false)} />
-      <CreatorPublishSheet visible={showPublish} onClose={() => setShowPublish(false)} />
+      <CreatorPublishSheet visible={showPublish} onClose={() => setShowPublish(false)} editingLookId={editingLookId ?? undefined} />
       <CreatorSettingsSheet visible={showSettings} onClose={() => setShowSettings(false)} />
       <CreatorTemplateBrowser
         visible={showTemplates}

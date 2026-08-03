@@ -76,6 +76,17 @@ export async function createLookOnApi(body: LookCreateBody): Promise<{ ok: boole
   });
 }
 
+export async function updateLookOnApi(
+  lookId: string,
+  body: Partial<LookCreateBody>
+): Promise<{ ok: boolean; lookId: string }> {
+  return fetchJson<{ ok: boolean; lookId: string }>(`/looks/${lookId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
 export async function fetchLooksFromApi(options?: { creatorId?: string; status?: string; limit?: number; cursor?: string }): Promise<LookApiResponse> {
   const params = new URLSearchParams();
   if (options?.creatorId) params.set('creatorId', options.creatorId);

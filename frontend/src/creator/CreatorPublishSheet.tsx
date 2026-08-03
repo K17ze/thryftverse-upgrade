@@ -17,7 +17,7 @@ import { useCreator } from './CreatorContext';
 import { CreatorCanvas } from './CreatorCanvas';
 import { SheetContainer, PressScale } from './CreatorAnimations';
 import { useHaptic } from '../hooks/useHaptic';
-import { createLookOnApi } from '../services/looksApi';
+import { createLookOnApi, updateLookOnApi } from '../services/looksApi';
 import { createPosterStory, scheduleCreatorDocument } from '../services/postersApi';
 import { CreatorAnalytics } from './creatorAnalytics';
 import { uploadAllLocalMedia, hasLocalUris } from './mediaUploadPipeline';
@@ -31,9 +31,10 @@ import {
 export interface CreatorPublishSheetProps {
   visible: boolean;
   onClose: () => void;
+  editingLookId?: string;
 }
 
-export function CreatorPublishSheet({ visible, onClose }: CreatorPublishSheetProps) {
+export function CreatorPublishSheet({ visible, onClose, editingLookId }: CreatorPublishSheetProps) {
   const { document, saveDraft } = useCreator();
   const navigation = useNavigation<any>();
   const { colors } = useAppTheme();
@@ -95,8 +96,10 @@ export function CreatorPublishSheet({ visible, onClose }: CreatorPublishSheetPro
         // 4. Serialise to canonical look payload
         const { payload } = serialiseToLookPayload(workingDoc);
 
-        // 5. Send real publish request
-        const result = await createLookOnApi(payload);
+        // 5. Send real publish request — update existing look or create new
+        const result = editingLookId
+          ? await updateLookOnApi(editingLookId, payload)
+          : await createLookOnApi(payload);
 
         // 6. If scheduled, set the scheduled_for timestamp on the document
         if (workingDoc.metadata.scheduledFor) {
@@ -140,7 +143,7 @@ export function CreatorPublishSheet({ visible, onClose }: CreatorPublishSheetPro
       setStage('error');
       CreatorAnalytics.publishError(document.type, err?.message ?? 'Unknown error');
     }
-  }, [document]);
+  }, [document, editingLookId]);
 
   if (!visible && stage === 'review') return null;
 

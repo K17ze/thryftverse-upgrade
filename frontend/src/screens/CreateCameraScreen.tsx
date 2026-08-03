@@ -223,6 +223,33 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
         pointerEvents="box-none"
         accessibilityRole="radiogroup"
       >
+        {/* Contextual tool cards — visible entry points for look/poster modes.
+            These expose the blank-canvas and gallery-upload flows without
+            requiring the user to open the overflow menu. */}
+        {mode !== 'visual-search' && (
+          <View style={s.contextCardsRow} pointerEvents="box-none">
+            <Pressable
+              style={({ pressed }) => [s.contextCard, pressed && s.controlPressed]}
+              onPress={handleBlankCanvas}
+              accessibilityLabel="Start with blank canvas"
+              accessibilityRole="button"
+            >
+              <Ionicons name="create-outline" size={18} color="#fff" />
+              <Text style={s.contextCardText} numberOfLines={1}>Start Blank</Text>
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => [s.contextCard, pressed && s.controlPressed]}
+              onPress={handleGallery}
+              accessibilityLabel="Upload from gallery"
+              accessibilityRole="button"
+            >
+              <Ionicons name="images-outline" size={18} color="#fff" />
+              <Text style={s.contextCardText} numberOfLines={1}>Gallery</Text>
+            </Pressable>
+          </View>
+        )}
+
         {/* Context label — flat transparent text, no grey deck */}
         <Text style={s.modeContextText}>{MODE_CONTEXT[mode]}</Text>
 
@@ -232,30 +259,33 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
             return (
               <Pressable
                 key={m.key}
-                style={({ pressed }) => [s.modeTab, pressed && s.controlPressed]}
+                style={({ pressed }) => [
+                  s.modeTab,
+                  { backgroundColor: isActive ? colors.brand : colors.surfaceAlt },
+                  pressed && s.controlPressed,
+                ]}
                 onPress={() => handleModeChange(m.key)}
                 hitSlop={12}
-                accessibilityRole="radio"
-                accessibilityState={{ checked: isActive }}
-                accessibilityLabel={m.label}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isActive }}
+                accessibilityLabel={`Switch to ${m.label} mode`}
               >
                 <Text
                   style={[
                     s.modeTabText,
-                    isActive ? s.modeTabTextActive : s.modeTabTextInactive,
+                    { color: isActive ? colors.textInverse : colors.textSecondary },
                   ]}
                   numberOfLines={1}
                 >
                   {m.label}
                 </Text>
-                {isActive && <View style={s.modeTabUnderline} />}
               </Pressable>
             );
           })}
         </View>
       </Animated.View>
     );
-  }, [handleModeChange, insets.bottom, mode, opacity]);
+  }, [colors.brand, colors.surfaceAlt, colors.textInverse, colors.textSecondary, handleBlankCanvas, handleGallery, handleModeChange, insets.bottom, mode, opacity]);
 
   const renderOverflowButton = useCallback(() => (
     <Pressable
@@ -357,11 +387,11 @@ const s = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
-  // ── Snapchat-style flat mode bar ───────────────────────────────────
-  // No background panel — just text labels over the camera feed.
-  // Active mode is solid white with a subtle underline.
-  // Inactive modes are semi-transparent white.
-  // The bar sits above the shutter button.
+  // ── Mode bar + contextual cards ────────────────────────────────────
+  // Overlays the camera feed above the shutter. Contextual tool cards
+  // (Start Blank / Gallery) appear for look/poster modes. Mode chips
+  // use filled brand/surfaceAlt backgrounds for clear active/inactive
+  // distinction over any camera background.
   modeBar: {
     position: 'absolute',
     left: 0,
@@ -378,37 +408,49 @@ const s = StyleSheet.create({
     color: 'rgba(255,255,255,0.6)',
     letterSpacing: 0.3,
   },
+  // ── Contextual tool cards (Start Blank / Gallery) ──
+  // Semi-transparent dark pills over the camera feed — the standard pattern
+  // for camera overlays (Instagram/Snapchat). White text + icon for legibility
+  // against any camera background.
+  contextCardsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: Space.sm,
+    marginBottom: Space.sm,
+  },
+  contextCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  contextCardText: {
+    fontFamily: Typography.family.medium,
+    fontSize: Type.caption.size,
+    color: '#fff',
+    letterSpacing: 0.2,
+  },
   modeTabsRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: Space.xl,
+    gap: 8,
   },
   modeTab: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: Space.sm,
-    paddingVertical: 6,
-    minWidth: 64,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
   },
   modeTabText: {
-    fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
-    letterSpacing: 0.3,
-  },
-  modeTabTextActive: {
-    color: '#fff',
     fontFamily: Typography.family.semibold,
-  },
-  modeTabTextInactive: {
-    color: 'rgba(255,255,255,0.5)',
-  },
-  modeTabUnderline: {
-    width: 20,
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: '#fff',
-    marginTop: 4,
+    fontSize: 13,
+    letterSpacing: 0.3,
   },
   topIconBtn: {
     width: 44,

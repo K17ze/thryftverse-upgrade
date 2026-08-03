@@ -222,7 +222,12 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
 
           {/* Shared: Canvas background */}
           <Text style={styles.sectionLabel}>Background</Text>
-          <View style={styles.bgRow}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.bgScroll}
+            contentContainerStyle={styles.bgScrollContent}
+          >
             {BG_PRESETS.map((bg) => {
               const isActive = document.canvas.background.type === bg.type &&
                 document.canvas.background.value === bg.value &&
@@ -234,24 +239,45 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
                     haptic.selection();
                     updateCanvas({ background: { type: bg.type, value: bg.value, secondaryValue: bg.secondaryValue } });
                   }}
-                  style={[styles.bgSwatch, isActive && styles.bgSwatchActive]}
-                  accessibilityLabel={`Background ${bg.label}`}
+                  style={styles.bgTileWrap}
+                  accessibilityLabel={`Background ${bg.label}${isActive ? ', selected' : ''}`}
                   accessibilityRole="button"
                 >
-                  {bg.type === 'color' ? (
-                    <View style={[styles.bgSwatchFill, { backgroundColor: bg.value }]} />
-                  ) : (
-                    <LinearGradient
-                      colors={[bg.value, bg.secondaryValue!]}
-                      style={styles.bgSwatchFill}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 0, y: 1 }}
-                    />
-                  )}
+                  <View
+                    style={[
+                      styles.bgTile,
+                      { borderColor: isActive ? colors.brand : 'transparent' },
+                    ]}
+                  >
+                    {bg.type === 'color' ? (
+                      <View style={[styles.bgTileFill, { backgroundColor: bg.value }]} />
+                    ) : (
+                      <LinearGradient
+                        colors={[bg.value, bg.secondaryValue!]}
+                        style={styles.bgTileFill}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 0, y: 1 }}
+                      />
+                    )}
+                    {isActive && (
+                      <View style={styles.bgCheckOverlay}>
+                        <Ionicons name="checkmark-circle" size={20} color={colors.surface} />
+                      </View>
+                    )}
+                  </View>
+                  <Text
+                    style={[
+                      styles.bgTileLabel,
+                      { color: isActive ? colors.brand : colors.textSecondary },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {bg.label}
+                  </Text>
                 </Pressable>
               );
             })}
-          </View>
+          </ScrollView>
 
           {/* Shared: Canvas ratio */}
           <Text style={styles.sectionLabel}>Canvas Ratio</Text>
@@ -502,25 +528,43 @@ function createStyles(colors: ThemeColors) {
     color: colors.textMuted,
   },
   // ── Background picker ──
-  bgRow: {
-    flexDirection: 'row',
-    gap: Space.sm,
-    flexWrap: 'wrap',
+  bgScroll: {
+    marginHorizontal: -Space.md,
   },
-  bgSwatch: {
-    width: 56,
-    height: 56,
-    borderRadius: Radius.md,
+  bgScrollContent: {
+    paddingHorizontal: 16,
+    gap: 10,
+  },
+  bgTileWrap: {
+    alignItems: 'center',
+    gap: 6,
+  },
+  bgTile: {
+    width: 64,
+    height: 80,
+    borderRadius: 12,
     borderWidth: 2,
-    borderColor: 'transparent',
     overflow: 'hidden',
   },
-  bgSwatchActive: {
-    borderColor: colors.brand,
-  },
-  bgSwatchFill: {
+  bgTileFill: {
     width: '100%',
     height: '100%',
+  },
+  bgCheckOverlay: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.brand,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  bgTileLabel: {
+    fontFamily: Typography.family.medium,
+    fontSize: 11,
+    letterSpacing: 0.1,
   },
   });
 }

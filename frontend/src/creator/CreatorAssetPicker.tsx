@@ -1450,12 +1450,12 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
           {BRUSH_SIZES.map((s) => {
             const isActive = brushSize === s;
             const previewColor = activeTool === 'eraser' ? colors.textSecondary : isActive ? colors.brand : activeColor;
-            const dotSize = Math.max(6, Math.min(22, s + 4));
+            const dotSize = Math.max(6, Math.min(28, s + 4));
             return (
               <Pressable
                 key={s}
                 onPress={() => { haptic.selection(); setBrushSize(s); }}
-                style={[styles.brushSizeOption, isActive && styles.brushSizeOptionActive]}
+                style={({ pressed }) => [styles.brushSizeOption, isActive && styles.brushSizeOptionActive, pressed && { opacity: 0.7 }]}
                 accessibilityLabel={`Brush size ${s}`}
                 accessibilityRole="button"
                 hitSlop={12}
@@ -1464,6 +1464,22 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               </Pressable>
             );
           })}
+        </View>
+
+        {/* Live stroke preview — Instagram pattern: shows actual brush diameter in active color */}
+        <View style={styles.brushPreviewWrap}>
+          <View
+            style={[
+              styles.brushPreviewDot,
+              {
+                width: Math.max(4, Math.min(28, brushSize)),
+                height: Math.max(4, Math.min(28, brushSize)),
+                borderRadius: Math.max(2, Math.min(14, brushSize / 2)),
+                backgroundColor: activeTool === 'eraser' ? colors.surfaceAlt : activeColor,
+              },
+            ]}
+          />
+          <Text style={styles.brushPreviewLabel}>{brushSize}px</Text>
         </View>
 
         {/* Actions */}
@@ -2515,7 +2531,7 @@ function StickerTray({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
                   <Pressable
                     key={sticker.key}
                     onPress={() => { haptic.selection(); setSubMode(sticker.mode); }}
-                    style={styles.stickerCell}
+                    style={({ pressed }) => [styles.stickerCell, pressed && { opacity: 0.7 }]}
                     accessibilityLabel={`Add ${sticker.label} sticker`}
                     accessibilityRole="button"
                   >
@@ -3090,8 +3106,8 @@ function createStyles(colors: ThemeColors) {
   styleOptionActive: { borderColor: colors.brand, backgroundColor: `${colors.brand}18`, borderWidth: 1.5 },
   styleOptionText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textPrimary },
   styleOptionTextActive: { color: colors.brand },
-  colorRow: { flexDirection: 'row', gap: Space.sm, flexWrap: 'wrap' },
-  colorOption: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: 'transparent' },
+  colorRow: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
+  colorOption: { width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: 'transparent', elevation: 2, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
   colorOptionActive: { borderColor: colors.brand, shadowColor: colors.brand, shadowOpacity: 0.3, shadowRadius: 4, shadowOffset: { width: 0, height: 0 }, elevation: 2 },
   colorOptionTransparent: { borderWidth: 1, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' },
   alignmentRow: { flexDirection: 'row', gap: Space.sm },
@@ -3130,6 +3146,9 @@ function createStyles(colors: ThemeColors) {
   brushSizeOption: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
   brushSizeOptionActive: { borderColor: colors.brand, backgroundColor: `${colors.brand}15` },
   brushSizeDot: { borderRadius: 100 },
+  brushPreviewWrap: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.xs },
+  brushPreviewDot: { elevation: 1, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2, shadowOffset: { width: 0, height: 1 } },
+  brushPreviewLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary },
   drawActions: { flexDirection: 'row', alignItems: 'center', gap: Space.md, marginTop: Space.md },
   drawActionBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: Space.md, paddingVertical: Space.sm, borderRadius: Radius.md, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
   drawActionLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary },
@@ -3166,15 +3185,15 @@ function createStyles(colors: ThemeColors) {
   stickerSearchInput: { flex: 1, fontSize: Type.body.size, color: colors.textPrimary, fontFamily: Typography.family.regular, paddingVertical: 4 },
   stickerSearchClear: { width: 32, height: 32, justifyContent: 'center', alignItems: 'center' },
   stickerCategoryScroll: { marginHorizontal: -Space.md, marginBottom: Space.xs },
-  stickerCategoryContent: { paddingHorizontal: Space.md, gap: Space.xs },
-  stickerCategoryChip: { paddingHorizontal: Space.md + 2, paddingVertical: Space.xs + 2, borderRadius: Radius.full, backgroundColor: colors.surfaceAlt },
-  stickerCategoryChipText: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary },
+  stickerCategoryContent: { paddingHorizontal: Space.md, gap: 8 },
+  stickerCategoryChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, backgroundColor: colors.surfaceAlt },
+  stickerCategoryChipText: { fontFamily: Typography.family.semibold, fontSize: 13, color: colors.textSecondary },
   stickerGridScroll: { flex: 1 },
   stickerGridContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
   stickerCategorySection: { marginBottom: Space.lg },
   stickerCategoryTitle: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: Space.sm },
   stickerGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.md },
-  stickerCell: { width: '30%', aspectRatio: 1, borderRadius: Radius.lg, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', gap: Space.xs },
+  stickerCell: { width: 80, height: 80, borderRadius: 12, backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center', gap: Space.xs, borderWidth: 1, borderColor: colors.borderSubtle },
   stickerCellIcon: { width: 48, height: 48, borderRadius: 24, backgroundColor: `${colors.brand}15`, justifyContent: 'center', alignItems: 'center' },
   stickerCellLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textPrimary },
   stickerEmptyState: { paddingVertical: Space.xxl, alignItems: 'center', gap: Space.md },
@@ -3191,12 +3210,12 @@ function createStyles(colors: ThemeColors) {
   weatherCellLabel: { fontFamily: Typography.family.medium, fontSize: 9, color: colors.textSecondary, textAlign: 'center' },
   // ── Spectrum color picker ──
   spectrumWrap: { marginTop: Space.sm, gap: Space.xs },
-  spectrumBar: { height: 36, borderRadius: Radius.md, overflow: 'hidden', position: 'relative' },
+  spectrumBar: { height: 36, borderRadius: 18, overflow: 'hidden', position: 'relative', elevation: 3, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 6, shadowOffset: { width: 0, height: 3 } },
   spectrumOverlay: { ...StyleSheet.absoluteFill },
-  spectrumIndicator: { position: 'absolute', top: -4, width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: '#fff', shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 4, left: '50%', marginLeft: -10 },
+  spectrumIndicator: { position: 'absolute', top: -4, width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: '#fff', backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 4, left: '50%', marginLeft: -14 },
   spectrumClose: { alignSelf: 'center', paddingVertical: Space.xs },
   // ── Vertical brush size slider (Instagram pattern) ──
-  brushSliderWrap: { position: 'absolute', left: Space.sm, top: '50%', marginTop: -60, zIndex: 10 },
+  brushSliderWrap: { position: 'absolute', left: Space.sm, top: '50%', marginTop: -60, zIndex: 10, elevation: 4, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
   brushSliderTrack: { width: 28, height: 120, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end', overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.1)' },
   brushSliderFill: { width: '100%', backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 14 },
   brushSliderHandle: { position: 'absolute', left: '50%', marginLeft: -11, width: 22, height: 22, justifyContent: 'center', alignItems: 'center' },

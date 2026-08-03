@@ -19587,6 +19587,69 @@ app.get('/looks/:lookId', async (request, reply) => {
   return { ok: true, look: enriched };
 });
 
+app.patch('/looks/:lookId', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ lookId: z.string().min(2).max(120) });
+  const { lookId } = paramsSchema.parse(request.params);
+
+  const bodySchema = z.object({
+    title: z.string().max(120).optional(),
+    caption: z.string().max(500).optional(),
+    visibility: z.enum(['public', 'followers', 'private']).optional(),
+    status: z.enum(['draft', 'published', 'archived']).optional(),
+    tags: z.array(z.object({
+      productId: z.string().min(2).max(120).optional(),
+      x: z.number().min(0).max(1).optional(),
+      y: z.number().min(0).max(1).optional(),
+      label: z.string().max(120).optional(),
+    })).optional(),
+  });
+  const payload = bodySchema.parse(request.body);
+
+  // Ownership check
+  const existing = await db.query<{ creator_id: string }>(
+    'SELECT creator_id FROM looks WHERE id = $1 LIMIT 1',
+    [lookId]
+  );
+  if (existing.rows.length === 0) {
+    return reply.code(404).send({ error: 'Look not found' });
+  }
+  if (existing.rows[0].creator_id !== actorUserId && request.authUser?.role !== 'admin') {
+    return reply.code(403).send({ error: 'Not authorised to edit this look' });
+  }
+
+  // Build update query dynamically
+  const updates: string[] = [];
+  const values: any[] = [];
+  let paramIdx = 1;
+
+  if (payload.title !== undefined) { updates.push(`title = $${paramIdx++}`); values.push(payload.title); }
+  if (payload.caption !== undefined) { updates.push(`caption = $${paramIdx++}`); values.push(payload.caption); }
+  if (payload.visibility !== undefined) { updates.push(`visibility = $${paramIdx++}`); values.push(payload.visibility); }
+  if (payload.status !== undefined) { updates.push(`status = $${paramIdx++}`); values.push(payload.status); }
+  updates.push(`updated_at = NOW()`);
+
+  if (updates.length > 1) {
+    values.push(lookId);
+    await db.query(`UPDATE looks SET ${updates.join(', ')} WHERE id = $${paramIdx}`, values);
+  }
+
+  // Update tags if provided
+  if (payload.tags !== undefined) {
+    await db.query('DELETE FROM look_tags WHERE look_id = $1', [lookId]);
+    for (const tag of payload.tags) {
+      if (tag.productId) {
+        await db.query(
+          'INSERT INTO look_tags (look_id, product_id, x, y, label) VALUES ($1, $2, $3, $4, $5)',
+          [lookId, tag.productId, tag.x ?? 0.5, tag.y ?? 0.5, tag.label ?? '']
+        );
+      }
+    }
+  }
+
+  return { ok: true, lookId };
+});
+
 app.delete('/looks/:lookId', async (request, reply) => {
   const actorUserId = resolveAuthenticatedUserId(request);
   const paramsSchema = z.object({ lookId: z.string().min(2).max(120) });
@@ -40090,6 +40153,10 @@ app.get('/auctions/:auctionId', async (request, reply) => {
       // Per spec 02_AUCTION §8: backend-backed fulfilment contract.
       // Null until the auction is terminal and fulfilment data exists.
       fulfilment: null,
+      // Buyer protection is a platform-wide feature: all auction
+      // transactions go through escrow with a buyer protection hold
+      // (default 48h after delivery). This is truthful — not per-listing.
+      buyerProtection: config.buyerProtectionHoldHours > 0,
     },
     bidActivity: bidsResult.rows.map((b) => ({
       id: b.id,
