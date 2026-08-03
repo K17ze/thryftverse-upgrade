@@ -1,0 +1,16 @@
+name: Preview OTA Update
+on:
+  push:
+    branches: [main]
+jobs:
+  update:
+    name: Publish OTA update to preview
+    type: eas
+    image: linux
+    steps:
+      - run:
+          name: Install dependencies
+          command: cd frontend && npm ci --legacy-peer-deps
+      - run:
+          name: Publish update
+          command: cd frontend && eas update --channel preview --auto --non-interactive

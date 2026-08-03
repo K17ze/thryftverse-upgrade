@@ -1,0 +1,41 @@
+name: Production Deploy
+on:
+  push:
+    branches: ['release/*']
+jobs:
+  fingerprint:
+    name: Check fingerprint
+    type: fingerprint
+    platform: all
+
+  get-build:
+    name: Find compatible build
+    type: get-build
+    needs: fingerprint
+    build_profile: production
+    platform: all
+
+  build-if-needed:
+    name: Build if needed
+    type: build
+    needs: get-build
+    build_profile: production
+    if: ${{ !needs.get-build.outputs.build_id }}
+    platform: all
+
+  submit:
+    name: Submit to stores
+    type: submit
+    needs: build-if-needed
+    build_profile: production
+    platform: all
+
+  ota-update:
+    name: Publish OTA update
+    type: eas
+    needs: submit
+    image: linux
+    steps:
+      - run:
+          name: Publish production OTA update
+          command: cd frontend && eas update --channel production --auto --non-interactive --rollout-percentage=1
