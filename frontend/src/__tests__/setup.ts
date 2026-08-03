@@ -156,18 +156,34 @@ vi.mock('expo-haptics', () => ({
   NotificationFeedbackType: { Success: 'Success', Warning: 'Warning', Error: 'Error' },
 }));
 
-vi.mock('expo-modules-core', () => ({
-  EventEmitter: class {
-    addListener() { return { remove: () => {} }; }
-    emit() {}
-    removeAllListeners() {}
-  },
-  requireNativeModule: () => ({
-    addListener: () => ({ remove: () => {} }),
-    removeListener: () => {},
-  }),
-  NativeModule: class {},
-}));
+vi.mock('expo-image', () => {
+  const React = require('react');
+  return {
+    default: React.forwardRef((props: any, ref: any) =>
+      React.createElement('Image', { ref, ...props })
+    ),
+  };
+});
+
+vi.mock('expo-modules-core', () => {
+  const React = require('react');
+  return {
+    EventEmitter: class {
+      addListener() { return { remove: () => {} }; }
+      emit() {}
+      removeAllListeners() {}
+    },
+    requireNativeModule: () => ({
+      addListener: () => ({ remove: () => {} }),
+      removeListener: () => {},
+    }),
+    requireNativeViewManager: (name: string) =>
+      React.forwardRef((props: any, ref: any) =>
+        React.createElement(name, { ref, ...props })
+      ),
+    NativeModule: class {},
+  };
+});
 
 vi.mock('expo-network', () => ({
   getNetworkStateAsync: vi.fn(() => Promise.resolve({ isConnected: true, type: 'wifi' })),

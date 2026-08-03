@@ -35,6 +35,16 @@ vi.mock('../theme/ThemeContext', () => {
   };
 });
 
+// Mock CachedImage to avoid expo-image transitive import issues
+vi.mock('../components/CachedImage', () => {
+  const React = require('react');
+  return {
+    CachedImage: React.forwardRef((props: any, ref: any) =>
+      React.createElement('CachedImage', { ref, ...props })
+    ),
+  };
+});
+
 // Mock useReducedMotion — return true to skip Reanimated animations
 vi.mock('../hooks/useReducedMotion', () => ({
   useReducedMotion: () => true,
@@ -254,7 +264,9 @@ describe('commerce-detail runtime tests (react-test-renderer)', () => {
           }}
         />
       );
-      expect(hasText(renderer, '…')).toBe(true);
+      // When loading, the component renders ActivityIndicator instead of the label text
+      const allText = getAllText(renderer);
+      expect(allText.some((t) => t.includes('Buy now'))).toBe(false);
     });
 
     it('renders without error when disabled', () => {

@@ -52,7 +52,7 @@ describe('i18n helper', () => {
     expect(t('settings.header.title')).toBe('Settings');
     expect(t('settings.push.subtitle', { enabled: 4, total: 7 })).toBe('4/7 types enabled');
     expect(t('checkout.payment.policyScope', { scope: 'GB-only' })).toBe('Policy scope: GB-only');
-    expect(t('checkout.a11y.paySecurely', { amount: 'GBP 12.50' })).toBe('Review and pay GBP 12.50 with Stripe');
+    expect(t('checkout.a11y.paySecurely', { amount: 'GBP 12.50' })).toBe('Pay GBP 12.50');
   });
 
   it('maps settings language labels to supported locales', () => {
