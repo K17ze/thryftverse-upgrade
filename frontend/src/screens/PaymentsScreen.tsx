@@ -190,7 +190,7 @@ export default function PaymentsScreen({ navigation }: Props) {
     emptySub: string,
     unavailableTitle: string,
     unavailableSub: string,
-    iconOutline: string
+    iconOutline: React.ComponentProps<typeof Ionicons>['name']
   ) => {
     if (!allow) {
       return (
@@ -198,7 +198,7 @@ export default function PaymentsScreen({ navigation }: Props) {
           style={styles.paymentRow}
         >
           <View style={styles.iconCircle}>
-            <Ionicons name={iconOutline as any} size={20} color={colors.textPrimary} />
+            <Ionicons name={iconOutline} size={20} color={colors.textPrimary} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.paymentTitle}>{unavailableTitle}</Text>
@@ -220,7 +220,7 @@ export default function PaymentsScreen({ navigation }: Props) {
             activeOpacity={0.8}
           >
             <View style={[styles.iconCircle, { backgroundColor: `${brand.color}12` }]}>
-              <Ionicons name={brand.icon as any} size={20} color={brand.color} />
+              <Ionicons name={brand.icon} size={20} color={brand.color} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.paymentTitle}>{method.label}</Text>
@@ -238,7 +238,7 @@ export default function PaymentsScreen({ navigation }: Props) {
     }
     return (
       <View style={styles.emptyState}>
-        <Ionicons name={iconOutline as any} size={40} color={colors.textMuted} />
+        <Ionicons name={iconOutline} size={40} color={colors.textMuted} />
         <Text style={styles.emptyStateTitle}>{emptyTitle}</Text>
         <Text style={styles.emptyStateSub}>{emptySub}</Text>
       </View>

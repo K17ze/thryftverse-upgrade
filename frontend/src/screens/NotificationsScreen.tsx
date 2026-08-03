@@ -499,9 +499,9 @@ export default function NotificationsScreen() {
       if (route) {
         const params = 'params' in route ? route.params : undefined;
         if (params) {
-          (navigation as any).navigate(route.screen, params);
+          (navigation.navigate as (screen: any, params?: any) => void)(route.screen, params);
         } else {
-          (navigation as any).navigate(route.screen);
+          (navigation.navigate as (screen: any) => void)(route.screen);
         }
         return;
       }
