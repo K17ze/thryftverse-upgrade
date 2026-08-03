@@ -29,6 +29,12 @@ export interface SettingsPreferences {
   quietHours: QuietHoursSettings;
   mySizes: string[];
   filterPresets: FilterPreset[];
+  /**
+   * When true, all in-house analytics/telemetry events are suppressed.
+   * No event is dispatched to a handler or transmitted to the backend.
+   * Defaults to false (analytics enabled) to preserve prior behaviour.
+   */
+  analyticsOptOut: boolean;
 }
 
 export interface PushNotificationDefinition {
@@ -87,6 +93,7 @@ export const DEFAULT_SETTINGS_PREFERENCES: SettingsPreferences = {
   quietHours: DEFAULT_QUIET_HOURS,
   mySizes: [],
   filterPresets: [],
+  analyticsOptOut: false,
 };
 
 export function buildDefaultPushNotificationToggles(keys: readonly string[]): PushNotificationToggles {
@@ -145,6 +152,10 @@ export async function getStoredSettingsPreferences(): Promise<SettingsPreference
               typeof p.name === 'string'
           )
         : [],
+      analyticsOptOut:
+        typeof parsed.analyticsOptOut === 'boolean'
+          ? parsed.analyticsOptOut
+          : DEFAULT_SETTINGS_PREFERENCES.analyticsOptOut,
     };
   } catch {
     return DEFAULT_SETTINGS_PREFERENCES;

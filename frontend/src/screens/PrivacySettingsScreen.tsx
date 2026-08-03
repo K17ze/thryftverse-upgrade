@@ -14,6 +14,7 @@ import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { updateActivityStatus, updateSearchVisibility } from '../services/accountApi';
+import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 
 type Props = StackScreenProps<RootStackParamList, 'PrivacySettings'>;
 
@@ -26,6 +27,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
   const updateAccountPreferences = useStore((s) => s.updateAccountPreferences);
   const blockedCount = useStore((s) => s.blockedUsers.length);
   const twoFactorEnabled = useStore((s) => s.twoFactorEnabled);
+  const { analyticsOptOut, setAnalyticsOptOut } = useSettingsPreferences();
 
   const [activityStatusVisible, setActivityStatusVisible] = React.useState(true);
   const [searchVisibility, setSearchVisibility] = React.useState<'visible' | 'hidden'>('visible');
@@ -163,6 +165,20 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
       </Reanimated.View>
 
       <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(300)}>
+      <SettingsSection title="Data & analytics" noCard>
+        <SettingsRow
+          icon="analytics-outline"
+          title="Analytics opt-out"
+          subtitle="Stop sending anonymous usage data to Thryftverse. No personal information is ever collected."
+          toggleValue={analyticsOptOut}
+          onToggle={setAnalyticsOptOut}
+          isFirst
+          isLast
+        />
+      </SettingsSection>
+      </Reanimated.View>
+
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(360)}>
       <SettingsSection title="Legal" noCard>
         <SettingsRow
           icon="document-text-outline"
