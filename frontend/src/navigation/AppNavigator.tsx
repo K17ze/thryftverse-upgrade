@@ -4,161 +4,11 @@ import { RootStackParamList } from './types';
 import { useStore } from '../store/useStore';
 import { Motion } from '../constants/motion';
 
+// Eager — initial routes needed immediately at startup.
+// AuthLandingScreen is the initial route when unauthenticated;
+// TabNavigator (MainTabs) is the initial route when authenticated.
 import AuthLandingScreen from '../screens/AuthLandingScreen';
-import LoginScreen from '../screens/LoginScreen';
-import SignUpScreen from '../screens/SignUpScreen';
 import TabNavigator from './TabNavigator';
-import CategoryDetailScreen from '../screens/CategoryDetailScreen';
-import BrowseScreen from '../screens/BrowseScreen';
-import ItemDetailScreen from '../screens/ItemDetailScreen';
-import ClosetScreen from '../screens/ClosetScreen';
-import CollectionDetailScreen from '../screens/CollectionDetailScreen';
-import PosterViewerScreen from '../screens/PosterViewerScreen';
-import PosterStoryActivityScreen from '../screens/PosterStoryActivityScreen';
-import PosterArchiveScreen from '../screens/PosterArchiveScreen';
-
-import SellScreen from '../screens/SellScreen';
-import TradeHubScreen from '../screens/TradeHubScreen';
-import VerificationScreen from '../screens/VerificationScreen';
-import AuctionHomeScreen from '../screens/AuctionHomeScreen';
-import SellerAuctionCentreScreen from '../screens/SellerAuctionCentreScreen';
-import CreateAuctionScreen from '../screens/CreateAuctionScreen';
-import AuctionDetailScreen from '../screens/AuctionDetailScreen';
-import CreateCoOwnScreen from '../screens/CreateSyndicateScreen';
-import MarketLedgerScreen from '../screens/MarketLedgerScreen';
-import CoOwnHubScreen from '../screens/SyndicateHubScreen';
-import AssetDetailScreen from '../screens/AssetDetailScreen';
-import TradeScreen from '../screens/TradeScreen';
-import PortfolioScreen from '../screens/PortfolioScreen';
-import MyBidsScreen from '../screens/MyBidsScreen';
-import MyListingsScreen from '../screens/MyListingsScreen';
-import SellerAnalyticsScreen from '../screens/SellerAnalyticsScreen';
-import BundleBagScreen from '../screens/BundleBagScreen';
-import SellerVerificationScreen from '../screens/SellerVerificationScreen';
-import VerificationResponseScreen from '../screens/VerificationResponseScreen';
-import CoOwnOrderHistoryScreen from '../screens/SyndicateOrderHistoryScreen';
-import AssetLeaderboardScreen from '../screens/AssetLeaderboardScreen';
-import BuyoutScreen from '../screens/BuyoutScreen';
-import CorporateActionDetailScreen from '../screens/CorporateActionDetailScreen';
-import DistributionHistoryScreen from '../screens/DistributionHistoryScreen';
-import CoOwnOnboardingScreen from '../screens/SyndicateOnboardingScreen';
-import ChatScreen from '../screens/ChatScreen';
-import CreateGroupChatScreen from '../screens/CreateGroupChatScreen';
-import GroupChatInfoScreen from '../screens/GroupChatInfoScreen';
-import GroupMembersScreen from '../screens/GroupMembersScreen';
-import GroupBotManagementScreen from '../screens/GroupBotManagementScreen';
-import BotDirectoryScreen from '../screens/BotDirectoryScreen';
-import BotDetailScreen from '../screens/BotDetailScreen';
-import CustomBotsScreen from '../screens/CustomBotsScreen';
-import BotBuilderScreen from '../screens/BotBuilderScreen';
-import EditGroupScreen from '../screens/EditGroupScreen';
-import UserProfileScreen from '../screens/UserProfileScreen';
-
-// Profile Subs
-import WalletScreen from '../screens/WalletScreen';
-import MyOrdersScreen from '../screens/MyOrdersScreen';
-import PersonalisationScreen from '../screens/PersonalisationScreen';
-import SettingsScreen from '../screens/SettingsScreen';
-import EditProfileScreen from '../screens/EditProfileScreen';
-import AccountSettingsScreen from '../screens/AccountSettingsScreen';
-import AccountControlScreen from '../screens/AccountControlScreen';
-import SavedAddressesScreen from '../screens/SavedAddressesScreen';
-import PaymentsScreen from '../screens/PaymentsScreen';
-
-// Phase 16 new screens
-import MakeOfferScreen from '../screens/MakeOfferScreen';
-import PushNotificationsScreen from '../screens/PushNotificationsScreen';
-import PostageScreen from '../screens/PostageScreen';
-import InviteFriendsScreen from '../screens/InviteFriendsScreen';
-import BalanceHistoryScreen from '../screens/BalanceHistoryScreen';
-
-import AddBankAccountScreen from '../screens/AddBankAccountScreen';
-import HelpSupportScreen from '../screens/HelpSupportScreen';
-
-// Phase 18 new screens
-import OrderDetailScreen from '../screens/OrderDetailScreen';
-import SellerFulfilmentScreen from '../screens/SellerFulfilmentScreen';
-import OrderReceiptScreen from '../screens/OrderReceiptScreen';
-
-// Phase 19 new screens
-import CheckoutScreen from '../screens/CheckoutScreen';
-import AddressFormScreen from '../screens/AddressFormScreen';
-import SuccessScreen from '../screens/SuccessScreen';
-import ManageListingScreen from '../screens/ManageListingScreen';
-import WithdrawScreen from '../screens/WithdrawScreen';
-import CategoryTreeScreen from '../screens/CategoryTreeScreen';
-
-// Phase 24 new screens
-import GlobalSearchScreen from '../screens/GlobalSearchScreen';
-
-// Phase 25 new screens
-import FilterScreen from '../screens/FilterScreen';
-import ListingSuccessScreen from '../screens/ListingSuccessScreen';
-
-// Phase 27
-import NotificationsScreen from '../screens/NotificationsScreen';
-import SavedSearchesScreen from '../screens/SavedSearchesScreen';
-
-// Phase 28
-import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
-import VisualSearchScreen from '../screens/VisualSearchScreen';
-import CreateCameraScreen from '../screens/CreateCameraScreen';
-import ChangePasswordScreen from '../screens/ChangePasswordScreen';
-import TwoFactorSetupScreen from '../screens/TwoFactorSetupScreen';
-import WriteReviewScreen from '../screens/WriteReviewScreen';
-import ReportScreen from '../screens/ReportScreen';
-import EditListingScreen from '../screens/EditListingScreen';
-
-// Explore / Creator screens
-import CreateLookScreen from '../screens/CreateLookScreen';
-import { CreateLookRedirect } from '../screens/CreateLookRedirect';
-import { CreatePosterRedirect } from '../screens/CreatePosterRedirect';
-import { CreatorStudioScreen } from '../creator';
-import { CreatorDraftListScreen } from '../creator/CreatorDraftListScreen';
-import OutfitBuilderScreen from '../screens/OutfitBuilderScreen';
-import CoOwnIssueScreen from '../screens/CoOwnIssueScreen';
-// UI-22R.6B — Experience elevation
-import LookDetailScreen from '../screens/LookDetailScreen';
-import PulseFeedScreen from '../screens/PulseFeedScreen';
-import ExploreCollectionScreen from '../screens/ExploreCollectionScreen';
-import StyleQuizScreen from '../screens/StyleQuizScreen';
-
-// VISUAL-15 — UI Architecture + Feature Depth
-import ConversationInfoScreen from '../screens/ConversationInfoScreen';
-import MessageRequestsScreen from '../screens/MessageRequestsScreen';
-import NewMessageScreen from '../screens/NewMessageScreen';
-import SharedConversationMediaScreen from '../screens/SharedConversationMediaScreen';
-import ManageCollectionItemsScreen from '../screens/ManageCollectionItemsScreen';
-import CreateCollectionScreen from '../screens/CreateCollectionScreen';
-import OrderSupportScreen from '../screens/OrderSupportScreen';
-import BuyerProtectionScreen from '../screens/BuyerProtectionScreen';
-import ConnectedAccountsScreen from '../screens/ConnectedAccountsScreen';
-import EmailNotificationsScreen from '../screens/EmailNotificationsScreen';
-import AccessibilitySettingsScreen from '../screens/AccessibilitySettingsScreen';
-import CoOwnPriceAlertsScreen from '../screens/CoOwnPriceAlertsScreen';
-import CoOwnTaxDocumentsScreen from '../screens/CoOwnTaxDocumentsScreen';
-import CoOwnRecurringOrdersScreen from '../screens/CoOwnRecurringOrdersScreen';
-import ChatMediaPreviewScreen from '../screens/ChatMediaPreviewScreen';
-// UI-18 — Reference-perfect product UX
-import EditCollectionScreen from '../screens/EditCollectionScreen';
-import SupportTicketDetailScreen from '../screens/SupportTicketDetailScreen';
-import ResolutionCentreScreen from '../screens/ResolutionCentreScreen';
-// UI-19 — Sell / Co-own / Chat marketplace UX
-import ListingPreviewScreen from '../screens/ListingPreviewScreen';
-import TradeConfirmScreen from '../screens/TradeConfirmScreen';
-
-// Phase 13 — Settings integrity
-import ChatSettingsScreen from '../screens/ChatSettingsScreen';
-import ActiveSessionsScreen from '../screens/ActiveSessionsScreen';
-import BlockedUsersScreen from '../screens/BlockedUsersScreen';
-import PrivacySettingsScreen from '../screens/PrivacySettingsScreen';
-import AboutScreen from '../screens/AboutScreen';
-import MutedConversationsScreen from '../screens/MutedConversationsScreen';
-import ArchivedConversationsScreen from '../screens/ArchivedConversationsScreen';
-import ManageQuickRepliesScreen from '../screens/ManageQuickRepliesScreen';
-
-// Diagnostic — dev only
-import RuntimeSmokeTestScreen from '../screens/RuntimeSmokeTestScreen';
 
 const Stack = createStackNavigator<RootStackParamList>();
 
@@ -225,164 +75,164 @@ export default function AppNavigator() {
 
       {/* Auth Flow */}
       <Stack.Screen name="AuthLanding" component={AuthLandingScreen} />
-      <Stack.Screen name="Login" component={LoginScreen} />
-      <Stack.Screen name="SignUp" component={SignUpScreen} />
-      <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+      <Stack.Screen name="Login" getComponent={() => require('../screens/LoginScreen').default} />
+      <Stack.Screen name="SignUp" getComponent={() => require('../screens/SignUpScreen').default} />
+      <Stack.Screen name="ForgotPassword" getComponent={() => require('../screens/ForgotPasswordScreen').default} />
 
       <Stack.Screen name="MainTabs" component={TabNavigator} />
-      <Stack.Screen name="CategoryDetail" component={CategoryDetailScreen} />
-      <Stack.Screen name="Browse" component={BrowseScreen} />
-      <Stack.Screen name="ItemDetail" component={ItemDetailScreen} />
-      <Stack.Screen name="Closet" component={ClosetScreen} />
-      <Stack.Screen name="CollectionDetail" component={CollectionDetailScreen} />
-      <Stack.Screen name="PosterViewer" component={PosterViewerScreen} options={modalScreenOptions} />
-      <Stack.Screen name="CreatePoster" component={CreatePosterRedirect} options={modalScreenOptions} />
-      <Stack.Screen name="PosterStoryActivity" component={PosterStoryActivityScreen} options={modalScreenOptions} />
-      <Stack.Screen name="PosterArchive" component={PosterArchiveScreen} options={modalScreenOptions} />
+      <Stack.Screen name="CategoryDetail" getComponent={() => require('../screens/CategoryDetailScreen').default} />
+      <Stack.Screen name="Browse" getComponent={() => require('../screens/BrowseScreen').default} />
+      <Stack.Screen name="ItemDetail" getComponent={() => require('../screens/ItemDetailScreen').default} />
+      <Stack.Screen name="Closet" getComponent={() => require('../screens/ClosetScreen').default} />
+      <Stack.Screen name="CollectionDetail" getComponent={() => require('../screens/CollectionDetailScreen').default} />
+      <Stack.Screen name="PosterViewer" getComponent={() => require('../screens/PosterViewerScreen').default} options={modalScreenOptions} />
+      <Stack.Screen name="CreatePoster" getComponent={() => require('../screens/CreatePosterRedirect').CreatePosterRedirect} options={modalScreenOptions} />
+      <Stack.Screen name="PosterStoryActivity" getComponent={() => require('../screens/PosterStoryActivityScreen').default} options={modalScreenOptions} />
+      <Stack.Screen name="PosterArchive" getComponent={() => require('../screens/PosterArchiveScreen').default} options={modalScreenOptions} />
 
-      <Stack.Screen name="Sell" component={SellScreen} options={modalScreenOptions} />
-      <Stack.Screen name="TradeHub" component={TradeHubScreen} />
-      <Stack.Screen name="Verification" component={VerificationScreen} />
-      <Stack.Screen name="AuctionHome" component={AuctionHomeScreen} />
-      <Stack.Screen name="SellerAuctionCentre" component={SellerAuctionCentreScreen} />
-      <Stack.Screen name="CreateAuction" component={CreateAuctionScreen} options={modalScreenOptions} />
-      <Stack.Screen name="AuctionDetail" component={AuctionDetailScreen} />
-      <Stack.Screen name="CreateCoOwn" component={CreateCoOwnScreen} options={modalScreenOptions} />
-      <Stack.Screen name="MarketLedger" component={MarketLedgerScreen} />
-      <Stack.Screen name="CoOwnHub" component={CoOwnHubScreen} />
-      <Stack.Screen name="AssetDetail" component={AssetDetailScreen} />
-      <Stack.Screen name="Trade" component={TradeScreen} options={modalScreenOptions} />
-      <Stack.Screen name="Portfolio" component={PortfolioScreen} />
-      <Stack.Screen name="MyBids" component={MyBidsScreen} />
-      <Stack.Screen name="MyListings" component={MyListingsScreen} />
-      <Stack.Screen name="SellerAnalytics" component={SellerAnalyticsScreen} />
-      <Stack.Screen name="BundleBag" component={BundleBagScreen} />
-      <Stack.Screen name="SellerVerification" component={SellerVerificationScreen} />
-      <Stack.Screen name="VerificationResponse" component={VerificationResponseScreen} options={modalScreenOptions} />
-      <Stack.Screen name="CoOwnOrderHistory" component={CoOwnOrderHistoryScreen} />
-      <Stack.Screen name="AssetLeaderboard" component={AssetLeaderboardScreen} />
-      <Stack.Screen name="Buyout" component={BuyoutScreen} />
-      <Stack.Screen name="CorporateActionDetail" component={CorporateActionDetailScreen} />
-      <Stack.Screen name="DistributionHistory" component={DistributionHistoryScreen} />
-      <Stack.Screen name="CoOwnOnboarding" component={CoOwnOnboardingScreen} options={modalScreenOptions} />
-      <Stack.Screen name="Chat" component={ChatScreen} />
-      <Stack.Screen name="CreateGroupChat" component={CreateGroupChatScreen} options={modalScreenOptions} />
-      <Stack.Screen name="GroupChatInfo" component={GroupChatInfoScreen} />
-      <Stack.Screen name="GroupMembers" component={GroupMembersScreen} />
-      <Stack.Screen name="GroupBotManagement" component={GroupBotManagementScreen} />
-      <Stack.Screen name="BotDirectory" component={BotDirectoryScreen} />
-      <Stack.Screen name="BotDetail" component={BotDetailScreen} />
-      <Stack.Screen name="CustomBots" component={CustomBotsScreen} />
-      <Stack.Screen name="BotBuilder" component={BotBuilderScreen} options={modalScreenOptions} />
-      <Stack.Screen name="EditGroup" component={EditGroupScreen} />
-      <Stack.Screen name="UserProfile" component={UserProfileScreen} />
-      <Stack.Screen name="Wallet" component={WalletScreen} />
-      <Stack.Screen name="MyOrders" component={MyOrdersScreen} />
-      <Stack.Screen name="Personalisation" component={PersonalisationScreen} />
-      <Stack.Screen name="Settings" component={SettingsScreen} />
-      <Stack.Screen name="EditProfile" component={EditProfileScreen} />
-      <Stack.Screen name="AccountSettings" component={AccountSettingsScreen} />
-      <Stack.Screen name="AccountControl" component={AccountControlScreen} />
-      <Stack.Screen name="SavedAddresses" component={SavedAddressesScreen} />
-      <Stack.Screen name="Payments" component={PaymentsScreen} />
+      <Stack.Screen name="Sell" getComponent={() => require('../screens/SellScreen').default} options={modalScreenOptions} />
+      <Stack.Screen name="TradeHub" getComponent={() => require('../screens/TradeHubScreen').default} />
+      <Stack.Screen name="Verification" getComponent={() => require('../screens/VerificationScreen').default} />
+      <Stack.Screen name="AuctionHome" getComponent={() => require('../screens/AuctionHomeScreen').default} />
+      <Stack.Screen name="SellerAuctionCentre" getComponent={() => require('../screens/SellerAuctionCentreScreen').default} />
+      <Stack.Screen name="CreateAuction" getComponent={() => require('../screens/CreateAuctionScreen').default} options={modalScreenOptions} />
+      <Stack.Screen name="AuctionDetail" getComponent={() => require('../screens/AuctionDetailScreen').default} />
+      <Stack.Screen name="CreateCoOwn" getComponent={() => require('../screens/CreateSyndicateScreen').default} options={modalScreenOptions} />
+      <Stack.Screen name="MarketLedger" getComponent={() => require('../screens/MarketLedgerScreen').default} />
+      <Stack.Screen name="CoOwnHub" getComponent={() => require('../screens/SyndicateHubScreen').default} />
+      <Stack.Screen name="AssetDetail" getComponent={() => require('../screens/AssetDetailScreen').default} />
+      <Stack.Screen name="Trade" getComponent={() => require('../screens/TradeScreen').default} options={modalScreenOptions} />
+      <Stack.Screen name="Portfolio" getComponent={() => require('../screens/PortfolioScreen').default} />
+      <Stack.Screen name="MyBids" getComponent={() => require('../screens/MyBidsScreen').default} />
+      <Stack.Screen name="MyListings" getComponent={() => require('../screens/MyListingsScreen').default} />
+      <Stack.Screen name="SellerAnalytics" getComponent={() => require('../screens/SellerAnalyticsScreen').default} />
+      <Stack.Screen name="BundleBag" getComponent={() => require('../screens/BundleBagScreen').default} />
+      <Stack.Screen name="SellerVerification" getComponent={() => require('../screens/SellerVerificationScreen').default} />
+      <Stack.Screen name="VerificationResponse" getComponent={() => require('../screens/VerificationResponseScreen').default} options={modalScreenOptions} />
+      <Stack.Screen name="CoOwnOrderHistory" getComponent={() => require('../screens/SyndicateOrderHistoryScreen').default} />
+      <Stack.Screen name="AssetLeaderboard" getComponent={() => require('../screens/AssetLeaderboardScreen').default} />
+      <Stack.Screen name="Buyout" getComponent={() => require('../screens/BuyoutScreen').default} />
+      <Stack.Screen name="CorporateActionDetail" getComponent={() => require('../screens/CorporateActionDetailScreen').default} />
+      <Stack.Screen name="DistributionHistory" getComponent={() => require('../screens/DistributionHistoryScreen').default} />
+      <Stack.Screen name="CoOwnOnboarding" getComponent={() => require('../screens/SyndicateOnboardingScreen').default} options={modalScreenOptions} />
+      <Stack.Screen name="Chat" getComponent={() => require('../screens/ChatScreen').default} />
+      <Stack.Screen name="CreateGroupChat" getComponent={() => require('../screens/CreateGroupChatScreen').default} options={modalScreenOptions} />
+      <Stack.Screen name="GroupChatInfo" getComponent={() => require('../screens/GroupChatInfoScreen').default} />
+      <Stack.Screen name="GroupMembers" getComponent={() => require('../screens/GroupMembersScreen').default} />
+      <Stack.Screen name="GroupBotManagement" getComponent={() => require('../screens/GroupBotManagementScreen').default} />
+      <Stack.Screen name="BotDirectory" getComponent={() => require('../screens/BotDirectoryScreen').default} />
+      <Stack.Screen name="BotDetail" getComponent={() => require('../screens/BotDetailScreen').default} />
+      <Stack.Screen name="CustomBots" getComponent={() => require('../screens/CustomBotsScreen').default} />
+      <Stack.Screen name="BotBuilder" getComponent={() => require('../screens/BotBuilderScreen').default} options={modalScreenOptions} />
+      <Stack.Screen name="EditGroup" getComponent={() => require('../screens/EditGroupScreen').default} />
+      <Stack.Screen name="UserProfile" getComponent={() => require('../screens/UserProfileScreen').default} />
+      <Stack.Screen name="Wallet" getComponent={() => require('../screens/WalletScreen').default} />
+      <Stack.Screen name="MyOrders" getComponent={() => require('../screens/MyOrdersScreen').default} />
+      <Stack.Screen name="Personalisation" getComponent={() => require('../screens/PersonalisationScreen').default} />
+      <Stack.Screen name="Settings" getComponent={() => require('../screens/SettingsScreen').default} />
+      <Stack.Screen name="EditProfile" getComponent={() => require('../screens/EditProfileScreen').default} />
+      <Stack.Screen name="AccountSettings" getComponent={() => require('../screens/AccountSettingsScreen').default} />
+      <Stack.Screen name="AccountControl" getComponent={() => require('../screens/AccountControlScreen').default} />
+      <Stack.Screen name="SavedAddresses" getComponent={() => require('../screens/SavedAddressesScreen').default} />
+      <Stack.Screen name="Payments" getComponent={() => require('../screens/PaymentsScreen').default} />
 
       {/* Phase 16 new screens */}
-      <Stack.Screen name="MakeOffer" component={MakeOfferScreen} />
-      <Stack.Screen name="PushNotifications" component={PushNotificationsScreen} />
-      <Stack.Screen name="Postage" component={PostageScreen} />
-      <Stack.Screen name="InviteFriends" component={InviteFriendsScreen} />
-      <Stack.Screen name="BalanceHistory" component={BalanceHistoryScreen} />
+      <Stack.Screen name="MakeOffer" getComponent={() => require('../screens/MakeOfferScreen').default} />
+      <Stack.Screen name="PushNotifications" getComponent={() => require('../screens/PushNotificationsScreen').default} />
+      <Stack.Screen name="Postage" getComponent={() => require('../screens/PostageScreen').default} />
+      <Stack.Screen name="InviteFriends" getComponent={() => require('../screens/InviteFriendsScreen').default} />
+      <Stack.Screen name="BalanceHistory" getComponent={() => require('../screens/BalanceHistoryScreen').default} />
 
       {/* Phase 17 new screens */}
-      <Stack.Screen name="AddBankAccount" component={AddBankAccountScreen} />
-      <Stack.Screen name="HelpSupport" component={HelpSupportScreen} />
+      <Stack.Screen name="AddBankAccount" getComponent={() => require('../screens/AddBankAccountScreen').default} />
+      <Stack.Screen name="HelpSupport" getComponent={() => require('../screens/HelpSupportScreen').default} />
 
       {/* Phase 18 new screens */}
-      <Stack.Screen name="OrderDetail" component={OrderDetailScreen} />
-      <Stack.Screen name="SellerFulfilment" component={SellerFulfilmentScreen} />
-      <Stack.Screen name="OrderReceipt" component={OrderReceiptScreen} />
+      <Stack.Screen name="OrderDetail" getComponent={() => require('../screens/OrderDetailScreen').default} />
+      <Stack.Screen name="SellerFulfilment" getComponent={() => require('../screens/SellerFulfilmentScreen').default} />
+      <Stack.Screen name="OrderReceipt" getComponent={() => require('../screens/OrderReceiptScreen').default} />
 
       {/* Phase 19 new screens */}
-      <Stack.Screen name="Checkout" component={CheckoutScreen} />
-      <Stack.Screen name="AddressForm" component={AddressFormScreen} />
-      <Stack.Screen name="Success" component={SuccessScreen} />
-      <Stack.Screen name="ManageListing" component={ManageListingScreen} />
-      <Stack.Screen name="Withdraw" component={WithdrawScreen} />
-      <Stack.Screen name="CategoryTree" component={CategoryTreeScreen} />
+      <Stack.Screen name="Checkout" getComponent={() => require('../screens/CheckoutScreen').default} />
+      <Stack.Screen name="AddressForm" getComponent={() => require('../screens/AddressFormScreen').default} />
+      <Stack.Screen name="Success" getComponent={() => require('../screens/SuccessScreen').default} />
+      <Stack.Screen name="ManageListing" getComponent={() => require('../screens/ManageListingScreen').default} />
+      <Stack.Screen name="Withdraw" getComponent={() => require('../screens/WithdrawScreen').default} />
+      <Stack.Screen name="CategoryTree" getComponent={() => require('../screens/CategoryTreeScreen').default} />
 
       {/* Phase 24 new screens */}
-      <Stack.Screen name="GlobalSearch" component={GlobalSearchScreen} />
+      <Stack.Screen name="GlobalSearch" getComponent={() => require('../screens/GlobalSearchScreen').default} />
 
       {/* Phase 25 new screens */}
-      <Stack.Screen name="Filter" component={FilterScreen} options={transparentSheetScreenOptions} />
-      <Stack.Screen name="ListingSuccess" component={ListingSuccessScreen} />
-      <Stack.Screen name="EditListing" component={EditListingScreen} options={modalScreenOptions} />
+      <Stack.Screen name="Filter" getComponent={() => require('../screens/FilterScreen').default} options={transparentSheetScreenOptions} />
+      <Stack.Screen name="ListingSuccess" getComponent={() => require('../screens/ListingSuccessScreen').default} />
+      <Stack.Screen name="EditListing" getComponent={() => require('../screens/EditListingScreen').default} options={modalScreenOptions} />
 
       {/* Phase 27 new screens */}
-      <Stack.Screen name="NotificationsList" component={NotificationsScreen} />
+      <Stack.Screen name="NotificationsList" getComponent={() => require('../screens/NotificationsScreen').default} />
 
       {/* Phase 28 new screens */}
-      <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
-      <Stack.Screen name="TwoFactorSetup" component={TwoFactorSetupScreen} />
-      <Stack.Screen name="WriteReview" component={WriteReviewScreen} options={modalScreenOptions} />
-      <Stack.Screen name="Report" component={ReportScreen} options={modalScreenOptions} />
-      <Stack.Screen name="SavedSearches" component={SavedSearchesScreen} />
+      <Stack.Screen name="ChangePassword" getComponent={() => require('../screens/ChangePasswordScreen').default} />
+      <Stack.Screen name="TwoFactorSetup" getComponent={() => require('../screens/TwoFactorSetupScreen').default} />
+      <Stack.Screen name="WriteReview" getComponent={() => require('../screens/WriteReviewScreen').default} options={modalScreenOptions} />
+      <Stack.Screen name="Report" getComponent={() => require('../screens/ReportScreen').default} options={modalScreenOptions} />
+      <Stack.Screen name="SavedSearches" getComponent={() => require('../screens/SavedSearchesScreen').default} />
 
       {/* Visual Search — full-screen camera viewfinder with its own header on results */}
-      <Stack.Screen name="VisualSearch" component={VisualSearchScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="VisualSearch" getComponent={() => require('../screens/VisualSearchScreen').default} options={{ headerShown: false }} />
 
       {/* Unified camera-first create screen — replaces the Create tab action sheet */}
-      <Stack.Screen name="CreateCamera" component={CreateCameraScreen} options={modalScreenOptions} />
+      <Stack.Screen name="CreateCamera" getComponent={() => require('../screens/CreateCameraScreen').default} options={modalScreenOptions} />
 
       {/* Explore / Creator screens */}
-      <Stack.Screen name="CreateLook" component={CreateLookRedirect} options={modalScreenOptions} />
-      <Stack.Screen name="CreatorStudio" component={CreatorStudioScreen} options={modalScreenOptions} />
-      <Stack.Screen name="CreatorDraftList" component={CreatorDraftListScreen} options={modalScreenOptions} />
-      <Stack.Screen name="OutfitBuilder" component={OutfitBuilderScreen} options={modalScreenOptions} />
-      <Stack.Screen name="CoOwnIssue" component={CoOwnIssueScreen} options={modalScreenOptions} />
+      <Stack.Screen name="CreateLook" getComponent={() => require('../screens/CreateLookRedirect').CreateLookRedirect} options={modalScreenOptions} />
+      <Stack.Screen name="CreatorStudio" getComponent={() => require('../creator').CreatorStudioScreen} options={modalScreenOptions} />
+      <Stack.Screen name="CreatorDraftList" getComponent={() => require('../creator/CreatorDraftListScreen').CreatorDraftListScreen} options={modalScreenOptions} />
+      <Stack.Screen name="OutfitBuilder" getComponent={() => require('../screens/OutfitBuilderScreen').default} options={modalScreenOptions} />
+      <Stack.Screen name="CoOwnIssue" getComponent={() => require('../screens/CoOwnIssueScreen').default} options={modalScreenOptions} />
       {/* UI-22R.6B — Experience elevation */}
-      <Stack.Screen name="LookDetail" component={LookDetailScreen} />
-      <Stack.Screen name="PulseFeed" component={PulseFeedScreen} />
-      <Stack.Screen name="ExploreCollection" component={ExploreCollectionScreen} />
-      <Stack.Screen name="StyleQuiz" component={StyleQuizScreen} options={modalScreenOptions} />
+      <Stack.Screen name="LookDetail" getComponent={() => require('../screens/LookDetailScreen').default} />
+      <Stack.Screen name="PulseFeed" getComponent={() => require('../screens/PulseFeedScreen').default} />
+      <Stack.Screen name="ExploreCollection" getComponent={() => require('../screens/ExploreCollectionScreen').default} />
+      <Stack.Screen name="StyleQuiz" getComponent={() => require('../screens/StyleQuizScreen').default} options={modalScreenOptions} />
 
       {/* Phase 13 — Settings integrity */}
-      <Stack.Screen name="ChatSettings" component={ChatSettingsScreen} />
-      <Stack.Screen name="ActiveSessions" component={ActiveSessionsScreen} />
-      <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} />
-      <Stack.Screen name="PrivacySettings" component={PrivacySettingsScreen} />
-      <Stack.Screen name="About" component={AboutScreen} />
-      <Stack.Screen name="MutedConversations" component={MutedConversationsScreen} />
-      <Stack.Screen name="ArchivedConversations" component={ArchivedConversationsScreen} />
-      <Stack.Screen name="ManageQuickReplies" component={ManageQuickRepliesScreen} />
+      <Stack.Screen name="ChatSettings" getComponent={() => require('../screens/ChatSettingsScreen').default} />
+      <Stack.Screen name="ActiveSessions" getComponent={() => require('../screens/ActiveSessionsScreen').default} />
+      <Stack.Screen name="BlockedUsers" getComponent={() => require('../screens/BlockedUsersScreen').default} />
+      <Stack.Screen name="PrivacySettings" getComponent={() => require('../screens/PrivacySettingsScreen').default} />
+      <Stack.Screen name="About" getComponent={() => require('../screens/AboutScreen').default} />
+      <Stack.Screen name="MutedConversations" getComponent={() => require('../screens/MutedConversationsScreen').default} />
+      <Stack.Screen name="ArchivedConversations" getComponent={() => require('../screens/ArchivedConversationsScreen').default} />
+      <Stack.Screen name="ManageQuickReplies" getComponent={() => require('../screens/ManageQuickRepliesScreen').default} />
 
       {/* VISUAL-15 — UI Architecture + Feature Depth */}
-      <Stack.Screen name="ConversationInfo" component={ConversationInfoScreen} />
-      <Stack.Screen name="MessageRequests" component={MessageRequestsScreen} />
-      <Stack.Screen name="NewMessage" component={NewMessageScreen} options={modalScreenOptions} />
-      <Stack.Screen name="SharedConversationMedia" component={SharedConversationMediaScreen} />
-      <Stack.Screen name="ManageCollectionItems" component={ManageCollectionItemsScreen} />
-      <Stack.Screen name="CreateCollection" component={CreateCollectionScreen} options={modalScreenOptions} />
-      <Stack.Screen name="OrderSupport" component={OrderSupportScreen} />
-      <Stack.Screen name="BuyerProtection" component={BuyerProtectionScreen} />
-      <Stack.Screen name="ConnectedAccounts" component={ConnectedAccountsScreen} />
-      <Stack.Screen name="EmailNotifications" component={EmailNotificationsScreen} />
-      <Stack.Screen name="AccessibilitySettings" component={AccessibilitySettingsScreen} />
-      <Stack.Screen name="CoOwnPriceAlerts" component={CoOwnPriceAlertsScreen} />
-      <Stack.Screen name="CoOwnTaxDocuments" component={CoOwnTaxDocumentsScreen} />
-      <Stack.Screen name="CoOwnRecurringOrders" component={CoOwnRecurringOrdersScreen} />
-      <Stack.Screen name="ChatMediaPreview" component={ChatMediaPreviewScreen} options={modalScreenOptions} />
+      <Stack.Screen name="ConversationInfo" getComponent={() => require('../screens/ConversationInfoScreen').default} />
+      <Stack.Screen name="MessageRequests" getComponent={() => require('../screens/MessageRequestsScreen').default} />
+      <Stack.Screen name="NewMessage" getComponent={() => require('../screens/NewMessageScreen').default} options={modalScreenOptions} />
+      <Stack.Screen name="SharedConversationMedia" getComponent={() => require('../screens/SharedConversationMediaScreen').default} />
+      <Stack.Screen name="ManageCollectionItems" getComponent={() => require('../screens/ManageCollectionItemsScreen').default} />
+      <Stack.Screen name="CreateCollection" getComponent={() => require('../screens/CreateCollectionScreen').default} options={modalScreenOptions} />
+      <Stack.Screen name="OrderSupport" getComponent={() => require('../screens/OrderSupportScreen').default} />
+      <Stack.Screen name="BuyerProtection" getComponent={() => require('../screens/BuyerProtectionScreen').default} />
+      <Stack.Screen name="ConnectedAccounts" getComponent={() => require('../screens/ConnectedAccountsScreen').default} />
+      <Stack.Screen name="EmailNotifications" getComponent={() => require('../screens/EmailNotificationsScreen').default} />
+      <Stack.Screen name="AccessibilitySettings" getComponent={() => require('../screens/AccessibilitySettingsScreen').default} />
+      <Stack.Screen name="CoOwnPriceAlerts" getComponent={() => require('../screens/CoOwnPriceAlertsScreen').default} />
+      <Stack.Screen name="CoOwnTaxDocuments" getComponent={() => require('../screens/CoOwnTaxDocumentsScreen').default} />
+      <Stack.Screen name="CoOwnRecurringOrders" getComponent={() => require('../screens/CoOwnRecurringOrdersScreen').default} />
+      <Stack.Screen name="ChatMediaPreview" getComponent={() => require('../screens/ChatMediaPreviewScreen').default} options={modalScreenOptions} />
       {/* UI-18 — Reference-perfect product UX */}
-      <Stack.Screen name="EditCollection" component={EditCollectionScreen} options={modalScreenOptions} />
-      <Stack.Screen name="SupportTicketDetail" component={SupportTicketDetailScreen} />
-      <Stack.Screen name="ResolutionCentre" component={ResolutionCentreScreen} />
+      <Stack.Screen name="EditCollection" getComponent={() => require('../screens/EditCollectionScreen').default} options={modalScreenOptions} />
+      <Stack.Screen name="SupportTicketDetail" getComponent={() => require('../screens/SupportTicketDetailScreen').default} />
+      <Stack.Screen name="ResolutionCentre" getComponent={() => require('../screens/ResolutionCentreScreen').default} />
       {/* UI-19 — Sell / Co-own / Chat marketplace UX */}
-      <Stack.Screen name="ListingPreview" component={ListingPreviewScreen} options={modalScreenOptions} />
-      <Stack.Screen name="TradeConfirm" component={TradeConfirmScreen} options={modalScreenOptions} />
+      <Stack.Screen name="ListingPreview" getComponent={() => require('../screens/ListingPreviewScreen').default} options={modalScreenOptions} />
+      <Stack.Screen name="TradeConfirm" getComponent={() => require('../screens/TradeConfirmScreen').default} options={modalScreenOptions} />
 
       {/* Diagnostic — dev only */}
       {__DEV__ && (
-        <Stack.Screen name="RuntimeSmokeTest" component={RuntimeSmokeTestScreen} />
+        <Stack.Screen name="RuntimeSmokeTest" getComponent={() => require('../screens/RuntimeSmokeTestScreen').default} />
       )}
     </Stack.Navigator>
   );
