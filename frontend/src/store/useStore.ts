@@ -6,6 +6,7 @@ import type { AuctionMarketItem, AuctionViewModel, CoOwnAsset } from '../data/tr
 import type { ChatBot, Conversation, Message as ConversationMessage } from '../data/mockData';
 import { MOCK_CHAT_BOTS, MOCK_CONVERSATIONS } from '../data/mockData';
 import { ENABLE_RUNTIME_MOCKS } from '../constants/runtimeFlags';
+import { setSentryUser } from '../platform/monitoring/sentry';
 import { updateUserAccountPreferences, updateUserPostagePreferences, updateUserPersonalisation, updateChatPrivacy } from '../services/accountApi';
 import { addToCoOwnWatchlist, removeFromCoOwnWatchlist } from '../services/marketApi';
 import {
@@ -514,10 +515,19 @@ export const useStore = create<StoreState>()(
   login: (user) => {
     set({ currentUser: user, isAuthenticated: true });
     persistLocalAuthSnapshot(user, get().twoFactorEnabled);
+    // Attach Sentry user context for crash attribution. Only authenticated
+    // users receive PII context; non-authenticated users stay unset.
+    setSentryUser({
+      id: user.id,
+      email: user.email ?? undefined,
+      username: user.username,
+    });
   },
   logout: () => {
     set({ currentUser: null, isAuthenticated: false, twoFactorEnabled: false });
     persistLocalAuthSnapshot(null, false);
+    // Scrub Sentry user context on logout so subsequent crashes are anonymous.
+    setSentryUser(null);
   },
   updateUserProfile: (updates) =>
     set((state) => {

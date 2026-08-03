@@ -24,6 +24,7 @@ import { BackendDataProvider } from './src/context/BackendDataContext';
 import { SettingsPreferencesProvider } from './src/context/SettingsPreferencesContext';
 import { ToastContainer } from './src/components/Toast';
 import { AppErrorBoundary, initSentry, ObserveRoot, markInteractive } from './src/platform/monitoring';
+import { registerAppNavigationRef } from './src/platform/monitoring/appNavigation';
 import { KeyboardProvider } from './src/platform/keyboard';
 import { ServerStateProvider, useMobileQueryLifecycle } from './src/platform/server';
 import { BrandedSplash } from './src/components/BrandedSplash';

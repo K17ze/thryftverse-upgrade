@@ -112,6 +112,48 @@ export function isSentryInitialised(): boolean {
   return sentryInitialised;
 }
 
+/**
+ * Returns true when a real Sentry client is bound (initialised with a DSN).
+ * Used by `setSentryUser` and other helpers to short-circuit when observability
+ * is unavailable so they never crash the app.
+ */
+export function isSentryAvailable(): boolean {
+  return sentryInitialised && sentryInstance !== SentryStub;
+}
+
+export interface SentryUser {
+  id: string;
+  email?: string | null;
+  username?: string | null;
+}
+
+/**
+ * Attach (or clear) the Sentry user context so crashes are attributable to a
+ * specific authenticated user. Pass `null` on logout to scrub the context.
+ *
+ * Privacy: only call this for authenticated users. Non-authenticated users
+ * must not have PII attached — leave the context unset for them.
+ *
+ * Observability must never crash the app, so all Sentry calls are guarded.
+ */
+export function setSentryUser(user: SentryUser | null): void {
+  if (!isSentryAvailable()) return;
+  try {
+    if (user) {
+      sentryInstance.setUser?.({
+        id: user.id,
+        ...(user.email ? { email: user.email } : {}),
+        ...(user.username ? { username: user.username } : {}),
+      });
+      sentryInstance.setTag?.('user.id', user.id);
+    } else {
+      sentryInstance.setUser?.(null);
+    }
+  } catch {
+    // Observability must never crash the app.
+  }
+}
+
 export function resetSentryForTesting(): void {
   sentryInstance = SentryStub;
   sentryInitialised = false;
