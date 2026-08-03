@@ -5,6 +5,7 @@ import {
   StyleSheet,
   Pressable,
   FlatList,
+  ScrollView,
   Image,
   ActivityIndicator,
   useWindowDimensions,
@@ -31,7 +32,7 @@ import { useHaptic } from '../hooks/useHaptic';
 // VisualSearchCamera), not inline code. This keeps the entry screen
 // thin and the camera component reusable.
 
-const GRID_COLUMNS = 3;
+const GRID_COLUMNS = 4;
 
 interface MediaAsset {
   id: string;
@@ -368,8 +369,8 @@ export function CreatorEntryScreen({
         />
       )}
 
-      {/* Bottom bar — blank canvas option */}
-      {selectedCount === 0 && (
+      {/* Bottom bar — blank canvas option or selected preview */}
+      {selectedCount === 0 ? (
         <LinearGradient
           colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.6)']}
           style={[styles.bottomBarGradient, { paddingBottom: insets.bottom + 8 }]}
@@ -377,6 +378,38 @@ export function CreatorEntryScreen({
           <Pressable style={styles.blankBtn} hitSlop={12} onPress={() => { haptic.light(); onBlankStart(); }}>
             <Ionicons name="create-outline" size={18} color="rgba(255,255,255,0.6)" />
             <Text style={styles.blankBtnText}>Blank canvas</Text>
+          </Pressable>
+        </LinearGradient>
+      ) : (
+        <LinearGradient
+          colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.8)']}
+          style={[styles.bottomBarGradient, { paddingBottom: insets.bottom + 8 }]}
+        >
+          {/* Selected preview bar */}
+          <View style={styles.selectedPreviewBar}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.selectedPreviewScroll}>
+              {assets.filter(a => selectedIds.has(a.id)).map((asset) => (
+                <View key={asset.id} style={styles.selectedThumbWrap}>
+                  <Image source={{ uri: asset.uri }} style={styles.selectedThumb} resizeMode="cover" />
+                  <Pressable
+                    style={styles.selectedThumbRemove}
+                    onPress={() => { haptic.selection(); toggleSelect(asset); }}
+                    accessibilityLabel="Remove from selection"
+                    hitSlop={8}
+                  >
+                    <Ionicons name="close" size={12} color="#fff" />
+                  </Pressable>
+                </View>
+              ))}
+            </ScrollView>
+            <Text style={styles.selectedCountText}>
+              {selectedCount} of {isPoster ? 10 : 6} selected
+            </Text>
+          </View>
+          <Pressable style={styles.addBtn} hitSlop={12} onPress={handleAddSelected} accessibilityLabel={isPoster ? 'Create story' : 'Create collage'}>
+            <Text style={styles.addBtnText}>
+              {isPoster ? 'Create Story' : 'Create Look'}
+            </Text>
           </Pressable>
         </LinearGradient>
       )}
@@ -547,5 +580,44 @@ const styles = StyleSheet.create({
     bottom: 0,
     alignItems: 'center',
     paddingTop: 16,
+  },
+  // Selected preview bar
+  selectedPreviewBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    width: '100%',
+    paddingHorizontal: 12,
+  },
+  selectedPreviewScroll: {
+    gap: 6,
+    alignItems: 'center',
+  },
+  selectedThumbWrap: {
+    position: 'relative',
+    width: 48,
+    height: 48,
+  },
+  selectedThumb: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+  },
+  selectedThumbRemove: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  selectedCountText: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 12,
+    fontFamily: Typography.family.medium,
+    marginLeft: 'auto',
   },
 });

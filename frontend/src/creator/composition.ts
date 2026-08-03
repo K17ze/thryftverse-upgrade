@@ -22,6 +22,9 @@ const MediaLayerPayloadSchema = z.object({
   contentFit: z.enum(['cover', 'contain', 'fill']).default('cover'),
   thumbnailUri: z.string().optional(),
   videoDurationMs: z.number().nullable().optional(),
+  filterId: z.string().optional(),
+  trimStartMs: z.number().min(0).optional(),
+  trimEndMs: z.number().min(0).optional(),
   opacity: z.number().min(0).max(1).default(1),
 });
 
@@ -47,7 +50,10 @@ const LookLayerPayloadSchema = z.object({
 
 const VoteLayerPayloadSchema = z.object({
   question: z.string().min(1).max(100),
-  options: z.array(z.object({ id: z.string(), label: z.string().min(1).max(50) })).length(2),
+  options: z.array(z.object({ id: z.string(), label: z.string().min(1).max(50) })).min(2).max(4),
+  votes: z.array(z.number()).optional(),
+  timerMs: z.number().min(1000).max(604800000).optional(),
+  backgroundColor: z.string().optional(),
 });
 
 // Quiz sticker — multiple-choice with a correct answer (Instagram 2026 parity)
@@ -56,6 +62,7 @@ const QuizLayerPayloadSchema = z.object({
   options: z.array(z.object({ id: z.string(), label: z.string().min(1).max(50) })).min(2).max(4),
   correctOptionId: z.string().min(1),
   emoji: z.string().default('🎯'),
+  timerMs: z.number().min(1000).max(604800000).optional(),
 });
 
 // Question box sticker — open-ended text responses (Instagram 2026 parity)
@@ -64,6 +71,7 @@ const QuestionLayerPayloadSchema = z.object({
   placeholder: z.string().max(80).default('Type something...'),
   backgroundColor: z.string().default('#9b0202'),
   textColor: z.string().default('#ffffff'),
+  timerMs: z.number().min(1000).max(604800000).optional(),
 });
 
 // Emoji slider sticker — intensity measurement (Instagram 2026 parity)
@@ -123,8 +131,9 @@ const WeatherLayerPayloadSchema = z.object({
 });
 
 const DecorativeLayerPayloadSchema = z.object({
-  shape: z.enum(['circle', 'square', 'line', 'arrow', 'star', 'heart']),
+  shape: z.enum(['circle', 'square', 'line', 'arrow', 'star', 'heart', 'triangle', 'hexagon']),
   color: z.string().default('#ffffff'),
+  fillColor: z.string().optional(),
   opacity: z.number().min(0).max(1).default(1),
 });
 
@@ -158,6 +167,9 @@ const MusicLayerPayloadSchema = z.object({
   artworkUrl: z.string().optional(),
   previewUrl: z.string().optional(),
   trackId: z.string().optional(),
+  startOffsetMs: z.number().min(0).optional(),
+  durationMs: z.number().min(1000).optional(),
+  isExplicit: z.boolean().optional(),
   opacity: z.number().min(0).max(1).default(1),
 });
 

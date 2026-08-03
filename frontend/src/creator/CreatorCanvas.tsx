@@ -116,6 +116,7 @@ export function CreatorCanvas({
         <LayerRenderer
           key={layer.id}
           layer={layer}
+          siblingLayers={visibleLayers.filter((l) => l.id !== layer.id)}
           canvasWidth={canvasWidth}
           canvasHeight={canvasHeight}
           mode={mode}
@@ -173,6 +174,7 @@ function EmptyCanvasState({ colors }: { colors: ReturnType<typeof useAppTheme>['
 
 interface LayerRendererProps {
   layer: CreatorLayer;
+  siblingLayers: CreatorLayer[];
   canvasWidth: number;
   canvasHeight: number;
   mode: 'edit' | 'preview' | 'view';
@@ -193,6 +195,7 @@ function triggerHaptic() {
 
 const LayerRenderer = React.memo(function LayerRenderer({
   layer,
+  siblingLayers,
   canvasWidth,
   canvasHeight,
   mode,
@@ -212,6 +215,9 @@ const LayerRenderer = React.memo(function LayerRenderer({
   const startScale = useSharedValue(1);
   const startRotation = useSharedValue(0);
   const [showGuides, setShowGuides] = useState(false);
+  // Smart alignment guides — vertical/horizontal pixel positions where the
+  // dragged layer's edges/centre align with a sibling's edges/centre.
+  const [smartGuides, setSmartGuides] = useState<{ vertical: number[]; horizontal: number[] }>({ vertical: [], horizontal: [] });
 
   // Selection animation: border + handles fade/scale in with spring
   const selectionOpacity = useSharedValue(0);
@@ -281,6 +287,7 @@ const LayerRenderer = React.memo(function LayerRenderer({
 
     if (snappedX || snappedY) triggerHaptic();
     setShowGuides(false);
+    setSmartGuides({ vertical: [], horizontal: [] });
 
     onTransformChange?.(layer.id, { x: normX, y: normY });
   }, [canvasWidth, canvasHeight, layer.id, layer.width, layer.height, layer.scale, onTransformChange, translateX, translateY]);
@@ -427,6 +434,65 @@ const LayerRenderer = React.memo(function LayerRenderer({
 
   const content = renderLayerContent(layer, layer.width * canvasWidth, layer.height * canvasHeight);
 
+  // Smart alignment guides: while dragging, detect when this layer's
+  // left/right/centre aligns with a sibling's left/right/centre (vertical
+  // guide) or top/bottom/centre (horizontal guide). Computed on the UI
+  // thread from the live translate shared values and committed sibling
+  // geometry, then mirrored to JS state for rendering.
+  const SMART_GUIDE_THRESHOLD_PX = 4;
+  const computeSmartGuides = useCallback(
+    (cx: number, cy: number) => {
+      const halfW = (layer.width * layer.scale * canvasWidth) / 2;
+      const halfH = (layer.height * layer.scale * canvasHeight) / 2;
+      const myLeft = cx - halfW;
+      const myRight = cx + halfW;
+      const myCenterX = cx;
+      const myTop = cy - halfH;
+      const myBottom = cy + halfH;
+      const myCenterY = cy;
+      const vertical = new Set<number>();
+      const horizontal = new Set<number>();
+      for (const sib of siblingLayers) {
+        const sHalfW = (sib.width * sib.scale * canvasWidth) / 2;
+        const sHalfH = (sib.height * sib.scale * canvasHeight) / 2;
+        const sCx = sib.x * canvasWidth;
+        const sCy = sib.y * canvasHeight;
+        const sLeft = sCx - sHalfW;
+        const sRight = sCx + sHalfW;
+        const sCenterX = sCx;
+        const sTop = sCy - sHalfH;
+        const sBottom = sCy + sHalfH;
+        const sCenterY = sCy;
+        const xCandidates = [myLeft, myRight, myCenterX];
+        const xTargets = [sLeft, sRight, sCenterX];
+        for (const mc of xCandidates) {
+          for (const st of xTargets) {
+            if (Math.abs(mc - st) < SMART_GUIDE_THRESHOLD_PX) vertical.add(st);
+          }
+        }
+        const yCandidates = [myTop, myBottom, myCenterY];
+        const yTargets = [sTop, sBottom, sCenterY];
+        for (const mc of yCandidates) {
+          for (const st of yTargets) {
+            if (Math.abs(mc - st) < SMART_GUIDE_THRESHOLD_PX) horizontal.add(st);
+          }
+        }
+      }
+      setSmartGuides({ vertical: Array.from(vertical), horizontal: Array.from(horizontal) });
+    },
+    [layer.width, layer.height, layer.scale, canvasWidth, canvasHeight, siblingLayers],
+  );
+
+  useAnimatedReaction(
+    () => ({ x: translateX.value, y: translateY.value }),
+    (pos) => {
+      if (showGuides) {
+        runOnJS(computeSmartGuides)(pos.x, pos.y);
+      }
+    },
+    [showGuides, computeSmartGuides],
+  );
+
   // Per-type corner radius: media = 0 (full-bleed), text = conditional,
   // product/mention/look/vote = 8px (pill content), decorative = 0
   const layerRadius = getLayerRadius(layer);
@@ -481,7 +547,7 @@ const LayerRenderer = React.memo(function LayerRenderer({
               <Text style={[styles.gestureBadgeText, { color: colors.textPrimary }]}>{gestureBadge}</Text>
             </View>
           )}
-          {showGuides && <AlignmentGuides canvasWidth={canvasWidth} canvasHeight={canvasHeight} colors={colors} />}
+          {showGuides && <AlignmentGuides canvasWidth={canvasWidth} canvasHeight={canvasHeight} colors={colors} smartGuides={smartGuides} />}
         </Reanimated.View>
       </GestureDetector>
     );
@@ -576,7 +642,7 @@ function renderLayerContent(layer: CreatorLayer, width: number, height: number):
     case 'countdown':
       return <CountdownLayerContent layer={layer} />;
     case 'decorative':
-      return <DecorativeLayerContent layer={layer} />;
+      return <DecorativeLayerContent layer={layer} width={width} height={height} />;
     case 'draw':
       return <DrawLayerContent layer={layer} width={width} height={height} />;
     case 'gif':
@@ -917,13 +983,29 @@ function LookLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'loo
 
 function VoteLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'vote' }> }) {
   const { payload } = layer;
+  const hasTimer = payload.timerMs !== undefined && payload.timerMs > 0;
+  const timerSeconds = hasTimer ? Math.round(payload.timerMs! / 1000) : 0;
+  const timerLabel = timerSeconds >= 3600
+    ? `${Math.floor(timerSeconds / 3600)}h`
+    : timerSeconds >= 60
+      ? `${Math.floor(timerSeconds / 60)}m`
+      : `${timerSeconds}s`;
+
   return (
-    <View style={voteStyles.container}>
-      <Text style={voteStyles.question}>{payload.question}</Text>
+    <View style={[voteStyles.container, payload.backgroundColor && { backgroundColor: payload.backgroundColor }]}>
+      <View style={voteStyles.headerRow}>
+        <Text style={voteStyles.question}>{payload.question}</Text>
+        {hasTimer && (
+          <View style={voteStyles.timerBadge}>
+            <Ionicons name="timer-outline" size={10} color="#fff" />
+            <Text style={voteStyles.timerText}>{timerLabel}</Text>
+          </View>
+        )}
+      </View>
       <View style={voteStyles.optionsRow}>
-        {payload.options.map((opt, i) => (
-          <View key={opt.id} style={[voteStyles.option, i === 0 && voteStyles.optionFirst]}>
-            <Text style={voteStyles.optionText}>{opt.label}</Text>
+        {payload.options.map((opt) => (
+          <View key={opt.id} style={voteStyles.option}>
+            <Text style={voteStyles.optionText} numberOfLines={1}>{opt.label}</Text>
           </View>
         ))}
       </View>
@@ -1042,27 +1124,105 @@ function CountdownLayerContent({ layer }: { layer: Extract<CreatorLayer, { type:
   );
 }
 
-function DecorativeLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'decorative' }> }) {
+function DecorativeLayerContent({ layer, width, height }: { layer: Extract<CreatorLayer, { type: 'decorative' }>; width: number; height: number }) {
+  const { colors } = useAppTheme();
   const { payload } = layer;
-  const baseStyle: any = {
-    width: '100%',
-    height: '100%',
-    backgroundColor: payload.color,
-    opacity: payload.opacity,
+  const fillColor = payload.fillColor ?? colors.brand;
+  const subtleShadow = {
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   };
+  const iconSize = Math.min(width, height);
+
   switch (payload.shape) {
     case 'circle':
-      return <View style={[baseStyle, { borderRadius: 999 }]} />;
+      return (
+        <View
+          style={{
+            width: '100%',
+            height: '100%',
+            borderRadius: width / 2,
+            backgroundColor: fillColor,
+            opacity: payload.opacity,
+            ...subtleShadow,
+          }}
+        />
+      );
     case 'square':
-      return <View style={[baseStyle, { borderRadius: Radius.sm }]} />;
+      return (
+        <View
+          style={{
+            width: '100%',
+            height: '100%',
+            borderRadius: 8,
+            backgroundColor: fillColor,
+            opacity: payload.opacity,
+            ...subtleShadow,
+          }}
+        />
+      );
     case 'line':
-      return <View style={[baseStyle, { height: 2, marginTop: '50%' }]} />;
+      return (
+        <View
+          style={{
+            width: '100%',
+            height: 4,
+            borderRadius: 2,
+            backgroundColor: fillColor,
+            opacity: payload.opacity,
+            marginTop: height / 2 - 2,
+          }}
+        />
+      );
     case 'arrow':
-      return <Ionicons name="arrow-forward" size={24} color={payload.color} style={{ opacity: payload.opacity }} />;
+      return (
+        <View style={{ width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center', opacity: payload.opacity }}>
+          <Ionicons
+            name="arrow-up"
+            size={iconSize}
+            color={fillColor}
+            style={{ transform: [{ rotate: `${layer.rotation}deg` }] }}
+          />
+        </View>
+      );
     case 'star':
-      return <Ionicons name="star" size={24} color={payload.color} style={{ opacity: payload.opacity }} />;
+      return (
+        <View style={{ width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center', opacity: payload.opacity, ...subtleShadow }}>
+          <Ionicons name="star" size={iconSize} color={fillColor} />
+        </View>
+      );
     case 'heart':
-      return <Ionicons name="heart" size={24} color={payload.color} style={{ opacity: payload.opacity }} />;
+      return (
+        <View style={{ width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center', opacity: payload.opacity, ...subtleShadow }}>
+          <Ionicons name="heart" size={iconSize} color={fillColor} />
+        </View>
+      );
+    case 'triangle':
+      return (
+        <View
+          style={{
+            width: 0,
+            height: 0,
+            borderLeftWidth: width / 2,
+            borderRightWidth: width / 2,
+            borderBottomWidth: height,
+            borderLeftColor: 'transparent',
+            borderRightColor: 'transparent',
+            borderBottomColor: fillColor,
+            opacity: payload.opacity,
+            alignSelf: 'center',
+          }}
+        />
+      );
+    case 'hexagon':
+      return (
+        <View style={{ width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center', opacity: payload.opacity, ...subtleShadow }}>
+          <Ionicons name="stop-outline" size={iconSize * 0.9} color={fillColor} />
+        </View>
+      );
     default:
       return null;
   }
@@ -1482,14 +1642,16 @@ function AlignmentGuides({
   canvasWidth,
   canvasHeight,
   colors,
+  smartGuides,
 }: {
   canvasWidth: number;
   canvasHeight: number;
   colors: ReturnType<typeof useAppTheme>['colors'];
+  smartGuides?: { vertical: number[]; horizontal: number[] };
 }) {
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {/* Horizontal centre line — 1.5px, brand color at 40% opacity */}
+      {/* Horizontal centre line — 1.5px, brand color at 50% opacity */}
       <View style={{
         position: 'absolute',
         left: 0,
@@ -1497,7 +1659,7 @@ function AlignmentGuides({
         top: canvasHeight / 2 - 0.75,
         height: 1.5,
         backgroundColor: colors.brand,
-        opacity: 0.4,
+        opacity: 0.5,
       }} />
       {/* Vertical centre line */}
       <View style={{
@@ -1507,13 +1669,32 @@ function AlignmentGuides({
         left: canvasWidth / 2 - 0.75,
         width: 1.5,
         backgroundColor: colors.brand,
-        opacity: 0.4,
+        opacity: 0.5,
       }} />
-      {/* Safe-zone edges — 1px dashed, muted at 30% opacity */}
-      <View style={{ position: 'absolute', left: 0, right: 0, top: canvasHeight * SAFE_MARGIN, height: 1, backgroundColor: colors.textMuted, opacity: 0.3 }} />
-      <View style={{ position: 'absolute', left: 0, right: 0, bottom: canvasHeight * SAFE_MARGIN, height: 1, backgroundColor: colors.textMuted, opacity: 0.3 }} />
-      <View style={{ position: 'absolute', top: 0, bottom: 0, left: canvasWidth * SAFE_MARGIN, width: 1, backgroundColor: colors.textMuted, opacity: 0.3 }} />
-      <View style={{ position: 'absolute', top: 0, bottom: 0, right: canvasWidth * SAFE_MARGIN, width: 1, backgroundColor: colors.textMuted, opacity: 0.3 }} />
+      {/* Center dot at intersection */}
+      <View style={{
+        position: 'absolute',
+        left: canvasWidth / 2 - 3,
+        top: canvasHeight / 2 - 3,
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: colors.brand,
+        opacity: 0.6,
+      }} />
+      {/* Safe-zone edges — 1px dashed, muted at 25% opacity */}
+      <View style={{ position: 'absolute', left: 0, right: 0, top: canvasHeight * SAFE_MARGIN, height: 1, backgroundColor: colors.textMuted, opacity: 0.25 }} />
+      <View style={{ position: 'absolute', left: 0, right: 0, bottom: canvasHeight * SAFE_MARGIN, height: 1, backgroundColor: colors.textMuted, opacity: 0.25 }} />
+      <View style={{ position: 'absolute', top: 0, bottom: 0, left: canvasWidth * SAFE_MARGIN, width: 1, backgroundColor: colors.textMuted, opacity: 0.25 }} />
+      <View style={{ position: 'absolute', top: 0, bottom: 0, right: canvasWidth * SAFE_MARGIN, width: 1, backgroundColor: colors.textMuted, opacity: 0.25 }} />
+      {/* Smart guides — vertical */}
+      {(smartGuides?.vertical ?? []).map((x, i) => (
+        <View key={`v${i}`} style={{ position: 'absolute', top: 0, bottom: 0, left: x, width: 1, backgroundColor: colors.brand, opacity: 0.7 }} />
+      ))}
+      {/* Smart guides — horizontal */}
+      {(smartGuides?.horizontal ?? []).map((y, i) => (
+        <View key={`h${i}`} style={{ position: 'absolute', left: 0, right: 0, top: y, height: 1, backgroundColor: colors.brand, opacity: 0.7 }} />
+      ))}
     </View>
   );
 }
@@ -1774,15 +1955,39 @@ const voteStyles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+  },
   question: {
     color: '#fff',
     fontFamily: Typography.family.semibold,
     fontSize: Type.body.size,
     textAlign: 'center',
+    flexShrink: 1,
+  },
+  timerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  timerText: {
+    color: '#fff',
+    fontFamily: Typography.family.medium,
+    fontSize: 10,
   },
   optionsRow: {
     flexDirection: 'row',
     gap: 6,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
   },
   option: {
     backgroundColor: 'rgba(255,255,255,0.18)',
@@ -1791,6 +1996,8 @@ const voteStyles = StyleSheet.create({
     paddingHorizontal: Space.md,
     alignItems: 'center',
     minWidth: 60,
+    flex: 1,
+    maxWidth: '48%',
   },
   optionFirst: {
     // Both options equal weight — no visual hierarchy difference
