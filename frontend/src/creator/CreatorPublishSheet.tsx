@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -43,8 +43,18 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId }: Creator
   const [errorMessage, setErrorMessage] = useState('');
   const [publishedId, setPublishedId] = useState('');
   const [uploadProgress, setUploadProgress] = useState('');
+  const [uploadFraction, setUploadFraction] = useState(0);
+  const [uploadCompleted, setUploadCompleted] = useState(0);
+  const [uploadTotal, setUploadTotal] = useState(0);
   const publishGuardRef = useRef(new PublishGuard());
   const styles = useMemo(() => createStyles(colors), [colors]);
+
+  // Haptic feedback when entering the success state
+  useEffect(() => {
+    if (stage === 'success') {
+      haptic.success();
+    }
+  }, [stage, haptic]);
 
   const handleClose = useCallback(() => {
     if (stage === 'publishing' || stage === 'uploading') return;
@@ -52,6 +62,9 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId }: Creator
     setStage('review');
     setErrorMessage('');
     setUploadProgress('');
+    setUploadFraction(0);
+    setUploadCompleted(0);
+    setUploadTotal(0);
     publishGuardRef.current.reset();
     onClose();
   }, [stage, haptic, onClose]);
@@ -79,6 +92,9 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId }: Creator
         workingDoc = await uploadAllLocalMedia(document, (progress) => {
           if (progress.total > 0) {
             setUploadProgress(`Uploading media ${progress.completed + 1} of ${progress.total}`);
+            setUploadTotal(progress.total);
+            setUploadCompleted(progress.completed + 1);
+            setUploadFraction((progress.completed + 1) / progress.total);
           }
         });
       }
@@ -163,7 +179,14 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId }: Creator
         {stage === 'uploading' && (
           <View style={styles.centerState}>
             <ActivityIndicator size="large" color={colors.brand} />
-            <Text style={styles.centerStateText}>{uploadProgress || 'Uploading media...'}</Text>
+            <Text style={styles.centerStateText}>
+              {uploadTotal > 0
+                ? `Uploading ${uploadCompleted} of ${uploadTotal}...`
+                : uploadProgress || 'Uploading media...'}
+            </Text>
+            <View style={styles.progressBarTrack}>
+              <View style={[styles.progressBarFill, { width: `${Math.round(uploadFraction * 100)}%` }]} />
+            </View>
           </View>
         )}
 
@@ -176,12 +199,14 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId }: Creator
 
         {stage === 'success' && (
           <View style={styles.centerState}>
-            <Ionicons name="checkmark-circle" size={48} color={colors.success} />
-            <Text style={styles.centerStateTitle}>Published!</Text>
-            <Text style={styles.centerStateText}>Your {document.type} is now live.</Text>
+            <View style={styles.successCircle}>
+              <Ionicons name="checkmark" size={32} color="#fff" />
+            </View>
+            <Text style={styles.successTitle}>Published!</Text>
+            <Text style={styles.centerStateText}>Your content is now live</Text>
             <Pressable
               onPress={() => {
-                haptic.success();
+                haptic.selection();
                 onClose();
                 setStage('review');
                 if (document.type === 'look') {
@@ -190,12 +215,22 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId }: Creator
                   navigation.replace('PosterViewer', { storyId: publishedId });
                 }
               }}
-              style={styles.retryBtn}
+              style={styles.viewBtn}
               accessibilityLabel="View published content"
               accessibilityRole="button"
               hitSlop={16}
             >
-              <Text style={styles.retryBtnText}>View</Text>
+              <Text style={styles.viewBtnText}>View</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => { haptic.selection(); }}
+              style={styles.shareBtn}
+              accessibilityLabel="Share published content"
+              accessibilityRole="button"
+              hitSlop={16}
+            >
+              <Ionicons name="share-outline" size={18} color={colors.brand} />
+              <Text style={styles.shareBtnText}>Share</Text>
             </Pressable>
           </View>
         )}
@@ -236,8 +271,8 @@ function PublishReview({
   const canvasWidth = 280;
   const canvasHeight = Math.floor(canvasWidth / document.canvas.aspectRatio);
   const coverThumbWidth = 100;
-  const coverThumbHeight = Math.floor(coverThumbWidth / document.canvas.aspectRatio);
-  const [saveToCameraRoll, setSaveToCameraRoll] = useState(false);
+  const coverThumbHeight = 125;
+  const [saveToCameraRoll, setSaveToCameraRoll] = useState(true);
   const [coverPageIndex, setCoverPageIndex] = useState(0);
 
   return (
@@ -288,7 +323,7 @@ function PublishReview({
                 />
                 {coverPageIndex === i && (
                   <View style={styles.coverBadge}>
-                    <Ionicons name="star" size={12} color="#fff" />
+                    <Ionicons name="checkmark" size={12} color="#fff" />
                   </View>
                 )}
               </Pressable>
@@ -299,23 +334,26 @@ function PublishReview({
 
       {/* Caption */}
       <Text style={styles.sectionLabel}>Caption</Text>
-      <TextInput
-        style={styles.textInput}
-        placeholder="Write a caption..."
-        placeholderTextColor={colors.textMuted}
-        value={document.metadata.caption}
-        onChangeText={(v) => updateMetadata({ caption: v })}
-        multiline
-        maxLength={500}
-        accessibilityLabel="Caption"
-      />
+      <View style={styles.captionCard}>
+        <TextInput
+          style={styles.captionInput}
+          placeholder="Write a caption..."
+          placeholderTextColor={colors.textMuted}
+          value={document.metadata.caption}
+          onChangeText={(v) => updateMetadata({ caption: v })}
+          multiline
+          maxLength={500}
+          accessibilityLabel="Caption"
+        />
+        <Text style={styles.captionCount}>{document.metadata.caption.length}/500</Text>
+      </View>
 
       {/* Visibility — 3-option segmented control (Instagram Close Friends pattern) */}
       <Text style={styles.sectionLabel}>Audience</Text>
       <View style={styles.audienceRow}>
         {[
           { key: 'public' as const, label: 'Public', icon: 'globe-outline' },
-          { key: 'closeFriends' as const, label: 'Close', icon: 'people-outline' },
+          { key: 'closeFriends' as const, label: 'Close Friends', icon: 'people-outline' },
           { key: 'private' as const, label: 'Only Me', icon: 'lock-closed-outline' },
         ].map((opt) => {
           const isActive = document.metadata.visibility === opt.key;
@@ -328,24 +366,24 @@ function PublishReview({
               accessibilityRole="button"
               hitSlop={8}
             >
-              <Ionicons name={opt.icon as any} size={16} color={isActive ? colors.brand : colors.textSecondary} />
-              <Text style={[styles.audiencePillText, isActive && { color: colors.brand }]}>{opt.label}</Text>
+              <Ionicons name={opt.icon as any} size={16} color={isActive ? '#fff' : colors.textSecondary} />
+              <Text style={[styles.audiencePillText, isActive && styles.audiencePillTextActive]}>{opt.label}</Text>
             </Pressable>
           );
         })}
       </View>
 
       {/* Save to Camera Roll */}
-      <View style={styles.toggleRow}>
+      <View style={styles.cameraRollRow}>
         <View style={styles.toggleLabelWrap}>
           <Ionicons name="download-outline" size={18} color={colors.textSecondary} />
-          <Text style={styles.toggleLabel}>Save to Camera Roll</Text>
+          <Text style={styles.toggleLabel}>Save to camera roll</Text>
         </View>
         <Switch
           value={saveToCameraRoll}
           onValueChange={(v) => { haptic.selection(); setSaveToCameraRoll(v); }}
-          trackColor={{ false: colors.surfaceAlt, true: `${colors.brand}40` }}
-          thumbColor={saveToCameraRoll ? colors.brand : colors.textMuted}
+          trackColor={{ false: colors.surfaceAlt, true: colors.brand }}
+          thumbColor={saveToCameraRoll ? '#fff' : colors.textMuted}
           accessibilityLabel="Save to camera roll"
         />
       </View>
@@ -508,6 +546,25 @@ function createStyles(colors: ThemeColors) {
       color: colors.textPrimary,
       minHeight: 60,
     },
+    captionCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      padding: Space.md,
+    },
+    captionInput: {
+      fontSize: Type.body.size,
+      color: colors.textPrimary,
+      minHeight: 80,
+      textAlignVertical: 'top',
+      padding: 0,
+    },
+    captionCount: {
+      alignSelf: 'flex-end',
+      fontFamily: Typography.family.medium,
+      fontSize: Type.meta.size,
+      color: colors.textMuted,
+      marginTop: Space.xs,
+    },
     toggleRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -523,10 +580,18 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       gap: Space.sm,
     },
+    cameraRollRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      padding: Space.md,
+    },
     // ── Audience segmented control ──
     audienceRow: {
       flexDirection: 'row',
-      gap: Space.xs,
+      gap: 8,
       marginBottom: Space.sm,
     },
     audiencePill: {
@@ -534,21 +599,21 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: 6,
-      paddingVertical: Space.sm + 2,
-      borderRadius: Radius.md,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
+      gap: 8,
+      padding: Space.md,
+      borderRadius: 12,
       backgroundColor: colors.surfaceAlt,
     },
     audiencePillActive: {
-      borderColor: colors.brand,
-      backgroundColor: `${colors.brand}12`,
+      backgroundColor: colors.brand,
     },
     audiencePillText: {
       fontFamily: Typography.family.medium,
       fontSize: Type.body.size,
       color: colors.textSecondary,
+    },
+    audiencePillTextActive: {
+      color: '#fff',
     },
     // ── Cover selection ──
     coverHint: {
@@ -562,14 +627,19 @@ function createStyles(colors: ThemeColors) {
     },
     coverContainer: {
       paddingHorizontal: Space.md,
-      gap: Space.sm,
+      gap: 10,
       paddingBottom: Space.xs,
     },
     coverThumbWrap: {
-      borderRadius: Radius.sm,
+      borderRadius: 12,
       overflow: 'hidden',
       borderWidth: 2,
       borderColor: 'transparent',
+      elevation: 2,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.08,
+      shadowRadius: 4,
     },
     coverThumbActive: {
       borderColor: colors.brand,
@@ -669,6 +739,19 @@ function createStyles(colors: ThemeColors) {
       color: colors.textSecondary,
       textAlign: 'center',
     },
+    progressBarTrack: {
+      width: '80%',
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: colors.surfaceAlt,
+      overflow: 'hidden',
+      marginTop: Space.xs,
+    },
+    progressBarFill: {
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: colors.brand,
+    },
     retryBtn: {
       paddingHorizontal: Space.md + 4,
       height: 40,
@@ -681,6 +764,49 @@ function createStyles(colors: ThemeColors) {
     retryBtnText: {
       color: colors.textInverse,
       fontFamily: Typography.family.semibold,
+      fontSize: Type.body.size,
+    },
+    successCircle: {
+      width: 72,
+      height: 72,
+      borderRadius: 36,
+      backgroundColor: colors.success,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    successTitle: {
+      fontFamily: Typography.family.bold,
+      fontSize: Type.subtitle.size,
+      color: colors.textPrimary,
+    },
+    viewBtn: {
+      width: '80%',
+      paddingVertical: Space.md,
+      borderRadius: 12,
+      backgroundColor: colors.brand,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginTop: Space.sm,
+    },
+    viewBtnText: {
+      color: colors.textInverse,
+      fontFamily: Typography.family.semibold,
+      fontSize: Type.body.size,
+    },
+    shareBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      width: '80%',
+      paddingVertical: Space.md,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.brand,
+    },
+    shareBtnText: {
+      color: colors.brand,
+      fontFamily: Typography.family.medium,
       fontSize: Type.body.size,
     },
   });

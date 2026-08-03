@@ -26,7 +26,7 @@ import { createStableId } from '../utils/createStableId';
 import { SheetContainer, PressScale } from './CreatorAnimations';
 import { useHaptic } from '../hooks/useHaptic';
 import type { CreatorLayer } from './composition';
-import { Canvas, Path, Skia } from '@shopify/react-native-skia';
+import { Canvas, Path, Skia, DashPathEffect } from '@shopify/react-native-skia';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Reanimated, { useSharedValue, runOnJS } from 'react-native-reanimated';
 
@@ -877,6 +877,7 @@ const TEXT_STYLES: Array<{ key: string; label: string }> = [
   { key: 'poster', label: 'Poster' },
   { key: 'squeeze', label: 'Squeeze' },
   { key: 'signature', label: 'Signature' },
+  { key: 'neon', label: 'Neon' },
 ];
 
 // Text effect types (Instagram 2025-2026)
@@ -921,6 +922,7 @@ const TEXT_STYLE_PREVIEW: Record<string, { fontFamily: string; fontSize: number;
   poster: { fontFamily: Typography.family.bold, fontSize: Type.title.size - 4, lineHeight: (Type.title.size - 4) * 1.1 },
   squeeze: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, lineHeight: Type.body.size * 1.1 },
   signature: { fontFamily: Typography.family.regular, fontSize: Type.bodyEmphasis.size, lineHeight: Type.bodyEmphasis.size * 1.4 },
+  neon: { fontFamily: Typography.family.bold, fontSize: Type.bodyEmphasis.size + 4, lineHeight: (Type.bodyEmphasis.size + 4) * 1.2 },
 };
 
 function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
@@ -981,6 +983,11 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               styles.textPreviewText,
               { color: textColor, textAlign: alignment },
               TEXT_STYLE_PREVIEW[textStyle] ?? TEXT_STYLE_PREVIEW.clean,
+              textStyle === 'neon' && {
+                textShadowColor: textColor,
+                textShadowOffset: { width: 0, height: 0 },
+                textShadowRadius: 12,
+              },
             ]}
             numberOfLines={3}
           >
@@ -1017,6 +1024,11 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                   styles.styleOptionText,
                   textStyle === s.key && styles.styleOptionTextActive,
                   TEXT_STYLE_PREVIEW[s.key] ?? TEXT_STYLE_PREVIEW.clean,
+                  s.key === 'neon' && {
+                    textShadowColor: textStyle === 'neon' ? colors.brand : textColor,
+                    textShadowOffset: { width: 0, height: 0 },
+                    textShadowRadius: 8,
+                  },
                 ]}
               >
                 {s.label}
@@ -1091,50 +1103,70 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
         {/* Text effect — Instagram 2025-2026: shadow, neon, outline, glow */}
         <Text style={styles.pickerSectionLabel}>Effect</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.styleScroll}>
-          {TEXT_EFFECTS.map((e) => (
-            <Pressable
-              key={e.key}
-              onPress={() => { haptic.selection(); setTextEffect(e.key); }}
-              style={[styles.styleOption, textEffect === e.key && styles.styleOptionActive]}
-              accessibilityLabel={`Text effect ${e.label}`}
-              accessibilityRole="button"
-              hitSlop={12}
-            >
-              <Ionicons name={e.icon as any} size={18} color={textEffect === e.key ? colors.brand : colors.textSecondary} />
-              <Text
-                style={[
-                  styles.styleOptionText,
-                  textEffect === e.key && styles.styleOptionTextActive,
+          {TEXT_EFFECTS.map((e) => {
+            const isActive = textEffect === e.key;
+            const sampleColor = isActive ? colors.brand : colors.textPrimary;
+            return (
+              <Pressable
+                key={e.key}
+                onPress={() => { haptic.selection(); setTextEffect(e.key); }}
+                style={({ pressed }) => [
+                  styles.effectChip,
+                  isActive && styles.effectChipActive,
+                  pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
                 ]}
+                accessibilityLabel={`Text effect ${e.label}`}
+                accessibilityRole="button"
+                hitSlop={12}
               >
-                {e.label}
-              </Text>
-            </Pressable>
-          ))}
+                <Text
+                  style={[
+                    styles.effectChipSample,
+                    { color: sampleColor },
+                    e.key === 'shadow' && { textShadowColor: '#000', textShadowOffset: { width: 1, height: 2 }, textShadowRadius: 3 },
+                    e.key === 'neon' && { textShadowColor: isActive ? colors.brand : '#7B68EE', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 10 },
+                    e.key === 'outline' && { borderWidth: 1, borderColor: sampleColor, paddingHorizontal: 4, borderRadius: 4 },
+                    e.key === 'glow' && { textShadowColor: isActive ? colors.brand : '#F5D547', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8 },
+                  ]}
+                >
+                  Aa
+                </Text>
+                <Text style={[styles.effectChipLabel, isActive && styles.effectChipLabelActive]}>{e.label}</Text>
+              </Pressable>
+            );
+          })}
         </ScrollView>
 
         {/* Text animation — Instagram 2025-2026: typewriter, bounce, fade, slide */}
         <Text style={styles.pickerSectionLabel}>Animation</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.styleScroll}>
-          {TEXT_ANIMATIONS.map((a) => (
-            <Pressable
-              key={a.key}
-              onPress={() => { haptic.selection(); setTextAnimation(a.key); }}
-              style={[styles.styleOption, textAnimation === a.key && styles.styleOptionActive]}
-              accessibilityLabel={`Text animation ${a.label}`}
-              accessibilityRole="button"
-              hitSlop={12}
-            >
-              <Text
-                style={[
-                  styles.styleOptionText,
-                  textAnimation === a.key && styles.styleOptionTextActive,
+          {TEXT_ANIMATIONS.map((a) => {
+            const isActive = textAnimation === a.key;
+            const animIcon: Record<string, string> = {
+              none: 'close-outline',
+              typewriter: 'keyboard-outline',
+              bounce: 'arrow-up-circle-outline',
+              fade: 'eye-outline',
+              slide: 'arrow-up-outline',
+            };
+            return (
+              <Pressable
+                key={a.key}
+                onPress={() => { haptic.selection(); setTextAnimation(a.key); }}
+                style={({ pressed }) => [
+                  styles.animChip,
+                  isActive && styles.animChipActive,
+                  pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
                 ]}
+                accessibilityLabel={`Text animation ${a.label}`}
+                accessibilityRole="button"
+                hitSlop={12}
               >
-                {a.label}
-              </Text>
-            </Pressable>
-          ))}
+                <Ionicons name={animIcon[a.key] as any} size={20} color={isActive ? colors.brand : colors.textSecondary} />
+                <Text style={[styles.animChipLabel, isActive && styles.animChipLabelActive]}>{a.label}</Text>
+              </Pressable>
+            );
+          })}
         </ScrollView>
 
         {/* Background color — Instagram 2025-2026: colored text background */}
@@ -1174,12 +1206,13 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
 // highlighter, neon, and eraser. Uses Skia for performant stroke
 // rendering and react-native-gesture-handler for pan capture.
 
-const DRAW_TOOLS: Array<{ key: 'pen' | 'marker' | 'highlighter' | 'neon' | 'eraser'; label: string; icon: string }> = [
+const DRAW_TOOLS: Array<{ key: 'pen' | 'marker' | 'highlighter' | 'neon' | 'eraser' | 'chalk'; label: string; icon: string }> = [
   { key: 'pen', label: 'Pen', icon: 'create-outline' },
   { key: 'marker', label: 'Marker', icon: 'brush-outline' },
   { key: 'highlighter', label: 'Highlight', icon: 'color-highlight-outline' },
   { key: 'neon', label: 'Neon', icon: 'flash-outline' },
   { key: 'eraser', label: 'Eraser', icon: 'backspace-outline' },
+  { key: 'chalk', label: 'Chalk', icon: 'brush-outline' },
 ];
 
 const DRAW_COLORS = ['#ffffff', '#000000', '#9b0202', '#215634', '#06489A', '#C9A46A', '#E06666', '#B85566', '#F5D547', '#7B68EE'];
@@ -1190,7 +1223,7 @@ interface DrawStroke {
   points: DrawPoint[];
   color: string;
   width: number;
-  tool: 'pen' | 'marker' | 'highlighter' | 'neon' | 'eraser';
+  tool: 'pen' | 'marker' | 'highlighter' | 'neon' | 'eraser' | 'chalk';
 }
 
 function buildSkiaPath(points: DrawPoint[], canvasW: number, canvasH: number): any {
@@ -1218,7 +1251,8 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
   const existingStrokes: DrawStroke[] = isEditing ? (editingLayer as any).payload.strokes ?? [] : [];
 
   const [strokes, setStrokes] = useState<DrawStroke[]>(existingStrokes);
-  const [activeTool, setActiveTool] = useState<'pen' | 'marker' | 'highlighter' | 'neon' | 'eraser'>('pen');
+  const [redoStack, setRedoStack] = useState<DrawStroke[]>([]);
+  const [activeTool, setActiveTool] = useState<'pen' | 'marker' | 'highlighter' | 'neon' | 'eraser' | 'chalk'>('pen');
   const [activeColor, setActiveColor] = useState('#ffffff');
   const [brushSize, setBrushSize] = useState(4);
   const [canvasLayout, setCanvasLayout] = useState({ width: 320, height: 400 });
@@ -1272,12 +1306,28 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
 
   const handleUndo = useCallback(() => {
     haptic.selection();
-    setStrokes((prev) => prev.slice(0, -1));
+    setStrokes((prev) => {
+      if (prev.length === 0) return prev;
+      const lastStroke = prev[prev.length - 1];
+      setRedoStack((redoPrev) => [...redoPrev, lastStroke]);
+      return prev.slice(0, -1);
+    });
+  }, [haptic]);
+
+  const handleRedo = useCallback(() => {
+    haptic.selection();
+    setRedoStack((prev) => {
+      if (prev.length === 0) return prev;
+      const strokeToRestore = prev[prev.length - 1];
+      setStrokes((strokesPrev) => [...strokesPrev, strokeToRestore]);
+      return prev.slice(0, -1);
+    });
   }, [haptic]);
 
   const handleClear = useCallback(() => {
     haptic.medium();
     setStrokes([]);
+    setRedoStack([]);
   }, [haptic]);
 
   const handleDone = useCallback(() => {
@@ -1331,6 +1381,7 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                     const isMarker = stroke.tool === 'marker';
                     const isHighlighter = stroke.tool === 'highlighter';
                     const isNeon = stroke.tool === 'neon';
+                    const isChalk = stroke.tool === 'chalk';
                     return (
                       <Path
                         key={i}
@@ -1338,11 +1389,15 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                         style="stroke"
                         strokeWidth={stroke.width}
                         color={stroke.color}
-                        strokeCap="round"
-                        strokeJoin="round"
-                        opacity={isHighlighter ? 0.35 : isMarker ? 0.6 : 1}
+                        strokeCap={isChalk ? 'butt' : 'round'}
+                        strokeJoin={isChalk ? 'miter' : 'round'}
+                        opacity={isHighlighter ? 0.35 : isMarker ? 0.6 : isChalk ? 0.85 : 1}
                         blendMode={isEraser ? "clear" : isNeon ? "screen" : "srcOver"}
-                      />
+                      >
+                        {isChalk && (
+                          <DashPathEffect intervals={[stroke.width * 1.8, stroke.width * 0.9]} />
+                        )}
+                      </Path>
                     );
                   })}
                 </Canvas>
@@ -1381,20 +1436,26 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
 
         {/* Tool selector */}
         <Text style={styles.pickerSectionLabel}>Brush</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.styleScroll}>
-          {DRAW_TOOLS.map((t) => (
-            <Pressable
-              key={t.key}
-              onPress={() => { haptic.selection(); setActiveTool(t.key); }}
-              style={[styles.styleOption, activeTool === t.key && styles.styleOptionActive]}
-              accessibilityLabel={`Brush ${t.label}`}
-              accessibilityRole="button"
-              hitSlop={12}
-            >
-              <Ionicons name={t.icon as any} size={18} color={activeTool === t.key ? colors.brand : colors.textSecondary} />
-              <Text style={[styles.styleOptionText, activeTool === t.key && styles.styleOptionTextActive]}>{t.label}</Text>
-            </Pressable>
-          ))}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.styleScroll} contentContainerStyle={styles.brushChipScroll}>
+          {DRAW_TOOLS.map((t) => {
+            const isActive = activeTool === t.key;
+            return (
+              <Pressable
+                key={t.key}
+                onPress={() => { haptic.selection(); setActiveTool(t.key); }}
+                style={({ pressed }) => [
+                  styles.brushChip,
+                  isActive && styles.brushChipActive,
+                  pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
+                ]}
+                accessibilityLabel={`Brush ${t.label}`}
+                accessibilityRole="button"
+                hitSlop={12}
+              >
+                <Ionicons name={t.icon as any} size={22} color={isActive ? '#fff' : colors.textSecondary} />
+              </Pressable>
+            );
+          })}
         </ScrollView>
 
         {/* Color selector (hidden for eraser) */}
@@ -1484,9 +1545,13 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
 
         {/* Actions */}
         <View style={styles.drawActions}>
-          <PressScale onPress={handleUndo} style={styles.drawActionBtn} accessibilityLabel="Undo stroke" hitSlop={12}>
+          <PressScale onPress={handleUndo} style={[styles.drawActionBtn, strokes.length === 0 && { opacity: 0.4 }]} accessibilityLabel="Undo stroke" hitSlop={12}>
             <Ionicons name="arrow-undo-outline" size={20} color={colors.textSecondary} />
             <Text style={styles.drawActionLabel}>Undo</Text>
+          </PressScale>
+          <PressScale onPress={handleRedo} style={[styles.drawActionBtn, redoStack.length === 0 && { opacity: 0.4 }]} accessibilityLabel="Redo stroke" hitSlop={12}>
+            <Ionicons name="refresh-outline" size={20} color={colors.textSecondary} />
+            <Text style={styles.drawActionLabel}>Redo</Text>
           </PressScale>
           <PressScale onPress={handleClear} style={styles.drawActionBtn} accessibilityLabel="Clear drawing" hitSlop={12}>
             <Ionicons name="trash-outline" size={20} color={colors.danger} />
@@ -1508,6 +1573,15 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
 const GIPHY_API_KEY = process.env.EXPO_PUBLIC_GIPHY_API_KEY?.trim() || 'dc6zaTOxFJmzC';
 const GIPHY_BASE = 'https://api.giphy.com/v1/gifs';
 
+const GIF_CATEGORIES: Array<{ key: string; label: string; tag: string }> = [
+  { key: 'trending', label: 'Trending', tag: '' },
+  { key: 'reactions', label: 'Reactions', tag: 'reactions' },
+  { key: 'emotions', label: 'Emotions', tag: 'emotions' },
+  { key: 'animals', label: 'Animals', tag: 'animals' },
+  { key: 'celebrate', label: 'Celebrate', tag: 'celebrate' },
+  { key: 'memes', label: 'Mem', tag: 'memes' },
+];
+
 interface GifResult {
   id: string;
   gifUrl: string;
@@ -1522,6 +1596,7 @@ function GifPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (
   const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [query, setQuery] = useState('');
+  const [activeCategory, setActiveCategory] = useState('trending');
   const [results, setResults] = useState<GifResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1533,14 +1608,19 @@ function GifPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (
     return () => { mountedRef.current = false; };
   }, []);
 
-  const fetchGifs = useCallback(async (searchQuery: string) => {
+  const fetchGifs = useCallback(async (searchQuery: string, category: string) => {
     if (!mountedRef.current) return;
     setIsLoading(true);
     setError(null);
     try {
+      const catDef = GIF_CATEGORIES.find((c) => c.key === category);
+      const catTag = catDef?.tag ?? '';
+      const useTrending = !searchQuery.trim() && (!catTag || category === 'trending');
       const endpoint = searchQuery.trim()
         ? `${GIPHY_BASE}/search?api_key=${GIPHY_API_KEY}&q=${encodeURIComponent(searchQuery.trim())}&limit=24&rating=g`
-        : `${GIPHY_BASE}/trending?api_key=${GIPHY_API_KEY}&limit=24&rating=g`;
+        : useTrending
+          ? `${GIPHY_BASE}/trending?api_key=${GIPHY_API_KEY}&limit=24&rating=g`
+          : `${GIPHY_BASE}/search?api_key=${GIPHY_API_KEY}&q=${encodeURIComponent(catTag)}&limit=24&rating=g`;
       const res = await fetch(endpoint);
       if (!res.ok) throw new Error(`GIPHY ${res.status}`);
       const json = await res.json();
@@ -1564,17 +1644,23 @@ function GifPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (
 
   // Load trending on mount
   useEffect(() => {
-    fetchGifs('');
+    fetchGifs('', 'trending');
   }, [fetchGifs]);
 
-  // Debounced search
+  // Debounced search — refetch when query or category changes
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      fetchGifs(query);
+      fetchGifs(query, activeCategory);
     }, 350);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [query, fetchGifs]);
+  }, [query, activeCategory, fetchGifs]);
+
+  const handleCategorySelect = useCallback((catKey: string) => {
+    haptic.selection();
+    setActiveCategory(catKey);
+    setQuery('');
+  }, [haptic]);
 
   const handleSelect = useCallback((gif: GifResult) => {
     haptic.selection();
@@ -1596,6 +1682,30 @@ function GifPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (
 
   return (
     <PickerShell title="GIF" onClose={onClose}>
+      {/* Category chips — premium style matching sticker tray */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.gifCategoryScroll} contentContainerStyle={styles.gifCategoryContent}>
+        {GIF_CATEGORIES.map((cat) => {
+          const isActive = activeCategory === cat.key;
+          return (
+            <Pressable
+              key={cat.key}
+              onPress={() => handleCategorySelect(cat.key)}
+              style={({ pressed }) => [
+                styles.gifCategoryChip,
+                isActive && { backgroundColor: colors.brand },
+                pressed && { opacity: 0.7 },
+              ]}
+              accessibilityLabel={`GIF category ${cat.label}`}
+              accessibilityRole="button"
+              hitSlop={12}
+            >
+              <Text style={[styles.gifCategoryChipText, isActive && { color: colors.textInverse }]}>
+                {cat.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
       <View style={styles.searchRow}>
         <Ionicons name="search" size={18} color={colors.textMuted} style={styles.searchIcon} />
         <TextInput
@@ -1614,7 +1724,7 @@ function GifPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (
       {error ? (
         <View style={styles.errorBody}>
           <Text style={styles.errorText}>Couldn't load GIFs</Text>
-          <Pressable onPress={() => fetchGifs(query)} style={styles.retryBtn} accessibilityLabel="Retry GIF search" accessibilityRole="button" hitSlop={12}>
+          <Pressable onPress={() => fetchGifs(query, activeCategory)} style={styles.retryBtn} accessibilityLabel="Retry GIF search" accessibilityRole="button" hitSlop={12}>
             <Text style={styles.retryBtnText}>Retry</Text>
           </Pressable>
         </View>
@@ -1835,6 +1945,28 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
   return (
     <PickerShell title={isEditing ? 'Edit Quiz' : 'Add Quiz'} onClose={onClose}>
       <View style={styles.textPickerBody}>
+        {/* Live preview — mini quiz sticker */}
+        <View style={styles.quizPreviewWrap}>
+          <View style={styles.quizPreviewHeader}>
+            <Text style={styles.quizPreviewEmoji}>{emoji}</Text>
+            <Text style={styles.quizPreviewQuestion} numberOfLines={2}>
+              {question.trim() || 'Ask a question...'}
+            </Text>
+          </View>
+          {options.filter(o => o.trim()).slice(0, 4).map((opt, i) => (
+            <View key={i} style={[styles.quizPreviewOption, correctIdx === i && styles.quizPreviewOptionCorrect]}>
+              <Text style={styles.quizPreviewOptionText} numberOfLines={1}>{opt.trim()}</Text>
+              {correctIdx === i && (
+                <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+              )}
+            </View>
+          ))}
+          {options.filter(o => o.trim()).length === 0 && (
+            <View style={styles.quizPreviewOption}>
+              <Text style={[styles.quizPreviewOptionText, { opacity: 0.5 }]}>Add options...</Text>
+            </View>
+          )}
+        </View>
         <TextInput
           style={styles.textInput}
           placeholder="Ask a question..."
@@ -1960,13 +2092,19 @@ function QuestionPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => 
   return (
     <PickerShell title={isEditing ? 'Edit Question' : 'Ask Me'} onClose={onClose}>
       <View style={styles.textPickerBody}>
-        <View style={[styles.textPreview, { backgroundColor: bgColor }]}>
-          <Text style={{ color: '#fff', fontFamily: Typography.family.semibold, fontSize: Type.bodyEmphasis.size }}>
+        <View style={[styles.questionPreviewWrap, { backgroundColor: bgColor }]}>
+          <View style={styles.questionPreviewIconRow}>
+            <Ionicons name="chatbubble-ellipses" size={18} color="rgba(255,255,255,0.7)" />
+          </View>
+          <Text style={styles.questionPreviewPrompt}>
             {prompt.trim() || 'Ask me a question'}
           </Text>
-          <Text style={{ color: 'rgba(255,255,255,0.6)', fontFamily: Typography.family.regular, fontSize: Type.caption.size, marginTop: 4 }}>
-            {placeholder.trim() || 'Type something...'}
-          </Text>
+          <View style={styles.questionPreviewInputRow}>
+            <Text style={styles.questionPreviewPlaceholder}>
+              {placeholder.trim() || 'Type something...'}
+            </Text>
+            <View style={styles.questionPreviewSendDot} />
+          </View>
         </View>
         <TextInput
           style={styles.textInput}
@@ -2058,16 +2196,20 @@ function EmojiSliderPicker({ onClose, onAddLayer, editingLayer }: { onClose: () 
   return (
     <PickerShell title={isEditing ? 'Edit Slider' : 'Emoji Slider'} onClose={onClose}>
       <View style={styles.textPickerBody}>
-        <View style={[styles.textPreview, { backgroundColor: '#1a1a1a' }]}>
-          <Text style={{ color: '#fff', fontFamily: Typography.family.semibold, fontSize: Type.body.size, marginBottom: 8 }}>
+        <View style={styles.sliderPreviewWrap}>
+          <Text style={styles.sliderPreviewQuestion}>
             {question.trim() || 'How much do you love it?'}
           </Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Text style={{ fontSize: 28 }}>{emoji}</Text>
-            <View style={{ flex: 1, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.2)' }}>
-              <View style={{ width: '60%', height: '100%', borderRadius: 3, backgroundColor: sliderColor }} />
+          <View style={styles.sliderPreviewRow}>
+            <Text style={styles.sliderPreviewEmoji}>{emoji}</Text>
+            <View style={styles.sliderPreviewTrack}>
+              <View style={[styles.sliderPreviewFill, { width: '60%', backgroundColor: sliderColor }]} />
+              <View style={[styles.sliderPreviewHandle, { left: '60%', backgroundColor: sliderColor }]} />
             </View>
           </View>
+          {endLabel.trim() ? (
+            <Text style={styles.sliderPreviewEndLabel}>{endLabel.trim()}</Text>
+          ) : null}
         </View>
         <TextInput
           style={styles.textInput}
@@ -2249,15 +2391,18 @@ const SHAPES: Array<{ shape: 'circle' | 'square' | 'line' | 'arrow' | 'star' | '
   { shape: 'circle', icon: 'ellipse-outline', label: 'Circle' },
   { shape: 'square', icon: 'square-outline', label: 'Square' },
   { shape: 'line', icon: 'remove', label: 'Line' },
-  { shape: 'arrow', icon: 'arrow-forward', label: 'Arrow' },
-  { shape: 'star', icon: 'star-outline', label: 'Star' },
-  { shape: 'heart', icon: 'heart-outline', label: 'Heart' },
+  { shape: 'arrow', icon: 'arrow-up', label: 'Arrow' },
+  { shape: 'star', icon: 'star', label: 'Star' },
+  { shape: 'heart', icon: 'heart', label: 'Heart' },
 ];
+
+const SHAPE_COLORS = ['#ffffff', '#000000', '#9b0202', '#215634', '#06489A', '#C9A46A', '#E06666', '#7B68EE'];
 
 function ShapePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const [activeColor, setActiveColor] = useState('#ffffff');
   const handleSelect = useCallback((shape: typeof SHAPES[0]) => {
     haptic.selection();
     onAddLayer({
@@ -2265,19 +2410,64 @@ function ShapePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
       type: 'decorative',
       width: 0.15,
       height: 0.15,
-      payload: { shape: shape.shape, color: '#ffffff', opacity: 1 },
+      payload: { shape: shape.shape, color: activeColor, opacity: 1 },
     });
     onClose();
-  }, [onAddLayer, onClose]);
+  }, [onAddLayer, onClose, activeColor, haptic]);
+
+  const renderShapePreview = (shape: string) => {
+    switch (shape) {
+      case 'circle':
+        return <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: activeColor }} />;
+      case 'square':
+        return <View style={{ width: 32, height: 32, borderRadius: 4, backgroundColor: activeColor }} />;
+      case 'line':
+        return <View style={{ width: 32, height: 4, backgroundColor: activeColor }} />;
+      case 'arrow':
+        return (
+          <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+            <View style={{ width: 0, height: 0, borderLeftWidth: 10, borderRightWidth: 10, borderBottomWidth: 16, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderBottomColor: activeColor }} />
+          </View>
+        );
+      case 'star':
+        return <Ionicons name="star" size={32} color={activeColor} />;
+      case 'heart':
+        return <Ionicons name="heart" size={32} color={activeColor} />;
+      default:
+        return null;
+    }
+  };
 
   return (
     <PickerShell title="Add Shape" onClose={onClose}>
       <View style={styles.shapeGrid}>
         {SHAPES.map((s) => (
-          <Pressable key={s.shape} onPress={() => handleSelect(s)} style={styles.shapeOption} accessibilityLabel={`Add ${s.label}`} accessibilityRole="button" hitSlop={12}>
-            <Ionicons name={s.icon as any} size={28} color={colors.textPrimary} />
+          <Pressable
+            key={s.shape}
+            onPress={() => handleSelect(s)}
+            style={({ pressed }) => [styles.shapeOption, pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] }]}
+            accessibilityLabel={`Add ${s.label}`}
+            accessibilityRole="button"
+            hitSlop={12}
+          >
+            <View style={styles.shapePreviewBox}>
+              {renderShapePreview(s.shape)}
+            </View>
             <Text style={styles.shapeLabel}>{s.label}</Text>
           </Pressable>
+        ))}
+      </View>
+      <Text style={styles.pickerSectionLabel}>Color</Text>
+      <View style={styles.colorRow}>
+        {SHAPE_COLORS.map((c) => (
+          <Pressable
+            key={c}
+            onPress={() => { haptic.selection(); setActiveColor(c); }}
+            style={[styles.colorOption, { backgroundColor: c }, activeColor === c && styles.colorOptionActive]}
+            accessibilityLabel={`Shape color ${c}`}
+            accessibilityRole="button"
+            hitSlop={12}
+          />
         ))}
       </View>
     </PickerShell>
@@ -2318,6 +2508,20 @@ function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
   return (
     <PickerShell title="Add Style Vote" onClose={onClose}>
       <View style={styles.textPickerBody}>
+        {/* Live preview — mini vote sticker */}
+        <View style={styles.votePreviewWrap}>
+          <Text style={styles.votePreviewQuestion} numberOfLines={2}>
+            {question.trim() || 'Which outfit is better?'}
+          </Text>
+          <View style={styles.votePreviewOptions}>
+            <View style={[styles.votePreviewOption, { backgroundColor: `${colors.brand}22`, borderColor: `${colors.brand}55` }]}>
+              <Text style={styles.votePreviewOptionText} numberOfLines={1}>{option1.trim() || 'Option 1'}</Text>
+            </View>
+            <View style={[styles.votePreviewOption, { backgroundColor: `${colors.brand}22`, borderColor: `${colors.brand}55` }]}>
+              <Text style={styles.votePreviewOptionText} numberOfLines={1}>{option2.trim() || 'Option 2'}</Text>
+            </View>
+          </View>
+        </View>
         <Text style={styles.sectionLabel}>Question</Text>
         <TextInput
           style={styles.textInput}
@@ -3220,5 +3424,57 @@ function createStyles(colors: ThemeColors) {
   brushSliderFill: { width: '100%', backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 14 },
   brushSliderHandle: { position: 'absolute', left: '50%', marginLeft: -11, width: 22, height: 22, justifyContent: 'center', alignItems: 'center' },
   brushSliderDot: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
+  // ── Text effect chips (visual preview) ──
+  effectChip: { width: 56, height: 56, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, marginRight: Space.sm, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', gap: 2 },
+  effectChipActive: { borderColor: colors.brand, backgroundColor: `${colors.brand}18`, borderWidth: 1.5 },
+  effectChipSample: { fontFamily: Typography.family.bold, fontSize: 20, lineHeight: 24 },
+  effectChipLabel: { fontFamily: Typography.family.medium, fontSize: 9, color: colors.textSecondary },
+  effectChipLabelActive: { color: colors.brand },
+  // ── Text animation chips (visual preview) ──
+  animChip: { width: 48, height: 56, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, marginRight: Space.sm, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', gap: 4 },
+  animChipActive: { borderColor: colors.brand, backgroundColor: `${colors.brand}18`, borderWidth: 1.5 },
+  animChipLabel: { fontFamily: Typography.family.medium, fontSize: 9, color: colors.textSecondary, textAlign: 'center' },
+  animChipLabelActive: { color: colors.brand },
+  // ── Draw brush chips (premium tool selection) ──
+  brushChipScroll: { gap: Space.sm, paddingVertical: Space.xs },
+  brushChip: { width: 48, height: 48, borderRadius: 12, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', marginRight: Space.sm },
+  brushChipActive: { backgroundColor: colors.brand },
+  // ── Shape preview box ──
+  shapePreviewBox: { width: 56, height: 56, borderRadius: 12, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', marginBottom: 6 },
+  // ── GIF category chips ──
+  gifCategoryScroll: { marginHorizontal: -Space.md, marginBottom: Space.sm },
+  gifCategoryContent: { paddingHorizontal: Space.md, gap: 8 },
+  gifCategoryChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, backgroundColor: colors.surfaceAlt },
+  gifCategoryChipText: { fontFamily: Typography.family.semibold, fontSize: 13, color: colors.textSecondary },
+  // ── Vote preview ──
+  votePreviewWrap: { backgroundColor: colors.surface, borderRadius: 12, padding: Space.md, marginBottom: Space.sm, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+  votePreviewQuestion: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: colors.textPrimary, marginBottom: Space.sm, textAlign: 'center' },
+  votePreviewOptions: { flexDirection: 'row', gap: Space.sm },
+  votePreviewOption: { flex: 1, paddingVertical: Space.sm, paddingHorizontal: Space.sm, borderRadius: Radius.md, borderWidth: 1.5, alignItems: 'center' },
+  votePreviewOptionText: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textPrimary },
+  // ── Quiz preview ──
+  quizPreviewWrap: { backgroundColor: colors.surface, borderRadius: 12, padding: Space.md, marginBottom: Space.sm, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, gap: Space.xs },
+  quizPreviewHeader: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginBottom: Space.xs },
+  quizPreviewEmoji: { fontSize: 22 },
+  quizPreviewQuestion: { flex: 1, fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: colors.textPrimary },
+  quizPreviewOption: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: Space.sm, paddingHorizontal: Space.md, borderRadius: Radius.md, backgroundColor: colors.surfaceAlt, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+  quizPreviewOptionCorrect: { borderColor: colors.success, backgroundColor: `${colors.success}15` },
+  quizPreviewOptionText: { flex: 1, fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textPrimary },
+  // ── Question preview (improved) ──
+  questionPreviewWrap: { borderRadius: 16, padding: Space.md + 2, marginBottom: Space.sm, gap: Space.sm, elevation: 3, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
+  questionPreviewIconRow: { marginBottom: Space.xs },
+  questionPreviewPrompt: { fontFamily: Typography.family.semibold, fontSize: Type.bodyEmphasis.size, color: '#fff', lineHeight: Type.bodyEmphasis.size * 1.3 },
+  questionPreviewInputRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: Radius.md, paddingVertical: Space.sm, paddingHorizontal: Space.md },
+  questionPreviewPlaceholder: { fontFamily: Typography.family.regular, fontSize: Type.caption.size, color: 'rgba(255,255,255,0.6)' },
+  questionPreviewSendDot: { width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.3)', justifyContent: 'center', alignItems: 'center' },
+  // ── Emoji slider preview (improved) ──
+  sliderPreviewWrap: { backgroundColor: colors.surface, borderRadius: 16, padding: Space.md + 2, marginBottom: Space.sm, gap: Space.sm, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, elevation: 2, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 6, shadowOffset: { width: 0, height: 3 } },
+  sliderPreviewQuestion: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: colors.textPrimary, textAlign: 'center' },
+  sliderPreviewRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
+  sliderPreviewEmoji: { fontSize: 32 },
+  sliderPreviewTrack: { flex: 1, height: 8, borderRadius: 4, backgroundColor: colors.surfaceAlt, position: 'relative' },
+  sliderPreviewFill: { height: '100%', borderRadius: 4 },
+  sliderPreviewHandle: { position: 'absolute', top: -6, width: 20, height: 20, borderRadius: 10, marginLeft: -10, borderWidth: 2, borderColor: '#fff', elevation: 2, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
+  sliderPreviewEndLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary, textAlign: 'center' },
   }) as any;
 }

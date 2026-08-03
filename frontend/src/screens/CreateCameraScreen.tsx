@@ -8,11 +8,13 @@ import {
   StatusBar,
   Easing,
   PanResponder,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { StackScreenProps } from '@react-navigation/stack';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
+import Reanimated, { SlideInDown } from 'react-native-reanimated';
 import CreatorCamera from '../creator/CreatorCamera';
 import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -37,10 +39,22 @@ const MODE_CONTEXT: Record<CreateMode, string> = {
   poster: 'Create a story',
 };
 
+// Mode-specific hints shown under the mode switcher
+const MODE_HINT: Record<CreateMode, string> = {
+  'visual-search': 'Point at an item to search',
+  look: 'Capture or upload to create a look',
+  poster: 'Capture or upload to create a story',
+};
+
 const OVERFLOW_ACTIONS = [
-  { key: 'auction', label: 'Create auction', route: 'CreateAuction' as const },
-  { key: 'coown', label: 'Create Co-Own', route: 'CreateCoOwn' as const },
+  { key: 'auction', label: 'Create Auction', icon: 'trophy-outline' as const, route: 'CreateAuction' as const },
+  { key: 'coown', label: 'Create Co-Own', icon: 'people-outline' as const, route: 'CreateCoOwn' as const },
 ];
+
+// Mode chip geometry — used to compute the sliding indicator position.
+// Matches the modeTab style (horizontal padding 16 + gap 8 between chips).
+const MODE_CHIP_HORIZONTAL_PADDING = 16;
+const MODE_CHIP_GAP = 8;
 
 // Swipe threshold — how far the user needs to swipe to trigger a mode change
 const SWIPE_THRESHOLD = 60;
@@ -61,6 +75,13 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
   const opacity = useRef(new Animated.Value(0)).current;
   const modeTransition = useRef(new Animated.Value(1)).current;
 
+  // ── Animated sliding mode indicator ──
+  // Tracks each chip's measured width so the indicator can slide and resize
+  // to sit exactly under the active chip.
+  const [chipWidths, setChipWidths] = useState<number[]>(MODES.map(() => 0));
+  const modeIndicatorX = useRef(new Animated.Value(0)).current;
+  const modeIndicatorWidth = useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
     if (reducedMotion) {
       opacity.setValue(1);
@@ -73,6 +94,35 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
       easing: Easing.out(Easing.ease),
     }).start();
   }, [opacity, reducedMotion]);
+
+  // ── Slide + resize the mode indicator under the active chip ──
+  useEffect(() => {
+    const activeIndex = MODES.findIndex((m) => m.key === mode);
+    if (activeIndex < 0) return;
+    // Compute the x offset as the sum of preceding chip widths + gaps
+    let xOffset = 0;
+    for (let i = 0; i < activeIndex; i++) {
+      xOffset += (chipWidths[i] || 0) + MODE_CHIP_GAP;
+    }
+    const targetWidth = chipWidths[activeIndex] || 0;
+    if (reducedMotion) {
+      modeIndicatorX.setValue(xOffset);
+      modeIndicatorWidth.setValue(targetWidth);
+      return;
+    }
+    Animated.spring(modeIndicatorX, {
+      toValue: xOffset,
+      useNativeDriver: true,
+      tension: 80,
+      friction: 10,
+    }).start();
+    Animated.spring(modeIndicatorWidth, {
+      toValue: targetWidth,
+      useNativeDriver: false,
+      tension: 80,
+      friction: 10,
+    }).start();
+  }, [mode, chipWidths, modeIndicatorX, modeIndicatorWidth, reducedMotion]);
 
   // ── Swipe gesture to switch modes (Snapchat/TikTok pattern) ──
   // Use a ref to hold the current mode so the PanResponder doesn't capture
@@ -223,28 +273,29 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
         pointerEvents="box-none"
         accessibilityRole="radiogroup"
       >
-        {/* Contextual tool cards — visible entry points for look/poster modes.
-            These expose the blank-canvas and gallery-upload flows without
-            requiring the user to open the overflow menu. */}
+        {/* Premium contextual tool cards — visible entry points for
+            look/poster modes. Semi-transparent dark cards over the camera
+            feed (Instagram/Snapchat overlay pattern) with white text + icon
+            for legibility against any camera background. */}
         {mode !== 'visual-search' && (
           <View style={s.contextCardsRow} pointerEvents="box-none">
             <Pressable
-              style={({ pressed }) => [s.contextCard, pressed && s.controlPressed]}
+              style={({ pressed }) => [s.contextCard, pressed && s.contextCardPressed]}
               onPress={handleBlankCanvas}
               accessibilityLabel="Start with blank canvas"
               accessibilityRole="button"
             >
-              <Ionicons name="create-outline" size={18} color="#fff" />
+              <Ionicons name="create-outline" size={32} color="#fff" />
               <Text style={s.contextCardText} numberOfLines={1}>Start Blank</Text>
             </Pressable>
 
             <Pressable
-              style={({ pressed }) => [s.contextCard, pressed && s.controlPressed]}
+              style={({ pressed }) => [s.contextCard, pressed && s.contextCardPressed]}
               onPress={handleGallery}
               accessibilityLabel="Upload from gallery"
               accessibilityRole="button"
             >
-              <Ionicons name="images-outline" size={18} color="#fff" />
+              <Ionicons name="images-outline" size={32} color="#fff" />
               <Text style={s.contextCardText} numberOfLines={1}>Gallery</Text>
             </Pressable>
           </View>
@@ -253,39 +304,66 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
         {/* Context label — flat transparent text, no grey deck */}
         <Text style={s.modeContextText}>{MODE_CONTEXT[mode]}</Text>
 
-        <View style={s.modeTabsRow}>
-          {MODES.map((m) => {
-            const isActive = mode === m.key;
-            return (
-              <Pressable
-                key={m.key}
-                style={({ pressed }) => [
-                  s.modeTab,
-                  { backgroundColor: isActive ? colors.brand : colors.surfaceAlt },
-                  pressed && s.controlPressed,
-                ]}
-                onPress={() => handleModeChange(m.key)}
-                hitSlop={12}
-                accessibilityRole="button"
-                accessibilityState={{ selected: isActive }}
-                accessibilityLabel={`Switch to ${m.label} mode`}
-              >
-                <Text
-                  style={[
-                    s.modeTabText,
-                    { color: isActive ? colors.textInverse : colors.textSecondary },
+        {/* Mode chips with animated sliding indicator */}
+        <View style={s.modeTabsContainer}>
+          <View style={s.modeTabsRow}>
+            {MODES.map((m, index) => {
+              const isActive = mode === m.key;
+              return (
+                <Pressable
+                  key={m.key}
+                  style={({ pressed }) => [
+                    s.modeTab,
+                    { backgroundColor: isActive ? colors.brand : colors.surfaceAlt },
+                    pressed && s.controlPressed,
                   ]}
-                  numberOfLines={1}
+                  onLayout={(e) => {
+                    const w = e.nativeEvent.layout.width;
+                    setChipWidths((prev) => {
+                      if (prev[index] === w) return prev;
+                      const next = [...prev];
+                      next[index] = w;
+                      return next;
+                    });
+                  }}
+                  onPress={() => handleModeChange(m.key)}
+                  hitSlop={12}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isActive }}
+                  accessibilityLabel={`Switch to ${m.label} mode`}
                 >
-                  {m.label}
-                </Text>
-              </Pressable>
-            );
-          })}
+                  <Text
+                    style={[
+                      s.modeTabText,
+                      { color: isActive ? colors.textInverse : colors.textSecondary },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {m.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {/* Sliding indicator — sits under the active chip */}
+          <Animated.View
+            style={[
+              s.modeIndicator,
+              {
+                backgroundColor: colors.brand,
+                transform: [{ translateX: modeIndicatorX }],
+                width: modeIndicatorWidth,
+              },
+            ]}
+            pointerEvents="none"
+          />
         </View>
+
+        {/* Mode-specific hint text */}
+        <Text style={s.modeHintText}>{MODE_HINT[mode]}</Text>
       </Animated.View>
     );
-  }, [colors.brand, colors.surfaceAlt, colors.textInverse, colors.textSecondary, handleBlankCanvas, handleGallery, handleModeChange, insets.bottom, mode, opacity]);
+  }, [colors.brand, colors.surfaceAlt, colors.textInverse, colors.textSecondary, handleBlankCanvas, handleGallery, handleModeChange, insets.bottom, mode, modeIndicatorX, modeIndicatorWidth, opacity]);
 
   const renderOverflowButton = useCallback(() => (
     <Pressable
@@ -318,25 +396,35 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
       </Animated.View>
 
       {showOverflow && (
-        <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+        <Modal
+          visible={showOverflow}
+          transparent
+          animationType="none"
+          onRequestClose={() => setShowOverflow(false)}
+          statusBarTranslucent
+        >
+          {/* Backdrop — tap to dismiss */}
           <Pressable
-            style={StyleSheet.absoluteFill}
+            style={s.overflowBackdrop}
             onPress={() => setShowOverflow(false)}
-            pointerEvents="auto"
+            accessibilityLabel="Close menu"
+            accessibilityRole="button"
           />
-          <View
-            style={[
-              s.overflowMenu,
-              { top: Math.max(insets.top, 16) + 52, right: 12, backgroundColor: colors.surface },
-            ]}
+          {/* Bottom sheet */}
+          <Reanimated.View
+            style={[s.overflowSheet, { backgroundColor: colors.surface, paddingBottom: Math.max(insets.bottom, Space.md) }]}
+            entering={reducedMotion ? undefined : SlideInDown.duration(280)}
           >
+            {/* Grab handle */}
+            <View style={s.overflowGrabHandle} />
+
             {/* Contextual creator tools */}
             {contextualTools.map((tool) => (
               <Pressable
                 key={tool.key}
                 style={({ pressed }) => [
-                  s.overflowItem,
-                  pressed && { opacity: 0.7 },
+                  s.overflowOption,
+                  pressed && { opacity: 0.6 },
                 ]}
                 onPress={() => {
                   haptic.selection();
@@ -346,16 +434,16 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
                 accessibilityRole="menuitem"
                 accessibilityLabel={tool.label}
               >
-                <Ionicons name={tool.icon} size={18} color={colors.textSecondary} style={s.overflowIcon} />
-                <Text style={[s.overflowItemText, { color: colors.textPrimary }]}>
+                <Ionicons name={tool.icon} size={22} color={colors.textSecondary} style={s.overflowOptionIcon} />
+                <Text style={[s.overflowOptionText, { color: colors.textPrimary }]}>
                   {tool.label}
                 </Text>
               </Pressable>
             ))}
 
-            {/* Divider between creator tools and other actions */}
+            {/* Hairline divider between creator tools and other actions */}
             {contextualTools.length > 0 && OVERFLOW_ACTIONS.length > 0 && (
-              <View style={[s.overflowDivider, { backgroundColor: colors.border }]} />
+              <View style={[s.overflowHairline, { backgroundColor: colors.border }]} />
             )}
 
             {/* Other create actions */}
@@ -363,20 +451,40 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
               <Pressable
                 key={action.key}
                 style={({ pressed }) => [
-                  s.overflowItem,
-                  pressed && { opacity: 0.7 },
+                  s.overflowOption,
+                  pressed && { opacity: 0.6 },
                 ]}
                 onPress={() => handleOverflowAction(action.route)}
                 accessibilityRole="menuitem"
                 accessibilityLabel={action.label}
               >
-                <Text style={[s.overflowItemText, { color: colors.textPrimary }]}>
+                <Ionicons name={action.icon} size={22} color={colors.textSecondary} style={s.overflowOptionIcon} />
+                <Text style={[s.overflowOptionText, { color: colors.textPrimary }]}>
                   {action.label}
                 </Text>
               </Pressable>
             ))}
-          </View>
-        </View>
+
+            {/* Cancel — separated, secondary colour */}
+            <View style={[s.overflowHairline, { backgroundColor: colors.border }]} />
+            <Pressable
+              style={({ pressed }) => [
+                s.overflowOption,
+                pressed && { opacity: 0.6 },
+              ]}
+              onPress={() => {
+                haptic.light();
+                setShowOverflow(false);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel"
+            >
+              <Text style={[s.overflowOptionText, { color: colors.textSecondary, flex: 1 }]}>
+                Cancel
+              </Text>
+            </Pressable>
+          </Reanimated.View>
+        </Modal>
       )}
     </View>
   );
@@ -409,41 +517,56 @@ const s = StyleSheet.create({
     letterSpacing: 0.3,
   },
   // ── Contextual tool cards (Start Blank / Gallery) ──
-  // Semi-transparent dark pills over the camera feed — the standard pattern
-  // for camera overlays (Instagram/Snapchat). White text + icon for legibility
-  // against any camera background.
+  // Premium semi-transparent dark cards over the camera feed — the standard
+  // pattern for camera overlays (Instagram/Snapchat). White text + icon for
+  // legibility against any camera background. Subtle white border defines
+  // the card edge without adding a heavy surface.
   contextCardsRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     gap: Space.sm,
     marginBottom: Space.sm,
+    width: '100%',
   },
   contextCard: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    borderRadius: Radius.full,
+    justifyContent: 'center',
+    gap: Space.sm,
+    padding: Space.md,
+    borderRadius: Radius.xl,
     backgroundColor: 'rgba(0,0,0,0.55)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+  },
+  contextCardPressed: {
+    opacity: 0.7,
+    transform: [{ scale: 0.95 }],
   },
   contextCardText: {
-    fontFamily: Typography.family.medium,
+    fontFamily: Typography.family.semibold,
     fontSize: Type.caption.size,
     color: '#fff',
     letterSpacing: 0.2,
+  },
+  // ── Mode tabs with sliding indicator ──
+  modeTabsContainer: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modeTabsRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
+    gap: MODE_CHIP_GAP,
   },
   modeTab: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: MODE_CHIP_HORIZONTAL_PADDING,
     paddingVertical: 8,
     borderRadius: 20,
   },
@@ -451,6 +574,24 @@ const s = StyleSheet.create({
     fontFamily: Typography.family.semibold,
     fontSize: 13,
     letterSpacing: 0.3,
+  },
+  // Sliding indicator — 4px bar under the active chip
+  modeIndicator: {
+    position: 'absolute',
+    bottom: -2,
+    left: 0,
+    height: 4,
+    backgroundColor: 'transparent',
+    borderRadius: 2,
+  },
+  // Mode-specific hint text
+  modeHintText: {
+    fontFamily: Typography.family.regular,
+    fontSize: Type.caption.size,
+    color: 'rgba(255,255,255,0.55)',
+    textAlign: 'center',
+    marginTop: Space.xs,
+    letterSpacing: 0.2,
   },
   topIconBtn: {
     width: 44,
@@ -463,36 +604,49 @@ const s = StyleSheet.create({
     opacity: 0.7,
     transform: [{ scale: 0.97 }],
   },
-  overflowMenu: {
-    position: 'absolute',
-    borderRadius: Radius.lg,
-    paddingVertical: Space.xs,
-    paddingHorizontal: Space.sm,
-    minWidth: 200,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 8,
-    zIndex: 20,
+  // ── Overflow bottom sheet ──
+  overflowBackdrop: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
-  overflowItem: {
+  overflowSheet: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderTopLeftRadius: Radius.xxl,
+    borderTopRightRadius: Radius.xxl,
+    paddingHorizontal: Space.lg,
+    paddingTop: Space.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 16,
+  },
+  overflowGrabHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(0,0,0,0.15)',
+    alignSelf: 'center',
+    marginBottom: Space.md,
+  },
+  overflowOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingVertical: Space.sm,
-    paddingHorizontal: Space.sm,
+    gap: Space.md,
+    paddingVertical: Space.md,
   },
-  overflowIcon: {
-    width: 20,
+  overflowOptionIcon: {
+    width: 24,
   },
-  overflowItemText: {
+  overflowOptionText: {
     fontFamily: Typography.family.medium,
     fontSize: Type.body.size,
   },
-  overflowDivider: {
+  overflowHairline: {
     height: StyleSheet.hairlineWidth,
     marginVertical: Space.xs,
-    marginHorizontal: Space.sm,
   },
 });
