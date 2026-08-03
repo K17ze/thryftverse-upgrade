@@ -58,6 +58,11 @@ module.exports = function () {
         // published update. Otherwise a stale update on the development channel
         // overrides local changes and real-time iteration breaks.
         ...(isDevBuild ? { enabled: false } : {}),
+        // EAS Update code signing — generate keys outside the repo:
+        //   eas update:configure-code-signing --key-output-directory ../keys
+        // Then uncomment the codeSigningCertificate/codeSigningMetadata lines below.
+        // codeSigningCertificate: 'certs/update-certificate.pem',
+        // codeSigningMetadata: { keyid: 'main', alg: 'rsa-v1_5-sha256' },
       },
     },
   };

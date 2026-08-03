@@ -25,6 +25,9 @@
       },
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "EAS_UPDATE_EXPERIMENTAL_UPLOAD_EMBEDDED_BUNDLE": "1"
       }
     }
   }
