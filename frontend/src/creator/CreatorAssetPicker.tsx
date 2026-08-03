@@ -902,10 +902,10 @@ const TEXT_COLORS = ['#ffffff', '#000000', '#9b0202', '#215634', '#06489A', '#C9
 
 const TEXT_BG_COLORS = ['transparent', '#000000', '#ffffff', '#9b0202', '#215634', '#06489A', '#C9A46A', '#6B3245'];
 
-const TEXT_ALIGNMENTS: Array<{ key: 'left' | 'center' | 'right'; icon: string }> = [
+const TEXT_ALIGNMENTS: Array<{ key: 'left' | 'center' | 'right'; icon: React.ComponentProps<typeof Ionicons>['name'] }> = [
   { key: 'left', icon: 'text-outline' },
   { key: 'center', icon: 'text' },
-  { key: 'right', icon: 'text-right' },
+  { key: 'right', icon: 'list-outline' },
 ];
 
 // Text style preview mapping — mirrors CreatorCanvas styleMap
@@ -930,14 +930,14 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
   const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const isEditing = editingLayer?.type === 'text';
-  const existingPayload = isEditing ? (editingLayer as any).payload : null;
+  const existingPayload = editingLayer?.type === 'text' ? editingLayer.payload : null;
 
   const [text, setText] = useState(existingPayload?.text ?? '');
-  const [textStyle, setTextStyle] = useState(existingPayload?.textStyle ?? 'clean');
+  const [textStyle, setTextStyle] = useState<string>(existingPayload?.textStyle ?? 'clean');
   const [textColor, setTextColor] = useState(existingPayload?.textColor ?? '#ffffff');
   const [alignment, setAlignment] = useState<'left' | 'center' | 'right'>(existingPayload?.alignment ?? 'center');
-  const [textEffect, setTextEffect] = useState(existingPayload?.textEffect ?? 'none');
-  const [textAnimation, setTextAnimation] = useState(existingPayload?.textAnimation ?? 'none');
+  const [textEffect, setTextEffect] = useState<string>(existingPayload?.textEffect ?? 'none');
+  const [textAnimation, setTextAnimation] = useState<string>(existingPayload?.textAnimation ?? 'none');
   const [textBgColor, setTextBgColor] = useState(existingPayload?.backgroundColor ?? 'transparent');
   const [showSpectrum, setShowSpectrum] = useState(false);
 
@@ -1095,7 +1095,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               accessibilityRole="button"
               hitSlop={12}
             >
-              <Ionicons name={a.icon as any} size={18} color={alignment === a.key ? colors.brand : colors.textSecondary} />
+              <Ionicons name={a.icon} size={18} color={alignment === a.key ? colors.brand : colors.textSecondary} />
             </Pressable>
           ))}
         </View>
@@ -1142,9 +1142,9 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.styleScroll}>
           {TEXT_ANIMATIONS.map((a) => {
             const isActive = textAnimation === a.key;
-            const animIcon: Record<string, string> = {
+            const animIcon: Record<string, React.ComponentProps<typeof Ionicons>['name']> = {
               none: 'close-outline',
-              typewriter: 'keyboard-outline',
+              typewriter: 'keypad-outline',
               bounce: 'arrow-up-circle-outline',
               fade: 'eye-outline',
               slide: 'arrow-up-outline',
@@ -1162,7 +1162,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                 accessibilityRole="button"
                 hitSlop={12}
               >
-                <Ionicons name={animIcon[a.key] as any} size={20} color={isActive ? colors.brand : colors.textSecondary} />
+                <Ionicons name={animIcon[a.key]} size={20} color={isActive ? colors.brand : colors.textSecondary} />
                 <Text style={[styles.animChipLabel, isActive && styles.animChipLabelActive]}>{a.label}</Text>
               </Pressable>
             );
@@ -1206,10 +1206,10 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
 // highlighter, neon, and eraser. Uses Skia for performant stroke
 // rendering and react-native-gesture-handler for pan capture.
 
-const DRAW_TOOLS: Array<{ key: 'pen' | 'marker' | 'highlighter' | 'neon' | 'eraser' | 'chalk'; label: string; icon: string }> = [
+const DRAW_TOOLS: Array<{ key: 'pen' | 'marker' | 'highlighter' | 'neon' | 'eraser' | 'chalk'; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }> = [
   { key: 'pen', label: 'Pen', icon: 'create-outline' },
   { key: 'marker', label: 'Marker', icon: 'brush-outline' },
-  { key: 'highlighter', label: 'Highlight', icon: 'color-highlight-outline' },
+  { key: 'highlighter', label: 'Highlight', icon: 'color-fill-outline' },
   { key: 'neon', label: 'Neon', icon: 'flash-outline' },
   { key: 'eraser', label: 'Eraser', icon: 'backspace-outline' },
   { key: 'chalk', label: 'Chalk', icon: 'brush-outline' },
@@ -1248,7 +1248,7 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
   const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const isEditing = editingLayer?.type === 'draw';
-  const existingStrokes: DrawStroke[] = isEditing ? (editingLayer as any).payload.strokes ?? [] : [];
+  const existingStrokes: DrawStroke[] = editingLayer?.type === 'draw' ? editingLayer.payload.strokes ?? [] : [];
 
   const [strokes, setStrokes] = useState<DrawStroke[]>(existingStrokes);
   const [redoStack, setRedoStack] = useState<DrawStroke[]>([]);
@@ -1452,7 +1452,7 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                 accessibilityRole="button"
                 hitSlop={12}
               >
-                <Ionicons name={t.icon as any} size={22} color={isActive ? '#fff' : colors.textSecondary} />
+                <Ionicons name={t.icon} size={22} color={isActive ? '#fff' : colors.textSecondary} />
               </Pressable>
             );
           })}
@@ -1545,11 +1545,11 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
 
         {/* Actions */}
         <View style={styles.drawActions}>
-          <PressScale onPress={handleUndo} style={[styles.drawActionBtn, strokes.length === 0 && { opacity: 0.4 }]} accessibilityLabel="Undo stroke" hitSlop={12}>
+          <PressScale onPress={handleUndo} style={[styles.drawActionBtn, ...(strokes.length === 0 ? [{ opacity: 0.4 }] : [])]} accessibilityLabel="Undo stroke" hitSlop={12}>
             <Ionicons name="arrow-undo-outline" size={20} color={colors.textSecondary} />
             <Text style={styles.drawActionLabel}>Undo</Text>
           </PressScale>
-          <PressScale onPress={handleRedo} style={[styles.drawActionBtn, redoStack.length === 0 && { opacity: 0.4 }]} accessibilityLabel="Redo stroke" hitSlop={12}>
+          <PressScale onPress={handleRedo} style={[styles.drawActionBtn, ...(redoStack.length === 0 ? [{ opacity: 0.4 }] : [])]} accessibilityLabel="Redo stroke" hitSlop={12}>
             <Ionicons name="refresh-outline" size={20} color={colors.textSecondary} />
             <Text style={styles.drawActionLabel}>Redo</Text>
           </PressScale>
@@ -1943,7 +1943,7 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
   const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const isEditing = editingLayer?.type === 'quiz';
-  const existing = isEditing ? (editingLayer as any).payload : null;
+  const existing = editingLayer?.type === 'quiz' ? editingLayer.payload : null;
 
   const [question, setQuestion] = useState(existing?.question ?? '');
   const [options, setOptions] = useState<string[]>(existing?.options?.map((o: any) => o.label) ?? ['', '']);
@@ -2130,7 +2130,7 @@ function QuestionPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => 
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const isEditing = editingLayer?.type === 'question';
-  const existing = isEditing ? (editingLayer as any).payload : null;
+  const existing = editingLayer?.type === 'question' ? editingLayer.payload : null;
 
   const [prompt, setPrompt] = useState(existing?.prompt ?? '');
   const [placeholder, setPlaceholder] = useState(existing?.placeholder ?? 'Type something...');
@@ -2233,7 +2233,7 @@ function EmojiSliderPicker({ onClose, onAddLayer, editingLayer }: { onClose: () 
   const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const isEditing = editingLayer?.type === 'emojiSlider';
-  const existing = isEditing ? (editingLayer as any).payload : null;
+  const existing = editingLayer?.type === 'emojiSlider' ? editingLayer.payload : null;
 
   const [question, setQuestion] = useState(existing?.question ?? '');
   const [emoji, setEmoji] = useState(existing?.emoji ?? '😍');
@@ -2350,7 +2350,7 @@ function CountdownPicker({ onClose, onAddLayer, editingLayer }: { onClose: () =>
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const isEditing = editingLayer?.type === 'countdown';
-  const existing = isEditing ? (editingLayer as any).payload : null;
+  const existing = editingLayer?.type === 'countdown' ? editingLayer.payload : null;
 
   const [label, setLabel] = useState(existing?.label ?? '');
   const [endDate, setEndDate] = useState(() => {
@@ -2736,7 +2736,7 @@ interface StickerCategoryDef {
 interface StickerDef {
   key: string;
   label: string;
-  icon: string;
+  icon: React.ComponentProps<typeof Ionicons>['name'];
   emoji?: string;
   mode: AssetPickerMode;
   description?: string;
@@ -2895,7 +2895,7 @@ function StickerTray({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
                     accessibilityRole="button"
                   >
                     <View style={styles.stickerCellIcon}>
-                      <Ionicons name={sticker.icon as any} size={28} color={colors.brand} />
+                      <Ionicons name={sticker.icon} size={28} color={colors.brand} />
                     </View>
                     <Text style={styles.stickerCellLabel} numberOfLines={1}>{sticker.label}</Text>
                   </Pressable>
@@ -2916,7 +2916,7 @@ function LinkPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
   const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const isEditing = editingLayer?.type === 'link';
-  const existingPayload = isEditing ? (editingLayer as any).payload : null;
+  const existingPayload = editingLayer?.type === 'link' ? editingLayer.payload : null;
 
   const [url, setUrl] = useState(existingPayload?.url ?? '');
   const [ctaText, setCtaText] = useState(existingPayload?.ctaText ?? 'Link');
@@ -3004,7 +3004,7 @@ function LocationPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => 
   const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const isEditing = editingLayer?.type === 'location';
-  const existingPayload = isEditing ? (editingLayer as any).payload : null;
+  const existingPayload = editingLayer?.type === 'location' ? editingLayer.payload : null;
 
   const [placeName, setPlaceName] = useState(existingPayload?.placeName ?? '');
 
@@ -3062,7 +3062,7 @@ function HashtagPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => v
   const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const isEditing = editingLayer?.type === 'hashtag';
-  const existingPayload = isEditing ? (editingLayer as any).payload : null;
+  const existingPayload = editingLayer?.type === 'hashtag' ? editingLayer.payload : null;
 
   const [tag, setTag] = useState(existingPayload?.tag ?? '');
 
@@ -3125,7 +3125,7 @@ function TimePicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
   const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const isEditing = editingLayer?.type === 'time';
-  const existingPayload = isEditing ? (editingLayer as any).payload : null;
+  const existingPayload = editingLayer?.type === 'time' ? editingLayer.payload : null;
 
   const [format, setFormat] = useState<'time' | 'date' | 'datetime'>(existingPayload?.format ?? 'time');
   const now = new Date();
@@ -3165,11 +3165,11 @@ function TimePicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
         </View>
         <Text style={styles.pickerSectionLabel}>Format</Text>
         <View style={styles.alignmentRow}>
-          {[
-            { key: 'time' as const, label: 'Time', icon: 'time-outline' },
-            { key: 'date' as const, label: 'Date', icon: 'calendar-outline' },
-            { key: 'datetime' as const, label: 'Both', icon: 'calendar-number-outline' },
-          ].map((f) => (
+          {([
+            { key: 'time' as const, label: 'Time', icon: 'time-outline' as const },
+            { key: 'date' as const, label: 'Date', icon: 'calendar-outline' as const },
+            { key: 'datetime' as const, label: 'Both', icon: 'calendar-number-outline' as const },
+          ] as const).map((f) => (
             <Pressable
               key={f.key}
               onPress={() => { haptic.selection(); setFormat(f.key); }}
@@ -3178,7 +3178,7 @@ function TimePicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               accessibilityRole="button"
               hitSlop={12}
             >
-              <Ionicons name={f.icon as any} size={18} color={format === f.key ? colors.brand : colors.textSecondary} />
+              <Ionicons name={f.icon} size={18} color={format === f.key ? colors.brand : colors.textSecondary} />
             </Pressable>
           ))}
         </View>
@@ -3197,7 +3197,7 @@ function WeatherPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => v
   const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const isEditing = editingLayer?.type === 'weather';
-  const existingPayload = isEditing ? (editingLayer as any).payload : null;
+  const existingPayload = editingLayer?.type === 'weather' ? editingLayer.payload : null;
 
   const [temperature, setTemperature] = useState(existingPayload?.temperature ?? 22);
   const [condition, setCondition] = useState(existingPayload?.condition ?? 'Sunny');
@@ -3678,5 +3678,5 @@ function createStyles(colors: ThemeColors) {
   sliderPreviewFill: { height: '100%', borderRadius: 4 },
   sliderPreviewHandle: { position: 'absolute', top: -6, width: 20, height: 20, borderRadius: 10, marginLeft: -10, borderWidth: 2, borderColor: '#fff', elevation: 2, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
   sliderPreviewEndLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary, textAlign: 'center' },
-  }) as any;
+  });
 }

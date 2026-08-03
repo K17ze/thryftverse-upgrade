@@ -365,6 +365,32 @@ export function migrateLookToDocument(params: {
   };
 }
 
+// ── Payload extraction helpers for Record<string, unknown> sticker payloads ──
+function pStr(p: Record<string, unknown>, key: string, fallback = ''): string {
+  const v = p[key];
+  return typeof v === 'string' ? v : fallback;
+}
+
+function pStrOpt(p: Record<string, unknown>, key: string): string | undefined {
+  const v = p[key];
+  return typeof v === 'string' ? v : undefined;
+}
+
+function pNumOpt(p: Record<string, unknown>, key: string): number | undefined {
+  const v = p[key];
+  return typeof v === 'number' ? v : undefined;
+}
+
+function pOptions(p: Record<string, unknown>): Array<{ id: string; label: string }> {
+  const v = p['options'];
+  if (!Array.isArray(v)) return [];
+  return v.filter(
+    (item): item is { id: string; label: string } =>
+      typeof item === 'object' && item !== null &&
+      typeof item.id === 'string' && typeof item.label === 'string',
+  );
+}
+
 export function migratePosterFramesToDocument(params: {
   id: string;
   frames: ComposerFrame[];
@@ -445,11 +471,11 @@ export function migratePosterFramesToDocument(params: {
             ...baseFields,
             type: 'text',
             payload: {
-              text: (sticker.payload as any).text ?? '',
-              textStyle: mapTextStyle((sticker.payload as any).textStyle),
-              textColor: (sticker.payload as any).textColor ?? '#ffffff',
-              backgroundColor: (sticker.payload as any).backgroundColor,
-              alignment: (sticker.payload as any).alignment ?? 'center',
+              text: pStr(sticker.payload, 'text'),
+              textStyle: mapTextStyle(pStrOpt(sticker.payload, 'textStyle')),
+              textColor: pStr(sticker.payload, 'textColor', '#ffffff'),
+              backgroundColor: pStrOpt(sticker.payload, 'backgroundColor'),
+              alignment: pStr(sticker.payload, 'alignment', 'center') as 'left' | 'center' | 'right',
               opacity: 1,
             },
           });
@@ -459,8 +485,8 @@ export function migratePosterFramesToDocument(params: {
             ...baseFields,
             type: 'mention',
             payload: {
-              userId: (sticker.payload as any).userId ?? '',
-              username: (sticker.payload as any).username ?? '',
+              userId: pStr(sticker.payload, 'userId'),
+              username: pStr(sticker.payload, 'username'),
             },
           });
           break;
@@ -469,10 +495,10 @@ export function migratePosterFramesToDocument(params: {
             ...baseFields,
             type: 'product',
             payload: {
-              listingId: (sticker.payload as any).listingId ?? '',
-              snapshotTitle: (sticker.payload as any).snapshotTitle ?? '',
-              snapshotImageUrl: (sticker.payload as any).snapshotImageUrl,
-              snapshotPriceGbp: (sticker.payload as any).snapshotPriceGbp,
+              listingId: pStr(sticker.payload, 'listingId'),
+              snapshotTitle: pStr(sticker.payload, 'snapshotTitle'),
+              snapshotImageUrl: pStrOpt(sticker.payload, 'snapshotImageUrl'),
+              snapshotPriceGbp: pNumOpt(sticker.payload, 'snapshotPriceGbp'),
               availability: 'active',
             },
           });
@@ -482,9 +508,9 @@ export function migratePosterFramesToDocument(params: {
             ...baseFields,
             type: 'look',
             payload: {
-              lookId: (sticker.payload as any).lookId ?? '',
-              snapshotCaption: (sticker.payload as any).snapshotCaption ?? '',
-              snapshotImageUrl: (sticker.payload as any).snapshotImageUrl,
+              lookId: pStr(sticker.payload, 'lookId'),
+              snapshotCaption: pStr(sticker.payload, 'snapshotCaption'),
+              snapshotImageUrl: pStrOpt(sticker.payload, 'snapshotImageUrl'),
             },
           });
           break;
@@ -493,8 +519,8 @@ export function migratePosterFramesToDocument(params: {
             ...baseFields,
             type: 'vote',
             payload: {
-              question: (sticker.payload as any).question ?? '',
-              options: (sticker.payload as any).options ?? [],
+              question: pStr(sticker.payload, 'question'),
+              options: pOptions(sticker.payload),
             },
           });
           break;

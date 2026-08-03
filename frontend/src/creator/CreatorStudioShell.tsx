@@ -364,7 +364,7 @@ function CreatorStudioInner() {
                   <PressScale
                     onPress={() => { undo(); }}
                     disabled={!canUndo}
-                    style={[styles.topBtn, canUndo ? null : { opacity: 0.3 }] as any}
+                    style={[styles.topBtn, ...(canUndo ? [] : [{ opacity: 0.3 }])]}
                     accessibilityLabel="Undo"
                   >
                     <Ionicons name="arrow-undo" size={22} color={colors.textPrimary} />
@@ -372,7 +372,7 @@ function CreatorStudioInner() {
                   <PressScale
                     onPress={() => { redo(); }}
                     disabled={!canRedo}
-                    style={[styles.topBtn, canRedo ? null : { opacity: 0.3 }] as any}
+                    style={[styles.topBtn, ...(canRedo ? [] : [{ opacity: 0.3 }])]}
                     accessibilityLabel="Redo"
                   >
                     <Ionicons name="arrow-redo" size={22} color={colors.textPrimary} />
@@ -651,13 +651,14 @@ function CreatorStudioInner() {
       {cropTarget && cropTarget.type === 'media' && (
         <CreatorCropSheet
           visible={!!cropTarget}
-          imageUri={(cropTarget.payload as any)?.mediaUri ?? ''}
+          imageUri={cropTarget.payload.mediaUri}
           onClose={() => setCropTarget(null)}
           onCropComplete={(newUri) => {
-            if (cropTarget) {
+            if (cropTarget && cropTarget.type === 'media') {
               updateLayer(cropTarget.id, {
-                payload: { ...(cropTarget.payload as any), mediaUri: newUri },
-              } as any);
+                type: 'media',
+                payload: { ...cropTarget.payload, mediaUri: newUri },
+              });
             }
             setCropTarget(null);
           }}
@@ -667,18 +668,19 @@ function CreatorStudioInner() {
       {cutoutTarget && cutoutTarget.type === 'media' && (
         <CreatorCutoutSheet
           visible={!!cutoutTarget}
-          imageUri={(cutoutTarget.payload as any)?.mediaUri ?? ''}
+          imageUri={cutoutTarget.payload.mediaUri}
           onClose={() => setCutoutTarget(null)}
           onCutoutComplete={(newUri) => {
-            if (cutoutTarget) {
+            if (cutoutTarget && cutoutTarget.type === 'media') {
               // Replace the media layer's URI with the cutout result
               updateLayer(cutoutTarget.id, {
+                type: 'media',
                 payload: {
-                  ...(cutoutTarget.payload as any),
+                  ...cutoutTarget.payload,
                   mediaUri: newUri,
                   contentFit: 'contain',
                 },
-              } as any);
+              });
             }
             setCutoutTarget(null);
           }}
@@ -718,7 +720,7 @@ function CreatorStudioInner() {
 // ── Overflow menu item ─────────────────────────────────────────────
 
 interface OverflowItemProps {
-  icon: string;
+  icon: React.ComponentProps<typeof Ionicons>['name'];
   label: string;
   colors: ReturnType<typeof useAppTheme>['colors'];
   onPress: () => void;
@@ -740,7 +742,7 @@ const OverflowItem = React.memo(function OverflowItem({ icon, label, colors, onP
       hitSlop={12}
     >
       <Ionicons
-        name={icon as any}
+        name={icon}
         size={22}
         color={disabled ? colors.textMuted : colors.textPrimary}
       />
