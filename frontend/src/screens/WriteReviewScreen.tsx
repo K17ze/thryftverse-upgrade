@@ -20,6 +20,7 @@ import { WriteReviewSkeleton } from '../components/skeletons/WriteReviewSkeleton
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { Meta, BodyEmphasis, Caption } from '../components/ui/Text';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import { RootStackParamList } from '../navigation/types';
@@ -39,6 +40,7 @@ export default function WriteReviewScreen() {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
+  const { isOffline } = useConnectivity();
   const haptic = useHaptic();
 
   const [rating, setRating] = useState(0);
@@ -125,12 +127,13 @@ export default function WriteReviewScreen() {
       show('Review submitted successfully', 'success');
       navigation.goBack();
     } catch (err) {
-      const parsed = parseApiError(err);
+      const isNetworkError = isOffline || (err instanceof Error && /network|fetch|timeout/i.test(err.message));
+      const parsed = parseApiError(err, isNetworkError ? 'You appear to be offline. Check your connection and try again.' : undefined);
       show(parsed.message, 'error');
     } finally {
       setIsSubmitting(false);
     }
-  }, [canSubmit, haptic, orderId, rating, review, show, navigation]);
+  }, [canSubmit, haptic, orderId, rating, review, show, navigation, isOffline]);
 
   if (isLoading) {
     return (

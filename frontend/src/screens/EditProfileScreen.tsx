@@ -12,6 +12,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { RootStackParamList } from '../navigation/types';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Space, Typography, Radius, Type } from '../theme/designTokens';
@@ -34,7 +36,7 @@ const VERIFIED_LABEL = 'Verified';
 const UNVERIFIED_LABEL = 'Not verified';
 
 export default function EditProfileScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
   const { show } = useToast();
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
@@ -48,7 +50,6 @@ export default function EditProfileScreen() {
   const fetchMyProfile = useStore((state) => state.fetchMyProfile);
 
   const user = currentUser;
-  const userAny = user as any;
   const initialName = user?.displayName ?? user?.username ?? '';
   const initialUsername = user?.username ?? '';
 
@@ -56,7 +57,7 @@ export default function EditProfileScreen() {
   const [username, setUsername] = useState(initialUsername);
   const [bio, setBio] = useState(user?.bio ?? '');
   const [website, setWebsite] = useState(user?.website ?? '');
-  const [phone, setPhone] = useState(userAny?.phone ?? '');
+  const [phone, setPhone] = useState(user?.phone ?? '');
 
   const [isSaving, setIsSaving] = useState(false);
   const [websiteError, setWebsiteError] = useState('');
@@ -68,7 +69,7 @@ export default function EditProfileScreen() {
     username !== initialUsername ||
     bio !== (user?.bio ?? '') ||
     website !== (user?.website ?? '');
-  const hasPhoneChanged = phone !== (userAny?.phone ?? '');
+  const hasPhoneChanged = phone !== (user?.phone ?? '');
   const hasChanges = hasTextChanges || hasPhoneChanged;
 
   const openEdit = (field: string, current: string) => {
@@ -80,9 +81,9 @@ export default function EditProfileScreen() {
     setEditValue('');
   };
 
-  const email = userAny?.email ?? '';
+  const email = user?.email ?? '';
   const emailVerified = !!user?.emailVerified;
-  const country = (userAny?.country as string) || '';
+  const country = user?.country ?? '';
 
   const validateWebsite = useCallback((value: string) => {
     if (!value) {
@@ -182,7 +183,7 @@ export default function EditProfileScreen() {
           title="Not signed in"
           subtitle="Sign in to edit your profile."
           ctaLabel="Sign In"
-          onCtaPress={() => (navigation as any).navigate('Login')}
+          onCtaPress={() => navigation.navigate('Login')}
         />
       </FlagshipScreen>
     );
@@ -356,7 +357,7 @@ export default function EditProfileScreen() {
               iconColor={colors.brand}
               title="Password"
               subtitle="Change your password"
-              onPress={() => (navigation as any).navigate('ChangePassword')}
+              onPress={() => navigation.navigate('ChangePassword')}
               isFirst
             />
             <View style={styles.detailDivider} />
@@ -376,7 +377,7 @@ export default function EditProfileScreen() {
                   </View>
                 )
               }
-              onPress={() => (navigation as any).navigate('TwoFactorSetup')}
+              onPress={() => navigation.navigate('TwoFactorSetup')}
               isLast
             />
           </View>
@@ -387,7 +388,7 @@ export default function EditProfileScreen() {
           <Text style={styles.sectionLabel}>Account</Text>
 
           <Pressable
-            onPress={() => (navigation as any).navigate('AccountControl')}
+            onPress={() => navigation.navigate('AccountControl')}
             style={({ pressed }) => [
               styles.accountCard,
               {
@@ -458,7 +459,7 @@ export default function EditProfileScreen() {
 
 // ── PressableRow — compact row with icon chip for security section ──
 interface PressableRowProps {
-  icon: string;
+  icon: React.ComponentProps<typeof Ionicons>['name'];
   iconColor: string;
   title: string;
   subtitle?: string;
@@ -482,7 +483,7 @@ function PressableRow({ icon, iconColor, title, subtitle, statusPill, onPress, i
       accessibilityLabel={title}
     >
       <View style={[styles.rowIconChip, { backgroundColor: `${iconColor}15` }]}>
-        <Ionicons name={icon as any} size={18} color={iconColor} />
+        <Ionicons name={icon} size={18} color={iconColor} />
       </View>
       <View style={styles.rowText}>
         <Text style={styles.rowTitle} numberOfLines={1}>{title}</Text>

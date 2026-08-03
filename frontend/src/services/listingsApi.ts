@@ -19,6 +19,8 @@ export interface ListingSeller {
 export interface ListingEngagementSummaryApi {
   listingId: string;
   likes: number;
+  views?: number;
+  saves?: number;
   wishlistCount: number | null;
   collectionSaveCount: number | null;
   activeOfferCount: number | null;

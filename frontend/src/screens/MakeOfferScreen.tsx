@@ -20,6 +20,7 @@ import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { useCurrencyContext } from '../context/CurrencyContext';
 import { CURRENCIES } from '../constants/currencies';
 import { useToast } from '../context/ToastContext';
@@ -48,6 +49,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
   const { formatFromFiat } = useFormattedPrice();
   const { currencyCode, goldRates } = useCurrencyContext();
   const { show } = useToast();
+  const { isOffline } = useConnectivity();
   const currencySymbol = CURRENCIES[currencyCode].symbol;
   const [offerPrice, setOfferPrice] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -169,7 +171,10 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
       });
       show('Opening chat to send your offer.', 'info');
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Could not submit offer.';
+      const isNetworkError = isOffline || (err instanceof Error && /network|fetch|timeout/i.test(err.message));
+      const message = isNetworkError
+        ? 'You appear to be offline. Check your connection and try again.'
+        : err instanceof Error ? err.message : 'Could not submit offer.';
       setErrorMsg(message);
       show('Could not submit offer. Please try again.', 'error');
     } finally {

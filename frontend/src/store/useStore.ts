@@ -44,6 +44,7 @@ export interface User {
   website?: string | null;
   email?: string | null;
   phone?: string | null;
+  country?: string | null;
   displayName?: string | null;
   birthday?: string;
   role?: string;

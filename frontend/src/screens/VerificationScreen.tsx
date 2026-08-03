@@ -36,6 +36,7 @@ import {
   type KycStatus,
 } from '../services/complianceApi';
 import { parseApiError } from '../lib/apiClient';
+import { useConnectivity } from '../hooks/useConnectivity';
 
 type Props = StackScreenProps<RootStackParamList, 'Verification'>;
 
@@ -52,6 +53,7 @@ const UK_COUNTRIES = ['GB', 'IE'];
 
 export default function VerificationScreen({ navigation }: Props) {
   const { show } = useToast();
+  const { isOffline } = useConnectivity();
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const currentUser = useStore((state) => state.currentUser);
@@ -191,7 +193,8 @@ export default function VerificationScreen({ navigation }: Props) {
 
       setKycStep('status');
     } catch (err) {
-      const parsed = parseApiError(err);
+      const isNetworkError = isOffline || (err instanceof Error && /network|fetch|timeout/i.test(err.message));
+      const parsed = parseApiError(err, isNetworkError ? 'You appear to be offline. Check your connection and try again.' : undefined);
       show(parsed.message, 'error');
     } finally {
       setIsSubmittingKyc(false);
@@ -234,7 +237,8 @@ export default function VerificationScreen({ navigation }: Props) {
       show('Tax information saved', 'success');
       setDac7Step('status');
     } catch (err) {
-      const parsed = parseApiError(err);
+      const isNetworkError = isOffline || (err instanceof Error && /network|fetch|timeout/i.test(err.message));
+      const parsed = parseApiError(err, isNetworkError ? 'You appear to be offline. Check your connection and try again.' : undefined);
       show(parsed.message, 'error');
     } finally {
       setIsSubmittingDac7(false);

@@ -17,6 +17,7 @@ import { AppButton } from '../components/ui/AppButton';
 import { CachedImage } from '../components/CachedImage';
 import { Space, Radius, Type, Typography, DockConstants } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { haptics } from '../utils/haptics';
 import {
   CoOwnMarketHeader,
@@ -33,6 +34,7 @@ export default function BuyoutScreen() {
   const { colors, isDark } = useAppTheme();
   const { show } = useToast();
   const reducedMotionEnabled = useReducedMotion();
+  const { isOffline } = useConnectivity();
   const insets = useSafeAreaInsets();
   const currentUser = useStore((state) => state.currentUser);
   const { formatFromFiat } = useFormattedPrice();
@@ -121,7 +123,8 @@ export default function BuyoutScreen() {
               setTargetUnits('');
               navigation.replace('AssetDetail', { assetId: asset.id });
             } catch (err) {
-              const parsed = parseApiError(err, 'Failed to submit buyout offer');
+              const isNetworkError = isOffline || (err instanceof Error && /network|fetch|timeout/i.test(err.message));
+              const parsed = parseApiError(err, isNetworkError ? 'You appear to be offline. Check your connection and try again.' : 'Failed to submit buyout offer');
               show(parsed.message, 'error');
             } finally {
               setSubmitting(false);

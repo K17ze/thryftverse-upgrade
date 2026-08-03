@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { useCurrencyContext } from '../context/CurrencyContext';
 import { CURRENCIES } from '../constants/currencies';
 import { useToast } from '../context/ToastContext';
@@ -60,6 +61,7 @@ export default function WithdrawScreen() {
   const { formatFromFiat } = useFormattedPrice();
   const { currencyCode, goldRates } = useCurrencyContext();
   const { show } = useToast();
+  const { isOffline } = useConnectivity();
   const currentUser = useStore((state) => state.currentUser);
   const currencySymbol = CURRENCIES[currencyCode].symbol;
 
@@ -424,7 +426,8 @@ export default function WithdrawScreen() {
       );
       navigation.goBack();
     } catch (error) {
-      const parsed = parseApiError(error, 'Unable to submit withdrawal right now.');
+      const isNetworkError = isOffline || (error instanceof Error && /network|fetch|timeout/i.test(error.message));
+      const parsed = parseApiError(error, isNetworkError ? 'You appear to be offline. Check your connection and try again.' : 'Unable to submit withdrawal right now.');
       show(parsed.message, 'error');
     } finally {
       setIsWithdrawing(false);

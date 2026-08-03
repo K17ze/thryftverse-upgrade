@@ -15,7 +15,7 @@ import { fetchSellerAnalytics, fetchTopPerformers, type SellerAnalytics, type To
 type NavT = StackNavigationProp<RootStackParamList>;
 
 interface AnalyticsMetric {
-  icon: string;
+  icon: React.ComponentProps<typeof Ionicons>['name'];
   label: string;
   value: string;
   sublabel?: string;
@@ -87,9 +87,9 @@ export default function SellerAnalyticsScreen() {
     const totalSoldValue = sold.reduce((sum, l) => sum + l.priceGbp, 0);
     const avgActivePrice = active.length > 0 ? totalActiveValue / active.length : 0;
     const avgSoldPrice = sold.length > 0 ? totalSoldValue / sold.length : 0;
-    const totalViews = listings.reduce((sum, l) => sum + ((l as any).views ?? 0), 0);
-    const totalLikes = listings.reduce((sum, l) => sum + ((l as any).likes ?? 0), 0);
-    const totalSaves = listings.reduce((sum, l) => sum + ((l as any).saves ?? 0), 0);
+    const totalViews = listings.reduce((sum, l) => sum + (l.engagement?.views ?? 0), 0);
+    const totalLikes = listings.reduce((sum, l) => sum + (l.engagement?.likes ?? 0), 0);
+    const totalSaves = listings.reduce((sum, l) => sum + (l.engagement?.saves ?? 0), 0);
     const conversionRate = totalViews > 0 ? (sold.length / totalViews) * 100 : 0;
     const likeRate = totalViews > 0 ? (totalLikes / totalViews) * 100 : 0;
 
@@ -117,14 +117,14 @@ export default function SellerAnalyticsScreen() {
       }));
     }
     return [...listings]
-      .sort((a, b) => ((b as any).views ?? 0) - ((a as any).views ?? 0))
+      .sort((a, b) => (b.engagement?.views ?? 0) - (a.engagement?.views ?? 0))
       .slice(0, 5)
       .map((l) => ({
         id: l.id,
         title: l.title,
         price: l.priceGbp,
-        views: (l as any).views ?? 0,
-        likes: (l as any).likes ?? 0,
+        views: l.engagement?.views ?? 0,
+        likes: l.engagement?.likes ?? 0,
         status: l.status,
       }));
   }, [listings, topPerformersData]);
@@ -198,7 +198,7 @@ export default function SellerAnalyticsScreen() {
             return (
               <View key={metric.label} style={[styles.metricCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <View style={styles.metricHeader}>
-                  <Ionicons name={metric.icon as any} size={16} color={color} />
+                  <Ionicons name={metric.icon} size={16} color={color} />
                   <Text style={[styles.metricLabel, { color: colors.textMuted }]}>{metric.label}</Text>
                 </View>
                 <Text style={[styles.metricValue, { color }]}>{metric.value}</Text>

@@ -18,14 +18,14 @@ import { fetchUserListingsFromApi, ListingApiItem } from '../services/listingsAp
 type NavT = StackNavigationProp<RootStackParamList>;
 
 interface HubStat {
-  icon: string;
+  icon: React.ComponentProps<typeof Ionicons>['name'];
   label: string;
   value: string;
   tone: 'default' | 'success' | 'brand';
 }
 
 interface HubAction {
-  icon: string;
+  icon: React.ComponentProps<typeof Ionicons>['name'];
   label: string;
   subtitle: string;
   onPress: () => void;
@@ -71,8 +71,8 @@ export default function SellerHubScreen() {
     const sold = listings.filter((l) => l.status === 'sold');
     const totalActiveValue = active.reduce((sum, l) => sum + l.priceGbp, 0);
     const totalSoldValue = sold.reduce((sum, l) => sum + l.priceGbp, 0);
-    const totalViews = listings.reduce((sum, l) => sum + ((l as any).views ?? 0), 0);
-    const totalLikes = listings.reduce((sum, l) => sum + ((l as any).likes ?? 0), 0);
+    const totalViews = listings.reduce((sum, l) => sum + (l.engagement?.views ?? 0), 0);
+    const totalLikes = listings.reduce((sum, l) => sum + (l.engagement?.likes ?? 0), 0);
     const conversionRate = totalViews > 0 ? (sold.length / totalViews) * 100 : 0;
 
     return [
@@ -199,7 +199,7 @@ export default function SellerHubScreen() {
               const color = stat.tone === 'success' ? colors.success : stat.tone === 'brand' ? colors.brand : colors.textPrimary;
               return (
                 <View key={stat.label} style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                  <Ionicons name={stat.icon as any} size={16} color={color} />
+                  <Ionicons name={stat.icon} size={16} color={color} />
                   <Text style={[styles.statValue, { color }]}>{stat.value}</Text>
                   <Text style={[styles.statLabel, { color: colors.textMuted }]}>{stat.label}</Text>
                 </View>
@@ -224,7 +224,7 @@ export default function SellerHubScreen() {
                 accessibilityLabel={action.accessibilityLabel}
               >
                 <View style={[styles.actionIconWrap, { backgroundColor: colors.brand + '15' }]}>
-                  <Ionicons name={action.icon as any} size={20} color={colors.brand} />
+                  <Ionicons name={action.icon} size={20} color={colors.brand} />
                 </View>
                 <View style={styles.actionInfo}>
                   <Text style={[styles.actionLabel, { color: colors.textPrimary }]}>{action.label}</Text>

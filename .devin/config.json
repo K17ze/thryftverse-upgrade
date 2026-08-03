@@ -13,7 +13,17 @@
       "Read(**/__pycache__/**)",
       "Read(.venv/**)",
       "Read(thryftverse-payment-wallet-flagship-upgrade-prompts/**)",
-      "Read(thryftverse_product_detail_competitive_closure_audit_2026-07-30/**)"
+      "Read(thryftverse_product_detail_competitive_closure_audit_2026-07-30/**)",
+      "Read(frontend/tests_output.txt)",
+      "Read(report_full.txt)",
+      "Read(report_text.txt)",
+      "Read(report_wrapped.txt)",
+      "Read(Design.md)",
+      "Read(COOWN_MARKET_ECONOMIC_MODEL_AND_GALLERIA_UI_RESEARCH_2026-07.md)",
+      "Read(CREATE_POSTER_CREATE_LOOK_FLAGSHIP_AUDIT_2026-07.md)",
+      "Read(THRYFTVERSE_FLAGSHIP_FRONTEND_BACKEND_AUDIT_2026-07-24.md)",
+      "Read(Thryftverse_Flagship_UIUX_Audit_2026-07-11.md)",
+      "Read(ThryftVerse_UIUX_Research_Analysis_Report.docx)"
     ]
   }
 }
