@@ -12,6 +12,7 @@ import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Typography } from '../theme/designTokens';
+import { markInteractive } from '../platform/monitoring';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import {
   loginWithPassword,
@@ -112,6 +113,10 @@ export default function LoginScreen() {
       login(result.storeUser);
       setTwoFactorEnabled(result.user.twoFactorEnabled);
       navigation.replace('MainTabs');
+      // EAS Observe: login has completed and the user is being routed into the
+      // main app. Only the first markInteractive() app-wide records the TTI
+      // metric, so this is safe alongside the home-feed and splash signals.
+      markInteractive({ surface: 'login_complete' });
     } catch (error) {
       const authError = error as LoginWithPasswordError;
       if (
@@ -239,6 +244,10 @@ export default function LoginScreen() {
       login(result.storeUser);
       setTwoFactorEnabled(result.user.twoFactorEnabled);
       navigation.replace('MainTabs');
+      // EAS Observe: OTP login has completed and the user is being routed
+      // into the main app. Only the first markInteractive() app-wide records
+      // the TTI metric.
+      markInteractive({ surface: 'login_complete_otp' });
     } catch (error) {
       const maybeAttempts = (error as { attemptsRemaining?: number }).attemptsRemaining;
       const baseMessage = (error as Error).message || 'Unable to verify OTP right now.';

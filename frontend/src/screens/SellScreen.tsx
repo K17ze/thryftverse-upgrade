@@ -512,6 +512,9 @@ export default function SellScreen() {
 
     setErrors({});
 
+    // Performance mark: listing creation flow start (validation passed).
+    performance.mark('listing:create:start');
+
     if (listingMode === 'co_own') {
       const prefillResult = buildCreateCoOwnPrefillFromSell({
         shareCountInput,
@@ -617,6 +620,8 @@ export default function SellScreen() {
         setMediaDraftItems([]);
         queue.reset();
         haptics.success();
+        // Performance mark: listing creation complete (auction path).
+        performance.mark('listing:create:complete');
         navigation.replace('CreateAuction', { listingId });
       } catch (e: unknown) {
         const msg = typeof e === 'object' && e && 'message' in e && typeof (e as Error).message === 'string' ? (e as Error).message : 'Failed to prepare auction. Please try again.';
@@ -732,6 +737,8 @@ export default function SellScreen() {
       queue.reset();
       publishedListingIdRef.current = null;
       haptics.success();
+      // Performance mark: listing creation complete (standard path).
+      performance.mark('listing:create:complete');
       navigation.replace('ListingSuccess', {
         listingId,
         title: trimmedTitle,

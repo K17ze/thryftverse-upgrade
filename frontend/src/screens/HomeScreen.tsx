@@ -64,6 +64,7 @@ import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGri
 import { ProductAnalytics } from '../platform/product/productAnalytics';
 import { useFollowingFeed } from '../hooks/useFollowingFeed';
 import { useForYouFeed } from '../hooks/useForYouFeed';
+import { markInteractive } from '../platform/monitoring';
 import { resolveListingMediaHeightRatio } from '../utils/listingMediaGeometry';
 import { safeValidateDocument, type CreatorDocument } from '../creator/composition';
 import { CreatorCanvas } from '../creator/CreatorCanvas';
@@ -689,6 +690,21 @@ export default function HomeScreen() {
   const showFollowingRefreshing = feedMode === 'following' && followingFeed.isRefreshing;
   const showForYouLoading = feedMode === 'foryou' && forYouFeed.isLoading && !forYouFeed.isRefreshing && forYouFeed.listings.length === 0;
   const feedGridData = (showFeedLoadingSkeleton || showFollowingLoading || showForYouLoading) ? [] : activeFeedData;
+
+  // EAS Observe: record TTI once the home feed has real content rendered for
+  // the first time. Only the first markInteractive() call across the whole app
+  // records the metric, so this is safe to fire on every transition into a
+  // populated feed.
+  const feedFirstRenderRef = React.useRef(false);
+  React.useEffect(() => {
+    if (feedFirstRenderRef.current) {
+      return;
+    }
+    if (feedGridData.length > 0) {
+      feedFirstRenderRef.current = true;
+      markInteractive({ surface: 'home_feed_first_render', feed_mode: feedMode });
+    }
+  }, [feedGridData.length, feedMode]);
 
   const closePeek = React.useCallback(() => {
     setPeekItem(null);

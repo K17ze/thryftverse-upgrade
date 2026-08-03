@@ -1070,6 +1070,9 @@ export default function ChatScreen({ navigation, route }: Props) {
 
     scheduleScrollToEnd();
 
+    // Performance mark: chat message send initiated.
+    performance.mark("chat:send");
+
     sendConversationMessageOnApi(conversationId, trimmed)
       .then((serverMsg) => {
         setMessages((prev) =>
@@ -1079,6 +1082,8 @@ export default function ChatScreen({ navigation, route }: Props) {
               : m,
           ),
         );
+        // Performance mark: chat message delivered (server confirmed).
+        performance.mark("chat:delivered");
       })
 
       .catch(() => {

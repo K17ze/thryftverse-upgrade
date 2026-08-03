@@ -601,6 +601,9 @@ export default function CheckoutScreen() {
     const userId = currentUser?.id;
     if (!userId || !item) return;
 
+    // Performance mark: checkout flow start (user confirmed payment).
+    performance.mark('checkout:start');
+
     const PLATFORM_CHARGE = calculatePlatformChargeGbp(item.price);
     const POSTAGE_FEE = postageOption.priceFromGbp;
 
@@ -766,6 +769,8 @@ export default function CheckoutScreen() {
         show('Payment completed', 'success');
         pendingIntentIdRef.current = null;
         isSubmittingRef.current = false;
+        // Performance mark: checkout flow complete (payment settled).
+        performance.mark('checkout:complete');
         handleSettlementNavigation('succeeded', orderId, attemptId);
         return;
       }

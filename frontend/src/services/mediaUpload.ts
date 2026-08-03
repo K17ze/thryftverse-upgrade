@@ -228,6 +228,9 @@ export async function uploadMedia(
   source: string | MediaUploadAsset,
   folder = 'uploads'
 ): Promise<UploadedMedia> {
+  // Performance mark: image/media upload start.
+  performance.mark('upload:start');
+
   let fileUri: string;
   let fileName: string;
   let contentType: string;
@@ -288,6 +291,9 @@ export async function uploadMedia(
     }
     resolvedPublicUrl = publishedAsset.canonicalUrl;
   }
+
+  // Performance mark: image/media upload complete (finalized + published).
+  performance.mark('upload:complete');
 
   return {
     publicUrl: resolvedPublicUrl,

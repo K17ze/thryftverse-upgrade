@@ -23,7 +23,7 @@ import { CurrencyProvider } from './src/context/CurrencyContext';
 import { BackendDataProvider } from './src/context/BackendDataContext';
 import { SettingsPreferencesProvider } from './src/context/SettingsPreferencesContext';
 import { ToastContainer } from './src/components/Toast';
-import { AppErrorBoundary, initSentry } from './src/platform/monitoring';
+import { AppErrorBoundary, initSentry, ObserveRoot, markInteractive } from './src/platform/monitoring';
 import { KeyboardProvider } from './src/platform/keyboard';
 import { ServerStateProvider, useMobileQueryLifecycle } from './src/platform/server';
 import { BrandedSplash } from './src/components/BrandedSplash';
@@ -276,6 +276,10 @@ export default function App() {
           navigationRef.navigate('Chat', {
             conversationId: result.conversation.id,
           });
+          // EAS Observe: deep-link navigation has completed and the user has
+          // landed on the invite destination. Harmless if TTI was already
+          // recorded — only the first markInteractive() call is kept.
+          markInteractive({ surface: 'deep_link_invite' });
         } else {
           setQueuedConversationId(result.conversation.id);
         }
@@ -378,7 +382,15 @@ export default function App() {
   if (showBrandedSplash) {
     return (
       <ThemeProvider>
-        <BrandedSplash onFinish={() => setShowBrandedSplash(false)} />
+        <BrandedSplash
+          onFinish={() => {
+            setShowBrandedSplash(false);
+            // EAS Observe: the branded splash has dismissed and the real app
+            // surface is about to mount. The first markInteractive() records
+            // the TTI metric; later calls are ignored.
+            markInteractive({ surface: 'splash_resolved' });
+          }}
+        />
       </ThemeProvider>
     );
   }
@@ -400,6 +412,12 @@ export default function App() {
                         theme={premiumNavigationTheme}
                         onReady={() => {
                           setNavigationReady(true);
+
+                          // EAS Observe: the navigation container is ready and
+                          // the user can interact with the real app surface.
+                          // This is the primary TTI signal; only the first
+                          // markInteractive() call records the metric.
+                          markInteractive({ surface: 'navigation_ready' });
 
                           if (!queuedConversationId) {
                             return;
