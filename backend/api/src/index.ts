@@ -12366,8 +12366,9 @@ app.post(
     // prevent oversized auth payloads from consuming server resources.
     bodyLimit: 4096,
     config: {
+      // Account-creation spam protection — 5 req/min per OWASP guidance.
       rateLimit: {
-        max: 12,
+        max: 5,
         timeWindow: '1 minute',
       },
     },
@@ -12443,8 +12444,9 @@ app.post(
     // prevent oversized auth payloads from consuming server resources.
     bodyLimit: 4096,
     config: {
+      // Brute-force protection — 5 req/min per OWASP guidance.
       rateLimit: {
-        max: 20,
+        max: 5,
         timeWindow: '1 minute',
       },
     },
