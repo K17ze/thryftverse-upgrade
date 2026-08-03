@@ -9,6 +9,7 @@ import {
   Alert,
   Dimensions,
   ViewStyle,
+  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
@@ -35,7 +36,8 @@ export interface CreatorTemplateBrowserProps {
 
 /**
  * Instagram-grade template browser:
- * - Category filter chips at top (All, Featured, Interactive, Story, etc.)
+ * - Search bar at top to filter by name/description
+ * - Category filter chips (All, Featured, Interactive, Story, etc.)
  * - Featured templates get larger preview cards
  * - Real canvas previews, not flat placeholder cards
  * - Smooth haptic feedback on category change
@@ -51,20 +53,32 @@ export function CreatorTemplateBrowser({
   const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [activeCategory, setActiveCategory] = useState<TemplateCategory | 'all'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef<TextInput>(null);
 
   const templates = useMemo(
     () => getTemplatesByCategory(documentType, activeCategory),
     [documentType, activeCategory],
   );
 
+  const filteredTemplates = useMemo(() => {
+    if (!searchQuery.trim()) return templates;
+    const q = searchQuery.trim().toLowerCase();
+    return templates.filter(
+      (t) =>
+        t.name.toLowerCase().includes(q) ||
+        t.description.toLowerCase().includes(q),
+    );
+  }, [templates, searchQuery]);
+
   const featuredTemplates = useMemo(
-    () => templates.filter((t) => t.category === 'featured'),
-    [templates],
+    () => filteredTemplates.filter((t) => t.category === 'featured'),
+    [filteredTemplates],
   );
 
   const standardTemplates = useMemo(
-    () => templates.filter((t) => t.category !== 'featured'),
-    [templates],
+    () => filteredTemplates.filter((t) => t.category !== 'featured'),
+    [filteredTemplates],
   );
 
   const handleApply = useCallback(
@@ -98,6 +112,11 @@ export function CreatorTemplateBrowser({
     setActiveCategory(cat);
   }, [haptic]);
 
+  const handleClearSearch = useCallback(() => {
+    setSearchQuery('');
+    searchInputRef.current?.focus();
+  }, []);
+
   const renderFeaturedItem = useCallback(
     ({ item }: { item: CreatorTemplate }) => {
       const previewDoc = item.build();
@@ -107,7 +126,7 @@ export function CreatorTemplateBrowser({
       return (
         <Pressable
           onPress={() => handleApply(item)}
-          style={styles.featuredCard}
+          style={({ pressed }) => [styles.featuredCard, pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] }]}
           accessibilityLabel={`Apply featured template ${item.name}`}
           accessibilityRole="button"
         >
@@ -124,7 +143,12 @@ export function CreatorTemplateBrowser({
               <Text style={styles.featuredBadgeText}>Featured</Text>
             </View>
           </View>
-          <Text style={styles.featuredName}>{item.name}</Text>
+          <View style={styles.featuredInfo}>
+            <Text style={styles.featuredName} numberOfLines={1}>{item.name}</Text>
+            <View style={styles.featuredCategoryBadge}>
+              <Text style={styles.featuredCategoryText}>Featured</Text>
+            </View>
+          </View>
           <Text style={styles.featuredDesc} numberOfLines={1}>{item.description}</Text>
         </Pressable>
       );
@@ -141,7 +165,7 @@ export function CreatorTemplateBrowser({
       return (
         <Pressable
           onPress={() => handleApply(item)}
-          style={styles.templateCard}
+          style={({ pressed }) => [styles.templateCard, pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] }]}
           accessibilityLabel={`Apply template ${item.name}`}
           accessibilityRole="button"
         >
@@ -154,7 +178,7 @@ export function CreatorTemplateBrowser({
               mode="preview"
             />
           </View>
-          <Text style={styles.templateName}>{item.name}</Text>
+          <Text style={styles.templateName} numberOfLines={1}>{item.name}</Text>
           <Text style={styles.templateDesc} numberOfLines={1}>{item.description}</Text>
         </Pressable>
       );
@@ -175,6 +199,34 @@ export function CreatorTemplateBrowser({
         </PressScale>
       </View>
 
+      {/* Search bar */}
+      <View style={styles.searchContainer}>
+        <View style={styles.searchBar}>
+          <Ionicons name="search-outline" size={18} color={colors.textMuted} />
+          <TextInput
+            ref={searchInputRef}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search templates..."
+            placeholderTextColor={colors.textMuted}
+            style={styles.searchInput}
+            autoCorrect={false}
+            returnKeyType="search"
+          />
+          {searchQuery.length > 0 && (
+            <Pressable
+              onPress={handleClearSearch}
+              style={styles.searchClearBtn}
+              accessibilityLabel="Clear search"
+              accessibilityRole="button"
+              hitSlop={8}
+            >
+              <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+            </Pressable>
+          )}
+        </View>
+      </View>
+
       {/* Category filter chips */}
       <ScrollView
         horizontal
@@ -187,12 +239,16 @@ export function CreatorTemplateBrowser({
             <Pressable
               key={cat.key}
               onPress={() => handleCategoryChange(cat.key)}
-              style={[styles.categoryChip, isActive && styles.categoryChipActive, isActive && { backgroundColor: colors.brand }]}
+              style={({ pressed }) => [
+                styles.categoryChip,
+                isActive ? styles.categoryChipActive : styles.categoryChipInactive,
+                pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
+              ]}
               accessibilityLabel={`Filter by ${cat.label}`}
               accessibilityRole="button"
               hitSlop={8}
             >
-              <Text style={[styles.categoryChipText, isActive && styles.categoryChipTextActive, isActive && { color: colors.textInverse }]}>
+              <Text style={[styles.categoryChipText, isActive ? styles.categoryChipTextActive : styles.categoryChipTextInactive]}>
                 {cat.label}
               </Text>
             </Pressable>
@@ -226,7 +282,9 @@ export function CreatorTemplateBrowser({
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Ionicons name="grid-outline" size={40} color={colors.textMuted} />
-            <Text style={styles.emptyText}>No templates in this category</Text>
+            <Text style={styles.emptyText}>
+              {searchQuery.trim() ? 'No templates match your search' : 'No templates in this category'}
+            </Text>
           </View>
         }
       />
@@ -255,6 +313,33 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     borderRadius: Radius.sm,
   },
+  // ── Search bar ──
+  searchContainer: {
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.sm,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: 12,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.md,
+    gap: Space.sm,
+  },
+  searchInput: {
+    flex: 1,
+    fontFamily: Typography.family.regular,
+    fontSize: Type.body.size,
+    color: colors.textPrimary,
+    padding: 0,
+  },
+  searchClearBtn: {
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   // ── Category chips ──
   categoryScroll: {
     paddingHorizontal: Space.md,
@@ -262,23 +347,26 @@ function createStyles(colors: ThemeColors) {
     gap: Space.xs,
   },
   categoryChip: {
-    paddingHorizontal: Space.md + 2,
-    paddingVertical: 7,
-    borderRadius: Radius.full,
-    backgroundColor: colors.surfaceAlt,
+    paddingHorizontal: Space.md,
+    paddingVertical: 8,
+    borderRadius: 16,
     marginRight: Space.xs,
   },
   categoryChipActive: {
-    // backgroundColor set inline via colors.brand
+    backgroundColor: colors.brand,
+  },
+  categoryChipInactive: {
+    backgroundColor: colors.surfaceAlt,
   },
   categoryChipText: {
-    fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-    color: colors.textSecondary,
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.body.size,
   },
   categoryChipTextActive: {
-    fontFamily: Typography.family.semibold,
-    // color set inline via colors.textInverse
+    color: colors.textInverse,
+  },
+  categoryChipTextInactive: {
+    color: colors.textSecondary,
   },
   // ── Featured section ──
   featuredSection: {
@@ -299,9 +387,17 @@ function createStyles(colors: ThemeColors) {
   },
   featuredCard: {
     width: SCREEN_W * 0.42,
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    padding: Space.md,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
   featuredPreviewWrap: {
-    borderRadius: Radius.lg,
+    borderRadius: 12,
     overflow: 'hidden',
     marginBottom: Space.xs,
     position: 'relative',
@@ -324,11 +420,30 @@ function createStyles(colors: ThemeColors) {
     color: '#1a1a1a',
     letterSpacing: 0.3,
   },
+  featuredInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+    gap: Space.xs,
+  },
   featuredName: {
+    flex: 1,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
+    fontSize: Type.bodyEmphasis.size,
     color: colors.textPrimary,
-    marginBottom: 1,
+  },
+  featuredCategoryBadge: {
+    backgroundColor: colors.brand,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: Radius.full,
+  },
+  featuredCategoryText: {
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.meta.size,
+    color: colors.textInverse,
+    letterSpacing: Type.meta.letterSpacing,
   },
   featuredDesc: {
     fontFamily: Typography.family.regular,
@@ -346,26 +461,31 @@ function createStyles(colors: ThemeColors) {
   },
   templateCard: {
     flex: 1,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: Space.xs,
+    backgroundColor: colors.surface,
   },
   previewContainer: {
     alignItems: 'center',
     marginBottom: Space.xs,
-    borderRadius: Radius.md,
+    borderRadius: 8,
     overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
   },
   templateName: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size - 1,
+    fontSize: Type.caption.size,
     color: colors.textPrimary,
     marginBottom: 1,
+    paddingHorizontal: Space.xs,
   },
   templateDesc: {
     fontFamily: Typography.family.regular,
     fontSize: Type.caption.size - 1,
     color: colors.textMuted,
     lineHeight: 14,
+    paddingHorizontal: Space.xs,
   },
   emptyState: {
     alignItems: 'center',
@@ -376,6 +496,7 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.medium,
     fontSize: Type.body.size,
     color: colors.textSecondary,
+    textAlign: 'center',
   },
   });
 }

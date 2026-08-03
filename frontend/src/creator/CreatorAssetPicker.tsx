@@ -1777,6 +1777,7 @@ function MusicPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
   const [results, setResults] = useState<MusicTrack[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [previewTrack, setPreviewTrack] = useState<MusicTrack | null>(null);
   const mountedRef = useRef(true);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -1805,6 +1806,8 @@ function MusicPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
         previewUrl: t.previewUrl ?? '',
       })).filter((t: MusicTrack) => t.trackId && t.artworkUrl);
       setResults(tracks);
+      // Default the live preview to the first track so the sticker is never empty
+      if (tracks.length > 0) setPreviewTrack((prev) => prev ?? tracks[0]);
     } catch (err) {
       if (!mountedRef.current) return;
       setError((err as Error).message || 'Failed to load tracks');
@@ -1846,6 +1849,32 @@ function MusicPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
 
   return (
     <PickerShell title="Music" onClose={onClose}>
+      {/* Live sticker preview — shows how the music sticker will look on canvas */}
+      <View style={styles.musicPreviewCard}>
+        {previewTrack ? (
+          <>
+            <Image source={{ uri: previewTrack.artworkUrl }} style={styles.musicPreviewArt} resizeMode="cover" />
+            <View style={styles.musicPreviewInfo}>
+              <Text style={styles.musicPreviewTrackName} numberOfLines={1}>{previewTrack.trackName}</Text>
+              <Text style={styles.musicPreviewArtistName} numberOfLines={1}>{previewTrack.artistName}</Text>
+            </View>
+            <View style={styles.musicPreviewPlayBtn}>
+              <Ionicons name="play" size={16} color="#fff" />
+            </View>
+          </>
+        ) : (
+          <>
+            <View style={[styles.musicPreviewArt, { backgroundColor: colors.surfaceAlt }]} />
+            <View style={styles.musicPreviewInfo}>
+              <Text style={styles.musicPreviewTrackName}>Select a track</Text>
+              <Text style={styles.musicPreviewArtistName}>Search to preview</Text>
+            </View>
+            <View style={[styles.musicPreviewPlayBtn, { backgroundColor: colors.surfaceAlt }]}>
+              <Ionicons name="play" size={16} color={colors.textMuted} />
+            </View>
+          </>
+        )}
+      </View>
       <View style={styles.searchRow}>
         <Ionicons name="search" size={18} color={colors.textMuted} style={styles.searchIcon} />
         <TextInput
@@ -1859,8 +1888,13 @@ function MusicPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
           autoFocus
           accessibilityLabel="Search music"
         />
-        {isLoading && <ActivityIndicator size="small" color={colors.brand} />}
       </View>
+      {isLoading && (
+        <View style={styles.musicLoadingRow}>
+          <ActivityIndicator size="small" color={colors.brand} />
+          <Text style={styles.musicLoadingText}>Searching...</Text>
+        </View>
+      )}
       {error ? (
         <View style={styles.errorBody}>
           <Text style={styles.errorText}>Couldn't load music</Text>
@@ -1875,7 +1909,8 @@ function MusicPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
           renderItem={({ item }) => (
             <Pressable
               onPress={() => handleSelect(item)}
-              style={styles.musicRow}
+              onPressIn={() => setPreviewTrack(item)}
+              style={({ pressed }) => [styles.musicRow, pressed && { opacity: 0.6 }]}
               accessibilityLabel={`Select ${item.trackName} by ${item.artistName}`}
               accessibilityRole="button"
             >
@@ -1884,7 +1919,9 @@ function MusicPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
                 <Text style={styles.musicTrackName} numberOfLines={1}>{item.trackName}</Text>
                 <Text style={styles.musicArtistName} numberOfLines={1}>{item.artistName}</Text>
               </View>
-              <Ionicons name="add-circle-outline" size={22} color={colors.brand} />
+              <View style={styles.musicAddBtn}>
+                <Ionicons name="checkmark" size={18} color="#fff" />
+              </View>
             </Pressable>
           )}
           style={styles.resultList}
@@ -3086,46 +3123,69 @@ function WeatherPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => v
   return (
     <PickerShell title={isEditing ? 'Edit Weather' : 'Add Weather'} onClose={onClose}>
       <View style={styles.textPickerBody}>
-        <View style={styles.stickerPreviewPill}>
-          <Text style={styles.stickerPreviewPillEmoji}>{emoji}</Text>
-          <Text style={styles.stickerPreviewPillText}>{temperature}° {condition}</Text>
+        {/* Premium weather preview pill */}
+        <View style={styles.weatherPreviewPill}>
+          <Text style={styles.weatherPreviewEmoji}>{emoji}</Text>
+          <View style={styles.weatherPreviewInfo}>
+            <Text style={styles.weatherPreviewTemp}>{temperature}°</Text>
+            <Text style={styles.weatherPreviewCondition}>{condition}</Text>
+          </View>
+          {locationName.trim().length > 0 && (
+            <View style={styles.weatherPreviewLocation}>
+              <Ionicons name="location-outline" size={11} color="rgba(255,255,255,0.7)" />
+              <Text style={styles.weatherPreviewLocationText} numberOfLines={1}>{locationName.trim()}</Text>
+            </View>
+          )}
         </View>
         <Text style={styles.pickerSectionLabel}>Condition</Text>
         <View style={styles.weatherGrid}>
-          {WEATHER_OPTIONS.map((w) => (
-            <Pressable
-              key={w.condition}
-              onPress={() => { haptic.selection(); setCondition(w.condition); setEmoji(w.emoji); }}
-              style={[styles.weatherCell, condition === w.condition && styles.weatherCellActive]}
-              accessibilityLabel={`Weather ${w.condition}`}
-              accessibilityRole="button"
-              hitSlop={8}
-            >
-              <Text style={styles.weatherCellEmoji}>{w.emoji}</Text>
-              <Text style={styles.weatherCellLabel} numberOfLines={1}>{w.condition}</Text>
-            </Pressable>
-          ))}
+          {WEATHER_OPTIONS.map((w) => {
+            const isActive = condition === w.condition;
+            return (
+              <Pressable
+                key={w.condition}
+                onPress={() => { haptic.selection(); setCondition(w.condition); setEmoji(w.emoji); }}
+                style={({ pressed }) => [
+                  styles.weatherCell,
+                  isActive && styles.weatherCellActive,
+                  pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
+                ]}
+                accessibilityLabel={`Weather ${w.condition}`}
+                accessibilityRole="button"
+                hitSlop={8}
+              >
+                <Text style={[styles.weatherCellEmoji, isActive && { color: '#fff' }]}>{w.emoji}</Text>
+                <Text style={[styles.weatherCellLabel, isActive && { color: '#fff' }]} numberOfLines={1}>{w.condition}</Text>
+              </Pressable>
+            );
+          })}
         </View>
-        <Text style={styles.pickerSectionLabel}>Temperature (°C)</Text>
-        <TextInput
-          style={styles.textInput}
-          placeholder="22"
-          placeholderTextColor={colors.textMuted}
-          value={String(temperature)}
-          onChangeText={(v) => { const n = parseInt(v, 10); if (!isNaN(n)) setTemperature(n); }}
-          keyboardType="numeric"
-          accessibilityLabel="Temperature"
-        />
-        <Text style={styles.pickerSectionLabel}>Location (optional)</Text>
-        <TextInput
-          style={styles.textInput}
-          placeholder="London, UK"
-          placeholderTextColor={colors.textMuted}
-          value={locationName}
-          onChangeText={setLocationName}
-          maxLength={80}
-          accessibilityLabel="Weather location"
-        />
+        <Text style={styles.inputCardLabel}>Temperature</Text>
+        <View style={styles.inputCard}>
+          <TextInput
+            style={styles.inputCardText}
+            placeholder="22"
+            placeholderTextColor={colors.textMuted}
+            value={String(temperature)}
+            onChangeText={(v) => { const n = parseInt(v, 10); if (!isNaN(n)) setTemperature(n); }}
+            keyboardType="numeric"
+            accessibilityLabel="Temperature"
+          />
+          <Text style={styles.inputCardSuffix}>°C</Text>
+        </View>
+        <Text style={styles.inputCardLabel}>Location</Text>
+        <View style={styles.inputCard}>
+          <Ionicons name="location-outline" size={16} color={colors.textMuted} />
+          <TextInput
+            style={styles.inputCardText}
+            placeholder="London, UK"
+            placeholderTextColor={colors.textMuted}
+            value={locationName}
+            onChangeText={setLocationName}
+            maxLength={80}
+            accessibilityLabel="Weather location"
+          />
+        </View>
         <Pressable onPress={handleAdd} style={styles.saveBtn} accessibilityLabel={isEditing ? 'Update weather' : 'Add weather'} accessibilityRole="button" hitSlop={12}>
           <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Weather'}</Text>
         </Pressable>
@@ -3370,11 +3430,20 @@ function createStyles(colors: ThemeColors) {
   },
   gifThumb: { width: '100%', height: '100%' },
   // ── Music picker ──
-  musicRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
-  musicArtwork: { width: 48, height: 48, borderRadius: Radius.sm },
+  musicPreviewCard: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, backgroundColor: colors.surface, borderRadius: 12, padding: Space.md, marginHorizontal: Space.md, marginBottom: Space.sm, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
+  musicPreviewArt: { width: 48, height: 48, borderRadius: Radius.md },
+  musicPreviewInfo: { flex: 1, gap: 2 },
+  musicPreviewTrackName: { fontFamily: Typography.family.semibold, fontSize: Type.bodyEmphasis.size, color: colors.textPrimary },
+  musicPreviewArtistName: { fontFamily: Typography.family.regular, fontSize: Type.caption.size, color: colors.textSecondary },
+  musicPreviewPlayBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.brand, justifyContent: 'center', alignItems: 'center' },
+  musicLoadingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.sm, paddingVertical: Space.sm },
+  musicLoadingText: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary },
+  musicRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm, paddingHorizontal: Space.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  musicArtwork: { width: 56, height: 56, borderRadius: Radius.md, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
   musicInfo: { flex: 1, gap: 2 },
-  musicTrackName: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textPrimary },
+  musicTrackName: { fontFamily: Typography.family.semibold, fontSize: Type.bodyEmphasis.size, color: colors.textPrimary },
   musicArtistName: { fontFamily: Typography.family.regular, fontSize: Type.caption.size, color: colors.textSecondary },
+  musicAddBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.brand, justifyContent: 'center', alignItems: 'center' },
   // ── Quiz picker ──
   quizOptionRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginBottom: Space.xs },
   quizCorrectDot: { width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' },
@@ -3407,11 +3476,22 @@ function createStyles(colors: ThemeColors) {
   stickerPreviewPillText: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: '#fff' },
   stickerPreviewPillEmoji: { fontSize: 20 },
   // ── Weather picker ──
+  weatherPreviewPill: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.md, borderRadius: 16, backgroundColor: 'rgba(201,164,106,0.95)', alignSelf: 'center', marginBottom: Space.sm, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 3, minWidth: 180 },
+  weatherPreviewEmoji: { fontSize: 32 },
+  weatherPreviewInfo: { gap: 0 },
+  weatherPreviewTemp: { fontFamily: Typography.family.bold, fontSize: Type.subtitle.size, color: '#fff' },
+  weatherPreviewCondition: { fontFamily: Typography.family.regular, fontSize: Type.caption.size, color: 'rgba(255,255,255,0.85)' },
+  weatherPreviewLocation: { flexDirection: 'row', alignItems: 'center', gap: 3, marginLeft: 'auto' },
+  weatherPreviewLocationText: { fontFamily: Typography.family.medium, fontSize: Type.meta.size, color: 'rgba(255,255,255,0.7)' },
   weatherGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
-  weatherCell: { width: '23%', aspectRatio: 1, borderRadius: Radius.md, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', gap: 4 },
-  weatherCellActive: { backgroundColor: `${colors.brand}18`, borderWidth: 1.5, borderColor: colors.brand },
-  weatherCellEmoji: { fontSize: 24 },
-  weatherCellLabel: { fontFamily: Typography.family.medium, fontSize: 9, color: colors.textSecondary, textAlign: 'center' },
+  weatherCell: { width: 80, height: 80, borderRadius: 12, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', gap: 4 },
+  weatherCellActive: { backgroundColor: colors.brand },
+  weatherCellEmoji: { fontSize: 28 },
+  weatherCellLabel: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary, textAlign: 'center' },
+  inputCardLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary, marginBottom: 6, marginTop: Space.sm },
+  inputCard: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, backgroundColor: colors.surface, borderRadius: 12, padding: Space.md, marginBottom: Space.xs },
+  inputCardText: { flex: 1, fontSize: Type.body.size, color: colors.textPrimary, fontFamily: Typography.family.regular, paddingVertical: 2 },
+  inputCardSuffix: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: colors.textSecondary },
   // ── Spectrum color picker ──
   spectrumWrap: { marginTop: Space.sm, gap: Space.xs },
   spectrumBar: { height: 36, borderRadius: 18, overflow: 'hidden', position: 'relative', elevation: 3, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 6, shadowOffset: { width: 0, height: 3 } },

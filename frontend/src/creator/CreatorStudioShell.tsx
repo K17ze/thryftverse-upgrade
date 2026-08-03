@@ -11,6 +11,8 @@ import {
   useWindowDimensions,
   Platform,
   PanResponder,
+  ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -253,13 +255,10 @@ function CreatorStudioInner() {
 
   const selectedLayer = page?.layers.find((l) => l.id === selectedLayerId) ?? null;
 
-  // Compact draft status label for the top bar centre
-  const draftStatusLabel = useMemo(() => {
-    if (isLoadingDraft) return 'Loading…';
-    if (autosaveStatus === 'saving') return 'Saving…';
-    if (autosaveStatus === 'failed') return 'Save failed';
-    return null;
-  }, [isLoadingDraft, autosaveStatus]);
+  // Autosave status for the top bar (saving / saved / failed with retry)
+  const handleAutosaveRetry = useCallback(() => {
+    saveDraft();
+  }, [saveDraft]);
 
   // Handle media selection from entry screen — add all layers to the
   // first page, then enter the editor.
@@ -320,50 +319,23 @@ function CreatorStudioInner() {
         </View>
       </View>
 
-      {/* ── Floating top bar with gradient fade ──────────────────────── */}
-      {/* Semi-transparent gradient from black to transparent, like
-          Instagram Stories. Chrome floats over the canvas. */}
+      {/* ── Top bar — solid, themed, 56pt + safe area ─────────────────── */}
       <View style={[styles.topBarContainer, { paddingTop: insets.top }]}>
-        <LinearGradient
-          colors={['rgba(0,0,0,0.6)', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0)']}
-          style={styles.topBarGradient}
-        >
-          {/* Page progress dots (poster) — Instagram-style segments at top */}
-          {isPoster && document.pages.length > 1 && (
-            <View style={styles.pageDotsRow}>
-              {document.pages.map((p, i) => (
-                <PressScale
-                  key={p.id}
-                  onPress={() => { selectLayer(null); setActivePageIndex(i); }}
-                  onLongPress={() => setPageMenuIndex(i)}
-                  style={styles.pageDotSegment}
-                  accessibilityLabel={`Page ${i + 1}`}
-                >
-                  <View style={[
-                    styles.pageDotFill,
-                    i === activePageIndex
-                      ? { backgroundColor: '#fff' }
-                      : { backgroundColor: 'rgba(255,255,255,0.3)' },
-                  ]} />
-                </PressScale>
-              ))}
-            </View>
-          )}
-
+        <View style={[styles.topBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
           <View style={styles.topBarRow}>
             {selectedLayer ? (
-              /* During selection: Done · object name · More (audit 9.3) */
+              /* During selection: Done · object name · More */
               <>
                 <PressScale
                   onPress={() => selectLayer(null)}
                   style={styles.topBtn}
                   accessibilityLabel="Done"
                 >
-                  <Text style={styles.doneText}>Done</Text>
+                  <Text style={[styles.doneText, { color: colors.textPrimary }]}>Done</Text>
                 </PressScale>
 
                 <View style={styles.topCenter}>
-                  <Text style={styles.titleText} numberOfLines={1}>
+                  <Text style={[styles.titleText, { color: colors.textPrimary }]} numberOfLines={1}>
                     {layerTypeLabel(selectedLayer.type)}
                   </Text>
                 </View>
@@ -374,73 +346,146 @@ function CreatorStudioInner() {
                     style={styles.topBtn}
                     accessibilityLabel="More options"
                   >
-                    <Ionicons name="ellipsis-horizontal" size={24} color="#fff" />
+                    <Ionicons name="ellipsis-horizontal" size={24} color={colors.textPrimary} />
                   </PressScale>
                 </View>
               </>
             ) : (
-              /* Default: Back · center draft status · Preview/Next (audit 9.3) */
+              /* Default: Back · Undo · Redo · spacer · Preview · Settings · Autosave · Publish */
               <>
-                <PressScale
-                  onPress={handleBack}
-                  style={styles.topBtn}
-                  accessibilityLabel="Back"
-                >
-                  <Ionicons name="close" size={28} color="#fff" />
-                </PressScale>
-
-                {/* Centre: mode-specific title + status */}
-                <View style={styles.topCenter}>
-                  {draftStatusLabel ? (
-                    <Text style={styles.statusText} numberOfLines={1}>
-                      {draftStatusLabel}
-                    </Text>
-                  ) : (
-                    <Text style={styles.titleText} numberOfLines={1}>
-                      {isLook ? 'Look' : 'Story'}
-                      {isDirty ? ' ·' : ''}
-                    </Text>
-                  )}
+                <View style={styles.topLeftGroup}>
+                  <PressScale
+                    onPress={handleBack}
+                    style={styles.topBtn}
+                    accessibilityLabel="Back"
+                  >
+                    <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
+                  </PressScale>
+                  <PressScale
+                    onPress={() => { undo(); }}
+                    disabled={!canUndo}
+                    style={[styles.topBtn, canUndo ? null : { opacity: 0.3 }] as any}
+                    accessibilityLabel="Undo"
+                  >
+                    <Ionicons name="arrow-undo" size={22} color={colors.textPrimary} />
+                  </PressScale>
+                  <PressScale
+                    onPress={() => { redo(); }}
+                    disabled={!canRedo}
+                    style={[styles.topBtn, canRedo ? null : { opacity: 0.3 }] as any}
+                    accessibilityLabel="Redo"
+                  >
+                    <Ionicons name="arrow-redo" size={22} color={colors.textPrimary} />
+                  </PressScale>
                 </View>
 
-                {/* Right: Preview + Next */}
-                <View style={styles.topRight}>
+                <View style={styles.topRightGroup}>
+                  {/* Autosave status — left of publish button */}
+                  {(() => {
+                    const status = isLoadingDraft ? 'saving' : autosaveStatus;
+                    if (status === 'saving') {
+                      return (
+                        <View style={styles.autosaveStatus}>
+                          <ActivityIndicator size={12} color={colors.textSecondary} />
+                          <Text style={[styles.autosaveText, { color: colors.textSecondary }]}>Saving…</Text>
+                        </View>
+                      );
+                    }
+                    if (status === 'failed') {
+                      return (
+                        <Pressable
+                          onPress={() => { saveDraft(); }}
+                          style={styles.autosaveStatus}
+                          accessibilityLabel="Retry save"
+                        >
+                          <Ionicons name="warning-outline" size={12} color={colors.danger} />
+                          <Text style={[styles.autosaveText, { color: colors.danger }]}>Tap to retry</Text>
+                        </Pressable>
+                      );
+                    }
+                    if (status === 'saved' && isDirty) {
+                      return (
+                        <View style={styles.autosaveStatus}>
+                          <Ionicons name="checkmark" size={12} color={colors.success} />
+                          <Text style={[styles.autosaveText, { color: colors.success }]}>Saved</Text>
+                        </View>
+                      );
+                    }
+                    return null;
+                  })()}
+
                   <PressScale
                     onPress={() => setShowPreview(true)}
                     style={styles.topBtn}
                     accessibilityLabel="Preview"
                   >
-                    <Ionicons name="eye-outline" size={24} color="#fff" />
+                    <Ionicons name="eye-outline" size={22} color={colors.textPrimary} />
+                  </PressScale>
+                  <PressScale
+                    onPress={() => setShowSettings(true)}
+                    style={styles.topBtn}
+                    accessibilityLabel="Settings"
+                  >
+                    <Ionicons name="settings-outline" size={22} color={colors.textPrimary} />
                   </PressScale>
                   <PressScale
                     onPress={() => setShowPublish(true)}
-                    style={styles.nextBtn}
-                    accessibilityLabel="Next"
+                    style={[styles.publishBtn, { backgroundColor: colors.brand }]}
+                    accessibilityLabel="Publish"
                     scale={0.97}
                   >
-                    <Text style={styles.nextBtnText}>Next</Text>
+                    <Text style={[styles.publishBtnText, { color: colors.textInverse }]}>Publish</Text>
                   </PressScale>
                 </View>
               </>
             )}
           </View>
-        </LinearGradient>
+        </View>
       </View>
 
-      {/* ── Add page button (poster) — floating, right side ──────────── */}
-      {isPoster && document.pages.length < 10 && (
-        <PressScale
-          onPress={() => { selectLayer(null); addPage(); }}
-          style={[styles.addPageFloat, { top: insets.top + 60 }]}
-          accessibilityLabel="Add page"
+      {/* ── Page dots row (poster) — floating pill below top bar ──────── */}
+      {isPoster && document.pages.length > 1 && (
+        <View
+          style={[
+            styles.pageDotsFloat,
+            { top: insets.top + 56 + Space.sm },
+          ]}
         >
-          <LinearGradient
-            colors={['rgba(0,0,0,0.5)', 'rgba(0,0,0,0.3)']}
-            style={styles.addPageFloatGradient}
-          >
-            <Ionicons name="add" size={20} color="#fff" />
-          </LinearGradient>
-        </PressScale>
+          <View style={[styles.pageDotsPill, { backgroundColor: colors.surfaceAlt }]}>
+            {document.pages.map((p, i) => (
+              <PressScale
+                key={p.id}
+                onPress={() => { selectLayer(null); setActivePageIndex(i); }}
+                onLongPress={() => setPageMenuIndex(i)}
+                style={styles.pageDotTarget}
+                accessibilityLabel={`Page ${i + 1}`}
+              >
+                <View style={[
+                  styles.pageDot,
+                  i === activePageIndex
+                    ? { backgroundColor: colors.brand, width: 8, height: 8 }
+                    : { backgroundColor: colors.textMuted, width: 6, height: 6 },
+                ]} />
+              </PressScale>
+            ))}
+          </View>
+
+          {/* Page count */}
+          <Text style={[styles.pageCountText, { color: colors.textSecondary }]}>
+            {activePageIndex + 1}/{document.pages.length}
+          </Text>
+
+          {/* Add page button */}
+          {document.pages.length < 10 && (
+            <PressScale
+              onPress={() => { selectLayer(null); addPage(); }}
+              style={[styles.addPageBtn, { backgroundColor: colors.surface, borderColor: colors.brand }]}
+              accessibilityLabel="Add page"
+            >
+              <Ionicons name="add" size={18} color={colors.brand} />
+            </PressScale>
+          )}
+        </View>
       )}
 
       {/* ── Floating bottom rail with gradient fade ──────────────────── */}
@@ -989,6 +1034,85 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
+  },
+  // ── Top bar groups (default mode) ──
+  topLeftGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  topRightGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+  },
+  // ── Solid top bar ──
+  topBar: {
+    height: 56,
+    paddingHorizontal: Space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  // ── Autosave status ──
+  autosaveStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  autosaveText: {
+    fontFamily: Typography.family.medium,
+    fontSize: Type.meta.size,
+  },
+  // ── Publish button ──
+  publishBtn: {
+    borderRadius: 20,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  publishBtnText: {
+    fontFamily: Typography.family.semibold,
+    fontSize: 14,
+  },
+  // ── Page dots floating pill ──
+  pageDotsFloat: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.sm,
+    zIndex: 90,
+  },
+  pageDotsPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 16,
+    paddingHorizontal: Space.sm,
+    paddingVertical: 6,
+  },
+  pageDotTarget: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pageDot: {
+    borderRadius: 4,
+  },
+  pageCountText: {
+    fontFamily: Typography.family.medium,
+    fontSize: Type.meta.size,
+  },
+  addPageBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   nextBtnText: {
     fontFamily: Typography.family.semibold,

@@ -1,7 +1,9 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useCreator } from './CreatorContext';
@@ -67,12 +69,22 @@ export function CreatorToolDock({
   const { document } = useCreator();
   const { colors } = useAppTheme();
   const haptic = useHaptic();
+  const insets = useSafeAreaInsets();
   const isLook = document.type === 'look';
+  const [hoveredTool, setHoveredTool] = useState<string | null>(null);
+
+  const isSelectionMode = !!selectedLayer;
 
   // Build contextual tools based on selection state and mode
   const tools: RailTool[] = selectedLayer
     ? buildSelectionTools(selectedLayer, isLook, onEditLayer, onDeleteLayer, onDuplicateLayer, onReorderLayer, onCropLayer, onCutoutLayer)
     : buildDefaultTools(isLook, onToolPress, onAddPage, onLayoutPresets);
+
+  // Split into primary / secondary groups so a divider can separate them.
+  // In selection mode every tool is secondary (no primary flag), so no divider.
+  const primaryTools = tools.filter(t => t.primary);
+  const secondaryTools = tools.filter(t => !t.primary);
+  const hasDivider = !isSelectionMode && primaryTools.length > 0 && secondaryTools.length > 0;
 
   const handleToolPress = useCallback((tool: RailTool) => {
     if (tool.danger) {
@@ -93,88 +105,130 @@ export function CreatorToolDock({
     onMore();
   }, [haptic, onMore]);
 
-  // When floating over canvas: blurred glass dock (Instagram pattern)
-  // When solid (in a sheet): surface background, theme icons
-  const iconColor = floating ? '#fff' : colors.textSecondary;
+  // ── Mode-aware visual hierarchy ────────────────────────────────────
+  // Default (look/poster) mode: 48×48 buttons, primary tools get brand fill.
+  // Selection mode: 44×44 buttons, surface fill, danger uses danger icon.
+  const toolSize = isSelectionMode ? 44 : 48;
+  const toolRadius = isSelectionMode ? 10 : 12;
+  const toolIconSize = isSelectionMode ? 22 : 24;
+  const toolGap = isSelectionMode ? Space.xs : Space.sm;
+
+  // Floating (glass) dock keeps its own translucent palette.
+  const iconColor = floating ? '#fff' : colors.textPrimary;
   const labelColor = floating ? 'rgba(255,255,255,0.75)' : colors.textMuted;
   const dangerIconColor = floating ? '#E06666' : colors.danger;
   const dangerLabelColor = floating ? 'rgba(224,102,102,0.85)' : colors.danger;
-  const primaryIconColor = floating ? '#fff' : colors.textInverse;
-  const primaryIconBg = floating ? 'rgba(255,255,255,0.18)' : colors.brand;
-  const secondaryIconBg = floating ? 'rgba(255,255,255,0.08)' : 'transparent';
+
+  const getToolBg = (tool: RailTool): string => {
+    if (floating) {
+      if (tool.danger) return 'transparent';
+      return tool.primary ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.08)';
+    }
+    if (tool.danger) return 'transparent';
+    if (isSelectionMode) return colors.surface;
+    return tool.primary ? colors.brand : colors.surfaceAlt;
+  };
+
+  const getToolIconColor = (tool: RailTool): string => {
+    if (tool.danger) return dangerIconColor;
+    if (floating) return '#fff';
+    if (isSelectionMode) return colors.textPrimary;
+    return tool.primary ? colors.textInverse : colors.textPrimary;
+  };
+
+  // Render a single tool button — shared by both dock variants.
+  const renderTool = (tool: RailTool) => (
+    <PressScale
+      key={tool.label}
+      onPress={() => handleToolPress(tool)}
+      onLongPress={() => setHoveredTool(tool.label)}
+      onPressOut={() => setHoveredTool(null)}
+      style={styles.toolBtn}
+      accessibilityLabel={tool.label}
+      hitSlop={8}
+    >
+      <View
+        style={[
+          styles.toolIconWrap,
+          {
+            width: toolSize,
+            height: toolSize,
+            borderRadius: toolRadius,
+            backgroundColor: getToolBg(tool),
+          },
+        ]}
+      >
+        <Ionicons
+          name={tool.icon as any}
+          size={toolIconSize}
+          color={getToolIconColor(tool)}
+        />
+      </View>
+      <Text
+        style={[
+          styles.toolLabel,
+          { color: tool.danger ? dangerLabelColor : labelColor },
+          tool.primary && styles.toolLabelPrimary,
+        ]}
+        numberOfLines={1}
+      >
+        {tool.label}
+      </Text>
+    </PressScale>
+  );
+
+  // Render the tool list with an optional divider between primary/secondary.
+  const renderToolList = () => {
+    if (!hasDivider) {
+      return tools.map(renderTool);
+    }
+    return [
+      ...primaryTools.map(renderTool),
+      <View key="__divider" style={[styles.groupDivider, { backgroundColor: colors.border }]} />,
+      ...secondaryTools.map(renderTool),
+    ];
+  };
 
   return (
-    <View style={[styles.container, floating ? styles.containerFloating : { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+    <View
+      style={[
+        styles.container,
+        floating
+          ? styles.containerFloating
+          : {
+              backgroundColor: colors.surface,
+              borderTopColor: colors.border,
+              paddingTop: Space.sm,
+              paddingBottom: Math.max(insets.bottom, Space.sm),
+            },
+      ]}
+    >
       {floating ? (
         <BlurView intensity={60} tint="dark" style={styles.blurPill}>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.scrollContent}
+            contentContainerStyle={[styles.scrollContent, { gap: toolGap }]}
           >
-            {tools.map((tool, i) => (
-              <PressScale
-                key={tool.label}
-                onPress={() => handleToolPress(tool)}
-                style={styles.toolBtn}
-                accessibilityLabel={tool.label}
-                hitSlop={8}
-              >
-                <View style={[
-                  styles.toolIconWrap,
-                  { backgroundColor: tool.primary ? primaryIconBg : (tool.danger ? 'transparent' : secondaryIconBg) },
-                  tool.danger && styles.toolIconWrapDanger,
-                ]}>
-                  <Ionicons
-                    name={tool.icon as any}
-                    size={tool.primary ? 22 : 20}
-                    color={tool.danger ? dangerIconColor : (tool.primary ? primaryIconColor : iconColor)}
-                  />
-                </View>
-                <Text
-                  style={[styles.toolLabel, { color: tool.danger ? dangerLabelColor : labelColor }, tool.primary && styles.toolLabelPrimary]}
-                  numberOfLines={1}
-                >
-                  {tool.label}
-                </Text>
-              </PressScale>
-            ))}
+            {renderToolList()}
           </ScrollView>
         </BlurView>
       ) : (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
-        >
-          {tools.map((tool, i) => (
-            <PressScale
-              key={tool.label}
-              onPress={() => handleToolPress(tool)}
-              style={styles.toolBtn}
-              accessibilityLabel={tool.label}
-              hitSlop={8}
-            >
-              <View style={[
-                styles.toolIconWrap,
-                { backgroundColor: tool.primary ? primaryIconBg : (tool.danger ? 'transparent' : secondaryIconBg) },
-                tool.danger && styles.toolIconWrapDanger,
-              ]}>
-                <Ionicons
-                  name={tool.icon as any}
-                  size={tool.primary ? 22 : 20}
-                  color={tool.danger ? dangerIconColor : (tool.primary ? primaryIconColor : iconColor)}
-                />
-              </View>
-              <Text
-                style={[styles.toolLabel, { color: tool.danger ? dangerLabelColor : labelColor }, tool.primary && styles.toolLabelPrimary]}
-                numberOfLines={1}
-              >
-                {tool.label}
-              </Text>
-            </PressScale>
-          ))}
-        </ScrollView>
+        <View style={styles.scrollWrap}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={[styles.scrollContent, { gap: toolGap }]}
+          >
+            {renderToolList()}
+          </ScrollView>
+          {/* Subtle right-edge gradient fade indicating horizontal overflow */}
+          <LinearGradient
+            pointerEvents="none"
+            colors={[`${colors.surface}00`, colors.surface]}
+            style={styles.fadeRight}
+          />
+        </View>
       )}
 
       {/* Primary action — separated from editing tools */}
@@ -185,7 +239,7 @@ export function CreatorToolDock({
           accessibilityLabel="More options"
           hitSlop={12}
         >
-          <Ionicons name="ellipsis-horizontal" size={24} color={iconColor} />
+          <Ionicons name="ellipsis-horizontal" size={24} color={floating ? '#fff' : colors.textSecondary} />
         </PressScale>
         {/* Publish button — always visible, floating or solid */}
         <PressScale
@@ -198,6 +252,13 @@ export function CreatorToolDock({
           <Text style={[styles.publishBtnText, { color: colors.textInverse }]}>Next</Text>
         </PressScale>
       </View>
+
+      {/* Long-press tooltip label — centered below the dock */}
+      {hoveredTool ? (
+        <Text style={[styles.hoverLabel, { color: colors.textSecondary }]} numberOfLines={1}>
+          {hoveredTool}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -216,11 +277,12 @@ function buildDefaultTools(
   onLayoutPresets?: () => void,
 ): RailTool[] {
   if (isLook) {
-    // Look: collage-first, product-tagging, editorial layouts
+    // Look: collage-first, product-tagging, editorial layouts.
+    // Primary tools (Media, Text) lead with brand fill; secondary tools follow.
     return [
       { icon: 'images', label: 'Media', action: () => onToolPress('media'), primary: true },
-      { icon: 'pricetag-outline', label: 'Product', action: () => onToolPress('product') },
       { icon: 'text', label: 'Text', action: () => onToolPress('text'), primary: true },
+      { icon: 'pricetag-outline', label: 'Product', action: () => onToolPress('product') },
       { icon: 'brush-outline', label: 'Draw', action: () => onToolPress('draw') },
       { icon: 'image-outline', label: 'GIF', action: () => onToolPress('gif') },
       { icon: 'musical-notes-outline', label: 'Music', action: () => onToolPress('music') },
@@ -327,7 +389,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Space.sm,
-    paddingVertical: Space.xs,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   containerFloating: {
@@ -341,29 +402,43 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginHorizontal: Space.xs,
   },
+  // Wraps the horizontal ScrollView so a right-edge fade can overlay it.
+  scrollWrap: {
+    flex: 1,
+    position: 'relative',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  // Subtle gradient fade on the right edge signalling horizontal overflow.
+  fadeRight: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    width: 28,
+  },
   scrollContent: {
-    gap: Space.xs,
     alignItems: 'center',
     paddingHorizontal: Space.xs,
   },
   toolBtn: {
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 60,
+    minWidth: 56,
     minHeight: 56,
     paddingHorizontal: Space.xs + 2,
     borderRadius: Radius.md,
     gap: 4,
   },
   toolIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  toolIconWrapDanger: {
-    // No fill — danger is communicated via icon color, not background
+  // Thin vertical divider between primary and secondary tool groups.
+  groupDivider: {
+    width: 1,
+    height: 24,
+    marginHorizontal: Space.xs,
   },
   toolLabel: {
     fontSize: 10,
@@ -373,6 +448,17 @@ const styles = StyleSheet.create({
   toolLabelPrimary: {
     fontFamily: Typography.family.semibold,
     fontSize: 10.5,
+  },
+  // Long-press tooltip label — centered below the dock.
+  hoverLabel: {
+    position: 'absolute',
+    bottom: 2,
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+    letterSpacing: 0.1,
   },
   actions: {
     flexDirection: 'row',
