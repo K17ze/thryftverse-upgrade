@@ -24,6 +24,7 @@ import {
   FlatList,
 } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Typography, Space, Radius } from '../../theme/designTokens';
 import { isVideoUri } from '../../utils/media';
 import { CachedImage } from '../CachedImage';
@@ -218,6 +219,7 @@ export function FullscreenMediaViewer({
   onActiveIndexChange,
 }: FullscreenMediaViewerProps) {
   const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const listRef = useRef<FlatList<ProductMediaItem>>(null);
   const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 50 });
   const mediaItems = useMemo<ProductMediaItem[]>(() => {
@@ -302,7 +304,7 @@ export function FullscreenMediaViewer({
       />
 
       {/* Close button */}
-      <View style={styles.closeButtonContainer}>
+      <View style={[styles.closeButtonContainer, { top: Math.max(insets.top, 16) }]}>
         <AnimatedPressable
           style={styles.closeButton}
           onPress={onClose}
@@ -348,7 +350,6 @@ const styles = StyleSheet.create({
   },
   closeButtonContainer: {
     position: 'absolute',
-    top: 50,
     left: 0,
     right: 0,
     flexDirection: 'row',

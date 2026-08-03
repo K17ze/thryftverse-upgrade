@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, StatusBar, FlatList, ActivityIndicator, RefreshControl } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, FlatList, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation, RouteProp, useRoute, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -9,7 +9,7 @@ import { TypeStyles, Space, Radius, Type, Typography } from '../theme/designToke
 import { RootStackParamList } from '../navigation/types';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { EmptyState } from '../components/EmptyState';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { CachedImage } from '../components/CachedImage';
 import { SellerStandardsBadges } from '../components/profile/SellerStandardsBadges';
 import { useStore } from '../store/useStore';
@@ -67,7 +67,7 @@ function StatCard({ icon, label, value, tone }: { icon: string; label: string; v
 }
 
 export default function MyListingsScreen() {
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<NavT>();
   const route = useRoute<RouteT>();
@@ -136,20 +136,16 @@ export default function MyListingsScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} />
-        <ScreenHeader title={headerTitle} onBack={() => navigation.goBack()} />
-        <View style={styles.body}>
-          <ActivityIndicator size="large" color={colors.brand} />
-        </View>
-      </SafeAreaView>
+      <FlagshipScreen header={<FlagshipHeader title={headerTitle} onBack={() => navigation.goBack()} />}>
+        <FlagshipState variant="loading" />
+      </FlagshipScreen>
     );
   }
 
   const renderHeader = () => {
     if (listings.length === 0) return null;
     return (
-      <View style={styles.headerSection}>
+      <Reanimated.View style={styles.headerSection} entering={FadeInDown.duration(300)}>
         {/* Analytics summary */}
         <View style={styles.statsGrid}>
           <StatCard
@@ -223,6 +219,18 @@ export default function MyListingsScreen() {
             <Ionicons name="wallet-outline" size={18} color={colors.brand} />
             <Text style={styles.quickActionText}>Payouts</Text>
           </AnimatedPressable>
+          {filterType === 'coown' && (
+            <AnimatedPressable
+              style={styles.quickActionBtn}
+              onPress={() => navigation.navigate('SellerVerification')}
+              activeOpacity={0.85}
+              accessibilityLabel="View verification requests"
+              accessibilityRole="button"
+            >
+              <Ionicons name="shield-checkmark-outline" size={18} color={colors.brand} />
+              <Text style={styles.quickActionText}>Verification</Text>
+            </AnimatedPressable>
+          )}
         </View>
 
         {/* Listings header */}
@@ -231,15 +239,16 @@ export default function MyListingsScreen() {
             {analytics.total} {analytics.total === 1 ? 'listing' : 'listings'}
           </Text>
         </View>
-      </View>
+      </Reanimated.View>
     );
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} />
-      <ScreenHeader title={headerTitle} onBack={() => navigation.goBack()} />
-
+    <FlagshipScreen
+      header={<FlagshipHeader title={headerTitle} onBack={() => navigation.goBack()} />}
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+    >
       {listings.length === 0 ? (
         <View style={styles.body}>
           <EmptyState
@@ -255,7 +264,7 @@ export default function MyListingsScreen() {
           data={listings}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
-          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
+          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brand} />}
           ListHeaderComponent={renderHeader}
           renderItem={({ item }) => (
             <ListingRow
@@ -265,7 +274,7 @@ export default function MyListingsScreen() {
           )}
         />
       )}
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 

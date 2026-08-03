@@ -66,7 +66,7 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
       label: 'Reduce motion',
       description: 'Minimise animations and transitions',
       icon: 'pause',
-      iconColor: '#4A6A8A',
+      iconColor: colors.commerceTrust,
       value: reducedMotion,
       onToggle: (v) => { haptic.selection(); setReducedMotion(v); },
     },
@@ -78,7 +78,7 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
       label: 'High contrast',
       description: 'Increase contrast between text and backgrounds',
       icon: 'contrast',
-      iconColor: '#5A4A6A',
+      iconColor: colors.antiqueGold,
       value: highContrast,
       onToggle: (v) => { haptic.selection(); setHighContrast(v); },
     },
@@ -90,7 +90,7 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
       label: 'Additional hints',
       description: 'Provide extra context for screen reader users',
       icon: 'volume-medium',
-      iconColor: '#6A5A4A',
+      iconColor: colors.bronze,
       value: screenReaderHints,
       onToggle: (v) => { haptic.selection(); setScreenReaderHints(v); },
     },
@@ -111,7 +111,7 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
         value={config.value}
         onValueChange={config.onToggle}
         trackColor={{ false: colors.surfaceAlt, true: colors.brand }}
-        thumbColor="#fff"
+        thumbColor={colors.textInverse}
         accessibilityRole="switch"
         accessibilityLabel={config.label}
       />
@@ -168,7 +168,7 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
                       style={[
                         styles.textSizeSample,
                         { fontSize: option.sample },
-                        isSelected && { color: '#fff' },
+                        isSelected && { color: colors.textInverse },
                       ]}
                     >
                       Aa
@@ -176,7 +176,7 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
                     <Text
                       style={[
                         styles.textSizeLabel,
-                        isSelected && { color: '#fff' },
+                        isSelected && { color: colors.textInverse },
                       ]}
                     >
                       {option.label}

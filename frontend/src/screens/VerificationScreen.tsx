@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
@@ -26,6 +27,15 @@ import {
   VERIFICATION_TIERS,
   VerificationTier,
 } from '../platform/product/listingDetailContract';
+import {
+  createKycSession,
+  fetchKycStatus,
+  fetchDac7TaxInfo,
+  saveDac7TaxInfo,
+  type Dac7TaxInfo,
+  type KycStatus,
+} from '../services/complianceApi';
+import { parseApiError } from '../lib/apiClient';
 
 type Props = StackScreenProps<RootStackParamList, 'Verification'>;
 
@@ -50,24 +60,7 @@ export default function VerificationScreen({ navigation }: Props) {
 
   // Verification status — derived from user + compliance state
   const emailVerified = currentUser?.emailVerified ?? false;
-  const kycVerified = coOwnCompliance.kycVerified;
-  
-  const hasVerification = emailVerified || kycVerified;
-  const currentTier: VerificationTier = kycVerified ? 'id' : 'email';
-
-  const tierInfo = hasVerification
-    ? VERIFICATION_TIERS[currentTier]
-    : {
-        tier: 'email' as const,
-        label: 'Unverified',
-        icon: 'alert-circle-outline',
-        color: 'textSecondary',
-        description: 'Verify your email address to get started',
-      };
-
-  const iconColor = hasVerification ? colors.brand : colors.textSecondary;
-
-  const iconBgColor = colors.surfaceAlt;
+  const kycVerifiedLocal = coOwnCompliance.kycVerified;
 
   // KYC flow state
   const [kycStep, setKycStep] = React.useState<KycStep>('status');
@@ -89,10 +82,65 @@ export default function VerificationScreen({ navigation }: Props) {
   const [isSubmittingDac7, setIsSubmittingDac7] = React.useState(false);
 
   // DAC7 status — stored in compliance profile
-  const dac7Completed = (coOwnCompliance as any).dac7Completed ?? false;
+  const dac7CompletedLocal = (coOwnCompliance as any).dac7Completed ?? false;
+
+  // Real backend status
+  const [backendKycStatus, setBackendKycStatus] = useState<KycStatus | null>(null);
+  const [backendDac7Info, setBackendDac7Info] = useState<Dac7TaxInfo | null>(null);
+  const [isStatusLoading, setIsStatusLoading] = useState(true);
+
+  // Load real compliance status from backend on mount
+  useEffect(() => {
+    if (!currentUser?.id) {
+      setIsStatusLoading(false);
+      return;
+    }
+    let cancelled = false;
+    const loadStatus = async () => {
+      try {
+        const [kycRes, dac7Res] = await Promise.all([
+          fetchKycStatus(currentUser.id).catch(() => null),
+          fetchDac7TaxInfo(currentUser.id).catch(() => null),
+        ]);
+        if (cancelled) return;
+        if (kycRes?.kycStatus) setBackendKycStatus(kycRes.kycStatus);
+        if (dac7Res?.taxInfo) setBackendDac7Info(dac7Res.taxInfo);
+      } catch {
+        // Non-critical — fall back to local state
+      } finally {
+        if (!cancelled) setIsStatusLoading(false);
+      }
+    };
+    void loadStatus();
+    return () => { cancelled = true; };
+  }, [currentUser?.id]);
+
+  // Effective status — merges local + backend
+  const kycBackendVerified = backendKycStatus?.status === 'verified';
+  const kycBackendPending = backendKycStatus?.status === 'pending';
+  const effectiveKycVerified = kycVerifiedLocal || kycBackendVerified;
+  const effectiveDac7Completed = dac7CompletedLocal || backendDac7Info != null;
+  const dac7BackendStatus = backendDac7Info?.status ?? null;
+
+  // Derived tier info
+  const hasVerification = emailVerified || effectiveKycVerified;
+  const currentTier: VerificationTier = effectiveKycVerified ? 'id' : 'email';
+
+  const tierInfo = hasVerification
+    ? VERIFICATION_TIERS[currentTier]
+    : {
+        tier: 'email' as const,
+        label: 'Unverified',
+        icon: 'alert-circle-outline',
+        color: 'textSecondary',
+        description: 'Verify your email address to get started',
+      };
+
+  const iconColor = hasVerification ? colors.brand : colors.textSecondary;
+  const iconBgColor = colors.surfaceAlt;
 
   const handleStartKyc = () => {
-    if (kycVerified) {
+    if (effectiveKycVerified) {
       show('Your identity is already verified', 'info');
       return;
     }
@@ -104,15 +152,47 @@ export default function VerificationScreen({ navigation }: Props) {
       show('Please fill in all fields', 'error');
       return;
     }
+    if (!currentUser?.id) {
+      show('Please log in to verify your identity', 'error');
+      return;
+    }
     setIsSubmittingKyc(true);
     try {
-      // Simulate submission — in production this would call a KYC provider
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      updateCoOwnCompliance({ kycVerified: true });
-      show('Identity verification submitted. We will review your documents within 24 hours.', 'success');
+      // Call the real backend KYC session endpoint
+      const result = await createKycSession({
+        legalName: kycFullName.trim(),
+        dateOfBirth: kycDob.trim(),
+        countryCode: kycCountry,
+      });
+
+      // Update local compliance state
+      updateCoOwnCompliance({ kycVerified: false });
+
+      // If the provider returned a verification URL, open it
+      if (result.session.verificationUrl) {
+        show('Opening identity verification...', 'success');
+        const canOpen = await Linking.canOpenURL(result.session.verificationUrl);
+        if (canOpen) {
+          await Linking.openURL(result.session.verificationUrl);
+        }
+        show('Complete verification in your browser. We will review within 24 hours.', 'success');
+      } else {
+        // Provider not configured — submission is recorded as pending
+        show('Identity verification submitted. We will review your documents within 24 hours.', 'success');
+      }
+
+      // Refresh backend status
+      try {
+        const statusRes = await fetchKycStatus(currentUser.id);
+        setBackendKycStatus(statusRes.kycStatus);
+      } catch {
+        // Non-critical
+      }
+
       setKycStep('status');
-    } catch {
-      show('Verification submission failed. Please try again.', 'error');
+    } catch (err) {
+      const parsed = parseApiError(err);
+      show(parsed.message, 'error');
     } finally {
       setIsSubmittingKyc(false);
     }
@@ -127,15 +207,35 @@ export default function VerificationScreen({ navigation }: Props) {
       show('Please confirm the self-declaration checkbox', 'error');
       return;
     }
+    if (!currentUser?.id) {
+      show('Please log in to save tax information', 'error');
+      return;
+    }
     setIsSubmittingDac7(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      // Store DAC7 completion in compliance profile
-      (updateCoOwnCompliance as any)({ dac7Completed: true, dac7Tin: dac7Tin, dac7Country: dac7Country });
+      // Persist DAC7 tax info to the backend
+      const result = await saveDac7TaxInfo(currentUser.id, {
+        tin: dac7Tin.trim(),
+        taxResidenceCountry: dac7Country,
+        isEuResident: dac7IsEuResident,
+        selfDeclared: true,
+      });
+
+      // Update local compliance state
+      (updateCoOwnCompliance as any)({
+        dac7Completed: true,
+        dac7Tin: dac7Tin.trim(),
+        dac7Country: dac7Country,
+      });
+
+      // Update backend status state
+      setBackendDac7Info(result.taxInfo);
+
       show('Tax information saved', 'success');
       setDac7Step('status');
-    } catch {
-      show('Failed to save tax information. Please try again.', 'error');
+    } catch (err) {
+      const parsed = parseApiError(err);
+      show(parsed.message, 'error');
     } finally {
       setIsSubmittingDac7(false);
     }
@@ -152,26 +252,29 @@ export default function VerificationScreen({ navigation }: Props) {
       }
     >
       {/* ── STATUS CARD ── */}
-      <View style={[styles.statusCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <View style={[styles.statusIconWrap, { backgroundColor: iconBgColor }]}>
-          <Ionicons
-            name={tierInfo.icon as keyof typeof Ionicons.glyphMap}
-            size={22}
-            color={iconColor}
-          />
+      <Reanimated.View entering={FadeInDown.duration(300)}>
+        <View style={[styles.statusCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={[styles.statusIconWrap, { backgroundColor: iconBgColor }]}>
+            <Ionicons
+              name={tierInfo.icon as keyof typeof Ionicons.glyphMap}
+              size={22}
+              color={iconColor}
+            />
+          </View>
+          <View style={styles.statusBody}>
+            <Text style={[styles.statusTitle, { color: colors.textPrimary }]}>
+              {tierInfo.label}
+            </Text>
+            <Text style={[styles.statusDescription, { color: colors.textSecondary }]}>
+              {tierInfo.description}
+            </Text>
+          </View>
         </View>
-        <View style={styles.statusBody}>
-          <Text style={[styles.statusTitle, { color: colors.textPrimary }]}>
-            {tierInfo.label}
-          </Text>
-          <Text style={[styles.statusDescription, { color: colors.textSecondary }]}>
-            {tierInfo.description}
-          </Text>
-        </View>
-      </View>
+      </Reanimated.View>
 
       {/* ── VERIFICATION STEPS ── */}
-      <SettingsSection title="Verification steps">
+      <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
+        <SettingsSection title="Verification steps">
         <SettingsRow
           icon="mail-outline"
           iconColor={emailVerified ? colors.brand : colors.textMuted}
@@ -182,14 +285,27 @@ export default function VerificationScreen({ navigation }: Props) {
         />
         <SettingsRow
           icon="card-outline"
-          iconColor={kycVerified ? colors.brand : colors.textMuted}
+          iconColor={effectiveKycVerified ? colors.brand : kycBackendPending ? '#d97706' : colors.textMuted}
           title="Identity verification"
-          subtitle={kycVerified ? 'ID verified' : 'Verify your identity with a government document'}
-          value={kycVerified ? 'Verified' : 'Start'}
+          subtitle={
+            effectiveKycVerified
+              ? 'ID verified'
+              : kycBackendPending
+              ? 'Verification under review'
+              : 'Verify your identity with a government document'
+          }
+          value={
+            effectiveKycVerified
+              ? 'Verified'
+              : kycBackendPending
+              ? 'Pending'
+              : 'Start'
+          }
           onPress={handleStartKyc}
           isLast
         />
       </SettingsSection>
+      </Reanimated.View>
 
       {/* ── KYC FLOW ── */}
       {kycStep !== 'status' ? (
@@ -393,9 +509,13 @@ export default function VerificationScreen({ navigation }: Props) {
       <SettingsSection title="Tax information (DAC7)">
         <SettingsRow
           icon="document-text-outline"
-          iconColor={dac7Completed ? colors.brand : colors.textMuted}
+          iconColor={effectiveDac7Completed ? colors.brand : colors.textMuted}
           title="DAC7 tax details"
-          subtitle={dac7Completed ? 'Tax information provided' : 'Required for EU sellers under DAC7 regulation'}
+          subtitle={
+            effectiveDac7Completed
+              ? `Tax information provided · ${backendDac7Info?.taxResidenceCountry ?? dac7Country}`
+              : 'Required for EU sellers under DAC7 regulation'
+          }
           onPress={() => setDac7Step(dac7Step === 'status' ? 'details' : 'status')}
           isFirst
           isLast

@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StackScreenProps } from '@react-navigation/stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -94,14 +95,25 @@ export default function AccountControlScreen({ navigation }: Props) {
 
   const renderOverview = () => (
     <>
-      <View style={styles.introBlock}>
-        <Text style={styles.introTitle}>Account control</Text>
-        <Text style={[styles.introBody, { color: colors.textSecondary }]}>
-          Manage your account data and lifecycle. These actions are permanent where indicated.
-        </Text>
-      </View>
+      {/* Hero summary — account control status */}
+      <Reanimated.View entering={FadeInDown.duration(300)}>
+        <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.heroRow}>
+            <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
+              <Ionicons name="shield-outline" size={18} color={colors.textInverse} />
+            </View>
+            <View style={styles.heroText}>
+              <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>Account control</Text>
+              <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
+                Manage your data and account lifecycle
+              </Text>
+            </View>
+          </View>
+        </View>
+      </Reanimated.View>
 
       {/* Download data — supported, compact row */}
+      <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
       <View style={[styles.optionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.optionHeader}>
           <View style={[styles.optionIcon, { backgroundColor: colors.surfaceAlt }]}>
@@ -135,8 +147,10 @@ export default function AccountControlScreen({ navigation }: Props) {
           )}
         </AnimatedPressable>
       </View>
+      </Reanimated.View>
 
       {/* Delete — restrained navigation entry, not a giant red card */}
+      <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
       <View style={[styles.optionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.optionHeader}>
           <View style={[styles.optionIcon, { backgroundColor: colors.surfaceAlt }]}>
@@ -164,11 +178,13 @@ export default function AccountControlScreen({ navigation }: Props) {
           <Text style={[styles.optionBtnText, { color: colors.textPrimary }]}>Continue</Text>
         </AnimatedPressable>
       </View>
+      </Reanimated.View>
     </>
   );
 
   const renderDeleteInfo = () => (
     <>
+      <Reanimated.View entering={FadeInDown.duration(300)}>
       <View style={styles.introBlock}>
         <View style={[styles.phaseBadge, { backgroundColor: `${colors.danger}15` }]}>
           <Ionicons name="warning-outline" size={16} color={colors.danger} />
@@ -179,7 +195,9 @@ export default function AccountControlScreen({ navigation }: Props) {
           Review what happens when you permanently delete your Thryftverse account.
         </Text>
       </View>
+      </Reanimated.View>
 
+      <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
       <View style={[styles.consequenceCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <ConsequenceRow icon="person-remove-outline" text="Your username, email, password and profile are erased immediately." />
         <ConsequenceRow icon="location-outline" text="All saved delivery addresses are removed." />
@@ -188,7 +206,9 @@ export default function AccountControlScreen({ navigation }: Props) {
         <ConsequenceRow icon="cube-outline" text="Active listings remain visible to buyers until they expire, but you will no longer manage them from this account." />
         <ConsequenceRow icon="alert-circle-outline" text="Pending payouts, open disputes or active orders may need to be resolved before full erasure. Contact support if you have outstanding obligations." isLast />
       </View>
+      </Reanimated.View>
 
+      <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
       <Text style={[styles.consequenceFootnote, { color: colors.textMuted }]}>
         If you have unresolved orders or payouts, we recommend resolving them before deletion. You can also contact support for help.
       </Text>
@@ -214,14 +234,16 @@ export default function AccountControlScreen({ navigation }: Props) {
           accessibilityRole="button"
           accessibilityLabel="Continue to final confirmation"
         >
-          <Text style={[styles.dangerBtnText, { color: '#FFFFFF' }]}>Continue</Text>
+          <Text style={[styles.dangerBtnText, { color: colors.textInverse }]}>Continue</Text>
         </AnimatedPressable>
       </View>
+      </Reanimated.View>
     </>
   );
 
   const renderDeleteConfirm = () => (
     <>
+      <Reanimated.View entering={FadeInDown.duration(300)}>
       <View style={styles.introBlock}>
         <View style={[styles.phaseBadge, { backgroundColor: `${colors.danger}15` }]}>
           <Ionicons name="warning-outline" size={16} color={colors.danger} />
@@ -232,7 +254,9 @@ export default function AccountControlScreen({ navigation }: Props) {
           This is your last chance to cancel. Once you confirm, your account cannot be recovered.
         </Text>
       </View>
+      </Reanimated.View>
 
+      <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
       <View style={styles.confirmFieldWrap}>
         <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>
           Type {DELETE_CONFIRM_PHRASE} to permanently delete your account
@@ -258,7 +282,9 @@ export default function AccountControlScreen({ navigation }: Props) {
           </View>
         ) : null}
       </View>
+      </Reanimated.View>
 
+      <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
       <View style={styles.deleteConfirmActions}>
         <AnimatedPressable
           style={[styles.secondaryBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
@@ -284,12 +310,13 @@ export default function AccountControlScreen({ navigation }: Props) {
           accessibilityState={{ disabled: !canConfirmDelete || isDeleting }}
         >
           {isDeleting ? (
-            <ActivityIndicator color="#FFFFFF" size="small" />
+            <ActivityIndicator color={colors.textInverse} size="small" />
           ) : (
-            <Text style={[styles.dangerBtnText, { color: '#FFFFFF' }]}>Delete permanently</Text>
+            <Text style={[styles.dangerBtnText, { color: colors.textInverse }]}>Delete permanently</Text>
           )}
         </AnimatedPressable>
       </View>
+      </Reanimated.View>
     </>
   );
 
@@ -346,6 +373,35 @@ function ConsequenceRow({ icon, text, isLast }: { icon: string; text: string; is
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
+  heroCard: {
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Space.md,
+    marginBottom: Space.md,
+  },
+  heroRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+  },
+  heroIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  heroText: { flex: 1 },
+  heroTitle: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.body.letterSpacing,
+  },
+  heroSubtitle: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    marginTop: 2,
+  },
   introBlock: {
     paddingTop: Space.md,
     paddingBottom: Space.lg,

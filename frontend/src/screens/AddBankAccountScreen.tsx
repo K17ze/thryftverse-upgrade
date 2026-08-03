@@ -7,10 +7,10 @@ import {
   Text,
   StyleSheet,
   TextInput,
-  StatusBar
+  ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -22,16 +22,19 @@ import { createUserPaymentMethod } from '../services/commerceApi';
 import { getUserCountryCapabilities, UserCountryCapabilities } from '../services/capabilitiesApi';
 import { parseApiError } from '../lib/apiClient';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
+import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
+import { Space, Radius, Type, Typography } from '../theme/designTokens';
 
 type Props = StackScreenProps<RootStackParamList, 'AddBankAccount'>;
 
 export default function AddBankAccountScreen({ navigation }: Props) {
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [accountName, setAccountName] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
   const [sortCode, setSortCode] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoadingCapabilities, setIsLoadingCapabilities] = useState(true);
   const [countryCapabilities, setCountryCapabilities] = useState<UserCountryCapabilities | null>(null);
   const currentUser = useStore((state) => state.currentUser);
   const savePaymentMethod = useStore((state) => state.savePaymentMethod);
@@ -43,6 +46,7 @@ export default function AddBankAccountScreen({ navigation }: Props) {
     const hydrateCapabilities = async () => {
       if (!currentUser?.id) {
         setCountryCapabilities(null);
+        setIsLoadingCapabilities(false);
         return;
       }
 
@@ -54,6 +58,10 @@ export default function AddBankAccountScreen({ navigation }: Props) {
       } catch {
         if (!cancelled) {
           setCountryCapabilities(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingCapabilities(false);
         }
       }
     };
@@ -133,160 +141,268 @@ export default function AddBankAccountScreen({ navigation }: Props) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
-      <View style={styles.header}>
-        <AnimatedPressable
-          onPress={() => navigation.goBack()}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          accessibilityHint="Returns to the previous screen"
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-        </AnimatedPressable>
-        <Text style={styles.headerTitle}>Add bank account</Text>
-        <View style={{ width: 24 }} />
-      </View>
-
-      {policyLabel ? <Text style={styles.policyLabel}>Policy scope: {policyLabel}</Text> : null}
-
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title="Add bank account"
+          subtitle="For withdrawals"
+          onBack={() => navigation.goBack()}
+        />
+      }
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+    >
       <KeyboardAwareScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={{ paddingHorizontal: Space.md, paddingTop: Space.sm, paddingBottom: Space.xxl }}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
-          {!bankAllowed ? (
-            <View style={styles.blockedCard}>
-              <Text style={styles.blockedTitle}>Bank payouts unavailable in your region</Text>
-              <Text style={styles.blockedText}>Switch your country policy to enable bank withdrawal rails.</Text>
-            </View>
-          ) : null}
-
-          <Text style={styles.intro}>
-            Your bank account is used for withdrawals. We use bank-grade encryption to keep your details safe.
-          </Text>
-
-          <Text style={styles.sectionLabel}>ACCOUNT DETAILS</Text>
-          <View style={styles.card}>
-            <View style={styles.fieldRow}>
-              <Text style={styles.fieldLabel}>Account holder name</Text>
-              <TextInput
-                style={styles.fieldInput}
-                value={accountName}
-                onChangeText={setAccountName}
-                placeholder="Full name on account"
-                placeholderTextColor={colors.textMuted}
-                autoCapitalize="words"
-                selectionColor={colors.brand}
-                accessibilityLabel="Account holder name"
-                accessibilityHint="Enter the full legal name on the bank account"
-              />
-            </View>
-            <View style={styles.divider} />
-            <View style={styles.fieldRow}>
-              <Text style={styles.fieldLabel}>Account number</Text>
-              <TextInput
-                style={styles.fieldInput}
-                value={accountNumber}
-                onChangeText={v => setAccountNumber(v.replace(/\D/g, '').slice(0, 8))}
-                placeholder="8 digits"
-                placeholderTextColor={colors.textMuted}
-                keyboardType="number-pad"
-                selectionColor={colors.brand}
-                maxLength={8}
-                accessibilityLabel="Account number"
-                accessibilityHint="Enter your 8-digit account number"
-              />
-            </View>
-            <View style={styles.divider} />
-            <View style={styles.fieldRow}>
-              <Text style={styles.fieldLabel}>Sort code</Text>
-              <TextInput
-                style={styles.fieldInput}
-                value={sortCode}
-                onChangeText={v => setSortCode(formatSortCode(v))}
-                placeholder="00-00-00"
-                placeholderTextColor={colors.textMuted}
-                keyboardType="number-pad"
-                selectionColor={colors.brand}
-                maxLength={8}
-                accessibilityLabel="Sort code"
-                accessibilityHint="Enter the 6-digit sort code"
-              />
-            </View>
-          </View>
-
-          <View style={styles.secureRow}>
-            <Ionicons name="shield-checkmark-outline" size={14} color={colors.brand} />
-            <Text style={styles.secureText}>Protected by bank-level encryption</Text>
-          </View>
-
-          <View style={styles.infoCard}>
-            <Ionicons name="information-circle-outline" size={16} color={colors.textMuted} />
-            <Text style={styles.infoText}>
-              Withdrawals typically take 1-3 business days. You'll receive a confirmation email once initiated.
-            </Text>
-          </View>
-
-        <View style={styles.footer}>
-          <AppButton
-            title={isSaving ? 'Saving...' : 'Save bank account'}
-            onPress={handleSaveBank}
-            disabled={!isComplete || isSaving || !bankAllowed}
-            style={styles.saveBtn}
-            accessibilityLabel={isSaving ? 'Saving bank account' : 'Save bank account'}
-            accessibilityHint="Saves this bank account for withdrawals"
+        {isLoadingCapabilities ? (
+          <FlagshipState variant="loading" />
+        ) : !bankAllowed ? (
+          <FlagshipState
+            variant="empty"
+            icon="ban-outline"
+            title="Bank payouts unavailable"
+            subtitle="Bank withdrawals are not available in your region. Switch your country policy to enable bank withdrawal rails."
           />
-        </View>
+        ) : (
+          <>
+            {/* Hero summary — bank account purpose */}
+            <Reanimated.View entering={FadeInDown.duration(300)}>
+              <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <View style={styles.heroRow}>
+                  <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
+                    <Ionicons name="business" size={18} color={colors.textInverse} />
+                  </View>
+                  <View style={styles.heroText}>
+                    <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
+                      Bank account for payouts
+                    </Text>
+                    <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
+                      Withdrawals take 1-3 business days
+                    </Text>
+                  </View>
+                  <View style={[styles.heroBadge, { backgroundColor: colors.success + '15' }]}>
+                    <Ionicons name="lock-closed" size={12} color={colors.success} />
+                    <Text style={[styles.heroBadgeText, { color: colors.success }]}>Secure</Text>
+                  </View>
+                </View>
+              </View>
+            </Reanimated.View>
+
+            {policyLabel ? (
+              <Text style={[styles.policyLabel, { color: colors.textMuted }]}>
+                Policy scope: {policyLabel}
+              </Text>
+            ) : null}
+
+            {/* Form section */}
+            <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
+              <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>
+                ACCOUNT DETAILS
+              </Text>
+              <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <View style={styles.fieldRow}>
+                  <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Account holder name</Text>
+                  <TextInput
+                    style={[styles.fieldInput, { color: colors.textPrimary }]}
+                    value={accountName}
+                    onChangeText={setAccountName}
+                    placeholder="Full name on account"
+                    placeholderTextColor={colors.textMuted}
+                    autoCapitalize="words"
+                    selectionColor={colors.brand}
+                    accessibilityLabel="Account holder name"
+                    accessibilityHint="Enter the full legal name on the bank account"
+                  />
+                </View>
+                <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                <View style={styles.fieldRow}>
+                  <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Account number</Text>
+                  <TextInput
+                    style={[styles.fieldInput, { color: colors.textPrimary }]}
+                    value={accountNumber}
+                    onChangeText={v => setAccountNumber(v.replace(/\D/g, '').slice(0, 8))}
+                    placeholder="8 digits"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="number-pad"
+                    selectionColor={colors.brand}
+                    maxLength={8}
+                    accessibilityLabel="Account number"
+                    accessibilityHint="Enter your 8-digit account number"
+                  />
+                </View>
+                <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                <View style={styles.fieldRow}>
+                  <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Sort code</Text>
+                  <TextInput
+                    style={[styles.fieldInput, { color: colors.textPrimary }]}
+                    value={sortCode}
+                    onChangeText={v => setSortCode(formatSortCode(v))}
+                    placeholder="00-00-00"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="number-pad"
+                    selectionColor={colors.brand}
+                    maxLength={8}
+                    accessibilityLabel="Sort code"
+                    accessibilityHint="Enter the 6-digit sort code"
+                  />
+                </View>
+              </View>
+            </Reanimated.View>
+
+            {/* Security note */}
+            <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
+              <View style={styles.secureRow}>
+                <Ionicons name="shield-checkmark-outline" size={14} color={colors.brand} />
+                <Text style={[styles.secureText, { color: colors.brand }]}>
+                  Protected by bank-level encryption
+                </Text>
+              </View>
+            </Reanimated.View>
+
+            {/* Info card */}
+            <Reanimated.View entering={FadeInDown.duration(300).delay(180)}>
+              <View style={[styles.infoCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+                <Ionicons name="information-circle-outline" size={16} color={colors.textMuted} />
+                <Text style={[styles.infoText, { color: colors.textMuted }]}>
+                  Withdrawals typically take 1-3 business days. You'll receive a confirmation email once initiated.
+                </Text>
+              </View>
+            </Reanimated.View>
+
+            {/* Save button */}
+            <Reanimated.View entering={FadeInDown.duration(300).delay(240)}>
+              <AppButton
+                title={isSaving ? 'Saving...' : 'Save bank account'}
+                onPress={handleSaveBank}
+                disabled={!isComplete || isSaving || !bankAllowed}
+                loading={isSaving}
+                style={styles.saveBtn}
+                accessibilityLabel={isSaving ? 'Saving bank account' : 'Save bank account'}
+                accessibilityHint="Saves this bank account for withdrawals"
+              />
+            </Reanimated.View>
+          </>
+        )}
       </KeyboardAwareScrollView>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
-    header: {
-      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-      paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.border,
+    heroCard: {
+      borderRadius: Radius.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      padding: Space.md,
+      marginBottom: Space.md,
     },
-    headerTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
-    policyLabel: { fontSize: 12, color: colors.textMuted, textAlign: 'center', marginTop: 8 },
-    content: { padding: 20, paddingBottom: 40 },
-    blockedCard: {
-      backgroundColor: colors.surfaceAlt,
-      borderColor: colors.border,
-      borderWidth: 1,
-      borderRadius: 12,
-      paddingHorizontal: 14,
-      paddingVertical: 14,
-      marginBottom: 16,
+    heroRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.md,
     },
-    blockedTitle: { fontSize: 13, fontWeight: '700', color: colors.textPrimary, marginBottom: 4 },
-    blockedText: { fontSize: 12, color: colors.textMuted, lineHeight: 18 },
-    intro: { fontSize: 13, color: colors.textMuted, lineHeight: 20, marginBottom: 20, textAlign: 'center' },
-    sectionLabel: { fontSize: 11, color: colors.textMuted, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 10, marginLeft: 4 },
-    card: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 16, overflow: 'hidden', marginBottom: 20 },
-    fieldRow: { paddingHorizontal: 18, paddingVertical: 14 },
-    fieldLabel: { fontSize: 12, color: colors.textMuted, marginBottom: 6, fontWeight: '600' },
-    fieldInput: { fontSize: 16, color: colors.textPrimary, fontWeight: '500', paddingVertical: 4 },
-    divider: { height: 1, backgroundColor: colors.border },
-    secureRow: { flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'center', marginBottom: 16 },
-    secureText: { fontSize: 12, color: colors.brand },
+    heroIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: Radius.full,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    heroText: { flex: 1 },
+    heroTitle: {
+      fontSize: Type.bodyEmphasis.size,
+      fontFamily: Typography.family.semibold,
+      letterSpacing: Type.body.letterSpacing,
+    },
+    heroSubtitle: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+      marginTop: 2,
+    },
+    heroBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: Space.sm,
+      paddingVertical: Space.xs,
+      borderRadius: Radius.full,
+    },
+    heroBadgeText: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.semibold,
+    },
+    policyLabel: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+      textAlign: 'center',
+      marginTop: Space.xs,
+      marginBottom: Space.md,
+      letterSpacing: Type.caption.letterSpacing,
+    },
+    sectionLabel: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.semibold,
+      letterSpacing: 1.2,
+      textTransform: 'uppercase',
+      marginBottom: Space.sm,
+      marginLeft: Space.xs,
+    },
+    card: {
+      borderRadius: Radius.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      overflow: 'hidden',
+      marginBottom: Space.md,
+    },
+    fieldRow: {
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.md,
+    },
+    fieldLabel: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.semibold,
+      marginBottom: Space.xs,
+    },
+    fieldInput: {
+      fontSize: Type.bodyEmphasis.size,
+      fontFamily: Typography.family.medium,
+      paddingVertical: Space.xs,
+    },
+    divider: {
+      height: StyleSheet.hairlineWidth,
+    },
+    secureRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      justifyContent: 'center',
+      marginBottom: Space.md,
+    },
+    secureText: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.medium,
+    },
     infoCard: {
       flexDirection: 'row',
       alignItems: 'flex-start',
-      gap: 10,
-      backgroundColor: colors.surfaceAlt,
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 12,
-      padding: 14,
+      gap: Space.sm,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderRadius: Radius.lg,
+      padding: Space.md,
+      marginBottom: Space.lg,
     },
-    infoText: { flex: 1, fontSize: 12, color: colors.textMuted, lineHeight: 18 },
-    footer: { padding: 20, borderTopWidth: 1, borderTopColor: colors.border },
-    saveBtn: { borderRadius: 30 },
+    infoText: {
+      flex: 1,
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+      lineHeight: Type.caption.lineHeight + 2,
+    },
+    saveBtn: {
+      borderRadius: Radius.full,
+    },
   });
 }

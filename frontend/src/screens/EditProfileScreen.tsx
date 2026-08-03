@@ -10,6 +10,7 @@ import {
   Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -227,7 +228,8 @@ export default function EditProfileScreen() {
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, Space.md) + Space.lg }}
       >
         {/* ── Compact identity row ── */}
-        <View style={styles.identityRow}>
+        <Reanimated.View entering={FadeInDown.duration(300)}>
+          <View style={styles.identityRow}>
           {userAvatar ? (
             <CachedImage
               uri={userAvatar}
@@ -246,13 +248,14 @@ export default function EditProfileScreen() {
             <Text style={styles.identityHandle} numberOfLines={1}>@{username}</Text>
           </View>
         </View>
+        </Reanimated.View>
 
         <Text style={styles.photoHint}>
           Photo and cover are managed from your profile.
         </Text>
 
         {/* ── Profile fields ── */}
-        <View style={styles.sectionGroup}>
+        <Reanimated.View entering={FadeInDown.duration(300).delay(60)} style={styles.sectionGroup}>
           <Text style={styles.sectionLabel}>Profile</Text>
 
           <ProfileEditField
@@ -272,10 +275,10 @@ export default function EditProfileScreen() {
             autoCapitalize="none"
             returnKeyType="next"
           />
-        </View>
+        </Reanimated.View>
 
         {/* ── About fields ── */}
-        <View style={styles.sectionGroup}>
+        <Reanimated.View entering={FadeInDown.duration(300).delay(120)} style={styles.sectionGroup}>
           <Text style={styles.sectionLabel}>About</Text>
 
           <ProfileEditField
@@ -299,10 +302,10 @@ export default function EditProfileScreen() {
             returnKeyType="done"
             isLast
           />
-        </View>
+        </Reanimated.View>
 
         {/* ── Private details — integrated as form fields, not settings dump ── */}
-        <View style={styles.sectionGroup}>
+        <Reanimated.View entering={FadeInDown.duration(300).delay(180)} style={styles.sectionGroup}>
           <Text style={styles.sectionLabel}>Private details</Text>
 
           <View style={styles.detailCard}>
@@ -341,10 +344,10 @@ export default function EditProfileScreen() {
               </View>
             </Pressable>
           </View>
-        </View>
+        </Reanimated.View>
 
         {/* ── Security — stronger hierarchy with icon chips ── */}
-        <View style={styles.sectionGroup}>
+        <Reanimated.View entering={FadeInDown.duration(300).delay(240)} style={styles.sectionGroup}>
           <Text style={styles.sectionLabel}>Security</Text>
 
           <View style={styles.detailCard}>
@@ -377,10 +380,10 @@ export default function EditProfileScreen() {
               isLast
             />
           </View>
-        </View>
+        </Reanimated.View>
 
         {/* ── Account — prominent, not buried ── */}
-        <View style={styles.sectionGroup}>
+        <Reanimated.View entering={FadeInDown.duration(300).delay(300)} style={styles.sectionGroup}>
           <Text style={styles.sectionLabel}>Account</Text>
 
           <Pressable
@@ -405,7 +408,7 @@ export default function EditProfileScreen() {
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </Pressable>
-        </View>
+        </Reanimated.View>
       </KeyboardAwareScrollView>
 
       {/* ── Phone Edit Modal — premium bottom sheet ── */}

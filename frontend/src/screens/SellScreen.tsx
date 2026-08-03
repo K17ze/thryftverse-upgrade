@@ -10,6 +10,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 
@@ -937,7 +938,7 @@ export default function SellScreen() {
           </View>
 
           {/* -- 4. PRODUCT DETAILS -- */}
-          <View style={styles.sectionGroup}>
+          <Reanimated.View entering={FadeInDown.duration(300)} style={styles.sectionGroup}>
             <Text style={[styles.sectionHeading, t.sectionHeading]}>Details</Text>
 
             <View style={styles.fieldGroup}>
@@ -1020,10 +1021,10 @@ export default function SellScreen() {
             </Pressable>
             {errors.condition ? <Text style={[styles.fieldError, t.fieldError]}>{errors.condition}</Text> : null}
             <View style={[styles.hairline, t.hairline]} />
-          </View>
+          </Reanimated.View>
 
           {/* -- 5. MODE-SPECIFIC PRICING -- */}
-          <View style={styles.sectionGroup}>
+          <Reanimated.View entering={FadeInDown.duration(300).delay(60)} style={styles.sectionGroup}>
             <Text style={[styles.sectionHeading, t.sectionHeading]}>Pricing</Text>
 
             {listingMode === 'sell_now' && (
@@ -1138,7 +1139,7 @@ export default function SellScreen() {
                       return (
                         <Pressable
                           key={h}
-                          style={[styles.togglePill, t.togglePill, active && styles.togglePillActive, active && t.togglePillActive]}
+                          style={({ pressed }) => [styles.togglePill, t.togglePill, active && styles.togglePillActive, active && t.togglePillActive, pressed && { opacity: 0.7 }]}
                           onPress={() => setAuctionDurationHours(h)}
                           accessibilityRole="button"
                           accessibilityLabel={`Set duration to ${h} hours`}
@@ -1221,7 +1222,7 @@ export default function SellScreen() {
                       return (
                         <Pressable
                           key={h}
-                          style={[styles.togglePill, t.togglePill, active && styles.togglePillActive, active && t.togglePillActive]}
+                          style={({ pressed }) => [styles.togglePill, t.togglePill, active && styles.togglePillActive, active && t.togglePillActive, pressed && { opacity: 0.7 }]}
                           onPress={() => setOfferingWindowHours(h)}
                           accessibilityRole="button"
                           accessibilityLabel={`Set offering window to ${h} hours`}
@@ -1237,10 +1238,10 @@ export default function SellScreen() {
                 </View>
               </>
             )}
-          </View>
+          </Reanimated.View>
 
           {/* -- 6. DESCRIPTION AND TAGS -- */}
-          <View style={styles.sectionGroup}>
+          <Reanimated.View entering={FadeInDown.duration(300).delay(120)} style={styles.sectionGroup}>
             <Text style={[styles.sectionHeading, t.sectionHeading]}>Description</Text>
 
             <View style={styles.fieldGroup}>
@@ -1280,10 +1281,10 @@ export default function SellScreen() {
               />
             </View>
             <Text style={[styles.fieldHelper, t.fieldHelper]}>Press space or comma to add. Up to 8 tags.</Text>
-          </View>
+          </Reanimated.View>
 
           {/* -- 7. SHIPPING -- */}
-          <View style={styles.sectionGroup}>
+          <Reanimated.View entering={FadeInDown.duration(300).delay(180)} style={styles.sectionGroup}>
             <Text style={[styles.sectionHeading, t.sectionHeading]}>Shipping</Text>
 
             <View style={styles.fieldGroup}>
@@ -1294,7 +1295,7 @@ export default function SellScreen() {
                   return (
                     <Pressable
                       key={m}
-                      style={[styles.togglePill, t.togglePill, active && styles.togglePillActive, active && t.togglePillActive]}
+                      style={({ pressed }) => [styles.togglePill, t.togglePill, active && styles.togglePillActive, active && t.togglePillActive, pressed && { opacity: 0.7 }]}
                       onPress={() => { setShippingMethod(m); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
                       accessibilityRole="button"
                       accessibilityLabel={`Set shipping method to ${m}`}
@@ -1318,7 +1319,7 @@ export default function SellScreen() {
                   return (
                     <Pressable
                       key={p}
-                      style={[styles.togglePill, t.togglePill, active && styles.togglePillActive, active && t.togglePillActive]}
+                      style={({ pressed }) => [styles.togglePill, t.togglePill, active && styles.togglePillActive, active && t.togglePillActive, pressed && { opacity: 0.7 }]}
                       onPress={() => { setShippingPayer(p); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
                       accessibilityRole="button"
                       accessibilityLabel={`Set shipping payer to ${p}`}
@@ -1332,11 +1333,11 @@ export default function SellScreen() {
                 })}
               </View>
             </View>
-          </View>
+          </Reanimated.View>
 
           {/* -- CO-OWN AUTHENTICATION MEDIA -- */}
           {listingMode === 'co_own' && (
-            <View style={styles.sectionGroup}>
+            <Reanimated.View entering={FadeInDown.duration(300).delay(240)} style={styles.sectionGroup}>
               <Text style={[styles.sectionHeading, t.sectionHeading]}>Authentication photos</Text>
               <Text style={[styles.fieldHelper, t.fieldHelper]}>Attach proof-of-authenticity photos for investor confidence.</Text>
               {errors.authPhotos ? <Text style={[styles.fieldError, t.fieldError]}>{errors.authPhotos}</Text> : null}
@@ -1357,7 +1358,7 @@ export default function SellScreen() {
                   </Pressable>
                 )}
               </View>
-            </View>
+            </Reanimated.View>
           )}
 
           {/* -- error message (inline, above footer) -- */}
@@ -1414,8 +1415,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   navCloseBtn: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -1072,11 +1072,20 @@ export default function HomeScreen() {
         animationType="fade"
         onRequestClose={closePeek}
       >
-        <Pressable style={styles.peekBackdrop} onPress={closePeek}>
+        <Pressable
+          style={styles.peekBackdrop}
+          onPress={closePeek}
+          accessibilityRole="button"
+          accessibilityLabel="Close preview"
+        >
           <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.75)' }]} />
 
           {peekItem ? (
-            <Pressable style={styles.peekCard} onPress={(event) => event.stopPropagation()}>
+            <Pressable
+              style={styles.peekCard}
+              onPress={(event) => event.stopPropagation()}
+              accessibilityRole="none"
+            >
               <View style={styles.peekMediaWrap}>
                 <MediaPreview
                   uri={peekItem.mediaUri}

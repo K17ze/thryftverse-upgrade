@@ -6,7 +6,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeIn } from 'react-native-reanimated';
+import Reanimated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type } from '../theme/designTokens';
 import { StackScreenProps } from '@react-navigation/stack';
@@ -272,12 +272,28 @@ export default function PaymentsScreen({ navigation }: Props) {
         <Text style={styles.policyLabel}>Payment policy: {policyLabel}</Text>
       ) : null}
 
-      <Reanimated.View entering={FadeIn.duration(300)}>
-        <View style={[styles.trustBanner, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Ionicons name="shield-checkmark-outline" size={18} color={colors.success} />
-          <Text style={[styles.trustBannerText, { color: colors.textSecondary }]}>
-            Card details are collected securely. We never store your card number or security code.
-          </Text>
+      {/* Hero summary — payment methods count + security status */}
+      <Reanimated.View entering={FadeInDown.duration(300)}>
+        <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.heroRow}>
+            <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
+              <Ionicons name="card" size={20} color={colors.textInverse} />
+            </View>
+            <View style={styles.heroText}>
+              <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
+                {defaultMethod ? `${backendPaymentMethods.length} method${backendPaymentMethods.length === 1 ? '' : 's'}` : 'No payment method'}
+              </Text>
+              <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
+                {defaultMethod ? `${defaultMethod.label} is your default` : 'Add a card to check out faster'}
+              </Text>
+            </View>
+            {defaultMethod && (
+              <View style={[styles.heroBadge, { backgroundColor: colors.success + '15' }]}>
+                <Ionicons name="shield-checkmark" size={12} color={colors.success} />
+                <Text style={[styles.heroBadgeText, { color: colors.success }]}>Secure</Text>
+              </View>
+            )}
+          </View>
         </View>
       </Reanimated.View>
 
@@ -296,7 +312,7 @@ export default function PaymentsScreen({ navigation }: Props) {
       ) : (
         <>
           {/* Primary Payment Method Summary */}
-          <Reanimated.View entering={FadeIn.duration(300)}>
+          <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
             {defaultMethod ? (
               <View style={[styles.primaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <View style={styles.primaryCardHeader}>
@@ -350,7 +366,7 @@ export default function PaymentsScreen({ navigation }: Props) {
           </Reanimated.View>
 
           {/* Preferences */}
-          <Reanimated.View entering={FadeIn.duration(300)}>
+          <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
             <PremiumListSection title="Preferences">
               <SettingsCell
                 icon="wallet-outline"
@@ -367,7 +383,7 @@ export default function PaymentsScreen({ navigation }: Props) {
           </Reanimated.View>
 
           {/* Cards */}
-          <Reanimated.View entering={FadeIn.duration(300)}>
+          <Reanimated.View entering={FadeInDown.duration(300).delay(180)}>
             <PremiumListSection title="Cards">
               {renderPaymentMethodRows(
                 cardMethods,
@@ -397,7 +413,7 @@ export default function PaymentsScreen({ navigation }: Props) {
           </Reanimated.View>
 
           {/* Security Note */}
-          <Reanimated.View entering={FadeIn.duration(300)}>
+          <Reanimated.View entering={FadeInDown.duration(300).delay(240)}>
             <View style={[styles.trustNote, { backgroundColor: colors.surfaceAlt }]}>
               <Ionicons name="shield-checkmark-outline" size={16} color={colors.success} />
               <Text style={styles.trustNoteText}>
@@ -422,6 +438,47 @@ export default function PaymentsScreen({ navigation }: Props) {
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
+  heroCard: {
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Space.md,
+    marginBottom: Space.md,
+  },
+  heroRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+  },
+  heroIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  heroText: { flex: 1 },
+  heroTitle: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.body.letterSpacing,
+  },
+  heroSubtitle: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    marginTop: 2,
+  },
+  heroBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
+    borderRadius: Radius.full,
+  },
+  heroBadgeText: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+  },
   securityBanner: {
     alignItems: 'center',
     marginBottom: Space.sm,

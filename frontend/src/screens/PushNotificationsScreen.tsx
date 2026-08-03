@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ActivityIndicator, Linking, Platform, Pressable
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import { Ionicons } from '@expo/vector-icons';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { Space, Radius, Type } from '../theme/designTokens';
@@ -252,47 +253,61 @@ export default function PushNotificationsScreen({ navigation }: Props) {
         </View>
       )}
 
-      <View style={[styles.notificationTrust, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <Ionicons name="notifications-outline" size={18} color={colors.brand} />
-        <Text style={[styles.notificationTrustText, { color: colors.textSecondary }]}>
-          Choose which alerts you receive. You can change these at any time.
-        </Text>
-      </View>
-
-      <View style={styles.progressRow}>
-        <View style={styles.progressTrack}>
-          <View
-            style={[
-              styles.progressFill,
-              { width: `${(enabledCount / Math.max(pushTotalCount, 1)) * 100}%` },
-            ]}
-          />
+      {/* Hero summary — notification posture with progress */}
+      <Reanimated.View entering={FadeInDown.duration(300)}>
+        <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.heroRow}>
+            <View style={[styles.heroIcon, { backgroundColor: enabledCount > 0 ? colors.brand : colors.surfaceAlt }]}>
+              <Ionicons name="notifications" size={20} color={enabledCount > 0 ? colors.textInverse : colors.textMuted} />
+            </View>
+            <View style={styles.heroText}>
+              <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
+                {enabledCount === 0 ? 'All notifications off' : `${enabledCount} of ${pushTotalCount} categories on`}
+              </Text>
+              <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
+                {enabledCount === pushTotalCount ? 'All alerts enabled' : enabledCount === 0 ? 'You won\'t receive any alerts' : 'Some alerts are paused'}
+              </Text>
+            </View>
+          </View>
+          {/* Progress bar */}
+          <View style={styles.progressRow}>
+            <View style={[styles.progressTrack, { backgroundColor: colors.surfaceAlt }]}>
+              <View
+                style={[
+                  styles.progressFill,
+                  { width: `${(enabledCount / Math.max(pushTotalCount, 1)) * 100}%`, backgroundColor: colors.brand },
+                ]}
+              />
+            </View>
+            <Text style={[styles.progressLabel, { color: colors.textMuted }]}>
+              {enabledCount}/{pushTotalCount}
+            </Text>
+          </View>
         </View>
-        <Text style={styles.progressLabel}>
-          {enabledCount}/{pushTotalCount} enabled
-        </Text>
-      </View>
+      </Reanimated.View>
 
-      {PUSH_NOTIFICATION_GROUPS.map((group) => {
+      {PUSH_NOTIFICATION_GROUPS.map((group, index) => {
         const groupItems = NOTIFICATIONS.filter((n) => n.group === group.key);
         if (groupItems.length === 0) return null;
         const groupIconColor = group.key === 'orders' ? colors.success : group.key === 'social' ? colors.brand : colors.textMuted;
         return (
-          <SettingsSection key={group.key} title={group.label} noCard>
-            {groupItems.map((item, idx) => (
-              <SettingsRow
-                key={item.key}
-                title={item.label}
-                subtitle={item.subtitle}
-                icon={item.icon}
-                iconColor={groupIconColor}
-                toggleValue={toggles[item.key]}
-                onToggle={() => void toggle(item.key)}
-                isFirst={idx === 0}
-                isLast={idx === groupItems.length - 1}
-              />
-            ))}
-          </SettingsSection>
+          <Reanimated.View key={group.key} entering={FadeInDown.duration(300).delay(60 + index * 40)}>
+            <SettingsSection title={group.label} noCard>
+              {groupItems.map((item, idx) => (
+                <SettingsRow
+                  key={item.key}
+                  title={item.label}
+                  subtitle={item.subtitle}
+                  icon={item.icon}
+                  iconColor={groupIconColor}
+                  toggleValue={toggles[item.key]}
+                  onToggle={() => void toggle(item.key)}
+                  isFirst={idx === 0}
+                  isLast={idx === groupItems.length - 1}
+                />
+              ))}
+            </SettingsSection>
+          </Reanimated.View>
         );
       })}
 
@@ -402,8 +417,7 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
-      marginBottom: Space.md,
-      marginHorizontal: Space.md,
+      marginTop: Space.md,
     },
     progressTrack: {
       flex: 1,
@@ -455,22 +469,34 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
     },
-    notificationTrust: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.sm,
+    heroCard: {
       borderRadius: Radius.lg,
       borderWidth: StyleSheet.hairlineWidth,
       padding: Space.md,
-      marginHorizontal: Space.md,
       marginBottom: Space.md,
     },
-    notificationTrustText: {
-      flex: 1,
+    heroRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.md,
+    },
+    heroIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: Radius.full,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    heroText: { flex: 1 },
+    heroTitle: {
+      fontSize: Type.bodyEmphasis.size,
+      fontFamily: Typography.family.semibold,
+      letterSpacing: Type.body.letterSpacing,
+    },
+    heroSubtitle: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
+      marginTop: 2,
     },
     quietHoursRow: {
       flexDirection: 'row',

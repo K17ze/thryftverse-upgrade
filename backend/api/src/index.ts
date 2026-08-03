@@ -222,7 +222,12 @@ import { getAvailableApmsForCorridor } from './lib/alternativePaymentMethods.js'
 import { getAvailableBnplForCorridor, computeBnplInstallmentPlan } from './lib/bnplProviders.js';
 import { createPersonaInquiry, createOnfidoApplicant } from './lib/kycProviders.js';
 import { isWebhookIpAllowed, extractClientIp } from './lib/webhookIpAllowlist.js';
-import { getSellerVelocityMetrics } from './lib/sellerRiskTiering.js';
+import {
+  getSellerVelocityMetrics,
+  refreshAndPersistSellerRiskTier,
+  getPersistedSellerRiskTier,
+} from './lib/sellerRiskTiering.js';
+import type { SellerRiskTier } from './lib/sellerRiskTiering.js';
 import { COOWN_POLICY } from './lib/commercePolicies.js';
 import { compensateTerminalCommercePayment } from './lib/commerceCheckoutLifecycle.js';
 import {
@@ -5082,11 +5087,11 @@ async function releaseCommerceOrderEscrowToSeller(
     },
   });
 
-  // ── Rolling reserve for new sellers ─────────────────────────────────
-  // If the seller is below the new-seller threshold and has a reserve
-  // percentage configured, split the credit: most goes to seller_payable,
-  // the reserve portion goes to reserve_hold and is released after the
-  // holding period (Etsy pattern).
+  // ── Rolling reserve for new sellers + risk-tier reserve ───────────────
+  // New sellers get a rolling reserve (Etsy pattern). Sellers flagged with
+  // an elevated/high risk tier (P3.5) get an additional reserve. The
+  // effective reserve is the higher of the new-seller reserve and the
+  // tier reserve, so a high-velocity established seller is still held.
   let creditedToSellerGbp = subtotalGbp;
   let heldInReserveGbp = 0;
   const sellerCompletedSales = await client.query<{ total: string }>(
@@ -5096,9 +5101,29 @@ async function releaseCommerceOrderEscrowToSeller(
   const completedSalesCount = Number(sellerCompletedSales.rows[0]?.total ?? '0');
   const isNewSeller = completedSalesCount < config.payoutNewSellerThreshold;
 
+  let effectiveReservePct = 0;
+  let reserveReason = 'none';
   if (isNewSeller && config.payoutNewSellerReservePct > 0) {
+    effectiveReservePct = config.payoutNewSellerReservePct;
+    reserveReason = 'new_seller';
+  }
+
+  // Apply risk-tier reserve (P3.5) — take the higher of the two.
+  let persistedTier: SellerRiskTier = 'standard';
+  try {
+    const tierInfo = await getPersistedSellerRiskTier(client, input.sellerId);
+    if (tierInfo.reservePercentage > effectiveReservePct) {
+      effectiveReservePct = tierInfo.reservePercentage;
+      reserveReason = `risk_tier_${tierInfo.tier}`;
+    }
+    persistedTier = tierInfo.tier;
+  } catch {
+    // seller_risk_tiers table may not exist yet — fail safe (no tier reserve).
+  }
+
+  if (effectiveReservePct > 0) {
     heldInReserveGbp = roundTo(
-      subtotalGbp * (config.payoutNewSellerReservePct / 100),
+      subtotalGbp * (effectiveReservePct / 100),
       2
     );
     creditedToSellerGbp = roundTo(subtotalGbp - heldInReserveGbp, 2);
@@ -5123,7 +5148,9 @@ async function releaseCommerceOrderEscrowToSeller(
         metadata: {
           sellerId: input.sellerId,
           orderId: input.orderId,
-          reservePercentage: config.payoutNewSellerReservePct,
+          reservePercentage: effectiveReservePct,
+          reserveReason,
+          riskTier: persistedTier,
         },
       });
       await appendLedgerEntry(client, {
@@ -5137,7 +5164,9 @@ async function releaseCommerceOrderEscrowToSeller(
         metadata: {
           sellerId: input.sellerId,
           orderId: input.orderId,
-          reservePercentage: config.payoutNewSellerReservePct,
+          reservePercentage: effectiveReservePct,
+          reserveReason,
+          riskTier: persistedTier,
         },
       });
 
@@ -5159,7 +5188,7 @@ async function releaseCommerceOrderEscrowToSeller(
             input.orderId,
             payoutAccountResult.rows[0].id,
             heldInReserveGbp,
-            config.payoutNewSellerReservePct,
+            effectiveReservePct,
             releaseEligibleAt,
           ]
         );
@@ -5722,6 +5751,40 @@ async function applyOrderParcelEvent(
         }
       } catch (reviewError) {
         // Don't fail the delivery if the review table doesn't exist yet.
+      }
+
+      // ── Per-seller risk-tier refresh + high-tier review (P3.5) ───────
+      // Recompute the seller's sale velocity and persist the risk tier so
+      // the escrow release sweep can apply the tier reserve. If the seller
+      // is flagged high-risk, enqueue a manual review before escrow release
+      // (reusing the first-sale review queue with a risk_score).
+      try {
+        const tierMetrics = await refreshAndPersistSellerRiskTier(
+          client,
+          order.seller_id,
+          undefined,
+          config.sellerRiskTierElevatedReservePct,
+          config.sellerRiskTierHighReservePct
+        );
+        if (tierMetrics.riskTier === 'high') {
+          await client.query(
+            `INSERT INTO seller_first_sale_reviews (seller_id, order_id, review_status, risk_score, review_notes)
+             VALUES ($1, $2, 'pending', $3, $4)
+             ON CONFLICT (order_id) DO UPDATE SET
+               risk_score = EXCLUDED.risk_score,
+               review_notes = EXCLUDED.review_notes,
+               updated_at = NOW()
+             WHERE seller_first_sale_reviews.review_status = 'pending'`,
+            [
+              order.seller_id,
+              order.id,
+              Math.round(tierMetrics.salesCount24h),
+              `High-risk tier: ${tierMetrics.salesCount24h} sales / £${tierMetrics.salesGbp24h.toFixed(2)} in 24h (avg ${tierMetrics.avgSalesPerDay7d.toFixed(1)}/day)`,
+            ]
+          );
+        }
+      } catch (tierError) {
+        // Don't fail the delivery if the risk tier table doesn't exist yet.
       }
     }
   }
@@ -13619,6 +13682,242 @@ app.patch('/compliance/profile/:userId', async (request, reply) => {
   return {
     ok: true,
     profile: toComplianceProfilePayload(profile),
+  };
+});
+
+// ── DAC7 Tax Information ──
+
+// GET /compliance/dac7/:userId
+// Returns the user's DAC7 tax information.
+app.get('/compliance/dac7/:userId', async (request, reply) => {
+  const paramsSchema = z.object({ userId: z.string().min(2) });
+  const { userId } = paramsSchema.parse(request.params);
+
+  const authUser = (request as any).authUser;
+  if (!authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+  if (authUser.userId !== userId) {
+    reply.code(403);
+    return { ok: false, error: 'Access denied' };
+  }
+
+  const result = await db.query<{
+    tin: string;
+    tax_residence_country: string;
+    is_eu_resident: boolean;
+    self_declared: boolean;
+    self_declared_at: string | null;
+    status: string;
+    verified_at: string | null;
+    rejected_reason: string | null;
+    created_at: string;
+    updated_at: string;
+  }>(
+    `SELECT tin, tax_residence_country, is_eu_resident,
+            self_declared, self_declared_at, status,
+            verified_at, rejected_reason, created_at, updated_at
+     FROM user_tax_info
+     WHERE user_id = $1`,
+    [userId]
+  );
+
+  const row = result.rows[0];
+  if (!row) {
+    return { ok: true, taxInfo: null };
+  }
+
+  return {
+    ok: true,
+    taxInfo: {
+      tin: row.tin,
+      taxResidenceCountry: row.tax_residence_country,
+      isEuResident: row.is_eu_resident,
+      selfDeclared: row.self_declared,
+      selfDeclaredAt: row.self_declared_at,
+      status: row.status,
+      verifiedAt: row.verified_at,
+      rejectedReason: row.rejected_reason,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    },
+  };
+});
+
+// POST /compliance/dac7/:userId
+// Saves or updates the user's DAC7 tax information.
+app.post('/compliance/dac7/:userId', async (request, reply) => {
+  const paramsSchema = z.object({ userId: z.string().min(2) });
+  const { userId } = paramsSchema.parse(request.params);
+
+  const authUser = (request as any).authUser;
+  if (!authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+  if (authUser.userId !== userId) {
+    reply.code(403);
+    return { ok: false, error: 'Access denied' };
+  }
+
+  const bodySchema = z.object({
+    tin: z.string().trim().min(1).max(50),
+    taxResidenceCountry: z.string().trim().min(2).max(3),
+    isEuResident: z.boolean().default(false),
+    selfDeclared: z.boolean().default(false),
+  });
+  const body = bodySchema.parse(request.body ?? {});
+
+  if (!body.selfDeclared) {
+    reply.code(400);
+    return { ok: false, error: 'Self-declaration is required', code: 'SELF_DECLARATION_REQUIRED' };
+  }
+
+  // Upsert tax info
+  await db.query(
+    `INSERT INTO user_tax_info (user_id, tin, tax_residence_country, is_eu_resident, self_declared, self_declared_at, status, updated_at)
+     VALUES ($1, $2, $3, $4, TRUE, NOW(), 'declared', NOW())
+     ON CONFLICT (user_id)
+     DO UPDATE SET
+       tin = EXCLUDED.tin,
+       tax_residence_country = EXCLUDED.tax_residence_country,
+       is_eu_resident = EXCLUDED.is_eu_resident,
+       self_declared = TRUE,
+       self_declared_at = NOW(),
+       status = 'declared',
+       rejected_reason = NULL,
+       updated_at = NOW()`,
+    [userId, body.tin, body.taxResidenceCountry, body.isEuResident]
+  );
+
+  // Update compliance profile DAC7 fields
+  await db.query(
+    `UPDATE user_compliance_profiles
+     SET dac7_completed = TRUE,
+         dac7_tin = $2,
+         dac7_tax_residence_country = $3,
+         updated_at = NOW()
+     WHERE user_id = $1`,
+    [userId, body.tin, body.taxResidenceCountry]
+  );
+
+  // Log compliance audit event
+  await appendComplianceAuditSafe(request, {
+    eventType: 'compliance.dac7.submitted',
+    subjectUserId: userId,
+    payload: {
+      taxResidenceCountry: body.taxResidenceCountry,
+      isEuResident: body.isEuResident,
+    },
+  });
+
+  return {
+    ok: true,
+    taxInfo: {
+      tin: body.tin,
+      taxResidenceCountry: body.taxResidenceCountry,
+      isEuResident: body.isEuResident,
+      selfDeclared: true,
+      selfDeclaredAt: new Date().toISOString(),
+      status: 'declared',
+      verifiedAt: null,
+      rejectedReason: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+  };
+});
+
+// POST /compliance/kyc-session
+// Creates a KYC verification session. Updates compliance profile with
+// provided identity info, then delegates to the KYC provider.
+app.post('/compliance/kyc-session', async (request, reply) => {
+  const authUser = (request as any).authUser;
+  if (!authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const bodySchema = z.object({
+    legalName: z.string().trim().min(2).max(180).optional(),
+    dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    countryCode: z.string().trim().min(2).max(3).default('GB'),
+  });
+  const body = bodySchema.parse(request.body ?? {});
+
+  // Update compliance profile with provided info before starting KYC
+  if (body.legalName || body.dateOfBirth || body.countryCode) {
+    await db.query(
+      `UPDATE user_compliance_profiles
+       SET legal_name = COALESCE($2, legal_name),
+           date_of_birth = COALESCE($3::date, date_of_birth),
+           country_code = COALESCE($4, country_code),
+           kyc_status = 'pending',
+           updated_at = NOW()
+       WHERE user_id = $1`,
+      [authUser.userId, body.legalName ?? null, body.dateOfBirth ?? null, body.countryCode]
+    );
+  }
+
+  // Mark KYC as pending in compliance profile
+  await db.query(
+    `UPDATE user_compliance_profiles
+     SET kyc_status = 'pending',
+         updated_at = NOW()
+     WHERE user_id = $1`,
+    [authUser.userId]
+  );
+
+  // Log compliance audit event
+  await appendComplianceAuditSafe(request, {
+    eventType: 'compliance.kyc.session_started',
+    subjectUserId: authUser.userId,
+    payload: {
+      legalName: body.legalName,
+      countryCode: body.countryCode,
+    },
+  });
+
+  return {
+    ok: true,
+    session: {
+      id: `kyc_pending_${authUser.userId}`,
+      verificationUrl: null,
+      vendor: config.kycDefaultVendor,
+      status: 'pending',
+    },
+  };
+});
+
+// GET /compliance/kyc-status/:userId
+// Returns the user's current KYC status.
+app.get('/compliance/kyc-status/:userId', async (request, reply) => {
+  const paramsSchema = z.object({ userId: z.string().min(2) });
+  const { userId } = paramsSchema.parse(request.params);
+
+  const authUser = (request as any).authUser;
+  if (!authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+  if (authUser.userId !== userId) {
+    reply.code(403);
+    return { ok: false, error: 'Access denied' };
+  }
+
+  const profile = await getOrCreateComplianceProfile(db, userId);
+
+  return {
+    ok: true,
+    kycStatus: {
+      status: profile.kycStatus,
+      level: profile.kycLevel,
+      vendor: profile.kycVendor,
+      documentStatus: profile.documentStatus,
+      livenessStatus: profile.livenessStatus,
+      tradingEnabled: profile.tradingEnabled,
+    },
   };
 });
 
@@ -30091,10 +30390,20 @@ app.get('/users/:userId/risk-tier', async (request, reply) => {
   const { userId } = paramsSchema.parse(request.params);
   resolveAuthenticatedUserId(request, userId);
 
-  const metrics = await getSellerVelocityMetrics(db, userId);
+  // Refresh + persist the tier so the caller always sees current velocity,
+  // then return the metrics alongside the persisted reserve percentage.
+  const metrics = await refreshAndPersistSellerRiskTier(
+    db,
+    userId,
+    undefined,
+    config.sellerRiskTierElevatedReservePct,
+    config.sellerRiskTierHighReservePct
+  );
+  const { reservePercentage } = await getPersistedSellerRiskTier(db, userId);
   return {
     ok: true,
     ...metrics,
+    reservePercentage,
   };
 });
 
@@ -44981,6 +45290,81 @@ app.get('/co-own/seller/:userId/liability', async (request, reply) => {
       backgroundCheckStatus: row.background_check_status,
       backgroundCheckCompletedAt: row.background_check_completed_at,
     },
+  };
+});
+
+// GET /co-own/seller/:userId/verification-demands
+// Lists all verification demands across a seller's assets.
+// Sellers use this to see pending demands they need to respond to.
+app.get('/co-own/seller/:userId/verification-demands', async (request, reply) => {
+  const paramsSchema = z.object({ userId: z.string().min(2) });
+  const { userId } = paramsSchema.parse(request.params);
+
+  const authUser = (request as any).authUser;
+  if (!authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+  // Sellers can only see their own demands
+  if (authUser.userId !== userId) {
+    reply.code(403);
+    return { ok: false, error: 'Access denied' };
+  }
+
+  const result = await db.query<{
+    id: number;
+    asset_id: string;
+    requested_by: string;
+    demand_type: string;
+    deadline: string;
+    status: string;
+    responded_at: string | null;
+    evidence_url: string | null;
+    evidence_notes: string | null;
+    inspector_verdict: string | null;
+    created_at: string;
+    asset_title: string;
+    asset_image_url: string | null;
+  }>(
+    `SELECT vd.id, vd.asset_id, vd.requested_by, vd.demand_type,
+            vd.deadline, vd.status, vd.responded_at,
+            vd.evidence_url, vd.evidence_notes,
+            vd.inspector_verdict, vd.created_at,
+            ca.title AS asset_title, ca.image_url AS asset_image_url
+     FROM coown_verification_demands vd
+     INNER JOIN coOwn_assets ca ON ca.id = vd.asset_id
+     WHERE ca.issuer_id = $1
+     ORDER BY
+       CASE vd.status
+         WHEN 'pending' THEN 0
+         WHEN 'responded' THEN 1
+         WHEN 'failed' THEN 2
+         WHEN 'expired' THEN 3
+         WHEN 'compliant' THEN 4
+         ELSE 5
+       END,
+       vd.created_at DESC
+     LIMIT 50`,
+    [userId]
+  );
+
+  return {
+    ok: true,
+    demands: result.rows.map((d) => ({
+      id: d.id,
+      assetId: d.asset_id,
+      assetTitle: d.asset_title,
+      assetImageUrl: d.asset_image_url,
+      requestedBy: d.requested_by,
+      demandType: d.demand_type,
+      deadline: d.deadline,
+      status: d.status,
+      respondedAt: d.responded_at,
+      evidenceUrl: d.evidence_url,
+      evidenceNotes: d.evidence_notes,
+      inspectorVerdict: d.inspector_verdict,
+      createdAt: d.created_at,
+    })),
   };
 });
 

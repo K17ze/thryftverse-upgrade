@@ -17,17 +17,15 @@ import {
   StyleSheet,
   ScrollView,
   RefreshControl,
-  ActivityIndicator,
   Switch,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { EmptyState } from '../components/EmptyState';
 import {
   fetchEmailPreferences,
@@ -43,7 +41,7 @@ interface CategoryConfig {
   label: string;
   description: string;
   icon: string;
-  iconColor?: string;
+  iconColor?: keyof ThemeColors;
   defaultEnabled: boolean;
   locked?: boolean;
 }
@@ -64,7 +62,7 @@ const GROUPS: CategoryGroup[] = [
         label: 'Security alerts',
         description: 'New device logins, password changes, 2FA updates',
         icon: 'shield-checkmark',
-        iconColor: '#215634',
+        iconColor: 'success',
         defaultEnabled: true,
         locked: true,
       },
@@ -73,7 +71,7 @@ const GROUPS: CategoryGroup[] = [
         label: 'Order updates',
         description: 'Purchases, shipping, delivery confirmations',
         icon: 'bag',
-        iconColor: '#06489A',
+        iconColor: 'commerceTrust',
         defaultEnabled: true,
       },
       {
@@ -81,7 +79,7 @@ const GROUPS: CategoryGroup[] = [
         label: 'Messages',
         description: 'New messages from buyers and sellers',
         icon: 'mail',
-        iconColor: '#6B3245',
+        iconColor: 'social',
         defaultEnabled: true,
       },
     ],
@@ -95,7 +93,7 @@ const GROUPS: CategoryGroup[] = [
         label: 'Price drop alerts',
         description: 'When saved items drop in price',
         icon: 'trending-down',
-        iconColor: '#5F1616',
+        iconColor: 'danger',
         defaultEnabled: true,
       },
       {
@@ -103,7 +101,7 @@ const GROUPS: CategoryGroup[] = [
         label: 'New listings from followed sellers',
         description: 'When a followed seller posts a new item',
         icon: 'person-add',
-        iconColor: '#7B0E1E',
+        iconColor: 'discovery',
         defaultEnabled: true,
       },
     ],
@@ -117,7 +115,7 @@ const GROUPS: CategoryGroup[] = [
         label: 'Distribution notices',
         description: 'Dividend and revenue-share payments',
         icon: 'cash',
-        iconColor: '#1C5631',
+        iconColor: 'success',
         defaultEnabled: true,
       },
       {
@@ -125,7 +123,7 @@ const GROUPS: CategoryGroup[] = [
         label: 'Corporate actions',
         description: 'Governance votes, buybacks, splits',
         icon: 'briefcase',
-        iconColor: '#8A6A3F',
+        iconColor: 'bronze',
         defaultEnabled: true,
       },
     ],
@@ -139,7 +137,7 @@ const GROUPS: CategoryGroup[] = [
         label: 'Promotions and offers',
         description: 'Featured collections, seasonal campaigns',
         icon: 'sparkles',
-        iconColor: '#C9A46A',
+        iconColor: 'antiqueGold',
         defaultEnabled: false,
       },
     ],
@@ -200,18 +198,18 @@ export default function EmailNotificationsScreen({ navigation }: Props) {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <ScreenHeader title="Email Notifications" onBack={() => navigation.goBack()} />
-        <View style={styles.loadingBody}>
-          <ActivityIndicator size="large" color={colors.brand} />
-        </View>
-      </SafeAreaView>
+      <FlagshipScreen header={<FlagshipHeader title="Email Notifications" onBack={() => navigation.goBack()} />}>
+        <FlagshipState variant="loading" />
+      </FlagshipScreen>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <ScreenHeader title="Email Notifications" onBack={() => navigation.goBack()} />
+    <FlagshipScreen
+      header={<FlagshipHeader title="Email Notifications" onBack={() => navigation.goBack()} />}
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+    >
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => { setIsRefreshing(true); void load(); }} tintColor={colors.textSecondary} />}
@@ -260,7 +258,7 @@ export default function EmailNotificationsScreen({ navigation }: Props) {
                   const isEnabled = preferences?.[category.key] ?? category.defaultEnabled;
                   const isUpdating = updatingKeys.has(category.key);
                   const isLocked = category.locked;
-                  const iconColor = category.iconColor ?? colors.textSecondary;
+                  const iconColor = category.iconColor ? colors[category.iconColor] : colors.textSecondary;
                   return (
                     <View
                       key={category.key}
@@ -304,7 +302,7 @@ export default function EmailNotificationsScreen({ navigation }: Props) {
 
         <View style={{ height: Space.xxl }} />
       </ScrollView>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 

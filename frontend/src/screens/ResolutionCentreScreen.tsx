@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  StatusBar,
   FlatList,
   Pressable,
   RefreshControl,
@@ -12,10 +11,11 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Typography, Radius } from '../theme/designTokens';
+import { Space, Typography, Radius, Type } from '../theme/designTokens';
 import { useStore } from '../store/useStore';
-import { TradeHeader } from '../components/trade/TradeHeader';
+import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 
 type TicketFilter = 'all' | 'open' | 'resolved' | 'closed';
 
@@ -45,31 +45,10 @@ function formatRelativeDate(timestamp: number): string {
   return `${Math.floor(days / 30)}mo ago`;
 }
 
-const SKELETON_COUNT = 4;
-
-function TicketSkeleton() {
-  const { colors } = useAppTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
-  return (
-    <View style={styles.ticketCard}>
-      <View style={[styles.statusIconWrap, { backgroundColor: colors.surfaceAlt }]} />
-      <View style={styles.ticketInfo}>
-        <View style={styles.skeletonTopic} />
-        <View style={styles.skeletonDetails} />
-        <View style={styles.skeletonMetaRow}>
-          <View style={styles.skeletonMetaShort} />
-          <View style={styles.skeletonMetaLong} />
-        </View>
-      </View>
-      <View style={styles.skeletonChevron} />
-    </View>
-  );
-}
-
 export default function ResolutionCentreScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const statusConfig = useMemo(() => getStatusConfig(colors), [colors]);
   const [filter, setFilter] = useState<TicketFilter>('all');
@@ -107,63 +86,75 @@ export default function ResolutionCentreScreen() {
   const openCount = supportTickets.filter((t) => t.status === 'open').length;
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} />
-
-      <TradeHeader title="Resolution Centre" onBack={() => navigation.goBack()} />
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title="Resolution Centre"
+          onBack={() => navigation.goBack()}
+        />
+      }
+    >
+      {/* Hero summary — open ticket count */}
+      <Reanimated.View entering={FadeInDown.duration(300)}>
+        <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.heroRow}>
+            <View style={[styles.heroIcon, { backgroundColor: openCount > 0 ? colors.brand : colors.surfaceAlt }]}>
+              <Ionicons name="headset" size={18} color={openCount > 0 ? colors.textInverse : colors.textMuted} />
+            </View>
+            <View style={styles.heroText}>
+              <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
+                {openCount > 0 ? `${openCount} open request${openCount === 1 ? '' : 's'}` : 'No open requests'}
+              </Text>
+              <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
+                {supportTickets.length} total ticket{supportTickets.length === 1 ? '' : 's'}
+              </Text>
+            </View>
+          </View>
+        </View>
+      </Reanimated.View>
 
       {/* Filter rail */}
-      <View style={styles.filterRail}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterRailContent}
-        >
-          {FILTERS.map((opt) => {
-            const count = opt.value === 'all'
-              ? supportTickets.length
-              : supportTickets.filter((t) => t.status === opt.value).length;
-            const isActive = filter === opt.value;
-            return (
-              <Pressable
-                key={opt.value}
-                style={[styles.filterChip, isActive && styles.filterChipActive]}
-                onPress={() => setFilter(opt.value)}
-                accessibilityRole="button"
-                accessibilityLabel={opt.accessibilityLabel}
-              >
-                <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>
-                  {opt.label}
-                  {count > 0 && (
-                    <Text style={styles.filterChipCount}> {count}</Text>
-                  )}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.filterRailContent}
+        style={styles.filterRail}
+      >
+        {FILTERS.map((opt) => {
+          const count = opt.value === 'all'
+            ? supportTickets.length
+            : supportTickets.filter((t) => t.status === opt.value).length;
+          const isActive = filter === opt.value;
+          return (
+            <Pressable
+              key={opt.value}
+              style={[styles.filterChip, isActive && styles.filterChipActive]}
+              onPress={() => setFilter(opt.value)}
+              accessibilityRole="button"
+              accessibilityLabel={opt.accessibilityLabel}
+            >
+              <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>
+                {opt.label}
+                {count > 0 && (
+                  <Text style={styles.filterChipCount}> {count}</Text>
+                )}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
 
       {loading && supportTickets.length === 0 ? (
-        <View style={styles.listContent}>
-          {Array.from({ length: SKELETON_COUNT }).map((_, i) => (
-            <TicketSkeleton key={i} />
-          ))}
-        </View>
+        <FlagshipState variant="loading" />
       ) : filteredTickets.length === 0 ? (
-        <View style={styles.centerState}>
-          <View style={styles.emptyIconWrap}>
-            <Ionicons name="folder-open-outline" size={36} color={colors.textMuted} />
-          </View>
-          <Text style={styles.emptyTitle}>
-            {filter === 'open' ? 'No open requests' : 'No support requests'}
-          </Text>
-          <Text style={styles.emptySub}>
-            {filter === 'open'
-              ? 'You have no open support requests right now.'
-              : 'If you have an issue with an order, open the order and tap "Report an issue".'}
-          </Text>
-        </View>
+        <FlagshipState
+          variant="empty"
+          icon="folder-open-outline"
+          title={filter === 'open' ? 'No open requests' : 'No support requests'}
+          subtitle={filter === 'open'
+            ? 'You have no open support requests right now.'
+            : 'If you have an issue with an order, open the order and tap "Report an issue".'}
+        />
       ) : (
         <FlatList
           data={filteredTickets}
@@ -173,48 +164,76 @@ export default function ResolutionCentreScreen() {
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.brand} />
           }
-          renderItem={({ item }) => {
+          renderItem={({ item, index }) => {
             const statusCfg = statusConfig[item.status] ?? statusConfig.open;
             return (
-              <Pressable
-                style={styles.ticketCard}
-                onPress={() => navigation.navigate('SupportTicketDetail', { ticketId: item.id })}
-                accessibilityRole="button"
-                accessibilityLabel={`Support request: ${item.topicLabel}, ${statusCfg.label}`}
-              >
-                <View style={[styles.statusIconWrap, { backgroundColor: `${statusCfg.color}15` }]}>
-                  <Ionicons name={statusCfg.icon} size={18} color={statusCfg.color} />
-                </View>
-                <View style={styles.ticketInfo}>
-                  <Text style={styles.ticketTopic} numberOfLines={1}>{item.topicLabel}</Text>
-                  <Text style={styles.ticketDetails} numberOfLines={2}>{item.details}</Text>
-                  <View style={styles.ticketMetaRow}>
-                    <View style={[styles.statusPill, { backgroundColor: `${statusCfg.color}12` }]}>
-                      <Text style={[styles.ticketStatus, { color: statusCfg.color }]}>{statusCfg.label}</Text>
-                    </View>
-                    <Text style={styles.ticketDate}>Updated {formatRelativeDate(item.updatedAt)}</Text>
+              <Reanimated.View entering={FadeInDown.duration(300).delay(Math.min(index, 8) * 40)}>
+                <Pressable
+                  style={styles.ticketCard}
+                  onPress={() => navigation.navigate('SupportTicketDetail', { ticketId: item.id })}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Support request: ${item.topicLabel}, ${statusCfg.label}`}
+                >
+                  <View style={[styles.statusIconWrap, { backgroundColor: `${statusCfg.color}15` }]}>
+                    <Ionicons name={statusCfg.icon} size={18} color={statusCfg.color} />
                   </View>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-              </Pressable>
+                  <View style={styles.ticketInfo}>
+                    <Text style={styles.ticketTopic} numberOfLines={1}>{item.topicLabel}</Text>
+                    <Text style={styles.ticketDetails} numberOfLines={2}>{item.details}</Text>
+                    <View style={styles.ticketMetaRow}>
+                      <View style={[styles.statusPill, { backgroundColor: `${statusCfg.color}12` }]}>
+                        <Text style={[styles.ticketStatus, { color: statusCfg.color }]}>{statusCfg.label}</Text>
+                      </View>
+                      <Text style={styles.ticketDate}>Updated {formatRelativeDate(item.updatedAt)}</Text>
+                    </View>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+                </Pressable>
+              </Reanimated.View>
             );
           }}
         />
       )}
-    </View>
+    </FlagshipScreen>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
+  heroCard: {
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Space.md,
+    marginBottom: Space.md,
+  },
+  heroRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+  },
+  heroIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  heroText: { flex: 1 },
+  heroTitle: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.body.letterSpacing,
+  },
+  heroSubtitle: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    marginTop: 2,
   },
   filterRail: {
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
     paddingVertical: Space.sm,
+    marginBottom: Space.sm,
   },
   filterRailContent: {
     paddingHorizontal: Space.md,
@@ -305,72 +324,6 @@ function createStyles(colors: ThemeColors) {
     fontSize: 11,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
-  },
-  centerState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 40,
-    gap: 12,
-  },
-  emptyIconWrap: {
-    width: 72,
-    height: 72,
-    borderRadius: Radius.full,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
-  emptyTitle: {
-    fontSize: 16,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
-  emptySub: {
-    fontSize: 13,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-    textAlign: 'center',
-    lineHeight: 18,
-  },
-  // ── Skeleton ──
-  skeletonTopic: {
-    width: '60%',
-    height: 14,
-    borderRadius: 4,
-    backgroundColor: colors.surfaceAlt,
-  },
-  skeletonDetails: {
-    width: '90%',
-    height: 12,
-    borderRadius: 4,
-    backgroundColor: colors.surfaceAlt,
-    marginTop: 2,
-  },
-  skeletonMetaRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 6,
-    alignItems: 'center',
-  },
-  skeletonMetaShort: {
-    width: 50,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.surfaceAlt,
-  },
-  skeletonMetaLong: {
-    width: 80,
-    height: 10,
-    borderRadius: 4,
-    backgroundColor: colors.surfaceAlt,
-  },
-  skeletonChevron: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
-    backgroundColor: colors.surfaceAlt,
   },
   });
 }

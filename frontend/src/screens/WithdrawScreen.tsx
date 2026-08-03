@@ -456,6 +456,24 @@ export default function WithdrawScreen() {
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
+          {/* Hero summary — available balance */}
+          <Reanimated.View entering={FadeInDown.duration(300)}>
+            <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={styles.heroRow}>
+                <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
+                  <Ionicons name="wallet" size={18} color={colors.textInverse} />
+                </View>
+                <View style={styles.heroText}>
+                  <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
+                    {formatFromFiat(availableBalance, 'GBP', { displayMode: 'fiat' })}
+                  </Text>
+                  <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
+                    Available to withdraw
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </Reanimated.View>
 
           <Reanimated.View entering={FadeInDown.duration(300).delay(30)}>
             <View style={styles.amountWrap}>
@@ -567,6 +585,32 @@ function createStyles(colors: ThemeColors) {
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, height: 56, borderBottomWidth: 1, borderBottomColor: colors.border },
   backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'flex-start' },
   headerTitle: { fontSize: 17, fontFamily: Typography.family.semibold, color: colors.textPrimary },
+
+  heroCard: {
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Space.md,
+    marginTop: Space.md,
+    marginBottom: Space.sm,
+  },
+  heroRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
+  heroIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  heroText: { flex: 1 },
+  heroTitle: {
+    fontSize: Typography.family.bold ? 22 : 22,
+    fontFamily: Typography.family.bold,
+  },
+  heroSubtitle: {
+    fontSize: 14,
+    fontFamily: Typography.family.regular,
+    marginTop: 2,
+  },
 
   content: { flex: 1, paddingHorizontal: 20 },
 

@@ -27,6 +27,7 @@ export interface CoOwnOverflowSheetProps {
   isWatched: boolean;
   onReport: () => void;
   onPriceAlert?: () => void;
+  onOrderHistory?: () => void;
 }
 
 export function CoOwnOverflowSheet({
@@ -39,6 +40,7 @@ export function CoOwnOverflowSheet({
   isWatched,
   onReport,
   onPriceAlert,
+  onOrderHistory,
 }: CoOwnOverflowSheetProps) {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
@@ -57,6 +59,14 @@ export function CoOwnOverflowSheet({
       onPress: () => handleAction(() => {
         onClose();
         onShare();
+      }),
+    }] : []),
+    ...(onOrderHistory ? [{
+      icon: 'time-outline' as keyof typeof Ionicons.glyphMap,
+      label: 'View order history',
+      onPress: () => handleAction(() => {
+        onClose();
+        onOrderHistory();
       }),
     }] : []),
     {

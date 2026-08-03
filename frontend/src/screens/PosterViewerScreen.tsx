@@ -8,7 +8,6 @@ import {
   Dimensions,
   AppState,
   Image,
-  ActivityIndicator,
   Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -41,6 +40,7 @@ import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { Type, Typography, Space, Radius } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { PosterViewerSkeleton } from '../components/skeletons/PosterViewerSkeleton';
 import { PosterProgressSegments } from '../components/poster/PosterProgressSegments';
 import { PosterStickerLayer } from '../components/poster/PosterStickerLayer';
 import { PosterReactionReplyBar } from '../components/poster/PosterReactionReplyBar';
@@ -293,7 +293,7 @@ export default function PosterViewerScreen() {
     return (
       <View style={styles.loadingContainer}>
         <StatusBar barStyle="light-content" />
-        <ActivityIndicator size="large" color="#fff" />
+        <PosterViewerSkeleton />
       </View>
     );
   }

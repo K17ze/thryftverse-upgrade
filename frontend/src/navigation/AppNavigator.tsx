@@ -34,6 +34,8 @@ import MyBidsScreen from '../screens/MyBidsScreen';
 import MyListingsScreen from '../screens/MyListingsScreen';
 import SellerAnalyticsScreen from '../screens/SellerAnalyticsScreen';
 import BundleBagScreen from '../screens/BundleBagScreen';
+import SellerVerificationScreen from '../screens/SellerVerificationScreen';
+import VerificationResponseScreen from '../screens/VerificationResponseScreen';
 import CoOwnOrderHistoryScreen from '../screens/SyndicateOrderHistoryScreen';
 import AssetLeaderboardScreen from '../screens/AssetLeaderboardScreen';
 import BuyoutScreen from '../screens/BuyoutScreen';
@@ -255,6 +257,8 @@ export default function AppNavigator() {
       <Stack.Screen name="MyListings" component={MyListingsScreen} />
       <Stack.Screen name="SellerAnalytics" component={SellerAnalyticsScreen} />
       <Stack.Screen name="BundleBag" component={BundleBagScreen} />
+      <Stack.Screen name="SellerVerification" component={SellerVerificationScreen} />
+      <Stack.Screen name="VerificationResponse" component={VerificationResponseScreen} options={modalScreenOptions} />
       <Stack.Screen name="CoOwnOrderHistory" component={CoOwnOrderHistoryScreen} />
       <Stack.Screen name="AssetLeaderboard" component={AssetLeaderboardScreen} />
       <Stack.Screen name="Buyout" component={BuyoutScreen} />

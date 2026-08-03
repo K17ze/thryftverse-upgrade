@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  StatusBar,
   ScrollView,
   Pressable,
   TextInput,
@@ -12,9 +11,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
-import { Space, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
@@ -24,6 +24,7 @@ import { fetchJson } from '../lib/apiClient';
 import { CachedImage } from '../components/CachedImage';
 import { normaliseOrderStatus, humaniseStatus } from '../components/orders/orderCapabilities';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
+import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 
 type SellerFulfilmentRoute = RouteProp<{ SellerFulfilment: { orderId: string } }, 'SellerFulfilment'>;
 
@@ -50,7 +51,7 @@ export default function SellerFulfilmentScreen() {
   const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
   const currentUser = useStore((state) => state.currentUser);
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const { orderId } = route.params;
@@ -142,61 +143,35 @@ export default function SellerFulfilmentScreen() {
 
   if (isLoading) {
     return (
-      <View style={styles.container}>
-        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
-        <View style={[styles.header, { paddingTop: insets.top }]}>
-          <Pressable style={styles.headerBtn} onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityRole="button" accessibilityLabel="Go back">
-            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-          </Pressable>
-          <Text style={styles.headerTitle}>Dispatch</Text>
-          <View style={styles.headerSpacer} />
-        </View>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.textSecondary} />
-          <Text style={styles.loadingText}>Loading order…</Text>
-        </View>
-      </View>
+      <FlagshipScreen header={<FlagshipHeader title="Dispatch" onBack={() => navigation.goBack()} />}>
+        <FlagshipState variant="loading" />
+      </FlagshipScreen>
     );
   }
 
   if (loadError || !order) {
     return (
-      <View style={styles.container}>
-        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
-        <View style={[styles.header, { paddingTop: insets.top }]}>
-          <Pressable style={styles.headerBtn} onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityRole="button" accessibilityLabel="Go back">
-            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-          </Pressable>
-          <Text style={styles.headerTitle}>Dispatch</Text>
-          <View style={styles.headerSpacer} />
-        </View>
-        <View style={styles.errorContainer}>
-          <Ionicons name="cloud-offline-outline" size={36} color={colors.textMuted} />
-          <Text style={styles.errorTitle}>Order could not be loaded</Text>
-          <Pressable style={styles.retryBtn} onPress={() => { setLoadError(null); setIsLoading(true); void fetchOrder(); }} accessibilityRole="button" accessibilityLabel="Retry">
-            <Text style={styles.retryBtnText}>Retry</Text>
-          </Pressable>
-        </View>
-      </View>
+      <FlagshipScreen header={<FlagshipHeader title="Dispatch" onBack={() => navigation.goBack()} />}>
+        <FlagshipState
+          variant="error"
+          icon="cloud-offline-outline"
+          title="Order could not be loaded"
+          actionLabel="Retry"
+          onAction={() => { setLoadError(null); setIsLoading(true); void fetchOrder(); }}
+        />
+      </FlagshipScreen>
     );
   }
 
   if (!isSeller) {
     return (
-      <View style={styles.container}>
-        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
-        <View style={[styles.header, { paddingTop: insets.top }]}>
-          <Pressable style={styles.headerBtn} onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityRole="button" accessibilityLabel="Go back">
-            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-          </Pressable>
-          <Text style={styles.headerTitle}>Dispatch</Text>
-          <View style={styles.headerSpacer} />
-        </View>
-        <View style={styles.errorContainer}>
-          <Ionicons name="lock-closed-outline" size={36} color={colors.textMuted} />
-          <Text style={styles.errorTitle}>Only the seller can dispatch this order</Text>
-        </View>
-      </View>
+      <FlagshipScreen header={<FlagshipHeader title="Dispatch" onBack={() => navigation.goBack()} />}>
+        <FlagshipState
+          variant="empty"
+          icon="lock-closed-outline"
+          title="Only the seller can dispatch this order"
+        />
+      </FlagshipScreen>
     );
   }
 
@@ -204,26 +179,31 @@ export default function SellerFulfilmentScreen() {
   const statusLabel = humaniseStatus(order.status);
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
-
-      <View style={[styles.header, { paddingTop: insets.top }]}>
-        <Pressable style={styles.headerBtn} onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityRole="button" accessibilityLabel="Go back">
-          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-        </Pressable>
-        <Text style={styles.headerTitle}>Dispatch item</Text>
-        <View style={styles.headerSpacer} />
-      </View>
-
+    <FlagshipScreen
+      header={<FlagshipHeader title="Dispatch item" onBack={() => navigation.goBack()} />}
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+    >
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 100 + insets.bottom }]}
       >
-        <View style={styles.orderSummary}>
-          <Text style={styles.orderNumber}>ORDER #{shortOrderId}</Text>
-          <Text style={styles.statusLabel}>{statusLabel}</Text>
-        </View>
+        {/* Hero summary — order status */}
+        <Reanimated.View entering={FadeInDown.duration(300)}>
+          <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.heroRow}>
+              <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
+                <Ionicons name="cube" size={18} color={colors.textInverse} />
+              </View>
+              <View style={styles.heroText}>
+                <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>ORDER #{shortOrderId}</Text>
+                <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>{statusLabel}</Text>
+              </View>
+            </View>
+          </View>
+        </Reanimated.View>
 
+        <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
         <View style={styles.itemCard}>
           {order.listingImageUrl ? (
             <CachedImage uri={order.listingImageUrl} style={styles.itemImage} contentFit="cover" />
@@ -237,10 +217,12 @@ export default function SellerFulfilmentScreen() {
             <Text style={styles.itemTotal}>{formatFromFiat(order.totalGbp, 'GBP', { displayMode: 'fiat' })}</Text>
           </View>
         </View>
+        </Reanimated.View>
 
         <View style={styles.sectionDivider} />
 
         {/* Seller-side escrow narrative — when funds are held */}
+        <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
         {(() => {
           const normalised = normaliseOrderStatus(order.status);
           const isHeld = normalised === 'paid' || normalised === 'shipped' || normalised === 'in transit' || normalised === 'out for delivery';
@@ -271,9 +253,11 @@ export default function SellerFulfilmentScreen() {
             </View>
           );
         })()}
+        </Reanimated.View>
 
         <View style={styles.sectionDivider} />
 
+        <Reanimated.View entering={FadeInDown.duration(300).delay(180)}>
         <Text style={styles.sectionLabel}>Shipping details</Text>
 
         <Text style={styles.inputLabel}>Carrier</Text>
@@ -384,6 +368,7 @@ export default function SellerFulfilmentScreen() {
             </Text>
           </View>
         )}
+        </Reanimated.View>
       </ScrollView>
 
       {canShip && (
@@ -415,96 +400,45 @@ export default function SellerFulfilmentScreen() {
           </Pressable>
         </View>
       )}
-    </View>
+    </FlagshipScreen>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
+  heroCard: {
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Space.md,
+    marginBottom: Space.md,
   },
-  header: {
+  heroRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  headerBtn: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
-  headerSpacer: {
-    width: 44,
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
     gap: Space.md,
   },
-  loadingText: {
-    fontSize: 14,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
-  errorContainer: {
-    flex: 1,
-    alignItems: 'center',
+  heroIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.full,
     justifyContent: 'center',
-    paddingHorizontal: Space.xl,
-    gap: Space.md,
-  },
-  errorTitle: {
-    fontSize: 18,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-    textAlign: 'center',
-  },
-  retryBtn: {
-    paddingVertical: 14,
-    paddingHorizontal: Space.xl,
-    borderRadius: 10,
-    backgroundColor: colors.brand,
-    minHeight: 48,
     alignItems: 'center',
-    justifyContent: 'center',
   },
-  retryBtnText: {
-    fontSize: 16,
+  heroText: { flex: 1 },
+  heroTitle: {
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: colors.textInverse,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  heroSubtitle: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.bold,
+    marginTop: 2,
   },
   scrollContent: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
-  },
-  orderSummary: {
-    paddingVertical: Space.sm,
-    gap: 4,
-  },
-  orderNumber: {
-    fontSize: 12,
-    fontFamily: Typography.family.semibold,
-    color: colors.textMuted,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-  },
-  statusLabel: {
-    fontSize: 22,
-    fontFamily: Typography.family.bold,
-    color: colors.textPrimary,
   },
   itemCard: {
     flexDirection: 'row',
@@ -514,7 +448,7 @@ function createStyles(colors: ThemeColors) {
   itemImage: {
     width: 64,
     height: 80,
-    borderRadius: 6,
+    borderRadius: Radius.sm,
   },
   itemImagePlaceholder: {
     backgroundColor: colors.surface,

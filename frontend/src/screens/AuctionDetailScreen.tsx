@@ -660,11 +660,11 @@ export default function AuctionDetailScreen() {
               onPress: social.openShare,
             },
             {
-              icon: auction.isWatched ? 'eye' : 'eye-outline',
-              activeIcon: 'eye',
-              label: auction.isWatched ? 'Remove from watchlist' : 'Add to watchlist',
-              onPress: handleToggleWatch,
-              isActive: auction.isWatched,
+              icon: social.isSavedToCollection ? 'bookmark' : 'bookmark-outline',
+              activeIcon: 'bookmark',
+              label: social.isSavedToCollection ? 'Saved to collection' : 'Save to collection',
+              onPress: social.openCollectionPicker,
+              isActive: social.isSavedToCollection,
             },
           ]}
           onOverflow={() => setOverflowVisible(true)}
@@ -1223,7 +1223,7 @@ export default function AuctionDetailScreen() {
         return null;
       })()}
 
-      {/* ── Overflow sheet — Save to collection + wishlist (lower-frequency
+      {/* ── Overflow sheet — Watchlist, Save to collection, wishlist (lower-frequency
           actions kept off the hero per spec 04 §1). ── */}
       <BottomSheet
         visible={overflowVisible}
@@ -1233,6 +1233,24 @@ export default function AuctionDetailScreen() {
         <View style={styles.sheetHeader}>
           <Headline style={styles.sheetTitle}>More actions</Headline>
         </View>
+        <Pressable
+          style={[styles.overflowRow, { borderColor: colors.borderSubtle }]}
+          onPress={() => {
+            setOverflowVisible(false);
+            handleToggleWatch();
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={auction.isWatched ? 'Remove from watchlist' : 'Add to watchlist'}
+        >
+          <Ionicons
+            name={auction.isWatched ? 'eye' : 'eye-outline'}
+            size={20}
+            color={auction.isWatched ? colors.brand : colors.textPrimary}
+          />
+          <Text style={[styles.overflowRowText, { color: colors.textPrimary }]}>
+            {auction.isWatched ? 'Remove from watchlist' : 'Add to watchlist'}
+          </Text>
+        </Pressable>
         <Pressable
           style={[styles.overflowRow, { borderColor: colors.borderSubtle }]}
           onPress={() => {

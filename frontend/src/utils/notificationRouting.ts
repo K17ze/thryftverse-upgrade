@@ -35,6 +35,7 @@ const VALID_SCREENS: ReadonlySet<string> = new Set<ScreenName>([
   'CoOwnHub',
   'Portfolio',
   'CoOwnOrderHistory',
+  'SellerVerification',
 ]);
 
 export function resolveNotificationRoute(
@@ -138,6 +139,10 @@ export function resolveNotificationRoute(
     }
 
     const assetId = typeof payload.assetId === 'string' ? payload.assetId : null;
+    const demandId = typeof payload.demandId === 'number' ? payload.demandId : null;
+    if (assetId && demandId) {
+      return { screen: 'VerificationResponse', params: { assetId, demandId } };
+    }
     if (assetId) {
       return { screen: 'AssetDetail', params: { assetId } };
     }

@@ -264,6 +264,9 @@ export type RootStackParamList = {
   // Seller analytics (entry via MyListings)
   SellerAnalytics: undefined;
   BundleBag: { sellerId: string; sellerName?: string } | undefined;
+  // Seller verification response — sellers view and respond to Co-Own verification demands
+  SellerVerification: undefined;
+  VerificationResponse: { assetId: string; demandId: number } | undefined;
 };
 
 export type TabParamList = {

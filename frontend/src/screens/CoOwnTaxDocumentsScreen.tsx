@@ -16,7 +16,6 @@ import {
   StyleSheet,
   ScrollView,
   RefreshControl,
-  ActivityIndicator,
   Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -28,6 +27,7 @@ import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { CoOwnActivitySkeleton } from '../components/coown/CoOwnSkeletons';
 import { AppButton } from '../components/ui/AppButton';
 import { EmptyState } from '../components/EmptyState';
 import { fetchCoOwnTaxDocument, type CoOwnTaxDocument } from '../services/marketApi';
@@ -87,9 +87,9 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <ScreenHeader title="Tax Documents" onBack={() => navigation.goBack()} />
-        <View style={styles.loadingBody}>
-          <ActivityIndicator size="large" color={colors.brand} />
-        </View>
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <CoOwnActivitySkeleton />
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -282,7 +282,7 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    loadingBody: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    loadingBody: { flex: 1 },
     scrollContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
 
     // Hero card — P&L dominant

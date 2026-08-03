@@ -16,7 +16,6 @@ import {
   StyleSheet,
   ScrollView,
   RefreshControl,
-  ActivityIndicator,
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -29,6 +28,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AppButton } from '../components/ui/AppButton';
+import { ConnectedAccountsSkeleton } from '../components/skeletons/ConnectedAccountsSkeleton';
 import { EmptyState } from '../components/EmptyState';
 import {
   fetchConnectedAccounts,
@@ -115,9 +115,9 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <ScreenHeader title="Connected Accounts" onBack={() => navigation.goBack()} />
-        <View style={styles.loadingBody}>
-          <ActivityIndicator size="large" color={colors.brand} />
-        </View>
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <ConnectedAccountsSkeleton />
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -135,7 +135,7 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
           <View style={styles.heroCard}>
             <View style={styles.heroIconRow}>
               <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
-                <Ionicons name="lock-closed" size={20} color={isDark ? '#0A0A0A' : '#FFFFFF'} />
+                <Ionicons name="lock-closed" size={20} color={colors.textInverse} />
               </View>
               <View style={styles.heroText}>
                 <Text style={styles.heroTitle}>Sign-in methods</Text>
@@ -243,7 +243,7 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    loadingBody: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    loadingBody: { flex: 1 },
     scrollContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
 
     // Hero summary card

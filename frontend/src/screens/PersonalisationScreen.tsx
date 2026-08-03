@@ -2,9 +2,10 @@ import React, { useState, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
@@ -157,29 +158,41 @@ export default function PersonalisationScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* 2. Editorial introduction */}
-        <View style={styles.intro}>
-          <Text style={styles.introTitle}>Personalisation</Text>
-          <Text style={styles.introBody}>
-            Set the shopping preferences you want to keep.
-          </Text>
-          <Text style={styles.introBody}>
-            Your choices are saved automatically.
-          </Text>
-        </View>
+        {/* Hero summary — personalisation status */}
+        <Reanimated.View entering={FadeInDown.duration(300)}>
+          <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.heroRow}>
+              <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
+                <Ionicons name="sparkles" size={18} color={colors.textInverse} />
+              </View>
+              <View style={styles.heroText}>
+                <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
+                  {genderFilter.includes('All') ? 'All categories' : `${genderFilter.join(', ')} selected`}
+                </Text>
+                <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
+                  {brandsPref === 'Any' && membersPref === 'Everyone' ? 'Default discovery' : 'Custom discovery'}
+                </Text>
+              </View>
+              <View style={[styles.heroBadge, { backgroundColor: colors.success + '15' }]}>
+                <Ionicons name="checkmark-circle" size={12} color={colors.success} />
+                <Text style={[styles.heroBadgeText, { color: colors.success }]}>Saved</Text>
+              </View>
+            </View>
+          </View>
+        </Reanimated.View>
 
-        {/* 3. Visual shopping-audience selection */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Shop for</Text>
+        {/* Visual shopping-audience selection */}
+        <Reanimated.View entering={FadeInDown.duration(300).delay(60)} style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>Shop for</Text>
           <AudiencePreferenceGrid
             selectedGenders={genderFilter}
             onSelect={handleSelectGender}
           />
-        </View>
+        </Reanimated.View>
 
-        {/* 4. Discovery preference rows */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Discovery preferences</Text>
+        {/* Discovery preference rows */}
+        <Reanimated.View entering={FadeInDown.duration(300).delay(120)} style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>Discovery preferences</Text>
           <View style={styles.discoveryGroup}>
             <DiscoveryPreferenceRow
               icon="grid-outline"
@@ -204,19 +217,21 @@ export default function PersonalisationScreen() {
               isLast
             />
           </View>
-        </View>
+        </Reanimated.View>
 
-        {/* 6. Optional reset action */}
-        <Pressable
-          style={styles.resetBtn}
-          onPress={handleReset}
-          hitSlop={{ top: 8, bottom: 8 }}
-          accessibilityRole="button"
-          accessibilityLabel="Reset preferences to defaults"
-        >
-          <Ionicons name="refresh-outline" size={16} color={colors.textMuted} />
-          <Text style={styles.resetBtnText}>Reset preferences</Text>
-        </Pressable>
+        {/* Optional reset action */}
+        <Reanimated.View entering={FadeInDown.duration(300).delay(180)}>
+          <Pressable
+            style={styles.resetBtn}
+            onPress={handleReset}
+            hitSlop={{ top: 8, bottom: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="Reset preferences to defaults"
+          >
+            <Ionicons name="refresh-outline" size={16} color={colors.textMuted} />
+            <Text style={[styles.resetBtnText, { color: colors.textMuted }]}>Reset preferences</Text>
+          </Pressable>
+        </Reanimated.View>
       </ScrollView>
 
       {/* 7. BottomSheetPicker */}
@@ -240,7 +255,7 @@ function createStyles(colors: ThemeColors) {
       gap: 4,
     },
     headerSaved: {
-      fontSize: 13,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.medium,
       color: colors.success,
     },
@@ -250,23 +265,48 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
     },
 
-    // Editorial introduction
-    intro: {
-      paddingTop: Space.lg,
-      paddingBottom: Space.lg,
-      gap: Space.xs,
+    // Hero summary card
+    heroCard: {
+      borderRadius: Radius.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      padding: Space.md,
+      marginTop: Space.sm,
+      marginBottom: Space.lg,
     },
-    introTitle: {
-      fontSize: 28,
-      fontFamily: Typography.family.bold,
-      color: colors.textPrimary,
-      letterSpacing: -0.5,
+    heroRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.md,
     },
-    introBody: {
-      fontSize: 15,
+    heroIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: Radius.full,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    heroText: { flex: 1 },
+    heroTitle: {
+      fontSize: Type.bodyEmphasis.size,
+      fontFamily: Typography.family.semibold,
+      letterSpacing: Type.body.letterSpacing,
+    },
+    heroSubtitle: {
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
-      color: colors.textSecondary,
-      lineHeight: 21,
+      marginTop: 2,
+    },
+    heroBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: Space.sm,
+      paddingVertical: Space.xs,
+      borderRadius: Radius.full,
+    },
+    heroBadgeText: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.semibold,
     },
 
     // Section
@@ -274,9 +314,8 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.lg,
     },
     sectionTitle: {
-      fontSize: 13,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
-      color: colors.textMuted,
       textTransform: 'uppercase',
       letterSpacing: 0.8,
       marginBottom: Space.sm,
@@ -298,9 +337,8 @@ function createStyles(colors: ThemeColors) {
       minHeight: 48,
     },
     resetBtnText: {
-      fontSize: 14,
+      fontSize: Type.body.size,
       fontFamily: Typography.family.medium,
-      color: colors.textMuted,
     },
   });
 }

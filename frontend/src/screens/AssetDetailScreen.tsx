@@ -616,9 +616,9 @@ export default function AssetDetailScreen() {
         title={asset.title}
         onBack={() => navigation.goBack()}
         rightAction={{
-          icon: 'time-outline',
-          label: 'View order history',
-          onPress: () => navigation.navigate('CoOwnOrderHistory'),
+          icon: 'share-outline',
+          label: 'Share asset',
+          onPress: social.openShare,
         }}
       />
 
@@ -1169,6 +1169,7 @@ export default function AssetDetailScreen() {
                   sellerLiability={recourseStatus?.sellerLiability ?? null}
                   verificationDemands={recourseStatus?.verificationDemands}
                   isHolder={(yourUnits ?? 0) > 0}
+                  isIssuer={isIssuer}
                   onRequestVerification={async () => {
                     if (!assetId) return;
                     setVerificationDemandLoading(true);
@@ -1183,6 +1184,9 @@ export default function AssetDetailScreen() {
                     } finally {
                       setVerificationDemandLoading(false);
                     }
+                  }}
+                  onRespondToVerification={(demandId) => {
+                    navigation.navigate('VerificationResponse', { assetId, demandId });
                   }}
                 />
 
@@ -1561,6 +1565,7 @@ export default function AssetDetailScreen() {
         visible={overflowVisible}
         onClose={() => setOverflowVisible(false)}
         onShare={social.openShare}
+        onOrderHistory={() => navigation.navigate('CoOwnOrderHistory')}
         onToggleFav={social.toggleLike}
         isFav={social.isLiked}
         onWatch={() => {

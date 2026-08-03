@@ -28,7 +28,7 @@ import Reanimated, {
 import { useStore } from '../store/useStore';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { Space, Typography, DockConstants } from '../theme/designTokens';
+import { Space, Typography, DockConstants, Elevation } from '../theme/designTokens';
 import {
   type PublicProfileStats,
   type PublicProfileViewer,
@@ -858,7 +858,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 8, height: COLLAPSED_BAR_HEIGHT,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowRadius: 8, elevation: 4,
+    ...Elevation.card,
   },
   collapsedBackBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   collapsedCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4 },

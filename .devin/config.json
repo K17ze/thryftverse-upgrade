@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(node_modules/**)",
+      "Read(**/node_modules/**)",
+      "Read(.expo/**)",
+      "Read(**/.expo/**)",
+      "Read(dist/**)",
+      "Read(**/dist/**)",
+      "Read(frontend/ios/**)",
+      "Read(frontend/android/**)",
+      "Read(__pycache__/**)",
+      "Read(**/__pycache__/**)",
+      "Read(.venv/**)",
+      "Read(thryftverse-payment-wallet-flagship-upgrade-prompts/**)",
+      "Read(thryftverse_product_detail_competitive_closure_audit_2026-07-30/**)"
+    ]
+  }
+}

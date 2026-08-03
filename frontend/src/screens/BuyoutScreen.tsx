@@ -298,7 +298,7 @@ export default function BuyoutScreen() {
               variant="primary"
               size="lg"
               disabled={submitting || !offerPrice}
-              icon={submitting ? <ActivityIndicator size="small" color="#fff" /> : <Ionicons name="send-outline" size={16} color="#fff" />}
+              icon={submitting ? <ActivityIndicator size="small" color={colors.textInverse} /> : <Ionicons name="send-outline" size={16} color={colors.textInverse} />}
               accessibilityLabel="Submit buyout offer"
               style={{ flex: 2 }}
             />

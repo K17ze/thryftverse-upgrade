@@ -2026,6 +2026,20 @@ export async function fetchSellerLiability(
   );
 }
 
+export interface SellerVerificationDemand extends CoOwnVerificationDemand {
+  assetId: string;
+  assetTitle: string;
+  assetImageUrl: string | null;
+}
+
+export async function fetchSellerVerificationDemands(
+  userId: string
+): Promise<{ ok: true; demands: SellerVerificationDemand[] }> {
+  return fetchJson<{ ok: true; demands: SellerVerificationDemand[] }>(
+    `/co-own/seller/${encodeURIComponent(userId)}/verification-demands`
+  );
+}
+
 /* ─── Distributions ─── */
 
 export interface CoOwnDistribution {

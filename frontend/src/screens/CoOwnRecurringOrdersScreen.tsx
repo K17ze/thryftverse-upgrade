@@ -16,7 +16,6 @@ import {
   StyleSheet,
   ScrollView,
   RefreshControl,
-  ActivityIndicator,
   Pressable,
   Alert,
   Modal,
@@ -31,6 +30,7 @@ import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { CoOwnActivitySkeleton } from '../components/coown/CoOwnSkeletons';
 import { AppButton } from '../components/ui/AppButton';
 import { EmptyState } from '../components/EmptyState';
 import {
@@ -155,9 +155,9 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <ScreenHeader title="Auto-Invest" onBack={() => navigation.goBack()} />
-        <View style={styles.loadingBody}>
-          <ActivityIndicator size="large" color={colors.brand} />
-        </View>
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <CoOwnActivitySkeleton />
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -384,7 +384,7 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
                     accessibilityLabel={FREQUENCY_LABELS[f]}
                     accessibilityState={{ selected: isSelected }}
                   >
-                    <Text style={[styles.frequencyText, isSelected && { color: '#fff' }]}>
+                    <Text style={[styles.frequencyText, isSelected && { color: colors.textInverse }]}>
                       {FREQUENCY_LABELS[f]}
                     </Text>
                   </Pressable>
@@ -429,7 +429,7 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    loadingBody: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    loadingBody: { flex: 1 },
     scrollContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
 
     // Hero summary

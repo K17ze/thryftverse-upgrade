@@ -315,6 +315,17 @@ export const config = {
     0,
     1000
   ),
+  // Per-seller risk-tier reserve percentages (P3.5). Applied in addition to
+  // the new-seller rolling reserve — the escrow release logic uses the higher
+  // of the new-seller reserve and the tier reserve.
+  sellerRiskTierElevatedReservePct: asNumber(
+    process.env.SELLER_RISK_TIER_ELEVATED_RESERVE_PCT,
+    5
+  ),
+  sellerRiskTierHighReservePct: asNumber(
+    process.env.SELLER_RISK_TIER_HIGH_RESERVE_PCT,
+    15
+  ),
   paypalClientId: process.env.PAYPAL_CLIENT_ID?.trim() || null,
   paypalClientSecret: process.env.PAYPAL_CLIENT_SECRET?.trim() || null,
   paypalApiBaseUrl:

@@ -14,10 +14,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Typography, DockConstants } from '../theme/designTokens';
+import { Space, Typography, DockConstants, Type, Radius } from '../theme/designTokens';
 import { useToast } from '../context/ToastContext';
 import { useCurrencyPref } from '../hooks/useCurrencyPref';
 import { CURRENCIES } from '../constants/currencies';
@@ -32,6 +33,7 @@ import { MediaUploadQueue } from '../services/mediaUploadQueue';
 import { ListingMediaStudio } from '../components/listing/ListingMediaStudio';
 import { EditListingFooter } from '../components/listing/EditListingFooter';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { useBackendData } from '../context/BackendDataContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../platform/server/queryKeys';
@@ -54,9 +56,6 @@ export default function EditListingScreen() {
   // StyleSheet contains only non-color properties; colors are applied
   // via this themed proxy so the screen is fully dark-mode compatible.
   const t = useMemo(() => ({
-    root: { backgroundColor: colors.background },
-    navHeader: { borderBottomColor: colors.border },
-    navTitle: { color: colors.textPrimary },
     navStatusText: { color: colors.textMuted },
     navStatusUnsaved: { color: colors.brand },
     loadingText: { color: colors.textMuted },
@@ -552,31 +551,18 @@ export default function EditListingScreen() {
   /* ── loading state ── */
   if (isLoading) {
     return (
-      <SafeAreaView style={[styles.root, t.root]} edges={['top']}>
+      <FlagshipScreen header={<FlagshipHeader title="Edit listing" onBack={() => navigation.goBack()} />}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.brand} />
           <Text style={[styles.loadingText, t.loadingText]}>Loading listing…</Text>
         </View>
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   if (loadError) {
     return (
-      <SafeAreaView style={[styles.root, t.root]} edges={['top']}>
-        <View style={[styles.navHeader, t.navHeader]}>
-          <Pressable
-            style={styles.navCloseBtn}
-            onPress={() => navigation.goBack()}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-          >
-            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-          </Pressable>
-          <Text style={[styles.navTitle, t.navTitle]}>Edit listing</Text>
-          <View style={{ width: 60 }} />
-        </View>
+      <FlagshipScreen header={<FlagshipHeader title="Edit listing" onBack={() => navigation.goBack()} />}>
         <View style={styles.errorContainer}>
           <Ionicons name="cloud-offline-outline" size={40} color={colors.textMuted} />
           <Text style={[styles.errorTitle, t.errorTitle]}>Could not load listing</Text>
@@ -623,31 +609,27 @@ export default function EditListingScreen() {
             <Text style={[styles.retryBtnText, t.retryBtnText]}>Retry</Text>
           </Pressable>
         </View>
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.root, t.root]} edges={['top']}>
-        {/* ── 1. COMPACT NAVIGATION HEADER ── */}
-        <View style={[styles.navHeader, t.navHeader]}>
-          <Pressable
-            style={styles.navCloseBtn}
-            onPress={handleCancel}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            accessibilityRole="button"
-            accessibilityLabel="Cancel and go back"
-          >
-            <Ionicons name="close" size={24} color={colors.textPrimary} />
-          </Pressable>
-          <Text style={[styles.navTitle, t.navTitle]}>Edit listing</Text>
-          <View style={styles.navStatusWrap}>
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title="Edit listing"
+          onBack={handleCancel}
+          backIcon="close"
+          rightAction={
             <Text style={[styles.navStatusText, t.navStatusText, hasChanges && styles.navStatusUnsaved, hasChanges && t.navStatusUnsaved]}>
               {hasChanges ? 'Unsaved' : 'Saved'}
             </Text>
-          </View>
-        </View>
-
+          }
+        />
+      }
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+    >
         <KeyboardAwareScrollView
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
@@ -656,6 +638,7 @@ export default function EditListingScreen() {
           showsVerticalScrollIndicator={false}
         >
           {/* ── 2. LISTING MEDIA STUDIO ── */}
+          <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
           {isOwner ? (
             <ListingMediaStudio
               items={mediaItems}
@@ -686,6 +669,7 @@ export default function EditListingScreen() {
               lockedNote="You do not have permission to edit this listing."
             />
           )}
+          </Reanimated.View>
 
           {/* ── 3. LISTING STATUS/CONTEXT ── */}
           {listingStatusLabel && (
@@ -703,7 +687,7 @@ export default function EditListingScreen() {
           )}
 
           {/* ── 4. DETAILS ── */}
-          <View style={styles.sectionGroup}>
+          <Reanimated.View entering={FadeInDown.duration(300).delay(60)} style={styles.sectionGroup}>
             <Text style={[styles.sectionHeading, t.sectionHeading]}>Details</Text>
 
             <View style={styles.fieldGroup}>
@@ -782,10 +766,10 @@ export default function EditListingScreen() {
               </View>
               <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
             </Pressable>
-          </View>
+          </Reanimated.View>
 
           {/* ── 5. PRICING ── */}
-          <View style={styles.sectionGroup}>
+          <Reanimated.View entering={FadeInDown.duration(300).delay(120)} style={styles.sectionGroup}>
             <Text style={[styles.sectionHeading, t.sectionHeading]}>Pricing</Text>
 
             <View style={styles.fieldGroup}>
@@ -823,10 +807,10 @@ export default function EditListingScreen() {
                 />
               </View>
             </View>
-          </View>
+          </Reanimated.View>
 
           {/* ── 6. DESCRIPTION ── */}
-          <View style={styles.sectionGroup}>
+          <Reanimated.View entering={FadeInDown.duration(300).delay(180)} style={styles.sectionGroup}>
             <Text style={[styles.sectionHeading, t.sectionHeading]}>Description</Text>
             <View style={styles.fieldGroup}>
               <TextInput
@@ -842,10 +826,10 @@ export default function EditListingScreen() {
               />
               <Text style={[styles.charCount, t.charCount]}>{description.trim().length} characters</Text>
             </View>
-          </View>
+          </Reanimated.View>
 
           {/* ── 7. SHIPPING ── */}
-          <View style={styles.sectionGroup}>
+          <Reanimated.View entering={FadeInDown.duration(300).delay(240)} style={styles.sectionGroup}>
             <Text style={[styles.sectionHeading, t.sectionHeading]}>Shipping</Text>
 
             <Pressable
@@ -878,7 +862,7 @@ export default function EditListingScreen() {
               </View>
               <Ionicons name="swap-horizontal" size={16} color={colors.textMuted} />
             </Pressable>
-          </View>
+          </Reanimated.View>
 
           {/* ── 8. SAVE/UPDATE FEEDBACK ── */}
           {errorMsg && saveStage !== 'idle' && (
@@ -913,41 +897,13 @@ export default function EditListingScreen() {
         onSelect={handlePickerSelect}
         searchable={pickerMode === 'Brand'}
       />
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
-  keyboardView: {
-    flex: 1,
-  },
-  navHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  navCloseBtn: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  navTitle: {
-    fontSize: 16,
-    fontFamily: Typography.family.semibold,
-  },
-  navStatusWrap: {
-    minWidth: 60,
-    alignItems: 'flex-end',
-  },
   navStatusText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
   },
   navStatusUnsaved: {
@@ -966,7 +922,7 @@ const styles = StyleSheet.create({
     gap: Space.md,
   },
   loadingText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
   },
   errorContainer: {
@@ -977,22 +933,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.xl,
   },
   errorTitle: {
-    fontSize: 16,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
   },
   retryBtn: {
     paddingHorizontal: Space.lg,
     paddingVertical: Space.sm,
-    borderRadius: 24,
+    borderRadius: Radius.xxl,
   },
   retryBtnText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
   },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
   },
@@ -1003,18 +959,18 @@ const styles = StyleSheet.create({
   },
   statusDotActive: {},
   statusText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
   },
   restrictedRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
     paddingHorizontal: Space.md,
     paddingBottom: Space.sm,
   },
   restrictedText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
   },
   sectionGroup: {
@@ -1022,44 +978,44 @@ const styles = StyleSheet.create({
     paddingTop: Space.lg,
   },
   sectionHeading: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: Space.sm,
   },
   fieldGroup: {
-    paddingVertical: 4,
+    paddingVertical: Space.xs,
   },
   fieldLabel: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
-    marginBottom: 4,
+    marginBottom: Space.xs,
   },
   fieldInput: {
-    fontSize: 16,
+    fontSize: Typography.size.bodyLarge,
     fontFamily: Typography.family.regular,
-    paddingVertical: 8,
+    paddingVertical: Space.sm,
   },
   fieldInputDisabled: {
     opacity: 0.5,
   },
   hairline: {
     height: StyleSheet.hairlineWidth,
-    marginVertical: 4,
+    marginVertical: Space.xs,
   },
   pickerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 10,
+    paddingVertical: Space.sm + 2,
     minHeight: 44,
   },
   pickerRowInner: {
     flex: 1,
   },
   pickerValue: {
-    fontSize: 16,
+    fontSize: Typography.size.bodyLarge,
     fontFamily: Typography.family.regular,
   },
   pickerPlaceholder: {},
@@ -1068,42 +1024,42 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   currencySymbol: {
-    fontSize: 16,
+    fontSize: Typography.size.bodyLarge,
     fontFamily: Typography.family.bold,
-    marginRight: 6,
+    marginRight: Space.xs + 2,
   },
   priceInput: {
     flex: 1,
-    fontSize: 20,
+    fontSize: Type.priceList.size,
     fontFamily: Typography.family.bold,
   },
   discountPreview: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    marginTop: 4,
+    marginTop: Space.xs,
   },
   descInput: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.regular,
     minHeight: 100,
-    paddingVertical: 8,
-    lineHeight: 22,
+    paddingVertical: Space.sm,
+    lineHeight: Type.bodyEmphasis.lineHeight + 1,
   },
   charCount: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
     textAlign: 'right',
   },
   inlineErrorRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
   },
   inlineErrorText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
   },
 });

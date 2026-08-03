@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, StatusBar, ScrollView, ActivityIndicator, RefreshControl } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { RootStackParamList } from '../navigation/types';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
+import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { SellerStandardsBadges } from '../components/profile/SellerStandardsBadges';
 import { useStore } from '../store/useStore';
 import { useSellerTrust } from '../platform/product';
@@ -33,7 +33,7 @@ interface HubAction {
 }
 
 export default function SellerHubScreen() {
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<NavT>();
   const currentUser = useStore((s) => s.currentUser);
@@ -141,102 +141,149 @@ export default function SellerHubScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} />
-        <ScreenHeader title="Seller Hub" onBack={() => navigation.goBack()} />
-        <View style={styles.loadingBody}>
-          <ActivityIndicator size="large" color={colors.brand} />
-        </View>
-      </SafeAreaView>
+      <FlagshipScreen
+        header={<FlagshipHeader title="Seller Hub" onBack={() => navigation.goBack()} />}
+      >
+        <FlagshipState variant="loading" />
+      </FlagshipScreen>
     );
   }
 
-  return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} />
-      <ScreenHeader title="Seller Hub" onBack={() => navigation.goBack()} />
+  const activeCount = listings.filter((l) => l.status === 'active').length;
+  const soldCount = listings.filter((l) => l.status === 'sold').length;
 
+  return (
+    <FlagshipScreen
+      header={<FlagshipHeader title="Seller Hub" onBack={() => navigation.goBack()} />}
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+    >
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
+        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brand} />}
       >
+        {/* Hero summary — seller overview */}
+        <Reanimated.View entering={FadeInDown.duration(300)}>
+          <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.heroRow}>
+              <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
+                <Ionicons name="storefront" size={18} color={colors.textInverse} />
+              </View>
+              <View style={styles.heroText}>
+                <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
+                  {activeCount} active, {soldCount} sold
+                </Text>
+                <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
+                  {listings.length} total listing{listings.length === 1 ? '' : 's'}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </Reanimated.View>
+
         {/* Seller standards badges */}
         {sellerTrust ? (
-          <View style={styles.badgeSection}>
+          <Reanimated.View entering={FadeInDown.duration(300).delay(60)} style={styles.badgeSection}>
             <SellerStandardsBadges sellerTrust={sellerTrust} align="left" />
-          </View>
+          </Reanimated.View>
         ) : null}
 
         {/* Analytics dashboard */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Performance overview</Text>
-        </View>
-        <View style={styles.statsGrid}>
-          {stats.map((stat) => {
-            const color = stat.tone === 'success' ? colors.success : stat.tone === 'brand' ? colors.brand : colors.textPrimary;
-            return (
-              <View key={stat.label} style={styles.statCard}>
-                <Ionicons name={stat.icon as any} size={16} color={color} />
-                <Text style={[styles.statValue, { color }]}>{stat.value}</Text>
-                <Text style={styles.statLabel}>{stat.label}</Text>
-              </View>
-            );
-          })}
-        </View>
+        <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Performance overview</Text>
+          </View>
+          <View style={styles.statsGrid}>
+            {stats.map((stat) => {
+              const color = stat.tone === 'success' ? colors.success : stat.tone === 'brand' ? colors.brand : colors.textPrimary;
+              return (
+                <View key={stat.label} style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  <Ionicons name={stat.icon as any} size={16} color={color} />
+                  <Text style={[styles.statValue, { color }]}>{stat.value}</Text>
+                  <Text style={[styles.statLabel, { color: colors.textMuted }]}>{stat.label}</Text>
+                </View>
+              );
+            })}
+          </View>
+        </Reanimated.View>
 
         {/* Quick actions */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Quick actions</Text>
-        </View>
-        <View style={styles.actionsList}>
-          {actions.map((action) => (
-            <AnimatedPressable
-              key={action.label}
-              style={styles.actionRow}
-              onPress={action.onPress}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-              accessibilityLabel={action.accessibilityLabel}
-            >
-              <View style={styles.actionIconWrap}>
-                <Ionicons name={action.icon as any} size={20} color={colors.brand} />
-              </View>
-              <View style={styles.actionInfo}>
-                <Text style={styles.actionLabel}>{action.label}</Text>
-                <Text style={styles.actionSubtitle}>{action.subtitle}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-            </AnimatedPressable>
-          ))}
-        </View>
+        <Reanimated.View entering={FadeInDown.duration(300).delay(180)}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Quick actions</Text>
+          </View>
+          <View style={styles.actionsList}>
+            {actions.map((action) => (
+              <AnimatedPressable
+                key={action.label}
+                style={[styles.actionRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                onPress={action.onPress}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={action.accessibilityLabel}
+              >
+                <View style={[styles.actionIconWrap, { backgroundColor: colors.brand + '15' }]}>
+                  <Ionicons name={action.icon as any} size={20} color={colors.brand} />
+                </View>
+                <View style={styles.actionInfo}>
+                  <Text style={[styles.actionLabel, { color: colors.textPrimary }]}>{action.label}</Text>
+                  <Text style={[styles.actionSubtitle, { color: colors.textMuted }]}>{action.subtitle}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              </AnimatedPressable>
+            ))}
+          </View>
+        </Reanimated.View>
 
         {/* Primary CTA */}
-        <AppButton
-          title="Create new listing"
-          icon={<Ionicons name="add-circle-outline" size={18} color={colors.background} />}
-          variant="primary"
-          size="lg"
-          style={styles.ctaBtn}
-          onPress={() => navigation.navigate('Sell')}
-          accessibilityLabel="Create a new listing"
-          hapticFeedback="light"
-        />
+        <Reanimated.View entering={FadeInDown.duration(300).delay(240)}>
+          <AppButton
+            title="Create new listing"
+            icon={<Ionicons name="add-circle-outline" size={18} color={colors.background} />}
+            variant="primary"
+            size="lg"
+            style={styles.ctaBtn}
+            onPress={() => navigation.navigate('Sell')}
+            accessibilityLabel="Create a new listing"
+            hapticFeedback="light"
+          />
+        </Reanimated.View>
       </ScrollView>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
+  heroCard: {
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Space.md,
+    marginBottom: Space.md,
   },
-  loadingBody: {
-    flex: 1,
+  heroRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+  },
+  heroIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  heroText: { flex: 1 },
+  heroTitle: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.body.letterSpacing,
+  },
+  heroSubtitle: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    marginTop: 2,
   },
   scrollContent: {
     paddingHorizontal: Space.md,
@@ -252,7 +299,6 @@ function createStyles(colors: ThemeColors) {
   sectionTitle: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
   },
   statsGrid: {
     flexDirection: 'row',
@@ -265,9 +311,7 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
-    backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
     gap: 2,
   },
   statValue: {
@@ -275,9 +319,8 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.bold,
   },
   statLabel: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    color: colors.textMuted,
   },
   actionsList: {
     gap: Space.xs,
@@ -289,15 +332,12 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
-    backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
   },
   actionIconWrap: {
     width: 40,
     height: 40,
     borderRadius: Radius.md,
-    backgroundColor: `${colors.brand}12`,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -121,3 +121,91 @@ export async function getSellerVelocityMetrics(
     flaggedAt: riskTier !== 'standard' ? new Date().toISOString() : null,
   };
 }
+
+/**
+ * Resolve the reserve percentage for a risk tier.
+ * Standard = 0, elevated = elevatedPct, high = highPct.
+ */
+export function reservePercentageForTier(
+  tier: SellerRiskTier,
+  elevatedPct: number,
+  highPct: number
+): number {
+  if (tier === 'high') return highPct;
+  if (tier === 'elevated') return elevatedPct;
+  return 0;
+}
+
+/**
+ * Compute the seller's velocity metrics, assign a risk tier, and persist
+ * the result into the seller_risk_tiers table. Returns the persisted tier.
+ */
+export async function refreshAndPersistSellerRiskTier(
+  db: Queryable,
+  sellerId: string,
+  thresholds: VelocityThresholds = DEFAULT_VELOCITY_THRESHOLDS,
+  elevatedReservePct: number = 5,
+  highReservePct: number = 15
+): Promise<SellerVelocityMetrics> {
+  const metrics = await getSellerVelocityMetrics(db, sellerId, thresholds);
+  const reservePct = reservePercentageForTier(
+    metrics.riskTier,
+    elevatedReservePct,
+    highReservePct
+  );
+
+  await db.query(
+    `INSERT INTO seller_risk_tiers
+       (seller_id, risk_tier, sales_count_24h, sales_gbp_24h,
+        sales_count_7d, sales_gbp_7d, avg_sales_per_day_7d,
+        reserve_percentage, computed_at, flagged_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), $9)
+     ON CONFLICT (seller_id) DO UPDATE SET
+       risk_tier = EXCLUDED.risk_tier,
+       sales_count_24h = EXCLUDED.sales_count_24h,
+       sales_gbp_24h = EXCLUDED.sales_gbp_24h,
+       sales_count_7d = EXCLUDED.sales_count_7d,
+       sales_gbp_7d = EXCLUDED.sales_gbp_7d,
+       avg_sales_per_day_7d = EXCLUDED.avg_sales_per_day_7d,
+       reserve_percentage = EXCLUDED.reserve_percentage,
+       computed_at = NOW(),
+       flagged_at = EXCLUDED.flagged_at`,
+    [
+      sellerId,
+      metrics.riskTier,
+      metrics.salesCount24h,
+      metrics.salesGbp24h,
+      metrics.salesCount7d,
+      metrics.salesGbp7d,
+      metrics.avgSalesPerDay7d,
+      reservePct,
+      metrics.flaggedAt,
+    ]
+  );
+
+  return metrics;
+}
+
+/**
+ * Read the persisted risk tier for a seller. Returns 'standard' if no
+ * row exists (fail-safe: no extra reserve for unknown sellers).
+ */
+export async function getPersistedSellerRiskTier(
+  db: Queryable,
+  sellerId: string
+): Promise<{ tier: SellerRiskTier; reservePercentage: number }> {
+  const result = await db.query<{ risk_tier: string; reserve_percentage: string }>(
+    `SELECT risk_tier, reserve_percentage::text
+     FROM seller_risk_tiers
+     WHERE seller_id = $1`,
+    [sellerId]
+  );
+  const row = result.rows[0];
+  if (!row) return { tier: 'standard', reservePercentage: 0 };
+  const tier = (['standard', 'elevated', 'high'] as const).includes(
+    row.risk_tier as SellerRiskTier
+  )
+    ? (row.risk_tier as SellerRiskTier)
+    : 'standard';
+  return { tier, reservePercentage: Number(row.reserve_percentage ?? 0) };
+}

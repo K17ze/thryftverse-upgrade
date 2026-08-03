@@ -92,6 +92,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
         </View>
       </Reanimated.View>
 
+      <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
       <SettingsSection title="Visibility" noCard>
         <SettingsRow
           icon="eye-outline"
@@ -117,7 +118,9 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
           isLast
         />
       </SettingsSection>
+      </Reanimated.View>
 
+      <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
       <SettingsSection title="Shop activity" noCard>
         <SettingsRow
           icon="bag-outline"
@@ -129,7 +132,9 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
           isLast
         />
       </SettingsSection>
+      </Reanimated.View>
 
+      <Reanimated.View entering={FadeInDown.duration(300).delay(180)}>
       <SettingsSection title="Messaging" noCard>
         <SettingsRow
           icon="chatbubble-ellipses-outline"
@@ -140,7 +145,9 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
           isLast
         />
       </SettingsSection>
+      </Reanimated.View>
 
+      <Reanimated.View entering={FadeInDown.duration(300).delay(240)}>
       <SettingsSection title="Blocked users" noCard>
         <SettingsRow
           icon="ban-outline"
@@ -151,7 +158,9 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
           isLast
         />
       </SettingsSection>
+      </Reanimated.View>
 
+      <Reanimated.View entering={FadeInDown.duration(300).delay(300)}>
       <SettingsSection title="Legal" noCard>
         <SettingsRow
           icon="document-text-outline"
@@ -166,6 +175,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
           isLast
         />
       </SettingsSection>
+      </Reanimated.View>
     </FlagshipScreen>
   );
 }

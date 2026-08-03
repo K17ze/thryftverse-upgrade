@@ -499,10 +499,10 @@ export default function BrowseScreen() {
 
       {/* Heavy Typography Header */}
       <Reanimated.View entering={FadeInDown.duration(300).delay(30)} style={styles.header}>
-        <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.8} accessibilityLabel="Go back">
+        <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="Go back">
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </AnimatedPressable>
-        <AnimatedPressable style={styles.searchBtn} activeOpacity={0.8} onPress={() => navigation.navigate('GlobalSearch')} accessibilityLabel="Search listings">
+        <AnimatedPressable style={styles.searchBtn} activeOpacity={0.8} onPress={() => navigation.navigate('GlobalSearch')} accessibilityRole="button" accessibilityLabel="Search listings">
           <Ionicons name="search" size={20} color={colors.textPrimary} />
         </AnimatedPressable>
       </Reanimated.View>

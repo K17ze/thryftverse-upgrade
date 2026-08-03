@@ -10,11 +10,12 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
-import { Space, Typography, DockConstants } from '../theme/designTokens';
+import { Space, Typography, DockConstants, Type, Radius } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useStore } from '../store/useStore';
 import { haptics } from '../utils/haptics';
@@ -130,49 +131,55 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
         </View>
 
         {/* Listing quality meter — seller guidance */}
-        <ListingQualityMeter
-          result={useMemo(() => calculateListingQuality({
-            photos: preview?.photos ?? [],
-            title: preview?.title ?? '',
-            brand: preview?.brand ?? '',
-            category: preview?.category ?? '',
-            size: preview?.size ?? '',
-            condition: preview?.condition ?? '',
-            description: preview?.description ?? '',
-            price: preview?.price != null ? String(preview.price) : '',
-            originalPrice: preview?.originalPrice != null ? String(preview.originalPrice) : '',
-            tags: [],
-            shippingMethod: preview?.shippingMethod === 'standard' ? 'standard' : preview?.shippingMethod === 'express' ? 'express' : null,
-            shippingPayer: preview?.shippingPayer === 'buyer' ? 'buyer' : preview?.shippingPayer === 'seller' ? 'seller' : null,
-            listingMode: preview?.listingMode ?? 'sell_now',
-          }), [preview])}
-          compact
-        />
+        <Reanimated.View entering={FadeInDown.duration(300).delay(40)}>
+          <ListingQualityMeter
+            result={useMemo(() => calculateListingQuality({
+              photos: preview?.photos ?? [],
+              title: preview?.title ?? '',
+              brand: preview?.brand ?? '',
+              category: preview?.category ?? '',
+              size: preview?.size ?? '',
+              condition: preview?.condition ?? '',
+              description: preview?.description ?? '',
+              price: preview?.price != null ? String(preview.price) : '',
+              originalPrice: preview?.originalPrice != null ? String(preview.originalPrice) : '',
+              tags: [],
+              shippingMethod: preview?.shippingMethod === 'standard' ? 'standard' : preview?.shippingMethod === 'express' ? 'express' : null,
+              shippingPayer: preview?.shippingPayer === 'buyer' ? 'buyer' : preview?.shippingPayer === 'seller' ? 'seller' : null,
+              listingMode: preview?.listingMode ?? 'sell_now',
+            }), [preview])}
+            compact
+          />
+        </Reanimated.View>
 
         {/* ── 2. PRODUCT IDENTITY ── */}
-        <ListingIdentityBlock
-          brand={preview?.brand}
-          title={title}
-          price={priceText ?? '—'}
-          originalPrice={hasDiscount ? originalPriceText : null}
-          hasDiscount={hasDiscount}
-        />
+        <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
+          <ListingIdentityBlock
+            brand={preview?.brand}
+            title={title}
+            price={priceText ?? '—'}
+            originalPrice={hasDiscount ? originalPriceText : null}
+            hasDiscount={hasDiscount}
+          />
 
         {!hasRealTitle && (
           <Text style={styles.authoringHint}>Untitled listing — add a title before publishing.</Text>
         )}
+        </Reanimated.View>
 
         {/* ── 3. PURCHASE CONTEXT ── */}
-        <View style={styles.contextRow}>
-          <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
-          <Text style={styles.contextText}>
-            Payment and delivery options are confirmed at checkout.
-          </Text>
-        </View>
+        <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
+          <View style={styles.contextRow}>
+            <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
+            <Text style={styles.contextText}>
+              Payment and delivery options are confirmed at checkout.
+            </Text>
+          </View>
+        </Reanimated.View>
 
         {/* ── 4. SPECIFICATIONS ── */}
         {specs.length > 0 && (
-          <View style={styles.sectionGroup}>
+          <Reanimated.View entering={FadeInDown.duration(300).delay(160)} style={styles.sectionGroup}>
             <Text style={styles.sectionHeading}>Specifications</Text>
             <View style={styles.specGrid}>
               {specs.map((spec, i) => (
@@ -188,11 +195,11 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
                 </View>
               ))}
             </View>
-          </View>
+          </Reanimated.View>
         )}
 
         {/* ── 5. DESCRIPTION ── */}
-        <View style={styles.sectionGroup}>
+        <Reanimated.View entering={FadeInDown.duration(300).delay(200)} style={styles.sectionGroup}>
           <Text style={styles.sectionHeading}>Description</Text>
           {description ? (
             <Text style={styles.descriptionText}>{description}</Text>
@@ -201,10 +208,10 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
               No description added yet.
             </Text>
           )}
-        </View>
+        </Reanimated.View>
 
         {/* ── 6. SELLER PREVIEW ── */}
-        <View style={styles.sectionGroup}>
+        <Reanimated.View entering={FadeInDown.duration(300).delay(240)} style={styles.sectionGroup}>
           <Text style={styles.sectionHeading}>Seller</Text>
           <View style={styles.sellerRow}>
             {sellerAvatar ? (
@@ -224,10 +231,10 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
               <Text style={styles.sellerSubtext}>Seller preview</Text>
             </View>
           </View>
-        </View>
+        </Reanimated.View>
 
         {/* ── 7. SHIPPING & PAYMENT ── */}
-        <View style={styles.sectionGroup}>
+        <Reanimated.View entering={FadeInDown.duration(300).delay(280)} style={styles.sectionGroup}>
           <Text style={styles.sectionHeading}>Shipping & Payment</Text>
           <View style={styles.specGrid}>
             <View style={[styles.specRow, styles.specRowBorder]}>
@@ -253,7 +260,7 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
               <Text style={styles.specValue}>Through ThryftVerse checkout</Text>
             </View>
           </View>
-        </View>
+        </Reanimated.View>
 
         <View style={{ height: DockConstants.singleActionHeight }} />
       </ScrollView>
@@ -289,7 +296,7 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm,
   },
   heroEmptyText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },
@@ -308,7 +315,7 @@ function createStyles(colors: ThemeColors) {
     right: 0,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
+    paddingHorizontal: Space.md,
     zIndex: 10,
   },
   controlBtn: {
@@ -320,27 +327,27 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
   },
   editText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: '#fff',
+    color: colors.textInverse,
   },
   previewBadge: {
     position: 'absolute',
-    bottom: 16,
-    left: 16,
+    bottom: Space.md,
+    left: Space.md,
     backgroundColor: 'rgba(0,0,0,0.55)',
-    paddingHorizontal: 10,
+    paddingHorizontal: Space.sm + 2,
     paddingVertical: 5,
-    borderRadius: 8,
+    borderRadius: Radius.md,
   },
   previewBadgeText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.bold,
-    color: '#fff',
+    color: colors.textInverse,
     letterSpacing: 0.8,
   },
   authoringHint: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     fontStyle: 'italic',
@@ -350,13 +357,13 @@ function createStyles(colors: ThemeColors) {
   contextRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
   },
   contextText: {
     flex: 1,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },
@@ -365,7 +372,7 @@ function createStyles(colors: ThemeColors) {
     paddingTop: Space.lg,
   },
   sectionHeading: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
     textTransform: 'uppercase',
@@ -375,15 +382,15 @@ function createStyles(colors: ThemeColors) {
   specGrid: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     overflow: 'hidden',
   },
   specRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+    paddingVertical: Space.sm + Space.xs,
+    paddingHorizontal: Space.sm + Space.xs,
     minHeight: 44,
   },
   specRowBorder: {
@@ -391,25 +398,25 @@ function createStyles(colors: ThemeColors) {
     borderBottomColor: colors.border,
   },
   specLabel: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
   },
   specValue: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
     textAlign: 'right',
     flexShrink: 1,
   },
   descriptionText: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.regular,
     color: colors.textPrimary,
-    lineHeight: 22,
+    lineHeight: Type.body.lineHeight + Space.xs,
   },
   descriptionPlaceholder: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     fontStyle: 'italic',
@@ -434,12 +441,12 @@ function createStyles(colors: ThemeColors) {
     flex: 1,
   },
   sellerName: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
   sellerSubtext: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     marginTop: 2,

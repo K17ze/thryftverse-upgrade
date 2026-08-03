@@ -12,7 +12,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  ActivityIndicator,
   RefreshControl,
   Alert,
   TextInput,
@@ -29,6 +28,7 @@ import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { haptics } from '../utils/haptics';
 import { useToast } from '../context/ToastContext';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { BuyerProtectionSkeleton } from '../components/skeletons/BuyerProtectionSkeleton';
 import { AppButton } from '../components/ui/AppButton';
 import {
   fetchBuyerProtection,
@@ -134,9 +134,7 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
   if (loading) {
     return (
       <FlagshipScreen header={<FlagshipHeader title="Buyer Protection" onBack={() => navigation.goBack()} />}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.brand} />
-        </View>
+        <BuyerProtectionSkeleton />
       </FlagshipScreen>
     );
   }
@@ -262,7 +260,7 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
                 onPress={() => { haptics.tap(); setShowClaimForm(true); }}
                 variant="primary"
                 size="lg"
-                icon={<Ionicons name="shield-outline" size={18} color="#fff" />}
+                icon={<Ionicons name="shield-outline" size={18} color={colors.textInverse} />}
                 style={{ marginHorizontal: Space.md, marginTop: Space.md }}
               />
             ) : (
@@ -324,11 +322,6 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     scrollContent: {
       paddingBottom: Space.xxl,
-    },
-    loadingContainer: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
     },
     errorContainer: {
       flex: 1,

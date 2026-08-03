@@ -6,7 +6,6 @@ import {
   ScrollView,
   Dimensions,
   Pressable,
-  ActivityIndicator,
   Share,
 } from 'react-native';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
@@ -27,6 +26,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { EmptyState } from '../components/EmptyState';
+import { LookDetailSkeleton } from '../components/skeletons/LookDetailSkeleton';
 import { LookSocialActions } from '../components/look/LookSocialActions';
 import { LookCommentsSheet } from '../components/look/LookCommentsSheet';
 import { fetchLookByIdFromApi, type LookApiItem } from '../services/looksApi';
@@ -130,9 +130,12 @@ export default function LookDetailScreen() {
             <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </AnimatedPressable>
         </View>
-        <View style={styles.loadingWrap}>
-          <ActivityIndicator size="large" color={colors.brand} />
-        </View>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
+          <LookDetailSkeleton />
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -355,7 +358,6 @@ export default function LookDetailScreen() {
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   headerRow: {
     position: 'absolute',
     top: 0,

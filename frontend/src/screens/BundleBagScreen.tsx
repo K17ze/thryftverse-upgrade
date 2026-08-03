@@ -1,13 +1,13 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { View, Text, StyleSheet, StatusBar, FlatList, ActivityIndicator, RefreshControl } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, FlatList, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { RootStackParamList } from '../navigation/types';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { CachedImage } from '../components/CachedImage';
@@ -39,7 +39,7 @@ function getBundleDiscount(selectedCount: number): number {
 }
 
 export default function BundleBagScreen() {
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<NavT>();
   const route = useRoute<RouteT>();
@@ -128,21 +128,18 @@ export default function BundleBagScreen() {
 
   if (isSyncing && sellerListings.length === 0) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} />
-        <ScreenHeader title="Bundle Bag" onBack={() => navigation.goBack()} />
-        <View style={styles.loadingBody}>
-          <ActivityIndicator size="large" color={colors.brand} />
-        </View>
-      </SafeAreaView>
+      <FlagshipScreen header={<FlagshipHeader title="Bundle Bag" onBack={() => navigation.goBack()} />}>
+        <FlagshipState variant="loading" />
+      </FlagshipScreen>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} />
-      <ScreenHeader title="Bundle Bag" onBack={() => navigation.goBack()} />
-
+    <FlagshipScreen
+      header={<FlagshipHeader title="Bundle Bag" onBack={() => navigation.goBack()} />}
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+    >
       {sellerListings.length === 0 ? (
         <View style={styles.loadingBody}>
           <EmptyState
@@ -155,15 +152,32 @@ export default function BundleBagScreen() {
         </View>
       ) : (
         <View style={styles.body}>
-          {/* Seller info */}
-          <View style={styles.sellerBanner}>
-            <Ionicons name="storefront-outline" size={20} color={colors.brand} />
-            <Text style={styles.sellerText}>
-              {sellerListings.length} items from {sellerName ?? 'this seller'}
-            </Text>
-          </View>
+          {/* Hero summary — bundle status */}
+          <Reanimated.View entering={FadeInDown.duration(300)}>
+            <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={styles.heroRow}>
+                <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
+                  <Ionicons name="storefront" size={18} color={colors.textInverse} />
+                </View>
+                <View style={styles.heroText}>
+                  <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
+                    {selectedItems.length} selected
+                  </Text>
+                  <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
+                    {sellerListings.length} items from {sellerName ?? 'this seller'}
+                  </Text>
+                </View>
+                {discountPercent > 0 && (
+                  <View style={[styles.heroBadge, { backgroundColor: colors.brand + '18' }]}>
+                    <Text style={[styles.heroBadgeText, { color: colors.brand }]}>{discountPercent}% off</Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          </Reanimated.View>
 
           {/* Bundle tier hints */}
+          <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
           <View style={styles.tiersRow}>
             {BUNDLE_TIERS.map((tier) => {
               const achieved = selectedItems.length >= tier.itemCount;
@@ -184,6 +198,7 @@ export default function BundleBagScreen() {
               );
             })}
           </View>
+          </Reanimated.View>
 
           <FlatList
             data={sellerListings}
@@ -228,15 +243,51 @@ export default function BundleBagScreen() {
           )}
         </View>
       )}
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
+  heroCard: {
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Space.md,
+    marginHorizontal: Space.md,
+    marginTop: Space.sm,
+    marginBottom: Space.sm,
+  },
+  heroRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+  },
+  heroIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  heroText: { flex: 1 },
+  heroTitle: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.body.letterSpacing,
+  },
+  heroSubtitle: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    marginTop: 2,
+  },
+  heroBadge: {
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
+    borderRadius: Radius.full,
+  },
+  heroBadgeText: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.bold,
   },
   loadingBody: {
     flex: 1,
@@ -245,21 +296,6 @@ function createStyles(colors: ThemeColors) {
   },
   body: {
     flex: 1,
-  },
-  sellerBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    backgroundColor: colors.surface,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  sellerText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
   },
   tiersRow: {
     flexDirection: 'row',

@@ -29,9 +29,10 @@ export interface CommerceDetailMediaAction {
 
 export interface CommerceDetailMediaRailProps {
   onBack: () => void;
-  /** Right-side actions. Two may render when there is no overflow. When
-   * overflow is present, it reserves a slot and only the first action
-   * remains visible so the total never exceeds three controls. */
+  /** Right-side actions. Up to two may render alongside an overflow
+   * affordance (Back + Share + Save + Overflow). When no overflow is
+   * present, up to two actions render. The total visible utility
+   * controls never exceeds three besides the Back navigation control. */
   rightActions?: CommerceDetailMediaAction[];
   /** Called when the user taps the overflow affordance. The screen
    * opens its overflow sheet (save-to-collection, report, etc.). */
@@ -50,9 +51,10 @@ export function CommerceDetailMediaRail({
   topInset,
 }: CommerceDetailMediaRailProps) {
   const hasOverflow = showOverflow || rightActions.length > 2;
-  // Maximum three visible controls in total. Back consumes one slot;
-  // overflow consumes another, leaving one family-defining state action.
-  const visibleRight = rightActions.slice(0, hasOverflow ? 1 : 2);
+  // Back is a navigation control, not a utility control. The three
+  // utility slots are: Share, Save/Collection, and Overflow. This
+  // matches the screen intent: "Back, Share, Save + overflow".
+  const visibleRight = rightActions.slice(0, hasOverflow ? 2 : 2);
 
   return (
     <View

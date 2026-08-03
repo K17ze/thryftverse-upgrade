@@ -174,10 +174,14 @@ export function collectProductionReadinessErrors(
     );
   }
 
+  // Multi-vendor KYC fallback (P3.3): Stripe Identity is primary, Persona is
+  // the fallback for US/CA, and Onfido is the fallback for EU/UK. Each vendor
+  // has its own required configuration.
   const kycVendor = valueOf(environment, "KYC_DEFAULT_VENDOR").toLowerCase();
-  if (kycVendor && kycVendor !== "stripe_identity") {
+  const allowedKycVendors = ["stripe_identity", "persona", "onfido"];
+  if (kycVendor && !allowedKycVendors.includes(kycVendor)) {
     errors.push(
-      "KYC_DEFAULT_VENDOR must be stripe_identity until another signed provider adapter is installed",
+      `KYC_DEFAULT_VENDOR must be one of ${allowedKycVendors.join(", ")} (got "${kycVendor}")`,
     );
   }
   const kycReturnUrl = valueOf(environment, "KYC_RETURN_URL");
@@ -191,6 +195,25 @@ export function collectProductionReadinessErrors(
     errors.push(
       "STRIPE_SECRET_KEY is required when KYC_DEFAULT_VENDOR is stripe_identity",
     );
+  }
+  if (kycVendor === "persona") {
+    if (!valueOf(environment, "PERSONA_API_KEY")) {
+      errors.push("PERSONA_API_KEY is required when KYC_DEFAULT_VENDOR is persona");
+    }
+    if (!valueOf(environment, "PERSONA_TEMPLATE_ID")) {
+      errors.push("PERSONA_TEMPLATE_ID is required when KYC_DEFAULT_VENDOR is persona");
+    }
+    if (!valueOf(environment, "PERSONA_WEBHOOK_SECRET")) {
+      errors.push("PERSONA_WEBHOOK_SECRET is required when KYC_DEFAULT_VENDOR is persona");
+    }
+  }
+  if (kycVendor === "onfido") {
+    if (!valueOf(environment, "ONFIDO_API_KEY")) {
+      errors.push("ONFIDO_API_KEY is required when KYC_DEFAULT_VENDOR is onfido");
+    }
+    if (!valueOf(environment, "ONFIDO_WEBHOOK_TOKEN")) {
+      errors.push("ONFIDO_WEBHOOK_TOKEN is required when KYC_DEFAULT_VENDOR is onfido");
+    }
   }
 
   const rateLimitWindow =

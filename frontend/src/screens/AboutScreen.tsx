@@ -6,7 +6,7 @@ import {
   Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeIn } from 'react-native-reanimated';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
@@ -33,15 +33,20 @@ export default function AboutScreen({ navigation }: Props) {
 
   return (
     <FlagshipScreen header={<FlagshipHeader title="About" subtitle="Thryftverse app information" onBack={() => navigation.goBack()} />}>
-        <Reanimated.View entering={FadeIn.duration(300)} style={styles.brandWrap}>
-          <View style={styles.brandIcon}>
-            <Ionicons name="shirt-outline" size={40} color={colors.brand} />
+        {/* Hero summary — brand identity */}
+        <Reanimated.View entering={FadeInDown.duration(300)} style={styles.heroCard}>
+          <View style={styles.heroRow}>
+            <View style={styles.brandIcon}>
+              <Ionicons name="shirt-outline" size={32} color={colors.brand} />
+            </View>
+            <View style={styles.heroText}>
+              <Text style={styles.brandName}>Thryftverse</Text>
+              <Text style={styles.brandVersion}>Version 1.0.0 (Build 2026.06.05)</Text>
+            </View>
           </View>
-          <Text style={styles.brandName}>Thryftverse</Text>
-          <Text style={styles.brandVersion}>Version 1.0.0 (Build 2026.06.05)</Text>
         </Reanimated.View>
 
-        <Reanimated.View entering={FadeIn.duration(300)}>
+        <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
           <Text style={styles.sectionLabel}>Legal</Text>
           <View style={styles.rowGroup}>
             <AnimatedPressable
@@ -95,7 +100,7 @@ export default function AboutScreen({ navigation }: Props) {
           </View>
         </Reanimated.View>
 
-        <Reanimated.View entering={FadeIn.duration(300)}>
+        <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
           <Text style={styles.sectionLabel}>Support</Text>
           <View style={styles.rowGroup}>
             <AnimatedPressable
@@ -124,44 +129,22 @@ export default function AboutScreen({ navigation }: Props) {
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
+  heroCard: {
+    alignItems: 'center',
+    marginVertical: Space.lg,
   },
-  header: {
+  heroRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 4,
+    gap: Space.md,
   },
-  headerBack: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.bold,
-    color: colors.textPrimary,
-    letterSpacing: Type.subtitle.letterSpacing,
-    lineHeight: Type.subtitle.lineHeight,
-  },
-  scrollContent: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.xl,
-  },
-  brandWrap: {
-    alignItems: 'center',
-    marginVertical: Space.xl,
-    gap: Space.sm,
+  heroText: {
+    flex: 1,
   },
   brandIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 24,
+    width: 64,
+    height: 64,
+    borderRadius: Radius.lg,
     backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
@@ -170,13 +153,14 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
-    letterSpacing: -0.3,
+    letterSpacing: Type.title.letterSpacing,
   },
   brandVersion: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     letterSpacing: Type.caption.letterSpacing,
+    marginTop: 2,
   },
   sectionLabel: {
     fontSize: Type.body.size,
@@ -195,7 +179,7 @@ function createStyles(colors: ThemeColors) {
   rowRoot: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: Space.md,
     paddingHorizontal: Space.md,
     minHeight: 56,
     gap: Space.sm + 4,

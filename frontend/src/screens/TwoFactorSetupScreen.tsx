@@ -560,7 +560,7 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
-          <Reanimated.View entering={FadeIn.duration(300)}>
+          <Reanimated.View entering={FadeInDown.duration(300)}>
             {phase === 'disable' && renderDisableOverview()}
             {phase === 'disable-confirm' && renderDisableConfirm()}
             {phase === 'setup' && renderSetup()}

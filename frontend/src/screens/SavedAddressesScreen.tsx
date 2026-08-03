@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeIn } from 'react-native-reanimated';
+import Reanimated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { StackScreenProps } from '@react-navigation/stack';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Space, Radius, Type } from '../theme/designTokens';
@@ -200,7 +200,7 @@ export default function SavedAddressesScreen({ navigation }: Props) {
     const isDeleting = deletingId === address.id;
     const detail = formatAddressDetail(address);
     return (
-      <Reanimated.View key={address.id} entering={FadeIn.duration(250).delay(index * 40)}>
+      <Reanimated.View key={address.id} entering={FadeInDown.duration(250).delay(index * 40)}>
         <View style={[styles.addressCard, { backgroundColor: colors.surface, borderColor: colors.border }, isDefault && { borderColor: colors.brand, borderWidth: 1.5 }]}>
           <View style={styles.addressCardHeader}>
             <View style={styles.addressCardHeaderLeft}>
@@ -328,6 +328,23 @@ export default function SavedAddressesScreen({ navigation }: Props) {
           />
         ) : (
           <View style={styles.listWrap}>
+            <Reanimated.View entering={FadeInDown.duration(300)}>
+              <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <View style={styles.heroRow}>
+                  <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
+                    <Ionicons name="location" size={18} color={colors.textInverse} />
+                  </View>
+                  <View style={styles.heroText}>
+                    <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
+                      {addresses.length} address{addresses.length === 1 ? '' : 'es'}
+                    </Text>
+                    <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
+                      {addresses.find((a) => a.isDefault) ? `${addresses.find((a) => a.isDefault)?.name} is default` : 'No default set'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            </Reanimated.View>
             {addresses.map((address, index) => renderAddressCard(address, index))}
             <Text style={[styles.listFootnote, { color: colors.textMuted }]}>
               Addresses are used at checkout and for delivery. The default address is selected automatically.
@@ -347,6 +364,34 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  heroCard: {
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Space.md,
+  },
+  heroRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+  },
+  heroIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  heroText: { flex: 1 },
+  heroTitle: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.body.letterSpacing,
+  },
+  heroSubtitle: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    marginTop: 2,
   },
   skeletonWrap: {
     paddingTop: Space.sm,

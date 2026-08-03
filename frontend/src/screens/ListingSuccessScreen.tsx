@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StackScreenProps } from '@react-navigation/stack';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { RootStackParamList } from '../navigation/types';
 import { Confetti } from '../components/Confetti';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -135,7 +136,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
         showsVerticalScrollIndicator={false}
       >
         {/* Celebration Header */}
-        <View style={styles.heroSection}>
+        <Reanimated.View entering={FadeInDown.duration(400).delay(0)} style={styles.heroSection}>
           <View style={styles.iconCircle}>
             <Ionicons name="checkmark" size={64} color={colors.brand} />
           </View>
@@ -146,20 +147,21 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
           {listingPrice ? (
             <Text style={styles.heroMicroCopy}>{listingPrice}</Text>
           ) : null}
-        </View>
+        </Reanimated.View>
 
         {/* Published status */}
-        <View style={styles.statusRow}>
+        <Reanimated.View entering={FadeInDown.duration(400).delay(80)} style={styles.statusRow}>
           <PremiumStatusPill tone={statusTone as any} label={statusLabel} icon="checkmark-circle" />
           {listingId ? (
             <Text style={styles.idText} numberOfLines={1}>
               {listingId}
             </Text>
           ) : null}
-        </View>
+        </Reanimated.View>
 
         {/* Product preview card */}
-        <ElevatedSurface variant="elevated" style={styles.summaryCard}>
+        <Reanimated.View entering={FadeInDown.duration(400).delay(160)}>
+          <ElevatedSurface variant="elevated" style={styles.summaryCard}>
           {listingPhoto ? (
             <CachedImage
               uri={listingPhoto}
@@ -189,8 +191,10 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
             </Text>
           </View>
         </ElevatedSurface>
+        </Reanimated.View>
 
         {/* Actions */}
+        <Reanimated.View entering={FadeInDown.duration(400).delay(240)}>
         <ElevatedSurface variant="surface" style={{ marginBottom: Space.xl }}>
         {listingId ? (
           <AnimatedPressable
@@ -305,9 +309,10 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
         </AnimatedPressable>
 
         </ElevatedSurface>
+        </Reanimated.View>
 
         {/* Tips for selling — first-listing guidance */}
-        <View style={styles.tipsCard}>
+        <Reanimated.View entering={FadeInDown.duration(400).delay(320)} style={styles.tipsCard}>
           <View style={styles.tipsHeader}>
             <Ionicons name="bulb-outline" size={14} color={colors.brand} />
             <Text style={styles.tipsTitle}>Tips for selling faster</Text>
@@ -328,23 +333,25 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
             <Ionicons name="share-outline" size={13} color={colors.textMuted} />
             <Text style={styles.tipText}>Share your listing on social media for more reach</Text>
           </View>
-        </View>
+        </Reanimated.View>
 
         {/* Support link */}
-        <AnimatedPressable
-          style={styles.supportLink}
-          activeOpacity={0.8}
-          onPress={() => navigation.navigate('HelpSupport')}
-        >
-          <Ionicons
-            name="help-circle-outline"
-            size={14}
-            color={colors.textMuted}
-          />
-          <Text style={styles.supportLinkText}>
-            Need help? Visit the Help Centre
-          </Text>
-        </AnimatedPressable>
+        <Reanimated.View entering={FadeInDown.duration(400).delay(380)}>
+          <AnimatedPressable
+            style={styles.supportLink}
+            activeOpacity={0.8}
+            onPress={() => navigation.navigate('HelpSupport')}
+          >
+            <Ionicons
+              name="help-circle-outline"
+              size={14}
+              color={colors.textMuted}
+            />
+            <Text style={styles.supportLinkText}>
+              Need help? Visit the Help Centre
+            </Text>
+          </AnimatedPressable>
+        </Reanimated.View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -522,30 +529,30 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: `${colors.brand}20`,
-    gap: 8,
+    gap: Space.sm,
   },
   tipsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 4,
+    gap: Space.xs + 2,
+    marginBottom: Space.xs,
   },
   tipsTitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
   tipRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 8,
+    gap: Space.sm,
   },
   tipText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
-    lineHeight: 17,
+    lineHeight: Type.caption.lineHeight + 1,
   },
 
   supportLink: {

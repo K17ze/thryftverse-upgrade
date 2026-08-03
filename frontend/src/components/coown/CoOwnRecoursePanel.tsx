@@ -18,7 +18,9 @@ export interface CoOwnRecoursePanelProps {
   sellerLiability?: CoOwnSellerLiability | null;
   verificationDemands?: CoOwnVerificationDemand[];
   onRequestVerification?: () => void;
+  onRespondToVerification?: (demandId: number) => void;
   isHolder?: boolean;
+  isIssuer?: boolean;
 }
 
 export function CoOwnRecoursePanel({
@@ -30,7 +32,9 @@ export function CoOwnRecoursePanel({
   sellerLiability,
   verificationDemands,
   onRequestVerification,
+  onRespondToVerification,
   isHolder,
+  isIssuer,
 }: CoOwnRecoursePanelProps) {
   const { colors } = useAppTheme();
 
@@ -192,6 +196,28 @@ export function CoOwnRecoursePanel({
           <Ionicons name="search-outline" size={16} color={colors.textPrimary} />
           <Text style={[styles.demandButtonText, { color: colors.textPrimary }]}>
             Request verification
+          </Text>
+        </Pressable>
+      )}
+
+      {/* Seller-side: respond to pending verification demands */}
+      {isIssuer && onRespondToVerification && activeVerificationDemands != null && activeVerificationDemands > 0 && (
+        <Pressable
+          style={({ pressed }) => [
+            styles.demandButton,
+            { borderColor: '#d97706', backgroundColor: 'rgba(217,119,6,0.06)' },
+            pressed && { opacity: 0.7 },
+          ]}
+          onPress={() => {
+            const pending = verificationDemands?.find((d) => d.status === 'pending');
+            if (pending) onRespondToVerification(pending.id);
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Respond to verification request"
+        >
+          <Ionicons name="shield-checkmark-outline" size={16} color="#d97706" />
+          <Text style={[styles.demandButtonText, { color: '#d97706' }]}>
+            Respond to verification ({activeVerificationDemands} pending)
           </Text>
         </Pressable>
       )}

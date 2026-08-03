@@ -487,16 +487,19 @@ export default function AuctionsScreen() {
 
   const renderHeader = () => (
     <View>
-      <MetricGrid
-        metrics={[
-          { label: 'Live', value: String(liveAuctions.length) },
-          { label: 'Bids', value: String(totalLiveBids) },
-          { label: 'Watching', value: String(watchlistCount) },
-        ]}
-        columns={3}
-        style={{ marginTop: Space.sm }}
-      />
+      <Reanimated.View entering={FadeInDown.duration(300)}>
+        <MetricGrid
+          metrics={[
+            { label: 'Live', value: String(liveAuctions.length) },
+            { label: 'Bids', value: String(totalLiveBids) },
+            { label: 'Watching', value: String(watchlistCount) },
+          ]}
+          columns={3}
+          style={{ marginTop: Space.sm }}
+        />
+      </Reanimated.View>
 
+      <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
       <View style={styles.searchWrap}>
         <AppInput
           value={searchQuery}
@@ -508,6 +511,7 @@ export default function AuctionsScreen() {
           onSubmitEditing={() => void syncAuctions()}
         />
       </View>
+      </Reanimated.View>
 
       {renderStatusFilter()}
       {renderSortBar()}
@@ -891,7 +895,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.danger,
   },
   featuredLiveText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 10,
   },
   featuredMeta: {

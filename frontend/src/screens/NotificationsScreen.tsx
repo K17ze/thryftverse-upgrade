@@ -5,14 +5,12 @@ import {
   Text,
   SectionList,
   StyleSheet,
-  StatusBar,
   ActivityIndicator,
   RefreshControl,
   Pressable,
   ScrollView,
 } from 'react-native';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Swipeable } from 'react-native-gesture-handler';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -38,7 +36,7 @@ import { haptics } from '../utils/haptics';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Motion } from '../constants/motion';
 import { Space, Radius, Type } from '../theme/designTokens';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 import { isQuietHoursActive } from '../preferences/settingsPreferences';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -303,7 +301,7 @@ export default function NotificationsScreen() {
   const currentUser = useStore((state) => state.currentUser);
   const reducedMotionEnabled = useReducedMotion();
   const { quietHours } = useSettingsPreferences();
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [notifications, setNotifications] = React.useState<NotificationCard[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
@@ -514,33 +512,36 @@ export default function NotificationsScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
-
-      <ScreenHeader
-        title="Notifications"
-        onBack={() => navigation.goBack()}
-        rightAction={
-          <View style={styles.headerActions}>
-            <AnimatedPressable
-              style={styles.headerAction}
-              onPress={() => navigation.navigate('PushNotifications')}
-              accessibilityLabel="Manage notification preferences"
-              accessibilityRole="button"
-            >
-              <Ionicons name="settings-outline" size={20} color={colors.textSecondary} />
-            </AnimatedPressable>
-            <AnimatedPressable
-              style={styles.headerAction}
-              onPress={handleMarkAllAsRead}
-              accessibilityRole="button"
-              accessibilityLabel={hasUnread ? 'Mark all notifications as read' : 'All caught up'}
-            >
-              <Ionicons name="checkmark-done-outline" size={22} color={hasUnread ? colors.textPrimary : colors.textMuted} />
-            </AnimatedPressable>
-          </View>
-        }
-      />
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title="Notifications"
+          onBack={() => navigation.goBack()}
+          rightAction={
+            <View style={styles.headerActions}>
+              <AnimatedPressable
+                style={styles.headerAction}
+                onPress={() => navigation.navigate('PushNotifications')}
+                accessibilityLabel="Manage notification preferences"
+                accessibilityRole="button"
+              >
+                <Ionicons name="settings-outline" size={20} color={colors.textSecondary} />
+              </AnimatedPressable>
+              <AnimatedPressable
+                style={styles.headerAction}
+                onPress={handleMarkAllAsRead}
+                accessibilityRole="button"
+                accessibilityLabel={hasUnread ? 'Mark all notifications as read' : 'All caught up'}
+              >
+                <Ionicons name="checkmark-done-outline" size={22} color={hasUnread ? colors.textPrimary : colors.textMuted} />
+              </AnimatedPressable>
+            </View>
+          }
+        />
+      }
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+    >
 
       {/* Filter tabs */}
       <View style={styles.filterTabsRow}>
@@ -803,7 +804,7 @@ export default function NotificationsScreen() {
           ) : null
         }
       />
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 

@@ -10,7 +10,7 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, RefreshControl, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, TextInput } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,6 +31,7 @@ import {
   type CoOwnCorporateActionType,
   type CoOwnCorporateActionStatus,
 } from '../components/coown';
+import { CoOwnAssetDetailSkeleton } from '../components/coown/CoOwnSkeletons';
 import { AppButton } from '../components/ui/AppButton';
 import { fetchCoOwnAssetCorporateActions, fetchGovernanceVotes, castGovernanceVote, type CoOwnCorporateAction } from '../services/marketApi';
 import { useToast } from '../context/ToastContext';
@@ -194,7 +195,7 @@ export default function CorporateActionDetailScreen() {
           onBack={handleBack}
         />
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.brand} />
+          <CoOwnAssetDetailSkeleton />
         </View>
       </SafeAreaView>
     );

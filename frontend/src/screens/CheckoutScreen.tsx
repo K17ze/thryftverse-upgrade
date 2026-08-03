@@ -15,6 +15,7 @@ import {
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import {
   initPaymentSheet,
   PaymentSheetError,
@@ -1149,6 +1150,7 @@ export default function CheckoutScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {/* 2. Product and seller summary */}
+        <Reanimated.View entering={FadeInDown.duration(300)}>
         <CheckoutItemSummary
           title={item.title}
           imageUrl={getListingCoverUri(item.images, '')}
@@ -1247,10 +1249,12 @@ export default function CheckoutScreen() {
           }
           accessibilityHint="Add or change your payment method"
         />
+        </Reanimated.View>
 
         <View style={[styles.sectionDivider, t.sectionDivider]} />
 
         {/* 6. Price breakdown */}
+        <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
         <View style={[styles.priceBreakdownCard, t.priceBreakdownCard]}>
           <View style={styles.priceBreakdownHeader}>
             <Ionicons name="receipt-outline" size={14} color={colors.textMuted} />
@@ -1314,11 +1318,14 @@ export default function CheckoutScreen() {
             </>
           )}
         </View>
+        </Reanimated.View>
 
         {/* 6b. Buyer protection strip */}
+        <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
         <View style={styles.protectionStripWrap}>
           <BuyerProtectionStrip compact />
         </View>
+        </Reanimated.View>
 
         {/* 7. Transaction feedback */}
         {stage !== 'idle' ? (

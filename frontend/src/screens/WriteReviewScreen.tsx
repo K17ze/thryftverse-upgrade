@@ -4,12 +4,10 @@ import {
   Text,
   StyleSheet,
   TextInput,
-  StatusBar,
   ActivityIndicator,
   Pressable,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
@@ -17,7 +15,8 @@ import { useToast } from '../context/ToastContext';
 import { Typography, Space, Radius, Type, Elevation } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { WriteReviewSkeleton } from '../components/skeletons/WriteReviewSkeleton';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
@@ -37,7 +36,7 @@ export default function WriteReviewScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<RouteT>();
   const { orderId } = route.params;
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
@@ -135,23 +134,18 @@ export default function WriteReviewScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-        <ScreenHeader title="Write a Review" onBack={() => navigation.goBack()} />
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.brand} />
-          <Text style={styles.loadingText}>Loading…</Text>
-        </View>
-      </SafeAreaView>
+      <FlagshipScreen header={<FlagshipHeader title="Write a Review" onBack={() => navigation.goBack()} />}>
+        <WriteReviewSkeleton />
+      </FlagshipScreen>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-
-      <ScreenHeader title="Write a Review" onBack={() => navigation.goBack()} />
-
+    <FlagshipScreen
+      header={<FlagshipHeader title="Write a Review" onBack={() => navigation.goBack()} />}
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+    >
       <KeyboardAwareScrollView
         style={styles.content}
         contentContainerStyle={styles.scrollContent}
@@ -312,30 +306,18 @@ export default function WriteReviewScreen() {
           </View>
         )}
       </KeyboardAwareScrollView>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
   content: { flex: 1 },
   scrollContent: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
     paddingBottom: Space.xl,
     gap: Space.lg,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: Space.md,
-  },
-  loadingText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
   },
   orderCard: {
     backgroundColor: colors.surface,

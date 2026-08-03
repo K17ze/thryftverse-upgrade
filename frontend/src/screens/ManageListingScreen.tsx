@@ -9,7 +9,6 @@ import {
   Dimensions,
   Share,
   Switch,
-  ActivityIndicator,
   Pressable,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -23,6 +22,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { FlagshipActionCluster } from '../components/flagship';
+import { ProductDetailSkeleton } from '../components/product/ProductDetailSkeleton';
 import { AppButton } from '../components/ui/AppButton';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
@@ -108,9 +108,9 @@ export default function ManageListingScreen() {
 
   if (isLoading) {
     return (
-      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}>
+      <View style={styles.container}>
         <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor="transparent" translucent />
-        <ActivityIndicator size="large" color={colors.brand} />
+        <ProductDetailSkeleton />
       </View>
     );
   }
@@ -648,7 +648,7 @@ function createStyles(colors: ThemeColors) {
     borderRadius: 4,
   },
   statusPillText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 12,
     fontFamily: Typography.family.bold,
     letterSpacing: 0.3,
@@ -669,7 +669,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: 'rgba(255,255,255,0.45)',
   },
   dotActive: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.textInverse,
     width: 18,
   },
 
@@ -681,7 +681,7 @@ function createStyles(colors: ThemeColors) {
     padding: 20,
     borderWidth: 1,
     borderColor: colors.border,
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOpacity: 0.06,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 6 },
