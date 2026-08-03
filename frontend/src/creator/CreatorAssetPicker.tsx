@@ -1954,6 +1954,15 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
     return 0;
   });
   const [emoji, setEmoji] = useState(existing?.emoji ?? '🎯');
+  const [timerMs, setTimerMs] = useState<number | null>(existing?.timerMs ?? null);
+
+  const QUIZ_TIMER_OPTIONS = [
+    { label: 'No timer', value: null as number | null },
+    { label: '15s', value: 15000 },
+    { label: '30s', value: 30000 },
+    { label: '1m', value: 60000 },
+    { label: '5m', value: 300000 },
+  ];
 
   const handleAdd = useCallback(() => {
     if (!question.trim() || options.filter(o => o.trim()).length < 2) return;
@@ -1964,6 +1973,7 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
       options: optionObjs,
       correctOptionId: optionObjs[correctIdx]?.id ?? optionObjs[0].id,
       emoji,
+      ...(timerMs ? { timerMs } : {}),
     };
     if (isEditing && editingLayer) {
       onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
@@ -2074,6 +2084,30 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               <Text style={{ fontSize: 24 }}>{e}</Text>
             </Pressable>
           ))}
+        </ScrollView>
+        {/* Timer selection */}
+        <Text style={styles.pickerSectionLabel}>Timer</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.styleScroll}>
+          {QUIZ_TIMER_OPTIONS.map((t) => {
+            const isActive = timerMs === t.value;
+            return (
+              <Pressable
+                key={t.label}
+                onPress={() => { haptic.selection(); setTimerMs(t.value); }}
+                style={({ pressed }) => [
+                  styles.timerChip,
+                  isActive && { backgroundColor: colors.brand, borderColor: colors.brand },
+                  pressed && { opacity: 0.7 },
+                ]}
+                accessibilityLabel={`Timer: ${t.label}`}
+                accessibilityRole="button"
+              >
+                <Text style={[styles.timerChipText, isActive && { color: '#fff' }]}>
+                  {t.label}
+                </Text>
+              </Pressable>
+            );
+          })}
         </ScrollView>
         <Pressable
           onPress={handleAdd}
@@ -2518,14 +2552,44 @@ function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
   const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [question, setQuestion] = useState('');
-  const [option1, setOption1] = useState('');
-  const [option2, setOption2] = useState('');
+  const [options, setOptions] = useState<string[]>(['', '']);
+  const [timerMs, setTimerMs] = useState<number | null>(null);
 
-  const canSave = question.trim().length > 0 && option1.trim().length > 0 && option2.trim().length > 0 && option1.trim() !== option2.trim();
+  const TIMER_OPTIONS = [
+    { label: 'No timer', value: null as number | null },
+    { label: '1h', value: 3600000 },
+    { label: '6h', value: 21600000 },
+    { label: '24h', value: 86400000 },
+    { label: '3d', value: 259200000 },
+  ];
+
+  const canSave = question.trim().length > 0 && options.filter(o => o.trim().length > 0).length >= 2;
+
+  const updateOption = (index: number, value: string) => {
+    setOptions(prev => prev.map((o, i) => i === index ? value : o));
+  };
+
+  const addOption = () => {
+    if (options.length < 4) {
+      setOptions(prev => [...prev, '']);
+      haptic.selection();
+    }
+  };
+
+  const removeOption = (index: number) => {
+    if (options.length > 2) {
+      setOptions(prev => prev.filter((_, i) => i !== index));
+      haptic.light();
+    }
+  };
 
   const handleAdd = useCallback(() => {
     if (!canSave) return;
     haptic.selection();
+    const validOptions = options
+      .map(o => o.trim())
+      .filter(o => o.length > 0)
+      .map(label => ({ id: createStableId('opt'), label }));
     onAddLayer({
       ...baseLayer(createStableId('vote'), 10),
       type: 'vote',
@@ -2533,14 +2597,12 @@ function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
       height: 0.2,
       payload: {
         question: question.trim(),
-        options: [
-          { id: createStableId('opt'), label: option1.trim() },
-          { id: createStableId('opt'), label: option2.trim() },
-        ],
+        options: validOptions,
+        ...(timerMs ? { timerMs } : {}),
       },
     });
     onClose();
-  }, [question, option1, option2, canSave, onAddLayer, onClose]);
+  }, [question, options, timerMs, canSave, onAddLayer, onClose]);
 
   return (
     <PickerShell title="Add Style Vote" onClose={onClose}>
@@ -2550,14 +2612,34 @@ function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
           <Text style={styles.votePreviewQuestion} numberOfLines={2}>
             {question.trim() || 'Which outfit is better?'}
           </Text>
-          <View style={styles.votePreviewOptions}>
-            <View style={[styles.votePreviewOption, { backgroundColor: `${colors.brand}22`, borderColor: `${colors.brand}55` }]}>
-              <Text style={styles.votePreviewOptionText} numberOfLines={1}>{option1.trim() || 'Option 1'}</Text>
-            </View>
-            <View style={[styles.votePreviewOption, { backgroundColor: `${colors.brand}22`, borderColor: `${colors.brand}55` }]}>
-              <Text style={styles.votePreviewOptionText} numberOfLines={1}>{option2.trim() || 'Option 2'}</Text>
-            </View>
+          <View style={[styles.votePreviewOptions, { flexWrap: 'wrap' }]}>
+            {options.filter(o => o.trim().length > 0).length > 0 ? (
+              options.map((opt, i) => (
+                opt.trim() ? (
+                  <View key={i} style={[styles.votePreviewOption, { backgroundColor: `${colors.brand}22`, borderColor: `${colors.brand}55` }]}>
+                    <Text style={styles.votePreviewOptionText} numberOfLines={1}>{opt.trim()}</Text>
+                  </View>
+                ) : null
+              ))
+            ) : (
+              <>
+                <View style={[styles.votePreviewOption, { backgroundColor: `${colors.brand}22`, borderColor: `${colors.brand}55` }]}>
+                  <Text style={styles.votePreviewOptionText} numberOfLines={1}>Option 1</Text>
+                </View>
+                <View style={[styles.votePreviewOption, { backgroundColor: `${colors.brand}22`, borderColor: `${colors.brand}55` }]}>
+                  <Text style={styles.votePreviewOptionText} numberOfLines={1}>Option 2</Text>
+                </View>
+              </>
+            )}
           </View>
+          {timerMs && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6, alignSelf: 'center' }}>
+              <Ionicons name="timer-outline" size={12} color={colors.textSecondary} />
+              <Text style={{ fontFamily: Typography.family.medium, fontSize: 10, color: colors.textSecondary }}>
+                {timerMs >= 86400000 ? `${Math.floor(timerMs / 86400000)}d` : timerMs >= 3600000 ? `${Math.floor(timerMs / 3600000)}h` : `${Math.floor(timerMs / 60000)}m`}
+              </Text>
+            </View>
+          )}
         </View>
         <Text style={styles.sectionLabel}>Question</Text>
         <TextInput
@@ -2570,26 +2652,62 @@ function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
           autoFocus
           accessibilityLabel="Vote question"
         />
-        <Text style={styles.sectionLabel}>Option 1</Text>
-        <TextInput
-          style={styles.textInput}
-          placeholder="First option"
-          placeholderTextColor={colors.textMuted}
-          value={option1}
-          onChangeText={setOption1}
-          maxLength={50}
-          accessibilityLabel="Vote option 1"
-        />
-        <Text style={styles.sectionLabel}>Option 2</Text>
-        <TextInput
-          style={styles.textInput}
-          placeholder="Second option"
-          placeholderTextColor={colors.textMuted}
-          value={option2}
-          onChangeText={setOption2}
-          maxLength={50}
-          accessibilityLabel="Vote option 2"
-        />
+        {options.map((opt, i) => (
+          <View key={i}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={styles.sectionLabel}>Option {i + 1}</Text>
+              {options.length > 2 && (
+                <Pressable onPress={() => removeOption(i)} hitSlop={12} accessibilityLabel={`Remove option ${i + 1}`}>
+                  <Ionicons name="close-circle" size={18} color={colors.danger} />
+                </Pressable>
+              )}
+            </View>
+            <TextInput
+              style={styles.textInput}
+              placeholder={`Option ${i + 1}`}
+              placeholderTextColor={colors.textMuted}
+              value={opt}
+              onChangeText={(v) => updateOption(i, v)}
+              maxLength={50}
+              accessibilityLabel={`Vote option ${i + 1}`}
+            />
+          </View>
+        ))}
+        {options.length < 4 && (
+          <Pressable
+            onPress={addOption}
+            style={({ pressed }) => [styles.addOptionBtn, pressed && { opacity: 0.7 }]}
+            accessibilityLabel="Add option"
+            accessibilityRole="button"
+          >
+            <Ionicons name="add-circle-outline" size={18} color={colors.brand} />
+            <Text style={styles.addOptionBtnText}>Add Option ({options.length}/4)</Text>
+          </Pressable>
+        )}
+        {/* Timer selection */}
+        <Text style={styles.sectionLabel}>Timer</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.styleScroll}>
+          {TIMER_OPTIONS.map((t) => {
+            const isActive = timerMs === t.value;
+            return (
+              <Pressable
+                key={t.label}
+                onPress={() => { haptic.selection(); setTimerMs(t.value); }}
+                style={({ pressed }) => [
+                  styles.timerChip,
+                  isActive && { backgroundColor: colors.brand, borderColor: colors.brand },
+                  pressed && { opacity: 0.7 },
+                ]}
+                accessibilityLabel={`Timer: ${t.label}`}
+                accessibilityRole="button"
+              >
+                <Text style={[styles.timerChipText, isActive && { color: '#fff' }]}>
+                  {t.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
         <Pressable onPress={handleAdd} style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]} disabled={!canSave} accessibilityLabel="Add vote" accessibilityRole="button" hitSlop={12}>
           <Text style={styles.saveBtnText}>Add Vote</Text>
         </Pressable>
@@ -3532,6 +3650,10 @@ function createStyles(colors: ThemeColors) {
   votePreviewOptions: { flexDirection: 'row', gap: Space.sm },
   votePreviewOption: { flex: 1, paddingVertical: Space.sm, paddingHorizontal: Space.sm, borderRadius: Radius.md, borderWidth: 1.5, alignItems: 'center' },
   votePreviewOptionText: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textPrimary },
+  addOptionBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: Space.sm, marginBottom: Space.xs },
+  addOptionBtnText: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.brand },
+  timerChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, marginRight: 8 },
+  timerChipText: { fontFamily: Typography.family.semibold, fontSize: 13, color: colors.textSecondary },
   // ── Quiz preview ──
   quizPreviewWrap: { backgroundColor: colors.surface, borderRadius: 12, padding: Space.md, marginBottom: Space.sm, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, gap: Space.xs },
   quizPreviewHeader: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginBottom: Space.xs },
