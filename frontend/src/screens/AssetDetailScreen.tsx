@@ -1637,9 +1637,9 @@ export default function AssetDetailScreen() {
                     <Ionicons
                       name={c === 'above' ? 'arrow-up' : 'arrow-down'}
                       size={18}
-                      color={isSelected ? '#fff' : colors.textSecondary}
+                      color={isSelected ? colors.textInverse : colors.textSecondary}
                     />
-                    <Text style={[priceAlertStyles.conditionText, { color: isSelected ? '#fff' : colors.textSecondary }]}>
+                    <Text style={[priceAlertStyles.conditionText, { color: isSelected ? colors.textInverse : colors.textSecondary }]}>
                       {c === 'above' ? 'Above' : 'Below'}
                     </Text>
                   </Pressable>

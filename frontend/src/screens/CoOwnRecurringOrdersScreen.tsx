@@ -230,8 +230,8 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
                   >
                     <View style={styles.orderCard}>
                       <Pressable
-                        style={styles.orderInfo}
-                        onPress={() => navigation.navigate('AssetDetail', { assetId: order.assetId })}
+                        style={({ pressed }) => [styles.orderInfo, pressed && { opacity: 0.85 }]}
+                        onPress={() => { haptic.light(); navigation.navigate('AssetDetail', { assetId: order.assetId }); }}
                       >
                         <View style={styles.orderHeader}>
                           {/* Frequency badge — visual identity */}
@@ -380,7 +380,7 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
                 return (
                   <Pressable
                     key={f}
-                    style={[styles.frequencyTab, isSelected && { backgroundColor: colors.brand, borderColor: colors.brand }]}
+                    style={({ pressed }) => [styles.frequencyTab, isSelected && { backgroundColor: colors.brand, borderColor: colors.brand }, pressed && { opacity: 0.8 }]}
                     onPress={() => { haptic.selection(); setFrequency(f); }}
                     accessibilityRole="button"
                     accessibilityLabel={FREQUENCY_LABELS[f]}

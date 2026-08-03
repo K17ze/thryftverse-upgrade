@@ -269,6 +269,7 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
               onPress={handleShare}
               variant="secondary"
               size="md"
+              hapticFeedback="light"
               icon={<Ionicons name="share-outline" size={18} color={colors.textPrimary} />}
               style={{ marginTop: Space.md }}
             />

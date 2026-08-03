@@ -174,8 +174,8 @@ export default function CoOwnPriceAlertsScreen({ navigation }: Props) {
                       entering={FadeInDown.duration(300).delay((idx + 2) * 60)}
                     >
                       <Pressable
-                        style={styles.alertCard}
-                        onPress={() => navigation.navigate('AssetDetail', { assetId: alert.assetId })}
+                        style={({ pressed }) => [styles.alertCard, pressed && { opacity: 0.85 }]}
+                        onPress={() => { haptic.light(); navigation.navigate('AssetDetail', { assetId: alert.assetId }); }}
                       >
                         <View style={styles.alertInfo}>
                           {/* Condition badge — semantic colour */}
