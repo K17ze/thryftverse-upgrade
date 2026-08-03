@@ -10,6 +10,8 @@ import {
   Alert,
   Pressable,
   ActivityIndicator,
+  type NativeSyntheticEvent,
+  type NativeScrollEvent,
 } from "react-native";
 
 import { Ionicons } from "@expo/vector-icons";
@@ -859,6 +861,9 @@ export default function ChatScreen({ navigation, route }: Props) {
       }
       if (scrollTimerRef.current) {
         clearTimeout(scrollTimerRef.current);
+      }
+      if (undoTimerRef.current) {
+        clearTimeout(undoTimerRef.current);
       }
       if (conversationId && input) {
         upsertComposerStateOnApi(conversationId, {
@@ -1969,6 +1974,19 @@ export default function ChatScreen({ navigation, route }: Props) {
     return listings.find((l) => l.id === itemId) ?? null;
   }, [routeItemId, conversation?.itemId, listings]);
 
+  // Memoized FlatList callbacks — stable references avoid re-rendering the
+  // whole message list when parent state that doesn't affect messages changes.
+  const messageKeyExtractor = useCallback((item: Message) => item.id, []);
+  const handleMessageListScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+      const isNearBottom =
+        contentSize.height - contentOffset.y - layoutMeasurement.height < 150;
+      setShowScrollToBottom(!isNearBottom);
+    },
+    [],
+  );
+
   return (
     <SafeAreaView edges={["bottom"]} style={styles.screenRoot}>
       <View style={styles.screenRoot}>
@@ -2155,22 +2173,13 @@ export default function ChatScreen({ navigation, route }: Props) {
             ref={listRef}
             data={messages}
             renderItem={({ item, index }) => renderMessage(item, index)}
-            keyExtractor={(item) => item.id}
+            keyExtractor={messageKeyExtractor}
             contentContainerStyle={styles.messageList}
             showsVerticalScrollIndicator={false}
             keyboardDismissMode="on-drag"
             keyboardShouldPersistTaps="always"
             accessibilityLiveRegion="polite"
-            onScroll={(e) => {
-              const { contentOffset, contentSize, layoutMeasurement } =
-                e.nativeEvent;
-              const isNearBottom =
-                contentSize.height -
-                  contentOffset.y -
-                  layoutMeasurement.height <
-                150;
-              setShowScrollToBottom(!isNearBottom);
-            }}
+            onScroll={handleMessageListScroll}
             scrollEventThrottle={200}
           />
         ) : (

@@ -899,6 +899,46 @@ export default function HomeScreen() {
     });
   }, [navigation, haptic]);
 
+  // Memoized FlashList callbacks — stable references prevent FlashList from
+  // re-rendering every item on each parent render. The item renderer looks up
+  // the seller for each tile; deps capture the active listings + handlers.
+  const renderFeedItem = React.useCallback(
+    ({ item }: { item: ExploreTile }) => {
+      const listing = activeListings.find((l) => l.id === item.routeId);
+      return (
+        <View style={styles.flashListItem}>
+          <ExploreGridItem
+            item={item}
+            tileWidth={gridTileWidth}
+            formatPrice={formatFromFiat}
+            onPress={handleTilePress}
+            onLongPress={handleTileLongPress}
+            onPressSellerProfile={handleSellerProfilePress}
+            onPressSellerMessage={handleSellerMessagePress}
+            sellerUsername={listing?.seller?.username}
+            sellerAvatar={listing?.seller?.avatar}
+          />
+        </View>
+      );
+    },
+    [
+      activeListings,
+      gridTileWidth,
+      formatFromFiat,
+      handleTilePress,
+      handleTileLongPress,
+      handleSellerProfilePress,
+      handleSellerMessagePress,
+      styles.flashListItem,
+    ],
+  );
+
+  const feedKeyExtractor = React.useCallback((item: ExploreTile) => item.id, []);
+
+  const handleFeedEndReached = React.useCallback(() => {
+    if (hasMore && !isLoadingMore) void loadMoreListings();
+  }, [hasMore, isLoadingMore, loadMoreListings]);
+
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
@@ -964,29 +1004,10 @@ export default function HomeScreen() {
         contentContainerStyle={[styles.feedContent, { paddingTop: headerExpandedHeight + Space.sm }]}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
-        onEndReached={() => {
-          if (hasMore && !isLoadingMore) void loadMoreListings();
-        }}
+        onEndReached={handleFeedEndReached}
         onEndReachedThreshold={0.5}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => {
-          const listing = activeListings.find((l) => l.id === item.routeId);
-          return (
-            <View style={styles.flashListItem}>
-              <ExploreGridItem
-                item={item}
-                tileWidth={gridTileWidth}
-                formatPrice={formatFromFiat}
-                onPress={handleTilePress}
-                onLongPress={handleTileLongPress}
-                onPressSellerProfile={handleSellerProfilePress}
-                onPressSellerMessage={handleSellerMessagePress}
-                sellerUsername={listing?.seller?.username}
-                sellerAvatar={listing?.seller?.avatar}
-              />
-            </View>
-          );
-        }}
+        keyExtractor={feedKeyExtractor}
+        renderItem={renderFeedItem}
         overrideItemLayout={(layout) => {
           layout.span = 1;
         }}

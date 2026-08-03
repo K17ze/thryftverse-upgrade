@@ -162,9 +162,20 @@ export default function AuctionDetailScreen() {
 
   const prevLifecycleRef = React.useRef<AuctionEffectiveState | null>(null);
 
+  // Guard against async state updates after the component unmounts.
+  // fetchDetail and fetchRelatedAuctions both await network calls and
+  // then call setState; without this guard those calls would fire on
+  // an unmounted component, causing a memory-leak warning.
+  const isMountedRef = React.useRef(true);
+  React.useEffect(() => {
+    isMountedRef.current = true;
+    return () => { isMountedRef.current = false; };
+  }, []);
+
   const fetchDetail = React.useCallback(async (): Promise<AuctionDetailResponse | null> => {
     try {
       const res = await getAuctionDetail(auctionId);
+      if (!isMountedRef.current) return null;
       serverNowRef.current = res.serverNow;
       setAuction(res.auction);
       setBidActivity(res.bidActivity);
@@ -174,13 +185,16 @@ export default function AuctionDetailScreen() {
       clearResyncFailed();
       return res;
     } catch (err) {
+      if (!isMountedRef.current) return null;
       const parsed = parseApiError(err, 'Failed to load auction');
       setError(parsed.message);
       markResyncFailed();
       return null;
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (isMountedRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, [auctionId, resync, clearResyncFailed, markResyncFailed]);
 
@@ -192,11 +206,13 @@ export default function AuctionDetailScreen() {
     setRelatedLoading(true);
     try {
       const result = await listAuctions({ status: 'live', category: category ?? undefined, limit: 6 });
+      if (!isMountedRef.current) return;
       setRelatedAuctions(result.items.filter((a) => a.id !== currentId).slice(0, 4));
     } catch {
+      if (!isMountedRef.current) return;
       setRelatedAuctions([]);
     } finally {
-      setRelatedLoading(false);
+      if (isMountedRef.current) setRelatedLoading(false);
     }
   }, []);
 
@@ -227,7 +243,9 @@ export default function AuctionDetailScreen() {
       detectLifecycleTransition(prevLifecycleRef.current, effectiveState)
     ) {
       setIsTransitionRefreshing(true);
-      void fetchDetail().finally(() => setIsTransitionRefreshing(false));
+      void fetchDetail().finally(() => {
+        if (isMountedRef.current) setIsTransitionRefreshing(false);
+      });
     }
     prevLifecycleRef.current = effectiveState;
   }, [effectiveState, fetchDetail, isTransitionRefreshing]);
@@ -467,20 +485,34 @@ export default function AuctionDetailScreen() {
   const { data: recommendationsData, isLoading: recsLoading } = useRecommendations(
     auction?.listingId
   );
-  const recommendationSections = recommendationsData?.sections ?? [];
-  const railSections = recommendationSections.filter(
-    (section) => section.key !== 'seen_in_looks' && section.key !== 'continue_exploring',
+  const recommendationSections = React.useMemo(
+    () => recommendationsData?.sections ?? [],
+    [recommendationsData],
   );
-  const seenInLooksSection = recommendationSections.find((s) => s.key === 'seen_in_looks');
+  const railSections = React.useMemo(
+    () =>
+      recommendationSections.filter(
+        (section) => section.key !== 'seen_in_looks' && section.key !== 'continue_exploring',
+      ),
+    [recommendationSections],
+  );
+  const seenInLooksSection = React.useMemo(
+    () => recommendationSections.find((s) => s.key === 'seen_in_looks'),
+    [recommendationSections],
+  );
   void recsLoading;
   void railSections;
 
-  const handlePressRecommendation = (recItem: Listing) => {
+  const handlePressRecommendation = React.useCallback((recItem: Listing) => {
     navigation.push('ItemDetail', { itemId: recItem.id });
-  };
-  const handlePressLook = (lookItem: RecommendationLook) => {
+  }, [navigation]);
+  const handlePressLook = React.useCallback((lookItem: RecommendationLook) => {
     navigation.navigate('LookDetail', { lookId: lookItem.id });
-  };
+  }, [navigation]);
+
+  const handlePressRelatedAuction = React.useCallback((id: string) => {
+    navigation.push('AuctionDetail', { auctionId: id });
+  }, [navigation]);
 
   // Family badge state accent
   const familyStateAccent = isLive ? 'Live' : isUpcoming ? 'Upcoming' : isCancelled ? 'Cancelled'
@@ -1053,7 +1085,7 @@ export default function AuctionDetailScreen() {
                 countdownText: relTimeLabel || undefined,
               };
             })}
-            onPressItem={(id) => navigation.push('AuctionDetail', { auctionId: id })}
+            onPressItem={handlePressRelatedAuction}
           />
         )}
 
