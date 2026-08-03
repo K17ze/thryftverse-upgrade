@@ -6,6 +6,7 @@ export interface CreatorTemplate {
   name: string;
   type: 'look' | 'poster';
   description: string;
+  category: 'featured' | 'announcement' | 'interactive' | 'story' | 'editorial' | 'sale';
   build: () => CreatorDocument;
 }
 
@@ -33,6 +34,7 @@ export const LOOK_TEMPLATES: CreatorTemplate[] = [
     name: 'Single Photo',
     type: 'look',
     description: 'Editorial single-photo layout',
+    category: 'editorial',
     build: () => ({
       id: createStableId('doc'),
       type: 'look',
@@ -51,6 +53,7 @@ export const LOOK_TEMPLATES: CreatorTemplate[] = [
     name: 'Outfit Board',
     type: 'look',
     description: 'Three-piece outfit grid',
+    category: 'editorial',
     build: () => ({
       id: createStableId('doc'),
       type: 'look',
@@ -71,6 +74,7 @@ export const LOOK_TEMPLATES: CreatorTemplate[] = [
     name: 'Product Grid',
     type: 'look',
     description: 'Minimal product grid layout',
+    category: 'editorial',
     build: () => ({
       id: createStableId('doc'),
       type: 'look',
@@ -92,6 +96,7 @@ export const LOOK_TEMPLATES: CreatorTemplate[] = [
     name: 'Magazine',
     type: 'look',
     description: 'Magazine-style editorial layout',
+    category: 'editorial',
     build: () => ({
       id: createStableId('doc'),
       type: 'look',
@@ -111,6 +116,7 @@ export const LOOK_TEMPLATES: CreatorTemplate[] = [
     name: 'Colour Story',
     type: 'look',
     description: 'Colour-focused story layout',
+    category: 'editorial',
     build: () => ({
       id: createStableId('doc'),
       type: 'look',
@@ -132,6 +138,7 @@ export const LOOK_TEMPLATES: CreatorTemplate[] = [
     name: 'Split 2',
     type: 'look',
     description: 'Two-photo vertical split',
+    category: 'editorial',
     build: () => ({
       id: createStableId('doc'),
       type: 'look',
@@ -151,6 +158,7 @@ export const LOOK_TEMPLATES: CreatorTemplate[] = [
     name: 'Triple',
     type: 'look',
     description: 'Three-photo horizontal strip',
+    category: 'editorial',
     build: () => ({
       id: createStableId('doc'),
       type: 'look',
@@ -171,6 +179,7 @@ export const LOOK_TEMPLATES: CreatorTemplate[] = [
     name: 'Grid 4',
     type: 'look',
     description: 'Four-photo grid collage',
+    category: 'editorial',
     build: () => ({
       id: createStableId('doc'),
       type: 'look',
@@ -192,6 +201,7 @@ export const LOOK_TEMPLATES: CreatorTemplate[] = [
     name: 'Grid 6',
     type: 'look',
     description: 'Six-photo grid collage',
+    category: 'editorial',
     build: () => ({
       id: createStableId('doc'),
       type: 'look',
@@ -215,6 +225,7 @@ export const LOOK_TEMPLATES: CreatorTemplate[] = [
     name: 'Feature',
     type: 'look',
     description: 'Large feature photo with two side photos',
+    category: 'editorial',
     build: () => ({
       id: createStableId('doc'),
       type: 'look',
@@ -238,6 +249,7 @@ export const POSTER_TEMPLATES: CreatorTemplate[] = [
     name: 'Announcement',
     type: 'poster',
     description: 'Photo announcement poster',
+    category: 'announcement',
     build: () => ({
       id: createStableId('doc'),
       type: 'poster',
@@ -257,6 +269,7 @@ export const POSTER_TEMPLATES: CreatorTemplate[] = [
     name: 'Product Spotlight',
     type: 'poster',
     description: 'Spotlight a single product',
+    category: 'featured',
     build: () => ({
       id: createStableId('doc'),
       type: 'poster',
@@ -276,6 +289,7 @@ export const POSTER_TEMPLATES: CreatorTemplate[] = [
     name: 'Style Vote',
     type: 'poster',
     description: 'Vote on two styles',
+    category: 'interactive',
     build: () => ({
       id: createStableId('doc'),
       type: 'poster',
@@ -298,6 +312,7 @@ export const POSTER_TEMPLATES: CreatorTemplate[] = [
     name: 'New Listing',
     type: 'poster',
     description: 'Announce a new listing',
+    category: 'announcement',
     build: () => ({
       id: createStableId('doc'),
       type: 'poster',
@@ -318,6 +333,7 @@ export const POSTER_TEMPLATES: CreatorTemplate[] = [
     name: 'Behind the Scenes',
     type: 'poster',
     description: 'Share a behind-the-scenes moment',
+    category: 'story',
     build: () => ({
       id: createStableId('doc'),
       type: 'poster',
@@ -337,6 +353,7 @@ export const POSTER_TEMPLATES: CreatorTemplate[] = [
     name: 'Countdown Drop',
     type: 'poster',
     description: 'Build hype with a countdown',
+    category: 'featured',
     build: () => {
       const endDate = new Date();
       endDate.setDate(endDate.getDate() + 3);
@@ -362,6 +379,7 @@ export const POSTER_TEMPLATES: CreatorTemplate[] = [
     name: 'Style Quiz',
     type: 'poster',
     description: 'Engage with a style quiz',
+    category: 'interactive',
     build: () => ({
       id: createStableId('doc'),
       type: 'poster',
@@ -388,6 +406,7 @@ export const POSTER_TEMPLATES: CreatorTemplate[] = [
     name: 'Q&A Session',
     type: 'poster',
     description: 'Invite questions from followers',
+    category: 'interactive',
     build: () => ({
       id: createStableId('doc'),
       type: 'poster',
@@ -407,6 +426,7 @@ export const POSTER_TEMPLATES: CreatorTemplate[] = [
     name: 'React Slider',
     type: 'poster',
     description: 'Get vibe feedback with emoji slider',
+    category: 'interactive',
     build: () => ({
       id: createStableId('doc'),
       type: 'poster',
@@ -427,6 +447,7 @@ export const POSTER_TEMPLATES: CreatorTemplate[] = [
     name: 'Flash Sale',
     type: 'poster',
     description: 'Time-sensitive sale announcement',
+    category: 'sale',
     build: () => {
       const endDate = new Date();
       endDate.setHours(endDate.getHours() + 24);
@@ -452,6 +473,7 @@ export const POSTER_TEMPLATES: CreatorTemplate[] = [
     name: 'Story Sequence',
     type: 'poster',
     description: '3-page story with text and media',
+    category: 'story',
     build: () => ({
       id: createStableId('doc'),
       type: 'poster',
@@ -483,4 +505,22 @@ export function getTemplateById(id: string): CreatorTemplate | undefined {
 
 export function getTemplatesByType(type: 'look' | 'poster'): CreatorTemplate[] {
   return type === 'look' ? LOOK_TEMPLATES : POSTER_TEMPLATES;
+}
+
+export type TemplateCategory = CreatorTemplate['category'];
+
+export const TEMPLATE_CATEGORIES: Array<{ key: TemplateCategory | 'all'; label: string }> = [
+  { key: 'all', label: 'All' },
+  { key: 'featured', label: 'Featured' },
+  { key: 'announcement', label: 'Announce' },
+  { key: 'interactive', label: 'Interactive' },
+  { key: 'story', label: 'Story' },
+  { key: 'sale', label: 'Sale' },
+  { key: 'editorial', label: 'Editorial' },
+];
+
+export function getTemplatesByCategory(type: 'look' | 'poster', category: TemplateCategory | 'all'): CreatorTemplate[] {
+  const all = getTemplatesByType(type);
+  if (category === 'all') return all;
+  return all.filter((t) => t.category === category);
 }

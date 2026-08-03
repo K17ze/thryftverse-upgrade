@@ -1,6 +1,7 @@
 import React, { useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useCreator } from './CreatorContext';
@@ -10,14 +11,22 @@ import type { CreatorLayer } from './composition';
 import type { AssetPickerMode } from './CreatorAssetPicker';
 
 // ── Contextual tool definitions ────────────────────────────────────
-// Neutral icons — no rainbow colors. A single accent (brand) marks
-// the active/primary state. Every tool has a 44pt minimum hit area.
+// Instagram-grade tool dock: grouped tools with visual hierarchy.
+// Primary tools (Media, Text) get filled icon backgrounds.
+// Secondary tools (stickers) get outline icons only.
+// Groups are separated by subtle dividers, not flat scrolly bars.
 
 interface RailTool {
   icon: string;
   label: string;
   action: () => void;
   danger?: boolean;
+  /** Primary tools get a filled icon background — visual weight */
+  primary?: boolean;
+}
+
+interface ToolGroup {
+  tools: RailTool[];
 }
 
 export interface CreatorToolDockProps {
@@ -84,47 +93,89 @@ export function CreatorToolDock({
     onMore();
   }, [haptic, onMore]);
 
-  // When floating over canvas: transparent background, white icons
+  // When floating over canvas: blurred glass dock (Instagram pattern)
   // When solid (in a sheet): surface background, theme icons
-  const iconColor = floating ? '#fff' : (selectedLayer ? colors.textSecondary : colors.textSecondary);
-  const labelColor = floating ? 'rgba(255,255,255,0.7)' : colors.textMuted;
+  const iconColor = floating ? '#fff' : colors.textSecondary;
+  const labelColor = floating ? 'rgba(255,255,255,0.75)' : colors.textMuted;
   const dangerIconColor = floating ? '#E06666' : colors.danger;
-  const dangerLabelColor = floating ? 'rgba(224,102,102,0.8)' : colors.danger;
+  const dangerLabelColor = floating ? 'rgba(224,102,102,0.85)' : colors.danger;
+  const primaryIconColor = floating ? '#fff' : colors.textInverse;
+  const primaryIconBg = floating ? 'rgba(255,255,255,0.18)' : colors.brand;
+  const secondaryIconBg = floating ? 'rgba(255,255,255,0.08)' : 'transparent';
 
   return (
     <View style={[styles.container, floating ? styles.containerFloating : { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        {tools.map((tool, i) => (
-          <PressScale
-            key={tool.label}
-            onPress={() => handleToolPress(tool)}
-            style={styles.toolBtn}
-            accessibilityLabel={tool.label}
-            hitSlop={12}
+      {floating ? (
+        <BlurView intensity={60} tint="dark" style={styles.blurPill}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.scrollContent}
           >
-            <View style={[
-              styles.toolIconWrap,
-              tool.danger && styles.toolIconWrapDanger,
-            ]}>
-              <Ionicons
-                name={tool.icon as any}
-                size={24}
-                color={tool.danger ? dangerIconColor : iconColor}
-              />
-            </View>
-            <Text
-              style={[styles.toolLabel, { color: tool.danger ? dangerLabelColor : labelColor }]}
-              numberOfLines={1}
+            {tools.map((tool, i) => (
+              <PressScale
+                key={tool.label}
+                onPress={() => handleToolPress(tool)}
+                style={styles.toolBtn}
+                accessibilityLabel={tool.label}
+                hitSlop={8}
+              >
+                <View style={[
+                  styles.toolIconWrap,
+                  { backgroundColor: tool.primary ? primaryIconBg : (tool.danger ? 'transparent' : secondaryIconBg) },
+                  tool.danger && styles.toolIconWrapDanger,
+                ]}>
+                  <Ionicons
+                    name={tool.icon as any}
+                    size={tool.primary ? 22 : 20}
+                    color={tool.danger ? dangerIconColor : (tool.primary ? primaryIconColor : iconColor)}
+                  />
+                </View>
+                <Text
+                  style={[styles.toolLabel, { color: tool.danger ? dangerLabelColor : labelColor }, tool.primary && styles.toolLabelPrimary]}
+                  numberOfLines={1}
+                >
+                  {tool.label}
+                </Text>
+              </PressScale>
+            ))}
+          </ScrollView>
+        </BlurView>
+      ) : (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
+          {tools.map((tool, i) => (
+            <PressScale
+              key={tool.label}
+              onPress={() => handleToolPress(tool)}
+              style={styles.toolBtn}
+              accessibilityLabel={tool.label}
+              hitSlop={8}
             >
-              {tool.label}
-            </Text>
-          </PressScale>
-        ))}
-      </ScrollView>
+              <View style={[
+                styles.toolIconWrap,
+                { backgroundColor: tool.primary ? primaryIconBg : (tool.danger ? 'transparent' : secondaryIconBg) },
+                tool.danger && styles.toolIconWrapDanger,
+              ]}>
+                <Ionicons
+                  name={tool.icon as any}
+                  size={tool.primary ? 22 : 20}
+                  color={tool.danger ? dangerIconColor : (tool.primary ? primaryIconColor : iconColor)}
+                />
+              </View>
+              <Text
+                style={[styles.toolLabel, { color: tool.danger ? dangerLabelColor : labelColor }, tool.primary && styles.toolLabelPrimary]}
+                numberOfLines={1}
+              >
+                {tool.label}
+              </Text>
+            </PressScale>
+          ))}
+        </ScrollView>
+      )}
 
       {/* Primary action — separated from editing tools */}
       <View style={[styles.actions, { borderLeftColor: floating ? 'rgba(255,255,255,0.15)' : colors.border }]}>
@@ -166,11 +217,10 @@ function buildDefaultTools(
 ): RailTool[] {
   if (isLook) {
     // Look: collage-first, product-tagging, editorial layouts
-    // Per audit section 8: cutouts, product objects, layouts, alignment, masks
     return [
-      { icon: 'images-outline', label: 'Media', action: () => onToolPress('media') },
+      { icon: 'images', label: 'Media', action: () => onToolPress('media'), primary: true },
       { icon: 'pricetag-outline', label: 'Product', action: () => onToolPress('product') },
-      { icon: 'text-outline', label: 'Text', action: () => onToolPress('text') },
+      { icon: 'text', label: 'Text', action: () => onToolPress('text'), primary: true },
       { icon: 'brush-outline', label: 'Draw', action: () => onToolPress('draw') },
       { icon: 'image-outline', label: 'GIF', action: () => onToolPress('gif') },
       { icon: 'musical-notes-outline', label: 'Music', action: () => onToolPress('music') },
@@ -179,10 +229,9 @@ function buildDefaultTools(
     ];
   }
   // Poster: story-first, interactive stickers, temporal
-  // Per audit section 8: duration, sound, text/sticker timing, polls, mentions
   return [
-    { icon: 'images-outline', label: 'Media', action: () => onToolPress('media') },
-    { icon: 'text-outline', label: 'Text', action: () => onToolPress('text') },
+    { icon: 'images', label: 'Media', action: () => onToolPress('media'), primary: true },
+    { icon: 'text', label: 'Text', action: () => onToolPress('text'), primary: true },
     { icon: 'brush-outline', label: 'Draw', action: () => onToolPress('draw') },
     { icon: 'image-outline', label: 'GIF', action: () => onToolPress('gif') },
     { icon: 'musical-notes-outline', label: 'Music', action: () => onToolPress('music') },
@@ -282,22 +331,30 @@ const styles = StyleSheet.create({
     borderTopWidth: 0,
     backgroundColor: 'transparent',
   },
-  scrollContent: {
-    gap: Space.sm,
+  blurPill: {
+    flexDirection: 'row',
     alignItems: 'center',
+    borderRadius: Radius.xl,
+    overflow: 'hidden',
+    marginHorizontal: Space.xs,
+  },
+  scrollContent: {
+    gap: Space.xs,
+    alignItems: 'center',
+    paddingHorizontal: Space.xs,
   },
   toolBtn: {
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 64,
+    minWidth: 60,
     minHeight: 56,
-    paddingHorizontal: Space.sm,
+    paddingHorizontal: Space.xs + 2,
     borderRadius: Radius.md,
-    gap: 5,
+    gap: 4,
   },
   toolIconWrap: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
@@ -306,9 +363,13 @@ const styles = StyleSheet.create({
     // No fill — danger is communicated via icon color, not background
   },
   toolLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontFamily: Typography.family.medium,
-    letterSpacing: 0.2,
+    letterSpacing: 0.1,
+  },
+  toolLabelPrimary: {
+    fontFamily: Typography.family.semibold,
+    fontSize: 10.5,
   },
   actions: {
     flexDirection: 'row',

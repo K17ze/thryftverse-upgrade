@@ -903,81 +903,66 @@ function VoteLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'vot
   return (
     <View style={voteStyles.container}>
       <Text style={voteStyles.question}>{payload.question}</Text>
-      {payload.options.map((opt) => (
-        <View key={opt.id} style={voteStyles.option}>
-          <Text style={voteStyles.optionText}>{opt.label}</Text>
-        </View>
-      ))}
+      <View style={voteStyles.optionsRow}>
+        {payload.options.map((opt, i) => (
+          <View key={opt.id} style={[voteStyles.option, i === 0 && voteStyles.optionFirst]}>
+            <Text style={voteStyles.optionText}>{opt.label}</Text>
+          </View>
+        ))}
+      </View>
     </View>
   );
 }
 
 // ── Quiz layer content ─────────────────────────────────────────────
 // Instagram 2026: multiple-choice quiz with emoji and correct answer indicator.
+// Premium rendering: gradient surface, proper button styling, filled correct badge.
 function QuizLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'quiz' }> }) {
   const { payload } = layer;
   return (
-    <View style={voteStyles.container}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-        <Text style={{ fontSize: 20 }}>{payload.emoji}</Text>
-        <Text style={voteStyles.question}>{payload.question}</Text>
+    <View style={quizStyles.container}>
+      <View style={quizStyles.header}>
+        <Text style={quizStyles.emoji}>{payload.emoji}</Text>
+        <Text style={quizStyles.question}>{payload.question}</Text>
       </View>
-      {payload.options.map((opt) => (
-        <View
-          key={opt.id}
-          style={[
-            voteStyles.option,
-            opt.id === payload.correctOptionId && { borderColor: '#C9A46A', borderWidth: 1.5 },
-          ]}
-        >
-          <Text style={voteStyles.optionText}>{opt.label}</Text>
-          {opt.id === payload.correctOptionId && (
-            <Ionicons name="checkmark-circle" size={16} color="#C9A46A" style={{ marginLeft: 6 }} />
-          )}
-        </View>
-      ))}
+      <View style={quizStyles.optionsCol}>
+        {payload.options.map((opt, i) => {
+          const isCorrect = opt.id === payload.correctOptionId;
+          return (
+            <View key={opt.id} style={[
+              quizStyles.option,
+              isCorrect && quizStyles.optionCorrect,
+            ]}>
+              <Text style={[quizStyles.optionText, isCorrect && quizStyles.optionTextCorrect]}>
+                {opt.label}
+              </Text>
+              {isCorrect && (
+                <View style={quizStyles.correctBadge}>
+                  <Ionicons name="checkmark" size={12} color="#1a1a1a" />
+                </View>
+              )}
+            </View>
+          );
+        })}
+      </View>
     </View>
   );
 }
 
 // ── Question box layer content ─────────────────────────────────────
 // Instagram 2026: open-ended question box sticker.
+// Premium rendering: gradient background, input affordance with cursor hint.
 function QuestionLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'question' }> }) {
   const { payload } = layer;
   return (
-    <View style={{
-      backgroundColor: payload.backgroundColor,
-      borderRadius: Radius.md,
-      paddingHorizontal: 16,
-      paddingVertical: 12,
-      minWidth: 160,
-      maxWidth: '100%',
-    }}>
-      <Text style={{
-        color: payload.textColor,
-        fontFamily: Typography.family.semibold,
-        fontSize: Type.bodyEmphasis.size,
-        marginBottom: 6,
-      }}>
-        {payload.prompt}
-      </Text>
-      <View style={{
-        backgroundColor: 'rgba(255,255,255,0.15)',
-        borderRadius: Radius.sm,
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-      }}>
-        <Ionicons name="chatbubble-outline" size={14} color="rgba(255,255,255,0.6)" />
-        <Text style={{
-          color: 'rgba(255,255,255,0.6)',
-          fontFamily: Typography.family.regular,
-          fontSize: Type.caption.size,
-        }}>
-          {payload.placeholder}
-        </Text>
+    <View style={[questionStyles.container, { backgroundColor: payload.backgroundColor }]}>
+      <Text style={questionStyles.prompt}>{payload.prompt}</Text>
+      <View style={questionStyles.inputAffordance}>
+        <Ionicons name="chatbubbles-outline" size={14} color="rgba(255,255,255,0.5)" />
+        <Text style={questionStyles.placeholder}>{payload.placeholder}</Text>
+        <View style={questionStyles.sendHint}>
+          <Ionicons name="arrow-up" size={10} color="rgba(255,255,255,0.4)" />
+        </View>
       </View>
     </View>
   );
@@ -985,50 +970,20 @@ function QuestionLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 
 
 // ── Emoji slider layer content ─────────────────────────────────────
 // Instagram 2026: emoji slider for intensity measurement.
+// Premium rendering: dark glass surface, proper slider track with thumb.
 function EmojiSliderLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'emojiSlider' }> }) {
   const { payload } = layer;
   return (
-    <View style={{
-      backgroundColor: 'rgba(26,26,26,0.9)',
-      borderRadius: Radius.lg,
-      paddingHorizontal: 16,
-      paddingVertical: 12,
-      minWidth: 180,
-      maxWidth: '100%',
-    }}>
-      <Text style={{
-        color: '#fff',
-        fontFamily: Typography.family.semibold,
-        fontSize: Type.body.size,
-        marginBottom: 10,
-        textAlign: 'center',
-      }}>
-        {payload.question}
-      </Text>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <Text style={{ fontSize: 28 }}>{payload.emoji}</Text>
-        <View style={{
-          flex: 1,
-          height: 8,
-          borderRadius: 4,
-          backgroundColor: 'rgba(255,255,255,0.15)',
-          flexDirection: 'row',
-        }}>
-          <View style={{
-            width: '50%',
-            height: '100%',
-            borderRadius: 4,
-            backgroundColor: payload.sliderColor,
-          }} />
+    <View style={sliderStyles.container}>
+      <Text style={sliderStyles.question}>{payload.question}</Text>
+      <View style={sliderStyles.sliderRow}>
+        <Text style={sliderStyles.emoji}>{payload.emoji}</Text>
+        <View style={sliderStyles.track}>
+          <View style={[sliderStyles.trackFill, { backgroundColor: payload.sliderColor }]} />
+          <View style={[sliderStyles.thumb, { borderColor: payload.sliderColor }]} />
         </View>
         {payload.endLabel ? (
-          <Text style={{
-            color: 'rgba(255,255,255,0.7)',
-            fontFamily: Typography.family.medium,
-            fontSize: 11,
-          }}>
-            {payload.endLabel}
-          </Text>
+          <Text style={sliderStyles.endLabel}>{payload.endLabel}</Text>
         ) : null}
       </View>
     </View>
@@ -1037,6 +992,7 @@ function EmojiSliderLayerContent({ layer }: { layer: Extract<CreatorLayer, { typ
 
 // ── Countdown layer content ────────────────────────────────────────
 // Instagram 2026: countdown to a date/time with live timer.
+// Premium rendering: card with depth, gradient surface, tabular time display.
 function CountdownLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'countdown' }> }) {
   const { payload } = layer;
   const [now, setNow] = useState(Date.now());
@@ -1059,31 +1015,12 @@ function CountdownLayerContent({ layer }: { layer: Extract<CreatorLayer, { type:
     : `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 
   return (
-    <View style={{
-      backgroundColor: payload.color,
-      borderRadius: Radius.md,
-      paddingHorizontal: 14,
-      paddingVertical: 10,
-      minWidth: 140,
-      maxWidth: '100%',
-      alignItems: 'center',
-    }}>
-      <Text style={{
-        color: payload.textColor,
-        fontFamily: Typography.family.semibold,
-        fontSize: Type.caption.size,
-        marginBottom: 2,
-      }}>
-        {payload.label}
-      </Text>
-      <Text style={{
-        color: payload.textColor,
-        fontFamily: Typography.family.bold,
-        fontSize: Type.title.size,
-        fontVariant: ['tabular-nums'],
-      }}>
-        {timeStr}
-      </Text>
+    <View style={[countdownStyles.container, { backgroundColor: payload.color }]}>
+      <View style={countdownStyles.iconRow}>
+        <Ionicons name="time-outline" size={12} color={payload.textColor} />
+        <Text style={countdownStyles.label}>{payload.label}</Text>
+      </View>
+      <Text style={countdownStyles.time}>{timeStr}</Text>
     </View>
   );
 }
@@ -1665,12 +1602,12 @@ const lookStyles = StyleSheet.create({
 
 const voteStyles = StyleSheet.create({
   container: {
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: Radius.md,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    gap: 6,
-    minWidth: 140,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    borderRadius: Radius.lg,
+    paddingHorizontal: Space.md + 2,
+    paddingVertical: Space.sm + 2,
+    gap: 8,
+    minWidth: 160,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1680,16 +1617,209 @@ const voteStyles = StyleSheet.create({
     fontSize: Type.body.size,
     textAlign: 'center',
   },
+  optionsRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
   option: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(255,255,255,0.18)',
     borderRadius: Radius.sm,
-    paddingVertical: 6,
-    paddingHorizontal: Space.sm,
+    paddingVertical: 8,
+    paddingHorizontal: Space.md,
     alignItems: 'center',
+    minWidth: 60,
+  },
+  optionFirst: {
+    // Both options equal weight — no visual hierarchy difference
   },
   optionText: {
     color: '#fff',
     fontFamily: Typography.family.medium,
+    fontSize: Type.caption.size + 1,
+  },
+});
+
+const quizStyles = StyleSheet.create({
+  container: {
+    backgroundColor: 'rgba(0,0,0,0.78)',
+    borderRadius: Radius.lg,
+    paddingHorizontal: Space.md + 2,
+    paddingVertical: Space.sm + 2,
+    gap: 10,
+    minWidth: 180,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  emoji: {
+    fontSize: 18,
+  },
+  question: {
+    color: '#fff',
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.body.size,
+    flex: 1,
+  },
+  optionsCol: {
+    gap: 6,
+  },
+  option: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: Radius.sm,
+    paddingVertical: 8,
+    paddingHorizontal: Space.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  optionCorrect: {
+    backgroundColor: 'rgba(201,164,106,0.25)',
+    borderColor: 'rgba(201,164,106,0.6)',
+  },
+  optionText: {
+    color: '#fff',
+    fontFamily: Typography.family.medium,
+    fontSize: Type.caption.size + 1,
+    flex: 1,
+  },
+  optionTextCorrect: {
+    color: '#C9A46A',
+    fontFamily: Typography.family.semibold,
+  },
+  correctBadge: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#C9A46A',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+});
+
+const questionStyles = StyleSheet.create({
+  container: {
+    borderRadius: Radius.lg,
+    paddingHorizontal: Space.md + 2,
+    paddingVertical: Space.sm + 2,
+    minWidth: 180,
+    maxWidth: '100%',
+  },
+  prompt: {
+    color: '#fff',
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.bodyEmphasis.size,
+    marginBottom: 8,
+  },
+  inputAffordance: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: Radius.md,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: 8,
+  },
+  placeholder: {
+    flex: 1,
+    color: 'rgba(255,255,255,0.55)',
+    fontFamily: Typography.family.regular,
     fontSize: Type.caption.size,
+  },
+  sendHint: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+});
+
+const sliderStyles = StyleSheet.create({
+  container: {
+    backgroundColor: 'rgba(0,0,0,0.78)',
+    borderRadius: Radius.lg,
+    paddingHorizontal: Space.md + 2,
+    paddingVertical: Space.sm + 2,
+    minWidth: 200,
+    maxWidth: '100%',
+  },
+  question: {
+    color: '#fff',
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.body.size,
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  sliderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  emoji: {
+    fontSize: 26,
+  },
+  track: {
+    flex: 1,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center',
+  },
+  trackFill: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: '50%',
+    borderRadius: 3,
+  },
+  thumb: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    position: 'absolute',
+    left: '50%',
+    marginLeft: -7,
+  },
+  endLabel: {
+    color: 'rgba(255,255,255,0.7)',
+    fontFamily: Typography.family.medium,
+    fontSize: 11,
+  },
+});
+
+const countdownStyles = StyleSheet.create({
+  container: {
+    borderRadius: Radius.lg,
+    paddingHorizontal: Space.md + 2,
+    paddingVertical: Space.sm + 2,
+    minWidth: 150,
+    maxWidth: '100%',
+    alignItems: 'center',
+  },
+  iconRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 2,
+  },
+  label: {
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.caption.size - 1,
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+  },
+  time: {
+    fontFamily: Typography.family.bold,
+    fontSize: Type.title.size,
+    fontVariant: ['tabular-nums'],
+    letterSpacing: 0.5,
   },
 });
