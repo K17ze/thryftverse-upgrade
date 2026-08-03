@@ -63,7 +63,7 @@ function CreatorStudioInner() {
   const route = useRoute<any>();
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
-  const { document, activePageIndex, setActivePageIndex, selectedLayerId, selectLayer, canUndo, canRedo, undo, redo, isDirty, removeLayer, duplicateLayer, reorderLayer, updateLayer, addLayer, addPage, removePage, duplicatePage, commitLayerTransform, autosaveStatus, isLoadingDraft, setDocument, saveDraft } = useCreator();
+  const { document, activePageIndex, setActivePageIndex, selectedLayerId, selectLayer, canUndo, canRedo, undo, redo, isDirty, removeLayer, duplicateLayer, reorderLayer, updateLayer, addLayer, addPage, removePage, duplicatePage, updatePageDuration, commitLayerTransform, autosaveStatus, isLoadingDraft, setDocument, saveDraft } = useCreator();
 
   const [showLayers, setShowLayers] = useState(false);
   const [showPublish, setShowPublish] = useState(false);
@@ -286,12 +286,57 @@ function CreatorStudioInner() {
                   onPress={() => { selectLayer(null); setActivePageIndex(i); }}
                   onLongPress={() => {
                     if (document.pages.length > 1) {
+                      const currentDuration = document.pages[i]?.durationMs ?? 5000;
                       Alert.alert(
                         `Page ${i + 1}`,
                         undefined,
                         [
                           { text: 'Duplicate', onPress: () => duplicatePage(i) },
+                          {
+                            text: `Duration: ${Math.round(currentDuration / 1000)}s`,
+                            onPress: () => {
+                              Alert.alert(
+                                'Page Duration',
+                                'Choose how long this page displays',
+                                [
+                                  { text: '3s', onPress: () => updatePageDuration(i, 3000) },
+                                  { text: '5s', onPress: () => updatePageDuration(i, 5000) },
+                                  { text: '7s', onPress: () => updatePageDuration(i, 7000) },
+                                  { text: '10s', onPress: () => updatePageDuration(i, 10000) },
+                                  { text: '15s', onPress: () => updatePageDuration(i, 15000) },
+                                  { text: 'Cancel', style: 'cancel' },
+                                ],
+                              );
+                            },
+                          },
                           { text: 'Delete', style: 'destructive', onPress: () => removePage(i) },
+                          { text: 'Cancel', style: 'cancel' },
+                        ],
+                      );
+                    } else {
+                      const currentDuration = document.pages[i]?.durationMs ?? 5000;
+                      Alert.alert(
+                        `Page ${i + 1}`,
+                        undefined,
+                        [
+                          {
+                            text: `Duration: ${Math.round(currentDuration / 1000)}s`,
+                            onPress: () => {
+                              Alert.alert(
+                                'Page Duration',
+                                'Choose how long this page displays',
+                                [
+                                  { text: '3s', onPress: () => updatePageDuration(i, 3000) },
+                                  { text: '5s', onPress: () => updatePageDuration(i, 5000) },
+                                  { text: '7s', onPress: () => updatePageDuration(i, 7000) },
+                                  { text: '10s', onPress: () => updatePageDuration(i, 10000) },
+                                  { text: '15s', onPress: () => updatePageDuration(i, 15000) },
+                                  { text: 'Cancel', style: 'cancel' },
+                                ],
+                              );
+                            },
+                          },
+                          { text: 'Duplicate', onPress: () => duplicatePage(i) },
                           { text: 'Cancel', style: 'cancel' },
                         ],
                       );
