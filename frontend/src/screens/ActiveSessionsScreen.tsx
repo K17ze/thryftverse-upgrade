@@ -11,6 +11,7 @@ import type { ThemeColors } from '../theme/ThemeContext';
 import { AppButton } from '../components/ui/AppButton';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { SettingsListSkeleton } from '../components/skeletons/SettingsListSkeleton';
 import {
   fetchActiveSessions,
   revokeSession,
@@ -182,9 +183,7 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
         )}
 
         {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.brand} />
-          </View>
+          <SettingsListSkeleton count={4} />
         ) : (
           <>
             {/* This device */}
@@ -394,10 +393,6 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     flex: 1,
-  },
-  loadingContainer: {
-    alignItems: 'center',
-    paddingVertical: Space.xxl,
   },
   endAllContainer: {
     paddingHorizontal: Space.md,

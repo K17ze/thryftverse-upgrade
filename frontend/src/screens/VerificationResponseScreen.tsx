@@ -350,10 +350,10 @@ export default function VerificationResponseScreen() {
               <Ionicons
                 name={isOverdue ? 'warning-outline' : 'time-outline'}
                 size={14}
-                color={isOverdue ? '#dc2626' : colors.textMuted}
+                color={isOverdue ? colors.danger : colors.textMuted}
               />
               <Text style={[styles.deadlineBadgeText, {
-                color: isOverdue ? '#dc2626' : colors.textSecondary,
+                color: isOverdue ? colors.danger : colors.textSecondary,
               }]}>
                 {isOverdue
                   ? 'Deadline passed — respond immediately'
@@ -470,8 +470,8 @@ export default function VerificationResponseScreen() {
 
         {/* Liability warning */}
         <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
-          <View style={[styles.warningBox, { backgroundColor: 'rgba(217,119,6,0.06)', borderColor: 'rgba(217,119,6,0.2)' }]}>
-            <Ionicons name="shield-outline" size={18} color="#d97706" />
+          <View style={[styles.warningBox, { backgroundColor: colors.warning + '0F', borderColor: colors.warning + '33' }]}>
+            <Ionicons name="shield-outline" size={18} color={colors.warning} />
             <Text style={[styles.warningText, { color: colors.textSecondary }]}>
               Your personal liability guarantee is active. Failure to provide satisfactory evidence may trigger recourse proceedings.
             </Text>

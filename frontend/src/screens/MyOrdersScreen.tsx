@@ -27,6 +27,7 @@ import { EmptyState } from '../components/EmptyState';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import { OrdersTabRail, OrdersTab } from '../components/orders/OrdersTabRail';
 import { OrderLedgerRow, OrderViewModel } from '../components/orders/OrderLedgerRow';
+import { OrderRowSkeleton } from '../components/skeletons/OrderRowSkeleton';
 import {
   OrdersFilterSheet,
   FilterClassification,
@@ -367,10 +368,7 @@ export default function MyOrdersScreen() {
   }, [viewerId, debouncedQuery, hasActiveFilter, activeTab, navigation, handleClearSearch]);
 
   const renderLoading = useCallback(() => (
-    <View style={styles.loadingContainer}>
-      <ActivityIndicator size="large" color={colors.textSecondary} />
-      <Text style={styles.loadingText}>Loading orders…</Text>
-    </View>
+    <OrderRowSkeleton count={6} />
   ), []);
 
   const renderError = useCallback(() => (
@@ -690,17 +688,6 @@ function createStyles(colors: ThemeColors) {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.borderSubtle,
     marginLeft: 104,
-  },
-  loadingContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Space.xl * 2,
-    gap: Space.md,
-  },
-  loadingText: {
-    fontSize: 14,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
   },
   errorContainer: {
     alignItems: 'center',

@@ -1892,7 +1892,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   exploreMessageBtn: {
     minWidth: 44,
-    height: 32,
+    height: 44,
     paddingHorizontal: Space.xs + 2,
     flexDirection: 'row',
     gap: 4,

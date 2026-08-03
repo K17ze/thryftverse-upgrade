@@ -82,7 +82,7 @@ export default function VerificationScreen({ navigation }: Props) {
   const [isSubmittingDac7, setIsSubmittingDac7] = React.useState(false);
 
   // DAC7 status — stored in compliance profile
-  const dac7CompletedLocal = (coOwnCompliance as any).dac7Completed ?? false;
+  const dac7CompletedLocal = coOwnCompliance.dac7Completed ?? false;
 
   // Real backend status
   const [backendKycStatus, setBackendKycStatus] = useState<KycStatus | null>(null);
@@ -222,7 +222,7 @@ export default function VerificationScreen({ navigation }: Props) {
       });
 
       // Update local compliance state
-      (updateCoOwnCompliance as any)({
+      updateCoOwnCompliance({
         dac7Completed: true,
         dac7Tin: dac7Tin.trim(),
         dac7Country: dac7Country,
@@ -314,7 +314,13 @@ export default function VerificationScreen({ navigation }: Props) {
             <Text style={[styles.flowTitle, { color: colors.textPrimary }]}>
               {kycStep === 'identity' ? 'Your details' : kycStep === 'document' ? 'Document' : 'Review'}
             </Text>
-            <Pressable onPress={() => setKycStep('status')} accessibilityLabel="Cancel verification">
+            <Pressable
+              onPress={() => setKycStep('status')}
+              accessibilityLabel="Cancel verification"
+              accessibilityRole="button"
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+            >
               <Ionicons name="close-outline" size={22} color={colors.textMuted} />
             </Pressable>
           </View>
@@ -528,7 +534,13 @@ export default function VerificationScreen({ navigation }: Props) {
             <Text style={[styles.flowTitle, { color: colors.textPrimary }]}>
               {dac7Step === 'details' ? 'Tax details' : 'Review'}
             </Text>
-            <Pressable onPress={() => setDac7Step('status')} accessibilityLabel="Cancel">
+            <Pressable
+              onPress={() => setDac7Step('status')}
+              accessibilityLabel="Cancel"
+              accessibilityRole="button"
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+            >
               <Ionicons name="close-outline" size={22} color={colors.textMuted} />
             </Pressable>
           </View>

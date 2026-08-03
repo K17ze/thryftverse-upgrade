@@ -191,6 +191,9 @@ interface CoOwnComplianceProfile {
   riskDisclosureAccepted: boolean;
   stableCoinWalletConnected: boolean;
   educationCompleted: boolean;
+  dac7Completed?: boolean;
+  dac7Tin?: string;
+  dac7Country?: string;
 }
 
 type CoOwnEligibilityResult = {
@@ -854,6 +857,9 @@ export const useStore = create<StoreState>()(
     riskDisclosureAccepted: false,
     stableCoinWalletConnected: false,
     educationCompleted: false,
+    dac7Completed: false,
+    dac7Tin: undefined,
+    dac7Country: undefined,
   },
   updateCoOwnCompliance: (updates) =>
     set((state) => ({

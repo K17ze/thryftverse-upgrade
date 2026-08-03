@@ -30,14 +30,26 @@ const DEMAND_TYPE_LABELS: Record<string, string> = {
   inspection: 'In-person inspection',
 };
 
-const STATUS_COLORS: Record<string, { icon: string; color: string }> = {
-  pending: { icon: 'hourglass-outline', color: '#d97706' },
-  responded: { icon: 'document-text-outline', color: '#2563eb' },
-  compliant: { icon: 'checkmark-circle', color: '#215634' },
-  failed: { icon: 'close-circle', color: '#dc2626' },
-  expired: { icon: 'time-outline', color: '#6b7280' },
-  withdrawn: { icon: 'remove-circle-outline', color: '#6b7280' },
+const STATUS_ICONS: Record<string, string> = {
+  pending: 'hourglass-outline',
+  responded: 'document-text-outline',
+  compliant: 'checkmark-circle',
+  failed: 'close-circle',
+  expired: 'time-outline',
+  withdrawn: 'remove-circle-outline',
 };
+
+function getStatusColor(status: string, colors: ThemeColors): string {
+  switch (status) {
+    case 'pending': return colors.warning;
+    case 'responded': return colors.brand;
+    case 'compliant': return colors.success;
+    case 'failed': return colors.danger;
+    case 'expired':
+    case 'withdrawn':
+    default: return colors.textMuted;
+  }
+}
 
 export default function SellerVerificationScreen() {
   const navigation = useNavigation<any>();
@@ -97,7 +109,8 @@ export default function SellerVerificationScreen() {
   }, [navigation, haptic]);
 
   const renderDemand = useCallback((demand: SellerVerificationDemand, index: number) => {
-    const statusInfo = STATUS_COLORS[demand.status] ?? STATUS_COLORS.withdrawn;
+    const statusIcon = STATUS_ICONS[demand.status] ?? STATUS_ICONS.withdrawn;
+    const statusColor = getStatusColor(demand.status, colors);
     const deadline = new Date(demand.deadline);
     const now = new Date();
     const isOverdue = demand.status === 'pending' && deadline < now;
@@ -143,14 +156,14 @@ export default function SellerVerificationScreen() {
           <View style={styles.demandStatusRow}>
             <View style={styles.statusBadge}>
               <Ionicons
-                name={statusInfo.icon as any}
+                name={statusIcon as any}
                 size={14}
-                color={isOverdue ? '#dc2626' : statusInfo.color}
+                color={isOverdue ? colors.danger : statusColor}
               />
               <Text
                 style={[
                   styles.statusText,
-                  { color: isOverdue ? '#dc2626' : statusInfo.color },
+                  { color: isOverdue ? colors.danger : statusColor },
                 ]}
               >
                 {isOverdue ? 'Overdue' : demand.status}
@@ -177,7 +190,7 @@ export default function SellerVerificationScreen() {
               </Text>
             )}
             {demand.status === 'failed' && (
-              <Text style={[styles.deadlineText, { color: '#dc2626' }]}>
+              <Text style={[styles.deadlineText, { color: colors.danger }]}>
                 Recourse triggered
               </Text>
             )}
@@ -189,12 +202,12 @@ export default function SellerVerificationScreen() {
               <Ionicons
                 name={isOverdue ? 'warning-outline' : 'arrow-forward-circle-outline'}
                 size={16}
-                color={isOverdue ? '#dc2626' : colors.brand}
+                color={isOverdue ? colors.danger : colors.brand}
               />
               <Text
                 style={[
                   styles.actionPromptText,
-                  { color: isOverdue ? '#dc2626' : colors.textPrimary },
+                  { color: isOverdue ? colors.danger : colors.textPrimary },
                 ]}
               >
                 {isOverdue
@@ -252,7 +265,7 @@ export default function SellerVerificationScreen() {
         {demands.length > 0 && (
           <View style={[styles.summaryBanner, { backgroundColor: colors.surface }]}>
             <View style={styles.summaryItem}>
-              <Text style={[styles.summaryNumber, { color: pendingCount > 0 ? '#d97706' : colors.textPrimary }]}>
+              <Text style={[styles.summaryNumber, { color: pendingCount > 0 ? colors.warning : colors.textPrimary }]}>
                 {pendingCount}
               </Text>
               <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>

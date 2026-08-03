@@ -28,6 +28,7 @@ import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { isPaymentMethodAllowed } from '../utils/capabilityPolicy';
 import { calculatePlatformChargeGbp } from '../utils/currencyAuthoringFlows';
 import { useBackendData } from '../context/BackendDataContext';
@@ -49,6 +50,7 @@ import {
 } from '../services/commerceApi';
 import { CapabilityCarrier, getUserCountryCapabilities, UserCountryCapabilities } from '../services/capabilitiesApi';
 import { CachedImage } from '../components/CachedImage';
+import { CommerceDetailOfflineBanner } from '../components/commerce/detail';
 import { BuyerProtectionStrip } from '../components/product';
 import { getIzePosition } from '../services/walletApi';
 import { haptics } from '../utils/haptics';
@@ -222,6 +224,7 @@ export default function CheckoutScreen() {
   const { itemId } = route.params;
   const { colors, isDark } = useAppTheme();
   const reducedMotionEnabled = useReducedMotion();
+  const { isOffline } = useConnectivity();
   const { listings } = useBackendData();
 
   // Theme-aware color overrides for the static styles. The static
@@ -788,7 +791,10 @@ export default function CheckoutScreen() {
       }
 
       setStage('payment_failed');
-      const message = error?.message ?? 'Payment could not be completed. Please try again.';
+      const isNetworkError = isOffline || error?.code === 'NETWORK_ERROR' || error?.code === 'ECONNABORTED';
+      const message = isNetworkError
+        ? 'You appear to be offline. Check your connection and try again.'
+        : error?.message ?? 'Payment could not be completed. Please try again.';
       setOrderError(message);
       show(message, 'error');
     } finally {
@@ -1145,6 +1151,8 @@ export default function CheckoutScreen() {
         <Text style={[styles.headerTitle, t.headerTitle]}>Checkout</Text>
         <View style={styles.headerSpacer} />
       </View>
+
+      <CommerceDetailOfflineBanner isOffline={isOffline} />
 
       <ScrollView
         showsVerticalScrollIndicator={false}

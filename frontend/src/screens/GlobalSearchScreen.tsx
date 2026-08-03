@@ -1566,9 +1566,9 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   topicSearchBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1635,8 +1635,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   savedSearchRemove: {
-    width: 32,
-    height: 36,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },

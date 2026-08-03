@@ -11,6 +11,7 @@ import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { SettingsListSkeleton } from '../components/skeletons/SettingsListSkeleton';
 import {
   fetchPublicProfile,
   unblockUser,
@@ -116,10 +117,7 @@ export default function BlockedUsersScreen({ navigation }: Props) {
           </Text>
         </View>
       ) : loadingProfiles && Object.keys(profiles).length === 0 ? (
-        <View style={styles.loading}>
-          <ActivityIndicator size="small" color={colors.textMuted} />
-          <Text style={[styles.loadingText, { color: colors.textMuted }]}>Loading blocked accounts</Text>
-        </View>
+        <SettingsListSkeleton count={3} />
       ) : (
         <View style={[styles.list, { borderColor: colors.border }]}>
           {blockedIds.map((userId, index) => {
@@ -298,16 +296,6 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.caption.size,
       lineHeight: 18,
       textAlign: 'center',
-    },
-    loading: {
-      minHeight: 160,
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: Space.sm,
-    },
-    loadingText: {
-      fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
     },
   });
 }
