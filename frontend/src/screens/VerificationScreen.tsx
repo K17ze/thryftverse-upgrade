@@ -37,6 +37,7 @@ import {
 } from '../services/complianceApi';
 import { parseApiError } from '../lib/apiClient';
 import { useConnectivity } from '../hooks/useConnectivity';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 type Props = StackScreenProps<RootStackParamList, 'Verification'>;
 

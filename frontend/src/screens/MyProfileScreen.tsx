@@ -160,7 +160,7 @@ export default function MyProfileScreen() {
   const userCover = useStore((state) => state.userCover);
   const updateUserAvatar = useStore((state) => state.updateUserAvatar);
   const updateUserCover = useStore((state) => state.updateUserCover);
-  const user = currentUser as any;
+  const user = currentUser;
   const [myLooks, setMyLooks] = React.useState<LookApiItem[]>([]);
   const [looksLoading, setLooksLoading] = React.useState(false);
 
@@ -505,15 +505,15 @@ export default function MyProfileScreen() {
             avatarUri={displayAvatar}
             displayName={user.displayName || user.username}
             username={user.username}
-            bio={user.bio}
-            location={user.location}
+            bio={user.bio ?? undefined}
+            location={user.location ?? undefined}
             memberSince={memberSince}
             listingCount={allOwnedListings.length}
             lookCount={myLooks.length}
             sellerTrust={sellerTrust}
             emailVerified={user.emailVerified}
             onEditAvatar={pickAvatar}
-            onEditProfile={() => (navigation as any).navigate('EditProfile')}
+            onEditProfile={() => navigation.navigate('EditProfile', {})}
             onShare={handleShare}
           />
 
@@ -521,7 +521,7 @@ export default function MyProfileScreen() {
           {holidayMode ? (
             <Pressable
               style={[myProfileStyles.awayBanner, tMyProfile.awayBanner]}
-              onPress={() => (navigation as any).navigate('PrivacySettings')}
+              onPress={() => navigation.navigate('PrivacySettings')}
               accessibilityRole="button"
               accessibilityLabel="Holiday mode is on — tap to manage"
             >
