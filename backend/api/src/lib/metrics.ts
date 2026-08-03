@@ -80,6 +80,13 @@ const databasePoolConnections = new Gauge({
   registers: [registry],
 });
 
+const redisConnectionState = new Gauge({
+  name: 'thryftverse_redis_connection_state',
+  help: 'Redis connection state (1 for connected, 0 for disconnected)',
+  labelNames: ['state'] as const,
+  registers: [registry],
+});
+
 function normalizeRouteLabel(route: string): string {
   const trimmed = route.trim();
   if (!trimmed) {
@@ -188,6 +195,11 @@ export function observeDatabasePool(input: {
   databasePoolConnections.set({ pool: input.pool, state: 'total' }, input.total);
   databasePoolConnections.set({ pool: input.pool, state: 'idle' }, input.idle);
   databasePoolConnections.set({ pool: input.pool, state: 'waiting' }, input.waiting);
+}
+
+export function observeRedisConnection(connected: boolean): void {
+  redisConnectionState.set({ state: 'connected' }, connected ? 1 : 0);
+  redisConnectionState.set({ state: 'disconnected' }, connected ? 0 : 1);
 }
 
 export async function renderMetrics(): Promise<string> {

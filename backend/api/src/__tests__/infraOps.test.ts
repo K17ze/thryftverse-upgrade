@@ -4,6 +4,7 @@ import {
   metricsContentType,
   observeDatabasePool,
   observeHttpRequest,
+  observeRedisConnection,
   recordPaymentTransition,
   recordPushDelivery,
   renderMetrics,
@@ -49,6 +50,7 @@ test('metrics renderer exposes infra counters and content type', async () => {
     idle: 5,
     waiting: 1,
   });
+  observeRedisConnection(true);
 
   const payload = await renderMetrics();
   const contentType = metricsContentType();
@@ -57,5 +59,6 @@ test('metrics renderer exposes infra counters and content type', async () => {
   assert.match(payload, /thryftverse_push_deliveries_total/);
   assert.match(payload, /thryftverse_payment_transitions_total/);
   assert.match(payload, /thryftverse_database_pool_connections/);
+  assert.match(payload, /thryftverse_redis_connection_state/);
   assert.match(contentType, /text\/plain/);
 });
