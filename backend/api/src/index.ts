@@ -370,9 +370,23 @@ void app.register(cors, {
     'Stripe-Signature',
   ],
   credentials: false,
+  // Expose the correlation-id response header so browser clients can read it
+  // for log correlation / support. Set on every response via onRequest + onSend.
+  exposedHeaders: ['X-Request-Id'],
   maxAge: 86400,
 });
 
+// ── Rate-limiting strategy ──────────────────────────────────────────
+// Per 2026 August OWASP API security best practices, the global rate limit
+// below is a baseline only. Sensitive routes override it with stricter
+// per-route limits via `config.rateLimit`:
+//   • Auth routes (login, signup, password reset, OTP, 2FA) — 3-5 req/min
+//     to blunt brute-force, account-creation spam and email enumeration.
+//   • Write routes (create listing, place bid, send message) — 20-30 req/min
+//     to prevent spam while allowing legitimate burst activity.
+//   • Read routes (get listing, search) — rely on the looser global limit.
+//   • Webhook routes (Stripe et al.) — exempt (`rateLimit: false`) because
+//     providers send bursts of callbacks that must not be throttled.
 void app.register(rateLimit, {
   global: true,
   max: config.apiRateLimitMax,
