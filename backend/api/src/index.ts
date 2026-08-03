@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { shutdownTelemetry } from './telemetry.js';
+import closeWithGrace from 'close-with-grace';
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import * as Sentry from '@sentry/node';
 import type { Pool, PoolClient } from 'pg';
@@ -255,6 +256,9 @@ const app = Fastify({
   maxRequestsPerSocket: 200,
   // Trust X-Forwarded-For from Railway / reverse proxy so request.ip is correct.
   trustProxy: true,
+  // Immediately close idle keep-alive connections during shutdown so they
+  // don't hang the process while we wait for in-flight requests to drain.
+  forceCloseConnections: 'idle',
 });
 
 if (config.sentryDsn) {
@@ -11001,6 +11005,39 @@ app.get('/health', async () => {
     now,
     redis: redisPing,
   };
+});
+
+// Liveness — just confirms the process is alive (no dependency checks).
+app.get('/health/live', async () => ({ ok: true, service: 'thryftverse-api', timestamp: new Date().toISOString() }));
+
+// Readiness — checks all dependencies. Returns 503 if any are down.
+app.get('/health/ready', async (_request, reply) => {
+  const checks: Record<string, string> = {};
+  let allHealthy = true;
+
+  try {
+    const result = await db.query('SELECT 1');
+    if (result.rowCount !== null) checks.database = 'ok';
+    else { checks.database = 'degraded'; allHealthy = false; }
+  } catch {
+    checks.database = 'down';
+    allHealthy = false;
+  }
+
+  try {
+    const pong = await redis?.ping();
+    checks.redis = pong === 'PONG' ? 'ok' : 'degraded';
+    if (pong !== 'PONG') allHealthy = false;
+  } catch {
+    checks.redis = 'down';
+    allHealthy = false;
+  }
+
+  const body = { ok: allHealthy, service: 'thryftverse-api', checks, timestamp: new Date().toISOString() };
+  if (!allHealthy) {
+    reply.code(503);
+  }
+  return body;
 });
 
 app.get('/metrics', async (request, reply) => {
@@ -45986,6 +46023,32 @@ const start = async () => {
     } catch (error) {
       app.log.warn({ err: error }, 'AI deploy readiness check failed');
     }
+
+    // ── Graceful shutdown ────────────────────────────────────────────────
+    // Kubernetes sends SIGTERM, waits terminationGracePeriodSeconds (default 30s),
+    // then SIGKILL. We set the delay slightly lower (25s) to ensure clean exit.
+    // Fastify's app.close() stops accepting new connections and waits for
+    // in-flight requests to finish, then runs onClose hooks.
+    app.addHook('onClose', async () => {
+      app.log.info('Closing database connections...');
+      try { await closeDb(); } catch (e) { app.log.error({ err: e }, 'Error closing DB'); }
+      app.log.info('Closing Redis connections...');
+      try { await redis?.quit(); } catch (e) { app.log.error({ err: e }, 'Error closing Redis'); }
+    });
+
+    closeWithGrace({ delay: 25_000 }, async ({ signal, err }) => {
+      if (err) {
+        app.log.error({ err }, 'Server closing due to error');
+      } else {
+        app.log.info({ signal }, 'Server closing due to signal');
+      }
+      // app.close() stops accepting new connections and waits for in-flight
+      // requests. onClose hooks will close DB and Redis connections.
+      await app.close();
+      // Explicitly close DB pool in case onClose hook didn't fire
+      try { await closeDb(); } catch {}
+      try { await redis?.quit(); } catch {}
+    });
 
     await app.listen({ port: config.port, host: '0.0.0.0' });
     app.log.info(`API running on :${config.port}`);
