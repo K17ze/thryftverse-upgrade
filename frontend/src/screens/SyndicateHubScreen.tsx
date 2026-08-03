@@ -21,6 +21,7 @@ import { useToast } from '../context/ToastContext';
 import { useBackendData } from '../context/BackendDataContext';
 import { Radius, Space, Type, Typography } from '../theme/designTokens';
 import { haptics } from '../utils/haptics';
+import { getCategoryFocalPoint } from '../utils/media';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import {
@@ -98,14 +99,6 @@ const SECTION_TITLES: Record<HubSegment, string> = {
 
 function normalizeInitialSegment(value: 'active' | 'new_issues' | 'watchlist' | undefined): HubSegment {
   return value === 'new_issues' || value === 'watchlist' ? value : 'active';
-}
-
-function getFocalPoint(category: string): { x: number; y: number } {
-  const normalized = category.toLowerCase();
-  if (normalized.includes('vehicle') || normalized.includes('car')) return { x: 0.5, y: 0.58 };
-  if (normalized.includes('bag') || normalized.includes('shoe')) return { x: 0.5, y: 0.56 };
-  if (normalized.includes('watch') || normalized.includes('jewel') || normalized.includes('art')) return { x: 0.5, y: 0.5 };
-  return { x: 0.5, y: 0.46 };
 }
 
 function getStatus(asset: HubAsset): CoOwnAssetStatus {
@@ -349,7 +342,7 @@ export default function CoOwnHubScreen() {
       allocatedPct,
       statusLabel: getStatusLabel(asset),
       status: getStatus(asset),
-      focalPoint: getFocalPoint(asset.category),
+      focalPoint: getCategoryFocalPoint(asset.category),
     };
   }), [format1ze, formatLocal, highlightAssets]);
 
@@ -410,7 +403,7 @@ export default function CoOwnHubScreen() {
         gainLossLabel={costBasisGbp > 0 ? `${sign}${format1ze(Math.abs(gainLossGbp))}` : undefined}
         gainLossPct={gainLossPct}
         portfolioWeightPct={portfolioWeightPct}
-        focalPoint={getFocalPoint(item.category)}
+        focalPoint={getCategoryFocalPoint(item.category)}
         onPress={() => navigation.navigate('AssetDetail', { assetId: item.id })}
       />
     );
@@ -650,7 +643,7 @@ export default function CoOwnHubScreen() {
               statusLabel={getStatusLabel(asset)}
               status={getStatus(asset)}
               isWatched={coOwnWatchlist.includes(asset.id)}
-              focalPoint={getFocalPoint(asset.category)}
+              focalPoint={getCategoryFocalPoint(asset.category)}
               onPress={() => navigation.navigate('AssetDetail', { assetId: asset.id })}
               onToggleWatch={() => toggleCoOwnWatch(asset.id)}
             />

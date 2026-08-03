@@ -269,7 +269,7 @@ export default function CreateAuctionScreen() {
               title="No listings available"
               subtitle="Create a listing first to launch an auction."
               ctaLabel="Create Listing"
-              onCtaPress={() => (navigation as any).navigate('Sell')}
+              onCtaPress={() => navigation.navigate('Sell')}
             />
           </Reanimated.View>
         ) : (
@@ -460,7 +460,7 @@ export default function CreateAuctionScreen() {
                         </Body>
                         {startingBidInput && (
                           <Text style={styles.termsIzeText}>
-                            {formatIzeAmount(toIze(Number(startingBidInput), currencyCode as any, goldRates))}
+                            {formatIzeAmount(toIze(Number(startingBidInput), currencyCode, goldRates))}
                           </Text>
                         )}
                       </View>
@@ -473,7 +473,7 @@ export default function CreateAuctionScreen() {
                         </Body>
                         {buyNowEnabled && buyNowInput && (
                           <Text style={styles.termsIzeText}>
-                            {formatIzeAmount(toIze(Number(buyNowInput), currencyCode as any, goldRates))}
+                            {formatIzeAmount(toIze(Number(buyNowInput), currencyCode, goldRates))}
                           </Text>
                         )}
                       </View>
@@ -586,7 +586,7 @@ export default function CreateAuctionScreen() {
                   <Body style={styles.termsValue}>{resultData.startingBid}</Body>
                   {startingBidInput && (
                     <Text style={styles.termsIzeText}>
-                      {formatIzeAmount(toIze(Number(startingBidInput), currencyCode as any, goldRates))}
+                      {formatIzeAmount(toIze(Number(startingBidInput), currencyCode, goldRates))}
                     </Text>
                   )}
                 </View>
@@ -598,7 +598,7 @@ export default function CreateAuctionScreen() {
                     <Body style={styles.termsValue}>{resultData.buyNow}</Body>
                     {buyNowInput && (
                       <Text style={styles.termsIzeText}>
-                        {formatIzeAmount(toIze(Number(buyNowInput), currencyCode as any, goldRates))}
+                        {formatIzeAmount(toIze(Number(buyNowInput), currencyCode, goldRates))}
                       </Text>
                     )}
                   </View>
