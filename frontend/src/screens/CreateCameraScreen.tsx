@@ -112,7 +112,7 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
     }
     Animated.spring(modeIndicatorX, {
       toValue: xOffset,
-      useNativeDriver: true,
+      useNativeDriver: false,
       tension: 80,
       friction: 10,
     }).start();
