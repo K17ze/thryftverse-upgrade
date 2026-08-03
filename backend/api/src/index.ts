@@ -243,6 +243,18 @@ import {
 const app = Fastify({
   logger: true,
   rewriteUrl: (request) => normalizeVersionedUrl(request.url ?? '/').url,
+  // ── Server-level DoS hardening (2026 August Fastify security best practices) ──
+  // 1 MB global body limit. The rawBody parser below raises this to 2 MB for
+  // webhook routes that need to verify larger signed payloads.
+  bodyLimit: 1 * 1024 * 1024,
+  // Kill slow-client (Slowloris) connections after 60 s of inactivity.
+  connectionTimeout: 60_000,
+  // Keep-alive slightly above connectionTimeout to avoid connection-reset churn.
+  keepAliveTimeout: 65_000,
+  // Cap requests per socket to prevent request flooding on a single connection.
+  maxRequestsPerSocket: 200,
+  // Trust X-Forwarded-For from Railway / reverse proxy so request.ip is correct.
+  trustProxy: true,
 });
 
 if (config.sentryDsn) {
@@ -304,6 +316,24 @@ void app.register(rateLimit, {
   timeWindow: config.apiRateLimitWindow,
   redis,
   nameSpace: 'thryftverse:rate-limit',
+  // IPv6-safe key generator — fixes GHSA-grpc-p53c-r64v where IPv6 address
+  // rotation bypasses rate limits. We bucket by the /64 prefix (first 4
+  // groups) so rotated addresses from the same /64 are counted together.
+  keyGenerator: (request) => {
+    const ip = request.ip;
+    // Normalize IPv6 — strip the interface suffix and lowercase so rotated
+    // IPv6 addresses from the same /64 are bucketed together.
+    // See GHSA-grpc-p53c-r64v: @fastify/rate-limit <= 11.1.0 was vulnerable.
+    if (ip.includes(':')) {
+      const base = ip.split('%')[0].toLowerCase();
+      const groups = base.split(':');
+      if (groups.length >= 4) {
+        return groups.slice(0, 4).join(':');
+      }
+      return base;
+    }
+    return ip;
+  },
 });
 
 // ── Body size limit ──────────────────────────────────────────────────
@@ -12222,6 +12252,9 @@ function toPublicProfilePayload(row: ProfileUserRow) {
 app.post(
   '/auth/signup',
   {
+    // Auth routes only accept email/username/password — cap at 4 KB to
+    // prevent oversized auth payloads from consuming server resources.
+    bodyLimit: 4096,
     config: {
       rateLimit: {
         max: 12,
@@ -12296,6 +12329,9 @@ app.post(
 app.post(
   '/auth/login',
   {
+    // Auth routes only accept email/password — cap at 4 KB to
+    // prevent oversized auth payloads from consuming server resources.
+    bodyLimit: 4096,
     config: {
       rateLimit: {
         max: 20,
