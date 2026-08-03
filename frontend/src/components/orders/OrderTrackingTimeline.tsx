@@ -31,7 +31,7 @@ export function OrderTrackingTimeline({ entries, warningText }: Props) {
       ) : null}
       {entries.map((entry, index) => {
         const isLast = index === entries.length - 1;
-        const iconName =
+        const iconName: React.ComponentProps<typeof Ionicons>['name'] =
           entry.state === 'failure'
             ? 'close-circle'
             : entry.state === 'completed'
@@ -51,7 +51,7 @@ export function OrderTrackingTimeline({ entries, warningText }: Props) {
         return (
           <View key={entry.id} style={styles.entryRow}>
             <View style={styles.leftCol}>
-              <Ionicons name={iconName as any} size={20} color={iconColor} />
+              <Ionicons name={iconName} size={20} color={iconColor} />
               {!isLast ? (
                 <View
                   style={[

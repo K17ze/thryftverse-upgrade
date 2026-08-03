@@ -19,6 +19,7 @@ import {
 } from '../../utils/currencyAuthoringFlows';
 import { toIze, formatIzeAmount } from '../../utils/currency';
 import { createStableId } from '../../utils/createStableId';
+import { haptics } from '../../utils/haptics';
 import type { SupportedCurrencyCode } from '../../constants/currencies';
 import type { GoldRates } from '../../utils/currency';
 import type { AuctionDetailResponse } from '../../services/marketApi';
@@ -271,6 +272,7 @@ export function BidSheet({
       // Submit the validated local variable, not stale state
       await onSubmitBid(validatedGbpAmount, idempotencyKeyRef.current);
       setStage('success');
+      haptics.success();
     } catch (err) {
       const parsed = parseApiError(err, 'Unable to place bid');
       const txError = mapApiErrorToTransactionError(

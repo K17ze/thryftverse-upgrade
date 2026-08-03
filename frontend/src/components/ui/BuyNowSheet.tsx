@@ -22,6 +22,7 @@ import {
 import { parseApiError } from '../../lib/apiClient';
 import { createStableId } from '../../utils/createStableId';
 import { toIze, formatAuctionIze } from '../../utils/currency';
+import { haptics } from '../../utils/haptics';
 import type { SupportedCurrencyCode } from '../../constants/currencies';
 import type { AuctionDetailResponse, BuyNowResult } from '../../services/marketApi';
 
@@ -182,6 +183,7 @@ export function BuyNowSheet({
         throw new Error('The response did not confirm the Buy Now winning bid. Please try again.');
       }
       setStage('success');
+      haptics.success();
     } catch (err) {
       const parsed = parseApiError(err, 'Unable to confirm Buy Now');
       const txError = mapApiErrorToTransactionError(

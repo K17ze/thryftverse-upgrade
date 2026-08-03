@@ -297,7 +297,7 @@ export default function BuyoutScreen() {
             />
             <AppButton
               title={submitting ? 'Submitting…' : 'Submit offer'}
-              onPress={() => { haptics.tap(); void handleCreateBuyoutOffer(); }}
+              onPress={() => { haptics.press(); void handleCreateBuyoutOffer(); }}
               variant="primary"
               size="lg"
               disabled={submitting || !offerPrice}

@@ -19,7 +19,7 @@ function formatDateLabel(createdAt: string): string {
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
-function iconForType(type: string, lineType: string) {
+function iconForType(type: string, lineType: string): React.ComponentProps<typeof Ionicons>['name'] {
   if (lineType.includes('refund') || type === 'refund') return 'refresh-outline';
   if (lineType.includes('withdrawal') || type === 'withdrawal') return 'arrow-up-circle-outline';
   if (lineType.includes('seller_payable') || type === 'sale') return 'trending-up';
@@ -114,7 +114,7 @@ export default function BalanceHistoryScreen({ navigation }: Props) {
                 >
                   <View style={styles.txRow}>
                     <View style={[styles.txIcon, { backgroundColor: colorForType(tx.type, tx.lineType, colors) + '22' }]}>
-                      <Ionicons name={iconForType(tx.type, tx.lineType) as any} size={18} color={colorForType(tx.type, tx.lineType, colors)} />
+                      <Ionicons name={iconForType(tx.type, tx.lineType)} size={18} color={colorForType(tx.type, tx.lineType, colors)} />
                     </View>
                     <View style={styles.txInfo}>
                       <Text style={styles.txLabel}>{tx.lineType.replace(/_/g, ' ')}</Text>

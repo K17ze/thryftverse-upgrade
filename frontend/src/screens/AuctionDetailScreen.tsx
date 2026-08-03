@@ -19,6 +19,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useConnectivity } from '../hooks/useConnectivity';
+import { haptics } from '../utils/haptics';
 import { useCurrencyContext } from '../context/CurrencyContext';
 import { parseApiError } from '../lib/apiClient';
 import { Meta, BodyEmphasis, Headline } from '../components/ui/Text';
@@ -1191,10 +1192,13 @@ export default function AuctionDetailScreen() {
                 label: stateAction.primary.label,
                 onPress: () => {
                   if (primaryType === 'placeBid' || primaryType === 'increaseBid' || primaryType === 'bidAgain') {
+                    haptics.press();
                     openBidSheet();
                   } else if (primaryType === 'watchAuction') {
+                    haptics.tap();
                     void handleToggleWatch();
                   } else if (primaryType === 'viewSimilar') {
+                    haptics.tap();
                     navigation.navigate('MainTabs', { screen: 'Explore' });
                   }
                 },
@@ -1210,7 +1214,7 @@ export default function AuctionDetailScreen() {
                       // now". Price stays above buttons or inside the
                       // transaction surface, not in the button label.
                       label: isBuyNowLoading ? 'Processing…' : 'Buy now',
-                      onPress: openBuyNowSheet,
+                      onPress: () => { haptics.press(); openBuyNowSheet(); },
                       disabled: isBuyNowLoading,
                       loading: isBuyNowLoading,
                       accessibilityLabel: `Buy now for ${formatFromFiat(auction.buyNowPriceGbp ?? 0, 'GBP')}`,

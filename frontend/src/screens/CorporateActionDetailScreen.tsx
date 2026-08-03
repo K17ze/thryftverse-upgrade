@@ -428,7 +428,7 @@ export default function CorporateActionDetailScreen() {
                 {(['for', 'against', 'abstain'] as const).map((v) => {
                   const label = v === 'for' ? 'For' : v === 'against' ? 'Against' : 'Abstain';
                   const variant = v === 'for' ? 'primary' : 'secondary';
-                  const icon = v === 'for' ? 'thumbs-up-outline' : v === 'against' ? 'thumbs-down-outline' : 'remove-circle-outline';
+                  const icon: React.ComponentProps<typeof Ionicons>['name'] = v === 'for' ? 'thumbs-up-outline' : v === 'against' ? 'thumbs-down-outline' : 'remove-circle-outline';
                   return (
                     <AppButton
                       key={v}
@@ -437,7 +437,7 @@ export default function CorporateActionDetailScreen() {
                       variant={variant}
                       size="sm"
                       disabled={submittingVote}
-                      icon={<Ionicons name={icon as any} size={16} color={variant === 'primary' ? '#fff' : colors.textPrimary} />}
+                      icon={<Ionicons name={icon} size={16} color={variant === 'primary' ? colors.textInverse : colors.textPrimary} />}
                       style={{ flex: 1 }}
                     />
                   );

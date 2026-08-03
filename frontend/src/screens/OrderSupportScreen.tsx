@@ -35,7 +35,15 @@ import { parseApiError } from '../lib/apiClient';
 
 type Props = StackScreenProps<RootStackParamList, 'OrderSupport'>;
 
-const ALL_SUPPORT_TOPICS = [
+interface SupportTopic {
+  id: string;
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  label: string;
+  description: string;
+  requiresStatus: string[] | null;
+}
+
+const ALL_SUPPORT_TOPICS: SupportTopic[] = [
   { id: 'not_received', icon: 'cube-outline', label: 'Item not received', description: 'My order has not arrived within the expected timeframe.', requiresStatus: ['shipped', 'delivered'] },
   { id: 'not_as_described', icon: 'alert-circle-outline', label: 'Not as described', description: 'The item condition, size, or authenticity does not match the listing.', requiresStatus: ['delivered'] },
   { id: 'damaged', icon: 'bandage-outline', label: 'Item arrived damaged', description: 'The item was damaged during shipping or arrived broken.', requiresStatus: ['delivered'] },
@@ -237,7 +245,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
                     <View style={[styles.topicRow, isActive && styles.topicRowActive]}>
                       <View style={[styles.topicIcon, isActive && styles.topicIconActive]}>
                         <Ionicons
-                          name={topic.icon as any}
+                          name={topic.icon}
                           size={20}
                           color={isActive ? colors.textInverse : colors.textSecondary}
                         />

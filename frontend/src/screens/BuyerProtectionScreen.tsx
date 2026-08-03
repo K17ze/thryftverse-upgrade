@@ -11,11 +11,11 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   RefreshControl,
   Alert,
   TextInput,
 } from 'react-native';
+import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -164,7 +164,7 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
 
   return (
     <FlagshipScreen header={<FlagshipHeader title="Buyer Protection" onBack={() => navigation.goBack()} />}>
-      <ScrollView
+      <KeyboardAwareScrollView
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.textSecondary} />}
         showsVerticalScrollIndicator={false}
@@ -277,6 +277,8 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
                   placeholder="e.g. Item not as described"
                   placeholderTextColor={colors.textMuted}
                   maxLength={120}
+                  accessibilityLabel="Claim reason"
+                  accessibilityHint="Briefly describe the reason for your claim"
                 />
 
                 <Text style={styles.inputLabel}>Description</Text>
@@ -290,6 +292,8 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
                   numberOfLines={4}
                   maxLength={2000}
                   textAlignVertical="top"
+                  accessibilityLabel="Claim description"
+                  accessibilityHint="Describe the issue in detail, up to 2000 characters"
                 />
 
                 <View style={styles.claimFormActions}>
@@ -315,7 +319,7 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
         )}
 
         <View style={{ height: 40 }} />
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </FlagshipScreen>
   );
 }

@@ -1263,8 +1263,20 @@ export default function CheckoutScreen() {
 
         <View style={[styles.sectionDivider, t.sectionDivider]} />
 
-        {/* 6. Price breakdown */}
+        {/* 5b. Buyer protection strip — BEFORE price breakdown per Design.md:
+            "Trust information must appear before the irreversible payment step."
+            2026 research (Baymard): trust badges near the payment CTA lift
+            conversion up to 32% vs footer placement. Placing this above the
+            order summary ensures the user sees escrow protection before
+            reviewing costs and tapping Pay. */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
+        <View style={styles.protectionStripWrap}>
+          <BuyerProtectionStrip compact />
+        </View>
+        </Reanimated.View>
+
+        {/* 6. Price breakdown */}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
         <View style={[styles.priceBreakdownCard, t.priceBreakdownCard]}>
           <View style={styles.priceBreakdownHeader}>
             <Ionicons name="receipt-outline" size={14} color={colors.textMuted} />
@@ -1330,13 +1342,6 @@ export default function CheckoutScreen() {
         </View>
         </Reanimated.View>
 
-        {/* 6b. Buyer protection strip */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
-        <View style={styles.protectionStripWrap}>
-          <BuyerProtectionStrip compact />
-        </View>
-        </Reanimated.View>
-
         {/* 7. Transaction feedback */}
         {stage !== 'idle' ? (
           <View style={styles.feedbackRow}>
@@ -1393,7 +1398,7 @@ export default function CheckoutScreen() {
             accessibilityLabel={`Pay ${formatFromFiat(TOTAL, 'GBP')} with Apple Pay`}
             accessibilityState={{ disabled: !checkoutEligible || isInteractionLocked }}
           >
-            <Ionicons name="logo-apple" size={18} color="#ffffff" />
+            <Ionicons name="logo-apple" size={18} color={colors.textInverse} />
             <Text style={styles.applePayBtnText}>Pay</Text>
           </Pressable>
         )}
@@ -1467,11 +1472,13 @@ function PriceRow({ label, value, bold }: { label: string; value: string; bold?:
       fontSize: 14,
       fontFamily: Typography.family.medium,
       color: colors.textPrimary,
+      fontVariant: ['tabular-nums'] as any,
     },
     valueBold: {
       fontSize: 18,
       fontFamily: Typography.family.bold,
       color: colors.textPrimary,
+      fontVariant: ['tabular-nums'] as any,
     },
   }), [colors]);
 
