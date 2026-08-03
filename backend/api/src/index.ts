@@ -6164,7 +6164,10 @@ async function createGatewayPaymentIntent(input: {
         : undefined,
     };
 
-    const created = await stripe.paymentIntents.create(paymentIntentParams);
+    const created = await stripe.paymentIntents.create(
+      paymentIntentParams,
+      { idempotencyKey: `payment:${input.intentId}` }
+    );
 
     // Flag high-risk intents for manual review based on Radar fraud score.
     // Stripe attaches `radar_options.fraud_score` to the intent after creation.
@@ -6424,12 +6427,15 @@ async function createGatewayRefund(input: {
       apiVersion: '2024-06-20',
     });
 
-    const created = await stripe.refunds.create({
-      payment_intent: input.providerIntentRef,
-      amount: Math.max(1, Math.round(input.refundAmount * 100)),
-      reason: input.reason ? 'requested_by_customer' : undefined,
-      metadata: toStripeMetadata(refundMetadata),
-    });
+    const created = await stripe.refunds.create(
+      {
+        payment_intent: input.providerIntentRef,
+        amount: Math.max(1, Math.round(input.refundAmount * 100)),
+        reason: input.reason ? 'requested_by_customer' : undefined,
+        metadata: toStripeMetadata(refundMetadata),
+      },
+      { idempotencyKey: `refund:${input.intentId}` }
+    );
 
     return {
       providerRefundRef: created.id,
@@ -30826,13 +30832,16 @@ app.post('/users/:userId/stripe-connect/account', async (request, reply) => {
 
   try {
     // Create Stripe Connect account
-    const account = await stripe.accounts.create({
-      type: 'standard',
-      metadata: {
-        userId,
-        platform: 'thryftverse',
+    const account = await stripe.accounts.create(
+      {
+        type: 'standard',
+        metadata: {
+          userId,
+          platform: 'thryftverse',
+        },
       },
-    });
+      { idempotencyKey: `connect:${userId}` }
+    );
 
     // Store account reference
     await db.query(
@@ -34812,6 +34821,41 @@ app.post('/webhooks/:provider', async (request, reply) => {
 
   const event = verification.event;
   const expectedGateway = expectedGatewayIdForProvider(provider);
+
+  // ── Stripe webhook event-ID deduplication ──────────────────────────
+  // The 2026 Stripe Webhook Hardening Checklist requires explicit event-ID
+  // dedup. We insert the Stripe event ID into the webhook_events table
+  // before processing. If the insert returns zero rows (ON CONFLICT DO
+  // NOTHING), the event was already processed — return 200 OK immediately
+  // (idempotent). This is additive to the existing payment_webhook_events
+  // dedup inside the transaction below.
+  if (provider === 'stripe' && event.providerEventId) {
+    const payloadHash = crypto
+      .createHash('sha256')
+      .update(rawBody)
+      .digest('hex');
+    const dedupInsert = await db.query<{ id: number }>(
+      `
+        INSERT INTO webhook_events (event_id, event_type, provider, payload_hash)
+        VALUES ($1, $2, 'stripe', $3)
+        ON CONFLICT (event_id) DO NOTHING
+        RETURNING id
+      `,
+      [event.providerEventId, event.eventType, payloadHash]
+    );
+
+    if (!dedupInsert.rowCount) {
+      request.log.info(
+        { providerEventId: event.providerEventId, eventType: event.eventType },
+        'Stripe webhook event already processed (event-ID dedup)'
+      );
+      reply.code(200);
+      return {
+        ok: true,
+        duplicate: true,
+      };
+    }
+  }
 
   const client = await db.connect();
   try {
