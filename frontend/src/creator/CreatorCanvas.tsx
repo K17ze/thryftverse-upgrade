@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useEffect, useState } from 'react';
 import { View, Text, Image, StyleSheet, Pressable, Platform } from 'react-native';
+import { CachedImage } from '../components/CachedImage';
 import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Reanimated, {
@@ -80,10 +81,10 @@ export function CreatorCanvas({
     }
     if (canvas.background.type === 'image' && canvas.background.value) {
       return (
-        <Image
-          source={{ uri: canvas.background.value }}
+        <CachedImage
+          uri={canvas.background.value}
           style={StyleSheet.absoluteFill}
-          resizeMode="cover"
+          contentFit="cover"
         />
       );
     }

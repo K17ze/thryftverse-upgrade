@@ -18,7 +18,7 @@ import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { Listing } from '../data/mockData';
-import { isVideoUri } from '../utils/media';
+import { isVideoUri, getCategoryFocalPoint, FACE_FOCAL_POINT } from '../utils/media';
 import { Typography } from '../theme/designTokens';
 import { StaggeredItem } from './StaggeredGridEntrance';
 import { PressPresets } from '../hooks/usePremiumPressFeedback';
@@ -124,6 +124,7 @@ export function ProductCardV2({
             style={[styles.image, { aspectRatio }]}
             contentFit="cover"
             transition={300}
+            focalPoint={getCategoryFocalPoint(item.category)}
             onError={() => setImageFailed(true)}
           />
         )}
@@ -236,6 +237,7 @@ export function ProductCardV2({
                   uri={sellerAvatar}
                   style={styles.sellerAvatar}
                   contentFit="cover"
+                  focalPoint={FACE_FOCAL_POINT}
                 />
               ) : (
                 // Premium compact seller placeholder — keeps alignment and

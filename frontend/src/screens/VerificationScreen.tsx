@@ -55,6 +55,7 @@ const UK_COUNTRIES = ['GB', 'IE'];
 export default function VerificationScreen({ navigation }: Props) {
   const { show } = useToast();
   const { isOffline } = useConnectivity();
+  const reducedMotionEnabled = useReducedMotion();
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const currentUser = useStore((state) => state.currentUser);
@@ -257,7 +258,7 @@ export default function VerificationScreen({ navigation }: Props) {
       }
     >
       {/* ── STATUS CARD ── */}
-      <Reanimated.View entering={FadeInDown.duration(300)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <View style={[styles.statusCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={[styles.statusIconWrap, { backgroundColor: iconBgColor }]}>
             <Ionicons
@@ -278,7 +279,7 @@ export default function VerificationScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* ── VERIFICATION STEPS ── */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
         <SettingsSection title="Verification steps">
         <SettingsRow
           icon="mail-outline"

@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Typography } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
+import { FACE_FOCAL_POINT } from '../../utils/media';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Video, ResizeMode } from '../compat/Video';
 
@@ -145,6 +146,7 @@ export function FlagshipProfileMedia({
                 style={styles.avatarImage}
                 contentFit="cover"
                 transition={300}
+                focalPoint={FACE_FOCAL_POINT}
                 cacheBuster={cacheBuster}
               />
             ) : (

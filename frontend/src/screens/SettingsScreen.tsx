@@ -36,7 +36,7 @@ import { useAppTheme as useTheme } from '../theme/ThemeContext';
 type Props = StackScreenProps<RootStackParamList, 'Settings'>;
 
 interface DestinationMeta {
-  key: string;
+  key: keyof RootStackParamList;
   label: string;
   searchTerms: string;
   section: string;
@@ -181,12 +181,12 @@ export default function SettingsScreen({ navigation }: Props) {
     );
   }, [isSearching, q]);
 
-  const avatarUri = (currentUser as any)?.avatar || null;
-  const displayName = (currentUser as any)?.displayName ?? currentUser?.username ?? 'Not signed in';
+  const avatarUri = currentUser?.avatar || null;
+  const displayName = currentUser?.displayName ?? currentUser?.username ?? 'Not signed in';
   const username = currentUser?.username ?? '';
 
   // Security badges for identity card
-  const securityBadges: { icon: string; label: string; color: string }[] = [];
+  const securityBadges: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; color: string }[] = [];
   if (twoFactorEnabled) securityBadges.push({ icon: 'shield-checkmark', label: '2FA', color: colors.success });
   if (currentUser?.emailVerified) securityBadges.push({ icon: 'checkmark-circle', label: 'Verified', color: colors.success });
 
@@ -228,7 +228,7 @@ export default function SettingsScreen({ navigation }: Props) {
                 onPress={() => {
                   setSearchQuery('');
                   setSearchVisible(false);
-                  (navigation as any).navigate(dest.key);
+                  (navigation.navigate as (key: keyof RootStackParamList) => void)(dest.key);
                 }}
                 isFirst={i === 0}
                 isLast={i === (isSearching ? searchResults : ROUTE_METADATA).length - 1}
@@ -263,7 +263,7 @@ export default function SettingsScreen({ navigation }: Props) {
     >
       {/* ── IDENTITY HERO CARD — sole profile/account editor entrypoint ── */}
       <AnimatedPressable
-        onPress={() => (navigation as any).navigate('EditProfile')}
+        onPress={() => navigation.navigate('EditProfile', {})}
         activeOpacity={0.9}
         scaleValue={0.99}
         hapticFeedback="light"
@@ -293,7 +293,7 @@ export default function SettingsScreen({ navigation }: Props) {
                 <View style={styles.identityBadges}>
                   {securityBadges.map((badge, i) => (
                     <View key={i} style={[styles.identityBadge, { backgroundColor: `${badge.color}15` }]}>
-                      <Ionicons name={badge.icon as any} size={11} color={badge.color} />
+                      <Ionicons name={badge.icon} size={11} color={badge.color} />
                       <Text style={[styles.identityBadgeText, { color: badge.color }]}>{badge.label}</Text>
                     </View>
                   ))}

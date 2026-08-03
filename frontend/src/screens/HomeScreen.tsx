@@ -921,6 +921,7 @@ export default function HomeScreen() {
         ref={scrollRef}
         data={feedGridData}
         numColumns={2}
+        estimatedItemSize={gridTileWidth * 1.25 + 90}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.feedContent, { paddingTop: headerExpandedHeight + Space.sm }]}
         onScroll={scrollHandler}

@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Image, ActivityIndicator, Modal } from 'react-native';
+import { CachedImage } from '../CachedImage';
 import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
@@ -123,10 +124,10 @@ export function PosterFrameStrip({
                     {frame.mediaType === 'video' ? (
                       <>
                         {frame.thumbnailUri ? (
-                          <Image
-                            source={{ uri: frame.thumbnailUri }}
+                          <CachedImage
+                            uri={frame.thumbnailUri}
                             style={StyleSheet.absoluteFill}
-                            resizeMode="cover"
+                            contentFit="cover"
                           />
                         ) : null}
                         <View style={[styles.videoDarkOverlay, !frame.thumbnailUri && StyleSheet.absoluteFill]}>
@@ -139,10 +140,10 @@ export function PosterFrameStrip({
                         </View>
                       </>
                     ) : (
-                      <Image
-                        source={{ uri: frame.mediaUri }}
+                      <CachedImage
+                        uri={frame.mediaUri}
                         style={StyleSheet.absoluteFill}
-                        resizeMode="cover"
+                        contentFit="cover"
                       />
                     )}
                   </View>
