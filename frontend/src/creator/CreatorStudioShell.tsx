@@ -795,19 +795,19 @@ const styles = StyleSheet.create({
   // ── Page progress dots (Instagram-style segments) ──
   pageDotsRow: {
     flexDirection: 'row',
-    gap: 4,
+    gap: 3,
     paddingHorizontal: Space.xs,
-    paddingBottom: Space.sm,
+    paddingBottom: Space.sm + 2,
   },
   pageDotSegment: {
     flex: 1,
-    height: 24,
-    borderRadius: 12,
+    height: 22,
+    borderRadius: 11,
     justifyContent: 'center',
   },
   pageDotFill: {
-    height: 4,
-    borderRadius: 2,
+    height: 3.5,
+    borderRadius: 1.75,
   },
   // ── Top bar row ──
   topBarRow: {
