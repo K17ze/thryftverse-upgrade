@@ -59,7 +59,7 @@ export function AuctionCountdown({ text, urgent, compact, progress, stage, showP
   const isFinalOrUrgent = resolvedStage === 'final' || resolvedStage === 'urgent';
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} accessible={false}>
       <View style={styles.row}>
         <Ionicons
           name={resolvedStage === 'ended' ? 'checkmark-done-outline' : 'time-outline'}

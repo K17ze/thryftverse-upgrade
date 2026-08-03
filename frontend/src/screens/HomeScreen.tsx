@@ -789,21 +789,19 @@ export default function HomeScreen() {
                   </Text>
                   <View
                     style={isUnwatched ? styles.posterFreshDot : styles.posterSeenDot}
-                    accessible
-                    accessibilityLabel={isUnwatched ? 'New poster' : 'Seen poster'}
-                    accessibilityRole="image"
+                    accessible={false}
                   />
                 </View>
 
                 {story.totalFrameCount > 1 && (
-                  <View style={styles.frameCountBadge}>
+                  <View style={styles.frameCountBadge} accessible={false}>
                     <Ionicons name="layers" size={10} color={colors.textInverse} />
                     <Text style={styles.frameCountBadgeText}>{story.totalFrameCount}</Text>
                   </View>
                 )}
 
                 {showUnwatchedBadge && (
-                  <View style={styles.unwatchedBadge}>
+                  <View style={styles.unwatchedBadge} accessible={false}>
                     <Text style={styles.unwatchedBadgeText}>{unwatchedCount} new</Text>
                   </View>
                 )}
@@ -985,7 +983,7 @@ export default function HomeScreen() {
             >
               <Ionicons name="notifications-outline" size={22} color={colors.textPrimary} />
               {notificationCount > 0 && (
-                <View style={styles.notificationBadge} pointerEvents="none">
+                <View style={styles.notificationBadge} pointerEvents="none" accessible={false}>
                   <Text style={styles.notificationBadgeText}>
                     {notificationCount > 99 ? '99+' : notificationCount}
                   </Text>

@@ -1808,6 +1808,13 @@ export default function ChatScreen({ navigation, route }: Props) {
             onPress={() => toggleMessageSelection(msg.id)}
             activeOpacity={0.7}
             hapticFeedback="light"
+            accessibilityRole="button"
+            accessibilityLabel={
+              selectedMessageIds.has(msg.id)
+                ? "Deselect message"
+                : "Select message"
+            }
+            accessibilityState={{ selected: selectedMessageIds.has(msg.id) }}
           >
             {selectedMessageIds.has(msg.id) ? (
               <Ionicons name="checkmark" size={14} color={colors.textInverse} />
@@ -2116,6 +2123,9 @@ export default function ChatScreen({ navigation, route }: Props) {
               activeOpacity={0.7}
               scaleValue={0.92}
               hapticFeedback="light"
+              accessibilityRole="button"
+              accessibilityLabel="Exit selection mode"
+              accessibilityHint="Closes the message selection toolbar"
             >
               <Ionicons
                 name="close-outline"
@@ -2123,7 +2133,10 @@ export default function ChatScreen({ navigation, route }: Props) {
                 color={colors.textPrimary}
               />
             </AnimatedPressable>
-            <Caption color={colors.textMuted}>
+            <Caption
+              color={colors.textMuted}
+              accessibilityLiveRegion="polite"
+            >
               {selectedMessageIds.size} selected
             </Caption>
             <AnimatedPressable
@@ -2251,7 +2264,10 @@ export default function ChatScreen({ navigation, route }: Props) {
                       size={16}
                       color={colors.textSecondary}
                     />
-                    <Text style={styles.offlineBannerText}>
+                    <Text
+                      style={styles.offlineBannerText}
+                      accessibilityLiveRegion="polite"
+                    >
                       You are offline. Messages will be sent when you reconnect.
                     </Text>
                   </View>
@@ -2259,7 +2275,10 @@ export default function ChatScreen({ navigation, route }: Props) {
 
                 {isSlotVisible(resolution, 'undoBanner') && recentlyDeleted.length > 0 && (
                   <View style={styles.undoBanner}>
-                    <Text style={styles.undoBannerText}>
+                    <Text
+                      style={styles.undoBannerText}
+                      accessibilityLiveRegion="polite"
+                    >
                       {recentlyDeleted.length} message
                       {recentlyDeleted.length === 1 ? "" : "s"} deleted
                     </Text>
@@ -2268,6 +2287,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                       activeOpacity={0.7}
                       scaleValue={0.95}
                       hapticFeedback="light"
+                      accessibilityRole="button"
                       accessibilityLabel="Undo message deletion"
                     >
                       <Text style={styles.undoBannerAction}>Undo</Text>

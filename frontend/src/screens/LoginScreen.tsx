@@ -273,7 +273,13 @@ export default function LoginScreen() {
 
       <View style={styles.header}>
         {canGoBack ? (
-          <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()}>
+          <AnimatedPressable
+            style={styles.backBtn}
+            onPress={() => navigation.goBack()}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            accessibilityHint="Returns to the previous screen"
+          >
             <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </AnimatedPressable>
         ) : (
@@ -375,6 +381,9 @@ export default function LoginScreen() {
               <AnimatedPressable
                 style={styles.forgotBtn}
                 onPress={() => navigation.navigate('ForgotPassword')}
+                accessibilityRole="button"
+                accessibilityLabel="Forgot password"
+                accessibilityHint="Opens password recovery flow"
               >
                 <Text style={styles.forgotText}>Forgot password?</Text>
               </AnimatedPressable>
@@ -449,6 +458,7 @@ export default function LoginScreen() {
                 exiting={statusExitAnimation}
                 layout={layoutAnimation}
                 style={styles.infoText}
+                accessibilityLiveRegion="polite"
               >
                 {infoMsg}
               </Reanimated.Text>
@@ -460,6 +470,7 @@ export default function LoginScreen() {
                 exiting={statusExitAnimation}
                 layout={layoutAnimation}
                 style={styles.errorText}
+                accessibilityLiveRegion="assertive"
               >
                 {errorMsg}
               </Reanimated.Text>
@@ -481,7 +492,13 @@ export default function LoginScreen() {
 
             <View style={styles.switchRow}>
               <Text style={styles.switchText}>New to Thryftverse?</Text>
-              <AnimatedPressable onPress={() => navigation.navigate('SignUp')} activeOpacity={0.8}>
+              <AnimatedPressable
+                onPress={() => navigation.navigate('SignUp')}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Create account"
+                accessibilityHint="Opens the sign-up screen"
+              >
                 <Text style={styles.switchLink}>Create account</Text>
               </AnimatedPressable>
             </View>

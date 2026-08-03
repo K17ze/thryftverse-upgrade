@@ -84,6 +84,7 @@ export function ListingPublishFooter({
               publicationStage === 'failed_recoverable' && styles.feedbackTextError,
             ]}
             numberOfLines={2}
+            accessibilityLiveRegion="polite"
           >
             {errorMsg && publicationStage === 'failed_recoverable' ? errorMsg : stageText}
           </Text>
