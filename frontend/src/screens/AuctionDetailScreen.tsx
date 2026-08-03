@@ -22,6 +22,7 @@ import { useConnectivity } from '../hooks/useConnectivity';
 import { haptics } from '../utils/haptics';
 import { useCurrencyContext } from '../context/CurrencyContext';
 import { parseApiError } from '../lib/apiClient';
+import { requestPushPermissionOnce } from '../lib/pushPermission';
 import { Meta, BodyEmphasis, Headline } from '../components/ui/Text';
 import { toIze, formatIzeAmount } from '../utils/currency';
 import { Space, Radius, Typography, Type, DockConstants } from '../theme/designTokens';
@@ -133,6 +134,11 @@ export default function AuctionDetailScreen() {
   const [isSubmittingBid, setIsSubmittingBid] = React.useState(false);
   const [isBuyNowLoading, setIsBuyNowLoading] = React.useState(false);
   const [watchToggling, setWatchToggling] = React.useState(false);
+  // Per App Store / Google Play 2026 guidelines, push permission is requested
+  // only after a meaningful user action — here, after the user watches/favorites
+  // an auction for the first time. The ref guards within-session re-prompting;
+  // requestPushPermissionOnce persists an AsyncStorage flag across sessions.
+  const favoritePushAskedRef = React.useRef(false);
   const [isTransitionRefreshing, setIsTransitionRefreshing] = React.useState(false);
   const [bidHistorySheetVisible, setBidHistorySheetVisible] = React.useState(false);
   const [rulesSheetVisible, setRulesSheetVisible] = React.useState(false);
@@ -243,6 +249,12 @@ export default function AuctionDetailScreen() {
       } else {
         await addToWatchlist(auctionId);
         show('Added to watchlist', 'info');
+        // Contextual push permission prompt — ask once after the user adds an
+        // item to their watchlist. Best-effort; never blocks the watch flow.
+        if (!favoritePushAskedRef.current) {
+          favoritePushAskedRef.current = true;
+          requestPushPermissionOnce('favorite').catch(() => undefined);
+        }
       }
     } catch {
       setAuction({ ...auction, isWatched: wasWatching });

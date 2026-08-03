@@ -195,3 +195,18 @@ vi.mock('expo-secure-store', () => ({
   setItemAsync: vi.fn(() => Promise.resolve()),
   deleteItemAsync: vi.fn(() => Promise.resolve()),
 }));
+
+vi.mock('expo-notifications', () => ({
+  getPermissionsAsync: vi.fn(() =>
+    Promise.resolve({ status: 'granted', canAskAgain: true, expires: 'never', granted: true }),
+  ),
+  requestPermissionsAsync: vi.fn(() =>
+    Promise.resolve({ status: 'granted', canAskAgain: true, expires: 'never', granted: true }),
+  ),
+  setNotificationChannelAsync: vi.fn(() => Promise.resolve()),
+  AndroidImportance: { MAX: 'max', HIGH: 'high', DEFAULT: 'default', LOW: 'low', MIN: 'min' },
+  addNotificationReceivedListener: () => ({ remove: () => {} }),
+  addNotificationResponseReceivedListener: () => ({ remove: () => {} }),
+  getLastNotificationResponseAsync: vi.fn(() => Promise.resolve(null)),
+  setNotificationHandler: vi.fn(),
+}));

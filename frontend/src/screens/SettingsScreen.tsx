@@ -18,6 +18,11 @@ import {
 } from '../preferences/settingsPreferences';
 import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 import {
+  getPushPermissionStatus,
+  requestPushPermissionWithContext,
+  resetPushPermissionAskedFlag,
+} from '../lib/pushPermission';
+import {
   getThemePreferenceLabel,
   ThemePreference,
   updateThemePreference,
@@ -91,6 +96,24 @@ export default function SettingsScreen({ navigation }: Props) {
   const [languagePickerVisible, setLanguagePickerVisible] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [searchVisible, setSearchVisible] = React.useState(false);
+  const [pushPermissionGranted, setPushPermissionGranted] = React.useState<boolean | null>(null);
+  const [isTogglingPush, setIsTogglingPush] = React.useState(false);
+
+  // Read the current system push permission status on mount so the "Enable
+  // notifications" toggle reflects the real OS-level state.
+  React.useEffect(() => {
+    let mounted = true;
+    getPushPermissionStatus()
+      .then((status) => {
+        if (mounted) setPushPermissionGranted(status.status === 'granted');
+      })
+      .catch(() => {
+        if (mounted) setPushPermissionGranted(null);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const { themePreference, setThemePreference } = useAppTheme();
 
@@ -160,6 +183,35 @@ export default function SettingsScreen({ navigation }: Props) {
       }
     },
     [show]
+  );
+
+  const handleTogglePushPermission = React.useCallback(
+    async (enable: boolean) => {
+      if (enable) {
+        setIsTogglingPush(true);
+        try {
+          // Reset the contextual "asked" flag so the Settings toggle is an
+          // explicit, user-initiated re-enable that always prompts the OS.
+          await resetPushPermissionAskedFlag('settings');
+          const granted = await requestPushPermissionWithContext('settings');
+          setPushPermissionGranted(granted);
+          show(
+            granted ? 'Push notifications enabled' : 'Push notifications were denied. You can enable them in device settings.',
+            granted ? 'success' : 'info',
+          );
+        } catch {
+          show('Unable to update push notification permission.', 'error');
+        } finally {
+          setIsTogglingPush(false);
+        }
+      } else {
+        // The OS push permission cannot be revoked programmatically. Direct
+        // the user to the system settings screen where they can disable it.
+        show('Manage push notifications in your device settings.', 'info');
+        Linking.openSettings().catch(() => undefined);
+      }
+    },
+    [show],
   );
 
   const handleLogout = React.useCallback(async () => {
@@ -396,6 +448,14 @@ export default function SettingsScreen({ navigation }: Props) {
           title="Chat privacy"
           subtitle="Who can message you"
           onPress={() => navigation.navigate('ChatSettings')}
+        />
+        <SettingsRow
+          icon="notifications"
+          title="Enable notifications"
+          subtitle={pushPermissionGranted === null ? 'Permission unknown' : pushPermissionGranted ? 'Allowed' : 'Not allowed'}
+          toggleValue={pushPermissionGranted === true}
+          onToggle={(v) => void handleTogglePushPermission(v)}
+          disabled={isTogglingPush}
         />
         <SettingsRow
           icon="notifications-outline"
