@@ -27,6 +27,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { isPaymentMethodAllowed } from '../utils/capabilityPolicy';
 import { calculatePlatformChargeGbp } from '../utils/currencyAuthoringFlows';
 import { useBackendData } from '../context/BackendDataContext';
@@ -220,6 +221,7 @@ export default function CheckoutScreen() {
   const route = useRoute<RouteT>();
   const { itemId } = route.params;
   const { colors, isDark } = useAppTheme();
+  const reducedMotionEnabled = useReducedMotion();
   const { listings } = useBackendData();
 
   // Theme-aware color overrides for the static styles. The static
@@ -1150,7 +1152,7 @@ export default function CheckoutScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {/* 2. Product and seller summary */}
-        <Reanimated.View entering={FadeInDown.duration(300)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <CheckoutItemSummary
           title={item.title}
           imageUrl={getListingCoverUri(item.images, '')}
@@ -1254,7 +1256,7 @@ export default function CheckoutScreen() {
         <View style={[styles.sectionDivider, t.sectionDivider]} />
 
         {/* 6. Price breakdown */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
         <View style={[styles.priceBreakdownCard, t.priceBreakdownCard]}>
           <View style={styles.priceBreakdownHeader}>
             <Ionicons name="receipt-outline" size={14} color={colors.textMuted} />
@@ -1321,7 +1323,7 @@ export default function CheckoutScreen() {
         </Reanimated.View>
 
         {/* 6b. Buyer protection strip */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
         <View style={styles.protectionStripWrap}>
           <BuyerProtectionStrip compact />
         </View>

@@ -365,6 +365,14 @@ export default function MyBidsScreen() {
                 <SkeletonLoader key={i} width="100%" height={80} borderRadius={0} style={{ marginBottom: Space.sm }} />
               ))}
             </View>
+          ) : error ? (
+            <EmptyState
+              icon="cloud-offline-outline"
+              title="Couldn't load bids"
+              subtitle={error}
+              ctaLabel="Retry"
+              onCtaPress={() => { setError(null); setLoading(true); void fetchItems(filter); }}
+            />
           ) : (
             <EmptyState
               icon="hammer-outline"

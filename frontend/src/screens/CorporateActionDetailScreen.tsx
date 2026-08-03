@@ -397,7 +397,11 @@ export default function CorporateActionDetailScreen() {
               {/* My vote indicator — elevated badge */}
               {myVote && (
                 <View style={[styles.myVoteBadge, { backgroundColor: (myVote === 'for' ? colors.success : myVote === 'against' ? colors.danger : colors.textMuted) + '18' }]}>
-                  <Ionicons name="checkmark-circle" size={16} color={myVote === 'for' ? colors.success : myVote === 'against' ? colors.danger : colors.textMuted} />
+                  <Ionicons
+                    name={myVote === 'for' ? 'checkmark-circle' : myVote === 'against' ? 'close-circle' : 'ellipse-outline'}
+                    size={16}
+                    color={myVote === 'for' ? colors.success : myVote === 'against' ? colors.danger : colors.textMuted}
+                  />
                   <Text style={[styles.myVoteText, { color: myVote === 'for' ? colors.success : myVote === 'against' ? colors.danger : colors.textMuted }]}>
                     You voted {myVote}
                   </Text>

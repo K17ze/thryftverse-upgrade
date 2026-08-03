@@ -230,7 +230,7 @@ export type CreatorBackground = z.infer<typeof CreatorBackgroundSchema>;
 export const CreatorMetadataSchema = z.object({
   caption: z.string().max(500).default(''),
   title: z.string().max(120).default(''),
-  visibility: z.enum(['public', 'private']).default('public'),
+  visibility: z.enum(['public', 'closeFriends', 'private']).default('public'),
   allowReplies: z.boolean().default(true),
   allowReactions: z.boolean().default(true),
   expiresInHours: z.number().int().min(1).max(168).optional(),
@@ -282,7 +282,7 @@ export function migrateLookToDocument(params: {
   imageMediaUrl?: string;
   caption: string;
   tags: OutfitTag[];
-  visibility: 'public' | 'private';
+  visibility: 'public' | 'closeFriends' | 'private';
 }): CreatorDocument {
   const layers: CreatorLayer[] = [];
 

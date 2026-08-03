@@ -96,7 +96,7 @@ const SECTION_TITLES: Record<HubSegment, string> = {
   watchlist: 'Watchlist',
 };
 
-function normalizeInitialSegment(value: 'active' | 'auctions' | 'new_issues' | 'watchlist' | undefined): HubSegment {
+function normalizeInitialSegment(value: 'active' | 'new_issues' | 'watchlist' | undefined): HubSegment {
   return value === 'new_issues' || value === 'watchlist' ? value : 'active';
 }
 

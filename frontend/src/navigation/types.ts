@@ -39,7 +39,7 @@ export type RootStackParamList = {
     | undefined;
   MarketLedger: undefined;
   CoOwnHub: {
-    initialSegment?: 'active' | 'auctions' | 'new_issues' | 'watchlist';
+    initialSegment?: 'active' | 'new_issues' | 'watchlist';
   } | undefined;
   AssetDetail: { assetId: string };
   Trade: { assetId: string; side: 'buy' | 'sell'; limitPrice?: number };

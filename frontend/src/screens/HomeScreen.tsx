@@ -41,6 +41,7 @@ import { useTabScroll } from '../context/TabScrollContext';
 // Phase 3: Removed AnimatedBadge (badge clutter reduced)
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useHaptic } from '../hooks/useHaptic';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useBackendData } from '../context/BackendDataContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
@@ -399,6 +400,7 @@ export default function HomeScreen() {
   const notificationCount = useStore((state) => state.notificationCount);
   const { formatFromFiat } = useFormattedPrice();
   const haptic = useHaptic();
+  const reducedMotionEnabled = useReducedMotion();
   const { listings, source, isSyncing, lastError, refreshListings, loadMoreListings, hasMore, isLoadingMore } = useBackendData();
   const followingFeed = useFollowingFeed();
   const forYouFeed = useForYouFeed();
@@ -1013,7 +1015,7 @@ export default function HomeScreen() {
               renderExploreLoadingState()
             ) : feedGridData.length === 0 ? (
               feedMode === 'following' ? (
-                <Reanimated.View entering={FadeInDown.duration(300)} style={{ flex: 1 }}>
+                <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={{ flex: 1 }}>
                   <EmptyState
                     density="compact"
                     icon={followingFeed.hasFollowing ? 'pricetag-outline' : 'people-outline'}
@@ -1032,7 +1034,7 @@ export default function HomeScreen() {
                 // Premium empty state — backend returned zero items and we are not
                 // loading. Preserves the flagship layout instead of collapsing to
                 // a blank masonry. Distinct from the sync-error banner above.
-                <Reanimated.View entering={FadeInDown.duration(300)} style={{ flex: 1 }}>
+                <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={{ flex: 1 }}>
                   <EmptyState
                     density="compact"
                     icon="sparkles-outline"

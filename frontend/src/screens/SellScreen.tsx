@@ -38,6 +38,7 @@ import { ListingQualityMeter } from '../components/listing/ListingQualityMeter';
 import { calculateListingQuality } from '../utils/listingQuality';
 import { useListingAutofill } from '../hooks/useListingAutofill';
 import { useSoldComps } from '../hooks/useSoldComps';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useBackendData } from '../context/BackendDataContext';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 
@@ -173,6 +174,7 @@ export default function SellScreen() {
 
   const currency = useCurrencyPref();
   const currencySymbol = CURRENCIES[currency.currencyCode].symbol;
+  const reducedMotionEnabled = useReducedMotion();
 
   // AI autofill suggestions from first photo filename
   const autofillSuggestion = useListingAutofill(mediaDraftItems);
@@ -1024,7 +1026,7 @@ export default function SellScreen() {
           </Reanimated.View>
 
           {/* -- 5. MODE-SPECIFIC PRICING -- */}
-          <Reanimated.View entering={FadeInDown.duration(300).delay(60)} style={styles.sectionGroup}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)} style={styles.sectionGroup}>
             <Text style={[styles.sectionHeading, t.sectionHeading]}>Pricing</Text>
 
             {listingMode === 'sell_now' && (
@@ -1241,7 +1243,7 @@ export default function SellScreen() {
           </Reanimated.View>
 
           {/* -- 6. DESCRIPTION AND TAGS -- */}
-          <Reanimated.View entering={FadeInDown.duration(300).delay(120)} style={styles.sectionGroup}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)} style={styles.sectionGroup}>
             <Text style={[styles.sectionHeading, t.sectionHeading]}>Description</Text>
 
             <View style={styles.fieldGroup}>
@@ -1284,7 +1286,7 @@ export default function SellScreen() {
           </Reanimated.View>
 
           {/* -- 7. SHIPPING -- */}
-          <Reanimated.View entering={FadeInDown.duration(300).delay(180)} style={styles.sectionGroup}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)} style={styles.sectionGroup}>
             <Text style={[styles.sectionHeading, t.sectionHeading]}>Shipping</Text>
 
             <View style={styles.fieldGroup}>
@@ -1337,7 +1339,7 @@ export default function SellScreen() {
 
           {/* -- CO-OWN AUTHENTICATION MEDIA -- */}
           {listingMode === 'co_own' && (
-            <Reanimated.View entering={FadeInDown.duration(300).delay(240)} style={styles.sectionGroup}>
+            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(240)} style={styles.sectionGroup}>
               <Text style={[styles.sectionHeading, t.sectionHeading]}>Authentication photos</Text>
               <Text style={[styles.fieldHelper, t.fieldHelper]}>Attach proof-of-authenticity photos for investor confidence.</Text>
               {errors.authPhotos ? <Text style={[styles.fieldError, t.fieldError]}>{errors.authPhotos}</Text> : null}

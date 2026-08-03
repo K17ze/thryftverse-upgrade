@@ -500,7 +500,7 @@ export default function MyProfileScreen() {
         scrollEventThrottle={16}
       >
         {/* ── 3-9: IDENTITY HERO + ACTIONS ── */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(40)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(40)}>
           <MyProfileIdentityHero
             avatarUri={displayAvatar}
             displayName={user.displayName || user.username}

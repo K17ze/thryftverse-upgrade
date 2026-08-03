@@ -482,7 +482,7 @@ export default function BrowseScreen() {
   const showBrowseLoadingSkeleton = isSyncing && dataToRender.length === 0 && !lastError;
 
   const renderBrowseLoadingState = () => (
-    <Reanimated.View entering={FadeInDown.duration(200)} style={styles.loadingStateWrap}>
+    <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(200)} style={styles.loadingStateWrap}>
       <MasonrySkeleton numColumns={2} itemCount={6} horizontalPadding={Space.md} gap={3} />
     </Reanimated.View>
   );
@@ -498,7 +498,7 @@ export default function BrowseScreen() {
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
       {/* Heavy Typography Header */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(30)} style={styles.header}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(30)} style={styles.header}>
         <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="Go back">
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </AnimatedPressable>
@@ -507,12 +507,12 @@ export default function BrowseScreen() {
         </AnimatedPressable>
       </Reanimated.View>
 
-      <Reanimated.View entering={FadeInDown.duration(300).delay(60)} style={styles.titleContainer}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)} style={styles.titleContainer}>
         <Text style={styles.hugeTitle}>{title}</Text>
         <Text style={styles.itemCountText}>{backendLoading ? 'Loading…' : `${displayCount} items`}</Text>
       </Reanimated.View>
 
-      <Reanimated.View entering={FadeInDown.duration(300).delay(90)} style={styles.filterBar}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(90)} style={styles.filterBar}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
           <AnimatedPressable
             style={[styles.filterPill, hasActiveFilters && styles.filterPillActive]}
@@ -613,7 +613,7 @@ export default function BrowseScreen() {
             horizontalPadding={Space.md}
           />
         ) : (
-          <Reanimated.View entering={FadeInDown.duration(300)} style={{ flex: 1 }}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={{ flex: 1 }}>
             <EmptyState
               icon="search-outline"
               title="No matches found"

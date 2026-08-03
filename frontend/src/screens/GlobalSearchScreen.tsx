@@ -1267,6 +1267,16 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                           ? 'No picks match your current filters. Adjust or clear them.'
                           : isSearching ? 'Searching...' : 'No results found. Try a different keyword.'}
                       </Text>
+                      {hasActiveDiscoverFilters && !isSearching && (
+                        <AnimatedPressable
+                          style={[styles.recoEmptyCta, { borderColor: colors.border }]}
+                          onPress={resetBrowseFilters}
+                          accessibilityRole="button"
+                          accessibilityLabel="Clear all filters"
+                        >
+                          <Text style={[styles.recoEmptyCtaText, { color: colors.textPrimary }]}>Clear filters</Text>
+                        </AnimatedPressable>
+                      )}
                     </View>
                   )}
                 </Reanimated.View>
@@ -1679,9 +1689,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     marginHorizontal: 20,
+    flexWrap: 'wrap',
   },
   recoEmptyText: {
     fontSize: 12,
     fontFamily: Typography.family.medium,
+    flex: 1,
+  },
+  recoEmptyCta: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    marginTop: 4,
+  },
+  recoEmptyCtaText: {
+    fontSize: 12,
+    fontFamily: Typography.family.semibold,
   },
 });

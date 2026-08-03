@@ -42,6 +42,8 @@ export function CreatorPublishSheet({ visible, onClose }: CreatorPublishSheetPro
   const [errorMessage, setErrorMessage] = useState('');
   const [publishedId, setPublishedId] = useState('');
   const [uploadProgress, setUploadProgress] = useState('');
+  const [saveToCameraRoll, setSaveToCameraRoll] = useState(false);
+  const [coverPageIndex, setCoverPageIndex] = useState(0);
   const publishGuardRef = useRef(new PublishGuard());
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -232,6 +234,8 @@ function PublishReview({
   const styles = useMemo(() => createStyles(colors), [colors]);
   const canvasWidth = 280;
   const canvasHeight = Math.floor(canvasWidth / document.canvas.aspectRatio);
+  const coverThumbWidth = 100;
+  const coverThumbHeight = Math.floor(coverThumbWidth / document.canvas.aspectRatio);
 
   return (
     <ScrollView style={styles.scrollBody} contentContainerStyle={styles.scrollContent}>
@@ -258,6 +262,38 @@ function PublishReview({
         ))}
       </ScrollView>
 
+      {/* Cover selection — for multi-page stories (Instagram pattern) */}
+      {document.pages.length > 1 && (
+        <>
+          <Text style={styles.sectionLabel}>Cover</Text>
+          <Text style={styles.coverHint}>Tap a page to set it as the cover</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.coverScroll} contentContainerStyle={styles.coverContainer}>
+            {document.pages.map((page, i) => (
+              <Pressable
+                key={page.id}
+                onPress={() => { haptic.selection(); setCoverPageIndex(i); }}
+                style={[styles.coverThumbWrap, coverPageIndex === i && styles.coverThumbActive]}
+                accessibilityLabel={`Set page ${i + 1} as cover`}
+                accessibilityRole="button"
+              >
+                <CreatorCanvas
+                  document={document}
+                  page={page}
+                  canvasWidth={coverThumbWidth}
+                  canvasHeight={coverThumbHeight}
+                  mode="preview"
+                />
+                {coverPageIndex === i && (
+                  <View style={styles.coverBadge}>
+                    <Ionicons name="star" size={12} color="#fff" />
+                  </View>
+                )}
+              </Pressable>
+            ))}
+          </ScrollView>
+        </>
+      )}
+
       {/* Caption */}
       <Text style={styles.sectionLabel}>Caption</Text>
       <TextInput
@@ -271,15 +307,43 @@ function PublishReview({
         accessibilityLabel="Caption"
       />
 
-      {/* Visibility */}
-      <Text style={styles.sectionLabel}>Visibility</Text>
+      {/* Visibility — 3-option segmented control (Instagram Close Friends pattern) */}
+      <Text style={styles.sectionLabel}>Audience</Text>
+      <View style={styles.audienceRow}>
+        {[
+          { key: 'public' as const, label: 'Public', icon: 'globe-outline' },
+          { key: 'closeFriends' as const, label: 'Close', icon: 'people-outline' },
+          { key: 'private' as const, label: 'Only Me', icon: 'lock-closed-outline' },
+        ].map((opt) => {
+          const isActive = document.metadata.visibility === opt.key;
+          return (
+            <Pressable
+              key={opt.key}
+              onPress={() => { haptic.selection(); updateMetadata({ visibility: opt.key }); }}
+              style={[styles.audiencePill, isActive && styles.audiencePillActive]}
+              accessibilityLabel={`Audience ${opt.label}`}
+              accessibilityRole="button"
+              hitSlop={8}
+            >
+              <Ionicons name={opt.icon as any} size={16} color={isActive ? colors.brand : colors.textSecondary} />
+              <Text style={[styles.audiencePillText, isActive && { color: colors.brand }]}>{opt.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {/* Save to Camera Roll */}
       <View style={styles.toggleRow}>
-        <Text style={styles.toggleLabel}>Public</Text>
+        <View style={styles.toggleLabelWrap}>
+          <Ionicons name="download-outline" size={18} color={colors.textSecondary} />
+          <Text style={styles.toggleLabel}>Save to Camera Roll</Text>
+        </View>
         <Switch
-          value={document.metadata.visibility === 'public'}
-          onValueChange={(v) => updateMetadata({ visibility: v ? 'public' : 'private' })}
+          value={saveToCameraRoll}
+          onValueChange={(v) => { haptic.selection(); setSaveToCameraRoll(v); }}
           trackColor={{ false: colors.surfaceAlt, true: `${colors.brand}40` }}
-          thumbColor={document.metadata.visibility === 'public' ? colors.brand : colors.textMuted}
+          thumbColor={saveToCameraRoll ? colors.brand : colors.textMuted}
+          accessibilityLabel="Save to camera roll"
         />
       </View>
 
@@ -450,6 +514,73 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.medium,
       fontSize: Type.body.size,
       color: colors.textPrimary,
+    },
+    toggleLabelWrap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm,
+    },
+    // ── Audience segmented control ──
+    audienceRow: {
+      flexDirection: 'row',
+      gap: Space.xs,
+      marginBottom: Space.sm,
+    },
+    audiencePill: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      paddingVertical: Space.sm + 2,
+      borderRadius: Radius.md,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      backgroundColor: colors.surfaceAlt,
+    },
+    audiencePillActive: {
+      borderColor: colors.brand,
+      backgroundColor: `${colors.brand}12`,
+    },
+    audiencePillText: {
+      fontFamily: Typography.family.medium,
+      fontSize: Type.body.size,
+      color: colors.textSecondary,
+    },
+    // ── Cover selection ──
+    coverHint: {
+      fontFamily: Typography.family.regular,
+      fontSize: Type.caption.size,
+      color: colors.textMuted,
+      marginBottom: Space.xs,
+    },
+    coverScroll: {
+      marginHorizontal: -Space.md,
+    },
+    coverContainer: {
+      paddingHorizontal: Space.md,
+      gap: Space.sm,
+      paddingBottom: Space.xs,
+    },
+    coverThumbWrap: {
+      borderRadius: Radius.sm,
+      overflow: 'hidden',
+      borderWidth: 2,
+      borderColor: 'transparent',
+    },
+    coverThumbActive: {
+      borderColor: colors.brand,
+    },
+    coverBadge: {
+      position: 'absolute',
+      top: 4,
+      right: 4,
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      backgroundColor: colors.brand,
+      justifyContent: 'center',
+      alignItems: 'center',
     },
     scheduleRow: {
       flexDirection: 'row',

@@ -12,6 +12,7 @@ import { EmptyState } from '../components/EmptyState';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { CachedImage } from '../components/CachedImage';
 import { SellerStandardsBadges } from '../components/profile/SellerStandardsBadges';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useSellerTrust } from '../platform/product';
@@ -74,6 +75,7 @@ export default function MyListingsScreen() {
   const { show } = useToast();
   const currentUser = useStore((s) => s.currentUser);
   const filterType = route.params?.type;
+  const reducedMotionEnabled = useReducedMotion();
   const { data: sellerTrust } = useSellerTrust(currentUser?.id);
 
   const [listings, setListings] = useState<ListingApiItem[]>([]);
@@ -145,7 +147,7 @@ export default function MyListingsScreen() {
   const renderHeader = () => {
     if (listings.length === 0) return null;
     return (
-      <Reanimated.View style={styles.headerSection} entering={FadeInDown.duration(300)}>
+      <Reanimated.View style={styles.headerSection} entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         {/* Analytics summary */}
         <View style={styles.statsGrid}>
           <StatCard

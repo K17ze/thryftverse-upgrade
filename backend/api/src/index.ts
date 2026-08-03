@@ -5786,6 +5786,40 @@ async function applyOrderParcelEvent(
       } catch (tierError) {
         // Don't fail the delivery if the risk tier table doesn't exist yet.
       }
+
+      // ── Per-seller risk-tier refresh + high-tier review (P3.5) ───────
+      // Recompute the seller's sale velocity and persist the risk tier so
+      // the escrow release sweep can apply the tier reserve. If the seller
+      // is flagged high-risk, enqueue a manual review before escrow release
+      // (reusing the first-sale review queue with a risk_score).
+      try {
+        const tierMetrics = await refreshAndPersistSellerRiskTier(
+          client,
+          order.seller_id,
+          undefined,
+          config.sellerRiskTierElevatedReservePct,
+          config.sellerRiskTierHighReservePct
+        );
+        if (tierMetrics.riskTier === 'high') {
+          await client.query(
+            `INSERT INTO seller_first_sale_reviews (seller_id, order_id, review_status, risk_score, review_notes)
+             VALUES ($1, $2, 'pending', $3, $4)
+             ON CONFLICT (order_id) DO UPDATE SET
+               risk_score = EXCLUDED.risk_score,
+               review_notes = EXCLUDED.review_notes,
+               updated_at = NOW()
+             WHERE seller_first_sale_reviews.review_status = 'pending'`,
+            [
+              order.seller_id,
+              order.id,
+              Math.round(tierMetrics.salesCount24h),
+              `High-risk tier: ${tierMetrics.salesCount24h} sales / £${tierMetrics.salesGbp24h.toFixed(2)} in 24h (avg ${tierMetrics.avgSalesPerDay7d.toFixed(1)}/day)`,
+            ]
+          );
+        }
+      } catch (tierError) {
+        // Don't fail the delivery if the risk tier table doesn't exist yet.
+      }
     }
   }
 

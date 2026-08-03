@@ -16,6 +16,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useStore } from '../store/useStore';
 import {
   CommerceUserOrder,
@@ -80,6 +81,7 @@ export default function MyOrdersScreen() {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { formatFromFiat } = useFormattedPrice();
+  const reducedMotionEnabled = useReducedMotion();
   const currentUser = useStore((state) => state.currentUser);
   const viewerId = currentUser?.id;
 
@@ -481,7 +483,7 @@ export default function MyOrdersScreen() {
       />
 
       {needsActionCount > 0 && !debouncedQuery.trim() && filter.classification === 'all' && (
-        <Reanimated.View entering={FadeInDown.duration(300)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <Pressable
             style={[styles.needsActionBanner, { backgroundColor: colors.brand + '12' }]}
             onPress={() => setFilter({ classification: 'needs_action', year: null })}

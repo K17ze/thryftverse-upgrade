@@ -12,6 +12,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library/legacy';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
@@ -134,6 +135,24 @@ function baseLayer(id: string, zIndex: number): Omit<CreatorLayer, 'type' | 'pay
 const GRID_COLUMNS = 3;
 const { width: SCREEN_W } = Dimensions.get('window');
 const THUMB_SIZE = Math.floor((SCREEN_W - Space.md * 2 - Space.xs * (GRID_COLUMNS - 1)) / GRID_COLUMNS);
+
+// HSL → HEX converter for the spectrum color picker
+function hslToHex(h: number, s: number, l: number): string {
+  const sNorm = s / 100;
+  const lNorm = l / 100;
+  const c = (1 - Math.abs(2 * lNorm - 1)) * sNorm;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = lNorm - c / 2;
+  let r = 0, g = 0, b = 0;
+  if (h < 60) { r = c; g = x; }
+  else if (h < 120) { r = x; g = c; }
+  else if (h < 180) { g = c; b = x; }
+  else if (h < 240) { g = x; b = c; }
+  else if (h < 300) { r = x; b = c; }
+  else { r = c; b = x; }
+  const toHex = (v: number) => Math.round((v + m) * 255).toString(16).padStart(2, '0');
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
 
 interface MediaAsset {
   id: string;
@@ -918,6 +937,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
   const [textEffect, setTextEffect] = useState(existingPayload?.textEffect ?? 'none');
   const [textAnimation, setTextAnimation] = useState(existingPayload?.textAnimation ?? 'none');
   const [textBgColor, setTextBgColor] = useState(existingPayload?.backgroundColor ?? 'transparent');
+  const [showSpectrum, setShowSpectrum] = useState(false);
 
   const handleAdd = useCallback(() => {
     if (!text.trim()) return;
@@ -1011,14 +1031,45 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
           {TEXT_COLORS.map((c) => (
             <Pressable
               key={c}
-              onPress={() => { haptic.selection(); setTextColor(c); }}
-              style={[styles.colorOption, { backgroundColor: c }, textColor === c && styles.colorOptionActive]}
+              onPress={() => { haptic.selection(); setTextColor(c); setShowSpectrum(false); }}
+              onLongPress={() => { haptic.medium(); setTextColor(c); setShowSpectrum(true); }}
+              style={[styles.colorOption, { backgroundColor: c }, textColor === c && !showSpectrum && styles.colorOptionActive]}
               accessibilityLabel={`Text color ${c}`}
               accessibilityRole="button"
               hitSlop={12}
             />
           ))}
         </View>
+        {/* Spectrum picker — long-press any swatch to open (Instagram pattern) */}
+        {showSpectrum && (
+          <View style={styles.spectrumWrap}>
+            <LinearGradient
+              colors={['#ff0000', '#ffff00', '#00ff00', '#00ffff', '#0000ff', '#ff00ff', '#ff0000']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.spectrumBar}
+            >
+              <Pressable
+                style={styles.spectrumOverlay}
+                onPress={(e) => {
+                  const { locationX } = e.nativeEvent;
+                  // Approximate hue from x position (0..width → 0..360°)
+                  // width is approximate; the layout fills the row
+                  const ratio = Math.max(0, Math.min(1, locationX / (SCREEN_W - Space.md * 2 - 4)));
+                  const hue = ratio * 360;
+                  const hex = hslToHex(hue, 80, 55);
+                  setTextColor(hex);
+                }}
+                accessibilityLabel="Spectrum color picker"
+                accessibilityRole="adjustable"
+              />
+            </LinearGradient>
+            <View style={[styles.spectrumIndicator, { backgroundColor: textColor }]} />
+            <PressScale onPress={() => { haptic.selection(); setShowSpectrum(false); }} style={styles.spectrumClose} accessibilityLabel="Close spectrum">
+              <Ionicons name="chevron-up" size={18} color={colors.textSecondary} />
+            </PressScale>
+          </View>
+        )}
 
         {/* Alignment */}
         <Text style={styles.pickerSectionLabel}>Alignment</Text>
@@ -1171,6 +1222,7 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
   const [activeColor, setActiveColor] = useState('#ffffff');
   const [brushSize, setBrushSize] = useState(4);
   const [canvasLayout, setCanvasLayout] = useState({ width: 320, height: 400 });
+  const [showDrawSpectrum, setShowDrawSpectrum] = useState(false);
 
   // Current stroke being drawn
   const currentStroke = useSharedValue<DrawStroke | null>(null);
@@ -1301,6 +1353,29 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                 <Text style={styles.drawCanvasHintText}>Draw with your finger</Text>
               </View>
             )}
+            {/* Vertical brush size slider — Instagram pattern (left side, drag up=thicker) */}
+            {activeTool !== 'eraser' && (
+              <View style={styles.brushSliderWrap} pointerEvents="box-none">
+                <Pressable
+                  style={styles.brushSliderTrack}
+                  onPress={(e) => {
+                    const { locationY } = e.nativeEvent;
+                    const trackHeight = 120;
+                    const ratio = 1 - Math.max(0, Math.min(1, locationY / trackHeight));
+                    const newSize = Math.max(2, Math.min(20, Math.round(2 + ratio * 18)));
+                    haptic.selection();
+                    setBrushSize(newSize);
+                  }}
+                  accessibilityLabel="Brush size slider"
+                  accessibilityRole="adjustable"
+                >
+                  <View style={[styles.brushSliderFill, { height: `${(brushSize - 2) / 18 * 100}%` }]} />
+                  <View style={[styles.brushSliderHandle, { bottom: `${(brushSize - 2) / 18 * 100}%` }]}>
+                    <View style={[styles.brushSliderDot, { width: Math.max(6, Math.min(22, brushSize + 4)), height: Math.max(6, Math.min(22, brushSize + 4)), borderRadius: 11, backgroundColor: activeColor }]} />
+                  </View>
+                </Pressable>
+              </View>
+            )}
           </View>
         </GestureHandlerRootView>
 
@@ -1330,14 +1405,42 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               {DRAW_COLORS.map((c) => (
                 <Pressable
                   key={c}
-                  onPress={() => { haptic.selection(); setActiveColor(c); }}
-                  style={[styles.colorOption, { backgroundColor: c }, activeColor === c && styles.colorOptionActive]}
+                  onPress={() => { haptic.selection(); setActiveColor(c); setShowDrawSpectrum(false); }}
+                  onLongPress={() => { haptic.medium(); setActiveColor(c); setShowDrawSpectrum(true); }}
+                  style={[styles.colorOption, { backgroundColor: c }, activeColor === c && !showDrawSpectrum && styles.colorOptionActive]}
                   accessibilityLabel={`Draw color ${c}`}
                   accessibilityRole="button"
                   hitSlop={12}
                 />
               ))}
             </View>
+            {/* Spectrum picker — long-press any swatch to open */}
+            {showDrawSpectrum && (
+              <View style={styles.spectrumWrap}>
+                <LinearGradient
+                  colors={['#ff0000', '#ffff00', '#00ff00', '#00ffff', '#0000ff', '#ff00ff', '#ff0000']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.spectrumBar}
+                >
+                  <Pressable
+                    style={styles.spectrumOverlay}
+                    onPress={(e) => {
+                      const { locationX } = e.nativeEvent;
+                      const ratio = Math.max(0, Math.min(1, locationX / (SCREEN_W - Space.md * 2 - 4)));
+                      const hue = ratio * 360;
+                      setActiveColor(hslToHex(hue, 80, 55));
+                    }}
+                    accessibilityLabel="Spectrum color picker"
+                    accessibilityRole="adjustable"
+                  />
+                </LinearGradient>
+                <View style={[styles.spectrumIndicator, { backgroundColor: activeColor }]} />
+                <PressScale onPress={() => { haptic.selection(); setShowDrawSpectrum(false); }} style={styles.spectrumClose} accessibilityLabel="Close spectrum">
+                  <Ionicons name="chevron-up" size={18} color={colors.textSecondary} />
+                </PressScale>
+              </View>
+            )}
           </>
         )}
 
@@ -3090,5 +3193,17 @@ function createStyles(colors: ThemeColors) {
   weatherCellActive: { backgroundColor: `${colors.brand}18`, borderWidth: 1.5, borderColor: colors.brand },
   weatherCellEmoji: { fontSize: 24 },
   weatherCellLabel: { fontFamily: Typography.family.medium, fontSize: 9, color: colors.textSecondary, textAlign: 'center' },
+  // ── Spectrum color picker ──
+  spectrumWrap: { marginTop: Space.sm, gap: Space.xs },
+  spectrumBar: { height: 36, borderRadius: Radius.md, overflow: 'hidden', position: 'relative' },
+  spectrumOverlay: { ...StyleSheet.absoluteFill },
+  spectrumIndicator: { position: 'absolute', top: -4, width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: '#fff', shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 4, left: '50%', marginLeft: -10 },
+  spectrumClose: { alignSelf: 'center', paddingVertical: Space.xs },
+  // ── Vertical brush size slider (Instagram pattern) ──
+  brushSliderWrap: { position: 'absolute', left: Space.sm, top: '50%', marginTop: -60, zIndex: 10 },
+  brushSliderTrack: { width: 28, height: 120, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end', overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.1)' },
+  brushSliderFill: { width: '100%', backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 14 },
+  brushSliderHandle: { position: 'absolute', left: '50%', marginLeft: -11, width: 22, height: 22, justifyContent: 'center', alignItems: 'center' },
+  brushSliderDot: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
   }) as any;
 }

@@ -737,6 +737,173 @@ async function seed() {
     }
     console.log(`[seed] ${USERS.length} compliance profiles upserted`);
 
+    // ── DAC7 tax info for EU/UK sellers ───────────────────────────────────
+    // seed_u1 is the issuer of both Co-Own assets — they need DAC7 on file.
+    // seed_u3 is a high-volume seller who also needs DAC7.
+    const dac7TaxInfos = [
+      { userId: 'seed_u1', tin: 'GB12345678', country: 'GB', isEuResident: false, status: 'verified' },
+      { userId: 'seed_u3', tin: 'GB87654321', country: 'GB', isEuResident: false, status: 'verified' },
+      { userId: 'seed_u2', tin: 'DE123456789', country: 'DE', isEuResident: true, status: 'declared' },
+    ];
+    for (const t of dac7TaxInfos) {
+      await client.query(
+        `INSERT INTO user_tax_info
+           (user_id, tin, tax_residence_country, is_eu_resident,
+            self_declared, self_declared_at, status, verified_at, updated_at)
+         VALUES ($1, $2, $3, $4, TRUE, NOW() - INTERVAL '10 days', $5,
+                 CASE WHEN $5 = 'verified' THEN NOW() - INTERVAL '8 days' ELSE NULL END,
+                 NOW())
+         ON CONFLICT (user_id) DO UPDATE SET
+           tin = EXCLUDED.tin,
+           tax_residence_country = EXCLUDED.tax_residence_country,
+           is_eu_resident = EXCLUDED.is_eu_resident,
+           status = EXCLUDED.status,
+           updated_at = NOW()`,
+        [t.userId, t.tin, t.country, t.isEuResident, t.status]
+      );
+      // Sync compliance profile DAC7 fields
+      await client.query(
+        `UPDATE user_compliance_profiles
+         SET dac7_completed = TRUE,
+             dac7_tin = $2,
+             dac7_tax_residence_country = $3,
+             updated_at = NOW()
+         WHERE user_id = $1`,
+        [t.userId, t.tin, t.country]
+      );
+    }
+    console.log(`[seed] ${dac7TaxInfos.length} DAC7 tax info records upserted`);
+
+    // ── Co-Own holdings (units owned by users) ────────────────────────────
+    // seed_coown_1: 10 total units, seed_u2 owns 3, seed_u3 owns 2, seed_u4 owns 1
+    // seed_coown_2: 20 total units, seed_u2 owns 5, seed_u3 owns 4, seed_u4 owns 3
+    // This leaves available_units: coown_1 = 4, coown_2 = 8
+    const coownHoldings = [
+      { userId: 'seed_u2', assetId: 'seed_coown_1', units: 3, avgEntry: 32 },
+      { userId: 'seed_u3', assetId: 'seed_coown_1', units: 2, avgEntry: 32 },
+      { userId: 'seed_u4', assetId: 'seed_coown_1', units: 1, avgEntry: 32 },
+      { userId: 'seed_u2', assetId: 'seed_coown_2', units: 5, avgEntry: 10 },
+      { userId: 'seed_u3', assetId: 'seed_coown_2', units: 4, avgEntry: 10 },
+      { userId: 'seed_u4', assetId: 'seed_coown_2', units: 3, avgEntry: 10 },
+    ];
+    for (const h of coownHoldings) {
+      await client.query(
+        `INSERT INTO coOwn_holdings (user_id, asset_id, units_owned, avg_entry_price_gbp, realized_pnl_gbp, updated_at)
+         VALUES ($1, $2, $3, $4, 0, NOW() - INTERVAL '3 days')
+         ON CONFLICT (user_id, asset_id) DO UPDATE SET
+           units_owned = EXCLUDED.units_owned,
+           avg_entry_price_gbp = EXCLUDED.avg_entry_price_gbp,
+           updated_at = NOW()`,
+        [h.userId, h.assetId, h.units, h.avgEntry]
+      );
+    }
+    // Update asset available_units and holders count
+    await client.query(
+      `UPDATE coOwn_assets SET available_units = 4, holders = 3, updated_at = NOW() WHERE id = 'seed_coown_1'`
+    );
+    await client.query(
+      `UPDATE coOwn_assets SET available_units = 8, holders = 3, updated_at = NOW() WHERE id = 'seed_coown_2'`
+    );
+    console.log(`[seed] ${coownHoldings.length} Co-Own holdings upserted`);
+
+    // ── Co-Own orders (for market history) ────────────────────────────────
+    // Filled buy orders that correspond to the holdings above.
+    const coownOrders = [
+      { assetId: 'seed_coown_1', userId: 'seed_u2', side: 'buy', units: 3, unitPrice: 32, fee: 0.96, total: 96, orderType: 'market', status: 'filled', hoursAgo: 72 },
+      { assetId: 'seed_coown_1', userId: 'seed_u3', side: 'buy', units: 2, unitPrice: 32, fee: 0.64, total: 64, orderType: 'market', status: 'filled', hoursAgo: 48 },
+      { assetId: 'seed_coown_1', userId: 'seed_u4', side: 'buy', units: 1, unitPrice: 32, fee: 0.32, total: 32, orderType: 'limit', status: 'filled', hoursAgo: 24 },
+      { assetId: 'seed_coown_2', userId: 'seed_u2', side: 'buy', units: 5, unitPrice: 10, fee: 0.50, total: 50, orderType: 'market', status: 'filled', hoursAgo: 96 },
+      { assetId: 'seed_coown_2', userId: 'seed_u3', side: 'buy', units: 4, unitPrice: 10, fee: 0.40, total: 40, orderType: 'market', status: 'filled', hoursAgo: 60 },
+      { assetId: 'seed_coown_2', userId: 'seed_u4', side: 'buy', units: 3, unitPrice: 10, fee: 0.30, total: 30, orderType: 'limit', status: 'filled', hoursAgo: 36 },
+      // An open limit buy order from seed_u3 on coown_1
+      { assetId: 'seed_coown_1', userId: 'seed_u3', side: 'buy', units: 2, unitPrice: 28, fee: 0, total: 56, orderType: 'limit', status: 'open', hoursAgo: 2 },
+    ];
+    for (const o of coownOrders) {
+      await client.query(
+        `INSERT INTO coOwn_orders
+           (asset_id, user_id, side, units, unit_price_gbp, fee_gbp, total_gbp,
+            status, order_type, limit_price_gbp, filled_units, remaining_units,
+            created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5::numeric, $6::numeric, $7::numeric, $8, $9,
+                 CASE WHEN $9 = 'limit' THEN $5::numeric ELSE NULL END,
+                 CASE WHEN $8 = 'filled' THEN $4 ELSE 0 END,
+                 CASE WHEN $8 = 'open' THEN $4 ELSE 0 END,
+                 NOW() - ($10::text || ' hours')::interval, NOW())
+         ON CONFLICT DO NOTHING`,
+        [
+          o.assetId, o.userId, o.side, o.units, o.unitPrice,
+          o.fee, o.total, o.status, o.orderType, String(o.hoursAgo),
+        ]
+      );
+    }
+    console.log(`[seed] ${coownOrders.length} Co-Own orders upserted`);
+
+    // ── Verification demands for seeded Co-Own assets ─────────────────────
+    // seed_u2 demands authenticity proof from seed_u1 (the issuer) on coown_1.
+    // seed_u3 demands possession proof on coown_2.
+    // One is already responded to (compliant), one is pending.
+    const verificationDemands = [
+      {
+        assetId: 'seed_coown_1',
+        requestedBy: 'seed_u2',
+        demandType: 'authenticity',
+        status: 'pending',
+        deadline: 'NOW() + INTERVAL \'12 days\'',
+        respondedAt: 'NULL',
+        evidenceUrl: 'NULL',
+        evidenceNotes: 'NULL',
+      },
+      {
+        assetId: 'seed_coown_2',
+        requestedBy: 'seed_u3',
+        demandType: 'possession',
+        status: 'responded',
+        deadline: 'NOW() + INTERVAL \'7 days\'',
+        respondedAt: 'NOW() - INTERVAL \'2 days\'',
+        evidenceUrl: "'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=800'",
+        evidenceNotes: "'Photo of item in custody vault with timestamp and serial number visible.'",
+      },
+    ];
+    for (const d of verificationDemands) {
+      await client.query(
+        `INSERT INTO coown_verification_demands
+           (asset_id, requested_by, demand_type, deadline, status,
+            responded_at, evidence_url, evidence_notes, created_at, updated_at)
+         VALUES ($1, $2, $3, ${d.deadline}, $4,
+                 ${d.respondedAt}, ${d.evidenceUrl}, ${d.evidenceNotes},
+                 NOW() - INTERVAL '3 days', NOW())
+         ON CONFLICT DO NOTHING`,
+        [d.assetId, d.requestedBy, d.demandType, d.status]
+      );
+    }
+    // Log verification demand events in the recourse audit trail
+    for (const d of verificationDemands) {
+      await client.query(
+        `INSERT INTO coown_recourse_events
+           (asset_id, event_type, event_payload, triggered_by, visibility, created_at)
+         VALUES ($1, 'verification_demand_sent', $2::jsonb, $3, 'public', NOW() - INTERVAL '3 days')
+         ON CONFLICT DO NOTHING`,
+        [
+          d.assetId,
+          JSON.stringify({ demandType: d.demandType, status: d.status }),
+          d.requestedBy,
+        ]
+      );
+      if (d.status === 'responded') {
+        await client.query(
+          `INSERT INTO coown_recourse_events
+             (asset_id, event_type, event_payload, triggered_by, visibility, created_at)
+           VALUES ($1, 'verification_demand_responded', $2::jsonb, 'seed_u1', 'public', NOW() - INTERVAL '2 days')
+           ON CONFLICT DO NOTHING`,
+          [
+            d.assetId,
+            JSON.stringify({ demandType: d.demandType, verdict: 'compliant' }),
+          ]
+        );
+      }
+    }
+    console.log(`[seed] ${verificationDemands.length} verification demands + events upserted`);
+
     // ── Jurisdiction rule for co-own market ─────────────────────────────────
     await client.query(
       `INSERT INTO jurisdiction_rules (market, scope, scope_code, is_enabled, min_kyc_level, require_sanctions_clear, max_order_notional_gbp, max_daily_notional_gbp, max_open_orders)
