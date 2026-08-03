@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useEffect, useState } from 'react';
-import { View, Text, Image, StyleSheet, Pressable, Platform } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
 import { CachedImage } from '../components/CachedImage';
 import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -693,7 +693,7 @@ function MediaLayerContent({ layer, width, height }: { layer: Extract<CreatorLay
     return (
       <>
         {payload.thumbnailUri && (
-          <Image source={{ uri: payload.thumbnailUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+          <ExpoImage source={{ uri: payload.thumbnailUri }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="memory-disk" recyclingKey={payload.thumbnailUri} enforceEarlyResizing />
         )}
         <Video
           key={`${layer.id}-${payload.mediaUri}`}
@@ -926,10 +926,13 @@ function ProductLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
   if (hasImage) {
     return (
       <View style={productStyles.imageContainer}>
-        <Image
+        <ExpoImage
           source={{ uri: payload.snapshotImageUrl! }}
           style={productStyles.thumbnail}
-          resizeMode="cover"
+          contentFit="cover"
+          cachePolicy="memory-disk"
+          recyclingKey={payload.snapshotImageUrl!}
+          enforceEarlyResizing
         />
         <View style={productStyles.imageOverlay}>
           <Text style={productStyles.imageTitle} numberOfLines={1}>
@@ -1308,6 +1311,10 @@ function GifLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'gif'
       source={{ uri: payload.gifUrl }}
       style={{ width: '100%', height: '100%' }}
       contentFit="contain"
+      cachePolicy="memory-disk"
+      recyclingKey={payload.gifUrl}
+      transition={300}
+      enforceEarlyResizing
       accessible
       accessibilityLabel={payload.altText || 'GIF sticker'}
     />
@@ -1333,7 +1340,7 @@ function MusicLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'mu
       maxWidth: '100%',
     }}>
       {payload.artworkUrl ? (
-        <Image
+        <ExpoImage
           source={{ uri: payload.artworkUrl }}
           style={{
             width: 40,
@@ -1344,7 +1351,10 @@ function MusicLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'mu
             shadowOpacity: 0.3,
             shadowRadius: 3,
           }}
-          resizeMode="cover"
+          contentFit="cover"
+          cachePolicy="memory-disk"
+          recyclingKey={payload.artworkUrl}
+          enforceEarlyResizing
         />
       ) : (
         <View style={{

@@ -205,6 +205,7 @@ export function CachedImage({
             cachePolicy="memory-disk"
             priority={effectivePriority}
             recyclingKey={`preview-${sourceUri}`}
+            enforceEarlyResizing
           />
         </Reanimated.View>
       )}
@@ -245,6 +246,7 @@ export function CachedImage({
             onLoad={handleLoad}
             onError={handleError}
             recyclingKey={sourceUri}
+            enforceEarlyResizing
           />
         )}
       </Reanimated.View>

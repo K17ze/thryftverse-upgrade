@@ -13,7 +13,8 @@
  *   unchanged.
  */
 import React, { useEffect, useMemo } from 'react';
-import { Image, StyleProp, StyleSheet, View, ViewStyle, ImageStyle } from 'react-native';
+import { StyleProp, StyleSheet, View, ViewStyle, ImageStyle } from 'react-native';
+import { Image as ExpoImage, ImageContentFit } from 'expo-image';
 import { useVideoPlayer, VideoView } from 'expo-video';
 
 export enum ResizeMode {
@@ -188,10 +189,13 @@ export const Video: React.FC<VideoProps> = ({
 
       {showPoster ? (
         <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-          <Image
+          <ExpoImage
             source={posterSource as { uri: string }}
             style={[StyleSheet.absoluteFill, posterStyle]}
-            resizeMode={contentFit === 'fill' ? 'stretch' : contentFit}
+            contentFit={contentFit === 'fill' ? 'fill' : (contentFit as ImageContentFit)}
+            cachePolicy="memory-disk"
+            recyclingKey={(posterSource as { uri: string })?.uri}
+            enforceEarlyResizing
           />
         </View>
       ) : null}

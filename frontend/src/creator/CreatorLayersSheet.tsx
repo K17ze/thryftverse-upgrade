@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, Alert, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Alert, Pressable } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -194,7 +195,7 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
                 >
                   <View style={[styles.thumbnail, { backgroundColor: `${getLayerColor(layer.type, colors)}20` }, layer.hidden && styles.thumbnailHidden]}>
                     {thumbSource ? (
-                      <Image source={thumbSource} style={styles.thumbnailImage} resizeMode="cover" />
+                      <ExpoImage source={thumbSource} style={styles.thumbnailImage} contentFit="cover" cachePolicy="memory-disk" recyclingKey={thumbSource.uri} enforceEarlyResizing />
                     ) : (
                       <Ionicons name={LAYER_ICONS[layer.type]} size={20} color={layer.hidden ? colors.textMuted : getLayerColor(layer.type, colors)} />
                     )}

@@ -1,5 +1,6 @@
 import React, { useCallback } from 'react';
-import { View, StyleSheet, Image, Dimensions, Text } from 'react-native';
+import { View, StyleSheet, Dimensions, Text } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { Video, ResizeMode } from './compat/Video';
 import Reanimated, {
   useSharedValue,
@@ -208,7 +209,7 @@ function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, re
                 isLooping={false}
               />
             ) : (
-              <Image source={{ uri: id }} style={styles.image} />
+              <ExpoImage source={{ uri: id }} style={styles.image} cachePolicy="memory-disk" recyclingKey={id} enforceEarlyResizing />
             )}
 
             {isVideo && (

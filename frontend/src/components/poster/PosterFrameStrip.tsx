@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Image, ActivityIndicator, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Modal } from 'react-native';
 import { CachedImage } from '../CachedImage';
 import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius, Type, Typography } from '../../theme/designTokens';
