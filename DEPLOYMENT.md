@@ -938,6 +938,39 @@ During any rollback, follow this communication sequence:
 - Mitigating: *"We have identified the issue and are rolling back [component]. Service should be restored within [ETA]."*
 - Resolved: *"The issue has been resolved by rolling back [component]. We will publish a postmortem within 48 hours."*
 
+### 17.7 Staged OTA Rollout Procedure
+
+Per the 2026 August Expo EAS Update production playbook, OTA updates must use staged rollouts gated by EAS Observe metrics (crash rate, TTI regression). Each stage is published via the **OTA Staged Rollout** GitHub Actions workflow (`.github/workflows/ota-staged-rollout.yml`), which runs typecheck + tests before publishing and targets a GitHub `environment` (`production` or `preview`) so manual approval gates can be enforced between stages.
+
+| Stage | Rollout | Minimum monitor window | Gate before progressing |
+|---|---|---|---|
+| 1 | 1% | 1 hour | EAS Observe crash rate ≤ 1% and no TTI regression > 20% |
+| 2 | 10% | 4 hours | EAS Observe crash rate ≤ 1% and no TTI regression > 20% |
+| 3 | 25% | 8 hours | EAS Observe crash rate ≤ 1% and no TTI regression > 20% |
+| 4 | 50% | 24 hours | EAS Observe crash rate ≤ 1% and no TTI regression > 20% |
+| 5 | 100% | Full rollout | Mark complete; continue monitoring for 24 hours |
+
+**Procedure:**
+
+1. **Stage 1 — Publish at 1%.** Trigger the *OTA Staged Rollout* workflow with `channel=production`, `rollout_percentage=1`, and a descriptive `message`. After it succeeds, open EAS Observe and monitor the crash rate and TTI for **1 hour**.
+2. **Stage 2 — Progress to 10%.** Re-trigger the workflow with `rollout_percentage=10` and the same `message`. Monitor EAS Observe for **4 hours**.
+3. **Stage 3 — Progress to 25%.** Re-trigger with `rollout_percentage=25`. Monitor for **8 hours**.
+4. **Stage 4 — Progress to 50%.** Re-trigger with `rollout_percentage=50`. Monitor for **24 hours**.
+5. **Stage 5 — Progress to 100%.** Re-trigger with `rollout_percentage=100` for the full rollout. Continue monitoring for 24 hours after completion.
+
+**Abort criteria — trigger rollback immediately:**
+
+- Crash rate > **1%** at any stage, OR
+- TTI regression > **20%** versus the previous baseline, OR
+- Any SEV1/SEV2 incident attributed to the OTA update.
+
+When abort criteria are met, trigger the **OTA Rollback** workflow (`.github/workflows/ota-rollback.yml`) with `channel=production` and `method=rollback` (rolls back to the embedded bundle) or `method=republish` (republish a prior update group via the EAS CLI). Follow §17.6 for incident communication.
+
+**Workflow links:**
+
+- Staged rollout: [`.github/workflows/ota-staged-rollout.yml`](.github/workflows/ota-staged-rollout.yml)
+- Rollback: [`.github/workflows/ota-rollback.yml`](.github/workflows/ota-rollback.yml)
+
 ---
 
 ## 18. Incident Response Runbook
