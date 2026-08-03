@@ -307,7 +307,7 @@ export default function InboxScreen() {
     requestBtnAcceptText: { color: colors.textInverse },
     offlineBanner: { backgroundColor: colors.surfaceAlt, borderBottomColor: colors.border },
     offlineBannerText: { color: colors.textSecondary },
-    errorBanner: { borderBottomColor: colors.border },
+    errorBanner: { backgroundColor: colors.surfaceAlt, borderBottomColor: colors.border },
     errorBannerTitle: { color: colors.danger },
     errorBannerSub: { color: colors.textMuted },
     errorBannerRetry: { color: colors.brand },

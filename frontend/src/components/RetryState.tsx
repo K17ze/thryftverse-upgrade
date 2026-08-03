@@ -54,7 +54,7 @@ function createStyles(colors: ThemeColors) {
       width: 120,
       height: 120,
       borderRadius: 60,
-      backgroundColor: '#1E1111',
+      backgroundColor: colors.surfaceAlt,
       justifyContent: 'center',
       alignItems: 'center',
       marginBottom: 24,
