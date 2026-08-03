@@ -242,7 +242,31 @@ import {
 } from './lib/domainOutbox.js';
 
 const app = Fastify({
-  logger: true,
+  logger: {
+    level: config.nodeEnv === 'production' ? 'info' : 'debug',
+    // Fastify automatically includes reqId in all request-scoped logs.
+    serializers: {
+      req(request) {
+        return {
+          method: request.method,
+          url: request.url,
+          headers: {
+            'user-agent': request.headers['user-agent'],
+            'x-request-id': request.id,
+          },
+          remoteAddress: request.ip,
+        };
+      },
+    },
+  },
+  // ── Request correlation ID (2026 August Node.js production best practices) ──
+  // Honour an incoming x-request-id header, otherwise generate a UUID.
+  requestIdHeader: 'x-request-id',
+  genReqId: (req) => {
+    const incoming = req.headers['x-request-id'];
+    if (typeof incoming === 'string' && incoming.length > 0) return incoming;
+    return crypto.randomUUID();
+  },
   rewriteUrl: (request) => normalizeVersionedUrl(request.url ?? '/').url,
   // ── Server-level DoS hardening (2026 August Fastify security best practices) ──
   // 1 MB global body limit. The rawBody parser below raises this to 2 MB for
@@ -259,6 +283,41 @@ const app = Fastify({
   // Immediately close idle keep-alive connections during shutdown so they
   // don't hang the process while we wait for in-flight requests to drain.
   forceCloseConnections: 'idle',
+});
+
+// ── Correlation ID response header ────────────────────────────────────
+// Echo the request ID back on every response so clients can reference it
+// when correlating logs or reporting issues.
+app.addHook('onRequest', async (request, reply) => {
+  reply.header('x-request-id', request.id);
+});
+
+// ── Structured request-completion logging ─────────────────────────────
+// Fastify's built-in logger already emits request/response lines, but we
+// add an explicit onResponse hook so every completed request is logged with
+// the correlation ID, method, URL, status code and response time.
+app.addHook('onResponse', async (request, reply) => {
+  request.log.info({
+    reqId: request.id,
+    method: request.method,
+    url: request.url,
+    statusCode: reply.statusCode,
+    responseTime: reply.elapsedTime,
+  }, 'request completed');
+});
+
+// ── Sentry breadcrumb on errors ───────────────────────────────────────
+// When Sentry is configured, capture a breadcrumb for every request error
+// so the error event in Sentry includes the request context.
+app.addHook('onError', async (request, reply, error) => {
+  if (config.sentryDsn) {
+    Sentry.addBreadcrumb({
+      category: 'request',
+      message: `${request.method} ${request.url} → ${reply.statusCode}`,
+      level: 'error',
+      data: { reqId: request.id, error: error.message },
+    });
+  }
 });
 
 if (config.sentryDsn) {
