@@ -1,10 +1,11 @@
 import React from 'react';
 import { View, StyleSheet, Text, Pressable, useWindowDimensions, ActivityIndicator } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Reanimated from 'react-native-reanimated';
-import { FadeIn } from 'react-native-reanimated';
+import { FadeIn, SlideInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../../../theme/ThemeContext';
-import { Space, Type, Radius, Typography } from '../../../theme/designTokens';
+import { Space, Type, Radius, Typography, Elevation } from '../../../theme/designTokens';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { CachedImage } from '../../CachedImage';
@@ -76,6 +77,16 @@ export interface CommerceDetailStateDockProps {
    * Research (ecomsdesignpro): "A small thumbnail helps, especially
    * when users scroll far past the hero image." */
   thumbnailUri?: string;
+  /** Optional shipping hint shown below the price (e.g. "+ £3.99 shipping"
+   *  or "Free shipping"). Competitor pattern (Vinted/Depop): shipping
+   *  context next to the price in the dock reduces checkout abandonment. */
+  shippingHint?: string;
+  /** When true, renders a buyer protection strip above the dock with a
+   *  shield icon and "Buyer protection" text. Per Design.md trust/commerce
+   *  card micro spec: "Buyer protection strip: colors.surface background,
+   *  Radius.lg, shield icon 20pt, Type.captionElevated text, placed above
+   *  the action dock." Only render when protection is actually available. */
+  showProtectionStrip?: boolean;
   /** Primary action (max 1). Required when no blocked state is shown. */
   primaryAction?: CommerceDetailStateDockAction;
   /** Secondary action (max 1). */
@@ -106,6 +117,8 @@ export function CommerceDetailStateDock({
   stateBadge,
   subtitle,
   thumbnailUri,
+  shippingHint,
+  showProtectionStrip = false,
   primaryAction,
   secondaryAction,
   elevated = false,
@@ -134,16 +147,31 @@ export function CommerceDetailStateDock({
   };
 
   const content = (
-    <View
-      style={[
-        styles.container,
-        {
-          backgroundColor: elevated ? colors.surfaceElevated : colors.background,
-          paddingBottom: Math.max(safeBottom + Space.xs, Space.sm),
-          borderTopColor: colors.border,
-        },
-      ]}
-    >
+    <React.Fragment>
+      {/* ── Buyer protection strip ──
+          Per Design.md trust/commerce card micro spec: "Buyer protection
+          strip: colors.surface background, Radius.lg, shield icon 20pt,
+          Type.captionElevated text, placed above the action dock."
+          Research (Vinted/Depop): trust signal at the payment decision
+          point increases conversion more than any other single change. */}
+      {showProtectionStrip && !stateBadge && (
+        <View style={[styles.protectionStrip, { backgroundColor: colors.surface }]}>
+          <Ionicons name="shield-checkmark" size={16} color={colors.success} />
+          <Text style={[styles.protectionText, { color: colors.textSecondary }]} numberOfLines={1}>
+            Buyer protection
+          </Text>
+        </View>
+      )}
+      <View
+        style={[
+          styles.container,
+          {
+            backgroundColor: elevated ? colors.surfaceElevated : colors.background,
+            paddingBottom: Math.max(safeBottom + Space.xs, Space.sm),
+            borderTopColor: colors.border,
+          },
+        ]}
+      >
       <View style={shouldStack ? styles.rowStacked : styles.row}>
         <View style={styles.valueCluster}>
           {/* Product thumbnail — anchors the user to the product when
@@ -191,6 +219,14 @@ export function CommerceDetailStateDock({
                 {subtitle}
               </Text>
             ) : null}
+            {shippingHint && !stateBadge ? (
+              <Text
+                style={[styles.shippingHint, { color: colors.textMuted }]}
+                numberOfLines={1}
+              >
+                {shippingHint}
+              </Text>
+            ) : null}
           </View>
         </View>
 
@@ -201,7 +237,6 @@ export function CommerceDetailStateDock({
               disabled={secondaryAction.disabled || secondaryAction.loading}
               style={({ pressed }) => [
                 shouldStack ? styles.secondaryActionStacked : styles.secondaryAction,
-                { borderColor: colors.border },
                 pressed && !secondaryAction.disabled && styles.pressed,
                 secondaryAction.disabled && styles.disabled,
               ]}
@@ -221,7 +256,7 @@ export function CommerceDetailStateDock({
                     {
                       color: secondaryAction.disabled
                         ? colors.textMuted
-                        : colors.textPrimary,
+                        : colors.textSecondary,
                     },
                   ]}
                 >
@@ -277,7 +312,8 @@ export function CommerceDetailStateDock({
           ) : null}
         </View>
       </View>
-    </View>
+      </View>
+    </React.Fragment>
   );
 
   if (reducedMotion) {
@@ -285,7 +321,10 @@ export function CommerceDetailStateDock({
   }
 
   return (
-    <Reanimated.View entering={FadeIn.duration(200)} style={styles.wrapper}>
+    <Reanimated.View
+      entering={SlideInDown.duration(300).springify().damping(24).stiffness(200)}
+      style={styles.wrapper}
+    >
       {content}
     </Reanimated.View>
   );
@@ -299,6 +338,24 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 100,
   },
+  // ── Buyer protection strip ──
+  // Per Design.md: colors.surface background, Radius.lg, shield icon,
+  // Type.captionElevated text. Sits above the dock as a trust signal
+  // at the payment decision point.
+  protectionStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs + 1,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(0,0,0,0.06)',
+  },
+  protectionText: {
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.medium,
+  },
   container: {
     width: '100%',
     minWidth: 0,
@@ -306,15 +363,9 @@ const styles = StyleSheet.create({
     paddingTop: Space.sm + 2,
     borderTopWidth: StyleSheet.hairlineWidth,
     // Per Design.md Elevation.floating: the dock is a genuinely floating
-    // surface separating persistent action from scroll content. A stronger
-    // shadow (0.10/12px) creates clear depth separation without being
-    // decorative. Research: "0 -2px 8px rgba(0,0,0,0.06)" is the minimum;
-    // flagship docks use 0.10–0.12 to read as elevated, not flat.
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.10,
-    shadowRadius: 12,
-    elevation: 6,
+    // surface separating persistent action from scroll content.
+    // Spec: 8px offset, 0.12 opacity, 16px radius.
+    ...Elevation.floating,
   },
   row: {
     flexDirection: 'row',
@@ -399,15 +450,15 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     flexGrow: 1,
   },
-  // Per spec 05 §5: restrained radii — medium radius (Radius.md = 8)
-  // for primary commerce action, not radius 24.
-  // Research 2025: 48–52dp tall for persistent footer buttons. Using
-  // 50px to give the primary action slightly more presence than the
-  // secondary (48px), creating subtle hierarchy within the dock.
+  // Per Design.md button-primary spec: full-pill (Radius.full), 52px
+  // height, brand fill, body-strong typography. The dock micro spec
+  // confirms: "Primary CTA: full-pill." Competitors (Vinted, Depop,
+  // Vestiaire) all use full-pill primary buttons in their sticky docks.
+  // The previous 8px rectangle looked weak and non-premium.
   primaryAction: {
-    minHeight: 50,
-    paddingHorizontal: Space.lg,
-    borderRadius: Radius.md,
+    minHeight: 52,
+    paddingHorizontal: Space.xl,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     minWidth: 120,
@@ -415,9 +466,9 @@ const styles = StyleSheet.create({
   // Stacked primary: flexes to consume available width so the label
   // never truncates on compact widths.
   primaryActionStacked: {
-    minHeight: 50,
-    paddingHorizontal: Space.lg,
-    borderRadius: Radius.md,
+    minHeight: 52,
+    paddingHorizontal: Space.xl,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     flexGrow: 1,
@@ -428,23 +479,22 @@ const styles = StyleSheet.create({
     lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.semibold,
   },
-  // Per spec 05 §5: secondary is a quiet outlined control with medium
-  // radius, not a giant pill.
+  // Per Design.md: secondary is a quiet text control, not a full
+  // outlined button. Reduces visual noise so the primary action
+  // dominates. Competitor pattern (Depop): secondary is a text link.
   secondaryAction: {
     minHeight: 48,
     paddingHorizontal: Space.md,
-    borderRadius: Radius.md,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
   },
   secondaryActionStacked: {
     minHeight: 48,
     paddingHorizontal: Space.md,
-    borderRadius: Radius.md,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
     flexShrink: 0,
   },
   secondaryActionText: {
@@ -470,5 +520,15 @@ const styles = StyleSheet.create({
     fontSize: Type.captionElevated.size,
     lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
+  },
+  // Shipping hint — quiet, muted, shown below the price when shipping
+  // context is available. Competitor pattern (Vinted/Depop): "+ £3.99
+  // shipping" or "Free shipping" next to the price reduces checkout
+  // abandonment by setting expectations early.
+  shippingHint: {
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.regular,
+    fontVariant: ['tabular-nums'],
   },
 });

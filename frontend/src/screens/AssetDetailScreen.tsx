@@ -1437,6 +1437,7 @@ export default function AssetDetailScreen() {
             value={formatCoOwnIze(asset.unitPriceGbp)}
             valueLabel="Unit price"
             thumbnailUri={asset.imageUrl ?? undefined}
+            showProtectionStrip={asset.buyerProtection ?? false}
             primaryAction={
               isHolder
                 ? {

@@ -739,7 +739,7 @@ interface LookSearchItem {
   id: string;
   caption: string;
   mediaUrl: string;
-  visibility: 'public' | 'private';
+  visibility: 'public' | 'closeFriends' | 'private';
   status: string;
 }
 

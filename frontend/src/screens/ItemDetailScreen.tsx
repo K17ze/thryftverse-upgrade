@@ -1119,6 +1119,14 @@ export default function ItemDetailScreen() {
           <CommerceDetailStateDock
             value={formattedPrice}
             thumbnailUri={item.images?.[0]}
+            shippingHint={
+              commerce.shippingPayer === 'seller'
+                ? 'Free shipping'
+                : commerce.shippingMethod
+                  ? 'Shipping calculated at checkout'
+                  : undefined
+            }
+            showProtectionStrip={commerce.protectionPolicy?.available ?? false}
             primaryAction={{
               label: 'Buy now',
               onPress: () => {

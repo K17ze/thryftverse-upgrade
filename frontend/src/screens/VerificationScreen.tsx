@@ -178,7 +178,7 @@ export default function VerificationScreen({ navigation }: Props) {
         show('Complete verification in your browser. We will review within 24 hours.', 'success');
       } else {
         // Provider not configured — submission is recorded as pending
-      show('Identity verification submitted. We will review your documents within 24 hours.', 'success');
+        show('Identity verification submitted. We will review your documents within 24 hours.', 'success');
       }
 
       // Refresh backend status
@@ -305,7 +305,6 @@ export default function VerificationScreen({ navigation }: Props) {
           isLast
         />
       </SettingsSection>
-      </Reanimated.View>
       </Reanimated.View>
 
       {/* ── KYC FLOW ── */}
