@@ -32,8 +32,10 @@ interface HubAction {
   accessibilityLabel: string;
 }
 
+import { useReducedMotion } from '../hooks/useReducedMotion';
 export default function SellerHubScreen() {
   const { colors } = useAppTheme();
+  const reducedMotionEnabled = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<NavT>();
   const currentUser = useStore((s) => s.currentUser);
@@ -164,7 +166,7 @@ export default function SellerHubScreen() {
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brand} />}
       >
         {/* Hero summary — seller overview */}
-        <Reanimated.View entering={FadeInDown.duration(300)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.heroRow}>
               <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
@@ -184,13 +186,13 @@ export default function SellerHubScreen() {
 
         {/* Seller standards badges */}
         {sellerTrust ? (
-          <Reanimated.View entering={FadeInDown.duration(300).delay(60)} style={styles.badgeSection}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)} style={styles.badgeSection}>
             <SellerStandardsBadges sellerTrust={sellerTrust} align="left" />
           </Reanimated.View>
         ) : null}
 
         {/* Analytics dashboard */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Performance overview</Text>
           </View>
@@ -209,7 +211,7 @@ export default function SellerHubScreen() {
         </Reanimated.View>
 
         {/* Quick actions */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(180)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Quick actions</Text>
           </View>
@@ -237,7 +239,7 @@ export default function SellerHubScreen() {
         </Reanimated.View>
 
         {/* Primary CTA */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(240)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(240)}>
           <AppButton
             title="Create new listing"
             icon={<Ionicons name="add-circle-outline" size={18} color={colors.background} />}

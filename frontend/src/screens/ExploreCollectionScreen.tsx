@@ -18,6 +18,7 @@ import { MasonryGrid } from '../components/ProductCardV2';
 import { Type, Space, Radius, Typography } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { EmptyState } from '../components/EmptyState';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { SkeletonLoader } from '../components/SkeletonLoader';
@@ -39,6 +40,7 @@ export default function ExploreCollectionScreen() {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { listings, isSyncing, lastError, refreshListings } = useBackendData();
+  const reducedMotionEnabled = useReducedMotion();
   const savedProducts = useStore((state) => state.savedProducts);
   const toggleSavedProduct = useStore((state) => state.toggleSavedProduct);
 
@@ -117,7 +119,7 @@ export default function ExploreCollectionScreen() {
   };
 
   const renderHeader = () => (
-    <Reanimated.View entering={FadeInDown.duration(300)} style={styles.headerInfo}>
+    <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.headerInfo}>
       {subtitle ? (
         <Text style={styles.headerSubtitle}>{subtitle}</Text>
       ) : null}

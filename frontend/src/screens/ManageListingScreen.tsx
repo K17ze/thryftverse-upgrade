@@ -302,13 +302,13 @@ export default function ManageListingScreen() {
       <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor="transparent" translucent />
 
       <Reanimated.View style={[styles.floatingHeader, headerBgStyle, { paddingTop: Math.max(insets.top, 20) }]}>
-        <AnimatedPressable style={styles.hdrBtn} onPress={() => navigation.goBack()}>
+        <AnimatedPressable style={styles.hdrBtn} onPress={() => navigation.goBack()} accessibilityLabel="Go back" accessibilityRole="button">
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </AnimatedPressable>
         <Reanimated.View style={headerTitleStyle}>
           <Text style={styles.hdrTitle} numberOfLines={1}>Manage</Text>
         </Reanimated.View>
-        <AnimatedPressable style={styles.hdrBtn} onPress={handleShare}>
+        <AnimatedPressable style={styles.hdrBtn} onPress={handleShare} accessibilityLabel="Share listing" accessibilityRole="button">
           <Ionicons name="share-outline" size={22} color={colors.textPrimary} />
         </AnimatedPressable>
       </Reanimated.View>
@@ -542,7 +542,14 @@ export default function ManageListingScreen() {
         </View>
 
         {/* Delete */}
-        <AnimatedPressable style={styles.deleteRow} activeOpacity={0.8} onPress={handleDeleteListing}>
+        <AnimatedPressable
+          style={styles.deleteRow}
+          activeOpacity={0.8}
+          onPress={handleDeleteListing}
+          accessibilityLabel="Delete this listing permanently"
+          accessibilityRole="button"
+          accessibilityHint="This action cannot be undone"
+        >
           <Ionicons name="trash-outline" size={18} color={colors.danger} />
           <Text style={styles.deleteText}>Delete this listing</Text>
         </AnimatedPressable>

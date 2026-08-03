@@ -17,6 +17,7 @@ import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { parseApiError } from '../lib/apiClient';
 import { requestTwoFactorEnrollment, verifyTwoFactorEnrollment, disableTwoFactor } from '../services/authApi';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
@@ -41,6 +42,7 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
   const setTwoFactorEnabled = useStore((state) => state.setTwoFactorEnabled);
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const reducedMotionEnabled = useReducedMotion();
 
   const [phase, setPhase] = useState<Phase>(twoFactorEnabled ? 'disable' : 'setup');
   const [code, setCode] = useState('');
@@ -342,6 +344,8 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
               source={{ uri: qrDataUrl }}
               style={styles.qrImage}
               onError={() => setQrDataUrl('')}
+              accessibilityLabel="QR code for two-factor authentication setup"
+              accessibilityRole="image"
             />
           </View>
         ) : (
@@ -473,7 +477,7 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
         {recoveryCodes.map((code, i) => (
           <Reanimated.View
             key={i}
-            entering={FadeInDown.duration(200).delay(i * 50)}
+            entering={reducedMotionEnabled ? undefined : FadeInDown.duration(200).delay(i * 50)}
             style={[
               styles.recoveryCodeRow,
               i < recoveryCodes.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth },
@@ -560,7 +564,7 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
-          <Reanimated.View entering={FadeInDown.duration(300)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
             {phase === 'disable' && renderDisableOverview()}
             {phase === 'disable-confirm' && renderDisableConfirm()}
             {phase === 'setup' && renderSetup()}

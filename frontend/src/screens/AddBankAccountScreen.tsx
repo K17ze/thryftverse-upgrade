@@ -16,6 +16,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { formatCountryPolicyScope, isPaymentMethodAllowed } from '../utils/capabilityPolicy';
 import { buildBankAccountPaymentMethod } from '../utils/checkoutFlow';
 import { createUserPaymentMethod } from '../services/commerceApi';
@@ -39,6 +40,7 @@ export default function AddBankAccountScreen({ navigation }: Props) {
   const currentUser = useStore((state) => state.currentUser);
   const savePaymentMethod = useStore((state) => state.savePaymentMethod);
   const { show } = useToast();
+  const reducedMotionEnabled = useReducedMotion();
 
   useEffect(() => {
     let cancelled = false;
@@ -171,7 +173,7 @@ export default function AddBankAccountScreen({ navigation }: Props) {
         ) : (
           <>
             {/* Hero summary — bank account purpose */}
-            <Reanimated.View entering={FadeInDown.duration(300)}>
+            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
               <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <View style={styles.heroRow}>
                   <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
@@ -200,7 +202,7 @@ export default function AddBankAccountScreen({ navigation }: Props) {
             ) : null}
 
             {/* Form section */}
-            <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
+            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
               <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>
                 ACCOUNT DETAILS
               </Text>
@@ -255,7 +257,7 @@ export default function AddBankAccountScreen({ navigation }: Props) {
             </Reanimated.View>
 
             {/* Security note */}
-            <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
+            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
               <View style={styles.secureRow}>
                 <Ionicons name="shield-checkmark-outline" size={14} color={colors.brand} />
                 <Text style={[styles.secureText, { color: colors.brand }]}>
@@ -265,7 +267,7 @@ export default function AddBankAccountScreen({ navigation }: Props) {
             </Reanimated.View>
 
             {/* Info card */}
-            <Reanimated.View entering={FadeInDown.duration(300).delay(180)}>
+            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
               <View style={[styles.infoCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
                 <Ionicons name="information-circle-outline" size={16} color={colors.textMuted} />
                 <Text style={[styles.infoText, { color: colors.textMuted }]}>
@@ -275,7 +277,7 @@ export default function AddBankAccountScreen({ navigation }: Props) {
             </Reanimated.View>
 
             {/* Save button */}
-            <Reanimated.View entering={FadeInDown.duration(300).delay(240)}>
+            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(240)}>
               <AppButton
                 title={isSaving ? 'Saving...' : 'Save bank account'}
                 onPress={handleSaveBank}

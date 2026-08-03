@@ -11,6 +11,7 @@ import { SettingsRow } from '../components/settings/SettingsRow';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { useAppTheme } from '../theme/ThemeContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import type { ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 
@@ -19,6 +20,7 @@ type Props = StackScreenProps<RootStackParamList, 'ChatSettings'>;
 export default function ChatSettingsScreen({ navigation }: Props) {
   const { show } = useToast();
   const { colors } = useAppTheme();
+  const reducedMotionEnabled = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const mutedIds = useStore((s) => s.mutedConversationIds);
   const archivedIds = useStore((s) => s.archivedConversationIds);
@@ -56,7 +58,7 @@ export default function ChatSettingsScreen({ navigation }: Props) {
   return (
     <FlagshipScreen header={<FlagshipHeader title="Chat settings" onBack={() => navigation.goBack()} />}>
       {/* Hero summary */}
-      <Reanimated.View entering={FadeInDown.duration(300)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.heroRow}>
             <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>

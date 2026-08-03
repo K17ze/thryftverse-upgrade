@@ -17,6 +17,7 @@ import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
 import { Space, Typography, DockConstants, Type, Radius } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useStore } from '../store/useStore';
 import { haptics } from '../utils/haptics';
 import { ImageViewer } from '../components/ImageViewer';
@@ -37,6 +38,7 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
   const { formatFromFiat } = useFormattedPrice();
   const currentUser = useStore((s) => s.currentUser);
   const { colors } = useAppTheme();
+  const reducedMotionEnabled = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const photos = preview?.photos ?? [];
@@ -131,7 +133,7 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
         </View>
 
         {/* Listing quality meter — seller guidance */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(40)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(40)}>
           <ListingQualityMeter
             result={useMemo(() => calculateListingQuality({
               photos: preview?.photos ?? [],
@@ -153,7 +155,7 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
         </Reanimated.View>
 
         {/* ── 2. PRODUCT IDENTITY ── */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)}>
           <ListingIdentityBlock
             brand={preview?.brand}
             title={title}
@@ -168,7 +170,7 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
         </Reanimated.View>
 
         {/* ── 3. PURCHASE CONTEXT ── */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
           <View style={styles.contextRow}>
             <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
             <Text style={styles.contextText}>
@@ -179,7 +181,7 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
 
         {/* ── 4. SPECIFICATIONS ── */}
         {specs.length > 0 && (
-          <Reanimated.View entering={FadeInDown.duration(300).delay(160)} style={styles.sectionGroup}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(160)} style={styles.sectionGroup}>
             <Text style={styles.sectionHeading}>Specifications</Text>
             <View style={styles.specGrid}>
               {specs.map((spec, i) => (
@@ -199,7 +201,7 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
         )}
 
         {/* ── 5. DESCRIPTION ── */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(200)} style={styles.sectionGroup}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(200)} style={styles.sectionGroup}>
           <Text style={styles.sectionHeading}>Description</Text>
           {description ? (
             <Text style={styles.descriptionText}>{description}</Text>
@@ -211,7 +213,7 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
         </Reanimated.View>
 
         {/* ── 6. SELLER PREVIEW ── */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(240)} style={styles.sectionGroup}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(240)} style={styles.sectionGroup}>
           <Text style={styles.sectionHeading}>Seller</Text>
           <View style={styles.sellerRow}>
             {sellerAvatar ? (
@@ -234,7 +236,7 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
         </Reanimated.View>
 
         {/* ── 7. SHIPPING & PAYMENT ── */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(280)} style={styles.sectionGroup}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(280)} style={styles.sectionGroup}>
           <Text style={styles.sectionHeading}>Shipping & Payment</Text>
           <View style={styles.specGrid}>
             <View style={[styles.specRow, styles.specRowBorder]}>

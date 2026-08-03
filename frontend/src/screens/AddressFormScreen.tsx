@@ -18,6 +18,7 @@ import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
 import { useHaptic } from '../hooks/useHaptic';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { RootStackParamList } from '../navigation/types';
 import {
   createUserAddress,
@@ -150,6 +151,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
   const currentUser = useStore((state) => state.currentUser);
   const { show } = useToast();
   const haptic = useHaptic();
+  const reducedMotionEnabled = useReducedMotion();
 
   const isEditing = route.params?.mode === 'edit' && savedAddress !== null;
 
@@ -477,7 +479,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
         showsVerticalScrollIndicator={false}
       >
           {/* 2. Editorial introduction */}
-          <Reanimated.View entering={FadeInDown.duration(300)} style={styles.intro}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.intro}>
             <Text style={styles.introTitle}>
               {isEditing ? 'Edit delivery address' : 'Add delivery address'}
             </Text>
@@ -489,7 +491,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
           </Reanimated.View>
 
           {/* 3. Recipient section */}
-          <Reanimated.View entering={FadeInDown.duration(300).delay(60)} style={styles.section}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)} style={styles.section}>
             <Text style={styles.sectionLabel}>Full name</Text>
             <TextInput
               ref={nameRef}
@@ -516,7 +518,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
           <View style={styles.separator} />
 
           {/* 4. Address section */}
-          <Reanimated.View entering={FadeInDown.duration(300).delay(120)} style={styles.section}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)} style={styles.section}>
             <Text style={styles.sectionLabel}>Address line 1</Text>
             <TextInput
               ref={streetRef}
@@ -540,7 +542,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
             )}
           </Reanimated.View>
 
-          <Reanimated.View entering={FadeInDown.duration(300).delay(180)} style={styles.section}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)} style={styles.section}>
             <Text style={styles.sectionLabel}>Address line 2 (optional)</Text>
             <TextInput
               ref={apartmentRef}
@@ -559,7 +561,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
           <View style={styles.separator} />
 
           {/* 5. Location section */}
-          <Reanimated.View entering={FadeInDown.duration(300).delay(240)} style={styles.section}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(240)} style={styles.section}>
             <Text style={styles.sectionLabel}>City / town</Text>
             <TextInput
               ref={cityRef}
@@ -667,7 +669,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
           </View>
 
           {/* 6. Default-address note */}
-          <Reanimated.View entering={FadeInDown.duration(300).delay(300)} style={styles.defaultNote}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(300)} style={styles.defaultNote}>
             <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
             <Text style={styles.defaultNoteText}>
               This will be used as your default delivery address.

@@ -37,6 +37,7 @@ import { searchListingsFromApi } from '../services/feedApi';
 import { friendlyBackendError } from '../services/listingMapper';
 import { ProductAnalytics } from '../platform/product/productAnalytics';
 import { useSavedSearchAlerts } from '../hooks/useSavedSearchAlerts';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 /* ── New Discover Components ── */
 import { HeroCarousel, HeroItem } from '../components/discover/HeroCarousel';
@@ -241,6 +242,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
   const { listings, source, isSyncing, lastError, refreshListings } = useBackendData();
   const { formatFromFiat } = useFormattedPrice();
   const { colors, isDark } = useAppTheme();
+  const reducedMotionEnabled = useReducedMotion();
   const focusProgress = useSharedValue(0);
 
   // Evaluate saved search alerts against current listings
@@ -726,7 +728,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
 
       {/* Hero Search Header */}
       <View style={styles.header}>
-        <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()}>
+        <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} accessibilityLabel="Go back" accessibilityRole="button">
           <Ionicons name="arrow-back" size={26} color={colors.textPrimary} />
         </AnimatedPressable>
 
@@ -764,7 +766,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
       {/* Live search suggestions dropdown */}
       {searchSuggestions.length > 0 && (
         <Reanimated.View
-          entering={FadeInDown.duration(150)}
+          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(150)}
           style={[styles.suggestionsWrap, t.suggestionsWrap]}
         >
           <Text style={[styles.suggestionsHeader, t.suggestionsHeader]}>Suggestions</Text>
@@ -815,7 +817,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
               <>
                 {/* ── FOCUS STATE: Clean recent + trending when search is focused ── */}
                 {isSearchFocused ? (
-                  <Reanimated.View entering={FadeInDown.duration(220)}>
+                  <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(220)}>
                     {/* Recent searches */}
                     {recentSearches.length > 0 && (
                       <EditorialSection kicker="Your history" title="Recent searches">
@@ -1140,12 +1142,12 @@ export default function GlobalSearchScreen({ navigation }: Props) {
 
                 {/* Sort + Filter bar */}
                 <View style={styles.filterBar}>
-                  <AnimatedPressable style={[styles.sortChip, t.sortChip]} onPress={handleCycleSort} activeOpacity={0.8}>
+                  <AnimatedPressable style={[styles.sortChip, t.sortChip]} onPress={handleCycleSort} activeOpacity={0.8} accessibilityLabel={`Sort by ${browseFilters.sort}`} accessibilityRole="button">
                     <Ionicons name="swap-vertical" size={16} color={colors.textSecondary} />
                     <Text style={[styles.sortChipText, t.sortChipText]}>{browseFilters.sort}</Text>
                   </AnimatedPressable>
 
-                  <AnimatedPressable style={[styles.filterChip, t.filterChip]} onPress={handleOpenFilter} activeOpacity={0.8}>
+                  <AnimatedPressable style={[styles.filterChip, t.filterChip]} onPress={handleOpenFilter} activeOpacity={0.8} accessibilityLabel={activeFilterCount > 0 ? `Open filters, ${activeFilterCount} active` : 'Open filters'} accessibilityRole="button">
                     <Ionicons name="options-outline" size={16} color={colors.textSecondary} />
                     <Text style={[styles.filterChipText, t.filterChipText]}>Filter</Text>
                     {activeFilterCount > 0 && (
@@ -1156,7 +1158,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                   </AnimatedPressable>
 
                   {hasActiveDiscoverFilters && (
-                    <AnimatedPressable style={[styles.clearChip, t.clearChip]} onPress={handleClearDiscoverFilters} activeOpacity={0.8}>
+                    <AnimatedPressable style={[styles.clearChip, t.clearChip]} onPress={handleClearDiscoverFilters} activeOpacity={0.8} accessibilityLabel="Clear all filters" accessibilityRole="button">
                       <Ionicons name="close-circle" size={16} color={colors.danger} />
                       <Text style={[styles.clearChipText, t.clearChipText]}>Clear</Text>
                     </AnimatedPressable>

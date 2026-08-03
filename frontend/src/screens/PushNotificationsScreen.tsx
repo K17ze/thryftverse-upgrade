@@ -21,6 +21,7 @@ import { SettingsRow } from '../components/settings/SettingsRow';
 import { SettingsInfoBanner } from '../components/settings/SettingsInfoBanner';
 import { haptics } from '../utils/haptics';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 type Props = StackScreenProps<RootStackParamList, 'PushNotifications'>;
 
@@ -54,6 +55,7 @@ export default function PushNotificationsScreen({ navigation }: Props) {
   const [editingQuietTime, setEditingQuietTime] = React.useState<'start' | 'end' | null>(null);
 
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const reducedMotionEnabled = useReducedMotion();
 
   React.useEffect(() => {
     Notifications.getPermissionsAsync()

@@ -11,6 +11,7 @@ import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { AppButton } from '../components/ui/AppButton';
 import { HoldToSubmitButton } from '../components/ui/HoldToSubmitButton';
 import { useHaptic } from '../hooks/useHaptic';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useToast } from '../context/ToastContext';
 import { cancelCoOwnOrderReservation, placeCoOwnOrder } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
@@ -53,6 +54,7 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
   const isCompactDock = width < 360;
   const haptic = useHaptic();
   const { show } = useToast();
+  const reducedMotionEnabled = useReducedMotion();
   const currentUser = useStore((state) => state.currentUser);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -209,7 +211,7 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
         ]}
       >
         {/* Trade receipt — product identity, order details, totals */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(40)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(40)}>
           <CoOwnTradeReceipt
             imageUri={assetImageUrl}
             title={assetTitle ?? 'Co-Own asset'}
@@ -235,7 +237,7 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
         </Reanimated.View>
 
         {/* Risk disclosure */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(120)} style={styles.riskWrap}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)} style={styles.riskWrap}>
           <CoOwnRiskDisclosure />
         </Reanimated.View>
       </ScrollView>

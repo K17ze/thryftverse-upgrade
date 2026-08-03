@@ -100,6 +100,9 @@ export const Type: Record<string, TypeStyle> = {
   /** 15/21/600 - Strong body, picker values, emphasized descriptions */
   bodyEmphasis: { size: 15, lineHeight: 21, weight: '600', letterSpacing: 0 },
 
+  /** 16/22/700 - Card price hero, emphasized numeric values */
+  bodyLarge: { size: 16, lineHeight: 22, weight: '700', letterSpacing: -0.2 },
+
   /** 14/20/600 - Button text, emphasized content, prices (LEGACY — prefer priceList for actual prices) */
   price: { size: 14, lineHeight: 20, weight: '600', letterSpacing: -0.2 },
 
@@ -367,6 +370,12 @@ export const DockConstants = {
   dualActionHeight: 140,
   /** Stacked compact dock (buttons stacked vertically) — typical total */
   stackedActionHeight: 188,
+  /** Primary button height per Design.md button-primary spec (52px) */
+  primaryButtonHeight: 52,
+  /** Secondary/quiet button height per Design.md button-quiet spec (44px) */
+  secondaryButtonHeight: 44,
+  /** Dock top padding — breathing room above action buttons */
+  dockTopPadding: 10,
 } as const;
 
 // ============================================================================

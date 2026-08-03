@@ -33,6 +33,7 @@ import {
   type EmailPreferences,
 } from '../services/accountApi';
 import { RootStackParamList } from '../navigation/types';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 type Props = StackScreenProps<RootStackParamList, 'EmailNotifications'>;
 
@@ -148,6 +149,7 @@ export default function EmailNotificationsScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
+  const reducedMotionEnabled = useReducedMotion();
 
   const [preferences, setPreferences] = React.useState<EmailPreferences | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -216,7 +218,7 @@ export default function EmailNotificationsScreen({ navigation }: Props) {
         showsVerticalScrollIndicator={false}
       >
         {/* Hero summary — visual identity */}
-        <Reanimated.View entering={FadeInDown.duration(300)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <View style={styles.heroCard}>
             <View style={styles.heroIconRow}>
               <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
@@ -244,7 +246,7 @@ export default function EmailNotificationsScreen({ navigation }: Props) {
           GROUPS.map((group, groupIdx) => (
             <Reanimated.View
               key={group.title}
-              entering={FadeInDown.duration(300).delay((groupIdx + 1) * 80)}
+              entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay((groupIdx + 1) * 80)}
             >
               {/* Section header */}
               <View style={styles.sectionHeader}>

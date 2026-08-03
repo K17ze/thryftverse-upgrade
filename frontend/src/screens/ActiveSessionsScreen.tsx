@@ -5,6 +5,7 @@ import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useToast } from '../context/ToastContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Space, Radius, Type , Typography  } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
@@ -47,6 +48,7 @@ function platformIcon(platform: string): React.ComponentProps<typeof Ionicons>['
 export default function ActiveSessionsScreen({ navigation }: Props) {
   const { show } = useToast();
   const { colors } = useAppTheme();
+  const reducedMotionEnabled = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
@@ -155,7 +157,7 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
         showsVerticalScrollIndicator={false}
       >
         {/* Security overview */}
-        <Reanimated.View entering={FadeIn.duration(300)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
           <View style={[styles.trustSurface, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.trustHeader}>
               <Ionicons name="shield-checkmark-outline" size={20} color={colors.success} />
@@ -174,7 +176,7 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
         </Reanimated.View>
 
         {error && (
-          <Reanimated.View entering={FadeIn.duration(300)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
             <View style={[styles.errorBanner, { backgroundColor: colors.danger + '10', borderColor: colors.danger + '30' }]}>
               <Ionicons name="alert-circle-outline" size={18} color={colors.danger} />
               <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text>
@@ -187,7 +189,7 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
         ) : (
           <>
             {/* This device */}
-            <Reanimated.View entering={FadeIn.duration(300)}>
+            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
               <SettingsSection title="This device" noCard>
                 {currentSessions.length > 0 ? (
                   currentSessions.map((session) => (
@@ -222,7 +224,7 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
             </Reanimated.View>
 
             {/* Other devices */}
-            <Reanimated.View entering={FadeIn.duration(300)}>
+            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
               <SettingsSection title="Other devices" noCard>
                 {otherSessions.length === 0 ? (
                   <View style={styles.emptyGroup}>
@@ -264,7 +266,7 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
 
             {/* End all others */}
             {otherSessions.length > 0 && (
-              <Reanimated.View entering={FadeIn.duration(300)} style={styles.endAllContainer}>
+              <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)} style={styles.endAllContainer}>
                 <AppButton
                   title={revokingOthers ? 'Ending all…' : 'End all other sessions'}
                   onPress={handleEndAllOthers}

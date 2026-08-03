@@ -15,6 +15,7 @@ import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Typography, Radius, Type } from '../theme/designTokens';
 import { useStore } from '../store/useStore';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 
 type TicketFilter = 'all' | 'open' | 'resolved' | 'closed';
@@ -57,6 +58,7 @@ export default function ResolutionCentreScreen() {
 
   const supportTickets = useStore((state) => state.supportTickets);
   const loadSupportTicketsFromApi = useStore((state) => state.loadSupportTicketsFromApi);
+  const reducedMotionEnabled = useReducedMotion();
 
   useFocusEffect(
     useCallback(() => {

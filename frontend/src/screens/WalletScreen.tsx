@@ -696,6 +696,7 @@ export default function WalletScreen({ navigation }: Props) {
                   placeholder="0.00"
                   placeholderTextColor={colors.textMuted}
                   keyboardType="decimal-pad"
+                  returnKeyType="done"
                   accessibilityLabel={`Amount in ${currencyCode}`}
                   accessibilityHint="Enter the amount to convert into 1ZE."
                 />
@@ -744,6 +745,7 @@ export default function WalletScreen({ navigation }: Props) {
                   placeholder="0.00"
                   placeholderTextColor={colors.textMuted}
                   keyboardType="decimal-pad"
+                  returnKeyType="done"
                   accessibilityLabel={`Amount in ${currencyCode}`}
                   accessibilityHint="Enter the fiat amount to buy 1ZE."
                 />
@@ -796,6 +798,7 @@ export default function WalletScreen({ navigation }: Props) {
               placeholder="0.00"
               placeholderTextColor={colors.textMuted}
               keyboardType="decimal-pad"
+              returnKeyType="done"
               accessibilityLabel="Amount in 1ZE"
               accessibilityHint="Enter the 1ZE amount to convert to fiat."
             />
@@ -852,12 +855,22 @@ export default function WalletScreen({ navigation }: Props) {
           {balance.safeguarded && (balance.safeguardingEvidenceUrl || balance.safeguardingTermsUrl) ? (
             <View style={styles.safeguardingLinksRow}>
               {balance.safeguardingEvidenceUrl ? (
-                <Pressable onPress={() => Linking.openURL(balance.safeguardingEvidenceUrl!)}>
+                <Pressable
+                  onPress={() => Linking.openURL(balance.safeguardingEvidenceUrl!)}
+                  style={({ pressed }) => pressed && { opacity: 0.6 }}
+                  accessibilityRole="link"
+                  accessibilityLabel="View safeguarding evidence"
+                >
                   <Text style={[styles.safeguardingLink, { color: colors.brand }]}>Evidence</Text>
                 </Pressable>
               ) : null}
               {balance.safeguardingTermsUrl ? (
-                <Pressable onPress={() => Linking.openURL(balance.safeguardingTermsUrl!)}>
+                <Pressable
+                  onPress={() => Linking.openURL(balance.safeguardingTermsUrl!)}
+                  style={({ pressed }) => pressed && { opacity: 0.6 }}
+                  accessibilityRole="link"
+                  accessibilityLabel="View safeguarding terms"
+                >
                   <Text style={[styles.safeguardingLink, { color: colors.brand }]}>Terms</Text>
                 </Pressable>
               ) : null}

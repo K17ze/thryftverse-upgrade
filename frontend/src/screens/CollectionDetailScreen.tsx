@@ -36,6 +36,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { Typography } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { BoardEmptyGraphic } from '../components/profile/BoardEmptyGraphic';
 import { ShareSheet } from '../components/ShareSheet';
@@ -50,6 +51,7 @@ export default function CollectionDetailScreen() {
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
   const { colors, isDark } = useAppTheme();
+  const reducedMotionEnabled = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [refreshing, setRefreshing] = useState(false);
   const [shareVisible, setShareVisible] = useState(false);
@@ -330,7 +332,7 @@ export default function CollectionDetailScreen() {
 
         {/* Grid */}
         {count > 0 && (
-          <Reanimated.View entering={FadeInDown.duration(300)} style={{ marginTop: Space.md }}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={{ marginTop: Space.md }}>
             <MasonryGrid
               items={collectionItems}
               onPressItem={(item: any) => navigation.navigate('ItemDetail', { itemId: item.id })}
@@ -383,6 +385,7 @@ function MoreLikeThisRow({
   formatFromFiat: any;
 }) {
   const { colors } = useAppTheme();
+  const reducedMotionEnabled = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const similarItems = React.useMemo(() => {
     if (collectionItems.length === 0) return [];

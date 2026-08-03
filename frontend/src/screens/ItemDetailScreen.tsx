@@ -43,7 +43,6 @@ import {
   ProductDescription,
   RecommendationRail,
   SeenInLooksRail,
-  DiscoveryGrid,
   ProductDetailSkeleton,
   FullscreenMediaViewer,
   ProductFamilyBadge,
@@ -791,8 +790,8 @@ export default function ItemDetailScreen() {
               );
             })()}
             <CommerceDetailDisclosureRow
-              label="Delivery & protection"
-              summary="Full details"
+              label="Costs, delivery & protection"
+              summary="Full breakdown"
               onPress={() => {
                 haptic.light();
                 setPurchaseDetailsVisible(true);
@@ -1186,12 +1185,12 @@ export default function ItemDetailScreen() {
       <BottomSheet
         visible={purchaseDetailsVisible}
         onDismiss={() => setPurchaseDetailsVisible(false)}
-        snapPoint={0.58}
+        snapPoint={0.72}
       >
         <View style={[styles.purchaseSheetHeader, { borderBottomColor: colors.borderSubtle }]}>
           <View>
             <Text style={[styles.purchaseSheetTitle, { color: colors.textPrimary }]}>
-              Delivery & protection
+              Costs, delivery & protection
             </Text>
             <Text style={[styles.purchaseSheetSubtitle, { color: colors.textMuted }]}>
               Confirmed terms for this listing
@@ -1200,21 +1199,53 @@ export default function ItemDetailScreen() {
           <Pressable
             onPress={() => setPurchaseDetailsVisible(false)}
             style={styles.sheetCloseTarget}
-            accessibilityLabel="Close delivery and protection"
+            accessibilityLabel="Close costs, delivery and protection"
             accessibilityRole="button"
           >
             <Ionicons name="close" size={22} color={colors.textSecondary} />
           </Pressable>
         </View>
         <View style={styles.purchaseSheetBody}>
+          {/* ── Cost breakdown ──
+              Research (Baymard / EcomEye 2026): unexpected costs are the
+              #1 cause of checkout abandonment — "9% of abandonments
+              [happen] because the final price surprised them." A sheet
+              titled "Confirmed terms" must therefore lead with the
+              landed cost, not policy labels alone.
+              Per Design.md checkout summary spec: line items in
+              tabular numerals, emphasized total, right-aligned.
+              Only backend-supplied values render — never fabricated. */}
+          {hasPrice ? (
+            <CommerceDetailMetricRow label="Item price" value={formattedPrice} />
+          ) : null}
+          {commerce.buyerProtectionFee != null ? (
+            <CommerceDetailMetricRow
+              label="Buyer protection fee"
+              value={formatFromFiat(commerce.buyerProtectionFee, 'GBP', { displayMode: 'fiat' })}
+            />
+          ) : null}
           <CommerceDetailMetricRow
             label="Shipping"
-            value={commerce.shippingMethod ?? 'Confirmed at checkout'}
-            subLabel={
-              commerce.estimatedDeliveryStart && commerce.estimatedDeliveryEnd
-                ? `${commerce.estimatedDeliveryStart}–${commerce.estimatedDeliveryEnd}`
-                : undefined
+            value={
+              commerce.shippingPayer === 'seller'
+                ? 'Free'
+                : 'Calculated at checkout'
             }
+            muted={commerce.shippingPayer !== 'seller'}
+          />
+          {formattedProtectionTotal ? (
+            <CommerceDetailMetricRow
+              label="Estimated total"
+              value={formattedProtectionTotal}
+              subLabel={commerce.shippingPayer === 'seller' ? undefined : 'excl. shipping'}
+              emphasis
+              separated
+            />
+          ) : null}
+          <CommerceDetailMetricRow
+            label="Delivery method"
+            value={commerce.shippingMethod ?? 'Confirmed at checkout'}
+            muted={!commerce.shippingMethod}
           />
           <CommerceDetailMetricRow
             label="Buyer protection"

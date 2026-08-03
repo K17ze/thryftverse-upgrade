@@ -28,6 +28,7 @@ import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useToast } from '../context/ToastContext';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { CoOwnActivitySkeleton } from '../components/coown/CoOwnSkeletons';
@@ -68,6 +69,7 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
   const { show } = useToast();
+  const reducedMotionEnabled = useReducedMotion();
 
   const [orders, setOrders] = React.useState<CoOwnRecurringOrder[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -174,7 +176,7 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
         showsVerticalScrollIndicator={false}
       >
         {/* Hero summary */}
-        <Reanimated.View entering={FadeInDown.duration(300)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <View style={styles.heroCard}>
             <View style={styles.heroIconRow}>
               <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
@@ -214,7 +216,7 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
           <>
             {/* Active orders */}
             {activeOrders.length > 0 && (
-              <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
+              <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)}>
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitle}>Active</Text>
                   <View style={styles.sectionCount}>
@@ -283,7 +285,7 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
 
             {/* Inactive orders */}
             {inactiveOrders.length > 0 && (
-              <Reanimated.View entering={FadeInDown.duration(300).delay(160)}>
+              <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(160)}>
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitle}>Cancelled</Text>
                   <View style={styles.sectionCount}>

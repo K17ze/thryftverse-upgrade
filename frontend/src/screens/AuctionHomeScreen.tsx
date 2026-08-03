@@ -938,6 +938,7 @@ export default function AuctionHomeScreen() {
             onChangeText={handleSearchChange}
             placeholder="Search auctions…"
             autoFocus
+            returnKeyType="search"
             placeholderTextColor={colors.textMuted}
             style={styles.searchOverlayInput}
           />
@@ -959,7 +960,6 @@ export default function AuctionHomeScreen() {
             keyExtractor={(item) => item.id}
             renderItem={renderSearchItem}
             numColumns={2}
-            estimatedItemSize={300}
             ListEmptyComponent={
               searchState.status === 'loading' ? renderLoadingState() : (
                 searchState.status === 'error' ? (
@@ -1053,7 +1053,6 @@ export default function AuctionHomeScreen() {
             keyExtractor={(item) => item.id}
             renderItem={renderFilterItem}
             numColumns={2}
-            estimatedItemSize={300}
             contentContainerStyle={styles.contentContainer}
             showsVerticalScrollIndicator={false}
             refreshControl={

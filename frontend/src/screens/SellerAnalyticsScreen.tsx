@@ -11,6 +11,7 @@ import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/fla
 import { useStore } from '../store/useStore';
 import { fetchUserListingsFromApi, ListingApiItem } from '../services/listingsApi';
 import { fetchSellerAnalytics, fetchTopPerformers, type SellerAnalytics, type TopPerformerListing } from '../services/commerceApi';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 type NavT = StackNavigationProp<RootStackParamList>;
 
@@ -27,6 +28,7 @@ export default function SellerAnalyticsScreen() {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<NavT>();
   const currentUser = useStore((s) => s.currentUser);
+  const reducedMotionEnabled = useReducedMotion();
 
   const [listings, setListings] = useState<ListingApiItem[]>([]);
   const [analytics, setAnalytics] = React.useState<SellerAnalytics | null>(null);
@@ -151,7 +153,7 @@ export default function SellerAnalyticsScreen() {
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brand} />}
       >
         {/* Hero summary — analytics overview */}
-        <Reanimated.View entering={FadeInDown.duration(300)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.heroRow}>
               <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
@@ -170,7 +172,7 @@ export default function SellerAnalyticsScreen() {
         </Reanimated.View>
 
         {/* Period selector */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(60)} style={styles.periodRow}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)} style={styles.periodRow}>
           {(['7d', '30d', '90d'] as const).map((p) => {
             const isActive = period === p;
             return (
@@ -188,7 +190,7 @@ export default function SellerAnalyticsScreen() {
         </Reanimated.View>
 
         {/* Key metrics grid */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Key metrics</Text>
         </View>
@@ -212,7 +214,7 @@ export default function SellerAnalyticsScreen() {
         </Reanimated.View>
 
         {/* Top performing listings */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(180)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Top performing listings</Text>
         </View>

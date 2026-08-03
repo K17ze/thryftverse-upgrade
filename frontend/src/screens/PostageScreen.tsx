@@ -14,6 +14,7 @@ import { Space, Radius, Type } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { formatCountryPolicyScope } from '../utils/capabilityPolicy';
 import { CapabilityCarrier, getUserCountryCapabilities } from '../services/capabilitiesApi';
 import { SettingsCell } from '../components/SettingsCell';
@@ -53,6 +54,7 @@ export default function PostageScreen({ navigation }: Props) {
   const [carriers, setCarriers] = useState(CARRIERS);
   const [carrierScopeLabel, setCarrierScopeLabel] = useState<string | null>(null);
   const [isHydrating, setIsHydrating] = useState(true);
+  const reducedMotionEnabled = useReducedMotion();
 
   useEffect(() => {
     let cancelled = false;

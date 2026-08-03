@@ -54,7 +54,7 @@ import { SharedTransitionView } from '../components/SharedTransitionView';
 import { MasonryGrid, ProductCardV2 } from '../components/ProductCardV2';
 import { DoubleTapHeart } from '../components/DoubleTapHeart';
 import { getBackendSyncStatus } from '../utils/syncStatus';
-import { isVideoUri } from '../utils/media';
+import { isVideoUri, getCategoryFocalPoint } from '../utils/media';
 import { AppButton } from '../components/ui/AppButton';
 import { Space, Radius, Type, Stroke } from '../theme/designTokens';
 import { T } from '../components/ui/Text';
@@ -99,6 +99,7 @@ interface MediaPreviewProps {
   style?: StyleProp<ImageStyle>;
   containerStyle?: StyleProp<ViewStyle>;
   contentFit?: ImageContentFit;
+  focalPoint?: { x: number; y: number };
   autoPlay?: boolean;
   muted?: boolean;
   loop?: boolean;
@@ -111,6 +112,7 @@ function MediaPreview({
   style,
   containerStyle,
   contentFit = 'cover',
+  focalPoint,
   autoPlay = false,
   muted = true,
   loop = true,
@@ -137,6 +139,7 @@ function MediaPreview({
       style={style}
       containerStyle={containerStyle}
       contentFit={contentFit}
+      focalPoint={focalPoint}
       isVisible={isVisible}
     />
   );
@@ -335,6 +338,7 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
                 loop
                 muted
                 contentFit="cover"
+                focalPoint={getCategoryFocalPoint(item.category)}
                 isVisible
               />
             ) : (
@@ -921,7 +925,6 @@ export default function HomeScreen() {
         ref={scrollRef}
         data={feedGridData}
         numColumns={2}
-        estimatedItemSize={gridTileWidth * 1.25 + 90}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.feedContent, { paddingTop: headerExpandedHeight + Space.sm }]}
         onScroll={scrollHandler}

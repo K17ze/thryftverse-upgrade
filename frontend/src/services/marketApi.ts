@@ -86,6 +86,9 @@ export interface AuctionDetail {
    * result/fulfilment contract. Null when the auction is not terminal
    * or fulfilment data is not yet available. */
   fulfilment?: AuctionFulfilmentSummary | null;
+  /** Whether buyer protection (escrow hold) is active for this auction.
+   *  Platform-wide feature — all auction transactions go through escrow. */
+  buyerProtection?: boolean;
 }
 
 /** Canonical auction media record. Per spec 02_AUCTION §7. */

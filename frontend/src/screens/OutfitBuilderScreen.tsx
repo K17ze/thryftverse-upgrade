@@ -27,6 +27,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
@@ -272,6 +273,7 @@ export default function OutfitBuilderScreen() {
   const createCollectionFn = useStore((s) => s.createCollection);
   const addToCollection = useStore((s) => s.addToCollection);
   const { colors, isDark } = useAppTheme();
+  const reducedMotionEnabled = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [activeSlot, setActiveSlot] = useState<OutfitSlot>('top');
@@ -397,7 +399,7 @@ export default function OutfitBuilderScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {/* Outfit Preview */}
-        <Reanimated.View entering={FadeInDown.duration(300)} style={styles.previewWrap}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.previewWrap}>
           <View style={styles.slotRow}>
             {SLOTS.map((slot) => (
               <View key={slot} style={styles.slotWrap}>
@@ -435,7 +437,7 @@ export default function OutfitBuilderScreen() {
 
         {/* AI Suggestion */}
         {aiSuggestion && (
-          <Reanimated.View entering={FadeInUp.duration(250)} style={{ marginHorizontal: Space.md, marginBottom: Space.md }}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInUp.duration(250)} style={{ marginHorizontal: Space.md, marginBottom: Space.md }}>
             <View style={styles.aiCard}>
               <View style={styles.aiRow}>
                 <Ionicons name="sparkles" size={18} color={colors.brand} />
@@ -475,7 +477,7 @@ export default function OutfitBuilderScreen() {
             {slotItems.map((item, idx) => (
               <Reanimated.View
                 key={item.id}
-                entering={FadeInDown.delay(idx * 40).duration(250)}
+                entering={reducedMotionEnabled ? undefined : FadeInDown.delay(idx * 40).duration(250)}
               >
                 <ItemThumb
                   item={item}

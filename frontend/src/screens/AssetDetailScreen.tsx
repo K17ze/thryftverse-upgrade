@@ -133,6 +133,7 @@ export default function AssetDetailScreen() {
   const assetId = route.params?.assetId;
 
   const [asset, setAsset] = React.useState<MarketCoOwnAsset | null>(null);
+  const [isRefreshingAppraisal, setIsRefreshingAppraisal] = React.useState(false);
   const [orderBook, setOrderBook] = React.useState<CoOwnOrderBookSnapshot | null>(null);
   const [orderBookError, setOrderBookError] = React.useState(false);
   const [yourUnits, setYourUnits] = React.useState<number | null>(currentUser?.id ? null : 0);
@@ -671,7 +672,7 @@ export default function AssetDetailScreen() {
           isFav={social.isLiked}
           isSaved={social.isSavedToCollection}
           showDefaultControls={false}
-          heightFraction={isVeryCompact ? 0.48 : isCompact ? 0.5 : 0.56}
+          heightFraction={isVeryCompact ? 0.5 : isCompact ? 0.54 : 0.58}
           initialIndex={fullscreenIndex}
           onActiveIndexChange={setFullscreenIndex}
           onOpenFullscreen={handleOpenFullscreen}
@@ -1098,8 +1099,11 @@ export default function AssetDetailScreen() {
                 />
                 {isIssuer && (
                   <Pressable
-                    style={[styles.refreshBtn, { borderColor: colors.border }]}
+                    style={[styles.refreshBtn, { borderColor: colors.border, opacity: isRefreshingAppraisal ? 0.5 : 1 }]}
+                    disabled={isRefreshingAppraisal}
                     onPress={async () => {
+                      if (isRefreshingAppraisal) return;
+                      setIsRefreshingAppraisal(true);
                       try {
                         await refreshCoOwnAppraisal(assetId, { appraisalValueGbp: asset.appraisalValueGbp ?? 0, appraisalValuer: 'Issuer refresh' });
                         show('Appraisal refresh requested', 'success');
@@ -1108,12 +1112,14 @@ export default function AssetDetailScreen() {
                         setAsset(updated);
                       } catch {
                         show('Unable to refresh appraisal', 'error');
+                      } finally {
+                        setIsRefreshingAppraisal(false);
                       }
                     }}
                     accessibilityRole="button"
-                    accessibilityLabel="Refresh appraisal"
+                    accessibilityLabel={isRefreshingAppraisal ? 'Refreshing appraisal' : 'Refresh appraisal'}
                   >
-                    <Text style={[styles.refreshBtnText, { color: colors.brand }]}>Refresh</Text>
+                    <Text style={[styles.refreshBtnText, { color: colors.brand }]}>{isRefreshingAppraisal ? 'Refreshing…' : 'Refresh'}</Text>
                   </Pressable>
                 )}
               </View>
@@ -1517,7 +1523,7 @@ export default function AssetDetailScreen() {
           <Pressable
             onPress={() => setRiskDisclosureVisible(false)}
             hitSlop={12}
-            style={styles.sheetCloseTarget}
+            style={({ pressed }) => [styles.sheetCloseTarget, pressed && { opacity: 0.5 }]}
             accessibilityLabel="Close risk disclosure"
             accessibilityRole="button"
           >
@@ -1615,12 +1621,13 @@ export default function AssetDetailScreen() {
                 return (
                   <Pressable
                     key={c}
-                    style={[
+                    style={({ pressed }) => [
                       priceAlertStyles.conditionTab,
                       {
                         backgroundColor: isSelected ? semanticColor : colors.surfaceAlt,
                         borderColor: isSelected ? semanticColor : colors.border,
                       },
+                      pressed && { opacity: 0.7 },
                     ]}
                     onPress={() => { haptics.tap(); setAlertCondition(c); }}
                     accessibilityRole="button"

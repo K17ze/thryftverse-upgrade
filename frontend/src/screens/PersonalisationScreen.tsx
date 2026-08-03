@@ -10,6 +10,7 @@ import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
 import { useHaptic } from '../hooks/useHaptic';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { AudiencePreferenceGrid } from '../components/personalisation/AudiencePreferenceGrid';
 import { DiscoveryPreferenceRow } from '../components/personalisation/DiscoveryPreferenceRow';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
@@ -39,6 +40,7 @@ export default function PersonalisationScreen() {
   const [pickerMode, setPickerMode] = useState<PreferencePickerMode>(null);
   const { show } = useToast();
   const haptic = useHaptic();
+  const reducedMotionEnabled = useReducedMotion();
 
   const handleSelectGender = useCallback(
     (gender: string) => {

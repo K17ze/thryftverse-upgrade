@@ -25,6 +25,7 @@ import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useToast } from '../context/ToastContext';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AppButton } from '../components/ui/AppButton';
@@ -58,6 +59,7 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
   const { show } = useToast();
+  const reducedMotionEnabled = useReducedMotion();
 
   const [accounts, setAccounts] = React.useState<ConnectedAccount[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -131,7 +133,7 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
         showsVerticalScrollIndicator={false}
       >
         {/* Hero summary — visual identity for the screen */}
-        <Reanimated.View entering={FadeInDown.duration(300)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <View style={styles.heroCard}>
             <View style={styles.heroIconRow}>
               <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
@@ -162,7 +164,7 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
             onCtaPress={() => { setIsLoading(true); void load(); }}
           />
         ) : accounts.length === 0 ? (
-          <Reanimated.View entering={FadeInDown.duration(300).delay(100)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(100)}>
             <View style={styles.emptyCard}>
               <View style={styles.emptyIconWrap}>
                 <Ionicons name="link-outline" size={36} color={colors.textMuted} />
@@ -220,7 +222,7 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
         )}
 
         {/* Security note — elevated with icon and card */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(200)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(200)}>
           <View style={styles.securityNote}>
             <View style={styles.securityIconWrap}>
               <Ionicons name="shield-checkmark" size={20} color={colors.success} />

@@ -5,6 +5,7 @@ import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { AnimatedPressable } from './AnimatedPressable';
 import { Typography } from '../theme/designTokens';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 interface RetryStateProps {
   onRetry: () => void;
@@ -14,7 +15,8 @@ interface RetryStateProps {
 export function RetryState({ onRetry, message = 'Something went wrong.' }: RetryStateProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
-  const enter = FadeIn.duration(300);
+  const reducedMotionEnabled = useReducedMotion();
+  const enter = reducedMotionEnabled ? undefined : FadeIn.duration(300);
 
   return (
     <View style={styles.container}>

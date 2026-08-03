@@ -14,6 +14,7 @@ import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useToast } from '../context/ToastContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Typography, Space, Radius } from '../theme/designTokens';
 import { VisualCategoryTile } from '../components/discover/VisualCategoryTile';
 import { DiscoverySectionHeader } from '../components/discover/DiscoverySectionHeader';
@@ -44,6 +45,7 @@ export default function CategoryTreeScreen() {
   const route = useRoute<RouteT>();
   const { show } = useToast();
   const { colors, isDark } = useAppTheme();
+  const reducedMotionEnabled = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { categoryPrefix } = route.params;
 
@@ -65,7 +67,7 @@ export default function CategoryTreeScreen() {
         </View>
 
         {/* Premium full-width View All */}
-        <Reanimated.View entering={FadeInDown.duration(350).delay(100)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(100)}>
           <AnimatedPressable
             style={styles.viewAllRow}
             onPress={() => navigation.navigate('Browse', { categoryId: resolvedPrefix.toLowerCase(), title: `All ${resolvedPrefix}` })}
@@ -77,7 +79,7 @@ export default function CategoryTreeScreen() {
         </Reanimated.View>
 
         {/* 2-column VisualCategoryTile grid */}
-        <Reanimated.View entering={FadeInDown.duration(350).delay(150)} style={styles.gridWrap}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(150)} style={styles.gridWrap}>
           <View style={styles.grid}>
             {sections.map((section, index) => (
               <VisualCategoryTile

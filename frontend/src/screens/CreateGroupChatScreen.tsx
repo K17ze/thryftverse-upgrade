@@ -263,7 +263,13 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
                 <View style={styles.createErrorBanner}>
                   <Ionicons name="alert-circle" size={16} color={colors.danger} />
                   <Text style={styles.createErrorText}>{createError}</Text>
-                  <Pressable onPress={handleRetryCreate} hitSlop={8}>
+                  <Pressable
+                    onPress={handleRetryCreate}
+                    hitSlop={8}
+                    style={({ pressed }) => pressed && { opacity: 0.5 }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Retry creating group"
+                  >
                     <Text style={styles.retryText}>Retry</Text>
                   </Pressable>
                 </View>

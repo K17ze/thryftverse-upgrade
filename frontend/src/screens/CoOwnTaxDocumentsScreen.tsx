@@ -26,6 +26,7 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { CoOwnActivitySkeleton } from '../components/coown/CoOwnSkeletons';
 import { AppButton } from '../components/ui/AppButton';
@@ -49,6 +50,7 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
   const { show } = useToast();
+  const reducedMotionEnabled = useReducedMotion();
 
   const [doc, setDoc] = React.useState<CoOwnTaxDocument | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -121,7 +123,7 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
         ) : (
           <>
             {/* Hero — tax year with P&L as dominant number */}
-            <Reanimated.View entering={FadeInDown.duration(300)}>
+            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
               <View style={styles.heroCard}>
                 <View style={styles.heroTop}>
                   <View style={styles.heroIconWrap}>
@@ -155,7 +157,7 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
             </Reanimated.View>
 
             {/* Summary breakdown */}
-            <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
+            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Summary</Text>
               </View>
@@ -186,7 +188,7 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
 
             {/* Purchases breakdown */}
             {doc.purchases.length > 0 && (
-              <Reanimated.View entering={FadeInDown.duration(300).delay(160)}>
+              <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(160)}>
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitle}>Purchases by asset</Text>
                 </View>
@@ -206,7 +208,7 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
 
             {/* Sales breakdown */}
             {doc.sales.length > 0 && (
-              <Reanimated.View entering={FadeInDown.duration(300).delay(240)}>
+              <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(240)}>
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitle}>Sales by asset</Text>
                 </View>
@@ -226,7 +228,7 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
 
             {/* Distributions breakdown */}
             {doc.distributions.length > 0 && (
-              <Reanimated.View entering={FadeInDown.duration(300).delay(320)}>
+              <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(320)}>
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitle}>Distributions by asset</Text>
                 </View>
@@ -245,7 +247,7 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
             )}
 
             {/* Disclaimer */}
-            <Reanimated.View entering={FadeInDown.duration(300).delay(400)}>
+            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(400)}>
               <View style={styles.disclaimerCard}>
                 <View style={styles.disclaimerIconWrap}>
                   <Ionicons name="information-circle" size={18} color={colors.textMuted} />

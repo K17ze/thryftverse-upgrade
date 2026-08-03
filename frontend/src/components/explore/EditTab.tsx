@@ -18,6 +18,7 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../navigation/types';
 import { useHaptic } from '../../hooks/useHaptic';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useToast } from '../../context/ToastContext';
 import { useBackendData } from '../../context/BackendDataContext';
 import { fetchTrendingListings, type TrendingListing } from '../../services/marketApi';
@@ -50,6 +51,7 @@ export default function EditTab() {
   const haptic = useHaptic();
   const { show } = useToast();
   const { listings } = useBackendData();
+  const reducedMotionEnabled = useReducedMotion();
 
   const [trending, setTrending] = React.useState<TrendingListing[]>([]);
   const [trendingLoading, setTrendingLoading] = React.useState(true);
@@ -120,7 +122,7 @@ export default function EditTab() {
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
       {/* Trending Rail */}
       {trendingListings.length > 0 && (
-        <Reanimated.View entering={FadeInDown.duration(300)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <DiscoverySectionHeader
             kicker="What's hot"
             title="Trending Now"
@@ -160,7 +162,7 @@ export default function EditTab() {
 
       {/* New Arrivals */}
       {newestListings.length > 0 && (
-        <Reanimated.View entering={FadeInDown.duration(350).delay(80)} style={{ marginTop: Space.lg }}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(80)} style={{ marginTop: Space.lg }}>
           <DiscoverySectionHeader
             kicker="Fresh listings"
             title="New Arrivals"
@@ -183,7 +185,7 @@ export default function EditTab() {
 
       {/* Price Drops */}
       {priceDropListings.length > 0 && (
-        <Reanimated.View entering={FadeInDown.duration(350).delay(120)} style={{ marginTop: Space.lg }}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(120)} style={{ marginTop: Space.lg }}>
           <DiscoverySectionHeader
             kicker="Reduced"
             title="Price Drops"
@@ -205,7 +207,7 @@ export default function EditTab() {
       )}
 
       {/* Style Quiz */}
-      <Reanimated.View entering={FadeInDown.duration(350).delay(160)} style={{ marginTop: Space.lg }}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(160)} style={{ marginTop: Space.lg }}>
         <DiscoverySectionHeader
           kicker="Personalise"
           title="Find Your Aesthetic"

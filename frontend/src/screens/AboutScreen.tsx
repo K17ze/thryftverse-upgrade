@@ -11,6 +11,7 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useToast } from '../context/ToastContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Space, Radius, Type } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { Typography } from '../theme/designTokens';
@@ -21,6 +22,7 @@ type Props = StackScreenProps<RootStackParamList, 'About'>;
 export default function AboutScreen({ navigation }: Props) {
   const { show } = useToast();
   const { colors } = useAppTheme();
+  const reducedMotionEnabled = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const handleOpenExternal = async (url: string) => {

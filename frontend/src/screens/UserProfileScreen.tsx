@@ -434,7 +434,6 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   // MAIN RENDER
   // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   const numColumns = activeTab === 'Reviews' ? 1 : activeTab === 'Looks' ? LOOK_COLS : 2;
-  const estimatedItemSize = activeTab === 'Shop' ? cardHeight + 64 : activeTab === 'Looks' ? lookTileHeight + LOOK_GAP : 130;
 
   const listHeader = (
     <View>
@@ -584,7 +583,12 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     if (activeQuery.isLoading) return null;
     if (activeQuery.error) {
       return (
-        <Pressable style={styles.listState} onPress={() => activeQuery.refetch()} accessibilityRole="button" accessibilityLabel="Retry loading content">
+        <Pressable
+          style={({ pressed }) => [styles.listState, pressed && { opacity: 0.7 }]}
+          onPress={() => activeQuery.refetch()}
+          accessibilityRole="button"
+          accessibilityLabel="Retry loading content"
+        >
           <Ionicons name="cloud-offline-outline" size={32} color={MUTED} />
           <Text style={[styles.listStateTitle, t.listStateTitle]}>Couldn't load {activeTab === 'Shop' ? 'listings' : activeTab === 'Looks' ? 'Looks' : 'reviews'}</Text>
           <Text style={[styles.listStateSub, t.listStateSub]}>Tap to retry</Text>
@@ -779,7 +783,6 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         onEndReachedThreshold={0.5}
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={MUTED} colors={[MUTED]} />}
         key={`list-${numColumns}`}
-        estimatedItemSize={estimatedItemSize}
         onContentSizeChange={handleContentSizeChange}
       />
 

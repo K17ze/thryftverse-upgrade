@@ -8,6 +8,7 @@ import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Space, Radius } from '../../theme/designTokens';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -46,6 +47,7 @@ export function LookPreviewCard({
   index = 0,
 }: LookPreviewCardProps) {
   const { colors } = useAppTheme();
+  const reducedMotionEnabled = useReducedMotion();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   return (
     <Reanimated.View entering={FadeInDown.duration(350).delay(index * 60).springify()}>

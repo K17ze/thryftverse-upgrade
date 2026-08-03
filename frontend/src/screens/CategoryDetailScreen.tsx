@@ -11,6 +11,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { CATEGORIES } from '../constants/categories';
 import { useBackendData } from '../context/BackendDataContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useAppTheme } from '../theme/ThemeContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { EmptyState } from '../components/EmptyState';
@@ -27,6 +28,7 @@ export default function CategoryDetailScreen() {
   const route = useRoute<any>();
   const { listings, isSyncing, lastError, refreshListings } = useBackendData();
   const { colors, isDark } = useAppTheme();
+  const reducedMotionEnabled = useReducedMotion();
   const categoryId = route.params?.categoryId as string | undefined;
 
   const category = useMemo(() => {
@@ -205,7 +207,7 @@ export default function CategoryDetailScreen() {
             ))}
           </View>
         ) : gridData.length > 0 ? (
-          <Reanimated.View entering={FadeIn.duration(220)} style={styles.grid}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(220)} style={styles.grid}>
             <PinterestMasonryGrid
               items={gridData}
               onPressItem={(item) =>

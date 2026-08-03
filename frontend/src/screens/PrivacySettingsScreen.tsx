@@ -6,6 +6,7 @@ import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
@@ -19,6 +20,7 @@ type Props = StackScreenProps<RootStackParamList, 'PrivacySettings'>;
 export default function PrivacySettingsScreen({ navigation }: Props) {
   const { show } = useToast();
   const { colors } = useAppTheme();
+  const reducedMotionEnabled = useReducedMotion();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const accountPreferences = useStore((s) => s.accountPreferences);
   const updateAccountPreferences = useStore((s) => s.updateAccountPreferences);
@@ -73,7 +75,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
   return (
     <FlagshipScreen header={<FlagshipHeader title="Privacy & safety" onBack={() => navigation.goBack()} />}>
       {/* Privacy posture hero */}
-      <Reanimated.View entering={FadeInDown.duration(300)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.heroRow}>
             <View style={[styles.heroIcon, { backgroundColor: postureColor }]}>
@@ -92,7 +94,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
         </View>
       </Reanimated.View>
 
-      <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
       <SettingsSection title="Visibility" noCard>
         <SettingsRow
           icon="eye-outline"
@@ -120,7 +122,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
       </SettingsSection>
       </Reanimated.View>
 
-      <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
       <SettingsSection title="Shop activity" noCard>
         <SettingsRow
           icon="bag-outline"
@@ -134,7 +136,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
       </SettingsSection>
       </Reanimated.View>
 
-      <Reanimated.View entering={FadeInDown.duration(300).delay(180)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
       <SettingsSection title="Messaging" noCard>
         <SettingsRow
           icon="chatbubble-ellipses-outline"
@@ -147,7 +149,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
       </SettingsSection>
       </Reanimated.View>
 
-      <Reanimated.View entering={FadeInDown.duration(300).delay(240)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(240)}>
       <SettingsSection title="Blocked users" noCard>
         <SettingsRow
           icon="ban-outline"
@@ -160,7 +162,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
       </SettingsSection>
       </Reanimated.View>
 
-      <Reanimated.View entering={FadeInDown.duration(300).delay(300)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(300)}>
       <SettingsSection title="Legal" noCard>
         <SettingsRow
           icon="document-text-outline"

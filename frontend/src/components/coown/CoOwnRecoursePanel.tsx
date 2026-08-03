@@ -158,7 +158,7 @@ export function CoOwnRecoursePanel({
             <Ionicons
               name={item.icon as any}
               size={16}
-              color={item.positive ? colors.brand : item.warning ? '#d97706' : colors.textMuted}
+              color={item.positive ? colors.brand : item.warning ? colors.warning : colors.textMuted}
             />
             <View style={styles.itemBody}>
               <Text style={[styles.itemLabel, { color: colors.textMuted }]}>{item.label}</Text>
@@ -169,7 +169,7 @@ export function CoOwnRecoursePanel({
                     color: item.positive
                       ? colors.textPrimary
                       : item.warning
-                      ? '#d97706'
+                      ? colors.warning
                       : colors.textSecondary,
                   },
                 ]}
@@ -205,7 +205,7 @@ export function CoOwnRecoursePanel({
         <Pressable
           style={({ pressed }) => [
             styles.demandButton,
-            { borderColor: '#d97706', backgroundColor: 'rgba(217,119,6,0.06)' },
+            { borderColor: colors.warning, backgroundColor: colors.warning + '0F' },
             pressed && { opacity: 0.7 },
           ]}
           onPress={() => {
@@ -215,8 +215,8 @@ export function CoOwnRecoursePanel({
           accessibilityRole="button"
           accessibilityLabel="Respond to verification request"
         >
-          <Ionicons name="shield-checkmark-outline" size={16} color="#d97706" />
-          <Text style={[styles.demandButtonText, { color: '#d97706' }]}>
+          <Ionicons name="shield-checkmark-outline" size={16} color={colors.warning} />
+          <Text style={[styles.demandButtonText, { color: colors.warning }]}>
             Respond to verification ({activeVerificationDemands} pending)
           </Text>
         </Pressable>
@@ -241,7 +241,7 @@ export function CoOwnRecoursePanel({
                 size={14}
                 color={
                   d.status === 'compliant' ? colors.brand
-                  : d.status === 'failed' ? '#dc2626'
+                  : d.status === 'failed' ? colors.danger
                   : colors.textMuted
                 }
               />

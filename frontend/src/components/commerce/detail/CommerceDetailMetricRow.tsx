@@ -24,6 +24,15 @@ export interface CommerceDetailMetricRowProps {
   trailing?: React.ReactNode;
   /** Optional sub-label under the value (e.g. "per unit"). */
   subLabel?: string;
+  /** When true, the row reads as a summary total: the value uses
+   * `Type.priceList` and the label is emphasized. Per Design.md
+   * checkout summary spec: "Type.priceList for line items,
+   * Type.priceLarge for total, right-aligned, tabular alignment for
+   * numbers." Used for the estimated-total row in cost breakdowns. */
+  emphasis?: boolean;
+  /** When true, a hairline separator is drawn above the row. Used to
+   * detach a summary total from the line items above it. */
+  separated?: boolean;
 }
 
 export function CommerceDetailMetricRow({
@@ -32,13 +41,24 @@ export function CommerceDetailMetricRow({
   muted = false,
   trailing,
   subLabel,
+  emphasis = false,
+  separated = false,
 }: CommerceDetailMetricRowProps) {
   const { colors } = useAppTheme();
 
   return (
-    <View style={styles.row}>
+    <View
+      style={[
+        styles.row,
+        separated && [styles.rowSeparated, { borderTopColor: colors.borderSubtle }],
+      ]}
+    >
       <Text
-        style={[styles.label, { color: colors.textSecondary }]}
+        style={[
+          styles.label,
+          emphasis && styles.labelEmphasis,
+          { color: emphasis ? colors.textPrimary : colors.textSecondary },
+        ]}
         numberOfLines={2}
       >
         {label}
@@ -48,6 +68,7 @@ export function CommerceDetailMetricRow({
           <Text
             style={[
               styles.value,
+              emphasis && styles.valueEmphasis,
               { color: muted ? colors.textMuted : colors.textPrimary },
             ]}
             numberOfLines={2}
@@ -74,12 +95,22 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     paddingVertical: Space.sm,
   },
+  // Hairline detaching a summary total from the line items above it.
+  // Per Design.md stroke grammar: separators are hairline.
+  rowSeparated: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    marginTop: Space.xs,
+    paddingTop: Space.sm + Space.xs,
+  },
   label: {
     fontSize: Type.body.size,
     lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.regular,
     flex: 1,
     flexShrink: 1,
+  },
+  labelEmphasis: {
+    fontFamily: Typography.family.semibold,
   },
   valueCluster: {
     flexDirection: 'row',
@@ -96,6 +127,14 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
     flexShrink: 1,
     textAlign: 'right',
+  },
+  // Per Design.md checkout summary spec: the total is the dominant
+  // number in a cost breakdown.
+  valueEmphasis: {
+    fontSize: Type.priceList.size,
+    lineHeight: Type.priceList.lineHeight,
+    fontFamily: Typography.family.bold,
+    letterSpacing: Type.priceList.letterSpacing,
   },
   subLabel: {
     fontSize: Type.caption.size,

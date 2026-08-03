@@ -39,6 +39,7 @@ import { Typography } from '../theme/designTokens';
 import { MoodboardCollectionGrid } from '../components/profile/MoodboardCollectionGrid';
 import { BoardEmptyGraphic } from '../components/profile/BoardEmptyGraphic';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 type TabKey = 'SAVED' | 'WISHLIST' | 'COLLECTIONS';
 type SortOption = 'Default' | 'Price: Low to High' | 'Price: High to Low' | 'Newest' | 'Recently saved';
@@ -105,6 +106,7 @@ export default function ClosetScreen() {
   const loadCollectionsFromApi = useStore((state) => state.loadCollectionsFromApi);
   const currentUser = useStore((state) => state.currentUser);
   const { listings, refreshListings, isSyncing, lastError } = useBackendData();
+  const reducedMotionEnabled = useReducedMotion();
 
   React.useEffect(() => {
     let mounted = true;
@@ -409,7 +411,7 @@ export default function ClosetScreen() {
       );
     }
     return (
-      <Reanimated.View entering={FadeInDown.duration(300).delay(50)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(50)}>
         {renderSortBar()}
         {renderSortMenu()}
         {/* Brand filter chips */}
@@ -438,7 +440,7 @@ export default function ClosetScreen() {
       );
     }
     return (
-      <Reanimated.View entering={FadeInDown.duration(300).delay(50)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(50)}>
         {renderSortBar()}
         {renderSortMenu()}
         {/* Brand filter chips */}
@@ -502,7 +504,7 @@ export default function ClosetScreen() {
     });
 
     return (
-      <Reanimated.View entering={FadeInDown.duration(300).delay(50)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(50)}>
         {renderSortBar()}
         <MoodboardCollectionGrid
           boards={boardData}

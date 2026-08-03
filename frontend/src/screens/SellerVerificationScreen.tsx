@@ -17,6 +17,7 @@ import { CachedImage } from '../components/CachedImage';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import {
   fetchSellerVerificationDemands,
   type SellerVerificationDemand,
@@ -58,6 +59,7 @@ export default function SellerVerificationScreen() {
   const currentUser = useStore((s) => s.currentUser);
   const { show } = useToast();
   const haptic = useHaptic();
+  const reducedMotionEnabled = useReducedMotion();
 
   const [demands, setDemands] = useState<SellerVerificationDemand[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -117,7 +119,7 @@ export default function SellerVerificationScreen() {
     const daysLeft = Math.ceil((deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
     return (
-      <Reanimated.View key={demand.id} entering={FadeInDown.duration(250).delay(index * 30)}>
+      <Reanimated.View key={demand.id} entering={reducedMotionEnabled ? undefined : FadeInDown.duration(250).delay(index * 30)}>
         <Pressable
           style={({ pressed }) => [
             styles.demandCard,
@@ -154,7 +156,11 @@ export default function SellerVerificationScreen() {
 
           {/* Status row */}
           <View style={styles.demandStatusRow}>
-            <View style={styles.statusBadge}>
+            <View
+              style={styles.statusBadge}
+              accessibilityRole="text"
+              accessibilityLabel={`Verification status: ${isOverdue ? 'Overdue' : demand.status}`}
+            >
               <Ionicons
                 name={statusIcon as any}
                 size={14}

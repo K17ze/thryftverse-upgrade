@@ -21,6 +21,7 @@ import { useAppTheme } from '../theme/ThemeContext';
 import { Space, Typography, DockConstants, Type, Radius } from '../theme/designTokens';
 import { useToast } from '../context/ToastContext';
 import { useCurrencyPref } from '../hooks/useCurrencyPref';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { CURRENCIES } from '../constants/currencies';
 import { sanitizeDecimalInput } from '../utils/currencyAuthoringFlows';
 import { convertPickerAsset, validateMediaAssets, ListingMediaDraftItem } from '../utils/mediaUploadAsset';
@@ -86,6 +87,7 @@ export default function EditListingScreen() {
   const currencySymbol = CURRENCIES[currencyCode].symbol;
   const { refreshListings } = useBackendData();
   const queryClient = useQueryClient();
+  const reducedMotionEnabled = useReducedMotion();
 
   const [listing, setListing] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -638,7 +640,7 @@ export default function EditListingScreen() {
           showsVerticalScrollIndicator={false}
         >
           {/* ── 2. LISTING MEDIA STUDIO ── */}
-          <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(0)}>
           {isOwner ? (
             <ListingMediaStudio
               items={mediaItems}
@@ -687,7 +689,7 @@ export default function EditListingScreen() {
           )}
 
           {/* ── 4. DETAILS ── */}
-          <Reanimated.View entering={FadeInDown.duration(300).delay(60)} style={styles.sectionGroup}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)} style={styles.sectionGroup}>
             <Text style={[styles.sectionHeading, t.sectionHeading]}>Details</Text>
 
             <View style={styles.fieldGroup}>
@@ -769,7 +771,7 @@ export default function EditListingScreen() {
           </Reanimated.View>
 
           {/* ── 5. PRICING ── */}
-          <Reanimated.View entering={FadeInDown.duration(300).delay(120)} style={styles.sectionGroup}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)} style={styles.sectionGroup}>
             <Text style={[styles.sectionHeading, t.sectionHeading]}>Pricing</Text>
 
             <View style={styles.fieldGroup}>
@@ -810,7 +812,7 @@ export default function EditListingScreen() {
           </Reanimated.View>
 
           {/* ── 6. DESCRIPTION ── */}
-          <Reanimated.View entering={FadeInDown.duration(300).delay(180)} style={styles.sectionGroup}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)} style={styles.sectionGroup}>
             <Text style={[styles.sectionHeading, t.sectionHeading]}>Description</Text>
             <View style={styles.fieldGroup}>
               <TextInput
@@ -829,7 +831,7 @@ export default function EditListingScreen() {
           </Reanimated.View>
 
           {/* ── 7. SHIPPING ── */}
-          <Reanimated.View entering={FadeInDown.duration(300).delay(240)} style={styles.sectionGroup}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(240)} style={styles.sectionGroup}>
             <Text style={[styles.sectionHeading, t.sectionHeading]}>Shipping</Text>
 
             <Pressable

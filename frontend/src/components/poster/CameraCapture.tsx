@@ -13,6 +13,7 @@ import { CameraView, useCameraPermissions, CameraType } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useToast } from '../../context/ToastContext';
+import { useHaptic } from '../../hooks/useHaptic';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const SHUTTER_SIZE = 88;
@@ -26,6 +27,7 @@ interface CameraCaptureProps {
 export default function CameraCapture({ onPhotoCapture, onClose }: CameraCaptureProps) {
   const { colors } = useAppTheme();
   const { show } = useToast();
+  const haptic = useHaptic();
   const cameraRef = React.useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = React.useState<CameraType>('back');
@@ -44,10 +46,12 @@ export default function CameraCapture({ onPhotoCapture, onClose }: CameraCapture
   }, [permission]);
 
   const toggleFacing = () => {
+    haptic.light();
     setFacing((prev) => (prev === 'back' ? 'front' : 'back'));
   };
 
   const toggleFlash = () => {
+    haptic.light();
     setFlash((prev) => (prev === 'off' ? 'on' : 'off'));
   };
 
@@ -109,7 +113,12 @@ export default function CameraCapture({ onPhotoCapture, onClose }: CameraCapture
   if (!permission.granted) {
     return (
       <View style={styles.permissionOverlay}>
-        <Pressable style={styles.permissionBtn} onPress={requestPermission}>
+        <Pressable
+          style={({ pressed }) => [styles.permissionBtn, pressed && { opacity: 0.7 }]}
+          onPress={requestPermission}
+          accessibilityRole="button"
+          accessibilityLabel="Grant camera permission"
+        >
           <Ionicons name="camera-outline" size={32} color="#fff" />
         </Pressable>
       </View>
@@ -148,11 +157,23 @@ export default function CameraCapture({ onPhotoCapture, onClose }: CameraCapture
 
       {/* Top controls */}
       <View style={styles.topBar} pointerEvents="box-none">
-        <Pressable style={styles.topIconBtn} onPress={onClose} hitSlop={12}>
+        <Pressable
+          style={({ pressed }) => [styles.topIconBtn, pressed && { opacity: 0.5 }]}
+          onPress={onClose}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="Close camera"
+        >
           <Ionicons name="close" size={26} color="#fff" />
         </Pressable>
 
-        <Pressable style={styles.topIconBtn} onPress={toggleFlash} hitSlop={12}>
+        <Pressable
+          style={({ pressed }) => [styles.topIconBtn, pressed && { opacity: 0.5 }]}
+          onPress={toggleFlash}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel={flash === 'on' ? 'Turn off flash' : 'Turn on flash'}
+        >
           <Ionicons
             name={flash === 'on' ? 'flash' : 'flash-off'}
             size={24}
@@ -160,25 +181,48 @@ export default function CameraCapture({ onPhotoCapture, onClose }: CameraCapture
           />
         </Pressable>
 
-        <Pressable style={styles.topIconBtn} onPress={toggleFacing} hitSlop={12}>
+        <Pressable
+          style={({ pressed }) => [styles.topIconBtn, pressed && { opacity: 0.5 }]}
+          onPress={toggleFacing}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="Flip camera"
+        >
           <Ionicons name="camera-reverse-outline" size={24} color="#fff" />
         </Pressable>
       </View>
 
       {/* Zoom slider (right edge) */}
       <View style={styles.zoomBar} pointerEvents="box-none">
-        <Pressable style={styles.zoomBtn} onPress={() => handleZoomChange(-0.1)} hitSlop={8}>
+        <Pressable
+          style={({ pressed }) => [styles.zoomBtn, pressed && { opacity: 0.5 }]}
+          onPress={() => handleZoomChange(-0.1)}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Zoom out"
+        >
           <Ionicons name="remove" size={16} color="#fff" />
         </Pressable>
         <Text style={styles.zoomText}>{Math.round(zoom * 10)}x</Text>
-        <Pressable style={styles.zoomBtn} onPress={() => handleZoomChange(0.1)} hitSlop={8}>
+        <Pressable
+          style={({ pressed }) => [styles.zoomBtn, pressed && { opacity: 0.5 }]}
+          onPress={() => handleZoomChange(0.1)}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Zoom in"
+        >
           <Ionicons name="add" size={16} color="#fff" />
         </Pressable>
       </View>
 
       {/* Shutter button */}
       <View style={styles.shutterWrap} pointerEvents="box-none">
-        <Pressable onPress={handleShutterPress} hitSlop={24}>
+        <Pressable
+          onPress={handleShutterPress}
+          hitSlop={24}
+          accessibilityRole="button"
+          accessibilityLabel="Capture photo"
+        >
           <Animated.View style={[styles.shutterOuter, { transform: [{ scale: scaleAnim }] }]}>
             <View style={styles.shutterInner} />
           </Animated.View>

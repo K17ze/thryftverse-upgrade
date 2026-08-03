@@ -25,6 +25,7 @@ import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { RootStackParamList } from '../navigation/types';
 
@@ -53,6 +54,7 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
+  const reducedMotionEnabled = useReducedMotion();
 
   // Local state — persisted via AsyncStorage in a real implementation
   const [textSize, setTextSize] = React.useState<TextSize>('medium');
@@ -126,7 +128,7 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
         showsVerticalScrollIndicator={false}
       >
         {/* Hero summary */}
-        <Reanimated.View entering={FadeInDown.duration(300)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <View style={styles.heroCard}>
             <View style={styles.heroIconRow}>
               <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
@@ -143,7 +145,7 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
         </Reanimated.View>
 
         {/* Text Size — visual segmented selector */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)}>
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Text size</Text>
             <Text style={styles.sectionDescription}>
@@ -189,7 +191,7 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
         </Reanimated.View>
 
         {/* Motion */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(160)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(160)}>
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Motion</Text>
             {motionToggles.map(renderToggleRow)}
@@ -197,7 +199,7 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
         </Reanimated.View>
 
         {/* Display */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(240)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(240)}>
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Display</Text>
             {displayToggles.map(renderToggleRow)}
@@ -205,7 +207,7 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
         </Reanimated.View>
 
         {/* Screen Reader */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(320)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(320)}>
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Screen reader</Text>
             {readerToggles.map(renderToggleRow)}
@@ -213,7 +215,7 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
         </Reanimated.View>
 
         {/* Info note — elevated card */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(400)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(400)}>
           <View style={styles.noteCard}>
             <View style={styles.noteIconWrap}>
               <Ionicons name="information-circle" size={18} color={colors.textMuted} />

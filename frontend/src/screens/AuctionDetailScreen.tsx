@@ -623,7 +623,7 @@ export default function AuctionDetailScreen() {
           isFav={social.isLiked}
           isSaved={social.isSavedToCollection}
           showDefaultControls={false}
-          heightFraction={isCompact ? 0.5 : 0.56}
+          heightFraction={isCompact ? 0.54 : 0.58}
           initialIndex={fullscreenMediaIndex}
           onActiveIndexChange={setFullscreenMediaIndex}
           onOpenFullscreen={(index) => {
@@ -1186,6 +1186,7 @@ export default function AuctionDetailScreen() {
               valueLabel={dockValueLabel}
               subtitle={dockSubtitle}
               thumbnailUri={auctionMediaItems[0]?.uri}
+              showProtectionStrip={auction.buyerProtection ?? false}
               primaryAction={{
                 label: stateAction.primary.label,
                 onPress: () => {
@@ -1370,7 +1371,12 @@ export default function AuctionDetailScreen() {
         {bidActivityError && (
           <View style={[styles.subSectionError, { backgroundColor: colors.surfaceAlt }]}>
             <Text style={[styles.subSectionErrorText, { color: colors.textMuted }]}>Couldn't load bid history</Text>
-            <Pressable onPress={() => { setBidActivityError(false); void fetchDetail(); }}>
+            <Pressable
+              onPress={() => { setBidActivityError(false); void fetchDetail(); }}
+              style={({ pressed }) => pressed && { opacity: 0.5 }}
+              accessibilityRole="button"
+              accessibilityLabel="Retry loading bid history"
+            >
               <Text style={[styles.retryText, { color: colors.brand }]}>Retry</Text>
             </Pressable>
           </View>

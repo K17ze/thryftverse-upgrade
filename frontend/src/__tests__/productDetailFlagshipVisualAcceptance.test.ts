@@ -99,9 +99,9 @@ describe('product-detail-flagship-reconstruction: visual acceptance', () => {
     it('AssetDetailScreen uses compact flagship hero fractions', () => {
       const src = readScreen('AssetDetailScreen.tsx');
       expect(src).toContain('useWindowDimensions');
-      expect(src).toContain('isVeryCompact ? 0.48');
-      expect(src).toContain('isCompact ? 0.5');
-      expect(src).toContain(': 0.56');
+      expect(src).toContain('isVeryCompact ? 0.5');
+      expect(src).toContain('isCompact ? 0.54');
+      expect(src).toContain(': 0.58');
       expect(src).not.toContain(': 0.65');
     });
 

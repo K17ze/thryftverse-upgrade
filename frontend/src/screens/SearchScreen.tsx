@@ -14,6 +14,7 @@ import Reanimated, { useSharedValue, useAnimatedScrollHandler, FadeInDown } from
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../theme/ThemeContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useNavigation, useScrollToTop } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
@@ -75,6 +76,7 @@ export default function SearchScreen() {
   }, []);
 
   const { colors, isDark } = useAppTheme();
+  const reducedMotionEnabled = useReducedMotion();
 
   const styles = useMemo(() => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
@@ -435,7 +437,7 @@ export default function SearchScreen() {
 
           {/* Empty state when no listings and not loading */}
           {listings.length === 0 && !isSyncing && !lastError ? (
-            <Reanimated.View entering={FadeInDown.duration(400)}>
+            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400)}>
               <EmptyState
                 density="compact"
                 icon="compass-outline"
@@ -450,7 +452,7 @@ export default function SearchScreen() {
               />
             </Reanimated.View>
           ) : (
-            <Reanimated.View entering={FadeInDown.duration(350).delay(100)}>
+            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(100)}>
               {renderTabContent()}
             </Reanimated.View>
           )}

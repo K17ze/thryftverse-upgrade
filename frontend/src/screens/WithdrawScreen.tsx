@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useConnectivity } from '../hooks/useConnectivity';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useCurrencyContext } from '../context/CurrencyContext';
 import { CURRENCIES } from '../constants/currencies';
 import { useToast } from '../context/ToastContext';
@@ -62,6 +63,7 @@ export default function WithdrawScreen() {
   const { currencyCode, goldRates } = useCurrencyContext();
   const { show } = useToast();
   const { isOffline } = useConnectivity();
+  const reducedMotionEnabled = useReducedMotion();
   const currentUser = useStore((state) => state.currentUser);
   const currencySymbol = CURRENCIES[currencyCode].symbol;
 
@@ -460,7 +462,7 @@ export default function WithdrawScreen() {
         showsVerticalScrollIndicator={false}
       >
           {/* Hero summary — available balance */}
-          <Reanimated.View entering={FadeInDown.duration(300)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
             <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <View style={styles.heroRow}>
                 <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
@@ -478,7 +480,7 @@ export default function WithdrawScreen() {
             </View>
           </Reanimated.View>
 
-          <Reanimated.View entering={FadeInDown.duration(300).delay(30)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(30)}>
             <View style={styles.amountWrap}>
             <Text style={styles.currencySymbol}>{currencySymbol}</Text>
             <TextInput
@@ -498,7 +500,7 @@ export default function WithdrawScreen() {
           {exceedsBalance ? <Text style={styles.balanceError}>Entered amount exceeds available balance.</Text> : null}
           </Reanimated.View>
 
-          <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)}>
             <Text style={styles.sectionTitle}>Transfer to</Text>
             <AnimatedPressable
               style={styles.bankCard}

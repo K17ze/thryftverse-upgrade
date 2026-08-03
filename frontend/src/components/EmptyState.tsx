@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Typography } from '../theme/designTokens';
 import { AnimatedPressable } from './AnimatedPressable';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 interface SuggestedAction {
   label: string;
@@ -33,7 +34,8 @@ export function EmptyState({ icon, title, subtitle, hint, ctaLabel, onCtaPress, 
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const resolvedIconColor = iconColor ?? colors.brand;
-  const enter = FadeIn.duration(300);
+  const reducedMotionEnabled = useReducedMotion();
+  const enter = reducedMotionEnabled ? undefined : FadeIn.duration(300);
   const compact = density === 'compact';
 
   return (

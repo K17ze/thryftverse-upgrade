@@ -151,18 +151,18 @@ describe('commerce-detail family art direction (spec 05)', () => {
 
   // ── §5 Restrained radii ──
   describe('restrained radii', () => {
-    it('primary action uses medium radius (not 24)', () => {
+    it('primary action uses full-pill radius (not 24)', () => {
       const src = readDetailComponent('CommerceDetailStateDock');
-      expect(src).toContain('Radius.md');
+      expect(src).toContain('Radius.full');
       expect(src).not.toMatch(/borderRadius: 24/);
     });
 
-    it('secondary action uses medium Radius (not 24)', () => {
+    it('thumbnail uses medium Radius', () => {
       const src = readDetailComponent('CommerceDetailStateDock');
-      // Both inline and stacked secondary use Radius.md
+      // Thumbnail uses Radius.md; primary and secondary use Radius.full
       const matches = src.match(/Radius\.md/g);
       expect(matches).toBeTruthy();
-      expect(matches!.length).toBeGreaterThanOrEqual(4);
+      expect(matches!.length).toBeGreaterThanOrEqual(1);
     });
   });
 
@@ -195,7 +195,7 @@ describe('commerce-detail family art direction (spec 05)', () => {
     it('dock uses one entry transition (FadeIn)', () => {
       const src = readDetailComponent('CommerceDetailStateDock');
       expect(src).toContain('FadeIn');
-      expect(src).toContain('duration(200)');
+      expect(src).toContain('duration(280)');
     });
 
     it('header respects reduced motion', () => {

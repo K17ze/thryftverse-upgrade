@@ -19,6 +19,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { PremiumTextField } from '../components/ui/PremiumTextField';
 import { PasswordStrengthBar } from '../components/settings/PasswordStrengthBar';
 import { FlagshipScreen, FlagshipHeader, FlagshipStickyFooter, FlagshipFormSection } from '../components/flagship';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 export default function ChangePasswordScreen() {
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
@@ -26,6 +27,7 @@ export default function ChangePasswordScreen() {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const twoFactorEnabled = useStore((s) => s.twoFactorEnabled);
+  const reducedMotionEnabled = useReducedMotion();
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -94,7 +96,7 @@ export default function ChangePasswordScreen() {
       }
     >
       {/* Security posture hero */}
-      <Reanimated.View entering={FadeInDown.duration(300)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.heroRow}>
             <View style={[styles.heroIcon, { backgroundColor: twoFactorEnabled ? colors.success : colors.bronze }]}>
@@ -172,7 +174,7 @@ export default function ChangePasswordScreen() {
       </FlagshipFormSection>
 
       {/* Sessions warning */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(100)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(100)}>
         <View style={[styles.noteCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
           <Ionicons name="information-circle-outline" size={18} color={colors.textMuted} />
           <Text style={[styles.noteText, { color: colors.textSecondary }]}>

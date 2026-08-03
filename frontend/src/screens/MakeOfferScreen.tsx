@@ -21,6 +21,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useConnectivity } from '../hooks/useConnectivity';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useCurrencyContext } from '../context/CurrencyContext';
 import { CURRENCIES } from '../constants/currencies';
 import { useToast } from '../context/ToastContext';
@@ -50,6 +51,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
   const { currencyCode, goldRates } = useCurrencyContext();
   const { show } = useToast();
   const { isOffline } = useConnectivity();
+  const reducedMotionEnabled = useReducedMotion();
   const currencySymbol = CURRENCIES[currencyCode].symbol;
   const [offerPrice, setOfferPrice] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -224,7 +226,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
         {/* ── Item summary ──
             Compact, flat, no card. Image + title + listed price + message
             action. Per AGENTS.md surface budget: flat canvas, no cards. */}
-        <Reanimated.View entering={FadeInDown.duration(300)} style={styles.itemSummary}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.itemSummary}>
           <View style={[styles.itemThumb, { backgroundColor: colors.surfaceAlt }]}>
             {itemImageUri ? (
               <CachedImage
@@ -252,7 +254,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
         {/* ── Message seller action ──
             Inline quiet action, not a bordered chip. Per Design.md:
             quiet controls are transparent, no decorative chrome. */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
         <Pressable
           style={styles.messageAction}
           onPress={handleMessageSeller}
@@ -276,7 +278,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
             Radius.xl. But for a price entry field, we want it to feel
             like a number, not a form field — so we use a larger,
             centered layout with a hairline underline. */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
         <View style={styles.priceSection}>
           <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
             {isCounterOffer ? 'Your counter-offer' : 'Your offer'}
@@ -368,7 +370,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
         {/* ── Offer expiry ──
             Clean chip selector with selection state. Per Design.md:
             selected state uses brand fill, unselected uses surfaceAlt. */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(180)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
         <View style={styles.expirySection}>
           <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
             Offer valid for
@@ -408,7 +410,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
         {/* ── Summary ──
             Flat rows with hairline separator, not a card. Per AGENTS.md
             surface budget: flat canvas, hairlines, no cards. */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(240)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(240)}>
         <View style={styles.summarySection}>
           <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
             Summary
@@ -446,7 +448,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
         {/* ── Trust signal ──
             Inline buyer protection note, not a card. Per Design.md:
             trust signals are decision inputs, not decoration. */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(300)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(300)}>
         <View style={styles.trustRow}>
           <Ionicons name="shield-checkmark-outline" size={16} color={colors.success} />
           <Text style={[styles.trustText, { color: colors.textSecondary }]}>

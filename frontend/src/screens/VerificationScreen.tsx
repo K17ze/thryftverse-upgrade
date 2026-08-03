@@ -291,7 +291,7 @@ export default function VerificationScreen({ navigation }: Props) {
         />
         <SettingsRow
           icon="card-outline"
-          iconColor={effectiveKycVerified ? colors.brand : kycBackendPending ? '#d97706' : colors.textMuted}
+          iconColor={effectiveKycVerified ? colors.brand : kycBackendPending ? colors.warning : colors.textMuted}
           title="Identity verification"
           subtitle={
             effectiveKycVerified
@@ -323,6 +323,7 @@ export default function VerificationScreen({ navigation }: Props) {
             <Pressable
               onPress={() => setKycStep('status')}
               accessibilityLabel="Cancel verification"
+              accessibilityHint="Cancels the verification process and returns to status screen"
               accessibilityRole="button"
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
@@ -341,6 +342,8 @@ export default function VerificationScreen({ navigation }: Props) {
                 placeholder="As shown on your ID"
                 placeholderTextColor={colors.textMuted}
                 autoCapitalize="words"
+                returnKeyType="next"
+                blurOnSubmit={false}
               />
               <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Date of birth</Text>
               <TextInput
@@ -350,6 +353,8 @@ export default function VerificationScreen({ navigation }: Props) {
                 placeholder="DD/MM/YYYY"
                 placeholderTextColor={colors.textMuted}
                 keyboardType="numeric"
+                returnKeyType="next"
+                blurOnSubmit={false}
               />
               <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Address line</Text>
               <TextInput
@@ -358,6 +363,8 @@ export default function VerificationScreen({ navigation }: Props) {
                 onChangeText={setKycAddressLine}
                 placeholder="Street address"
                 placeholderTextColor={colors.textMuted}
+                returnKeyType="next"
+                blurOnSubmit={false}
               />
               <View style={styles.fieldRow}>
                 <View style={styles.fieldHalf}>
@@ -368,6 +375,8 @@ export default function VerificationScreen({ navigation }: Props) {
                     onChangeText={setKycCity}
                     placeholder="City"
                     placeholderTextColor={colors.textMuted}
+                    returnKeyType="next"
+                    blurOnSubmit={false}
                   />
                 </View>
                 <View style={styles.fieldHalf}>
@@ -379,6 +388,7 @@ export default function VerificationScreen({ navigation }: Props) {
                     placeholder="Postcode"
                     placeholderTextColor={colors.textMuted}
                     autoCapitalize="characters"
+                    returnKeyType="done"
                   />
                 </View>
               </View>
@@ -543,6 +553,7 @@ export default function VerificationScreen({ navigation }: Props) {
             <Pressable
               onPress={() => setDac7Step('status')}
               accessibilityLabel="Cancel"
+              accessibilityHint="Cancels and returns to status screen"
               accessibilityRole="button"
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
@@ -565,6 +576,7 @@ export default function VerificationScreen({ navigation }: Props) {
                 placeholder="Your TIN / National Insurance number"
                 placeholderTextColor={colors.textMuted}
                 autoCapitalize="characters"
+                returnKeyType="done"
               />
               <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Country of tax residence</Text>
               <ScrollView

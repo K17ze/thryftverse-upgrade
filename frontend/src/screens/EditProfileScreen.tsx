@@ -416,8 +416,8 @@ export default function EditProfileScreen() {
 
       {/* ── Phone Edit Modal — premium bottom sheet ── */}
       <Modal visible={editingField !== null} transparent animationType="slide" onRequestClose={closeEdit}>
-        <Pressable style={styles.modalOverlay} onPress={closeEdit}>
-          <Pressable style={[styles.modalCard, { backgroundColor: colors.surface }]} onPress={(e) => e.stopPropagation()}>
+        <Pressable style={styles.modalOverlay} onPress={closeEdit} accessibilityLabel="Close edit dialog" accessibilityRole="button">
+          <Pressable style={[styles.modalCard, { backgroundColor: colors.surface }]} onPress={(e) => e.stopPropagation()} accessibilityRole="none">
             <View style={styles.modalHandle} />
             <Text style={styles.modalTitle}>
               {editingField === 'phone' ? 'Phone number' : editingField}

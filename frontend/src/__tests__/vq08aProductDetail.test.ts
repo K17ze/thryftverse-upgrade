@@ -166,7 +166,8 @@ describe('VQ-08A Product Detail Page Revamp', () => {
     });
 
     it('has scoring function', () => {
-      expect(backend).toContain('scoreListing');
+      expect(backend).toContain('scoreCandidate');
+      expect(backend).toContain('scoreProductRecommendation');
     });
 
     it('has complementary category map', () => {

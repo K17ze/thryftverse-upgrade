@@ -6,6 +6,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useStore } from '../store/useStore';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { listUserTransactions, UserTransaction } from '../services/commerceApi';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
@@ -41,6 +42,7 @@ export default function BalanceHistoryScreen({ navigation }: Props) {
   const currentUser = useStore((state) => state.currentUser);
   const [transactions, setTransactions] = React.useState<UserTransaction[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
+  const reducedMotionEnabled = useReducedMotion();
 
   React.useEffect(() => {
     let cancelled = false;

@@ -185,7 +185,7 @@ function createStyles(colors: ThemeColors) {
     paddingLeft: Space.sm,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Space.xs,
   },
   seeAllText: {
     fontSize: Type.caption.size,
@@ -195,19 +195,20 @@ function createStyles(colors: ThemeColors) {
   titleRow: {
     paddingHorizontal: Space.md,
     marginBottom: Space.md,
-    gap: 3,
+    gap: Space.xs,
   },
   title: {
-    fontSize: 25,
+    fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
-    letterSpacing: -0.6,
-    lineHeight: 30,
+    letterSpacing: Type.title.letterSpacing,
+    lineHeight: Type.title.lineHeight,
   },
   subtitle: {
     fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
-    color: colors.textSecondary,
+    color: colors.textMuted,
   },
   rail: {
     paddingHorizontal: Space.md,
@@ -267,15 +268,16 @@ function createStyles(colors: ThemeColors) {
   },
   cardItemCountBadge: {
     position: 'absolute',
-    left: 10,
-    bottom: 10,
-    paddingHorizontal: 8,
+    left: Space.sm,
+    bottom: Space.sm,
+    paddingHorizontal: Space.xs,
     paddingVertical: 3,
     borderRadius: Radius.full,
     backgroundColor: 'rgba(0,0,0,0.68)',
   },
   cardItemCountBadgeText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.semibold,
     color: '#ffffff',
   },
@@ -290,7 +292,7 @@ function createStyles(colors: ThemeColors) {
   cardCopy: {
     flex: 1,
     minWidth: 0,
-    gap: 4,
+    gap: Space.xs,
   },
   cardKicker: {
     fontSize: 10,
@@ -308,9 +310,9 @@ function createStyles(colors: ThemeColors) {
   },
   cardSubtitle: {
     fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
-    color: colors.textSecondary,
-    lineHeight: 17,
+    color: colors.textMuted,
   },
   cardOpenIcon: {
     width: 36,

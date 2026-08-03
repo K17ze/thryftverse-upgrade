@@ -26,6 +26,7 @@ import { Caption, BodyEmphasis, Meta } from '../components/ui/Text';
 import { CommerceOrder, getOrder } from '../services/commerceApi';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { CachedImage } from '../components/CachedImage';
 import { getListingCoverUri } from '../utils/media';
 import * as ImagePicker from 'expo-image-picker';
@@ -51,6 +52,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
   const { show } = useToast();
   const haptic = useHaptic();
   const { formatFromFiat } = useFormattedPrice();
+  const reducedMotionEnabled = useReducedMotion();
 
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
   const [details, setDetails] = useState('');
@@ -173,7 +175,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
       >
           {/* Order Context Card */}
           {order && (
-            <Reanimated.View entering={FadeInDown.duration(300).delay(0)}>
+            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(0)}>
               <ElevatedSurface variant="surface" style={styles.orderCard}>
                 <View style={styles.orderRow}>
                   {order.listingImageUrl && (
@@ -195,7 +197,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
 
           {/* Existing Open Ticket */}
           {openTicket && !isSubmitted && (
-            <Reanimated.View entering={FadeInDown.duration(300).delay(20)}>
+            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(20)}>
               <ElevatedSurface variant="surface" style={styles.existingTicketCard}>
                 <View style={styles.existingTicketRow}>
                   <Ionicons name="help-circle-outline" size={22} color={colors.brand} />
@@ -214,7 +216,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
             </Reanimated.View>
           )}
 
-          <Reanimated.View entering={FadeInDown.duration(300).delay(40)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(40)}>
             <Meta color={colors.textMuted} style={styles.sectionLabel}>SELECT TOPIC</Meta>
             <View style={styles.topicsCard}>
               {availableTopics.map((topic) => {

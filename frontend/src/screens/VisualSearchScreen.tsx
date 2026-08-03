@@ -342,6 +342,8 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
             style={styles.queryThumb}
             resizeMode="cover"
             onError={() => setPreviewFailed(true)}
+            accessibilityLabel="Your selected image for visual search"
+            accessibilityRole="image"
           />
         )}
         {/* Instagram-style scanning overlay — animated scanline + corner brackets */}

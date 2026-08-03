@@ -7,7 +7,7 @@ import React, { useState } from 'react';
 import { View, StyleSheet, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Radius, Control } from '../theme/designTokens';
+import { Space, Radius, Control, Type } from '../theme/designTokens';
 import { T } from './ui/Text';
 import { AnimatedPressable } from './AnimatedPressable';
 import { CachedImage } from './CachedImage';
@@ -82,8 +82,10 @@ export function ProductCardV2({
   const sellerAvatar = item.seller?.avatar ?? null;
 
   const handleToggleFav = () => {
+    haptic.light();
     toggleFav(item.id);
     if (!isFav) {
+      haptic.success();
       show('Added to wishlist', 'success');
     }
   };
@@ -374,7 +376,8 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     borderRadius: Radius.md,
   },
   soldPillText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.bold,
     color: colors.textInverse,
     letterSpacing: 0.3,
@@ -421,11 +424,11 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     gap: Space.xs,
   },
   title: {
-    fontSize: 14,
-    lineHeight: 19,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
-    letterSpacing: -0.15,
+    letterSpacing: Type.body.letterSpacing,
   },
   priceRow: {
     flexDirection: 'row',
@@ -440,14 +443,15 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   // Price elevated to hero — 16pt bold, clearly dominant over 14pt title.
   // This is the Vestiaire/StockX move: price is the visual anchor.
   priceHero: {
-    fontSize: 16,
-    lineHeight: 20,
+    fontSize: Type.bodyLarge.size,
+    lineHeight: Type.bodyLarge.lineHeight,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
-    letterSpacing: -0.2,
+    letterSpacing: Type.bodyLarge.letterSpacing,
   },
   originalPrice: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     textDecorationLine: 'line-through',
@@ -458,8 +462,8 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     gap: 3,
   },
   likesText: {
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
   },
   sellerRow: {
     flexDirection: 'row',
@@ -491,7 +495,8 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     justifyContent: 'center',
   },
   sellerName: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
     color: colors.textSecondary,
     flex: 1,
@@ -517,7 +522,8 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     backgroundColor: 'rgba(200,50,50,0.65)',
   },
   conditionText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.bold,
     color: colors.textInverse,
     letterSpacing: 0.3,

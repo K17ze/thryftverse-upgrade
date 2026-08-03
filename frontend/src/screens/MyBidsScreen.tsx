@@ -257,7 +257,6 @@ export default function MyBidsScreen() {
       <FlashList
         data={sortedItems}
         keyExtractor={(item) => item.id}
-        estimatedItemSize={140}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         onEndReached={loadMore}

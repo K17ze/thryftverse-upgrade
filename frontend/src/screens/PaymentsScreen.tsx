@@ -22,6 +22,7 @@ import {
 } from '../services/commerceApi';
 import { getUserCountryCapabilities, UserCountryCapabilities } from '../services/capabilitiesApi';
 import { useToast } from '../context/ToastContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { AppButton } from '../components/ui/AppButton';
 import { SettingsCell } from '../components/SettingsCell';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -46,6 +47,7 @@ export default function PaymentsScreen({ navigation }: Props) {
   const savePaymentMethod = useStore((state) => state.savePaymentMethod);
   const clearSavedPaymentMethod = useStore((state) => state.clearSavedPaymentMethod);
   const { show } = useToast();
+  const reducedMotionEnabled = useReducedMotion();
 
   const getCardBrand = (label: string) => {
     const lower = label.toLowerCase();
@@ -273,7 +275,7 @@ export default function PaymentsScreen({ navigation }: Props) {
       ) : null}
 
       {/* Hero summary — payment methods count + security status */}
-      <Reanimated.View entering={FadeInDown.duration(300)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.heroRow}>
             <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
@@ -312,7 +314,7 @@ export default function PaymentsScreen({ navigation }: Props) {
       ) : (
         <>
           {/* Primary Payment Method Summary */}
-          <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
             {defaultMethod ? (
               <View style={[styles.primaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <View style={styles.primaryCardHeader}>
@@ -366,7 +368,7 @@ export default function PaymentsScreen({ navigation }: Props) {
           </Reanimated.View>
 
           {/* Preferences */}
-          <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
             <PremiumListSection title="Preferences">
               <SettingsCell
                 icon="wallet-outline"
@@ -383,7 +385,7 @@ export default function PaymentsScreen({ navigation }: Props) {
           </Reanimated.View>
 
           {/* Cards */}
-          <Reanimated.View entering={FadeInDown.duration(300).delay(180)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
             <PremiumListSection title="Cards">
               {renderPaymentMethodRows(
                 cardMethods,
@@ -413,7 +415,7 @@ export default function PaymentsScreen({ navigation }: Props) {
           </Reanimated.View>
 
           {/* Security Note */}
-          <Reanimated.View entering={FadeInDown.duration(300).delay(240)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(240)}>
             <View style={[styles.trustNote, { backgroundColor: colors.surfaceAlt }]}>
               <Ionicons name="shield-checkmark-outline" size={16} color={colors.success} />
               <Text style={styles.trustNoteText}>

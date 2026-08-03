@@ -17,6 +17,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { parseApiError } from '../lib/apiClient';
 import { requestMyDataExport, deleteMyAccount } from '../services/accountApi';
 import { logoutFromSession } from '../services/authApi';
@@ -39,6 +40,7 @@ export default function AccountControlScreen({ navigation }: Props) {
   const haptic = useHaptic();
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const reducedMotionEnabled = useReducedMotion();
 
   const [phase, setPhase] = useState<Phase>('overview');
   const [isExporting, setIsExporting] = useState(false);
@@ -96,7 +98,7 @@ export default function AccountControlScreen({ navigation }: Props) {
   const renderOverview = () => (
     <>
       {/* Hero summary — account control status */}
-      <Reanimated.View entering={FadeInDown.duration(300)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.heroRow}>
             <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
@@ -113,7 +115,7 @@ export default function AccountControlScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* Download data — supported, compact row */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
       <View style={[styles.optionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.optionHeader}>
           <View style={[styles.optionIcon, { backgroundColor: colors.surfaceAlt }]}>
@@ -150,7 +152,7 @@ export default function AccountControlScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* Delete — restrained navigation entry, not a giant red card */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
       <View style={[styles.optionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.optionHeader}>
           <View style={[styles.optionIcon, { backgroundColor: colors.surfaceAlt }]}>
@@ -184,7 +186,7 @@ export default function AccountControlScreen({ navigation }: Props) {
 
   const renderDeleteInfo = () => (
     <>
-      <Reanimated.View entering={FadeInDown.duration(300)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
       <View style={styles.introBlock}>
         <View style={[styles.phaseBadge, { backgroundColor: `${colors.danger}15` }]}>
           <Ionicons name="warning-outline" size={16} color={colors.danger} />
@@ -197,7 +199,7 @@ export default function AccountControlScreen({ navigation }: Props) {
       </View>
       </Reanimated.View>
 
-      <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
       <View style={[styles.consequenceCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <ConsequenceRow icon="person-remove-outline" text="Your username, email, password and profile are erased immediately." />
         <ConsequenceRow icon="location-outline" text="All saved delivery addresses are removed." />
@@ -208,7 +210,7 @@ export default function AccountControlScreen({ navigation }: Props) {
       </View>
       </Reanimated.View>
 
-      <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
       <Text style={[styles.consequenceFootnote, { color: colors.textMuted }]}>
         If you have unresolved orders or payouts, we recommend resolving them before deletion. You can also contact support for help.
       </Text>
@@ -243,7 +245,7 @@ export default function AccountControlScreen({ navigation }: Props) {
 
   const renderDeleteConfirm = () => (
     <>
-      <Reanimated.View entering={FadeInDown.duration(300)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
       <View style={styles.introBlock}>
         <View style={[styles.phaseBadge, { backgroundColor: `${colors.danger}15` }]}>
           <Ionicons name="warning-outline" size={16} color={colors.danger} />
@@ -256,7 +258,7 @@ export default function AccountControlScreen({ navigation }: Props) {
       </View>
       </Reanimated.View>
 
-      <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
       <View style={styles.confirmFieldWrap}>
         <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>
           Type {DELETE_CONFIRM_PHRASE} to permanently delete your account
@@ -284,7 +286,7 @@ export default function AccountControlScreen({ navigation }: Props) {
       </View>
       </Reanimated.View>
 
-      <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
       <View style={styles.deleteConfirmActions}>
         <AnimatedPressable
           style={[styles.secondaryBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}

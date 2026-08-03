@@ -9,6 +9,7 @@ import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Space, Radius } from '../../theme/designTokens';
 import { Listing } from '../../data/mockData';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_W = (SCREEN_W - Space.md * 2 - Space.sm) / 2;
@@ -30,6 +31,7 @@ export function ClosetBoardCard({
   index = 0,
 }: ClosetBoardCardProps) {
   const { colors } = useAppTheme();
+  const reducedMotionEnabled = useReducedMotion();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const hasCovers = covers.length > 0;
 

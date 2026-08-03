@@ -14,6 +14,8 @@ import { CachedImage } from '../components/CachedImage';
 import { EmptyState } from '../components/EmptyState';
 import { useBackendData } from '../context/BackendDataContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { useHaptic } from '../hooks/useHaptic';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useToast } from '../context/ToastContext';
 
 type NavT = StackNavigationProp<RootStackParamList>;
@@ -46,6 +48,8 @@ export default function BundleBagScreen() {
   const { sellerId, sellerName } = route.params ?? { sellerId: '', sellerName: '' };
   const { listings, isSyncing, refreshListings } = useBackendData();
   const { formatFromFiat } = useFormattedPrice();
+  const haptic = useHaptic();
+  const reducedMotionEnabled = useReducedMotion();
   const { show } = useToast();
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -75,6 +79,7 @@ export default function BundleBagScreen() {
   }, [refreshListings]);
 
   const toggleSelect = useCallback((id: string) => {
+    haptic.selection();
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
@@ -84,7 +89,7 @@ export default function BundleBagScreen() {
       }
       return next;
     });
-  }, []);
+  }, [haptic]);
 
   const handleCheckout = () => {
     if (selectedItems.length < 2) {
@@ -153,7 +158,7 @@ export default function BundleBagScreen() {
       ) : (
         <View style={styles.body}>
           {/* Hero summary — bundle status */}
-          <Reanimated.View entering={FadeInDown.duration(300)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
             <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <View style={styles.heroRow}>
                 <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
@@ -177,7 +182,7 @@ export default function BundleBagScreen() {
           </Reanimated.View>
 
           {/* Bundle tier hints */}
-          <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
           <View style={styles.tiersRow}>
             {BUNDLE_TIERS.map((tier) => {
               const achieved = selectedItems.length >= tier.itemCount;

@@ -129,7 +129,14 @@ export default function PosterArchiveScreen({ navigation }: Props) {
           <Text style={styles.cardDate}>
             {new Date(item.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
           </Text>
-          <Pressable onPress={() => handleDelete(item.id)} accessibilityLabel="Delete story">
+          <Pressable
+            onPress={() => handleDelete(item.id)}
+            style={({ pressed }) => pressed && { opacity: 0.5 }}
+            hitSlop={8}
+            accessibilityLabel="Delete story"
+            accessibilityRole="button"
+            accessibilityHint="Removes this story from your archive"
+          >
             <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
           </Pressable>
         </View>

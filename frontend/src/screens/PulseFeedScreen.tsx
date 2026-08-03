@@ -19,6 +19,7 @@ import { CachedImage } from '../components/CachedImage';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Type, Space, Radius, Typography } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { EmptyState } from '../components/EmptyState';
 import { formatCountdown } from '../data/tradeHub';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
@@ -97,6 +98,7 @@ export default function PulseFeedScreen() {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { listings } = useBackendData();
+  const reducedMotionEnabled = useReducedMotion();
   const customAuctions = useStore((state) => state.customAuctions);
   const now = Date.now();
 

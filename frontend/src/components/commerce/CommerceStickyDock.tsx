@@ -3,9 +3,9 @@ import { View, StyleSheet, StyleProp, ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Reanimated from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Elevation } from '../../theme/designTokens';
+import { Space, Elevation, DockConstants } from '../../theme/designTokens';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
-import { FadeIn } from 'react-native-reanimated';
+import { SlideInDown } from 'react-native-reanimated';
 
 export interface CommerceStickyDockProps {
   children: React.ReactNode;
@@ -43,7 +43,10 @@ export function CommerceStickyDock({
 
   if (animated && !reducedMotion) {
     return (
-      <Reanimated.View entering={FadeIn.duration(200)} style={styles.wrapper}>
+      <Reanimated.View
+        entering={SlideInDown.duration(280)}
+        style={styles.wrapper}
+      >
         {content}
       </Reanimated.View>
     );
@@ -63,10 +66,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     width: '100%',
     minWidth: 0,
-    minHeight: 72,
+    minHeight: DockConstants.baseHeight,
     backgroundColor: colors.background,
     paddingHorizontal: Space.md,
-    paddingTop: Space.sm + 2,
+    paddingTop: DockConstants.dockTopPadding,
     ...Elevation.floating,
   },
   topBorder: {

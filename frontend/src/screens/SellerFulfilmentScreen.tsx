@@ -25,6 +25,7 @@ import { CachedImage } from '../components/CachedImage';
 import { normaliseOrderStatus, humaniseStatus } from '../components/orders/orderCapabilities';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 type SellerFulfilmentRoute = RouteProp<{ SellerFulfilment: { orderId: string } }, 'SellerFulfilment'>;
 
@@ -53,6 +54,7 @@ export default function SellerFulfilmentScreen() {
   const currentUser = useStore((state) => state.currentUser);
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const reducedMotionEnabled = useReducedMotion();
 
   const { orderId } = route.params;
 
@@ -189,7 +191,7 @@ export default function SellerFulfilmentScreen() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 100 + insets.bottom }]}
       >
         {/* Hero summary — order status */}
-        <Reanimated.View entering={FadeInDown.duration(300)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.heroRow}>
               <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
@@ -203,7 +205,7 @@ export default function SellerFulfilmentScreen() {
           </View>
         </Reanimated.View>
 
-        <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
         <View style={styles.itemCard}>
           {order.listingImageUrl ? (
             <CachedImage uri={order.listingImageUrl} style={styles.itemImage} contentFit="cover" />
@@ -222,7 +224,7 @@ export default function SellerFulfilmentScreen() {
         <View style={styles.sectionDivider} />
 
         {/* Seller-side escrow narrative — when funds are held */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
         {(() => {
           const normalised = normaliseOrderStatus(order.status);
           const isHeld = normalised === 'paid' || normalised === 'shipped' || normalised === 'in transit' || normalised === 'out for delivery';
@@ -257,7 +259,7 @@ export default function SellerFulfilmentScreen() {
 
         <View style={styles.sectionDivider} />
 
-        <Reanimated.View entering={FadeInDown.duration(300).delay(180)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
         <Text style={styles.sectionLabel}>Shipping details</Text>
 
         <Text style={styles.inputLabel}>Carrier</Text>

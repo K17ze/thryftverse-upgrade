@@ -27,6 +27,7 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { CoOwnActivitySkeleton } from '../components/coown/CoOwnSkeletons';
 import { EmptyState } from '../components/EmptyState';
@@ -52,6 +53,7 @@ export default function CoOwnPriceAlertsScreen({ navigation }: Props) {
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
   const { show } = useToast();
+  const reducedMotionEnabled = useReducedMotion();
 
   const [alerts, setAlerts] = React.useState<CoOwnPriceAlert[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);

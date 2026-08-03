@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Reanimated from 'react-native-reanimated';
 import { FadeIn, SlideInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../../../theme/ThemeContext';
-import { Space, Type, Radius, Typography, Elevation } from '../../../theme/designTokens';
+import { Space, Type, Radius, Typography, Elevation, DockConstants } from '../../../theme/designTokens';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { CachedImage } from '../../CachedImage';
@@ -155,7 +155,12 @@ export function CommerceDetailStateDock({
           Research (Vinted/Depop): trust signal at the payment decision
           point increases conversion more than any other single change. */}
       {showProtectionStrip && !stateBadge && (
-        <View style={[styles.protectionStrip, { backgroundColor: colors.surface }]}>
+        <View
+          style={[
+            styles.protectionStrip,
+            { backgroundColor: colors.surface, borderBottomColor: colors.borderSubtle },
+          ]}
+        >
           <Ionicons name="shield-checkmark" size={16} color={colors.success} />
           <Text style={[styles.protectionText, { color: colors.textSecondary }]} numberOfLines={1}>
             Buyer protection
@@ -322,7 +327,7 @@ export function CommerceDetailStateDock({
 
   return (
     <Reanimated.View
-      entering={SlideInDown.duration(300).springify().damping(24).stiffness(200)}
+      entering={SlideInDown.duration(280)}
       style={styles.wrapper}
     >
       {content}
@@ -349,7 +354,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(0,0,0,0.06)',
   },
   protectionText: {
     fontSize: Type.captionElevated.size,
@@ -360,7 +364,7 @@ const styles = StyleSheet.create({
     width: '100%',
     minWidth: 0,
     paddingHorizontal: Space.md,
-    paddingTop: Space.sm + 2,
+    paddingTop: DockConstants.dockTopPadding,
     borderTopWidth: StyleSheet.hairlineWidth,
     // Per Design.md Elevation.floating: the dock is a genuinely floating
     // surface separating persistent action from scroll content.
@@ -456,7 +460,7 @@ const styles = StyleSheet.create({
   // Vestiaire) all use full-pill primary buttons in their sticky docks.
   // The previous 8px rectangle looked weak and non-premium.
   primaryAction: {
-    minHeight: 52,
+    minHeight: DockConstants.primaryButtonHeight,
     paddingHorizontal: Space.xl,
     borderRadius: Radius.full,
     alignItems: 'center',
@@ -466,7 +470,7 @@ const styles = StyleSheet.create({
   // Stacked primary: flexes to consume available width so the label
   // never truncates on compact widths.
   primaryActionStacked: {
-    minHeight: 52,
+    minHeight: DockConstants.primaryButtonHeight,
     paddingHorizontal: Space.xl,
     borderRadius: Radius.full,
     alignItems: 'center',
@@ -483,14 +487,14 @@ const styles = StyleSheet.create({
   // outlined button. Reduces visual noise so the primary action
   // dominates. Competitor pattern (Depop): secondary is a text link.
   secondaryAction: {
-    minHeight: 48,
+    minHeight: DockConstants.secondaryButtonHeight,
     paddingHorizontal: Space.md,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
   secondaryActionStacked: {
-    minHeight: 48,
+    minHeight: DockConstants.secondaryButtonHeight,
     paddingHorizontal: Space.md,
     borderRadius: Radius.full,
     alignItems: 'center',

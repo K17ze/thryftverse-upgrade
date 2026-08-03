@@ -501,7 +501,7 @@ export default function PortfolioScreen() {
             <View style={[styles.portfolioTabRow, { borderColor: colors.border }]}>
               <Pressable
                 onPress={() => { haptics.selection(); setActivePortfolioTab('positions'); }}
-                style={[styles.portfolioTab, activePortfolioTab === 'positions' && { borderBottomColor: colors.textPrimary }]}
+                style={({ pressed }) => [styles.portfolioTab, activePortfolioTab === 'positions' && { borderBottomColor: colors.textPrimary }, pressed && { opacity: 0.7 }]}
                 accessibilityRole="tab"
                 accessibilityLabel="Positions tab"
                 accessibilityState={{ selected: activePortfolioTab === 'positions' }}
@@ -518,7 +518,7 @@ export default function PortfolioScreen() {
               </Pressable>
               <Pressable
                 onPress={() => { haptics.selection(); setActivePortfolioTab('insights'); }}
-                style={[styles.portfolioTab, activePortfolioTab === 'insights' && { borderBottomColor: colors.textPrimary }]}
+                style={({ pressed }) => [styles.portfolioTab, activePortfolioTab === 'insights' && { borderBottomColor: colors.textPrimary }, pressed && { opacity: 0.7 }]}
                 accessibilityRole="tab"
                 accessibilityLabel="Insights tab"
                 accessibilityState={{ selected: activePortfolioTab === 'insights' }}
@@ -548,7 +548,7 @@ export default function PortfolioScreen() {
               <View style={[styles.insightCard, { borderBottomColor: colors.border }]}>
                 {performers.best && performers.best.avgEntryPriceGbp > 0 && (
                   <Pressable
-                    style={styles.insightRow}
+                    style={({ pressed }) => [styles.insightRow, pressed && { opacity: 0.7 }]}
                     onPress={() => handlePositionPress(performers.best!)}
                     accessibilityRole="button"
                     accessibilityLabel={`Best position: ${performers.best.title}`}
@@ -572,7 +572,7 @@ export default function PortfolioScreen() {
                 )}
                 {performers.worst && performers.worst.avgEntryPriceGbp > 0 && performers.worst.assetId !== performers.best?.assetId && (
                   <Pressable
-                    style={[styles.insightRow, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }]}
+                    style={({ pressed }) => [styles.insightRow, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }, pressed && { opacity: 0.7 }]}
                     onPress={() => handlePositionPress(performers.worst!)}
                     accessibilityRole="button"
                     accessibilityLabel={`Worst position: ${performers.worst.title}`}
@@ -602,7 +602,7 @@ export default function PortfolioScreen() {
             {allocationBars.length > 0 && (
               <View style={[styles.allocationCard, { borderBottomColor: colors.border }]}>
                 <Pressable
-                  style={styles.allocationHeader}
+                  style={({ pressed }) => [styles.allocationHeader, pressed && { opacity: 0.7 }]}
                   onPress={() => setAllocationExpanded((prev) => !prev)}
                   accessibilityRole="button"
                   accessibilityLabel={allocationExpanded ? 'Collapse allocation breakdown' : 'Expand allocation breakdown'}

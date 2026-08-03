@@ -12,6 +12,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsListSkeleton } from '../components/skeletons/SettingsListSkeleton';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import {
   fetchPublicProfile,
   unblockUser,
@@ -26,6 +27,7 @@ export default function BlockedUsersScreen({ navigation }: Props) {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const blockedIds = useStore((state) => state.blockedUsers);
   const toggleBlocked = useStore((state) => state.toggleBlockedUser);
+  const reducedMotionEnabled = useReducedMotion();
   const [profiles, setProfiles] = React.useState<
     Record<string, PublicProfileUser | null>
   >({});
@@ -86,7 +88,7 @@ export default function BlockedUsersScreen({ navigation }: Props) {
       }
     >
       {/* Hero summary */}
-      <Reanimated.View entering={FadeInDown.duration(300)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.heroRow}>
             <View style={[styles.heroIcon, { backgroundColor: blockedIds.length > 0 ? colors.danger : colors.success }]}>

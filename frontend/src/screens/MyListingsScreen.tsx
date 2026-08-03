@@ -31,7 +31,14 @@ function ListingRow({ item, onPress }: { item: ListingApiItem; onPress: () => vo
     : colors.danger;
 
   return (
-    <AnimatedPressable style={styles.row} onPress={onPress} activeOpacity={0.85}>
+    <AnimatedPressable
+      style={styles.row}
+      onPress={onPress}
+      activeOpacity={0.85}
+      accessibilityLabel={`${item.title}, £${item.priceGbp.toFixed(2)}, status: ${item.status}`}
+      accessibilityRole="button"
+      accessibilityHint="Tap to view listing details"
+    >
       {item.images[0] ? (
         <CachedImage uri={item.images[0]} style={styles.rowImage} containerStyle={styles.rowImageWrap} contentFit="cover" />
       ) : (

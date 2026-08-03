@@ -9,6 +9,7 @@ import {
   FlatList,
   Alert,
   Pressable,
+  ActivityIndicator,
 } from "react-native";
 
 import { Ionicons } from "@expo/vector-icons";
@@ -2105,12 +2106,17 @@ export default function ChatScreen({ navigation, route }: Props) {
             </Text>
             <Pressable
               onPress={() => void syncMessagesFromApi()}
-              style={styles.retryBtn}
+              style={({ pressed }) => [styles.retryBtn, pressed && { opacity: 0.7 }, isSyncing && { opacity: 0.5 }]}
+              disabled={isSyncing}
               accessibilityRole="button"
-              accessibilityLabel="Retry loading messages"
+              accessibilityLabel={isSyncing ? 'Loading messages' : 'Retry loading messages'}
             >
-              <Ionicons name="refresh" size={16} color={colors.textInverse} />
-              <Text style={styles.retryBtnText}>Retry</Text>
+              {isSyncing ? (
+                <ActivityIndicator size="small" color={colors.textInverse} />
+              ) : (
+                <Ionicons name="refresh" size={16} color={colors.textInverse} />
+              )}
+              <Text style={styles.retryBtnText}>{isSyncing ? 'Loading…' : 'Retry'}</Text>
             </Pressable>
           </View>
         ) : messages.length ? (

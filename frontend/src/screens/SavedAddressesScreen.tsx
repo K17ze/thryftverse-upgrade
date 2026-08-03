@@ -18,6 +18,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { parseApiError } from '../lib/apiClient';
 import {
   listUserAddresses,
@@ -55,6 +56,7 @@ export default function SavedAddressesScreen({ navigation }: Props) {
   const clearSavedAddress = useStore((state) => state.clearSavedAddress);
   const { show } = useToast();
   const haptic = useHaptic();
+  const reducedMotionEnabled = useReducedMotion();
 
   const [addresses, setAddresses] = useState<CommerceAddress[]>([]);
   const [loadState, setLoadState] = useState<LoadState>('loading');
