@@ -46,6 +46,7 @@
     "prom-client": "^15.1.3",
     "razorpay": "^2.9.6",
     "stripe": "^22.0.0",
+    "undici": "^8.10.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {
