@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as MediaLibrary from 'expo-media-library/legacy';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Typography } from '../theme/designTokens';
+import { Typography, Radius } from '../theme/designTokens';
 import { createStableId } from '../utils/createStableId';
 import type { CreatorLayer } from './composition';
 import CreatorCamera from './CreatorCamera';
@@ -472,8 +472,8 @@ const styles = StyleSheet.create({
   },
   thumb: {
     position: 'relative',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 3,
+    overflow: 'hidden',
   },
   thumbImage: {
     width: '100%',
@@ -485,11 +485,11 @@ const styles = StyleSheet.create({
     left: 4,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 4,
-    paddingVertical: 2,
-    borderRadius: 4,
+    gap: 3,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: Radius.sm,
   },
   videoDuration: {
     color: '#fff',
@@ -498,7 +498,7 @@ const styles = StyleSheet.create({
   },
   thumbOverlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(0,0,0,0.35)',
   },
   selectionBadge: {
     position: 'absolute',
@@ -507,26 +507,37 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: '#fff',
+    backgroundColor: '#C9A46A',
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
   },
   selectionBadgeText: {
-    color: '#000',
+    color: '#1a1a1a',
     fontSize: 13,
     fontFamily: Typography.family.bold,
   },
   // Gallery add button
   addBtn: {
-    backgroundColor: '#fff',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    backgroundColor: '#C9A46A',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: Radius.full,
+    shadowColor: '#C9A46A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   addBtnText: {
-    color: '#000',
+    color: '#1a1a1a',
     fontSize: 14,
     fontFamily: Typography.family.semibold,
+    letterSpacing: 0.3,
   },
   // Bottom bar gradient
   bottomBarGradient: {

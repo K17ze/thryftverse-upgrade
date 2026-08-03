@@ -748,6 +748,7 @@ const OpacityBar = React.memo(function OpacityBar({ value, onChange, onCommit }:
         style={styles.opacitySliderTrack}
         {...panResponder.panHandlers}
       >
+        <View style={styles.opacitySliderTrackBg} />
         <View style={[styles.opacitySliderFill, { width: `${pct}%` }]} />
         <View style={[styles.opacitySliderThumb, { left: `${pct}%` }]} />
       </View>
@@ -899,22 +900,31 @@ const styles = StyleSheet.create({
     height: 28,
     justifyContent: 'center',
   },
+  opacitySliderTrackBg: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
   opacitySliderFill: {
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: 'rgba(255,255,255,0.8)',
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#C9A46A',
   },
   opacitySliderThumb: {
     position: 'absolute',
-    width: 16,
-    height: 16,
-    borderRadius: 8,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     backgroundColor: '#fff',
-    marginLeft: -8,
+    marginLeft: -9,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowRadius: 3,
-    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    shadowOpacity: 0.25,
+    elevation: 3,
   },
   opacityLabel: {
     fontFamily: Typography.family.medium,
@@ -935,10 +945,10 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     paddingVertical: Space.xs,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 12,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
   },
   overflowItem: {
     flexDirection: 'row',

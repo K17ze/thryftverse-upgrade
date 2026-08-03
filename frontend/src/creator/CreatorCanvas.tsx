@@ -1118,7 +1118,7 @@ function GifLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'gif'
 
 // ── Music layer content ────────────────────────────────────────────
 // Instagram-style music sticker: album art + track name + artist.
-// Compact pill-shaped card with music note icon.
+// Premium rendering: darker glass surface, proper album art with shadow.
 function MusicLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'music' }> }) {
   const { payload } = layer;
   const { colors } = useAppTheme();
@@ -1126,36 +1126,60 @@ function MusicLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'mu
     <View style={{
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 8,
-      paddingHorizontal: 10,
-      paddingVertical: 8,
-      borderRadius: Radius.md,
-      backgroundColor: 'rgba(0,0,0,0.55)',
-      minWidth: 140,
+      gap: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderRadius: Radius.lg,
+      backgroundColor: 'rgba(0,0,0,0.75)',
+      minWidth: 160,
       maxWidth: '100%',
     }}>
       {payload.artworkUrl ? (
         <Image
           source={{ uri: payload.artworkUrl }}
-          style={{ width: 36, height: 36, borderRadius: Radius.sm }}
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: Radius.sm,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.3,
+            shadowRadius: 3,
+          }}
           resizeMode="cover"
         />
       ) : (
-        <View style={{ width: 36, height: 36, borderRadius: Radius.sm, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' }}>
-          <Ionicons name="musical-notes" size={18} color="#fff" />
+        <View style={{
+          width: 40,
+          height: 40,
+          borderRadius: Radius.sm,
+          backgroundColor: 'rgba(201,164,106,0.2)',
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}>
+          <Ionicons name="musical-notes" size={18} color="rgba(201,164,106,0.8)" />
         </View>
       )}
-      <View style={{ flex: 1, gap: 1 }}>
-        <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: '#fff' }} numberOfLines={1}>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.caption.size + 1, color: '#fff' }} numberOfLines={1}>
           {payload.trackName}
         </Text>
         {payload.artistName ? (
-          <Text style={{ fontFamily: Typography.family.regular, fontSize: 11, color: 'rgba(255,255,255,0.7)' }} numberOfLines={1}>
+          <Text style={{ fontFamily: Typography.family.regular, fontSize: 11, color: 'rgba(255,255,255,0.6)' }} numberOfLines={1}>
             {payload.artistName}
           </Text>
         ) : null}
       </View>
-      <Ionicons name="musical-notes" size={14} color="rgba(255,255,255,0.6)" />
+      <View style={{
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        backgroundColor: 'rgba(255,255,255,0.12)',
+        justifyContent: 'center',
+        alignItems: 'center',
+      }}>
+        <Ionicons name="play" size={10} color="#fff" />
+      </View>
     </View>
   );
 }

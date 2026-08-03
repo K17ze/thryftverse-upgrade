@@ -1284,6 +1284,11 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                 </Canvas>
               </View>
             </GestureDetector>
+            {strokes.length === 0 && (
+              <View style={styles.drawCanvasHint} pointerEvents="none">
+                <Text style={styles.drawCanvasHintText}>Draw with your finger</Text>
+              </View>
+            )}
           </View>
         </GestureHandlerRootView>
 
@@ -1327,18 +1332,23 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
         {/* Brush size */}
         <Text style={styles.pickerSectionLabel}>Size</Text>
         <View style={styles.brushSizeRow}>
-          {BRUSH_SIZES.map((s) => (
-            <Pressable
-              key={s}
-              onPress={() => { haptic.selection(); setBrushSize(s); }}
-              style={[styles.brushSizeOption, brushSize === s && styles.brushSizeOptionActive]}
-              accessibilityLabel={`Brush size ${s}`}
-              accessibilityRole="button"
-              hitSlop={12}
-            >
-              <View style={[styles.brushSizeDot, { width: s + 4, height: s + 4, backgroundColor: brushSize === s ? colors.brand : colors.textSecondary }]} />
-            </Pressable>
-          ))}
+          {BRUSH_SIZES.map((s) => {
+            const isActive = brushSize === s;
+            const previewColor = activeTool === 'eraser' ? colors.textSecondary : isActive ? colors.brand : activeColor;
+            const dotSize = Math.max(6, Math.min(22, s + 4));
+            return (
+              <Pressable
+                key={s}
+                onPress={() => { haptic.selection(); setBrushSize(s); }}
+                style={[styles.brushSizeOption, isActive && styles.brushSizeOptionActive]}
+                accessibilityLabel={`Brush size ${s}`}
+                accessibilityRole="button"
+                hitSlop={12}
+              >
+                <View style={[styles.brushSizeDot, { width: dotSize, height: dotSize, backgroundColor: previewColor }]} />
+              </Pressable>
+            );
+          })}
         </View>
 
         {/* Actions */}
@@ -2407,10 +2417,26 @@ function createStyles(colors: ThemeColors) {
   drawCanvasWrap: {
     flex: 1,
     minHeight: 280,
-    borderRadius: Radius.md,
-    backgroundColor: '#1a1a1a',
+    borderRadius: Radius.lg,
+    backgroundColor: '#161616',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.06)',
     overflow: 'hidden',
     marginBottom: Space.sm,
+  },
+  drawCanvasHint: {
+    position: 'absolute',
+    bottom: Space.sm,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    pointerEvents: 'none',
+  },
+  drawCanvasHintText: {
+    fontFamily: Typography.family.regular,
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.28)',
+    letterSpacing: 0.3,
   },
   brushSizeRow: { flexDirection: 'row', gap: Space.md, alignItems: 'center', paddingVertical: Space.xs },
   brushSizeOption: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },

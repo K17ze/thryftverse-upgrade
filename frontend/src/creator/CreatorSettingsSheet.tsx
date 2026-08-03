@@ -26,6 +26,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
   const [title, setTitle] = useState(document.metadata.title || '');
   const [caption, setCaption] = useState(document.metadata.caption || '');
   const [accessibilityDesc, setAccessibilityDesc] = useState(document.metadata.accessibilityDescription || '');
+  const [focusedField, setFocusedField] = useState<string | null>(null);
 
   const isLook = document.type === 'look';
 
@@ -41,6 +42,11 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
     updateMetadata({ accessibilityDescription: accessibilityDesc });
   }, [accessibilityDesc, updateMetadata]);
 
+  const inputStyle = (field: string) => [
+    styles.input,
+    focusedField === field && styles.inputFocused,
+  ];
+
   return (
     <SheetContainer visible={visible} onClose={onClose} maxHeight={0.8}>
         <View style={styles.header}>
@@ -54,10 +60,11 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
           {/* Shared: Title */}
           <Text style={styles.sectionLabel}>Title</Text>
           <TextInput
-            style={styles.input}
+            style={inputStyle('title')}
             value={title}
             onChangeText={setTitle}
-            onBlur={handleSaveTitle}
+            onFocus={() => setFocusedField('title')}
+            onBlur={() => { setFocusedField(null); handleSaveTitle(); }}
             placeholder="Untitled"
             placeholderTextColor={colors.textMuted}
             accessibilityLabel="Document title"
@@ -71,10 +78,11 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
             </Text>
           </View>
           <TextInput
-            style={[styles.input, styles.textArea]}
+            style={[inputStyle('caption'), styles.textArea]}
             value={caption}
             onChangeText={setCaption}
-            onBlur={handleSaveCaption}
+            onFocus={() => setFocusedField('caption')}
+            onBlur={() => { setFocusedField(null); handleSaveCaption(); }}
             placeholder="Add a caption..."
             placeholderTextColor={colors.textMuted}
             multiline
@@ -85,10 +93,11 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
           {/* Shared: Accessibility description */}
           <Text style={styles.sectionLabel}>Accessibility Description</Text>
           <TextInput
-            style={[styles.input, styles.textArea]}
+            style={[inputStyle('accessibility'), styles.textArea]}
             value={accessibilityDesc}
             onChangeText={setAccessibilityDesc}
-            onBlur={handleSaveAccessibility}
+            onFocus={() => setFocusedField('accessibility')}
+            onBlur={() => { setFocusedField(null); handleSaveAccessibility(); }}
             placeholder="Describe this content for screen readers..."
             placeholderTextColor={colors.textMuted}
             multiline
@@ -183,12 +192,14 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
 
               <Text style={styles.sectionLabel}>Expiry (hours)</Text>
               <TextInput
-                style={styles.input}
+                style={inputStyle('expiry')}
                 value={String(document.metadata.expiresInHours ?? 24)}
                 onChangeText={(v) => {
                   const num = parseInt(v, 10);
                   if (!isNaN(num) && num > 0) updateMetadata({ expiresInHours: num });
                 }}
+                onFocus={() => setFocusedField('expiry')}
+                onBlur={() => setFocusedField(null)}
                 keyboardType="numeric"
                 accessibilityLabel="Expiry in hours"
               />
@@ -318,6 +329,10 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.regular,
     color: colors.textPrimary,
   },
+  inputFocused: {
+    borderColor: colors.brand,
+    borderWidth: 1.5,
+  },
   textArea: {
     minHeight: 80,
     textAlignVertical: 'top',
@@ -396,12 +411,19 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.sm,
-    paddingVertical: Space.sm,
+    paddingVertical: Space.md,
     borderRadius: Radius.md,
     backgroundColor: colors.brand,
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
   },
   saveBtnDisabled: {
     opacity: 0.4,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   saveBtnText: {
     fontFamily: Typography.family.semibold,
