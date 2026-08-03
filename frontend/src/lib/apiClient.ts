@@ -239,6 +239,226 @@ export interface ParsedApiError {
   } | null;
 }
 
+// ---------------------------------------------------------------------------
+// Network resilience layer — timeout, retry, error classification
+// ---------------------------------------------------------------------------
+//
+// Per 2026 August React Native networking best practices, every request
+// leaving the client is wrapped with:
+//   1. An AbortController-backed timeout (default 15s, configurable per call)
+//   2. Exponential-backoff retry on transient failures (5xx / network drops)
+//   3. Classified network errors so UI layers can render the right state
+//
+// Retries are intentionally NOT applied to 4xx client errors — those are
+// deterministic rejections from the server and retrying would only amplify
+// load and latency for the user.
+
+/** Default request timeout in milliseconds. */
+const DEFAULT_TIMEOUT_MS = 15000;
+/** Default maximum retry attempts for transient (5xx / network) failures. */
+const DEFAULT_MAX_RETRIES = 3;
+/** Base delay (ms) for exponential backoff: 1s, 2s, 4s for attempts 0–2. */
+const RETRY_BASE_DELAY_MS = 1000;
+/** Upper bound (ms) for a single backoff sleep, preventing pathological waits. */
+const RETRY_MAX_DELAY_MS = 30000;
+
+/**
+ * High-level network error categories. UI layers can branch on these to
+ * render the correct offline / timeout / server-error / client-error state
+ * instead of showing a generic "something went wrong" message.
+ */
+export type NetworkErrorType =
+  | 'timeout'
+  | 'offline'
+  | 'server_error'
+  | 'client_error'
+  | 'network';
+
+/**
+ * Classifies an error produced by the API client (or a raw fetch error) into
+ * a high-level `NetworkErrorType`. This is the single source of truth for
+ * network error categorisation — UI and hook layers should call this rather
+ * than re-implementing ad-hoc status-code checks.
+ */
+export function classifyNetworkError(error: unknown): NetworkErrorType {
+  // AbortError from AbortController → timeout (or caller-initiated cancel).
+  if (error instanceof Error && error.name === 'AbortError') {
+    return 'timeout';
+  }
+
+  if (error instanceof ApiRequestError) {
+    // No HTTP status → the request never reached the server.
+    if (error.status === undefined) {
+      const details = error.details;
+      if (isRecord(details)) {
+        const code = typeof details.code === 'string' ? details.code : null;
+        if (
+          code === 'OFFLINE_WRITE_NOT_SUBMITTED' ||
+          code === OFFLINE_WRITE_QUEUED_CODE ||
+          code === 'WRITE_RESULT_UNKNOWN'
+        ) {
+          return 'offline';
+        }
+      }
+      if (error.message.includes('Internet connection is offline')) {
+        return 'offline';
+      }
+      if (error.message.includes('Network request failed')) {
+        return 'network';
+      }
+      return 'network';
+    }
+    if (error.status >= 500) return 'server_error';
+    if (error.status >= 400) return 'client_error';
+  }
+
+  if (error instanceof Error) {
+    if (error.message.includes('Network request failed')) {
+      return 'offline';
+    }
+  }
+
+  return 'network';
+}
+
+/** Returns true when a status code is a transient server error worth retrying. */
+function isTransientStatus(status: number): boolean {
+  return status >= 500 && status < 600;
+}
+
+/** Returns true when an error is a network-level failure worth retrying. */
+function isRetryableNetworkError(error: unknown): boolean {
+  if (error instanceof Error && error.name === 'AbortError') {
+    // A timeout-aborted request is retryable (the server may just be slow).
+    return true;
+  }
+  if (error instanceof Error && error.message.includes('Network request failed')) {
+    return true;
+  }
+  return false;
+}
+
+function delay(ms: number, signal?: AbortSignal | null): Promise<void> {
+  return new Promise<void>((resolve) => {
+    if (signal?.aborted) {
+      resolve();
+      return;
+    }
+    const timeoutId = setTimeout(resolve, ms);
+    if (signal) {
+      const onAbort = () => {
+        clearTimeout(timeoutId);
+        resolve();
+      };
+      signal.addEventListener('abort', onAbort, { once: true });
+    }
+  });
+}
+
+function computeBackoffDelay(attempt: number): number {
+  const delayMs = RETRY_BASE_DELAY_MS * Math.pow(2, attempt);
+  return Math.min(delayMs, RETRY_MAX_DELAY_MS);
+}
+
+/**
+ * Wraps `fetch` with an AbortController-backed timeout. If the caller
+ * provides their own `signal` (e.g. from a component unmount effect), it is
+ * composed with the internal timeout controller so that either source can
+ * abort the in-flight request.
+ */
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit = {},
+  timeoutMs: number = DEFAULT_TIMEOUT_MS
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  const callerSignal = options.signal;
+  if (callerSignal) {
+    if (callerSignal.aborted) {
+      controller.abort();
+    } else {
+      // Propagate caller cancellation (e.g. unmount) to the fetch.
+      callerSignal.addEventListener('abort', () => controller.abort(), { once: true });
+    }
+  }
+
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+/**
+ * Executes a fetch with exponential-backoff retry on transient failures.
+ *
+ * Retries are applied for:
+ *   - HTTP 5xx server errors
+ *   - Network-level failures (connection dropped, DNS failure)
+ *   - Timeout aborts (server too slow)
+ *
+ * Retries are NOT applied for:
+ *   - HTTP 4xx client errors (deterministic rejections)
+ *   - Caller-initiated cancellation (signal already aborted)
+ */
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit = {},
+  maxRetries: number = DEFAULT_MAX_RETRIES,
+  timeoutMs: number = DEFAULT_TIMEOUT_MS
+): Promise<Response> {
+  let lastError: Error | undefined;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    // If the caller has already cancelled, bail out immediately.
+    if (options.signal?.aborted) {
+      throw new DOMException('The user aborted a request.', 'AbortError');
+    }
+
+    try {
+      const response = await fetchWithTimeout(url, options, timeoutMs);
+
+      // Retry transient server errors (5xx) but return immediately on 4xx.
+      if (isTransientStatus(response.status) && attempt < maxRetries) {
+        await delay(computeBackoffDelay(attempt), options.signal);
+        continue;
+      }
+      return response;
+    } catch (error) {
+      lastError = error as Error;
+
+      // Caller-initiated cancellation should not be retried.
+      if (options.signal?.aborted) {
+        throw error;
+      }
+
+      if (attempt < maxRetries && isRetryableNetworkError(error)) {
+        await delay(computeBackoffDelay(attempt), options.signal);
+        continue;
+      }
+
+      throw error;
+    }
+  }
+
+  // All retries exhausted — surface the last error.
+  throw lastError ?? new Error(`Request failed after ${maxRetries + 1} attempts for ${url}`);
+}
+
+/**
+ * Per-request options accepted by `fetchJson` in addition to the standard
+ * `RequestInit`. These are intentionally optional and backward-compatible —
+ * existing two-argument callers are unaffected.
+ */
+export interface FetchJsonOptions {
+  /** Per-request timeout in milliseconds (default 15000). */
+  timeoutMs?: number;
+  /** Max retry attempts for transient failures (default 3). Set to 0 to disable retry. */
+  maxRetries?: number;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -395,7 +615,10 @@ async function refreshAccessToken(baseUrl: string): Promise<string | null> {
 
   refreshInFlight = (async () => {
     try {
-      const response = await fetch(`${baseUrl}/auth/refresh`, {
+      // Token refresh uses a shorter timeout (10s) and no retry — a hung or
+      // failing refresh endpoint should fail fast so the user is sent to
+      // re-login rather than waiting through backoff delays.
+      const response = await fetchWithTimeout(`${baseUrl}/auth/refresh`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -403,7 +626,7 @@ async function refreshAccessToken(baseUrl: string): Promise<string | null> {
         body: JSON.stringify({
           refreshToken: authSessionState?.refreshToken,
         }),
-      });
+      }, 10000);
 
       if (!response.ok) {
         await clearAuthSession();
@@ -463,11 +686,18 @@ async function parsePayload(response: Response) {
   return payload;
 }
 
-export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
+export async function fetchJson<T>(
+  path: string,
+  init?: RequestInit,
+  options?: FetchJsonOptions
+): Promise<T> {
   await hydrateAuthSession();
 
   const baseUrl = getApiBaseUrl();
   const url = `${baseUrl}${path.startsWith('/') ? path : `/${path}`}`;
+
+  const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const maxRetries = options?.maxRetries ?? DEFAULT_MAX_RETRIES;
 
   // Proactively check if the refresh token has expired
   if (
@@ -499,15 +729,23 @@ export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T>
   if (isWriteMethod) {
     const networkState = await Network.getNetworkStateAsync();
     if (networkState.isInternetReachable === false) {
+      // Offline before the request even leaves the device: enqueue the write
+      // mutation for later replay via the offline queue (WS33) so the user's
+      // intent is preserved across connectivity gaps.
+      try {
+        useOfflineQueue.getState().pushToQueue(url, buildQueuedRequestInit(init));
+      } catch {
+        // Queue persistence is best-effort — never block the offline signal.
+      }
       throw new ApiRequestError(
-        'You are offline. This action was not submitted; reconnect and try again.',
+        'You are offline. This action was saved and will be submitted automatically when you reconnect.',
         undefined,
-        { code: 'OFFLINE_WRITE_NOT_SUBMITTED' }
+        { code: OFFLINE_WRITE_QUEUED_CODE }
       );
     }
   }
 
-  const execute = async (overrideAccessToken?: string) => {
+  const execute = async (overrideAccessToken?: string): Promise<Response> => {
     const headers = new Headers(init?.headers ?? {});
     const token = overrideAccessToken ?? authSessionState?.accessToken;
 
@@ -515,10 +753,12 @@ export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T>
       headers.set('Authorization', `Bearer ${token}`);
     }
 
-    return fetch(url, {
-      ...init,
-      headers,
-    });
+    return fetchWithRetry(
+      url,
+      { ...init, headers },
+      maxRetries,
+      timeoutMs
+    );
   };
 
   let response: Response;
@@ -534,13 +774,24 @@ export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T>
       throw error;
     }
     if (isWriteMethod) {
+      // The connection dropped mid-flight before the server confirmed the
+      // result. Enqueue the mutation for replay so the user does not lose
+      // the action — the offline queue (WS33) will retry with its own
+      // exponential backoff once connectivity returns.
+      try {
+        useOfflineQueue.getState().pushToQueue(url, buildQueuedRequestInit(init!));
+      } catch {
+        // Queue persistence is best-effort.
+      }
       throw new ApiRequestError(
-        'The connection dropped before the server result was confirmed. Refresh before retrying this action.',
+        'The connection dropped before the server result was confirmed. Your action was saved offline and will be retried automatically.',
         undefined,
-        { code: 'WRITE_RESULT_UNKNOWN' }
+        { code: OFFLINE_WRITE_QUEUED_CODE }
       );
     }
-    throw new ApiRequestError(`Network request failed for ${url}: ${(error as Error).message}`);
+    const errorType = classifyNetworkError(error);
+    const label = errorType === 'timeout' ? 'Request timed out' : 'Network request failed';
+    throw new ApiRequestError(`${label} for ${url}: ${(error as Error).message}`);
   }
 
   if (
@@ -553,7 +804,9 @@ export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T>
       try {
         response = await execute(refreshedAccessToken);
       } catch (error) {
-        throw new ApiRequestError(`Network request failed for ${url}: ${(error as Error).message}`);
+        const errorType = classifyNetworkError(error);
+        const label = errorType === 'timeout' ? 'Request timed out' : 'Network request failed';
+        throw new ApiRequestError(`${label} for ${url}: ${(error as Error).message}`);
       }
     } else {
       // Token refresh failed — session is no longer valid. Trigger a
@@ -579,4 +832,28 @@ export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T>
   }
 
   return payload as T;
+}
+
+/**
+ * Produces a `RequestInit` safe for persisting into the offline queue.
+ * Stream-based bodies (which cannot be re-read after the first fetch) are
+ * serialised to a string so the queued request can be replayed later.
+ */
+function buildQueuedRequestInit(init: RequestInit): RequestInit {
+  const { body, ...rest } = init;
+  if (body == null) {
+    return rest;
+  }
+  if (typeof body === 'string') {
+    return { ...rest, body };
+  }
+  // Non-string bodies (Blob, FormData, ArrayBuffer, ReadableStream) cannot
+  // be reliably re-serialised after consumption; attempt a best-effort JSON
+  // stringify and fall back to dropping the body so the queue entry is at
+  // least replayable for the common JSON case.
+  try {
+    return { ...rest, body: JSON.stringify(body) };
+  } catch {
+    return rest;
+  }
 }
