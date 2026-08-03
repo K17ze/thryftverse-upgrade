@@ -62,7 +62,7 @@ export interface PosterFrame {
 
 // ── Types: Stories ──────────────────────────────────────────────────
 
-export type PosterStoryAudience = 'public' | 'private';
+export type PosterStoryAudience = 'public' | 'closeFriends' | 'private';
 export type PosterStoryStatus = 'active' | 'archived' | 'deleted';
 export type PosterReactionType = 'love' | 'fire' | 'style' | 'want' | 'wow' | 'laugh';
 

@@ -42,8 +42,6 @@ export function CreatorPublishSheet({ visible, onClose }: CreatorPublishSheetPro
   const [errorMessage, setErrorMessage] = useState('');
   const [publishedId, setPublishedId] = useState('');
   const [uploadProgress, setUploadProgress] = useState('');
-  const [saveToCameraRoll, setSaveToCameraRoll] = useState(false);
-  const [coverPageIndex, setCoverPageIndex] = useState(0);
   const publishGuardRef = useRef(new PublishGuard());
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -236,6 +234,8 @@ function PublishReview({
   const canvasHeight = Math.floor(canvasWidth / document.canvas.aspectRatio);
   const coverThumbWidth = 100;
   const coverThumbHeight = Math.floor(coverThumbWidth / document.canvas.aspectRatio);
+  const [saveToCameraRoll, setSaveToCameraRoll] = useState(false);
+  const [coverPageIndex, setCoverPageIndex] = useState(0);
 
   return (
     <ScrollView style={styles.scrollBody} contentContainerStyle={styles.scrollContent}>
