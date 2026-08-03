@@ -463,3 +463,38 @@ export const config = {
     'dev-only-oneze-attestation-signing-secret'
   ),
 };
+
+// ── Startup validation for critical secrets ──────────────
+// The `requiredSecret()` helper above already fails fast in production for
+// secrets that have development fallbacks. `assertProductionReadiness()` (called
+// at the top of this module) covers required-presence, development-default
+// detection, minimum-length, and provider-set completeness checks.
+//
+// The checks below cover conditional requirements that depend on other config
+// values and therefore must run after the config object is fully resolved.
+
+if (nodeEnv === 'production') {
+  // When email delivery is set to Resend, both the API key and a verified
+  // from-address are mandatory — otherwise transactional emails (magic links,
+  // password resets, OTPs) silently fail.
+  if (config.authEmailProvider === 'resend') {
+    if (!config.resendApiKey) {
+      throw new Error(
+        'RESEND_API_KEY is required in production when AUTH_EMAIL_PROVIDER is "resend"'
+      );
+    }
+    if (!config.authEmailFrom) {
+      throw new Error(
+        'AUTH_EMAIL_FROM is required in production when AUTH_EMAIL_PROVIDER is "resend"'
+      );
+    }
+  }
+
+  // Sentry DSN is strongly recommended in production for error tracking.
+  // This is a warning, not a hard failure, to allow staged rollouts.
+  if (!config.sentryDsn) {
+    console.warn(
+      '[security] SENTRY_DSN is not set — production error tracking is disabled.'
+    );
+  }
+}
