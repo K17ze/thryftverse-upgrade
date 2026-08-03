@@ -2431,21 +2431,17 @@ function StickerTray({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
 
   const activeCategoryDef = filteredCategories.find((c) => c.key === activeCategory) ?? filteredCategories[0];
 
-  // StickerTray doesn't add layers directly — it navigates to the
-  // specific picker. We use a callback to switch modes.
-  const onNavigateRef = useRef<(mode: AssetPickerMode) => void>(() => {});
-  // This is set by the parent via a prop — but since StickerTray is
-  // rendered inside AssetPickerContent, we need a way to switch modes.
-  // We'll use a local state to re-render with a different picker.
+  // StickerTray navigates to a specific picker via local state.
+  // onClose of the sub-picker returns to the tray (not the whole picker).
   const [subMode, setSubMode] = useState<AssetPickerMode | null>(null);
 
   if (subMode) {
-    // Render the specific picker, passing through onAddLayer
-    // This re-uses the existing picker components
+    // Render the specific picker, passing through onAddLayer.
+    // onClose goes back to the sticker tray (not the whole picker).
     return (
       <AssetPickerContent
         mode={subMode}
-        onClose={onClose}
+        onClose={() => setSubMode(null)}
         onAddLayer={onAddLayer}
         editingLayer={null}
       />
