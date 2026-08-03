@@ -212,10 +212,14 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
     navigation.goBack();
   }, [navigation]);
 
-  const handleOverflowAction = useCallback((route: string) => {
+  const handleOverflowAction = useCallback((route: 'CreateAuction' | 'CreateCoOwn') => {
     haptic.selection();
     setShowOverflow(false);
-    navigation.navigate(route as any);
+    if (route === 'CreateAuction') {
+      navigation.navigate('CreateAuction');
+    } else {
+      navigation.navigate('CreateCoOwn');
+    }
   }, [haptic, navigation]);
 
   const handleOpenTemplates = useCallback(() => {

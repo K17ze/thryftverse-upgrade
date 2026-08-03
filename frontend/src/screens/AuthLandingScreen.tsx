@@ -379,12 +379,11 @@ export default function AuthLandingScreen() {
                   displayName: 'Dev User',
                   email: 'dev@thryftverse.app',
                   avatar: '',
-                  cover: '',
+                  coverPhoto: '',
                   bio: '',
-                  reputationScore: 100,
-                  verified: true,
+                  emailVerified: true,
                   createdAt: new Date().toISOString(),
-                } as any);
+                });
                 navigation.replace('MainTabs');
               }}
             >

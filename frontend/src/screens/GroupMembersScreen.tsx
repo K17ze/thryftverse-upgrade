@@ -29,7 +29,9 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
 
   const conversations = useStore((state) => state.conversations);
   const currentUser = useStore((state) => state.currentUser);
-  const participantNameLookup = useStore((state) => (state as any).participantNameLookup as Map<string, string> | undefined);
+  const participantNameLookup = useStore(
+    (state) => (state as typeof state & { participantNameLookup?: Map<string, string> }).participantNameLookup
+  );
 
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -41,7 +43,7 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
   // Determine roles: creator is owner, others are members (admins not yet supported by backend)
   const members = useMemo(() => {
     const ids = conversation?.participantIds ?? [];
-    const creatorId = (conversation as any)?.creatorId ?? ids[0];
+    const creatorId = conversation?.creatorId ?? ids[0];
     return ids.map((id) => {
       const name = id === currentUser?.id
         ? 'You'

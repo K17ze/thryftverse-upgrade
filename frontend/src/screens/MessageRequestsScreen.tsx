@@ -303,7 +303,7 @@ export default function MessageRequestsScreen() {
         <FlashList
           data={requestConversations}
           keyExtractor={(c) => c.id}
-          renderItem={renderItem as any}
+          renderItem={renderItem}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
         />

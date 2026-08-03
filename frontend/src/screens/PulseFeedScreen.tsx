@@ -48,7 +48,7 @@ function EventCard({ event, index }: { event: FeedEvent; index: number }) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
-  const iconMap: Record<ActivityType, string> = {
+  const iconMap: Record<ActivityType, React.ComponentProps<typeof Ionicons>['name']> = {
     auction_live: 'flame-outline',
     fresh_drop: 'cube-outline',
     price_drop: 'trending-down-outline',
@@ -75,7 +75,7 @@ function EventCard({ event, index }: { event: FeedEvent; index: number }) {
         <CachedImage uri={event.image} style={styles.cardImage} containerStyle={{ borderRadius: Radius.md }} contentFit="cover" />
         <View style={styles.cardContent}>
           <View style={styles.cardHeader}>
-            <Ionicons name={iconMap[event.type] as any} size={14} color={accentMap[event.type]} />
+            <Ionicons name={iconMap[event.type]} size={14} color={accentMap[event.type]} />
             <Text style={[styles.cardTypeLabel, { color: accentMap[event.type] }]}>
               {event.type === 'auction_live' ? 'LIVE AUCTION'
                 : event.type === 'fresh_drop' ? 'FRESH DROP'

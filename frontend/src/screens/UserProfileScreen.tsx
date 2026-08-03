@@ -768,7 +768,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
       <AnimatedFlashList
         ref={listRef}
         data={listData as (ListingApiItem | LookApiItem | SellerReviewItem)[]}
-        renderItem={renderItem as any}
+        renderItem={renderItem}
         keyExtractor={(item: ListingApiItem | LookApiItem | SellerReviewItem, index: number) => (item as { id?: string }).id ?? `item-${index}`}
         ListHeaderComponent={listHeader}
         ListEmptyComponent={listEmpty}

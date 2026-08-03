@@ -180,10 +180,12 @@ export interface Conversation {
   id: string;
   type: ConversationType;
   title?: string;
+  description?: string;
   avatar?: string;
   sellerId?: string;
   itemId?: string;
   ownerId?: string;
+  creatorId?: string;
   participantIds?: string[];
   participantProfiles?: Array<{
     id: string;

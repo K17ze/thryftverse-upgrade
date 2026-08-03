@@ -775,7 +775,7 @@ export default function ChatScreen({ navigation, route }: Props) {
     appendToConversationStore(offerMsg, currentUser?.id ?? "me");
     scheduleScrollToEnd();
     // Clear the payload from route params so it doesn't re-send on re-render
-    navigation.setParams({ offerPayload: undefined } as any);
+    navigation.setParams({ offerPayload: undefined });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeOfferPayload, conversationId]);
 
@@ -1678,23 +1678,23 @@ export default function ChatScreen({ navigation, route }: Props) {
       msg.senderId &&
       isTrustedSystemMessage({
         id: msg.id,
-        senderId: msg.senderId,
+        senderId: msg.senderId ?? "",
         isSystem: msg.isSystem,
         type: msg.type === "system" ? "system" : undefined,
         systemTitle: msg.systemTitle,
         text: msg.text,
         timestamp: msg.date ?? "",
-      } as any)
+      })
     ) {
       const provenance = resolveSystemMessageProvenance({
         id: msg.id,
-        senderId: msg.senderId,
+        senderId: msg.senderId ?? "",
         isSystem: msg.isSystem,
         type: msg.type === "system" ? "system" : undefined,
         systemTitle: msg.systemTitle,
         text: msg.text,
         timestamp: msg.date ?? "",
-      } as any);
+      });
       const content = (
         <View key={msg.id} style={styles.statusWrap}>
           <MarketplaceChatCard

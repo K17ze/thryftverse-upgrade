@@ -5,7 +5,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { View, Text, StyleSheet, RefreshControl, Alert } from 'react-native';
 import { CachedImage } from '../components/CachedImage';
 
-import { FlashList } from '@shopify/flash-list';
+import { FlashList, type FlashListProps } from '@shopify/flash-list';
 
 
 import { Ionicons } from '@expo/vector-icons';
@@ -248,7 +248,7 @@ export default function InboxScreen() {
 
 
 
-  const AnimatedFlashList = Reanimated.createAnimatedComponent(FlashList);
+  const AnimatedFlashList = Reanimated.createAnimatedComponent(FlashList) as unknown as React.ComponentClass<FlashListProps<Conversation>>;
   const listRef = useRef<any>(null);
   useScrollToTop(listRef);
 
@@ -1062,7 +1062,7 @@ export default function InboxScreen() {
 
             contentContainerStyle={styles.listContent}
 
-            renderItem={renderItem as any}
+            renderItem={renderItem}
 
             onScroll={scrollHandler}
 

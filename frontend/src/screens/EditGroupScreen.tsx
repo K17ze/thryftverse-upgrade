@@ -41,10 +41,10 @@ export default function EditGroupScreen({ navigation, route }: Props) {
   );
 
   const [name, setName] = useState(conversation?.title ?? '');
-  const [description, setDescription] = useState((conversation as any)?.description ?? '');
+  const [description, setDescription] = useState(conversation?.description ?? '');
   const [isSaving, setIsSaving] = useState(false);
 
-  const hasChanges = name.trim() !== (conversation?.title ?? '').trim() || description.trim() !== ((conversation as any)?.description ?? '').trim();
+  const hasChanges = name.trim() !== (conversation?.title ?? '').trim() || description.trim() !== (conversation?.description ?? '').trim();
 
   if (!conversation || conversation.type !== 'group') {
     return (
@@ -70,7 +70,7 @@ export default function EditGroupScreen({ navigation, route }: Props) {
         ...conversation,
         title: name.trim(),
         description: description.trim(),
-      } as any);
+      });
       show('Group updated', 'success');
       navigation.goBack();
     } catch {

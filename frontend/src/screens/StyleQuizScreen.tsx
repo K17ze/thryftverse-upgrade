@@ -32,7 +32,7 @@ type Step = 0 | 1 | 2 | 3;
 interface QuizOption {
   label: string;
   value: string;
-  icon?: string;
+  icon?: React.ComponentProps<typeof Ionicons>['name'];
 }
 
 const GENDER_OPTIONS: QuizOption[] = [
@@ -130,7 +130,7 @@ export default function StyleQuizScreen() {
             onPress={() => { haptic.light(); setSelectedGender(opt.value); }}
             activeOpacity={0.88}
           >
-            <Ionicons name={opt.icon as any} size={28} color={selectedGender === opt.value ? colors.background : colors.textPrimary} />
+            <Ionicons name={opt.icon} size={28} color={selectedGender === opt.value ? colors.background : colors.textPrimary} />
             <Text style={[styles.optionLabel, selectedGender === opt.value && styles.optionLabelActive]}>{opt.label}</Text>
           </AnimatedPressable>
         ))}
@@ -152,7 +152,7 @@ export default function StyleQuizScreen() {
               onPress={() => toggleStyle(opt.value)}
               activeOpacity={0.88}
             >
-              <Ionicons name={opt.icon as any} size={16} color={isActive ? colors.background : colors.textPrimary} />
+              <Ionicons name={opt.icon} size={16} color={isActive ? colors.background : colors.textPrimary} />
               <Text style={[styles.pillLabel, isActive && styles.pillLabelActive]}>{opt.label}</Text>
             </AnimatedPressable>
           );

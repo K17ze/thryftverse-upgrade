@@ -32,6 +32,8 @@ const REACTION_LABELS: Record<string, string> = {
   laugh: 'Laugh',
 };
 
+type ActivityItem = ActivityData['viewers'][0] | ActivityData['reactions'][0] | ActivityData['replies'][0];
+
 export default function PosterStoryActivityScreen({ navigation, route }: Props) {
   const { colors, isDark } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -159,7 +161,7 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
     );
   }
 
-  const currentData = activeTab === 'viewers' ? activity?.viewers ?? []
+  const currentData: ActivityItem[] = activeTab === 'viewers' ? activity?.viewers ?? []
     : activeTab === 'reactions' ? activity?.reactions ?? []
     : activity?.replies ?? [];
 
@@ -203,9 +205,16 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
       </View>
 
       <FlatList
-        data={currentData as any[]}
-        keyExtractor={(item: any) => item.id ?? item.userId ?? item.authorId ?? `row_${item.createdAt ?? ''}`}
-        renderItem={activeTab === 'viewers' ? renderViewer as any : activeTab === 'reactions' ? renderReaction as any : renderReply as any}
+        data={currentData}
+        keyExtractor={(item: ActivityItem) => {
+          if ('id' in item) return item.id;
+          return item.userId;
+        }}
+        renderItem={({ item }: { item: ActivityItem; index: number }) => {
+          if ('viewedFrameCount' in item) return renderViewer({ item });
+          if ('reaction' in item) return renderReaction({ item });
+          return renderReply({ item });
+        }}
         contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl

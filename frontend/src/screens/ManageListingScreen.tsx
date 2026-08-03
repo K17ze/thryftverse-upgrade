@@ -500,6 +500,7 @@ export default function ManageListingScreen() {
               onPress={handleSaveOfferSettings}
               disabled={isUpdatingOfferSettings}
               loading={isUpdatingOfferSettings}
+              hapticFeedback="light"
               accessibilityLabel="Save offer preferences"
             />
           </View>
@@ -529,13 +530,13 @@ export default function ManageListingScreen() {
           )}
           {status === 'paused' && (
             <View style={{ flexDirection: 'row', gap: Space.sm, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
-              <AppButton title="Reactivate" variant="primary" size="sm" style={{ flex: 1 }} onPress={handleReactivate} />
-              <AppButton title="Mark Sold" variant="secondary" size="sm" style={{ flex: 1 }} titleStyle={{ color: colors.danger }} onPress={handleMarkSold} />
+              <AppButton title="Reactivate" variant="primary" size="sm" style={{ flex: 1 }} onPress={handleReactivate} hapticFeedback="medium" />
+              <AppButton title="Mark Sold" variant="secondary" size="sm" style={{ flex: 1 }} titleStyle={{ color: colors.danger }} onPress={handleMarkSold} hapticFeedback="medium" />
             </View>
           )}
           {status === 'sold' && (
             <View style={{ paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
-              <AppButton title="Reactivate Listing" variant="secondary" size="sm" style={{ width: '100%' }} onPress={handleReactivate} />
+              <AppButton title="Reactivate Listing" variant="secondary" size="sm" style={{ width: '100%' }} onPress={handleReactivate} hapticFeedback="medium" />
             </View>
           )}
         </View>
@@ -545,6 +546,7 @@ export default function ManageListingScreen() {
           style={styles.deleteRow}
           activeOpacity={0.8}
           onPress={handleDeleteListing}
+          hapticFeedback="medium"
           accessibilityLabel="Delete this listing permanently"
           accessibilityRole="button"
           accessibilityHint="This action cannot be undone"

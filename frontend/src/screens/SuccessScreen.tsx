@@ -205,7 +205,7 @@ function TimelineStep({
   isActive,
   isLast,
 }: {
-  icon: string;
+  icon: React.ComponentProps<typeof Ionicons>['name'];
   label: string;
   detail: string;
   isComplete: boolean;
@@ -223,7 +223,7 @@ function TimelineStep({
           isComplete && timelineStyles.iconWrapComplete,
           isActive && timelineStyles.iconWrapActive,
         ]}>
-          <Ionicons name={icon as any} size={14} color={isComplete || isActive ? colors.background : colors.textMuted} />
+          <Ionicons name={icon} size={14} color={isComplete || isActive ? colors.background : colors.textMuted} />
         </View>
         {!isLast && <View style={[
           timelineStyles.connector,

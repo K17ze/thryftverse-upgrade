@@ -756,14 +756,14 @@ export default function CreateCoOwnScreen() {
                 <Text style={[styles.recourseObligationsTitle, { color: colors.textSecondary }]}>
                   Your obligations
                 </Text>
-                {[
+                {([
                   { icon: 'cube-outline', text: 'Safeguard the physical asset in the condition stated' },
                   { icon: 'search-outline', text: 'Prove authenticity when requested by a unit holder' },
                   { icon: 'hand-right-outline', text: 'Produce the physical item on demand within 14 days' },
                   { icon: 'cash-outline', text: 'Repay the total traded value if you fail any obligation' },
-                ].map((ob, i) => (
+                ] as Array<{ icon: React.ComponentProps<typeof Ionicons>['name']; text: string }>).map((ob, i) => (
                   <View key={i} style={[styles.recourseObligationRow, i < 3 && { borderBottomColor: colors.borderSubtle }]}>
-                    <Ionicons name={ob.icon as any} size={16} color={colors.textMuted} />
+                    <Ionicons name={ob.icon} size={16} color={colors.textMuted} />
                     <Text style={[styles.recourseObligationText, { color: colors.textSecondary }]}>
                       {ob.text}
                     </Text>

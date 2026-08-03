@@ -57,7 +57,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
     .join('')
     .slice(0, 2)
     .toUpperCase();
-  const description = (conversation as typeof conversation & { description?: string }).description;
+  const description = conversation?.description;
 
   const leaveGroup = () => {
     Alert.alert(

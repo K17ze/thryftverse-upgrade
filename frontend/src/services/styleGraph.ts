@@ -3,7 +3,9 @@
  * Deterministic mock service for scoring item pairings and suggesting completions.
  */
 
+import type React from 'react';
 import { seededRandom } from '../utils/seededRandom';
+import type { Ionicons } from '@expo/vector-icons';
 
 export type OutfitSlot = 'top' | 'bottom' | 'shoes' | 'outerwear' | 'accessory';
 
@@ -291,12 +293,12 @@ export function getSlotLabel(slot: OutfitSlot): string {
   return labels[slot];
 }
 
-export function getSlotIcon(slot: OutfitSlot): string {
-  const icons: Record<OutfitSlot, string> = {
+export function getSlotIcon(slot: OutfitSlot): React.ComponentProps<typeof Ionicons>['name'] {
+  const icons: Record<OutfitSlot, React.ComponentProps<typeof Ionicons>['name']> = {
     top: 'shirt-outline',
     bottom: 'resize-outline',
     shoes: 'footsteps-outline',
-    outerwear: 'jacket-outline',
+    outerwear: 'business-outline',
     accessory: 'glasses-outline',
   };
   return icons[slot];

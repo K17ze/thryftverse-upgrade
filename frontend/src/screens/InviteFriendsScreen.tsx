@@ -85,7 +85,7 @@ export default function InviteFriendsScreen({ navigation }: Props) {
   }, [currentUser?.id]);
 
   // Loyalty tier derived from referral activity
-  const loyaltyTier = useMemo(() => {
+  const loyaltyTier = useMemo<{ name: string; icon: React.ComponentProps<typeof Ionicons>['name']; color: string; nextThreshold: number | null; progress: number }>(() => {
     const { rewarded } = referralStats;
     if (rewarded >= 10) return { name: 'Gold', icon: 'trophy', color: ACCENT, nextThreshold: null, progress: 100 };
     if (rewarded >= 3) return { name: 'Silver', icon: 'medal', color: MUTED, nextThreshold: 10, progress: (rewarded / 10) * 100 };
@@ -168,15 +168,15 @@ export default function InviteFriendsScreen({ navigation }: Props) {
           entering={reducedMotionEnabled ? undefined : FadeInDown.delay(240).duration(400)}
         >
           <View style={styles.shareRow}>
-            {[
+            {([
               { icon: 'logo-whatsapp', label: 'WhatsApp', color: '#25D366' },
               { icon: 'logo-instagram', label: 'Instagram', color: '#E1306C' },
               { icon: 'mail-outline', label: 'Email', color: ACCENT },
               { icon: 'share-social-outline', label: 'More', color: MUTED },
-            ].map(s => (
+            ] as Array<{ icon: React.ComponentProps<typeof Ionicons>['name']; label: string; color: string }>).map(s => (
               <AnimatedPressable key={s.label} style={styles.shareIconBtn} onPress={handleShare} accessibilityLabel={`Share via ${s.label}`} accessibilityRole="button">
                 <View style={[styles.shareIconCircle, { borderColor: s.color }]}>
-                  <Ionicons name={s.icon as any} size={22} color={s.color} />
+                  <Ionicons name={s.icon} size={22} color={s.color} />
                 </View>
                 <Text style={styles.shareIconLabel}>{s.label}</Text>
               </AnimatedPressable>
@@ -227,7 +227,7 @@ export default function InviteFriendsScreen({ navigation }: Props) {
           <View style={styles.loyaltyCard}>
             <View style={styles.loyaltyHeader}>
               <View style={[styles.loyaltyIconWrap, { borderColor: loyaltyTier.color }]}>
-                <Ionicons name={loyaltyTier.icon as any} size={24} color={loyaltyTier.color} />
+                <Ionicons name={loyaltyTier.icon} size={24} color={loyaltyTier.color} />
               </View>
               <View style={styles.loyaltyInfo}>
                 <Text style={styles.loyaltyTierName}>{loyaltyTier.name} Member</Text>
@@ -264,15 +264,15 @@ export default function InviteFriendsScreen({ navigation }: Props) {
         >
           <View style={styles.howItWorksCard}>
             <Text style={styles.sectionLabel}>HOW IT WORKS</Text>
-            {[
+            {([
               { icon: 'share-outline', text: 'Share your referral link with friends' },
               { icon: 'person-add-outline', text: 'They sign up and create an account' },
               { icon: 'pricetag-outline', text: 'They list their first item for sale' },
               { icon: 'gift-outline', text: 'You both get £5 credit automatically' },
-            ].map((step, i) => (
+            ] as Array<{ icon: React.ComponentProps<typeof Ionicons>['name']; text: string }>).map((step, i) => (
               <View key={i} style={styles.stepRow}>
                 <View style={styles.stepIconWrap}>
-                  <Ionicons name={step.icon as any} size={16} color={ACCENT} />
+                  <Ionicons name={step.icon} size={16} color={ACCENT} />
                 </View>
                 <Text style={styles.stepText}>{step.text}</Text>
               </View>

@@ -91,7 +91,7 @@ function SlotCircle({
         />
       ) : (
         <View style={slotStyles.empty}>
-          <Ionicons name={getSlotIcon(slot) as any} size={20} color={isActive ? colors.brand : colors.textMuted} />
+          <Ionicons name={getSlotIcon(slot)} size={20} color={isActive ? colors.brand : colors.textMuted} />
         </View>
       )}
       {isActive && <View style={slotStyles.activeRing} />}

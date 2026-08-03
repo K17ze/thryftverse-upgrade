@@ -8,6 +8,7 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { RootStackParamList } from '../navigation/types';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
+import { EmptyState } from '../components/EmptyState';
 import { useStore } from '../store/useStore';
 import { fetchUserListingsFromApi, ListingApiItem } from '../services/listingsApi';
 import { fetchSellerAnalytics, fetchTopPerformers, type SellerAnalytics, type TopPerformerListing } from '../services/commerceApi';
@@ -232,11 +233,11 @@ export default function SellerAnalyticsScreen() {
             ))}
           </View>
         ) : (
-          <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Ionicons name="bar-chart-outline" size={32} color={colors.textMuted} />
-            <Text style={[styles.emptyText, { color: colors.textPrimary }]}>No performance data yet</Text>
-            <Text style={[styles.emptySubtext, { color: colors.textMuted }]}>Listings with views will appear here</Text>
-          </View>
+          <EmptyState
+            icon="bar-chart-outline"
+            title="No performance data yet"
+            subtitle="Listings with views will appear here"
+          />
         )}
         </Reanimated.View>
       </ScrollView>

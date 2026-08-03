@@ -41,7 +41,7 @@ interface CategoryConfig {
   key: keyof EmailPreferences;
   label: string;
   description: string;
-  icon: string;
+  icon: React.ComponentProps<typeof Ionicons>['name'];
   iconColor?: keyof ThemeColors;
   defaultEnabled: boolean;
   locked?: boolean;
@@ -271,7 +271,7 @@ export default function EmailNotificationsScreen({ navigation }: Props) {
                     >
                       {/* Coloured icon badge — visual identity per category */}
                       <View style={[styles.categoryIcon, { backgroundColor: iconColor + '18' }]}>
-                        <Ionicons name={category.icon as any} size={20} color={iconColor} />
+                        <Ionicons name={category.icon} size={20} color={iconColor} />
                       </View>
                       <View style={styles.categoryInfo}>
                         <View style={styles.categoryLabelRow}>

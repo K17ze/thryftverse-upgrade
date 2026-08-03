@@ -360,13 +360,13 @@ export default function AccountControlScreen({ navigation }: Props) {
   );
 }
 
-function ConsequenceRow({ icon, text, isLast }: { icon: string; text: string; isLast?: boolean }) {
+function ConsequenceRow({ icon, text, isLast }: { icon: React.ComponentProps<typeof Ionicons>['name']; text: string; isLast?: boolean }) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   return (
     <View style={[styles.consequenceRow, !isLast && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
       <View style={styles.consequenceIcon}>
-        <Ionicons name={icon as any} size={18} color={colors.textMuted} />
+        <Ionicons name={icon} size={18} color={colors.textMuted} />
       </View>
       <Text style={[styles.consequenceText, { color: colors.textSecondary }]}>{text}</Text>
     </View>
