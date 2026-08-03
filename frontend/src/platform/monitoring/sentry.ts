@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
+import * as Updates from 'expo-updates';
 
 type SentryLike = {
   init?: (...args: unknown[]) => unknown;
@@ -42,7 +43,15 @@ export function initSentry(opts?: SentryInitOptions): void {
     const realSentry = require('@sentry/react-native');
     const environment = opts?.environment ?? (__DEV__ ? 'development' : 'production');
     const release = opts?.release ?? Constants?.expoConfig?.version;
-    const dist = opts?.dist;
+    // dist: prefer caller-supplied, then OTA updateId for update correlation,
+    // then fall back to app version for native builds.
+    let dist = opts?.dist;
+    if (!dist) {
+      try {
+        if (Updates.updateId) dist = String(Updates.updateId);
+      } catch { /* expo-updates not available */ }
+    }
+    if (!dist) dist = Constants?.expoConfig?.version;
 
     realSentry.init({
       dsn,
@@ -72,6 +81,26 @@ export function initSentry(opts?: SentryInitOptions): void {
     });
 
     realSentry.setTag('platform', Platform.OS);
+
+    // expo-updates attribution — tag events with the update context so Sentry
+    // can correlate crashes to a specific OTA update, not just the binary release.
+    try {
+      realSentry.setTag('expo-update-id', Updates.updateId ?? 'embedded');
+      realSentry.setTag('expo-is-embedded-update', Updates.isEmbeddedLaunch);
+      const updateGroup = Updates.manifest?.id
+        ?? (Updates.manifest as any)?.extra?.expoClient?.updateGroup;
+      if (typeof updateGroup === 'string') {
+        realSentry.setTag('expo-update-group-id', updateGroup);
+        if (__DEV__) {
+          const owner = (Updates.manifest as any)?.extra?.expoClient?.owner ?? '[account]';
+          const slug = (Updates.manifest as any)?.extra?.expoClient?.slug ?? '[project]';
+          realSentry.setTag(
+            'expo-update-debug-url',
+            `https://expo.dev/accounts/${owner}/projects/${slug}/updates/${updateGroup}`,
+          );
+        }
+      }
+    } catch { /* expo-updates not available or not initialised */ }
 
     sentryInstance = realSentry as SentryLike;
   } catch {
