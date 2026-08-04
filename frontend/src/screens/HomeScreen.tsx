@@ -94,7 +94,10 @@ const GRID_GAP = 12; // 12pt — breathable discovery gutter (flagship spacing)
 // Keep the fallback compact while real assets continue to use their API geometry.
 const MISSING_MEDIA_HEIGHT_RATIO = 0.78;
 const POSTER_CARD_WIDTH = 76;
-const POSTER_CARD_HEIGHT = 135;
+// Tightened from 135 → 116 to reclaim first-viewport space for the product
+// grid below. All poster overlays (creator, frame count, unwatched badge)
+// remain comfortably within the tile at this height.
+const POSTER_CARD_HEIGHT = 116;
 const LISTING_CARD_CHROME_HEIGHT = 110;
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -999,7 +1002,7 @@ export default function HomeScreen() {
         data={feedGridData}
         numColumns={2}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.feedContent, { paddingTop: headerExpandedHeight + Space.sm }]}
+        contentContainerStyle={[styles.feedContent, { paddingTop: headerExpandedHeight + Space.xs }]}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
         onEndReached={handleFeedEndReached}
@@ -1282,9 +1285,9 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginBottom: 2,
   },
   feedTabBar: {
-    minHeight: 46,
+    minHeight: 40,
     marginHorizontal: Space.md,
-    marginBottom: Space.md,
+    marginBottom: Space.sm,
     flexDirection: 'row',
     alignItems: 'stretch',
     gap: Space.lg,
@@ -1357,7 +1360,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   newListingsBannerIconWrap: {
     width: 14,
     height: 14,
-    borderRadius: 7,
+    borderRadius: Radius.full,
     backgroundColor: 'transparent',
   },
   newListingsBannerText: {
@@ -1402,7 +1405,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   storyCreateRing: {
     width: 62,
     height: 62,
-    borderRadius: 31,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 2,
@@ -1415,7 +1418,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   storyRingGradient: {
     width: 62,
     height: 62,
-    borderRadius: 31,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 6,
@@ -1427,7 +1430,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   storyRingInner: {
     width: 58,
     height: 58,
-    borderRadius: 29,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.background,
@@ -1435,17 +1438,17 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   storyAvatarWrap: {
     width: 54,
     height: 54,
-    borderRadius: 27,
+    borderRadius: Radius.full,
   },
   storyAvatar: {
     width: '100%',
     height: '100%',
-    borderRadius: 27,
+    borderRadius: Radius.full,
   },
   storyPulseDot: {
     width: 10,
     height: 10,
-    borderRadius: 5,
+    borderRadius: Radius.full,
     backgroundColor: colors.brand,
     position: 'absolute',
     right: 1,
@@ -1481,7 +1484,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   lookCard: {
     width: SCREEN_WIDTH * 0.82,
-    borderRadius: 20,
+    borderRadius: Radius.xxl,
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
@@ -1497,7 +1500,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   lookFeedCard: {
     width: '100%',
-    borderRadius: 18,
+    borderRadius: Radius.xxl,
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
@@ -1529,12 +1532,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   lookOwnerAvatarWrap: {
     width: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius: Radius.full,
   },
   lookOwnerAvatar: {
     width: '100%',
     height: '100%',
-    borderRadius: 10,
+    borderRadius: Radius.full,
   },
   lookOwnerName: {
     color: colors.textInverse,
@@ -1566,7 +1569,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 5,
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     backgroundColor: 'rgba(0,0,0,0.34)',
   },
   lookMetaText: {
@@ -1583,11 +1586,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
 
   postersSection: {
     marginTop: 2,
-    paddingBottom: Space.sm,
+    paddingBottom: Space.xs,
   },
   posterSectionHeading: {
     paddingHorizontal: Space.md,
-    marginBottom: Space.xs,
+    marginBottom: 2,
   },
   posterSectionTitle: {
     color: colors.textPrimary,
@@ -1647,7 +1650,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     position: 'absolute',
     width: 88,
     height: 88,
-    borderRadius: 44,
+    borderRadius: Radius.full,
     top: -42,
     right: -34,
     backgroundColor: 'rgba(255,255,255,0.08)',
@@ -1670,7 +1673,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     left: 5,
     width: 24,
     height: 24,
-    borderRadius: 12,
+    borderRadius: Radius.full,
     overflow: 'hidden',
     borderWidth: 2,
     borderColor: colors.textInverse,
@@ -1683,12 +1686,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   posterAvatarOverlayWrap: {
     width: 24,
     height: 24,
-    borderRadius: 12,
+    borderRadius: Radius.full,
   },
   posterAvatarOverlayImage: {
     width: '100%',
     height: '100%',
-    borderRadius: 12,
+    borderRadius: Radius.full,
   },
   posterTopRow: {
     position: 'absolute',
@@ -1706,19 +1709,19 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.6)',
     paddingHorizontal: 5,
     paddingVertical: 3,
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     flex: 1,
     gap: 4,
   },
   posterOwnerAvatarWrap: {
     width: 14,
     height: 14,
-    borderRadius: 7,
+    borderRadius: Radius.full,
   },
   posterOwnerAvatar: {
     width: '100%',
     height: '100%',
-    borderRadius: 7,
+    borderRadius: Radius.full,
   },
   posterOwnerName: {
     color: colors.textInverse,
@@ -1731,7 +1734,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     gap: 3,
     backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     paddingHorizontal: 6,
     paddingVertical: 3,
   },
@@ -1783,7 +1786,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     gap: 2,
     backgroundColor: 'rgba(0,0,0,0.55)',
-    borderRadius: 8,
+    borderRadius: Radius.md,
     paddingHorizontal: 5,
     paddingVertical: 2,
   },
@@ -1797,7 +1800,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     bottom: 6,
     left: 6,
     backgroundColor: colors.brand,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
@@ -1809,13 +1812,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   posterFreshDot: {
     width: 7,
     height: 7,
-    borderRadius: 4,
+    borderRadius: Radius.full,
     backgroundColor: colors.brand,
   },
   posterSeenDot: {
     width: 7,
     height: 7,
-    borderRadius: 4,
+    borderRadius: Radius.full,
     backgroundColor: colors.border,
   },
 
@@ -1860,7 +1863,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     position: 'absolute',
     width: 170,
     height: 170,
-    borderRadius: 85,
+    borderRadius: Radius.full,
     top: -76,
     right: -64,
     borderWidth: StyleSheet.hairlineWidth,
@@ -1871,7 +1874,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     position: 'absolute',
     width: 96,
     height: 96,
-    borderRadius: 48,
+    borderRadius: Radius.full,
     bottom: -44,
     left: -30,
     borderWidth: StyleSheet.hairlineWidth,
@@ -1928,17 +1931,17 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   exploreSellerAvatarWrap: {
     width: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius: Radius.full,
   },
   exploreSellerAvatar: {
     width: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius: Radius.full,
   },
   exploreSellerAvatarFallback: {
     width: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surfaceAlt,
@@ -2056,7 +2059,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   peekPrimaryIconWrap: {
     width: 16,
     height: 16,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     backgroundColor: 'transparent',
   },
   peekPrimaryText: {

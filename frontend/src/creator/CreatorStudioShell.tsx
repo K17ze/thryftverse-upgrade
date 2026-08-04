@@ -993,12 +993,12 @@ const styles = StyleSheet.create({
   pageDotSegment: {
     flex: 1,
     height: 22,
-    borderRadius: 11,
+    borderRadius: Radius.full,
     justifyContent: 'center',
   },
   pageDotFill: {
     height: 3.5,
-    borderRadius: 1.75,
+    borderRadius: Radius.sm,
   },
   // ── Top bar row ──
   topBarRow: {
@@ -1077,7 +1077,7 @@ const styles = StyleSheet.create({
   },
   // ── Publish button ──
   publishBtn: {
-    borderRadius: 20,
+    borderRadius: Radius.xxl,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     justifyContent: 'center',
@@ -1102,7 +1102,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
     paddingHorizontal: Space.sm,
     paddingVertical: 6,
   },
@@ -1113,7 +1113,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   pageDot: {
-    borderRadius: 4,
+    borderRadius: Radius.sm,
   },
   pageCountText: {
     fontFamily: Typography.family.medium,
@@ -1122,7 +1122,7 @@ const styles = StyleSheet.create({
   addPageBtn: {
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: Radius.full,
     borderWidth: 1.5,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1174,19 +1174,19 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 4,
-    borderRadius: 2,
+    borderRadius: Radius.sm,
     backgroundColor: 'rgba(255,255,255,0.18)',
   },
   opacitySliderFill: {
     height: 4,
-    borderRadius: 2,
+    borderRadius: Radius.sm,
     backgroundColor: '#C9A46A',
   },
   opacitySliderThumb: {
     position: 'absolute',
     width: 18,
     height: 18,
-    borderRadius: 9,
+    borderRadius: Radius.full,
     backgroundColor: '#fff',
     marginLeft: -9,
     shadowColor: '#000',

@@ -10,7 +10,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Typography } from '../../theme/designTokens';
+import { Typography, Radius } from '../../theme/designTokens';
 
 const { height: SCREEN_H } = Dimensions.get('window');
 const DRAWER_HEIGHT = SCREEN_H * 0.6;
@@ -392,7 +392,7 @@ const styles = StyleSheet.create({
   handle: {
     width: 36,
     height: 4,
-    borderRadius: 2,
+    borderRadius: Radius.sm,
     backgroundColor: 'rgba(255,255,255,0.2)',
   },
   tabRow: {
@@ -405,7 +405,7 @@ const styles = StyleSheet.create({
   tab: {
     paddingHorizontal: 18,
     paddingVertical: 8,
-    borderRadius: 10,
+    borderRadius: Radius.lg,
     backgroundColor: 'rgba(255,255,255,0.06)',
   },
   tabActive: {
@@ -432,7 +432,7 @@ const styles = StyleSheet.create({
   emojiBtn: {
     width: 52,
     height: 52,
-    borderRadius: 14,
+    borderRadius: Radius.xl,
     backgroundColor: 'rgba(255,255,255,0.06)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -455,7 +455,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     paddingHorizontal: 12,
     height: 44,
   },
@@ -475,14 +475,14 @@ const styles = StyleSheet.create({
   inputAction: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   presetCard: {
     backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 14,
+    borderRadius: Radius.xl,
     padding: 14,
     marginBottom: 10,
   },
@@ -503,7 +503,7 @@ const styles = StyleSheet.create({
   },
   pill: {
     backgroundColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 10,
+    borderRadius: Radius.lg,
     paddingHorizontal: 14,
     paddingVertical: 8,
   },
@@ -514,7 +514,7 @@ const styles = StyleSheet.create({
   },
   pillBtn: {
     backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 10,
+    borderRadius: Radius.lg,
     paddingHorizontal: 14,
     paddingVertical: 8,
   },
@@ -529,7 +529,7 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     backgroundColor: 'rgba(255,255,255,0.06)',
     marginTop: 8,
   },
@@ -549,7 +549,7 @@ const styles = StyleSheet.create({
   shapeBtn: {
     width: 90,
     height: 90,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,

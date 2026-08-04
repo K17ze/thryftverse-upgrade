@@ -1808,6 +1808,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             onPress={() => toggleMessageSelection(msg.id)}
             activeOpacity={0.7}
             hapticFeedback="light"
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             accessibilityRole="button"
             accessibilityLabel={
               selectedMessageIds.has(msg.id)
@@ -2123,6 +2124,7 @@ export default function ChatScreen({ navigation, route }: Props) {
               activeOpacity={0.7}
               scaleValue={0.92}
               hapticFeedback="light"
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               accessibilityRole="button"
               accessibilityLabel="Exit selection mode"
               accessibilityHint="Closes the message selection toolbar"
@@ -2144,6 +2146,7 @@ export default function ChatScreen({ navigation, route }: Props) {
               activeOpacity={0.7}
               scaleValue={0.92}
               hapticFeedback="medium"
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               accessibilityLabel="Delete selected"
             >
               <Ionicons name="trash-outline" size={22} color={colors.danger} />

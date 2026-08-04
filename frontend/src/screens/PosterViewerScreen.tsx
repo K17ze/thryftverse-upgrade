@@ -423,7 +423,7 @@ export default function PosterViewerScreen() {
               <CachedImage
                 uri={activeStory.creator.avatar}
                 style={styles.authorAvatar}
-                containerStyle={{ borderRadius: 14, overflow: 'hidden' }}
+                containerStyle={{ borderRadius: Radius.full, overflow: 'hidden' }}
                 contentFit="cover"
               />
             ) : (
@@ -563,7 +563,7 @@ const styles = StyleSheet.create({
   closeBtn: {
     paddingHorizontal: Space.md + 4,
     paddingVertical: Space.sm,
-    borderRadius: 999,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(255,255,255,0.15)',
   },
   closeBtnText: {
@@ -601,7 +601,7 @@ const styles = StyleSheet.create({
   storyDot: {
     width: 6,
     height: 6,
-    borderRadius: 3,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(255,255,255,0.3)',
   },
   storyDotActive: {
@@ -619,7 +619,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
     minHeight: 44,
-    borderRadius: 22,
+    borderRadius: Radius.full,
     paddingHorizontal: 10,
     backgroundColor: 'rgba(0,0,0,0.32)',
     gap: 8,
@@ -627,7 +627,7 @@ const styles = StyleSheet.create({
   authorAvatar: {
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -658,7 +658,7 @@ const styles = StyleSheet.create({
   topIconBtn: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.35)',
@@ -666,7 +666,7 @@ const styles = StyleSheet.create({
   closeBtnTop: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.35)',
@@ -734,7 +734,7 @@ const styles = StyleSheet.create({
   tagDot: {
     width: 24,
     height: 24,
-    borderRadius: 12,
+    borderRadius: Radius.full,
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
@@ -751,7 +751,7 @@ const styles = StyleSheet.create({
   tagDotInner: {
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: Radius.full,
   },
   tagLabelWrap: {
     marginTop: Space.xs,

@@ -53,6 +53,8 @@ const ROUTE_METADATA: DestinationMeta[] = [
   { key: 'EditProfile', label: 'Edit profile & account', searchTerms: 'edit profile avatar name bio username email phone private details security account two factor password', section: 'Account', showSection: true },
   { key: 'Verification', label: 'Verification & KYC', searchTerms: 'verification kyc identity dac7 tax badge verified seller trust', section: 'Account', showSection: true },
   { key: 'AccountControl', label: 'Account control', searchTerms: 'account control delete deactivate download data export', section: 'Account', showSection: true },
+  { key: 'DataExport', label: 'Download my data', searchTerms: 'download data export gdpr privacy account', section: 'Account' },
+  { key: 'DeleteAccount', label: 'Delete account', searchTerms: 'delete account permanently erase gdpr remove', section: 'Account' },
   { key: 'SavedAddresses', label: 'Saved addresses', searchTerms: 'saved addresses delivery shipping address buying', section: 'Buying', showSection: true },
   { key: 'Payments', label: 'Payment methods', searchTerms: 'payment methods card bank buying', section: 'Buying', showSection: true },
   { key: 'Closet', label: 'Saved & collections', searchTerms: 'closet saved wishlist collections buying', section: 'Buying', showSection: true },
@@ -545,6 +547,25 @@ export default function SettingsScreen({ navigation }: Props) {
           title="Account control"
           subtitle="Download data, delete account"
           onPress={() => navigation.navigate('AccountControl')}
+          isFirst
+        />
+        <SettingsRow
+          icon="download-outline"
+          title="Download my data"
+          subtitle="Export a copy of your account data"
+          onPress={() => navigation.navigate('DataExport')}
+          isLast
+        />
+      </SettingsSection>
+
+      {/* ── DANGER ZONE (visually separated) ── */}
+      <SettingsSection title="Danger zone" noCard>
+        <SettingsRow
+          icon="trash-outline"
+          title="Delete account"
+          subtitle="Permanently erase your account and data"
+          danger
+          onPress={() => navigation.navigate('DeleteAccount')}
           isFirst
           isLast
         />

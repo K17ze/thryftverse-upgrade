@@ -17,7 +17,7 @@ import * as MediaLibrary from 'expo-media-library/legacy';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Typography } from '../theme/designTokens';
+import { Typography, Radius } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
@@ -881,7 +881,7 @@ const styles = StyleSheet.create({
   permissionIconWrap: {
     width: 80,
     height: 80,
-    borderRadius: 40,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -904,7 +904,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
     paddingHorizontal: 28,
     paddingVertical: 14,
-    borderRadius: 28,
+    borderRadius: Radius.xxl,
     backgroundColor: '#fff',
   },
   permissionBtnText: {
@@ -919,7 +919,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingHorizontal: 18,
     paddingVertical: 12,
-    borderRadius: 22,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(255,255,255,0.1)',
   },
   galleryFallbackText: {
@@ -989,7 +989,7 @@ const styles = StyleSheet.create({
     height: 60,
     borderWidth: 2,
     borderColor: '#fff',
-    borderRadius: 4,
+    borderRadius: Radius.sm,
     pointerEvents: 'none',
   },
   // Pinch zoom indicator — subtle pill at bottom center
@@ -999,7 +999,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: Radius.xxl,
     backgroundColor: 'rgba(0,0,0,0.6)',
   },
   zoomIndicatorText: {
@@ -1118,7 +1118,7 @@ const styles = StyleSheet.create({
   topIconBtn: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1158,13 +1158,13 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   recentThumbWrap: {
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
   },
   recentThumb: {
     width: 56,
     height: 56,
-    borderRadius: 10,
+    borderRadius: Radius.lg,
   },
   // Mode pill — transparent, text only
   modePill: {
@@ -1274,7 +1274,7 @@ const styles = StyleSheet.create({
   reviewPrimaryBtn: {
     width: 72,
     height: 72,
-    borderRadius: 36,
+    borderRadius: Radius.full,
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',

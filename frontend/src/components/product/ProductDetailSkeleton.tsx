@@ -20,6 +20,16 @@ export function ProductDetailSkeleton() {
         <View style={[styles.line, styles.meta, block]} />
       </View>
 
+      {/* Elevated trust strip placeholder — matches the new trust chips
+          that now sit immediately after the identity and before the
+          seller row. Per AGENTS.md §14: skeletons should resemble the
+          final layout; this avoids a loading → populated geometry shift. */}
+      <View style={styles.trustStrip}>
+        <View style={[styles.line, styles.trustChip, block]} />
+        <View style={[styles.line, styles.trustChip, block]} />
+        <View style={[styles.line, styles.trustChip, block]} />
+      </View>
+
       <View style={[styles.hairline, { backgroundColor: colors.borderSubtle }]} />
 
       <View style={styles.seller}>
@@ -77,6 +87,18 @@ const styles = StyleSheet.create({
   hairline: {
     height: StyleSheet.hairlineWidth,
     marginHorizontal: Space.md,
+  },
+  trustStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.sm,
+    gap: Space.sm,
+  },
+  trustChip: {
+    width: 96,
+    height: 16,
+    borderRadius: Radius.sm,
   },
   seller: {
     minHeight: 76,

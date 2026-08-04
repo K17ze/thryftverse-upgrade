@@ -649,6 +649,63 @@ export default function ItemDetailScreen() {
           ) : null}
         </View>
 
+        {/* ── Trust strip — elevated above seller ──
+            Per 2026 marketplace UX research: "Trust signals must appear
+            above the fold or within first 2 scrolls" and "trust signal
+            at the payment decision point increases conversion more than
+            any other single change." The full "Buying this item" section
+            with its disclosure sheet remains below the seller row, but
+            the top 2-3 trust signals are elevated here so they are
+            visible immediately after the price — the moment the buyer's
+            intent is highest.
+            Per AGENTS.md §4: flat canvas, no card containers. Inline
+            icon+text pairs separated by spacing, not borders. */}
+        {(() => {
+          const trustChips: { icon: keyof typeof Ionicons.glyphMap; label: string }[] = [];
+          if (commerce.shippingMethod) {
+            trustChips.push({
+              icon: commerce.shippingPayer === 'seller' ? 'gift-outline' : 'cube-outline',
+              label: commerce.shippingPayer === 'seller' ? 'Free shipping' : 'Tracked shipping',
+            });
+          }
+          if (commerce.protectionPolicy?.available) {
+            trustChips.push({
+              icon: 'shield-checkmark-outline',
+              label: 'Buyer protection',
+            });
+          }
+          if (commerce.returnPolicy?.accepted) {
+            trustChips.push({
+              icon: 'return-up-back-outline',
+              label: commerce.returnPolicy.windowDays
+                ? `${commerce.returnPolicy.windowDays}-day returns`
+                : 'Returns accepted',
+            });
+          }
+          if (commerce.authenticity && commerce.authenticity.status !== 'not_offered') {
+            trustChips.push({
+              icon: 'ribbon-outline',
+              label: commerce.authenticity.label ?? (commerce.authenticity.status === 'verified' ? 'Verified' : 'Authentic'),
+            });
+          }
+          if (trustChips.length === 0) return null;
+          // Show at most 3 chips in the elevated strip — the rest are
+          // available in the full "Buying this item" section below.
+          const elevated = trustChips.slice(0, 3);
+          return (
+            <View style={styles.elevatedTrustStrip}>
+              {elevated.map((chip, i) => (
+                <View key={i} style={styles.trustChip}>
+                  <Ionicons name={chip.icon} size={16} color={colors.textSecondary} />
+                  <Text style={[styles.trustChipText, { color: colors.textSecondary }]} numberOfLines={1}>
+                    {chip.label}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          );
+        })()}
+
         {seller && (
           <View style={[styles.sellerRowWrap, { borderTopColor: colors.borderSubtle }]}>
             <CommerceDetailSellerRow
@@ -737,59 +794,15 @@ export default function ItemDetailScreen() {
         )}
 
         {/* ── Zone D — Purchase details ──
-            Visible trust chips (shipping, protection, returns) above the
-            disclosure row. Research: flagship PDPs surface key trust
-            signals without requiring a tap. The disclosure row still
-            opens the full details sheet.
-            Spec 05 §4: "Use a compact summary plus disclosure sheet.
-            Do not render a separate bordered strip for every policy." */}
+            The top trust signals are now elevated to the trust strip
+            right after the identity block (see above). This section
+            keeps the full disclosure row that opens the cost breakdown
+            sheet. Per spec 05 §4: "Use a compact summary plus disclosure
+            sheet. Do not render a separate bordered strip for every
+            policy." The elevated strip handles the at-a-glance trust;
+            this section handles the detailed breakdown. */}
         {purchaseSummary ? (
           <CommerceDetailSection label="Buying this item" variant="continuation">
-            {/* Trust chips — flat inline icon+text, no card containers.
-                Per AGENTS.md: "Flat canvas, spacing and hairlines are
-                the default utility structure." */}
-            {(() => {
-              const chips: { icon: keyof typeof Ionicons.glyphMap; label: string }[] = [];
-              if (commerce.shippingMethod) {
-                chips.push({
-                  icon: commerce.shippingPayer === 'seller' ? 'gift-outline' : 'cube-outline',
-                  label: commerce.shippingPayer === 'seller' ? 'Free shipping' : 'Tracked shipping',
-                });
-              }
-              if (commerce.protectionPolicy?.available) {
-                chips.push({
-                  icon: 'shield-checkmark-outline',
-                  label: 'Buyer protection',
-                });
-              }
-              if (commerce.returnPolicy?.accepted) {
-                chips.push({
-                  icon: 'return-up-back-outline',
-                  label: commerce.returnPolicy.windowDays
-                    ? `${commerce.returnPolicy.windowDays}-day returns`
-                    : 'Returns accepted',
-                });
-              }
-              if (commerce.authenticity && commerce.authenticity.status !== 'not_offered') {
-                chips.push({
-                  icon: 'ribbon-outline',
-                  label: commerce.authenticity.label ?? (commerce.authenticity.status === 'verified' ? 'Verified' : 'Authentic'),
-                });
-              }
-              if (chips.length === 0) return null;
-              return (
-                <View style={styles.trustChipsRow}>
-                  {chips.map((chip, i) => (
-                    <View key={i} style={styles.trustChip}>
-                      <Ionicons name={chip.icon} size={16} color={colors.textSecondary} />
-                      <Text style={[styles.trustChipText, { color: colors.textSecondary }]} numberOfLines={1}>
-                        {chip.label}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              );
-            })()}
             <CommerceDetailDisclosureRow
               label="Costs, delivery & protection"
               summary="Full breakdown"
@@ -1427,6 +1440,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingBottom: Space.sm,
     letterSpacing: 0.1,
+  },
+  // ── Elevated trust strip ──
+  // Compact inline trust signals placed immediately after the identity
+  // block, before the seller row. Per 2026 research: trust signals
+  // visible right after the price (the moment of highest buyer intent)
+  // increase conversion more than any other single change.
+  // Flat canvas — no card, no surface fill, no border. Just icon+label
+  // pairs with generous spacing. Per AGENTS.md §4 surface budget.
+  elevatedTrustStrip: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: Space.sm + 2,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    marginBottom: Space.xs,
   },
   // ── Seller row ──
   // Per Design.md between-group spacing: the seller row is a distinct

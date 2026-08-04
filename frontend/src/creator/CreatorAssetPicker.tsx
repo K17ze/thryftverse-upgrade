@@ -1129,7 +1129,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                     { color: sampleColor },
                     e.key === 'shadow' && { textShadowColor: '#000', textShadowOffset: { width: 1, height: 2 }, textShadowRadius: 3 },
                     e.key === 'neon' && { textShadowColor: isActive ? colors.brand : '#7B68EE', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 10 },
-                    e.key === 'outline' && { borderWidth: 1, borderColor: sampleColor, paddingHorizontal: 4, borderRadius: 4 },
+                    e.key === 'outline' && { borderWidth: 1, borderColor: sampleColor, paddingHorizontal: 4, borderRadius: Radius.sm },
                     e.key === 'glow' && { textShadowColor: isActive ? colors.brand : '#F5D547', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8 },
                   ]}
                 >
@@ -1432,7 +1432,7 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                 >
                   <View style={[styles.brushSliderFill, { height: `${(brushSize - 2) / 18 * 100}%` }]} />
                   <View style={[styles.brushSliderHandle, { bottom: `${(brushSize - 2) / 18 * 100}%` }]}>
-                    <View style={[styles.brushSliderDot, { width: Math.max(6, Math.min(22, brushSize + 4)), height: Math.max(6, Math.min(22, brushSize + 4)), borderRadius: 11, backgroundColor: activeColor }]} />
+                    <View style={[styles.brushSliderDot, { width: Math.max(6, Math.min(22, brushSize + 4)), height: Math.max(6, Math.min(22, brushSize + 4)), borderRadius: Radius.full, backgroundColor: activeColor }]} />
                   </View>
                 </Pressable>
               </View>
@@ -2511,9 +2511,9 @@ function ShapePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
   const renderShapePreview = (shape: string) => {
     switch (shape) {
       case 'circle':
-        return <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: activeColor }} />;
+        return <View style={{ width: 32, height: 32, borderRadius: Radius.full, backgroundColor: activeColor }} />;
       case 'square':
-        return <View style={{ width: 32, height: 32, borderRadius: 4, backgroundColor: activeColor }} />;
+        return <View style={{ width: 32, height: 32, borderRadius: Radius.sm, backgroundColor: activeColor }} />;
       case 'line':
         return <View style={{ width: 32, height: 4, backgroundColor: activeColor }} />;
       case 'arrow':
@@ -3375,7 +3375,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: 'rgba(0,0,0,0.6)',
     paddingHorizontal: 4,
     paddingVertical: 2,
-    borderRadius: 4,
+    borderRadius: Radius.sm,
   },
   mediaGridDuration: {
     color: '#fff',
@@ -3392,7 +3392,7 @@ function createStyles(colors: ThemeColors) {
     right: 6,
     width: 24,
     height: 24,
-    borderRadius: 12,
+    borderRadius: Radius.full,
     backgroundColor: '#fff',
     justifyContent: 'center',
     alignItems: 'center',
@@ -3472,7 +3472,7 @@ function createStyles(colors: ThemeColors) {
   resultRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   resultThumb: { width: 40, height: 40, borderRadius: Radius.sm, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
   resultThumbImg: { width: '100%', height: '100%' },
-  resultAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center' },
+  resultAvatar: { width: 40, height: 40, borderRadius: Radius.full, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center' },
   resultAvatarText: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: colors.textSecondary },
   resultInfo: { flex: 1, gap: 2 },
   resultName: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textPrimary },
@@ -3517,7 +3517,7 @@ function createStyles(colors: ThemeColors) {
   styleOptionText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textPrimary },
   styleOptionTextActive: { color: colors.brand },
   colorRow: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
-  colorOption: { width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: 'transparent', elevation: 2, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
+  colorOption: { width: 44, height: 44, borderRadius: Radius.full, borderWidth: 2, borderColor: 'transparent', elevation: 2, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
   colorOptionActive: { borderColor: colors.brand, shadowColor: colors.brand, shadowOpacity: 0.3, shadowRadius: 4, shadowOffset: { width: 0, height: 0 }, elevation: 2 },
   colorOptionTransparent: { borderWidth: 1, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' },
   alignmentRow: { flexDirection: 'row', gap: Space.sm },
@@ -3553,9 +3553,9 @@ function createStyles(colors: ThemeColors) {
     letterSpacing: 0.3,
   },
   brushSizeRow: { flexDirection: 'row', gap: Space.md, alignItems: 'center', paddingVertical: Space.xs },
-  brushSizeOption: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+  brushSizeOption: { width: 44, height: 44, borderRadius: Radius.full, justifyContent: 'center', alignItems: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
   brushSizeOptionActive: { borderColor: colors.brand, backgroundColor: `${colors.brand}15` },
-  brushSizeDot: { borderRadius: 100 },
+  brushSizeDot: { borderRadius: Radius.full },
   brushPreviewWrap: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.xs },
   brushPreviewDot: { elevation: 1, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2, shadowOffset: { width: 0, height: 1 } },
   brushPreviewLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary },
@@ -3576,12 +3576,12 @@ function createStyles(colors: ThemeColors) {
   },
   gifThumb: { width: '100%', height: '100%' },
   // ── Music picker ──
-  musicPreviewCard: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, backgroundColor: colors.surface, borderRadius: 12, padding: Space.md, marginHorizontal: Space.md, marginBottom: Space.sm, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
+  musicPreviewCard: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, backgroundColor: colors.surface, borderRadius: Radius.lg, padding: Space.md, marginHorizontal: Space.md, marginBottom: Space.sm, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
   musicPreviewArt: { width: 48, height: 48, borderRadius: Radius.md },
   musicPreviewInfo: { flex: 1, gap: 2 },
   musicPreviewTrackName: { fontFamily: Typography.family.semibold, fontSize: Type.bodyEmphasis.size, color: colors.textPrimary },
   musicPreviewArtistName: { fontFamily: Typography.family.regular, fontSize: Type.caption.size, color: colors.textSecondary },
-  musicPreviewPlayBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.brand, justifyContent: 'center', alignItems: 'center' },
+  musicPreviewPlayBtn: { width: 32, height: 32, borderRadius: Radius.full, backgroundColor: colors.brand, justifyContent: 'center', alignItems: 'center' },
   musicLoadingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.sm, paddingVertical: Space.sm },
   musicLoadingText: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary },
   musicRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm, paddingHorizontal: Space.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
@@ -3589,10 +3589,10 @@ function createStyles(colors: ThemeColors) {
   musicInfo: { flex: 1, gap: 2 },
   musicTrackName: { fontFamily: Typography.family.semibold, fontSize: Type.bodyEmphasis.size, color: colors.textPrimary },
   musicArtistName: { fontFamily: Typography.family.regular, fontSize: Type.caption.size, color: colors.textSecondary },
-  musicAddBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.brand, justifyContent: 'center', alignItems: 'center' },
+  musicAddBtn: { width: 36, height: 36, borderRadius: Radius.full, backgroundColor: colors.brand, justifyContent: 'center', alignItems: 'center' },
   // ── Quiz picker ──
   quizOptionRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginBottom: Space.xs },
-  quizCorrectDot: { width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' },
+  quizCorrectDot: { width: 28, height: 28, borderRadius: Radius.full, borderWidth: 2, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' },
   quizRemoveBtn: { padding: 4 },
   quizAddOptionBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: Space.sm },
   quizAddOptionText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.brand },
@@ -3605,15 +3605,15 @@ function createStyles(colors: ThemeColors) {
   stickerSearchClear: { width: 32, height: 32, justifyContent: 'center', alignItems: 'center' },
   stickerCategoryScroll: { marginHorizontal: -Space.md, marginBottom: Space.xs },
   stickerCategoryContent: { paddingHorizontal: Space.md, gap: 8 },
-  stickerCategoryChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, backgroundColor: colors.surfaceAlt },
+  stickerCategoryChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: Radius.xl, backgroundColor: colors.surfaceAlt },
   stickerCategoryChipText: { fontFamily: Typography.family.semibold, fontSize: 13, color: colors.textSecondary },
   stickerGridScroll: { flex: 1 },
   stickerGridContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
   stickerCategorySection: { marginBottom: Space.lg },
   stickerCategoryTitle: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: Space.sm },
   stickerGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.md },
-  stickerCell: { width: 80, height: 80, borderRadius: 12, backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center', gap: Space.xs, borderWidth: 1, borderColor: colors.borderSubtle },
-  stickerCellIcon: { width: 48, height: 48, borderRadius: 24, backgroundColor: `${colors.brand}15`, justifyContent: 'center', alignItems: 'center' },
+  stickerCell: { width: 80, height: 80, borderRadius: Radius.lg, backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center', gap: Space.xs, borderWidth: 1, borderColor: colors.borderSubtle },
+  stickerCellIcon: { width: 48, height: 48, borderRadius: Radius.full, backgroundColor: `${colors.brand}15`, justifyContent: 'center', alignItems: 'center' },
   stickerCellLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textPrimary },
   stickerEmptyState: { paddingVertical: Space.xxl, alignItems: 'center', gap: Space.md },
   stickerEmptyText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textMuted },
@@ -3622,7 +3622,7 @@ function createStyles(colors: ThemeColors) {
   stickerPreviewPillText: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: '#fff' },
   stickerPreviewPillEmoji: { fontSize: 20 },
   // ── Weather picker ──
-  weatherPreviewPill: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.md, borderRadius: 16, backgroundColor: 'rgba(201,164,106,0.95)', alignSelf: 'center', marginBottom: Space.sm, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 3, minWidth: 180 },
+  weatherPreviewPill: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.md, borderRadius: Radius.xl, backgroundColor: 'rgba(201,164,106,0.95)', alignSelf: 'center', marginBottom: Space.sm, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 3, minWidth: 180 },
   weatherPreviewEmoji: { fontSize: 32 },
   weatherPreviewInfo: { gap: 0 },
   weatherPreviewTemp: { fontFamily: Typography.family.bold, fontSize: Type.subtitle.size, color: '#fff' },
@@ -3630,60 +3630,60 @@ function createStyles(colors: ThemeColors) {
   weatherPreviewLocation: { flexDirection: 'row', alignItems: 'center', gap: 3, marginLeft: 'auto' },
   weatherPreviewLocationText: { fontFamily: Typography.family.medium, fontSize: Type.meta.size, color: 'rgba(255,255,255,0.7)' },
   weatherGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
-  weatherCell: { width: 80, height: 80, borderRadius: 12, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', gap: 4 },
+  weatherCell: { width: 80, height: 80, borderRadius: Radius.lg, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', gap: 4 },
   weatherCellActive: { backgroundColor: colors.brand },
   weatherCellEmoji: { fontSize: 28 },
   weatherCellLabel: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary, textAlign: 'center' },
   inputCardLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary, marginBottom: 6, marginTop: Space.sm },
-  inputCard: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, backgroundColor: colors.surface, borderRadius: 12, padding: Space.md, marginBottom: Space.xs },
+  inputCard: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, backgroundColor: colors.surface, borderRadius: Radius.lg, padding: Space.md, marginBottom: Space.xs },
   inputCardText: { flex: 1, fontSize: Type.body.size, color: colors.textPrimary, fontFamily: Typography.family.regular, paddingVertical: 2 },
   inputCardSuffix: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: colors.textSecondary },
   // ── Spectrum color picker ──
   spectrumWrap: { marginTop: Space.sm, gap: Space.xs },
-  spectrumBar: { height: 36, borderRadius: 18, overflow: 'hidden', position: 'relative', elevation: 3, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 6, shadowOffset: { width: 0, height: 3 } },
+  spectrumBar: { height: 36, borderRadius: Radius.full, overflow: 'hidden', position: 'relative', elevation: 3, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 6, shadowOffset: { width: 0, height: 3 } },
   spectrumOverlay: { ...StyleSheet.absoluteFill },
-  spectrumIndicator: { position: 'absolute', top: -4, width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: '#fff', backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 4, left: '50%', marginLeft: -14 },
+  spectrumIndicator: { position: 'absolute', top: -4, width: 28, height: 28, borderRadius: Radius.full, borderWidth: 2, borderColor: '#fff', backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 4, left: '50%', marginLeft: -14 },
   spectrumClose: { alignSelf: 'center', paddingVertical: Space.xs },
   // ── Vertical brush size slider (Instagram pattern) ──
   brushSliderWrap: { position: 'absolute', left: Space.sm, top: '50%', marginTop: -60, zIndex: 10, elevation: 4, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
-  brushSliderTrack: { width: 28, height: 120, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end', overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.1)' },
-  brushSliderFill: { width: '100%', backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 14 },
+  brushSliderTrack: { width: 28, height: 120, borderRadius: Radius.full, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end', overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.1)' },
+  brushSliderFill: { width: '100%', backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: Radius.full },
   brushSliderHandle: { position: 'absolute', left: '50%', marginLeft: -11, width: 22, height: 22, justifyContent: 'center', alignItems: 'center' },
   brushSliderDot: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
   // ── Text effect chips (visual preview) ──
-  effectChip: { width: 56, height: 56, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, marginRight: Space.sm, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', gap: 2 },
+  effectChip: { width: 56, height: 56, borderRadius: Radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, marginRight: Space.sm, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', gap: 2 },
   effectChipActive: { borderColor: colors.brand, backgroundColor: `${colors.brand}18`, borderWidth: 1.5 },
   effectChipSample: { fontFamily: Typography.family.bold, fontSize: 20, lineHeight: 24 },
   effectChipLabel: { fontFamily: Typography.family.medium, fontSize: 9, color: colors.textSecondary },
   effectChipLabelActive: { color: colors.brand },
   // ── Text animation chips (visual preview) ──
-  animChip: { width: 48, height: 56, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, marginRight: Space.sm, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', gap: 4 },
+  animChip: { width: 48, height: 56, borderRadius: Radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, marginRight: Space.sm, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', gap: 4 },
   animChipActive: { borderColor: colors.brand, backgroundColor: `${colors.brand}18`, borderWidth: 1.5 },
   animChipLabel: { fontFamily: Typography.family.medium, fontSize: 9, color: colors.textSecondary, textAlign: 'center' },
   animChipLabelActive: { color: colors.brand },
   // ── Draw brush chips (premium tool selection) ──
   brushChipScroll: { gap: Space.sm, paddingVertical: Space.xs },
-  brushChip: { width: 48, height: 48, borderRadius: 12, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', marginRight: Space.sm },
+  brushChip: { width: 48, height: 48, borderRadius: Radius.lg, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', marginRight: Space.sm },
   brushChipActive: { backgroundColor: colors.brand },
   // ── Shape preview box ──
-  shapePreviewBox: { width: 56, height: 56, borderRadius: 12, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', marginBottom: 6 },
+  shapePreviewBox: { width: 56, height: 56, borderRadius: Radius.lg, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', marginBottom: 6 },
   // ── GIF category chips ──
   gifCategoryScroll: { marginHorizontal: -Space.md, marginBottom: Space.sm },
   gifCategoryContent: { paddingHorizontal: Space.md, gap: 8 },
-  gifCategoryChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, backgroundColor: colors.surfaceAlt },
+  gifCategoryChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: Radius.xl, backgroundColor: colors.surfaceAlt },
   gifCategoryChipText: { fontFamily: Typography.family.semibold, fontSize: 13, color: colors.textSecondary },
   // ── Vote preview ──
-  votePreviewWrap: { backgroundColor: colors.surface, borderRadius: 12, padding: Space.md, marginBottom: Space.sm, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+  votePreviewWrap: { backgroundColor: colors.surface, borderRadius: Radius.lg, padding: Space.md, marginBottom: Space.sm, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
   votePreviewQuestion: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: colors.textPrimary, marginBottom: Space.sm, textAlign: 'center' },
   votePreviewOptions: { flexDirection: 'row', gap: Space.sm },
   votePreviewOption: { flex: 1, paddingVertical: Space.sm, paddingHorizontal: Space.sm, borderRadius: Radius.md, borderWidth: 1.5, alignItems: 'center' },
   votePreviewOptionText: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textPrimary },
   addOptionBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: Space.sm, marginBottom: Space.xs },
   addOptionBtnText: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.brand },
-  timerChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, marginRight: 8 },
+  timerChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: Radius.xl, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, marginRight: 8 },
   timerChipText: { fontFamily: Typography.family.semibold, fontSize: 13, color: colors.textSecondary },
   // ── Quiz preview ──
-  quizPreviewWrap: { backgroundColor: colors.surface, borderRadius: 12, padding: Space.md, marginBottom: Space.sm, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, gap: Space.xs },
+  quizPreviewWrap: { backgroundColor: colors.surface, borderRadius: Radius.lg, padding: Space.md, marginBottom: Space.sm, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, gap: Space.xs },
   quizPreviewHeader: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginBottom: Space.xs },
   quizPreviewEmoji: { fontSize: 22 },
   quizPreviewQuestion: { flex: 1, fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: colors.textPrimary },
@@ -3691,20 +3691,20 @@ function createStyles(colors: ThemeColors) {
   quizPreviewOptionCorrect: { borderColor: colors.success, backgroundColor: `${colors.success}15` },
   quizPreviewOptionText: { flex: 1, fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textPrimary },
   // ── Question preview (improved) ──
-  questionPreviewWrap: { borderRadius: 16, padding: Space.md + 2, marginBottom: Space.sm, gap: Space.sm, elevation: 3, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
+  questionPreviewWrap: { borderRadius: Radius.xl, padding: Space.md + 2, marginBottom: Space.sm, gap: Space.sm, elevation: 3, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
   questionPreviewIconRow: { marginBottom: Space.xs },
   questionPreviewPrompt: { fontFamily: Typography.family.semibold, fontSize: Type.bodyEmphasis.size, color: '#fff', lineHeight: Type.bodyEmphasis.size * 1.3 },
   questionPreviewInputRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: Radius.md, paddingVertical: Space.sm, paddingHorizontal: Space.md },
   questionPreviewPlaceholder: { fontFamily: Typography.family.regular, fontSize: Type.caption.size, color: 'rgba(255,255,255,0.6)' },
-  questionPreviewSendDot: { width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.3)', justifyContent: 'center', alignItems: 'center' },
+  questionPreviewSendDot: { width: 24, height: 24, borderRadius: Radius.full, backgroundColor: 'rgba(255,255,255,0.3)', justifyContent: 'center', alignItems: 'center' },
   // ── Emoji slider preview (improved) ──
-  sliderPreviewWrap: { backgroundColor: colors.surface, borderRadius: 16, padding: Space.md + 2, marginBottom: Space.sm, gap: Space.sm, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, elevation: 2, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 6, shadowOffset: { width: 0, height: 3 } },
+  sliderPreviewWrap: { backgroundColor: colors.surface, borderRadius: Radius.xl, padding: Space.md + 2, marginBottom: Space.sm, gap: Space.sm, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, elevation: 2, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 6, shadowOffset: { width: 0, height: 3 } },
   sliderPreviewQuestion: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: colors.textPrimary, textAlign: 'center' },
   sliderPreviewRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   sliderPreviewEmoji: { fontSize: 32 },
-  sliderPreviewTrack: { flex: 1, height: 8, borderRadius: 4, backgroundColor: colors.surfaceAlt, position: 'relative' },
-  sliderPreviewFill: { height: '100%', borderRadius: 4 },
-  sliderPreviewHandle: { position: 'absolute', top: -6, width: 20, height: 20, borderRadius: 10, marginLeft: -10, borderWidth: 2, borderColor: '#fff', elevation: 2, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
+  sliderPreviewTrack: { flex: 1, height: 8, borderRadius: Radius.sm, backgroundColor: colors.surfaceAlt, position: 'relative' },
+  sliderPreviewFill: { height: '100%', borderRadius: Radius.sm },
+  sliderPreviewHandle: { position: 'absolute', top: -6, width: 20, height: 20, borderRadius: Radius.full, marginLeft: -10, borderWidth: 2, borderColor: '#fff', elevation: 2, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
   sliderPreviewEndLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary, textAlign: 'center' },
   });
 }

@@ -548,7 +548,7 @@ function createStyles(colors: ThemeColors) {
     },
     captionCard: {
       backgroundColor: colors.surface,
-      borderRadius: 12,
+      borderRadius: Radius.lg,
       padding: Space.md,
     },
     captionInput: {
@@ -585,7 +585,7 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'space-between',
       alignItems: 'center',
       backgroundColor: colors.surface,
-      borderRadius: 12,
+      borderRadius: Radius.lg,
       padding: Space.md,
     },
     // ── Audience segmented control ──
@@ -601,7 +601,7 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'center',
       gap: 8,
       padding: Space.md,
-      borderRadius: 12,
+      borderRadius: Radius.lg,
       backgroundColor: colors.surfaceAlt,
     },
     audiencePillActive: {
@@ -631,7 +631,7 @@ function createStyles(colors: ThemeColors) {
       paddingBottom: Space.xs,
     },
     coverThumbWrap: {
-      borderRadius: 12,
+      borderRadius: Radius.lg,
       overflow: 'hidden',
       borderWidth: 2,
       borderColor: 'transparent',
@@ -650,7 +650,7 @@ function createStyles(colors: ThemeColors) {
       right: 4,
       width: 20,
       height: 20,
-      borderRadius: 10,
+      borderRadius: Radius.full,
       backgroundColor: colors.brand,
       justifyContent: 'center',
       alignItems: 'center',
@@ -742,14 +742,14 @@ function createStyles(colors: ThemeColors) {
     progressBarTrack: {
       width: '80%',
       height: 4,
-      borderRadius: 2,
+      borderRadius: Radius.sm,
       backgroundColor: colors.surfaceAlt,
       overflow: 'hidden',
       marginTop: Space.xs,
     },
     progressBarFill: {
       height: 4,
-      borderRadius: 2,
+      borderRadius: Radius.sm,
       backgroundColor: colors.brand,
     },
     retryBtn: {
@@ -769,7 +769,7 @@ function createStyles(colors: ThemeColors) {
     successCircle: {
       width: 72,
       height: 72,
-      borderRadius: 36,
+      borderRadius: Radius.full,
       backgroundColor: colors.success,
       justifyContent: 'center',
       alignItems: 'center',
@@ -782,7 +782,7 @@ function createStyles(colors: ThemeColors) {
     viewBtn: {
       width: '80%',
       paddingVertical: Space.md,
-      borderRadius: 12,
+      borderRadius: Radius.lg,
       backgroundColor: colors.brand,
       justifyContent: 'center',
       alignItems: 'center',
@@ -800,7 +800,7 @@ function createStyles(colors: ThemeColors) {
       gap: 6,
       width: '80%',
       paddingVertical: Space.md,
-      borderRadius: 12,
+      borderRadius: Radius.lg,
       borderWidth: 1,
       borderColor: colors.brand,
     },

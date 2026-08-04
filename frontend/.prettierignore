@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.expo/
+coverage/
+*.lock
+package-lock.json
+android/
+ios/
+assets/

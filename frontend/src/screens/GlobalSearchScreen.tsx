@@ -25,6 +25,9 @@ import { useBackendData } from '../context/BackendDataContext';
 import { SyncStatusPill } from '../components/SyncStatusPill';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
+import { EmptyState } from '../components/EmptyState';
+import { CommerceDetailOfflineBanner } from '../components/commerce/detail';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { getBackendSyncStatus } from '../utils/syncStatus';
 import { CachedImage } from '../components/CachedImage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -44,7 +47,7 @@ import { HeroCarousel, HeroItem } from '../components/discover/HeroCarousel';
 import { EditorialSection } from '../components/discover/EditorialSection';
 import { FeaturedBoardCard, FeaturedBoard } from '../components/discover/FeaturedBoardCard';
 import { EditorialImageRow, EditorialImage } from '../components/discover/EditorialImageRow';
-import { Typography } from '../theme/designTokens';
+import { Typography, Radius } from '../theme/designTokens';
 
 type Props = StackScreenProps<RootStackParamList, 'GlobalSearch'>;
 
@@ -242,6 +245,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
   const { listings, source, isSyncing, lastError, refreshListings } = useBackendData();
   const { formatFromFiat } = useFormattedPrice();
   const { colors, isDark } = useAppTheme();
+  const { isOffline } = useConnectivity();
   const reducedMotionEnabled = useReducedMotion();
   const focusProgress = useSharedValue(0);
 
@@ -728,7 +732,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
 
       {/* Hero Search Header */}
       <View style={styles.header}>
-        <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} accessibilityLabel="Go back" accessibilityRole="button">
+        <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityLabel="Go back" accessibilityRole="button">
           <Ionicons name="arrow-back" size={26} color={colors.textPrimary} />
         </AnimatedPressable>
 
@@ -740,7 +744,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
             onChangeText={setQuery}
             containerStyle={{ flex: 1, borderWidth: 0, backgroundColor: 'transparent' }}
             rightNode={
-              <AnimatedPressable onPress={() => navigation.navigate('VisualSearch')} activeOpacity={0.85} accessibilityLabel="Visual search" accessibilityRole="button">
+              <AnimatedPressable onPress={() => navigation.navigate('VisualSearch')} activeOpacity={0.85} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityLabel="Visual search" accessibilityRole="button">
                 <Ionicons name="camera" size={24} color={colors.textMuted} />
               </AnimatedPressable>
             }
@@ -762,6 +766,8 @@ export default function GlobalSearchScreen({ navigation }: Props) {
           <SyncStatusPill {...searchStatus} />
         </View>
       )}
+
+      <CommerceDetailOfflineBanner isOffline={isOffline} />
 
       {/* Live search suggestions dropdown */}
       {searchSuggestions.length > 0 && (
@@ -987,6 +993,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                             style={styles.savedSearchToggle}
                             activeOpacity={0.8}
                             onPress={() => handleToggleAlerts(search.id)}
+                            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                             accessibilityLabel={search.alertsEnabled ? 'Disable alerts' : 'Enable alerts'}
                             accessibilityRole="button"
                           >
@@ -1261,6 +1268,19 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                         ))}
                       </View>
                     </View>
+                  ) : searchError && !isSearching ? (
+                    <EmptyState
+                      density="compact"
+                      icon="cloud-offline-outline"
+                      iconColor={colors.danger}
+                      title="Search unavailable"
+                      subtitle={friendlyBackendError(searchError)}
+                      ctaLabel="Retry search"
+                      onCtaPress={() => {
+                        setSearchError(null);
+                        void refreshListings();
+                      }}
+                    />
                   ) : (
                     <View style={[styles.recoEmptyState, t.recoEmptyState]}>
                       <Ionicons name="sparkles-outline" size={18} color={colors.textMuted} />
@@ -1308,7 +1328,7 @@ const styles = StyleSheet.create({
   backBtn: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1316,7 +1336,7 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 30,
+    borderRadius: Radius.full,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderWidth: 1,
@@ -1330,7 +1350,7 @@ const styles = StyleSheet.create({
   suggestionsWrap: {
     marginHorizontal: 12,
     marginBottom: 8,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
     shadowColor: '#000',
@@ -1402,7 +1422,7 @@ const styles = StyleSheet.create({
   recentPill: {
     paddingHorizontal: 18,
     paddingVertical: 10,
-    borderRadius: 22,
+    borderRadius: Radius.full,
   },
   clearRecentPill: {
     flexDirection: 'row',
@@ -1423,7 +1443,7 @@ const styles = StyleSheet.create({
   topSearchCard: {
     width: 140,
     height: 170,
-    borderRadius: 20,
+    borderRadius: Radius.xxl,
     overflow: 'hidden',
     position: 'relative',
   },
@@ -1450,7 +1470,7 @@ const styles = StyleSheet.create({
   trendingPill: {
     paddingHorizontal: 18,
     paddingVertical: 12,
-    borderRadius: 22,
+    borderRadius: Radius.full,
     borderWidth: 1,
   },
   trendingPillText: {
@@ -1470,7 +1490,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 14,
     paddingVertical: 10,
-    borderRadius: 20,
+    borderRadius: Radius.xxl,
     borderWidth: 1,
   },
   trendingFocusText: {
@@ -1497,7 +1517,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    borderRadius: 20,
+    borderRadius: Radius.xxl,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderWidth: 1,
@@ -1510,7 +1530,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    borderRadius: 20,
+    borderRadius: Radius.xxl,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderWidth: 1,
@@ -1526,7 +1546,7 @@ const styles = StyleSheet.create({
     right: -4,
     minWidth: 18,
     height: 18,
-    borderRadius: 9,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1538,7 +1558,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    borderRadius: 20,
+    borderRadius: Radius.xxl,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderWidth: 1,
@@ -1570,7 +1590,7 @@ const styles = StyleSheet.create({
   topicSearchBtn: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1580,7 +1600,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 12,
     height: 34,
-    borderRadius: 17,
+    borderRadius: Radius.full,
     borderWidth: 1,
   },
   saveSearchBtnActive: {
@@ -1601,7 +1621,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 10,
     paddingHorizontal: 12,
-    borderRadius: 14,
+    borderRadius: Radius.xl,
     borderWidth: StyleSheet.hairlineWidth,
   },
   savedSearchMain: {
@@ -1613,7 +1633,7 @@ const styles = StyleSheet.create({
   savedSearchIconWrap: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1632,7 +1652,7 @@ const styles = StyleSheet.create({
   savedSearchToggle: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1652,13 +1672,13 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   masonryItemWrap: {
-    borderRadius: 16,
+    borderRadius: Radius.xl,
     overflow: 'hidden',
     position: 'relative',
   },
   masonryImg: {
     width: '100%',
-    borderRadius: 16,
+    borderRadius: Radius.xl,
   },
   resultOverlay: {
     position: 'absolute',
@@ -1684,7 +1704,7 @@ const styles = StyleSheet.create({
   },
   recoEmptyState: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 14,
+    borderRadius: Radius.xl,
     paddingVertical: 14,
     paddingHorizontal: 12,
     flexDirection: 'row',
@@ -1700,7 +1720,7 @@ const styles = StyleSheet.create({
   },
   recoEmptyCta: {
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     paddingVertical: 6,
     paddingHorizontal: 12,
     marginTop: 4,

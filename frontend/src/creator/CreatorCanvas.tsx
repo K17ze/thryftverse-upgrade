@@ -1181,7 +1181,7 @@ function DecorativeLayerContent({ layer, width, height }: { layer: Extract<Creat
           style={{
             width: '100%',
             height: '100%',
-            borderRadius: 8,
+            borderRadius: Radius.md,
             backgroundColor: fillColor,
             opacity: payload.opacity,
             ...subtleShadow,
@@ -1194,7 +1194,7 @@ function DecorativeLayerContent({ layer, width, height }: { layer: Extract<Creat
           style={{
             width: '100%',
             height: 4,
-            borderRadius: 2,
+            borderRadius: Radius.sm,
             backgroundColor: fillColor,
             opacity: payload.opacity,
             marginTop: height / 2 - 2,
@@ -1381,7 +1381,7 @@ function MusicLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'mu
       <View style={{
         width: 22,
         height: 22,
-        borderRadius: 11,
+        borderRadius: Radius.full,
         backgroundColor: 'rgba(255,255,255,0.12)',
         justifyContent: 'center',
         alignItems: 'center',
@@ -1598,7 +1598,7 @@ function SelectionHandles({
     position: 'absolute',
     width: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius: Radius.full,
     backgroundColor: '#fff',
     borderWidth: 2,
     borderColor: handleColor,
@@ -1614,7 +1614,7 @@ function SelectionHandles({
     position: 'absolute',
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: Radius.full,
   };
 
   return (
@@ -1709,7 +1709,7 @@ function AlignmentGuides({
         top: canvasHeight / 2 - 3,
         width: 6,
         height: 6,
-        borderRadius: 3,
+        borderRadius: Radius.full,
         backgroundColor: colors.brand,
         opacity: 0.6,
       }} />
@@ -1793,7 +1793,7 @@ const styles = StyleSheet.create({
     left: -10,
     width: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1922,7 +1922,7 @@ function createProductStyles(colors: ThemeColors) {
   hotspotDot: {
     width: 7,
     height: 7,
-    borderRadius: 3.5,
+    borderRadius: Radius.full,
     backgroundColor: '#fff',
     borderWidth: 1.5,
     borderColor: colors.brand,
@@ -2005,7 +2005,7 @@ const voteStyles = StyleSheet.create({
     alignItems: 'center',
     gap: 2,
     backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 8,
+    borderRadius: Radius.md,
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
@@ -2094,7 +2094,7 @@ const quizStyles = StyleSheet.create({
   correctBadge: {
     width: 18,
     height: 18,
-    borderRadius: 9,
+    borderRadius: Radius.full,
     backgroundColor: '#C9A46A',
     justifyContent: 'center',
     alignItems: 'center',
@@ -2133,7 +2133,7 @@ const questionStyles = StyleSheet.create({
   sendHint: {
     width: 18,
     height: 18,
-    borderRadius: 9,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(255,255,255,0.15)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -2167,7 +2167,7 @@ const sliderStyles = StyleSheet.create({
   track: {
     flex: 1,
     height: 6,
-    borderRadius: 3,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(255,255,255,0.15)',
     justifyContent: 'center',
   },
@@ -2177,12 +2177,12 @@ const sliderStyles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: '50%',
-    borderRadius: 3,
+    borderRadius: Radius.full,
   },
   thumb: {
     width: 14,
     height: 14,
-    borderRadius: 7,
+    borderRadius: Radius.full,
     backgroundColor: '#fff',
     borderWidth: 2,
     position: 'absolute',

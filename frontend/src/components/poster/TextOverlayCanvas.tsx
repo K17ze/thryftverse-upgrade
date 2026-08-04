@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
+import { Radius } from '../../theme/designTokens';
 import { KeyboardStickyView } from '../../platform/keyboard/KeyboardProvider';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -377,7 +378,7 @@ function createStyles(colors: any) {
   return StyleSheet.create({
   textBubble: {
     position: 'absolute',
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     paddingHorizontal: 12,
     paddingVertical: 8,
     maxWidth: SCREEN_W - 40,
@@ -401,7 +402,7 @@ function createStyles(colors: any) {
     top: -10,
     right: -10,
     backgroundColor: '#fff',
-    borderRadius: 10,
+    borderRadius: Radius.lg,
   },
   addTextBtn: {
     position: 'absolute',
@@ -411,7 +412,7 @@ function createStyles(colors: any) {
     alignItems: 'center',
     gap: 6,
     backgroundColor: 'rgba(0,0,0,0.45)',
-    borderRadius: 18,
+    borderRadius: Radius.full,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
@@ -428,8 +429,8 @@ function createStyles(colors: any) {
   },
   controlsPanel: {
     backgroundColor: 'rgba(0,0,0,0.85)',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: Radius.xxl,
+    borderTopRightRadius: Radius.xxl,
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 28,
@@ -443,7 +444,7 @@ function createStyles(colors: any) {
   fontPill: {
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 10,
+    borderRadius: Radius.lg,
     backgroundColor: 'rgba(255,255,255,0.1)',
   },
   fontPillActive: {
@@ -465,7 +466,7 @@ function createStyles(colors: any) {
   sizeBtn: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(255,255,255,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -490,7 +491,7 @@ function createStyles(colors: any) {
   alignBtn: {
     width: 38,
     height: 38,
-    borderRadius: 10,
+    borderRadius: Radius.lg,
     backgroundColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -507,7 +508,7 @@ function createStyles(colors: any) {
   colorOrb: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: Radius.full,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
@@ -520,7 +521,7 @@ function createStyles(colors: any) {
   bgOrb: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: Radius.full,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -532,7 +533,7 @@ function createStyles(colors: any) {
   doneBtn: {
     alignSelf: 'center',
     backgroundColor: colors.brand,
-    borderRadius: 14,
+    borderRadius: Radius.xl,
     paddingHorizontal: 32,
     paddingVertical: 12,
   },

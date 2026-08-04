@@ -584,7 +584,7 @@ export function CommerceMediaStage({
 
       {mediaItems.length > 1 && (
         <Pressable
-          style={styles.indexBadge}
+          style={({ pressed }) => [styles.indexBadge, pressed && styles.indexBadgePressed]}
           onPress={() => onOpenFullscreen(activeIndex)}
           accessibilityRole="button"
           accessibilityLabel={`${mediaItems[activeIndex]?.kind === 'video' ? 'Video' : 'Image'} ${activeIndex + 1} of ${mediaItems.length}. Open fullscreen.`}
@@ -649,7 +649,7 @@ export function CommerceMediaStage({
                   accessibilityLabel={`View ${isVid ? 'video' : 'image'} ${index + 1}`}
                   accessibilityRole="button"
                   accessibilityState={{ selected: isActive }}
-                  style={[styles.thumbnail, isActive && styles.thumbnailActive]}
+                  style={({ pressed }) => [styles.thumbnail, isActive && styles.thumbnailActive, pressed && styles.thumbnailPressed]}
                 >
                   {isVid ? (
                     <View style={[styles.thumbnailImage, styles.thumbnailVideoFallback]}>
@@ -781,6 +781,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: 5,
     borderRadius: Radius.md,
   },
+  indexBadgePressed: {
+    opacity: 0.7,
+    transform: [{ scale: 0.95 }],
+  },
   // Dot indicators — quiet position signal (Depop/Vinted pattern).
   // Inactive dots are small and translucent; active dot is wider and opaque.
   dotRow: {
@@ -876,6 +880,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     opacity: 1,
     borderWidth: 2,
     borderColor: '#fff',
+  },
+  thumbnailPressed: {
+    opacity: 0.8,
+    transform: [{ scale: 0.92 }],
   },
   thumbnailImage: {
     width: '100%',

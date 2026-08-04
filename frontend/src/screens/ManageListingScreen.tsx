@@ -363,18 +363,24 @@ export default function ManageListingScreen() {
           <Text style={styles.infoTitle} numberOfLines={2}>{item.title}</Text>
           <Text style={styles.infoPrice}>{formatFromFiat(item.priceGbp ?? 0, 'GBP', { displayMode: 'fiat' })}</Text>
 
+          {/* Attribute row — flattened per AGENTS.md §4 (no card-on-card).
+              Previous version used surfaceAlt-filled chips inside the
+              infoCard surface. Now a flat row with hairline dividers,
+              matching the buyer-side identity block pattern. */}
           <View style={styles.attrRow}>
-            <View style={styles.attrChip}>
+            <View style={styles.attrCell}>
               <Text style={styles.attrLabel}>Brand</Text>
-              <Text style={styles.attrValue}>{item.brand ?? '-'}</Text>
+              <Text style={styles.attrValue} numberOfLines={1}>{item.brand ?? '-'}</Text>
             </View>
-            <View style={styles.attrChip}>
+            <View style={[styles.attrDivider, { backgroundColor: colors.borderSubtle }]} />
+            <View style={styles.attrCell}>
               <Text style={styles.attrLabel}>Size</Text>
-              <Text style={styles.attrValue}>{item.size ?? '-'}</Text>
+              <Text style={styles.attrValue} numberOfLines={1}>{item.size ?? '-'}</Text>
             </View>
-            <View style={styles.attrChip}>
+            <View style={[styles.attrDivider, { backgroundColor: colors.borderSubtle }]} />
+            <View style={styles.attrCell}>
               <Text style={styles.attrLabel}>Condition</Text>
-              <Text style={styles.attrValue}>{item.condition ?? '-'}</Text>
+              <Text style={styles.attrValue} numberOfLines={1}>{item.condition ?? '-'}</Text>
             </View>
           </View>
         </View>
@@ -614,13 +620,13 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    paddingHorizontal: Space.md,
     paddingBottom: 10,
   },
   hdrBtn: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(0,0,0,0.35)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -649,19 +655,19 @@ function createStyles(colors: ThemeColors) {
   statusPill: {
     position: 'absolute',
     top: 68,
-    left: 16,
+    left: Space.md,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 16,
+    borderRadius: Radius.xl,
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
   statusDot: {
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: Radius.full,
   },
   statusPillText: {
     color: colors.textInverse,
@@ -671,7 +677,7 @@ function createStyles(colors: ThemeColors) {
   },
   dotRow: {
     position: 'absolute',
-    bottom: 16,
+    bottom: Space.md,
     left: 0,
     right: 0,
     flexDirection: 'row',
@@ -681,7 +687,7 @@ function createStyles(colors: ThemeColors) {
   dot: {
     width: 6,
     height: 6,
-    borderRadius: 3,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(255,255,255,0.45)',
   },
   dotActive: {
@@ -691,9 +697,9 @@ function createStyles(colors: ThemeColors) {
 
   infoCard: {
     marginTop: -24,
-    marginHorizontal: 16,
+    marginHorizontal: Space.md,
     backgroundColor: colors.surface,
-    borderRadius: 20,
+    borderRadius: Radius.xxl,
     padding: 20,
     borderWidth: 1,
     borderColor: colors.border,
@@ -717,17 +723,23 @@ function createStyles(colors: ThemeColors) {
     letterSpacing: -0.5,
     marginBottom: 14,
   },
+  // Attribute row — flat cells with hairline dividers (no card-on-card).
+  // Per AGENTS.md §4: nested surfaceAlt chips inside the infoCard surface
+  // were a card-on-card violation. Cells now share the parent surface;
+  // vertical hairlines separate them.
   attrRow: {
     flexDirection: 'row',
-    gap: 8,
+    alignItems: 'stretch',
+    marginTop: Space.sm,
   },
-  attrChip: {
+  attrCell: {
     flex: 1,
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
+    paddingVertical: Space.xs,
     alignItems: 'center',
+  },
+  attrDivider: {
+    width: StyleSheet.hairlineWidth,
+    alignSelf: 'stretch',
   },
   attrLabel: {
     fontSize: 10,
@@ -748,10 +760,10 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    marginHorizontal: 16,
-    marginTop: 16,
+    marginHorizontal: Space.md,
+    marginTop: Space.md,
     paddingVertical: 16,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
     backgroundColor: colors.textPrimary,
   },
   editBtnText: {
@@ -763,7 +775,7 @@ function createStyles(colors: ThemeColors) {
   iconActionsRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    marginHorizontal: 16,
+    marginHorizontal: Space.md,
     marginTop: 18,
     marginBottom: 4,
   },
@@ -774,7 +786,7 @@ function createStyles(colors: ThemeColors) {
   iconCircle: {
     width: 52,
     height: 52,
-    borderRadius: 26,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -785,14 +797,14 @@ function createStyles(colors: ThemeColors) {
   },
 
   card: {
-    marginHorizontal: 16,
-    marginTop: 16,
+    marginHorizontal: Space.md,
+    marginTop: Space.md,
     backgroundColor: colors.surface,
-    borderRadius: 20,
+    borderRadius: Radius.xxl,
     borderWidth: 1,
     borderColor: colors.border,
     paddingVertical: 4,
-    paddingHorizontal: 16,
+    paddingHorizontal: Space.md,
     overflow: 'hidden',
   },
   toggleRow: {
@@ -809,7 +821,7 @@ function createStyles(colors: ThemeColors) {
   toggleIconWrap: {
     width: 40,
     height: 40,
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -907,7 +919,7 @@ function createStyles(colors: ThemeColors) {
   thresholdChip: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surfaceAlt,

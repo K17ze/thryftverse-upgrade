@@ -11,7 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography } from '../../theme/designTokens';
+import { Space, Typography, Radius } from '../../theme/designTokens';
 import { SortablePhotoStrip } from '../SortablePhotoStrip';
 import { ListingMediaDraftItem } from '../../utils/mediaUploadAsset';
 import { UploadQueueItem, UploadQueueItemState } from '../../services/mediaUploadQueue';
@@ -396,7 +396,7 @@ function createStyles(colors: ThemeColors) {
   emptyIconWrap: {
     width: 64,
     height: 64,
-    borderRadius: 32,
+    borderRadius: Radius.full,
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
@@ -424,7 +424,7 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     paddingHorizontal: Space.lg,
     paddingVertical: 12,
-    borderRadius: 24,
+    borderRadius: Radius.xxl,
     backgroundColor: colors.brand,
   },
   emptyPrimaryText: {
@@ -438,7 +438,7 @@ function createStyles(colors: ThemeColors) {
     gap: 6,
     paddingHorizontal: Space.md,
     paddingVertical: 12,
-    borderRadius: 24,
+    borderRadius: Radius.xxl,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
@@ -472,7 +472,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: 'rgba(0,0,0,0.6)',
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 4,
+    borderRadius: Radius.sm,
   },
   coverBadgeText: {
     fontSize: 10,
@@ -490,7 +490,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: 'rgba(0,0,0,0.6)',
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 4,
+    borderRadius: Radius.sm,
   },
   videoText: {
     fontSize: 10,
@@ -504,7 +504,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: 'rgba(0,0,0,0.6)',
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 4,
+    borderRadius: Radius.sm,
   },
   countText: {
     fontSize: 11,
@@ -517,7 +517,7 @@ function createStyles(colors: ThemeColors) {
     right: Space.sm,
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(0,0,0,0.4)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -532,7 +532,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: 'rgba(0,0,0,0.5)',
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 8,
+    borderRadius: Radius.md,
   },
   coverStatusLabel: {
     justifyContent: 'center',
@@ -547,7 +547,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: 'rgba(255,59,48,0.85)',
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 8,
+    borderRadius: Radius.md,
   },
   coverFailedText: {
     fontSize: 11,
@@ -560,7 +560,7 @@ function createStyles(colors: ThemeColors) {
     gap: 4,
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 4,
+    borderRadius: Radius.sm,
     backgroundColor: 'rgba(255,255,255,0.2)',
   },
   coverRetryText: {
@@ -578,7 +578,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: 'rgba(0,0,0,0.5)',
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 4,
+    borderRadius: Radius.sm,
   },
   coverCancelledText: {
     fontSize: 11,
@@ -589,7 +589,7 @@ function createStyles(colors: ThemeColors) {
   thumbContent: {
     width: THUMB_SIZE,
     height: THUMB_SIZE,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
     overflow: 'hidden',
     position: 'relative',
     backgroundColor: colors.surfaceAlt,
@@ -597,12 +597,12 @@ function createStyles(colors: ThemeColors) {
   thumbImage: {
     width: THUMB_SIZE,
     height: THUMB_SIZE,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
   },
   thumbVideoTile: {
     width: THUMB_SIZE,
     height: THUMB_SIZE,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
@@ -613,7 +613,7 @@ function createStyles(colors: ThemeColors) {
     right: 4,
     width: 18,
     height: 18,
-    borderRadius: 9,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(0,0,0,0.6)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -669,7 +669,7 @@ function createStyles(colors: ThemeColors) {
     gap: 3,
     paddingHorizontal: 6,
     paddingVertical: 3,
-    borderRadius: 4,
+    borderRadius: Radius.sm,
     backgroundColor: 'rgba(255,255,255,0.25)',
   },
   thumbRetryText: {
@@ -699,7 +699,7 @@ function createStyles(colors: ThemeColors) {
     left: 4,
     width: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
     justifyContent: 'center',

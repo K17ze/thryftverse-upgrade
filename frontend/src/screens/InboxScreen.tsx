@@ -263,11 +263,11 @@ export default function InboxScreen() {
     screenRoot: { backgroundColor: colors.background },
     headerTitle: { color: colors.textPrimary },
     headerSubtitle: { color: colors.textMuted },
-    iconBtn: { backgroundColor: colors.surfaceAlt },
+    iconBtn: { backgroundColor: 'transparent' },
     newMessageBtn: { backgroundColor: colors.textPrimary },
     newMessageBtnText: { color: colors.textInverse },
     searchWrap: { backgroundColor: colors.surfaceAlt },
-    filterChip: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
+    filterChip: { backgroundColor: 'transparent', borderColor: colors.border },
     filterChipActive: { backgroundColor: colors.textPrimary, borderColor: colors.textPrimary },
     filterChipText: { color: colors.textSecondary },
     filterChipTextActive: { color: colors.textInverse },
@@ -311,7 +311,7 @@ export default function InboxScreen() {
     errorBannerTitle: { color: colors.danger },
     errorBannerSub: { color: colors.textMuted },
     errorBannerRetry: { color: colors.brand },
-    needsActionChip: { backgroundColor: `${colors.brand}0D`, borderColor: `${colors.brand}33` },
+    needsActionChip: { backgroundColor: 'transparent', borderColor: colors.border },
     needsActionText: { color: colors.brand },
   }), [colors]);
 
@@ -826,6 +826,8 @@ export default function InboxScreen() {
             scaleValue={0.95}
 
             hapticFeedback="light"
+
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
 
             accessibilityLabel="Message settings"
 

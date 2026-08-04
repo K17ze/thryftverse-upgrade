@@ -109,7 +109,7 @@ export function CommerceDetailHeader({
           hitSlop={12}
           accessibilityLabel="Go back"
           accessibilityRole="button"
-          style={styles.hitTarget}
+          style={({ pressed }) => [styles.hitTarget, pressed && styles.pressed]}
         >
           <Ionicons name="chevron-back" size={26} color={colors.textPrimary} />
         </Pressable>
@@ -132,7 +132,7 @@ export function CommerceDetailHeader({
             hitSlop={12}
             accessibilityLabel={rightAction.label}
             accessibilityRole="button"
-            style={styles.hitTarget}
+            style={({ pressed }) => [styles.hitTarget, pressed && styles.pressed]}
           >
             <Ionicons name={rightAction.icon} size={22} color={colors.textPrimary} />
           </Pressable>
@@ -166,6 +166,10 @@ const styles = StyleSheet.create({
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  pressed: {
+    opacity: 0.5,
+    transform: [{ scale: 0.9 }],
   },
   title: {
     flex: 1,

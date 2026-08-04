@@ -27,6 +27,8 @@ import { MasonrySkeleton } from '../components/skeletons/MasonrySkeleton';
 import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGrid';
 import { DiscoverySectionHeader } from '../components/discover/DiscoverySectionHeader';
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
+import { CommerceDetailOfflineBanner } from '../components/commerce/detail';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { RootStackParamList } from '../navigation/types';
 import { Listing } from '../data/mockData';
 import { useStore } from '../store/useStore';
@@ -81,6 +83,7 @@ function getSubcategoryToken(categoryId: string, subcategoryId?: string, title?:
 
 export default function BrowseScreen() {
   const { colors, isDark } = useAppTheme();
+  const { isOffline } = useConnectivity();
 
   const styles = useMemo(() => StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
@@ -581,6 +584,8 @@ export default function BrowseScreen() {
         />
       ) : null}
 
+      <CommerceDetailOfflineBanner isOffline={isOffline} />
+
       {/* Masonry Grid - Pinterest/Depop Style */}
       <View style={{ flex: 1 }}>
         <RefreshIndicator scrollY={scrollY} isRefreshing={refreshing} topInset={40} />
@@ -602,6 +607,15 @@ export default function BrowseScreen() {
                 condition: 'Any',
               })
             }
+          />
+        ) : lastError && displayListings.length === 0 ? (
+          <EmptyState
+            icon="cloud-offline-outline"
+            iconColor={colors.danger}
+            title="Browse unavailable"
+            subtitle="We couldn't load listings. Check your connection and try again."
+            ctaLabel="Retry"
+            onCtaPress={() => void refreshListings()}
           />
         ) : displayListings.length > 0 ? (
           <PinterestMasonryGrid

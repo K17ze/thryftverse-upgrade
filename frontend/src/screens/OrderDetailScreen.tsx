@@ -20,7 +20,7 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useBackendData } from '../context/BackendDataContext';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
-import { Space, Typography } from '../theme/designTokens';
+import { Space, Typography, Radius } from '../theme/designTokens';
 import {
   CommerceOrder,
   OrderParcelEvent,
@@ -1633,7 +1633,7 @@ const styles = StyleSheet.create({
   retryBtn: {
     paddingVertical: 14,
     paddingHorizontal: Space.xl,
-    borderRadius: 10,
+    borderRadius: Radius.lg,
     minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1663,12 +1663,12 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 100,
+    borderRadius: Radius.full,
   },
   statusDot: {
     width: 7,
     height: 7,
-    borderRadius: 4,
+    borderRadius: Radius.full,
   },
   statusBadgeText: {
     fontSize: 15,
@@ -1733,7 +1733,7 @@ const styles = StyleSheet.create({
   counterpartyAvatar: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: Radius.full,
   },
   counterpartyName: {
     flex: 1,
@@ -1747,7 +1747,7 @@ const styles = StyleSheet.create({
   counterpartyBtn: {
     paddingVertical: 8,
     paddingHorizontal: Space.md,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     borderWidth: 1,
     minHeight: 44,
     alignItems: 'center',
@@ -1768,13 +1768,13 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm + 2,
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
   },
   escrowIconWrap: {
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },

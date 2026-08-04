@@ -856,7 +856,7 @@ function createStyles(colors: ThemeColors) {
     left: 0,
     right: 0,
     height: 2,
-    borderRadius: 1,
+    borderRadius: Radius.sm,
     backgroundColor: colors.textPrimary,
   },
 
@@ -869,7 +869,7 @@ function createStyles(colors: ThemeColors) {
   swipeReadAction: {
     flex: 1,
     width: 80,
-    borderRadius: 20,
+    borderRadius: Radius.xxl,
     backgroundColor: `${colors.success}20`,
     borderWidth: 1,
     borderColor: `${colors.success}40`,
@@ -914,7 +914,7 @@ function createStyles(colors: ThemeColors) {
   unreadSummaryDot: {
     width: 6,
     height: 6,
-    borderRadius: 3,
+    borderRadius: Radius.full,
     backgroundColor: colors.brand,
   },
   unreadSummaryText: {
@@ -970,12 +970,12 @@ function createStyles(colors: ThemeColors) {
     left: 8,
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: Radius.full,
     backgroundColor: colors.brand,
   },
 
   notifImageWrap: {
-    width: 52, height: 52, borderRadius: 10,
+    width: 52, height: 52, borderRadius: Radius.lg,
     overflow: 'hidden',
     backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
@@ -1013,7 +1013,7 @@ function createStyles(colors: ThemeColors) {
   notifAggregatedAvatar: {
     width: 18,
     height: 18,
-    borderRadius: 9,
+    borderRadius: Radius.full,
     marginRight: -6,
     borderWidth: 1.5,
     borderColor: colors.surface,
@@ -1021,7 +1021,7 @@ function createStyles(colors: ThemeColors) {
   notifAggregatedAvatarFallback: {
     width: 18,
     height: 18,
-    borderRadius: 9,
+    borderRadius: Radius.full,
     marginRight: -6,
     borderWidth: 1.5,
     borderColor: colors.surface,
@@ -1032,7 +1032,7 @@ function createStyles(colors: ThemeColors) {
   notifAggregatedCountBadge: {
     minWidth: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius: Radius.full,
     paddingHorizontal: 6,
     backgroundColor: colors.brand,
     alignItems: 'center',
@@ -1065,12 +1065,12 @@ function createStyles(colors: ThemeColors) {
   notifActorAvatarWrap: {
     width: 18,
     height: 18,
-    borderRadius: 9,
+    borderRadius: Radius.full,
   },
   notifActorAvatar: {
     width: 18,
     height: 18,
-    borderRadius: 9,
+    borderRadius: Radius.full,
   },
   notifActorAvatarFallback: {
     minWidth: 20,

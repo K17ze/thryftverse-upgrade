@@ -105,7 +105,7 @@ export default function SearchScreen() {
   discoverBtn: {
     marginTop: 8,
     minHeight: 32,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
     borderWidth: 0,
     backgroundColor: colors.surfaceAlt,
     alignSelf: 'flex-end',
@@ -114,7 +114,7 @@ export default function SearchScreen() {
   discoverBtnIconWrap: {
     width: 18,
     height: 18,
-    borderRadius: 9,
+    borderRadius: Radius.full,
     backgroundColor: 'transparent',
   },
   discoverBtnText: {
@@ -196,7 +196,7 @@ export default function SearchScreen() {
     bottom: -StyleSheet.hairlineWidth,
     width: 28,
     height: 2,
-    borderRadius: 1,
+    borderRadius: Radius.sm,
     backgroundColor: colors.textPrimary,
   },
 
@@ -205,7 +205,7 @@ export default function SearchScreen() {
   tabsWrapper: { flexDirection: 'row', backgroundColor: 'transparent', gap: 10 },
   tab: {
     flex: 1,
-    borderRadius: 24,
+    borderRadius: Radius.xxl,
     minHeight: 40,
     borderWidth: 0,
     backgroundColor: colors.surface,
@@ -215,7 +215,7 @@ export default function SearchScreen() {
   tabIconWrap: {
     width: 16,
     height: 16,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     backgroundColor: 'transparent',
   },
   tabText: { fontSize: 13, fontFamily: Typography.family.semibold, color: colors.textMuted, letterSpacing: 0.2 },
@@ -223,7 +223,7 @@ export default function SearchScreen() {
   tabCountWrap: {
     width: 'auto',
     height: 'auto',
-    borderRadius: 0,
+    borderRadius: Radius.none,
     backgroundColor: 'transparent',
     paddingHorizontal: 0,
     paddingVertical: 0,
@@ -232,7 +232,7 @@ export default function SearchScreen() {
     marginLeft: 6,
     minWidth: 20,
     textAlign: 'center',
-    borderRadius: 10,
+    borderRadius: Radius.lg,
     paddingHorizontal: 6,
     paddingVertical: 2,
     overflow: 'hidden',
@@ -264,7 +264,7 @@ export default function SearchScreen() {
   },
   wishlistLoadingCard: {
     width: (SCREEN_WIDTH - 32) / 2,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
     borderWidth: 0,
     borderColor: 'transparent',
     backgroundColor: colors.surface,
@@ -293,7 +293,7 @@ export default function SearchScreen() {
     marginHorizontal: 16,
     marginBottom: 16,
     padding: 14,
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
@@ -306,7 +306,7 @@ export default function SearchScreen() {
   closetShortcutIcon: {
     width: 40,
     height: 40,
-    borderRadius: 10,
+    borderRadius: Radius.lg,
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
@@ -435,8 +435,20 @@ export default function SearchScreen() {
             })}
           </View>
 
-          {/* Empty state when no listings and not loading */}
-          {listings.length === 0 && !isSyncing && !lastError ? (
+          {/* Error state when sync failed and no cached listings */}
+          {lastError && listings.length === 0 && !isSyncing ? (
+            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400)}>
+              <EmptyState
+                density="compact"
+                icon="cloud-offline-outline"
+                iconColor={colors.danger}
+                title="Explore unavailable"
+                subtitle="We couldn't load listings. Check your connection and try again."
+                ctaLabel="Retry"
+                onCtaPress={() => void handleRefresh()}
+              />
+            </Reanimated.View>
+          ) : listings.length === 0 && !isSyncing && !lastError ? (
             <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400)}>
               <EmptyState
                 density="compact"

@@ -16,7 +16,7 @@ import { useStore } from '../store/useStore';
 import { useSavedSearchAlerts } from '../hooks/useSavedSearchAlerts';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { EmptyState } from '../components/EmptyState';
-import { Typography, Space } from '../theme/designTokens';
+import { Typography, Space, Radius } from '../theme/designTokens';
 
 type Props = StackScreenProps<RootStackParamList, 'SavedSearches'>;
 
@@ -99,14 +99,14 @@ export default function SavedSearchesScreen({ navigation }: Props) {
     backBtn: {
       width: 44,
       height: 44,
-      borderRadius: 22,
+      borderRadius: Radius.full,
       alignItems: 'center',
       justifyContent: 'center',
     },
     markSeenBtn: {
       width: 44,
       height: 44,
-      borderRadius: 22,
+      borderRadius: Radius.full,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -124,7 +124,7 @@ export default function SavedSearchesScreen({ navigation }: Props) {
       flex: 1,
       paddingVertical: 9,
       paddingHorizontal: 12,
-      borderRadius: 12,
+      borderRadius: Radius.lg,
       backgroundColor: colors.surface,
       borderWidth: 1,
       borderColor: colors.border,
@@ -171,7 +171,7 @@ export default function SavedSearchesScreen({ navigation }: Props) {
       gap: 8,
       paddingVertical: 12,
       paddingHorizontal: 14,
-      borderRadius: 16,
+      borderRadius: Radius.xl,
       backgroundColor: colors.surface,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
@@ -186,7 +186,7 @@ export default function SavedSearchesScreen({ navigation }: Props) {
     searchIconWrap: {
       width: 38,
       height: 38,
-      borderRadius: 19,
+      borderRadius: Radius.full,
       backgroundColor: colors.surfaceAlt,
       alignItems: 'center',
       justifyContent: 'center',
@@ -211,7 +211,7 @@ export default function SavedSearchesScreen({ navigation }: Props) {
     },
     newBadge: {
       backgroundColor: `${colors.brand}15`,
-      borderRadius: 10,
+      borderRadius: Radius.lg,
       paddingHorizontal: 7,
       paddingVertical: 2,
       flexShrink: 0,
@@ -227,7 +227,7 @@ export default function SavedSearchesScreen({ navigation }: Props) {
       alignItems: 'center',
       gap: 8,
       backgroundColor: `${colors.brand}10`,
-      borderRadius: 12,
+      borderRadius: Radius.lg,
       paddingHorizontal: 14,
       paddingVertical: 10,
       marginBottom: Space.sm + 2,
@@ -251,7 +251,7 @@ export default function SavedSearchesScreen({ navigation }: Props) {
     actionBtn: {
       width: 40,
       height: 40,
-      borderRadius: 20,
+      borderRadius: Radius.full,
       alignItems: 'center',
       justifyContent: 'center',
     },

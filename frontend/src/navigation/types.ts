@@ -259,6 +259,9 @@ export type RootStackParamList = {
   RuntimeSmokeTest: undefined;
   Sell: undefined;
   TradeHub: { destination?: 'auction' | 'co_own' } | undefined;
+  // GDPR — Account deletion & data export
+  DeleteAccount: undefined;
+  DataExport: undefined;
   // Trust & Verification
   Verification: undefined;
   // Seller analytics (entry via MyListings)

@@ -190,7 +190,7 @@ export function ListingQA({
                 </View>
               ) : isSeller && answeringId !== q.id ? (
                 <Pressable
-                  style={styles.answerBtn}
+                  style={({ pressed }) => [styles.answerBtn, pressed && styles.answerBtnPressed]}
                   onPress={() => { setAnsweringId(q.id); haptic.light(); }}
                   accessibilityRole="button"
                   accessibilityLabel="Answer this question"
@@ -216,8 +216,10 @@ export function ListingQA({
                   />
                   <View style={styles.answerActions}>
                     <Pressable
-                      style={styles.cancelAnswerBtn}
+                      style={({ pressed }) => [styles.cancelAnswerBtn, pressed && styles.cancelAnswerPressed]}
                       onPress={() => { setAnsweringId(null); setAnswerText(''); }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Cancel answer"
                     >
                       <Text style={styles.cancelAnswerText}>Cancel</Text>
                     </Pressable>
@@ -405,6 +407,10 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: `${colors.brand}10`,
     alignSelf: 'flex-start',
   },
+  answerBtnPressed: {
+    opacity: 0.7,
+    transform: [{ scale: 0.97 }],
+  },
   answerBtnText: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
@@ -433,6 +439,9 @@ function createStyles(colors: ThemeColors) {
   cancelAnswerBtn: {
     paddingVertical: 6,
     paddingHorizontal: 12,
+  },
+  cancelAnswerPressed: {
+    opacity: 0.6,
   },
   cancelAnswerText: {
     fontSize: 13,

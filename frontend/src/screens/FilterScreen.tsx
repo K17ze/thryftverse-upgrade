@@ -24,7 +24,7 @@ import Reanimated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Typography } from '../theme/designTokens';
+import { Typography, Radius } from '../theme/designTokens';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -682,7 +682,7 @@ function createStyles(colors: ThemeColors) {
   handle: {
     width: 36,
     height: 4,
-    borderRadius: 2,
+    borderRadius: Radius.sm,
     backgroundColor: colors.borderSubtle,
   },
 
@@ -696,7 +696,7 @@ function createStyles(colors: ThemeColors) {
   headerTitle: { fontSize: 20, fontFamily: Typography.family.bold, color: colors.textPrimary, letterSpacing: -0.3 },
   clearBtn: {
     minHeight: 32,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
     paddingHorizontal: 8,
     borderWidth: 0,
     backgroundColor: 'transparent',
@@ -726,10 +726,10 @@ function createStyles(colors: ThemeColors) {
   contextIdentity: {
     flex: 1,
     minHeight: 32,
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    backgroundColor: colors.surface,
+    backgroundColor: 'transparent',
     paddingHorizontal: 10,
     flexDirection: 'row',
     alignItems: 'center',
@@ -742,16 +742,20 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.semibold,
   },
 
-  // Filter presets
+  // Filter presets — flat canvas, no card container (hairline separators only)
   presetsWrap: {
     marginHorizontal: 24,
     marginBottom: 8,
     paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    backgroundColor: colors.surfaceAlt,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
+    paddingHorizontal: 0,
+    borderRadius: 0,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    borderColor: 'transparent',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
   },
   presetsHeaderRow: {
     flexDirection: 'row',
@@ -777,8 +781,8 @@ function createStyles(colors: ThemeColors) {
   presetChipWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: 16,
+    backgroundColor: 'transparent',
+    borderRadius: Radius.xl,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     paddingLeft: 10,
@@ -800,7 +804,7 @@ function createStyles(colors: ThemeColors) {
   presetRemoveBtn: {
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -812,7 +816,7 @@ function createStyles(colors: ThemeColors) {
   presetInput: {
     flex: 1,
     height: 38,
-    borderRadius: 10,
+    borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     backgroundColor: colors.surface,
@@ -824,7 +828,7 @@ function createStyles(colors: ThemeColors) {
   presetSaveBtn: {
     width: 38,
     height: 38,
-    borderRadius: 10,
+    borderRadius: Radius.lg,
     backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
@@ -835,7 +839,7 @@ function createStyles(colors: ThemeColors) {
   presetCancelBtn: {
     width: 38,
     height: 38,
-    borderRadius: 10,
+    borderRadius: Radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -847,10 +851,10 @@ function createStyles(colors: ThemeColors) {
     marginBottom: 8,
     paddingVertical: 10,
     paddingHorizontal: 14,
-    borderRadius: 12,
-    backgroundColor: `${colors.brand}0A`,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: `${colors.brand}30`,
+    borderRadius: 0,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    borderColor: 'transparent',
   },
   presetsEmptyCtaText: {
     fontSize: 13,
@@ -902,7 +906,7 @@ function createStyles(colors: ThemeColors) {
   },
   seeAllBtn: {
     minHeight: 32,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
     paddingHorizontal: 8,
     borderWidth: 0,
     backgroundColor: 'transparent',
@@ -921,8 +925,8 @@ function createStyles(colors: ThemeColors) {
   chip: {
     minHeight: 36,
     paddingHorizontal: 14,
-    borderRadius: 18,
-    backgroundColor: colors.surface,
+    borderRadius: Radius.full,
+    backgroundColor: 'transparent',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
@@ -958,7 +962,7 @@ function createStyles(colors: ThemeColors) {
   saveSizesBtn: {
     alignSelf: 'flex-start',
     minHeight: 32,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.brand,
     backgroundColor: 'transparent',
@@ -973,7 +977,7 @@ function createStyles(colors: ThemeColors) {
   chipIconWrap: {
     width: 18,
     height: 18,
-    borderRadius: 9,
+    borderRadius: Radius.full,
   },
 
   chipText: { fontSize: 14, fontFamily: Typography.family.semibold, color: colors.textPrimary },
@@ -999,7 +1003,7 @@ function createStyles(colors: ThemeColors) {
   applyBtn: {
     width: '100%',
     minHeight: 52,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
   },
   applyBtnDisabled: {
     opacity: 0.6,

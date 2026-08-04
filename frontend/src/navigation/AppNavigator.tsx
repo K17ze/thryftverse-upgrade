@@ -133,6 +133,8 @@ export default function AppNavigator() {
       <Stack.Screen name="EditProfile" getComponent={() => require('../screens/EditProfileScreen').default} />
       <Stack.Screen name="AccountSettings" getComponent={() => require('../screens/AccountSettingsScreen').default} />
       <Stack.Screen name="AccountControl" getComponent={() => require('../screens/AccountControlScreen').default} />
+      <Stack.Screen name="DeleteAccount" getComponent={() => require('../screens/DeleteAccountScreen').default} />
+      <Stack.Screen name="DataExport" getComponent={() => require('../screens/DataExportScreen').default} />
       <Stack.Screen name="SavedAddresses" getComponent={() => require('../screens/SavedAddressesScreen').default} />
       <Stack.Screen name="Payments" getComponent={() => require('../screens/PaymentsScreen').default} />
 

@@ -28,7 +28,7 @@ import Reanimated, {
 import { useStore } from '../store/useStore';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { Space, Typography, DockConstants, Elevation } from '../theme/designTokens';
+import { Space, Typography, DockConstants, Elevation, Radius } from '../theme/designTokens';
 import {
   type PublicProfileStats,
   type PublicProfileViewer,
@@ -696,7 +696,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
             <CachedImage
               uri={displayAvatar}
               style={styles.collapsedAvatar}
-              containerStyle={{ width: 28, height: 28, borderRadius: 14 }}
+              containerStyle={{ width: 28, height: 28, borderRadius: Radius.full }}
               contentFit="cover"
             />
           ) : (
@@ -852,7 +852,7 @@ const styles = StyleSheet.create({
   topUtilityRow: { position: 'absolute', left: 12, right: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   topUtilityRight: { flexDirection: 'row', gap: 8 },
   topUtilityIconBtn: {
-    width: 44, height: 44, borderRadius: 12,
+    width: 44, height: 44, borderRadius: Radius.lg,
     backgroundColor: 'rgba(0,0,0,0.22)',
     alignItems: 'center', justifyContent: 'center',
   },
@@ -863,19 +863,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     ...Elevation.card,
   },
-  collapsedBackBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  collapsedBackBtn: { width: 44, height: 44, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
   collapsedCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4 },
-  collapsedAvatar: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  collapsedAvatar: { width: 28, height: 28, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
   collapsedAvatarMonogram: {},
   collapsedAvatarInitials: { fontSize: 12, fontFamily: Typography.family.bold },
   collapsedTitle: { fontSize: 16, fontFamily: Typography.family.semibold, letterSpacing: -0.3, flexShrink: 1 },
   collapsedRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  collapsedFollowBtn: { height: 44, paddingHorizontal: 18, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  collapsedFollowBtn: { height: 44, paddingHorizontal: 18, borderRadius: Radius.lg, alignItems: 'center', justifyContent: 'center' },
   collapsedFollowingBtn: { borderWidth: StyleSheet.hairlineWidth },
   collapsedFollowActiveBtn: {},
   collapsedFollowText: { fontSize: 13, fontFamily: Typography.family.semibold },
   collapsedFollowActiveText: {},
-  collapsedIconBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  collapsedIconBtn: { width: 44, height: 44, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
   stickyRailWrap: {
     position: 'absolute', left: 0, right: 0, zIndex: 9,
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -890,7 +890,7 @@ const styles = StyleSheet.create({
     marginBottom: Space.sm,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
   },
   awayBannerTextWrap: {
@@ -929,7 +929,7 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 8,
+    borderRadius: Radius.md,
   },
   shopPolicyText: {
     fontSize: 11,
@@ -963,7 +963,7 @@ const styles = StyleSheet.create({
   featuredImage: {
     width: 100,
     height: 120,
-    borderRadius: 8,
+    borderRadius: Radius.md,
   },
   featuredImagePlaceholder: {
     alignItems: 'center',

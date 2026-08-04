@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography, Radius } from '../../theme/designTokens';
+import { Space, Typography, Radius, Stroke } from '../../theme/designTokens';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -43,7 +43,7 @@ export function CheckoutSelectionRow({
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   return (
-    <View style={styles.wrapper}>
+    <View style={[styles.wrapper, isFilled && styles.wrapperFilled]}>
       <Pressable
         onPress={onPress ?? (() => {})}
         disabled={!onPress}
@@ -103,6 +103,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   wrapper: {
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
+  },
+  wrapperFilled: {
+    borderLeftWidth: Stroke.standard,
+    borderLeftColor: colors.brand,
+    paddingLeft: Space.sm,
   },
   row: {
     flexDirection: 'row',

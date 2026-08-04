@@ -146,19 +146,33 @@ export function CommerceDetailStateDock({
     action.onPress();
   };
 
+  // Per AGENTS.md §4 (No card-on-card composition): the buyer protection
+  // strip is flattened into the TOP section of the dock's single coherent
+  // surface. It shares the dock background; a hairline divider separates
+  // it from the action row below instead of a second surface/background.
   const content = (
-    <React.Fragment>
-      {/* ── Buyer protection strip ──
-          Per Design.md trust/commerce card micro spec: "Buyer protection
-          strip: colors.surface background, Radius.lg, shield icon 20pt,
-          Type.captionElevated text, placed above the action dock."
+    <View
+      style={[
+        styles.container,
+        {
+          backgroundColor: elevated ? colors.surfaceElevated : colors.background,
+          paddingBottom: Math.max(safeBottom + Space.xs, Space.sm),
+          borderTopColor: colors.border,
+        },
+      ]}
+    >
+      {/* ── Buyer protection strip (top section of the unified dock) ──
+          Per Design.md trust/commerce card micro spec: shield icon,
+          Type.captionElevated text, placed at the top of the action dock.
           Research (Vinted/Depop): trust signal at the payment decision
-          point increases conversion more than any other single change. */}
+          point increases conversion more than any other single change.
+          Flattened per AGENTS.md §4 — no separate surface; a hairline
+          borderBottom divides it from the action row. */}
       {showProtectionStrip && !stateBadge && (
         <View
           style={[
             styles.protectionStrip,
-            { backgroundColor: colors.surface, borderBottomColor: colors.borderSubtle },
+            { borderBottomColor: colors.borderSubtle },
           ]}
         >
           <Ionicons name="shield-checkmark" size={16} color={colors.success} />
@@ -167,16 +181,6 @@ export function CommerceDetailStateDock({
           </Text>
         </View>
       )}
-      <View
-        style={[
-          styles.container,
-          {
-            backgroundColor: elevated ? colors.surfaceElevated : colors.background,
-            paddingBottom: Math.max(safeBottom + Space.xs, Space.sm),
-            borderTopColor: colors.border,
-          },
-        ]}
-      >
       <View style={shouldStack ? styles.rowStacked : styles.row}>
         <View style={styles.valueCluster}>
           {/* Product thumbnail — anchors the user to the product when
@@ -317,8 +321,7 @@ export function CommerceDetailStateDock({
           ) : null}
         </View>
       </View>
-      </View>
-    </React.Fragment>
+    </View>
   );
 
   if (reducedMotion) {

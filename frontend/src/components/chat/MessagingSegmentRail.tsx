@@ -60,6 +60,8 @@ export function MessagingSegmentRail({
                 <Text style={styles.badgeText}>{seg.badge}</Text>
               </View>
             ) : null}
+            {/* Underline indicator — active segment only (iOS/Instagram native pattern) */}
+            <View style={[styles.indicator, isActive && styles.indicatorActive]} />
           </Pressable>
         );
       })}
@@ -83,6 +85,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    paddingBottom: 8,
+    position: 'relative',
   },
   label: {
     fontSize: Type.body.size,
@@ -109,5 +113,17 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: 10,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     color: colors.textInverse,
+  },
+  indicator: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: 'transparent',
+  },
+  indicatorActive: {
+    backgroundColor: colors.textPrimary,
   },
 });

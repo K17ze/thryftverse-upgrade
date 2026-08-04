@@ -66,7 +66,7 @@ export function CommerceDetailMediaRail({
         hitSlop={12}
         accessibilityLabel="Go back"
         accessibilityRole="button"
-        style={styles.hitTarget}
+        style={({ pressed }) => [styles.hitTarget, pressed && styles.pressed]}
       >
         <Ionicons name="chevron-back" size={28} color="#fff" style={styles.scrimIcon} />
       </Pressable>
@@ -82,7 +82,7 @@ export function CommerceDetailMediaRail({
               accessibilityLabel={action.label}
               accessibilityRole="button"
               accessibilityState={action.isActive ? { selected: true } : undefined}
-              style={styles.hitTarget}
+              style={({ pressed }) => [styles.hitTarget, pressed && styles.pressed]}
             >
               <Ionicons
                 name={icon}
@@ -99,7 +99,7 @@ export function CommerceDetailMediaRail({
             hitSlop={12}
             accessibilityLabel="More actions"
             accessibilityRole="button"
-            style={styles.hitTarget}
+            style={({ pressed }) => [styles.hitTarget, pressed && styles.pressed]}
           >
             <Ionicons name="ellipsis-horizontal" size={22} color="#fff" style={styles.scrimIcon} />
           </Pressable>
@@ -131,6 +131,10 @@ const styles = StyleSheet.create({
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  pressed: {
+    opacity: 0.5,
+    transform: [{ scale: 0.9 }],
   },
   // Subtle media-contrast scrim behind the glyph. This is functional
   // (legibility over arbitrary imagery), not decorative chrome.

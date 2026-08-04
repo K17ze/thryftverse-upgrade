@@ -7,16 +7,25 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "newArchEnabled": true,
     "ios": {
       "bundleIdentifier": "com.thryftverse.app",
       "supportsTablet": true,
       "associatedDomains": [
         "applinks:thryftverse.com",
         "applinks:www.thryftverse.com"
-      ]
+      ],
+      "infoPlist": {
+        "NSCameraUsageDescription": "ThryftVerse needs camera access to capture photos and videos for listings, posters, and looks.",
+        "NSPhotoLibraryUsageDescription": "ThryftVerse needs photo library access to select images for listings, posters, and looks.",
+        "NSPhotoLibraryAddUsageDescription": "ThryftVerse needs photo library access to save captured photos.",
+        "NSUserTrackingUsageDescription": "ThryftVerse does not track you across other companies' apps or websites."
+      }
     },
     "android": {
       "package": "com.thryftverse.app",
+      "targetSdkVersion": 36,
+      "edgeToEdgeEnabled": true,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",

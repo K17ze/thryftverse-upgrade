@@ -50,9 +50,13 @@ describe('SETTINGS-01 — Settings information architecture, ownership and subpa
       expect(accountControlSection).toBeTruthy();
     });
 
-    it('does not expose a crude Delete account row directly in the hub', () => {
-      // The old code had a "Delete account" row with danger flag and disabled onPress
-      expect(settingsSrc).not.toMatch(/title="Delete account"[\s\S]*?danger/);
+    it('exposes a truthful Delete account row in a separated Danger zone section', () => {
+      // Per Apple App Store + Google Play 2026 requirements, account deletion
+      // MUST be reachable in-app. The row must be in a danger zone section
+      // (visually separated) and navigate to the dedicated DeleteAccount screen.
+      expect(settingsSrc).toMatch(/Danger zone/i);
+      expect(settingsSrc).toMatch(/Delete account/);
+      expect(settingsSrc).toMatch(/DeleteAccount/);
     });
   });
 

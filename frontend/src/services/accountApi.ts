@@ -94,6 +94,54 @@ export async function deleteMyAccount(reason?: string): Promise<DeleteAccountRes
   };
 }
 
+/**
+ * Request permanent account deletion with identity re-confirmation.
+ *
+ * Sends the user's password, typed confirmation phrase, and optional departure
+ * reason to `DELETE /users/me`. The backend GDPR erasure handler accepts the
+ * `reason` field today; `password` and `confirmText` are forwarded so that when
+ * the backend adds server-side re-authentication they are already in the
+ * request body without a client round-trip.
+ */
+export async function requestAccountDeletion(
+  password: string,
+  confirmText: string,
+  reason?: string,
+): Promise<DeleteAccountResult> {
+  const payload = await fetchJson<DeleteMyAccountResponse>('/users/me', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      reason: reason?.trim() || undefined,
+      password: password || undefined,
+      confirmText: confirmText?.trim() || undefined,
+    }),
+  });
+
+  return {
+    requestId: payload.requestId,
+    message: payload.message,
+  };
+}
+
+/**
+ * Request a GDPR data export. The backend processes the export synchronously
+ * and returns the full payload inline (no async job or download URL).
+ */
+export async function requestDataExport(): Promise<DataExportResult> {
+  return requestMyDataExport();
+}
+
+/**
+ * Check the status of a data export. The backend `GET /users/me/export`
+ * endpoint is synchronous — each call returns the current export snapshot with
+ * a fresh request ID. When the backend adds an async job queue, this method
+ * should poll a dedicated status endpoint instead.
+ */
+export async function checkDataExportStatus(_exportId?: string): Promise<DataExportResult> {
+  return requestMyDataExport();
+}
+
 export interface UpdateProfileInput {
   displayName?: string;
   username?: string;

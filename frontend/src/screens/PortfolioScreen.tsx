@@ -833,9 +833,10 @@ const styles = StyleSheet.create({
   summaryCard: {
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.lg,
-    gap: Space.sm,
-    marginBottom: Space.lg,
+    paddingVertical: Space.md,
+    paddingHorizontal: Space.lg,
+    gap: Space.xs,
+    marginBottom: Space.md,
   },
   summaryLabel: {
     fontSize: Type.meta.size,
@@ -850,7 +851,7 @@ const styles = StyleSheet.create({
   },
   summaryStats: {
     flexDirection: 'row',
-    paddingTop: Space.sm,
+    paddingTop: Space.xs,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   summaryStat: {
@@ -870,20 +871,20 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.bold,
   },
   allocationCard: {
-    paddingVertical: Space.md,
-    gap: Space.sm,
-    marginBottom: Space.lg,
+    paddingVertical: Space.sm,
+    gap: Space.xs,
+    marginBottom: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   // ── Portfolio tab toggle ──
   portfolioTabRow: {
     flexDirection: 'row',
     borderBottomWidth: StyleSheet.hairlineWidth,
-    marginBottom: Space.lg,
-    marginTop: Space.md,
+    marginBottom: Space.md,
+    marginTop: Space.sm,
   },
   portfolioTab: {
-    paddingVertical: Space.sm + 2,
+    paddingVertical: Space.sm,
     paddingHorizontal: Space.md,
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
@@ -896,7 +897,7 @@ const styles = StyleSheet.create({
   },
   // ── Position insight (calm replacement for gamification cards) ──
   insightCard: {
-    marginBottom: Space.lg,
+    marginBottom: Space.md,
     overflow: 'hidden',
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
@@ -974,15 +975,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Space.md,
+    marginBottom: Space.sm,
   },
   sectionActions: {
     flexDirection: 'row',
     gap: Space.md,
   },
   realisedCard: {
-    paddingVertical: Space.md,
-    marginBottom: Space.lg,
+    paddingVertical: Space.sm,
+    marginBottom: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   realisedHeader: {
