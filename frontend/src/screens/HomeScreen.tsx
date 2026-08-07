@@ -93,6 +93,10 @@ const GRID_GAP = 12; // 12pt — breathable discovery gutter (flagship spacing)
 const MISSING_MEDIA_HEIGHT_RATIO = 0.78;
 const POSTER_CARD_WIDTH = 76;
 const POSTER_CARD_HEIGHT = 135;
+// Instagram-style gradient ring for unseen story cards.
+const STORY_GRADIENT_RING = ['#F58529', '#DD2A7B', '#8134AF', '#515BD4'] as const;
+// Ring thickness around story cards (matches Instagram ~2.5pt).
+const STORY_RING_PADDING = 2.5;
 const LISTING_CARD_CHROME_HEIGHT = 110;
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -754,16 +758,9 @@ export default function HomeScreen() {
             accessibilityHint="Opens camera to create a new poster"
           >
             <View style={styles.posterCreateTile}>
-              <LinearGradient
-                colors={['#FF6B6B', '#FF8E53', '#FFA500']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.posterCreateGradient}
-              >
-                <View style={styles.posterCreateInner}>
-                  <Ionicons name="camera" size={28} color={colors.textPrimary} />
-                </View>
-              </LinearGradient>
+              <View style={styles.posterCreateDashed}>
+                <Ionicons name="camera" size={28} color={colors.brand} />
+              </View>
               <View style={styles.posterCreatePlusBadge}>
                 <Ionicons name="add" size={14} color="#fff" />
               </View>
@@ -791,33 +788,41 @@ export default function HomeScreen() {
               accessibilityLabel={`Open poster by @${story.creator.username ?? story.creatorId}${isUnwatched ? ', new' : ''}`}
               accessibilityHint="Opens poster viewer"
             >
-              <View style={[styles.posterTile, isUnwatched ? styles.posterTileUnseen : styles.posterTileSeen, isUnwatched && styles.posterTileRing]}>
-                <PosterStoryArtwork story={story} />
-                <View style={styles.posterShade} />
-
-                <View style={styles.posterCreatorOverlay}>
-                  <Text style={styles.posterCreatorName} numberOfLines={1}>
-                    @{story.creator.username ?? story.creatorId}
-                  </Text>
-                  <View
-                    style={isUnwatched ? styles.posterFreshDot : styles.posterSeenDot}
-                    accessible={false}
+              <View
+                style={[
+                  styles.posterRingOuter,
+                  isUnwatched ? styles.posterRingOuterUnseen : styles.posterRingOuterSeen,
+                ]}
+              >
+                {isUnwatched && (
+                  <LinearGradient
+                    colors={STORY_GRADIENT_RING}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.posterRingGradient}
                   />
+                )}
+                <View style={styles.posterRingInner}>
+                  <PosterStoryArtwork story={story} />
+                  <View style={styles.posterShade} />
+
+                  {story.totalFrameCount > 1 && (
+                    <View style={styles.frameCountBadge} accessible={false}>
+                      <Ionicons name="layers" size={10} color={colors.textInverse} />
+                      <Text style={styles.frameCountBadgeText}>{story.totalFrameCount}</Text>
+                    </View>
+                  )}
+
+                  {showUnwatchedBadge && (
+                    <View style={styles.unwatchedBadge} accessible={false}>
+                      <Text style={styles.unwatchedBadgeText}>{unwatchedCount} new</Text>
+                    </View>
+                  )}
                 </View>
-
-                {story.totalFrameCount > 1 && (
-                  <View style={styles.frameCountBadge} accessible={false}>
-                    <Ionicons name="layers" size={10} color={colors.textInverse} />
-                    <Text style={styles.frameCountBadgeText}>{story.totalFrameCount}</Text>
-                  </View>
-                )}
-
-                {showUnwatchedBadge && (
-                  <View style={styles.unwatchedBadge} accessible={false}>
-                    <Text style={styles.unwatchedBadgeText}>{unwatchedCount} new</Text>
-                  </View>
-                )}
               </View>
+              <Text style={styles.posterCardLabel} numberOfLines={1}>
+                @{story.creator.username ?? story.creatorId}
+              </Text>
             </AnimatedPressable>
             );
             });
@@ -1120,7 +1125,7 @@ export default function HomeScreen() {
         ListFooterComponent={
           isLoadingMore ? (
             <View style={{ paddingVertical: Space.md, alignItems: 'center' }}>
-              <Text style={{ color: colors.textMuted, fontSize: 13 }}>Loading more...</Text>
+              <Text style={{ color: colors.textMuted, fontSize: Type.captionElevated.size }}>Loading more...</Text>
             </View>
           ) : null
         }
@@ -1240,7 +1245,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingRight: 10,
   },
   brandTitle: {
-    fontSize: 20,
+    fontSize: Type.priceList.size,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.35,
     color: colors.textPrimary,
@@ -1272,7 +1277,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   notificationBadgeText: {
     color: colors.textInverse,
-    fontSize: 10,
+    fontSize: Type.meta.size,
     fontFamily: 'Inter_700Bold',
     lineHeight: 12,
   },
@@ -1359,11 +1364,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   newListingsBannerIconWrap: {
     width: 14,
     height: 14,
-    borderRadius: 7,
+    borderRadius: Radius.md,
     backgroundColor: 'transparent',
   },
   newListingsBannerText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.background,
     letterSpacing: 0.2,
@@ -1377,13 +1382,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: 16,
   },
   sectionTitle: {
-    fontSize: 17,
+    fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
     letterSpacing: -0.1,
   },
   sectionHint: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     letterSpacing: 0.22,
@@ -1410,7 +1415,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   posterHeaderCameraBtn: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: Radius.xl,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1427,7 +1432,54 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   posterCard: {
     width: POSTER_CARD_WIDTH,
   },
-  posterTile: {
+  // Outer ring container — holds the gradient (unseen) or grey (seen) ring
+  // with the artwork clipped inside. The ring is the padding area.
+  posterRingOuter: {
+    width: POSTER_CARD_WIDTH,
+    height: POSTER_CARD_HEIGHT,
+    borderRadius: Radius.lg,
+    padding: STORY_RING_PADDING,
+    overflow: 'hidden',
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
+  posterRingOuterUnseen: {
+    // Transparent — the LinearGradient layer fills this and shows through
+    // the padding as the Instagram-style gradient ring.
+    backgroundColor: 'transparent',
+  },
+  posterRingOuterSeen: {
+    // Plain grey ring for already-watched stories.
+    backgroundColor: colors.border,
+  },
+  posterRingGradient: {
+    ...StyleSheet.absoluteFill,
+  },
+  posterRingInner: {
+    flex: 1,
+    borderRadius: Radius.lg - STORY_RING_PADDING,
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: colors.surfaceAlt,
+  },
+  // Username label below the card — Instagram story rail convention.
+  posterCardLabel: {
+    marginTop: 6,
+    fontSize: Type.meta.size,
+    lineHeight: 14,
+    fontFamily: Typography.family.medium,
+    color: colors.textSecondary,
+    width: POSTER_CARD_WIDTH,
+    textAlign: 'center',
+  },
+  posterCreateCard: {
+    width: POSTER_CARD_WIDTH,
+  },
+  posterCreateTile: {
     width: POSTER_CARD_WIDTH,
     height: POSTER_CARD_HEIGHT,
     borderRadius: Radius.lg,
@@ -1440,50 +1492,16 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 4,
   },
-  posterTileUnseen: {
-    borderWidth: 2,
-    borderColor: colors.brand,
-  },
-  posterTileRing: {
-    shadowColor: colors.brand,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.35,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  posterTileSeen: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
-  posterCreateCard: {
-    width: POSTER_CARD_WIDTH,
-  },
-  posterCreateTile: {
-    width: POSTER_CARD_WIDTH,
-    height: POSTER_CARD_HEIGHT,
-    borderRadius: Radius.lg,
-    overflow: 'hidden',
-    position: 'relative',
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 4,
-  },
-  posterCreateGradient: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 3.5,
-  },
-  posterCreateInner: {
-    width: '100%',
-    height: '100%',
+  // Dashed border differentiates the create card from gradient-ring story cards.
+  posterCreateDashed: {
+    flex: 1,
+    margin: 2,
     borderRadius: Radius.lg - 2,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.background,
   },
   posterCreatePlusBadge: {
     position: 'absolute',
@@ -1491,7 +1509,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     right: 6,
     width: 22,
     height: 22,
-    borderRadius: 11,
+    borderRadius: Radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.brand,
@@ -1500,7 +1518,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   posterCreateLabel: {
     marginTop: 6,
-    fontSize: 10,
+    fontSize: Type.meta.size,
+    lineHeight: 14,
     fontFamily: Typography.family.medium,
     color: colors.textSecondary,
     width: POSTER_CARD_WIDTH,
@@ -1521,7 +1540,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     position: 'absolute',
     width: 88,
     height: 88,
-    borderRadius: 44,
+    borderRadius: Radius.full,
     top: -42,
     right: -34,
     backgroundColor: 'rgba(255,255,255,0.08)',
@@ -1544,7 +1563,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     left: 5,
     width: 24,
     height: 24,
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
     borderWidth: 2,
     borderColor: colors.textInverse,
@@ -1557,12 +1576,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   posterAvatarOverlayWrap: {
     width: 24,
     height: 24,
-    borderRadius: 12,
+    borderRadius: Radius.lg,
   },
   posterAvatarOverlayImage: {
     width: '100%',
     height: '100%',
-    borderRadius: 12,
+    borderRadius: Radius.lg,
   },
   posterTopRow: {
     position: 'absolute',
@@ -1580,23 +1599,23 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.6)',
     paddingHorizontal: 5,
     paddingVertical: 3,
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     flex: 1,
     gap: 4,
   },
   posterOwnerAvatarWrap: {
     width: 14,
     height: 14,
-    borderRadius: 7,
+    borderRadius: Radius.md,
   },
   posterOwnerAvatar: {
     width: '100%',
     height: '100%',
-    borderRadius: 7,
+    borderRadius: Radius.md,
   },
   posterOwnerName: {
     color: colors.textInverse,
-    fontSize: 8,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
     flex: 1,
   },
@@ -1605,13 +1624,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     gap: 3,
     backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     paddingHorizontal: 6,
     paddingVertical: 3,
   },
   posterExpiryText: {
     color: colors.textInverse,
-    fontSize: 9,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.bold,
   },
   posterBottomOverlay: {
@@ -1625,29 +1644,9 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   posterCaption: {
     color: colors.textInverse,
-    fontSize: 9,
+    fontSize: Type.meta.size,
     lineHeight: 12,
     fontFamily: Typography.family.medium,
-  },
-  posterCreatorOverlay: {
-    position: 'absolute',
-    left: 5,
-    right: 5,
-    bottom: 5,
-    minHeight: 22,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 6,
-    borderRadius: Radius.sm,
-    backgroundColor: 'rgba(0,0,0,0.58)',
-  },
-  posterCreatorName: {
-    flex: 1,
-    color: colors.textInverse,
-    fontSize: 9,
-    lineHeight: 12,
-    fontFamily: Typography.family.semibold,
   },
   frameCountBadge: {
     position: 'absolute',
@@ -1657,13 +1656,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     gap: 2,
     backgroundColor: 'rgba(0,0,0,0.55)',
-    borderRadius: 8,
+    borderRadius: Radius.md,
     paddingHorizontal: 5,
     paddingVertical: 2,
   },
   frameCountBadgeText: {
     color: colors.textInverse,
-    fontSize: 9,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.bold,
   },
   unwatchedBadge: {
@@ -1671,26 +1670,14 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     bottom: 6,
     left: 6,
     backgroundColor: colors.brand,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
   unwatchedBadgeText: {
     color: colors.textInverse,
-    fontSize: 9,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.bold,
-  },
-  posterFreshDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: colors.brand,
-  },
-  posterSeenDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: colors.border,
   },
 
   masonryGrid: {
@@ -1734,7 +1721,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     position: 'absolute',
     width: 170,
     height: 170,
-    borderRadius: 85,
+    borderRadius: Radius.full,
     top: -76,
     right: -64,
     borderWidth: StyleSheet.hairlineWidth,
@@ -1745,7 +1732,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     position: 'absolute',
     width: 96,
     height: 96,
-    borderRadius: 48,
+    borderRadius: Radius.full,
     bottom: -44,
     left: -30,
     borderWidth: StyleSheet.hairlineWidth,
@@ -1776,7 +1763,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   // Price elevated to hero — 16pt bold, clearly dominant over 14pt title.
   explorePrice: {
     color: colors.textPrimary,
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     lineHeight: 20,
     fontFamily: Typography.family.bold,
     fontVariant: ['tabular-nums'],
@@ -1802,17 +1789,17 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   exploreSellerAvatarWrap: {
     width: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius: Radius.lg,
   },
   exploreSellerAvatar: {
     width: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius: Radius.lg,
   },
   exploreSellerAvatarFallback: {
     width: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius: Radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surfaceAlt,
@@ -1820,7 +1807,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   exploreSellerText: {
     flex: 1,
     color: colors.textSecondary,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     letterSpacing: 0.1,
   },
@@ -1835,7 +1822,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   exploreMessageText: {
     color: colors.textPrimary,
-    fontSize: 10,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
   },
   videoBadge: {
@@ -1894,14 +1881,14 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: 14,
   },
   peekTitle: {
-    fontSize: 19,
+    fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     letterSpacing: -0.2,
   },
   peekSubtitle: {
     marginTop: 4,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
   },
@@ -1917,7 +1904,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: 'transparent',
   },
   peekGhostText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
@@ -1930,11 +1917,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   peekPrimaryIconWrap: {
     width: 16,
     height: 16,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     backgroundColor: 'transparent',
   },
   peekPrimaryText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.bold,
     color: colors.background,
   },

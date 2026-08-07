@@ -22,9 +22,10 @@ interface PosterHighlightsRailProps {
 }
 
 const HIGHLIGHT_SIZE = 72;
-// 3px — prominent gradient ring border at avatar sizes.
-const RING_WIDTH = 3;
-const NEW_ICON_SIZE = 28;
+// 2px — Instagram's refined gradient ring border at avatar sizes.
+const RING_WIDTH = 2;
+const NEW_ICON_SIZE = 24;
+const FRAME_BADGE_SIZE = 18;
 
 // Instagram story gradient — used for the highlight ring border
 const INSTAGRAM_GRADIENT = ['#F58529', '#DD2A7B', '#8134AF', '#515BD4'] as const;
@@ -101,13 +102,21 @@ export function PosterHighlightsRail({
                 )}
               </View>
             </LinearGradient>
+            {/* Frame count badge — bottom-right of the circle, adds information
+                density without clutter. Only shown when there is more than one
+                frame so single-frame highlights stay clean. */}
+            {highlight.frames.length > 1 && (
+              <View style={styles.frameBadge} pointerEvents="none">
+                <Text style={styles.frameBadgeText}>{highlight.frames.length}</Text>
+              </View>
+            )}
             <Text style={styles.label} numberOfLines={1}>{highlight.title}</Text>
           </AnimatedPressable>
         );
       })}
 
       {/* "New" highlight tile — only for the profile owner.
-          Dashed border with a plus icon. */}
+          Clean thin solid border with a plus icon (Instagram-style). */}
       {isOwner && onCreateHighlight && (
         <AnimatedPressable
           style={styles.tile}
@@ -166,7 +175,7 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       width: HIGHLIGHT_SIZE + Space.sm,
     },
-    // Instagram-style gradient ring — wraps the avatar with a 3px gradient border
+    // Instagram-style gradient ring — wraps the avatar with a 2px gradient border
     ringGradient: {
       width: HIGHLIGHT_SIZE + RING_WIDTH * 2,
       height: HIGHLIGHT_SIZE + RING_WIDTH * 2,
@@ -190,24 +199,44 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       backgroundColor: colors.surfaceAlt,
     },
+    // Frame count badge — small dark pill anchored to the bottom-right of the
+    // highlight circle. Adds useful information density without clutter.
+    frameBadge: {
+      position: 'absolute',
+      top: HIGHLIGHT_SIZE - FRAME_BADGE_SIZE / 2 + RING_WIDTH,
+      right: Space.xs / 2,
+      minWidth: FRAME_BADGE_SIZE,
+      height: FRAME_BADGE_SIZE,
+      paddingHorizontal: Space.xs,
+      borderRadius: Radius.full,
+      backgroundColor: 'rgba(0,0,0,0.7)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    frameBadgeText: {
+      color: '#fff',
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.semibold,
+      lineHeight: FRAME_BADGE_SIZE,
+    },
     label: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.medium,
       color: colors.textSecondary,
       marginTop: Space.xs,
-      maxWidth: HIGHLIGHT_SIZE,
+      maxWidth: HIGHLIGHT_SIZE + Space.xs,
       textAlign: 'center',
     },
-    // "New" tile — dashed border with a plus icon
+    // "New" tile — clean thin solid border with a plus icon (Instagram-style)
     newRing: {
       width: HIGHLIGHT_SIZE + RING_WIDTH * 2,
       height: HIGHLIGHT_SIZE + RING_WIDTH * 2,
       borderRadius: Radius.full,
-      borderStyle: 'dashed',
       borderWidth: Stroke.standard,
       borderColor: colors.border,
       justifyContent: 'center',
       alignItems: 'center',
+      backgroundColor: colors.background,
     },
   });
 }

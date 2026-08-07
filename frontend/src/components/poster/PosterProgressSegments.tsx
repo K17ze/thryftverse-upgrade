@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, type LayoutChangeEvent } from 'react-native';
 import Reanimated, {
   useSharedValue,
   withRepeat,
@@ -9,15 +9,13 @@ import Reanimated, {
   Easing as ReEasing,
   cancelAnimation,
 } from 'react-native-reanimated';
-import { Ionicons } from '@expo/vector-icons';
 import { Space } from '../../theme/designTokens';
-import { Motion } from '../../theme/motionTokens';
 
 // Progress bar height — matches Instagram/Snapchat thin-segment convention.
 const PROGRESS_HEIGHT = 2;
-// Pause indicator geometry — local constants keep the magic numbers traceable.
-const PAUSE_INDICATOR_SIZE = 14;
-const PAUSE_ICON_SIZE = 12;
+// Subtle segment rounding — avoids the pill look on a 2px bar.
+// Instagram uses a near-imperceptible radius rather than a full capsule.
+const SEGMENT_RADIUS = Math.max(0.5, PROGRESS_HEIGHT / 4);
 
 interface PosterProgressSegmentsProps {
   total: number;
@@ -38,10 +36,13 @@ interface PosterProgressSegmentsProps {
  * Design constraints:
  * - 2px height (matches Instagram/Snapchat thin-segment convention)
  * - 4px gap between segments
- * - No pause-bar artifact (pause simply freezes the fill)
+ * - Subtle 0.5px corner radius (not a pill)
+ * - Active fill driven by a Reanimated shared value on the UI thread for
+ *   buttery-smooth progress without React re-renders on every tick
  * - Loading state shows a subtle animated shimmer on all segments
  * - Reduced motion: segments show fill state without animated progress or shimmer
- * - Pause indicator: a subtle pause icon at the right edge of the active segment
+ * - Pause state freezes the fill (no distracting indicator on the bar itself;
+ *   the accessibility label still announces "paused")
  *
  * The progress bar always sits on top of media (dark overlay), so it uses
  * white-based rgba colors consistently regardless of theme.
@@ -60,8 +61,13 @@ export function PosterProgressSegments({
   // Reanimated runs on the UI thread by default (no useNativeDriver needed).
   const shimmerSV = useSharedValue(0.3);
 
-  // Pause indicator opacity — fades in/out smoothly.
-  const pauseOpacitySV = useSharedValue(0);
+  // Active segment fill — driven on the UI thread for buttery-smooth progress.
+  // Value is 0..1 representing the fraction of the active segment filled.
+  const activeFillSV = useSharedValue(0);
+  // Measured track width (all segments are equal via flex:1). Used to
+  // translate a full-width fill so the leading edge stays crisp without
+  // distorting the corner radius (unlike scaleX which would squash it).
+  const trackWidthSV = useSharedValue(0);
 
   useEffect(() => {
     if (isLoading && !reducedMotion) {
@@ -82,18 +88,33 @@ export function PosterProgressSegments({
     };
   }, [isLoading, reducedMotion, shimmerSV]);
 
-  // Pause indicator fade in/out
+  // Mirror the progress prop into the UI-thread shared value so the fill
+  // width updates without triggering a React re-render on every tick.
+  // Reduced motion: show a static half-fill for the active segment.
   useEffect(() => {
-    pauseOpacitySV.value = withTiming(isPaused ? 1 : 0, { duration: Motion.duration.normal });
-  }, [isPaused, pauseOpacitySV]);
+    activeFillSV.value = reducedMotion ? 0.5 : clampedProgress;
+  }, [clampedProgress, reducedMotion, activeFillSV]);
+
+  const handleTrackLayout = React.useCallback((e: LayoutChangeEvent) => {
+    trackWidthSV.value = e.nativeEvent.layout.width;
+  }, [trackWidthSV]);
 
   const shimmerStyle = useAnimatedStyle(() => ({
     backgroundColor: `rgba(255,255,255,${shimmerSV.value})`,
   }));
 
-  const pauseIconStyle = useAnimatedStyle(() => ({
-    opacity: pauseOpacitySV.value * 0.7,
-  }));
+  // Active segment fill: a full-width fill translated left so only the
+  // progress portion is visible inside the (overflow:hidden) track.
+  // The fill's own right edge is the leading edge, keeping its rounded
+  // corner crisp at every progress value (no scaleX distortion).
+  const activeFillStyle = useAnimatedStyle(() => {
+    const w = trackWidthSV.value;
+    if (w <= 0) return { opacity: 0 };
+    return {
+      opacity: 1,
+      transform: [{ translateX: -w * (1 - activeFillSV.value) }],
+    };
+  });
 
   return (
     <View
@@ -106,15 +127,6 @@ export function PosterProgressSegments({
       {Array.from({ length: total }).map((_, i) => {
         const isPast = i < currentIndex;
         const isActive = i === currentIndex;
-        // Past segments are full; active fills with progress; future are empty.
-        // Reduced motion: show full fill for past, half for active (no animation).
-        const fillPercent = isPast
-          ? 100
-          : isActive
-            ? reducedMotion
-              ? 50
-              : Math.round(clampedProgress * 100)
-            : 0;
 
         if (isLoading) {
           return (
@@ -126,19 +138,14 @@ export function PosterProgressSegments({
         }
 
         return (
-          <View key={i} style={styles.track}>
-            <View
-              style={[
-                styles.fill,
-                { width: `${fillPercent}%` },
-              ]}
-            />
-            {/* Pause indicator at the right edge of the active segment */}
-            {isActive && (
-              <Reanimated.View style={[styles.pauseIndicator, pauseIconStyle]} pointerEvents="none">
-                <Ionicons name="pause" size={PAUSE_ICON_SIZE} color="#fff" />
-              </Reanimated.View>
-            )}
+          <View key={i} style={styles.track} onLayout={handleTrackLayout}>
+            {isPast ? (
+              // Past segments are full — static fill, no animation needed.
+              <View style={styles.fill} />
+            ) : isActive ? (
+              // Active segment fills left-to-right on the UI thread.
+              <Reanimated.View style={[styles.fill, activeFillStyle]} />
+            ) : null}
           </View>
         );
       })}
@@ -157,31 +164,23 @@ const styles = StyleSheet.create({
   track: {
     flex: 1,
     height: PROGRESS_HEIGHT,
-    borderRadius: PROGRESS_HEIGHT / 2,
+    borderRadius: SEGMENT_RADIUS,
     // Track background — white with 0.35 opacity (always on dark media overlay)
     backgroundColor: 'rgba(255,255,255,0.35)',
     overflow: 'hidden',
-    flexDirection: 'row',
-    alignItems: 'center',
   },
   fill: {
-    height: '100%',
-    borderRadius: PROGRESS_HEIGHT / 2,
-    backgroundColor: 'rgba(255,255,255,1)',
-    // Active segment glow — subtle white shadow for depth on the fill
-    shadowColor: '#fff',
-    shadowOpacity: 0.3,
-    shadowRadius: 2,
-    shadowOffset: { width: 0, height: 0 },
-  },
-  pauseIndicator: {
     position: 'absolute',
-    right: -1,
-    top: '50%',
-    marginTop: -(PAUSE_INDICATOR_SIZE / 2),
-    width: PAUSE_INDICATOR_SIZE,
-    height: PAUSE_INDICATOR_SIZE,
-    justifyContent: 'center',
-    alignItems: 'center',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: '100%',
+    borderRadius: SEGMENT_RADIUS,
+    backgroundColor: 'rgba(255,255,255,1)',
+    // Active segment glow — very subtle white shadow for depth on the fill
+    shadowColor: '#fff',
+    shadowOpacity: 0.15,
+    shadowRadius: 1,
+    shadowOffset: { width: 0, height: 0 },
   },
 });

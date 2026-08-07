@@ -31,6 +31,27 @@ const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_W = (SCREEN_W - Space.md * 2 - Space.sm) / 2;
 const CARD_H = CARD_W * (16 / 9);
 
+/**
+ * Relative date formatter — "just now", "3h ago", "2d ago", "1w ago".
+ * Falls back to an absolute date ("Mar 4") for anything older than ~4 weeks,
+ * matching Instagram's archive scannability.
+ */
+function formatRelativeDate(iso: string): string {
+  const then = new Date(iso).getTime();
+  const now = Date.now();
+  const diffMs = Math.max(0, now - then);
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  const weeks = Math.floor(days / 7);
+  if (weeks < 5) return `${weeks}w ago`;
+  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
 export default function PosterArchiveScreen({ navigation }: Props) {
   const { colors, isDark } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -152,7 +173,7 @@ export default function PosterArchiveScreen({ navigation }: Props) {
         </View>
         <View style={styles.cardFooter}>
           <Text style={styles.cardDate}>
-            {new Date(item.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+            {formatRelativeDate(item.createdAt)}
           </Text>
           <AnimatedPressable
             onPress={() => handleDelete(item.id)}
@@ -165,7 +186,7 @@ export default function PosterArchiveScreen({ navigation }: Props) {
             accessibilityRole="button"
             accessibilityHint="Deletes this archived story"
           >
-            <Ionicons name="trash-outline" size={16} color="#fff" />
+            <Ionicons name="trash-outline" size={16} color={colors.textMuted} />
           </AnimatedPressable>
         </View>
       </AnimatedPressable>
@@ -319,7 +340,9 @@ export default function PosterArchiveScreen({ navigation }: Props) {
         }
         ListEmptyComponent={
           <View style={styles.emptyBody}>
-            <Ionicons name="archive-outline" size={56} color={colors.textMuted} />
+            <View style={styles.emptyIconWrap}>
+              <Ionicons name="archive-outline" size={36} color={colors.textMuted} />
+            </View>
             <Text style={styles.emptyTitle}>
               {filter === 'active'
                 ? 'No active stories'
@@ -387,7 +410,8 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.md,
     paddingBottom: Space.xl,
   },
-  // Filter segmented control — flat chips, no card-on-card
+  // Filter segmented control — flat, no card-on-card. Inactive is plain text,
+  // active is a filled brand pill (Instagram-style).
   filterRow: {
     flexDirection: 'row',
     gap: Space.xs,
@@ -398,12 +422,9 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.xs + 1,
     paddingHorizontal: Space.sm + 2,
     borderRadius: Radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
   },
   filterChipActive: {
     backgroundColor: colors.brand,
-    borderColor: colors.brand,
   },
   filterChipText: {
     fontSize: Type.caption.size,
@@ -494,7 +515,6 @@ function createStyles(colors: ThemeColors) {
     width: 28,
     height: 28,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -509,16 +529,28 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
     marginTop: Space.xxl,
     gap: Space.sm,
+    paddingHorizontal: Space.xl,
+  },
+  emptyIconWrap: {
+    width: Space.xxl + Space.sm,
+    height: Space.xxl + Space.sm,
+    borderRadius: Radius.full,
+    backgroundColor: colors.surfaceAlt,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: Space.xs,
   },
   emptyTitle: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
+    textAlign: 'center',
   },
   emptySubtitle: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
+    textAlign: 'center',
   },
   errorBody: {
     flex: 1,

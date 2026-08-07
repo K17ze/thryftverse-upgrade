@@ -223,8 +223,8 @@ export function PosterReactionReplyBar({
                 styles.reactionBtn,
                 viewerReaction === r.type && styles.reactionActive,
               ]}
-              scaleValue={0.97}
-              activeOpacity={0.85}
+              scaleValue={0.82}
+              activeOpacity={0.7}
               hapticFeedback="light"
               accessibilityLabel={`${r.label} reaction`}
               accessibilityRole="button"
@@ -269,8 +269,8 @@ export function PosterReactionReplyBar({
           <AnimatedPressable
             onPress={toggleReactions}
             style={styles.iconBtn}
-            scaleValue={0.97}
-            activeOpacity={0.85}
+            scaleValue={0.88}
+            activeOpacity={0.8}
             hapticFeedback="light"
             accessibilityLabel="Show reactions"
             accessibilityRole="button"
@@ -345,7 +345,7 @@ export function PosterReactionReplyBar({
             {isSending ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
-              <Ionicons name="send" size={Control.iconCompact} color="#fff" />
+              <Ionicons name="send" size={Control.icon} color="#fff" />
             )}
           </AnimatedPressable>
         )}
@@ -385,7 +385,7 @@ function createStyles(colors: any) {
       flexDirection: 'row',
       justifyContent: 'flex-end',
       alignItems: 'center',
-      gap: Space.sm,
+      gap: Space.xs,
       paddingVertical: Space.xs,
       paddingHorizontal: Space.sm,
       borderRadius: Radius.full,
@@ -403,19 +403,23 @@ function createStyles(colors: any) {
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: 'rgba(255,255,255,0.2)',
     },
+    // Reaction emoji button — 44pt hit target with a 26pt glyph.
+    // The visible glyph is smaller than the hit area so the emoji
+    // reads as floating, not boxed (per §4 icon grammar).
     reactionBtn: {
-      width: 40,
-      height: 40,
+      width: Control.hit,
+      height: Control.hit,
       borderRadius: Radius.full,
       justifyContent: 'center',
       alignItems: 'center',
     },
     reactionActive: {
-      backgroundColor: 'rgba(255,255,255,0.18)',
+      backgroundColor: 'rgba(255,255,255,0.22)',
     },
+    // 26pt emoji — within Instagram's 24-28pt band, evenly spaced.
     reactionGlyph: {
-      fontSize: Type.bodyLarge.size + 6,
-      lineHeight: 28,
+      fontSize: 26,
+      lineHeight: 30,
       textAlign: 'center',
     },
     // ── Quick reply chips ─────────────────────────────────────────────
@@ -457,9 +461,12 @@ function createStyles(colors: any) {
       justifyContent: 'center',
       alignItems: 'center',
     },
+    // Reaction toggle glyph — deliberately smaller (24pt) than the
+    // tray emoji so the reply input remains the primary element and
+    // the reaction toggle reads as a secondary control.
     iconEmoji: {
-      fontSize: Type.bodyLarge.size + 6,
-      lineHeight: 26,
+      fontSize: 24,
+      lineHeight: 28,
       textAlign: 'center',
     },
     // Reply input wrapper — frosted glass pill (Instagram pattern).
@@ -474,14 +481,20 @@ function createStyles(colors: any) {
       borderColor: 'rgba(255,255,255,0.25)',
       overflow: 'hidden',
     },
-    // Focus state — brighter border (1pt) per stroke grammar §4
+    // Focus state — 2pt white at 0.3 opacity per §4 stroke grammar
+    // (2pt reserved for focus/selection). The subtle highlight makes
+    // the active input boundary unmistakable without shouting.
     replyInputWrapFocused: {
-      borderColor: 'rgba(255,255,255,0.55)',
-      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.3)',
+      borderWidth: 2,
     },
-    // Glass background layer for the reply input pill.
+    // Glass background layer for the reply input pill. The blur is
+    // supplied by LiquidGlassBackdrop; the underlying fill is a subtle
+    // rgba(255,255,255,0.08) so the pill reads cleanly even when the
+    // blur fallback renders a flat tint (Instagram pattern).
     replyInputGlass: {
       borderRadius: Radius.full,
+      backgroundColor: 'rgba(255,255,255,0.08)',
     },
     replyInput: {
       height: Control.hit,
@@ -489,7 +502,7 @@ function createStyles(colors: any) {
       borderRadius: Radius.full,
       paddingHorizontal: Space.md,
       paddingVertical: 0,
-      color: 'rgba(255,255,255,0.9)',
+      color: 'rgba(255,255,255,0.95)',
       fontFamily: Typography.family.regular,
       fontSize: Type.bodyEmphasis.size,
     },
@@ -505,16 +518,19 @@ function createStyles(colors: any) {
     replyCounterLimit: {
       color: 'rgba(255,120,120,0.85)',
     },
+    // Send button — Instagram pattern: a white paper-plane glyph on a
+    // transparent 44pt hit target (no filled circle). The icon is the
+    // affordance; the brand accent is reserved for the icon tint so the
+    // control stays restrained and the reply input remains primary.
     sendBtn: {
-      width: 36,
-      height: 36,
+      width: Control.hit,
+      height: Control.hit,
       borderRadius: Radius.full,
       justifyContent: 'center',
       alignItems: 'center',
-      backgroundColor: colors.brand,
     },
     sendBtnSending: {
-      opacity: 0.7,
+      opacity: 0.6,
     },
     // Owner row — hairline separator from the reply area for visual separation
     ownerRow: {
