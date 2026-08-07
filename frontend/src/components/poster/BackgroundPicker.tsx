@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, StyleSheet, Pressable, Text, ScrollView } from 'react-native';
+import { View, StyleSheet, Text, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography } from '../../theme/designTokens';
+import { AnimatedPressable } from '../AnimatedPressable';
 
 interface BackgroundPickerProps {
   visible: boolean;
@@ -32,7 +33,14 @@ export default function BackgroundPicker({ visible, currentColor, onSelect, onCl
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="auto">
-      <Pressable style={styles.backdrop} onPress={onClose} />
+      <AnimatedPressable
+        style={styles.backdrop}
+        onPress={onClose}
+        activeOpacity={1}
+        hapticFeedback="light"
+        accessibilityLabel="Close background picker"
+        accessibilityRole="button"
+      />
 
       <View style={styles.panel}>
         <View style={styles.handleRow}>
@@ -43,16 +51,29 @@ export default function BackgroundPicker({ visible, currentColor, onSelect, onCl
 
         {/* Solid colors */}
         <Text style={styles.sectionLabel}>Solid Colors</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.colorRow}>
-          <Pressable
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.colorRow}
+          accessibilityRole="list"
+          accessibilityLabel="Solid background colors"
+        >
+          <AnimatedPressable
             style={[styles.colorOrb, { backgroundColor: 'transparent', borderColor: 'rgba(255,255,255,0.3)' }]}
             onPress={() => onSelect(null)}
+            scaleValue={0.9}
+            activeOpacity={0.85}
+            hapticFeedback="selection"
+            accessibilityLabel="No background color"
+            accessibilityHint="Clears the background color"
+            accessibilityRole="button"
+            accessibilityState={{ selected: !currentColor }}
           >
             {!currentColor && <Ionicons name="checkmark" size={14} color="#fff" />}
             {currentColor && <Ionicons name="close" size={14} color="rgba(255,255,255,0.5)" />}
-          </Pressable>
+          </AnimatedPressable>
           {SOLIDS.map((color) => (
-            <Pressable
+            <AnimatedPressable
               key={color}
               style={[
                 styles.colorOrb,
@@ -60,6 +81,13 @@ export default function BackgroundPicker({ visible, currentColor, onSelect, onCl
                 currentColor === color && styles.colorOrbActive,
               ]}
               onPress={() => onSelect(color)}
+              scaleValue={0.9}
+              activeOpacity={0.85}
+              hapticFeedback="selection"
+              accessibilityLabel={`Background color ${color}`}
+              accessibilityHint={`Sets the background to ${color}`}
+              accessibilityRole="button"
+              accessibilityState={{ selected: currentColor === color }}
             >
               {currentColor === color && (
                 <Ionicons
@@ -68,22 +96,34 @@ export default function BackgroundPicker({ visible, currentColor, onSelect, onCl
                   color={color === '#ffffff' || color === '#dfe6e9' || color === '#c8d6e5' ? '#000' : '#fff'}
                 />
               )}
-            </Pressable>
+            </AnimatedPressable>
           ))}
         </ScrollView>
 
         {/* Gradients (displayed as two-tone orbs for now) */}
         <Text style={styles.sectionLabel}>Gradients</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.gradientRow}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.gradientRow}
+          accessibilityRole="list"
+          accessibilityLabel="Gradient backgrounds"
+        >
           {GRADIENTS.map((g) => (
-            <Pressable
+            <AnimatedPressable
               key={g.label}
               style={[styles.gradientCard, { backgroundColor: g.colors[0] }]}
               onPress={() => onSelect(g.colors[0])}
+              scaleValue={0.94}
+              activeOpacity={0.85}
+              hapticFeedback="selection"
+              accessibilityLabel={`${g.label} gradient`}
+              accessibilityHint={`Applies the ${g.label.toLowerCase()} gradient background`}
+              accessibilityRole="button"
             >
               <View style={[styles.gradientHalf, { backgroundColor: g.colors[1] }]} />
               <Text style={styles.gradientLabel}>{g.label}</Text>
-            </Pressable>
+            </AnimatedPressable>
           ))}
         </ScrollView>
       </View>

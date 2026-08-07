@@ -2,7 +2,6 @@ import React from 'react';
 import {
   View,
   StyleSheet,
-  Pressable,
   Text,
   ScrollView,
   Animated,
@@ -11,6 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { POSTER_TEMPLATES, PosterTemplate } from '../../data/posters';
 import { Typography, Radius, Type, Space } from '../../theme/designTokens';
+import { AnimatedPressable } from '../AnimatedPressable';
 
 const { height: SCREEN_H } = Dimensions.get('window');
 const DRAWER_HEIGHT = SCREEN_H * 0.45;
@@ -60,7 +60,14 @@ export default function TemplatePicker({ visible, onClose, onSelect, currentTemp
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents={visible ? 'auto' : 'none'}>
       <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]} pointerEvents={visible ? 'auto' : 'none'}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <AnimatedPressable
+          style={StyleSheet.absoluteFill}
+          onPress={onClose}
+          activeOpacity={1}
+          hapticFeedback="light"
+          accessibilityLabel="Close template picker"
+          accessibilityRole="button"
+        />
       </Animated.View>
 
       <Animated.View style={[styles.drawer, { transform: [{ translateY }] }]}>
@@ -71,30 +78,55 @@ export default function TemplatePicker({ visible, onClose, onSelect, currentTemp
         <Text style={styles.title}>Templates</Text>
 
         {/* Category tabs */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabRow}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabRow}
+          accessibilityRole="tablist"
+          accessibilityLabel="Template categories"
+        >
           {CATEGORIES.map((c) => (
-            <Pressable
+            <AnimatedPressable
               key={c.key}
               style={[styles.tab, category === c.key && styles.tabActive]}
               onPress={() => setCategory(c.key)}
+              scaleValue={0.96}
+              activeOpacity={0.85}
+              hapticFeedback="selection"
+              accessibilityLabel={`${c.label} templates`}
+              accessibilityHint={`Filters templates by ${c.label.toLowerCase()}`}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: category === c.key }}
             >
               <Text style={[styles.tabText, category === c.key && styles.tabTextActive]}>{c.label}</Text>
-            </Pressable>
+            </AnimatedPressable>
           ))}
         </ScrollView>
 
         {/* Template grid */}
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.grid}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.grid}
+          accessibilityRole="list"
+          accessibilityLabel="Templates"
+        >
           {filtered.map((template) => {
             const isActive = currentTemplateId === template.id;
             return (
-              <Pressable
+              <AnimatedPressable
                 key={template.id}
                 style={[styles.card, isActive && styles.cardActive]}
                 onPress={() => {
                   onSelect(template);
                   onClose();
                 }}
+                scaleValue={0.95}
+                activeOpacity={0.85}
+                hapticFeedback="selection"
+                accessibilityLabel={`${template.name} template${isActive ? ', active' : ''}`}
+                accessibilityHint={`Applies the ${template.name} template`}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isActive }}
               >
                 <View style={[styles.thumb, { backgroundColor: template.thumbnailColor }]}>
                   <Ionicons name={template.icon} size={28} color="#fff" />
@@ -105,7 +137,7 @@ export default function TemplatePicker({ visible, onClose, onSelect, currentTemp
                   )}
                 </View>
                 <Text style={styles.cardLabel} numberOfLines={1}>{template.name}</Text>
-              </Pressable>
+              </AnimatedPressable>
             );
           })}
         </ScrollView>

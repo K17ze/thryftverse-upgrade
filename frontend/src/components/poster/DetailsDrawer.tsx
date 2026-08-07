@@ -4,10 +4,11 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  Pressable,
   ScrollView,
   Animated,
   Dimensions,
+  ActivityIndicator,
+  Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
@@ -16,6 +17,7 @@ import { CachedImage } from '../CachedImage';
 import { getListingCoverUri } from '../../utils/media';
 import { Typography, Radius, Type, Space } from '../../theme/designTokens';
 import { KeyboardAwareScrollView } from '../../platform/keyboard/KeyboardProvider';
+import { AnimatedPressable } from '../AnimatedPressable';
 
 const { height: SCREEN_H } = Dimensions.get('window');
 const DRAWER_HEIGHT = SCREEN_H * 0.55;
@@ -94,10 +96,17 @@ export default function DetailsDrawer({
   const renderListingCard = (item: Listing) => {
     const selected = item.id === selectedListingId;
     return (
-      <Pressable
+      <AnimatedPressable
         key={item.id}
         style={[styles.listingCard, selected && styles.listingCardSelected]}
         onPress={() => onListingSelect(item.id)}
+        scaleValue={0.96}
+        activeOpacity={0.85}
+        hapticFeedback="selection"
+        accessibilityLabel={`Tag listing: ${item.title}${selected ? ', selected' : ''}`}
+        accessibilityHint={`Tags ${item.title} to the poster`}
+        accessibilityRole="button"
+        accessibilityState={{ selected }}
       >
         <CachedImage
           uri={getListingCoverUri(item.images, '')}
@@ -112,7 +121,7 @@ export default function DetailsDrawer({
             <Ionicons name="checkmark" size={12} color={colors.background} />
           </View>
         )}
-      </Pressable>
+      </AnimatedPressable>
     );
   };
 
@@ -123,7 +132,14 @@ export default function DetailsDrawer({
         style={[styles.backdrop, { opacity: backdropOpacity }]}
         pointerEvents={visible ? 'auto' : 'none'}
       >
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <AnimatedPressable
+          style={StyleSheet.absoluteFill}
+          onPress={onClose}
+          activeOpacity={1}
+          hapticFeedback="light"
+          accessibilityLabel="Close details drawer"
+          accessibilityRole="button"
+        />
       </Animated.View>
 
       {/* Drawer */}
@@ -159,15 +175,22 @@ export default function DetailsDrawer({
             {/* Expiry */}
             <View style={styles.section}>
               <Text style={styles.sectionLabel}>Expires In</Text>
-              <View style={styles.expiryRow}>
+              <View style={styles.expiryRow} accessibilityRole="radiogroup" accessibilityLabel="Expiry duration">
                 {EXPIRY_OPTIONS.map((h) => (
-                  <Pressable
+                  <AnimatedPressable
                     key={h}
                     style={[
                       styles.expiryPill,
                       expiryHours === h && styles.expiryPillActive,
                     ]}
                     onPress={() => onExpiryChange(h)}
+                    scaleValue={0.95}
+                    activeOpacity={0.85}
+                    hapticFeedback="selection"
+                    accessibilityLabel={`${h} hours`}
+                    accessibilityHint={`Sets the poster to expire in ${h} hours`}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: expiryHours === h }}
                   >
                     <Text
                       style={[
@@ -177,7 +200,7 @@ export default function DetailsDrawer({
                     >
                       {h}h
                     </Text>
-                  </Pressable>
+                  </AnimatedPressable>
                 ))}
               </View>
             </View>
@@ -194,25 +217,37 @@ export default function DetailsDrawer({
                 multiline
                 maxLength={200}
                 textAlignVertical="top"
+                accessibilityLabel="Caption"
+                accessibilityHint="Enter a caption for your poster"
               />
               <Text style={styles.charCount}>{caption.length}/200</Text>
             </View>
 
             {/* Publish */}
-            <Pressable
+            <AnimatedPressable
               style={[styles.publishBtn, isPublishing && styles.publishBtnDisabled]}
               onPress={onPublish}
               disabled={isPublishing}
+              scaleValue={0.97}
+              activeOpacity={0.85}
+              hapticFeedback="medium"
+              accessibilityLabel="Publish poster"
+              accessibilityHint="Publishes your poster to your followers"
+              accessibilityRole="button"
+              accessibilityState={{ disabled: isPublishing }}
             >
               {isPublishing ? (
-                <Text style={styles.publishBtnText}>Publishing...</Text>
+                <>
+                  <ActivityIndicator size="small" color="#fff" />
+                  <Text style={styles.publishBtnText}>Publishing...</Text>
+                </>
               ) : (
                 <>
                   <Ionicons name="paper-plane" size={18} color="#fff" />
                   <Text style={styles.publishBtnText}>Publish</Text>
                 </>
               )}
-            </Pressable>
+            </AnimatedPressable>
           </KeyboardAwareScrollView>
         </View>
       </Animated.View>

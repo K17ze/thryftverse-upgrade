@@ -3,11 +3,11 @@ import { Typography } from '../../theme/designTokens';
 import {
   View,
   StyleSheet,
-  Pressable,
   Text,
   ScrollView,
   Image,
 } from 'react-native';
+import { AnimatedPressable } from '../AnimatedPressable';
 
 export type ImageFilter =
   | 'normal'
@@ -64,14 +64,23 @@ export default function FilterStrip({ activeFilter, onFilterChange, visible, pre
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.strip}
+        accessibilityRole="list"
+        accessibilityLabel="Image filters"
       >
         {FILTERS.map((filter) => {
           const isActive = activeFilter === filter.name;
           return (
-            <Pressable
+            <AnimatedPressable
               key={filter.name}
               style={styles.filterCard}
               onPress={() => onFilterChange(filter.name)}
+              scaleValue={0.94}
+              activeOpacity={0.85}
+              hapticFeedback="selection"
+              accessibilityLabel={`${filter.label} filter${isActive ? ', active' : ''}`}
+              accessibilityHint={`Applies the ${filter.label.toLowerCase()} filter to the image`}
+              accessibilityRole="button"
+              accessibilityState={{ selected: isActive }}
             >
               <View style={[styles.thumbWrap, isActive && styles.thumbWrapActive]}>
                 {previewUri ? (
@@ -104,7 +113,7 @@ export default function FilterStrip({ activeFilter, onFilterChange, visible, pre
               <Text style={[styles.filterLabel, isActive && styles.filterLabelActive]}>
                 {filter.label}
               </Text>
-            </Pressable>
+            </AnimatedPressable>
           );
         })}
       </ScrollView>

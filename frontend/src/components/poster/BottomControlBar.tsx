@@ -2,7 +2,6 @@ import React from 'react';
 import {
   View,
   StyleSheet,
-  Pressable,
   ScrollView,
   Image,
 } from 'react-native';
@@ -10,6 +9,8 @@ import { Ionicons } from '@expo/vector-icons';
 import type * as MediaLibrary from 'expo-media-library/legacy';
 
 import { Radius, Space } from '../../theme/designTokens';
+import { AnimatedPressable } from '../AnimatedPressable';
+
 interface BottomControlBarProps {
   onGalleryPress: () => void;
   onFlipCamera: () => void;
@@ -31,7 +32,16 @@ export default function BottomControlBar({
     <View style={styles.container} pointerEvents="box-none">
       {/* Gallery strip + camera flip */}
       <View style={styles.bottomRow}>
-        <Pressable style={styles.galleryThumb} onPress={onGalleryPress} hitSlop={12}>
+        <AnimatedPressable
+          style={styles.galleryThumb}
+          onPress={onGalleryPress}
+          scaleValue={0.95}
+          activeOpacity={0.85}
+          hapticFeedback="light"
+          accessibilityLabel="Open gallery"
+          accessibilityHint="Opens the photo gallery to select media"
+          accessibilityRole="button"
+        >
           {recentPhotos[0] ? (
             <Image
               source={{ uri: recentPhotos[0].uri ?? '' }}
@@ -44,12 +54,21 @@ export default function BottomControlBar({
           <View style={styles.galleryOverlay}>
             <Ionicons name="chevron-up" size={14} color="#fff" />
           </View>
-        </Pressable>
+        </AnimatedPressable>
 
         {showCameraControls && (
-          <Pressable style={styles.flipBtn} onPress={onRotateCamera || onFlipCamera} hitSlop={12}>
+          <AnimatedPressable
+            style={styles.flipBtn}
+            onPress={onRotateCamera || onFlipCamera}
+            scaleValue={0.90}
+            activeOpacity={0.85}
+            hapticFeedback="medium"
+            accessibilityLabel="Flip camera"
+            accessibilityHint="Switches between front and back camera"
+            accessibilityRole="button"
+          >
             <Ionicons name="sync-outline" size={22} color="#fff" />
-          </Pressable>
+          </AnimatedPressable>
         )}
       </View>
 
@@ -59,15 +78,23 @@ export default function BottomControlBar({
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.photoStrip}
+          accessibilityRole="list"
+          accessibilityLabel="Recent photos"
         >
           {recentPhotos.slice(0, 10).map((photo) => (
-            <Pressable
+            <AnimatedPressable
               key={photo.id}
               style={styles.photoThumb}
               onPress={() => onRecentPhotoPress(photo.uri ?? '')}
+              scaleValue={0.92}
+              activeOpacity={0.85}
+              hapticFeedback="light"
+              accessibilityLabel="Recent photo"
+              accessibilityHint="Selects this photo from your recent photos"
+              accessibilityRole="button"
             >
               <Image source={{ uri: photo.uri ?? '' }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-            </Pressable>
+            </AnimatedPressable>
           ))}
         </ScrollView>
       )}

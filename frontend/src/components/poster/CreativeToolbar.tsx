@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, StyleSheet, Pressable, Text } from 'react-native';
+import { View, StyleSheet, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Typography, Radius, Space } from '../../theme/designTokens';
+import { Typography, Radius, Space, Control } from '../../theme/designTokens';
+import { AnimatedPressable } from '../AnimatedPressable';
 
 export type CreativeTool = 'text' | 'stickers' | 'draw' | 'filter' | 'preview' | null;
 
@@ -28,11 +29,17 @@ export default function CreativeToolbar({ activeTool, onToolSelect, visible }: C
         {TOOLS.map((tool) => {
           const isActive = activeTool === tool.key;
           return (
-            <Pressable
+            <AnimatedPressable
               key={tool.key}
               style={[styles.toolBtn, isActive && styles.toolBtnActive]}
               onPress={() => onToolSelect(isActive ? null : tool.key)}
-              hitSlop={8}
+              scaleValue={0.95}
+              activeOpacity={0.85}
+              hapticFeedback="selection"
+              accessibilityLabel={`${tool.label} tool${isActive ? ', active' : ''}`}
+              accessibilityHint={`Toggles the ${tool.label.toLowerCase()} creative tool`}
+              accessibilityRole="button"
+              accessibilityState={{ selected: isActive }}
             >
               <Ionicons
                 name={tool.icon}
@@ -42,7 +49,7 @@ export default function CreativeToolbar({ activeTool, onToolSelect, visible }: C
               <Text style={[styles.toolLabel, isActive && styles.toolLabelActive]}>
                 {tool.label}
               </Text>
-            </Pressable>
+            </AnimatedPressable>
           );
         })}
       </View>

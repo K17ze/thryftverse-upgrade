@@ -8,6 +8,7 @@ import { Motion } from '../../theme/motionTokens';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useHaptic } from '../../hooks/useHaptic';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { Ionicons } from '@expo/vector-icons';
 import type { PosterHighlight } from '../../services/postersApi';
 
@@ -37,6 +38,7 @@ export function PosterHighlightsRail({
 }: PosterHighlightsRailProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
+  const reducedMotion = useReducedMotion();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   /**
@@ -91,7 +93,7 @@ export function PosterHighlightsRail({
             >
               <View style={styles.ringInner}>
                 {coverUrl ? (
-                  <HighlightCover coverUrl={coverUrl} />
+                  <HighlightCover coverUrl={coverUrl} reducedMotion={reducedMotion} />
                 ) : (
                   <View style={[styles.cover, styles.coverPlaceholder]}>
                     <Ionicons name="image-outline" size={24} color={colors.textMuted} />
@@ -132,8 +134,8 @@ export function PosterHighlightsRail({
  * The opacity animates from 0 → 1 using Motion.duration.normal so the
  * cover gracefully appears over the surfaceAlt placeholder background.
  */
-function HighlightCover({ coverUrl }: { coverUrl: string }) {
-  const coverOpacity = useSharedValue(0);
+function HighlightCover({ coverUrl, reducedMotion }: { coverUrl: string; reducedMotion: boolean }) {
+  const coverOpacity = useSharedValue(reducedMotion ? 1 : 0);
   const animatedStyle = useAnimatedStyle(() => ({ opacity: coverOpacity.value }));
   return (
     <Reanimated.View style={[StyleSheet.absoluteFill, animatedStyle]}>
@@ -143,7 +145,9 @@ function HighlightCover({ coverUrl }: { coverUrl: string }) {
         contentFit="cover"
         containerStyle={{ borderRadius: Radius.full, overflow: 'hidden' }}
         onLoad={() => {
-          coverOpacity.value = withTiming(1, { duration: Motion.duration.normal });
+          if (!reducedMotion) {
+            coverOpacity.value = withTiming(1, { duration: Motion.duration.normal });
+          }
         }}
       />
     </Reanimated.View>

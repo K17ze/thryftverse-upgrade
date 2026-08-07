@@ -3,11 +3,11 @@ import { Typography, Radius, Type, Space } from '../../theme/designTokens';
 import {
   View,
   StyleSheet,
-  Pressable,
   Text,
   Animated,
   Dimensions,
 } from 'react-native';
+import { AnimatedPressable } from '../AnimatedPressable';
 
 const { height: SCREEN_H } = Dimensions.get('window');
 const DRAWER_HEIGHT = SCREEN_H * 0.55;
@@ -108,7 +108,14 @@ export default function LayoutPicker({ visible, currentLayout, onSelect, onClose
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents={visible ? 'auto' : 'none'}>
       <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]} pointerEvents={visible ? 'auto' : 'none'}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <AnimatedPressable
+          style={StyleSheet.absoluteFill}
+          onPress={onClose}
+          activeOpacity={1}
+          hapticFeedback="light"
+          accessibilityLabel="Close layout picker"
+          accessibilityRole="button"
+        />
       </Animated.View>
 
       <Animated.View style={[styles.drawer, { transform: [{ translateY }] }]}>
@@ -118,17 +125,24 @@ export default function LayoutPicker({ visible, currentLayout, onSelect, onClose
 
         <Text style={styles.title}>Layout</Text>
 
-        <View style={styles.layoutGrid}>
+        <View style={styles.layoutGrid} accessibilityRole="list" accessibilityLabel="Layout options">
           {LAYOUTS.map((layout) => {
             const isActive = currentLayout === layout.type;
             return (
-              <Pressable
+              <AnimatedPressable
                 key={layout.type}
                 style={[styles.layoutCard, isActive && styles.layoutCardActive]}
                 onPress={() => {
                   onSelect(layout.type);
                   onClose();
                 }}
+                scaleValue={0.94}
+                activeOpacity={0.85}
+                hapticFeedback="selection"
+                accessibilityLabel={`${layout.label} layout, ${layout.slots} slots${isActive ? ', active' : ''}`}
+                accessibilityHint={`Selects the ${layout.label.toLowerCase()} layout with ${layout.slots} photo slot${layout.slots !== 1 ? 's' : ''}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isActive }}
               >
                 <View style={[styles.layoutPreview, isActive && styles.layoutPreviewActive]}>
                   <LayoutPreview type={layout.type} />
@@ -136,7 +150,7 @@ export default function LayoutPicker({ visible, currentLayout, onSelect, onClose
                 <Text style={[styles.layoutLabel, isActive && styles.layoutLabelActive]}>
                   {layout.label}
                 </Text>
-              </Pressable>
+              </AnimatedPressable>
             );
           })}
         </View>
