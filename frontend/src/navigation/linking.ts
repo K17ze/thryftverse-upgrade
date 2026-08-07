@@ -86,12 +86,18 @@ export const linking: LinkingOptions<RootStackParamList> = {
       // Discovery
       GlobalSearch: 'search',
       PulseFeed: 'pulse',
-      LookDetail: 'look/:lookId',
+      LookDetail: 'looks/:lookId',
       NotificationsList: 'notifications',
 
       // Bots
       BotDirectory: 'bots',
       BotDetail: 'bot/:botId',
+
+      // Moodboards
+      MoodboardEditor: 'moodboards/:moodboardId',
+
+      // Galleria collections
+      GalleriaCollectionDetail: 'galleria/collections/:collectionId',
     },
   },
 };

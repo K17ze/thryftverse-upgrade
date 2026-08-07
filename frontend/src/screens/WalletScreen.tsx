@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import {
   initPaymentSheet,
   PaymentSheetError,
@@ -26,7 +26,7 @@ import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useCurrencyContext } from '../context/CurrencyContext';
 import { useToast } from '../context/ToastContext';
-import { Space, Radius, Type, Typography, DockConstants } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, DockConstants, LetterSpacing, Stroke } from '../theme/designTokens';
 import { AppButton } from '../components/ui/AppButton';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { haptics } from '../utils/haptics';
@@ -58,8 +58,11 @@ import {
 } from '../components/coown';
 import { CoOwnNumericText } from '../components/ui/CoOwnNumericText';
 import { useConnectivity } from '../hooks/useConnectivity';
+import { useBiometricGate } from '../hooks/useBiometricGate';
+import { BiometricGatePrompt } from '../components/security/BiometricGate';
+import { WalletTransactionHistory } from '../components/wallet/WalletTransactionHistory';
 
-type Props = StackScreenProps<RootStackParamList, 'Wallet'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'Wallet'>;
 
 /** Add-flow mode: 'load' converts external fiat → 1ZE; 'buy' uses fiat balance → 1ZE. */
 type AddMode = 'load' | 'buy';
@@ -75,6 +78,11 @@ export default function WalletScreen({ navigation }: Props) {
   const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
   const { isOffline } = useConnectivity();
+
+  // ── Biometric gate (OWASP M5) ──
+  // Wallet balances are sensitive. Require biometric re-authentication before
+  // revealing any wallet content. Falls through when biometric is unavailable.
+  const biometricGate = useBiometricGate();
 
   // ── Balance state (canonical 1ZE sub-balances) ──
   const [balance, setBalance] = React.useState<CoOwn1ZeBalance>({
@@ -405,6 +413,34 @@ export default function WalletScreen({ navigation }: Props) {
   }, [navigation]);
 
   const scrollBottomPadding = Math.max(insets.bottom, Space.md) + DockConstants.dualActionHeight;
+
+  // Auto-prompt biometric once availability is confirmed.
+  React.useEffect(() => {
+    if (biometricGate.status === 'locked' && !biometricGate.isAuthenticating) {
+      void biometricGate.authenticate('Authenticate to view your wallet');
+    }
+  }, [biometricGate.status, biometricGate.isAuthenticating, biometricGate.authenticate]);
+
+  // ── Biometric gate: block sensitive content until authenticated ──
+  if (biometricGate.status === 'pending' || biometricGate.status === 'locked') {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+        <BiometricGatePrompt
+          gate={biometricGate}
+          reason="Authenticate to view your wallet"
+          header={
+            <CoOwnMarketHeader
+              title="Wallet"
+              subtitle="Your 1ZE settlement balance"
+              onBack={handleBack}
+            />
+          }
+          onBack={handleBack}
+        />
+      </SafeAreaView>
+    );
+  }
 
   // ── Loading state ──
   if (isLoading) {
@@ -840,6 +876,22 @@ export default function WalletScreen({ navigation }: Props) {
           />
         </View>
 
+        {/* ── Transaction history ── */}
+        <View style={styles.txHistorySection}>
+          <View style={styles.txHistoryHeader}>
+            <Text style={[styles.txHistoryTitle, { color: colors.textPrimary }]}>Recent activity</Text>
+            <Pressable
+              onPress={handleViewActivity}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="View all activity"
+            >
+              <Text style={[styles.txHistorySeeAll, { color: colors.brand }]}>See all</Text>
+            </Pressable>
+          </View>
+          <WalletTransactionHistory limit={20} />
+        </View>
+
         {/* ── Safeguarding & redemption info ── */}
         <View style={[styles.infoCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.infoHeader}>
@@ -860,6 +912,7 @@ export default function WalletScreen({ navigation }: Props) {
                   style={({ pressed }) => pressed && { opacity: 0.6 }}
                   accessibilityRole="link"
                   accessibilityLabel="View safeguarding evidence"
+                  accessibilityHint="Opens in external browser"
                 >
                   <Text style={[styles.safeguardingLink, { color: colors.brand }]}>Evidence</Text>
                 </Pressable>
@@ -870,6 +923,7 @@ export default function WalletScreen({ navigation }: Props) {
                   style={({ pressed }) => pressed && { opacity: 0.6 }}
                   accessibilityRole="link"
                   accessibilityLabel="View safeguarding terms"
+                  accessibilityHint="Opens in external browser"
                 >
                   <Text style={[styles.safeguardingLink, { color: colors.brand }]}>Terms</Text>
                 </Pressable>
@@ -947,7 +1001,7 @@ function QuickAction({
       scaleValue={0.97}
       hapticFeedback="light"
     >
-      <View style={[styles.quickActionCircle, { backgroundColor: colors.surfaceAlt }]}>
+      <View style={styles.quickActionCircle}>
         <Ionicons name={icon} size={20} color={colors.textPrimary} />
       </View>
       <Text style={[styles.quickActionLabel, { color: colors.textSecondary }]}>{label}</Text>
@@ -980,13 +1034,13 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xs,
   },
   sellerBalanceDivider: {
-    width: 1,
+    width: Stroke.standard,
     marginVertical: Space.xs,
   },
   sellerBalanceLabel: {
     fontSize: Type.caption.size,
     fontWeight: '500',
-    marginBottom: 2,
+    marginBottom: Space.xs / 2,
   },
   sellerBalanceValue: {
     fontSize: Type.title.size,
@@ -1024,7 +1078,7 @@ const styles = StyleSheet.create({
   },
   pendingItemMeta: {
     fontSize: Type.caption.size,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
   pendingItemAmount: {
     fontSize: Type.body.size,
@@ -1143,9 +1197,9 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   quickActionCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: Space.xl + Space.sm,
+    height: Space.xl + Space.sm,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1154,6 +1208,27 @@ const styles = StyleSheet.create({
     lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
     letterSpacing: Type.caption.letterSpacing,
+  },
+
+  // ── Transaction history ──
+  txHistorySection: {
+    marginTop: Space.lg,
+  },
+  txHistoryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.xs,
+    marginBottom: Space.sm,
+  },
+  txHistoryTitle: {
+    fontSize: Type.subtitle.size,
+    fontFamily: Typography.family.bold,
+    letterSpacing: -0.2,
+  },
+  txHistorySeeAll: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.semibold,
   },
 
   // ── Safeguarding info ──
@@ -1189,7 +1264,7 @@ const styles = StyleSheet.create({
   safeguardingLink: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: 0.2,
+    letterSpacing: LetterSpacing.wide,
     textTransform: 'uppercase',
   },
 });

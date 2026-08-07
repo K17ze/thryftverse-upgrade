@@ -6,7 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 import { Listing } from '../../data/mockData';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -165,11 +165,11 @@ function createStyles(colors: ThemeColors) {
     left: 0,
     right: 0,
     padding: 12,
-    paddingTop: 24,
+    paddingTop: Space.lg,
   },
   title: {
     fontFamily: Typography.family.bold,
-    fontSize: 14,
+    fontSize: Type.body.size,
     color: '#fff',
     textShadowColor: 'rgba(0,0,0,0.4)',
     textShadowOffset: { width: 0, height: 1 },
@@ -177,7 +177,7 @@ function createStyles(colors: ThemeColors) {
   },
   meta: {
     fontFamily: Typography.family.medium,
-    fontSize: 11,
+    fontSize: Type.meta.size,
     color: 'rgba(255,255,255,0.8)',
     marginTop: 2,
     textShadowColor: 'rgba(0,0,0,0.3)',

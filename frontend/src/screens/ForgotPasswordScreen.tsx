@@ -1,4 +1,4 @@
-import { Space, Typography } from '../theme/designTokens';
+import { Space, Typography, Type } from '../theme/designTokens';
 import React, { useState, useMemo } from 'react';
 import {
   View,
@@ -146,26 +146,26 @@ function createStyles(colors: ThemeColors) {
 
   content: { flex: 1, paddingHorizontal: Space.lg },
   contentContainer: { justifyContent: 'center', flexGrow: 1, paddingBottom: Space.xl },
-  title: { fontSize: 44, fontFamily: Typography.family.bold, color: colors.textPrimary, lineHeight: 48, letterSpacing: -1, marginBottom: Space.lg },
-  subtitle: { fontSize: 16, fontFamily: Typography.family.regular, color: colors.textSecondary, marginBottom: Space.xl, lineHeight: 24 },
+  title: { fontSize: Type.display.size + Space.sm + Space.xs, fontFamily: Typography.family.bold, color: colors.textPrimary, lineHeight: Type.display.lineHeight + 10, letterSpacing: Type.display.letterSpacing * 2, marginBottom: Space.lg },
+  subtitle: { fontSize: Type.bodyLarge.size, fontFamily: Typography.family.regular, color: colors.textSecondary, marginBottom: Space.xl, lineHeight: Type.subtitle.lineHeight },
 
   form: { marginBottom: Space.xl },
   inputGroup: { marginBottom: Space.xl },
 
   footer: { paddingBottom: Space.xl },
-  errorText: { color: colors.danger, fontSize: 13, fontFamily: Typography.family.medium, marginBottom: Space.xs },
+  errorText: { color: colors.danger, fontSize: Type.captionElevated.size, fontFamily: Typography.family.medium, marginBottom: Space.xs },
 
   successState: {
     alignItems: 'center',
     paddingTop: Space.lg,
   },
   successText: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     color: colors.textPrimary,
     fontFamily: Typography.family.regular,
     textAlign: 'center',
     marginVertical: Space.lg,
-    lineHeight: 24,
+    lineHeight: Type.subtitle.lineHeight,
   }
   });
 }

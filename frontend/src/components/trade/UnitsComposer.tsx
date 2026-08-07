@@ -178,12 +178,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   modeLabel: {
     textAlign: 'center',
-    marginBottom: 4,
+    marginBottom: Space.xs,
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
   title: {
-    marginBottom: 4,
+    marginBottom: Space.xs,
     textAlign: 'center',
   },
   hint: {
@@ -219,7 +219,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginTop: 2,
   },
   quoteRealized: {
-    marginTop: 4,
+    marginTop: Space.xs,
   },
   actions: {
     flexDirection: 'row',

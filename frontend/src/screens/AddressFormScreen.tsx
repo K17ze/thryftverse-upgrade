@@ -11,9 +11,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Control, LetterSpacing } from '../theme/designTokens';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
@@ -29,7 +29,7 @@ import { lookupUKPostcode, isUKPostcode } from '../utils/postcodeLookup';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 
-type Props = StackScreenProps<RootStackParamList, 'AddressForm'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'AddressForm'>;
 
 type CountryOption = {
   code: string;
@@ -750,24 +750,24 @@ function createStyles(colors: ThemeColors) {
     paddingBottom: Space.sm,
   },
   headerBtn: {
-    minWidth: 44,
-    minHeight: 44,
+    minWidth: Control.hit,
+    minHeight: Control.hit,
     justifyContent: 'center',
   },
   headerCancelText: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
   },
   headerTitle: {
     flex: 1,
-    fontSize: 17,
+    fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
     textAlign: 'center',
   },
   headerSpacer: {
-    minWidth: 44,
+    minWidth: Control.hit,
   },
 
   // Scroll
@@ -782,16 +782,16 @@ function createStyles(colors: ThemeColors) {
     gap: Space.xs,
   },
   introTitle: {
-    fontSize: 24,
+    fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
-    letterSpacing: -0.3,
+    letterSpacing: LetterSpacing.tight + LetterSpacing.wide,
   },
   introBody: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
-    lineHeight: 21,
+    lineHeight: Type.bodyEmphasis.lineHeight,
   },
 
   // Section
@@ -799,18 +799,18 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.sm,
   },
   sectionLabel: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
-    marginBottom: 6,
+    marginBottom: Space.xs + 2,
   },
   input: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.regular,
     color: colors.textPrimary,
-    paddingVertical: 10,
+    paddingVertical: Space.sm + 2,
     paddingHorizontal: 0,
-    minHeight: 44,
+    minHeight: Control.hit,
   },
   separator: {
     height: StyleSheet.hairlineWidth,
@@ -821,29 +821,29 @@ function createStyles(colors: ThemeColors) {
   errorRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
+    gap: Space.xs,
+    marginTop: Space.xs,
   },
   errorText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     color: colors.danger,
   },
   postcodeSuggestion: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    gap: Space.xs + 2,
+    marginTop: Space.sm,
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.sm + 4,
     backgroundColor: `${colors.brand}08`,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: `${colors.brand}30`,
   },
   postcodeSuggestionText: {
     flex: 1,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
   },
@@ -854,13 +854,13 @@ function createStyles(colors: ThemeColors) {
   saveErrorRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
   },
   saveErrorText: {
     flex: 1,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
     color: colors.danger,
   },
@@ -870,11 +870,11 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    minHeight: 44,
-    paddingVertical: 10,
+    minHeight: Control.hit,
+    paddingVertical: Space.sm + 2,
   },
   countryText: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.regular,
     color: colors.textPrimary,
   },
@@ -891,10 +891,10 @@ function createStyles(colors: ThemeColors) {
   },
   defaultNoteText: {
     flex: 1,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
-    lineHeight: 18,
+    lineHeight: Type.captionElevated.lineHeight,
   },
 
   // Remove
@@ -905,10 +905,10 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm,
     paddingVertical: Space.md,
     marginTop: Space.lg,
-    minHeight: 48,
+    minHeight: Control.hit + Space.xs,
   },
   removeBtnText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
   },
@@ -923,17 +923,17 @@ function createStyles(colors: ThemeColors) {
   },
   saveBtn: {
     backgroundColor: colors.brand,
-    paddingVertical: 14,
-    borderRadius: 8,
+    paddingVertical: Space.md - 2,
+    borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 48,
+    minHeight: Control.hit + Space.xs,
   },
   saveBtnPressed: {
     opacity: 0.7,
   },
   saveBtnText: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.semibold,
     color: colors.textInverse,
   },
@@ -947,29 +947,29 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm,
   },
   signedOutTitle: {
-    fontSize: 20,
+    fontSize: Type.priceList.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     marginTop: Space.sm,
   },
   signedOutBody: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
     textAlign: 'center',
-    lineHeight: 21,
+    lineHeight: Type.bodyEmphasis.lineHeight,
   },
   signedOutBtn: {
     marginTop: Space.md,
     paddingHorizontal: Space.xl,
-    paddingVertical: 14,
+    paddingVertical: Space.md - 2,
     backgroundColor: colors.brand,
-    borderRadius: 8,
-    minHeight: 48,
+    borderRadius: Radius.md,
+    minHeight: Control.hit + Space.xs,
     justifyContent: 'center',
   },
   signedOutBtnText: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.semibold,
     color: colors.textInverse,
   },

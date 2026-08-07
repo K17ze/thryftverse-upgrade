@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Typography, Space } from '../../theme/designTokens';
+import { Typography, Space, Type } from '../../theme/designTokens';
 import type { ThemeColors } from '../../theme/ThemeContext';
 
 interface ListingIdentityBlockProps {
@@ -47,12 +47,12 @@ function createStyles(colors: ThemeColors) {
     paddingBottom: Space.sm,
   },
   brand: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     color: colors.textMuted,
     letterSpacing: 0.8,
     textTransform: 'uppercase',
-    marginBottom: 4,
+    marginBottom: Space.xs,
   },
   title: {
     fontSize: 22,
@@ -60,7 +60,7 @@ function createStyles(colors: ThemeColors) {
     color: colors.textPrimary,
     lineHeight: 28,
     letterSpacing: -0.4,
-    marginBottom: 8,
+    marginBottom: Space.sm,
   },
   priceRow: {
     flexDirection: 'row',
@@ -68,13 +68,13 @@ function createStyles(colors: ThemeColors) {
     gap: 10,
   },
   price: {
-    fontSize: 28,
+    fontSize: Type.priceLarge.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     letterSpacing: -0.6,
   },
   originalPrice: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     textDecorationLine: 'line-through',

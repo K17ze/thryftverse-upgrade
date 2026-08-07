@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
@@ -25,7 +25,7 @@ import { createStableId } from '../utils/createStableId';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AppInput } from '../components/ui/AppInput';
 import { AppButton } from '../components/ui/AppButton';
-import { Space, Radius, Type, TypeStyles } from '../theme/designTokens';
+import { Space, Radius, Type, TypeStyles, Control } from '../theme/designTokens';
 import { Meta, Caption, BodyEmphasis } from '../components/ui/Text';
 import { useHaptic } from '../hooks/useHaptic';
 import { KeyboardAwareStickyAction } from '../platform/keyboard';
@@ -43,7 +43,7 @@ import {
 } from '../utils/chatGroupHelpers';
 import type { SelectableUser as HelperSelectableUser, Stage } from '../utils/chatGroupHelpers';
 
-type Props = StackScreenProps<RootStackParamList, 'CreateGroupChat'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'CreateGroupChat'>;
 
 interface SelectableUser extends UserSearchResult {
   displayName: string | null;
@@ -505,7 +505,7 @@ function createStyles(colors: ThemeColors) {
     flex: 1,
     borderWidth: 0,
     backgroundColor: 'transparent',
-    minHeight: 44,
+    minHeight: Control.hit,
     paddingHorizontal: 0,
   },
   searchInput: {
@@ -523,29 +523,29 @@ function createStyles(colors: ThemeColors) {
   selectedChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Space.xs,
     backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.full,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: Space.xs + 2,
+    paddingVertical: Space.xs / 2 + 1,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
   selectedChipAvatar: {
-    width: 20,
-    height: 20,
+    width: Space.sm + 4,
+    height: Space.sm + 4,
     borderRadius: Radius.full,
   },
   selectedChipAvatarPlaceholder: {
-    width: 20,
-    height: 20,
+    width: Space.sm + 4,
+    height: Space.sm + 4,
     borderRadius: Radius.full,
     backgroundColor: colors.border,
     justifyContent: 'center',
     alignItems: 'center',
   },
   selectedChipAvatarText: {
-    fontSize: 10,
+    fontSize: Type.meta.size - 1,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     color: colors.textPrimary,
   },
@@ -578,19 +578,19 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm + 2,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
-    minHeight: 56,
+    minHeight: Space.xl + Space.xl + 8,
   },
   memberRowPressed: {
     backgroundColor: colors.surfaceAlt,
   },
   memberAvatar: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     borderRadius: Radius.full,
   },
   memberAvatarPlaceholder: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
@@ -613,8 +613,8 @@ function createStyles(colors: ThemeColors) {
     color: colors.textMuted,
   },
   checkCircle: {
-    width: 28,
-    height: 28,
+    width: Space.lg + 4,
+    height: Space.lg + 4,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -633,17 +633,17 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.sm + 2,
   },
   skeletonAvatar: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
   },
   skeletonTextWrap: {
     flex: 1,
-    gap: 6,
+    gap: Space.xs + 2,
   },
   skeletonLine: {
-    height: 12,
+    height: Space.xs + 4,
     borderRadius: Radius.sm,
     backgroundColor: colors.surfaceAlt,
   },
@@ -679,8 +679,8 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.lg,
   },
   avatarSelector: {
-    width: 80,
-    height: 80,
+    width: Space.xxl + Space.xl,
+    height: Space.xxl + Space.xl,
     borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
@@ -704,7 +704,7 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
     backgroundColor: colors.surface,
     borderRadius: Radius.md,
-    minHeight: 48,
+    minHeight: Space.xxl,
     paddingHorizontal: Space.sm + 2,
   },
   fieldInput: {
@@ -716,7 +716,7 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
     backgroundColor: colors.surface,
     borderRadius: Radius.md,
-    minHeight: 80,
+    minHeight: Space.xxl + Space.xl,
     paddingHorizontal: Space.sm + 2,
   },
   fieldInputMultiline: {
@@ -725,7 +725,7 @@ function createStyles(colors: ThemeColors) {
   },
   charCount: {
     textAlign: 'right',
-    marginTop: 2,
+    marginTop: Space.xs / 2,
     fontSize: Type.caption.size,
     color: colors.textMuted,
   },
@@ -742,13 +742,13 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.sm,
   },
   participantAvatar: {
-    width: 36,
-    height: 36,
+    width: Space.xl + Space.xs,
+    height: Space.xl + Space.xs,
     borderRadius: Radius.full,
   },
   participantAvatarPlaceholder: {
-    width: 36,
-    height: 36,
+    width: Space.xl + Space.xs,
+    height: Space.xl + Space.xs,
     borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
@@ -798,7 +798,7 @@ function createStyles(colors: ThemeColors) {
     paddingTop: Space.sm,
   },
   createBtn: {
-    height: 50,
+    height: Space.xxl + 2,
     borderRadius: Radius.lg,
   },
   createBtnDisabled: {

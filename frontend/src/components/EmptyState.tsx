@@ -5,7 +5,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Typography } from '../theme/designTokens';
+import { Typography, Radius, Type, Space } from '../theme/designTokens';
 import { AnimatedPressable } from './AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
@@ -126,7 +126,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   containerCompact: {
     flex: 0,
     minHeight: 228,
-    paddingHorizontal: 24,
+    paddingHorizontal: Space.lg,
     paddingVertical: 28,
     gap: 6,
   },
@@ -139,27 +139,27 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginBottom: Space.md,
   },
   iconRingCompact: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    marginBottom: 8,
+    marginBottom: Space.sm,
   },
   title: {
-    fontSize: 20,
+    fontSize: Type.priceList.size,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.2,
     color: colors.textPrimary,
     textAlign: 'center',
   },
   titleCompact: {
-    fontSize: 17,
+    fontSize: Type.subtitle.size,
     lineHeight: 22,
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     letterSpacing: 0.08,
     color: colors.textMuted,
@@ -168,7 +168,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     maxWidth: 260,
   },
   subtitleCompact: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     lineHeight: 19,
     maxWidth: 310,
   },
@@ -176,12 +176,12 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 6,
-    marginTop: 4,
+    marginTop: Space.xs,
     maxWidth: 280,
   },
   hintText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
     lineHeight: 17,
@@ -189,18 +189,18 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   cta: {
     marginTop: 20,
     backgroundColor: colors.textPrimary,
-    paddingHorizontal: 32,
+    paddingHorizontal: Space.xl,
     paddingVertical: 14,
-    borderRadius: 24,
+    borderRadius: Radius.xxl,
   },
   ctaCompact: {
     minHeight: 44,
     marginTop: 12,
     paddingVertical: 11,
-    borderRadius: 14,
+    borderRadius: Radius.xl,
   },
   ctaText: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.bold,
     letterSpacing: 0.3,
     color: colors.background,
@@ -209,12 +209,12 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     marginTop: 10,
     paddingHorizontal: 28,
     paddingVertical: 12,
-    borderRadius: 24,
+    borderRadius: Radius.xxl,
     borderWidth: 1,
     borderColor: colors.border,
   },
   ctaSecondaryText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
@@ -224,7 +224,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     gap: 10,
   },
   suggestedLabel: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
     textTransform: 'uppercase',
@@ -239,14 +239,14 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   chip: {
     paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.xxl,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
   },
   chipText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },

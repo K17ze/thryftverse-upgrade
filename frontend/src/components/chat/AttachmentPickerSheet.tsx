@@ -9,7 +9,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Elevation } from '../../theme/designTokens';
+import { Space, Radius, Elevation, Type } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Caption, BodyEmphasis } from '../ui/Text';
@@ -204,7 +204,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   optionLabel: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     textAlign: 'center',
   },
   cancelBtn: {

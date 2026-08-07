@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography } from '../../theme/designTokens';
+import { Space, Typography, Radius, Type } from '../../theme/designTokens';
 
 type PublicationStage =
   | 'idle'
@@ -143,11 +143,11 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    paddingBottom: 8,
+    paddingBottom: Space.sm,
   },
   feedbackText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
   },
@@ -162,7 +162,7 @@ function createStyles(colors: ThemeColors) {
   previewBtn: {
     flex: 1,
     height: 48,
-    borderRadius: 24,
+    borderRadius: Radius.xxl,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
@@ -170,14 +170,14 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
   },
   previewText: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
   publishBtn: {
     flex: 1.5,
     height: 48,
-    borderRadius: 24,
+    borderRadius: Radius.xxl,
     backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
@@ -186,7 +186,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.surfaceAlt,
   },
   publishText: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.bold,
     color: colors.textInverse,
   },

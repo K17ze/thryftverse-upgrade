@@ -9,7 +9,7 @@ import Reanimated, {
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { ThemeColors } from '../../theme/ThemeContext';
-import { Typography } from '../../theme/designTokens';
+import { Typography, Radius, Type, Space } from '../../theme/designTokens';
 import { isVideoUri } from '../../utils/media';
 import { ImageViewer } from '../ImageViewer';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -196,13 +196,13 @@ function createStyles(colors: ThemeColors) {
     bottom: 32,
     left: 20,
     backgroundColor: colors.success,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.md,
   },
   soldText: {
     color: colors.background,
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.bold,
     letterSpacing: 1,
   },
@@ -213,11 +213,11 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: 'rgba(0,0,0,0.55)',
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 8,
+    borderRadius: Radius.md,
   },
   indexText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
   },
   videoBadge: {
@@ -230,11 +230,11 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: 'rgba(0,0,0,0.55)',
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 8,
+    borderRadius: Radius.md,
   },
   videoBadgeText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
   },
   floatingHeader: {
@@ -254,7 +254,7 @@ function createStyles(colors: ThemeColors) {
   controlBtn: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: Radius.xxl,
     backgroundColor: 'rgba(0,0,0,0.4)',
     alignItems: 'center',
     justifyContent: 'center',

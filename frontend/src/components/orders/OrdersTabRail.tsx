@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography } from '../../theme/designTokens';
+import { Space, Typography, Type } from '../../theme/designTokens';
 
 export type OrdersTab = 'buying' | 'selling';
 
@@ -65,16 +65,16 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: Space.lg,
   },
   tab: {
-    paddingVertical: 8,
+    paddingVertical: Space.sm,
     alignItems: 'flex-start',
   },
   tabText: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },
   tabTextActive: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
   },

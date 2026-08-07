@@ -10,10 +10,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeIn, FadeInDown } from 'react-native-reanimated';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Radius, Type } from '../theme/designTokens';
-import { Typography } from '../theme/designTokens';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
@@ -28,7 +26,8 @@ import {
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 
-type Props = StackScreenProps<RootStackParamList, 'SavedAddresses'>;
+import { Space, Radius, Type, Typography, Stroke } from '../theme/designTokens';
+type Props = NativeStackScreenProps<RootStackParamList, 'SavedAddresses'>;
 
 type LoadState = 'loading' | 'populated' | 'empty' | 'error';
 
@@ -203,7 +202,7 @@ export default function SavedAddressesScreen({ navigation }: Props) {
     const detail = formatAddressDetail(address);
     return (
       <Reanimated.View key={address.id} entering={FadeInDown.duration(250).delay(index * 40)}>
-        <View style={[styles.addressCard, { backgroundColor: colors.surface, borderColor: colors.border }, isDefault && { borderColor: colors.brand, borderWidth: 1.5 }]}>
+        <View style={[styles.addressCard, { backgroundColor: colors.surface, borderColor: colors.border }, isDefault && { borderColor: colors.brand, borderWidth: Stroke.emphasis }]}>
           <View style={styles.addressCardHeader}>
             <View style={styles.addressCardHeaderLeft}>
               {isDefault ? (
@@ -360,8 +359,8 @@ export default function SavedAddressesScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   addBtn: {
-    width: 40,
-    height: 40,
+    width: Space.xl + Space.sm,
+    height: Space.xl + Space.sm,
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
@@ -378,8 +377,8 @@ const styles = StyleSheet.create({
     gap: Space.md,
   },
   heroIcon: {
-    width: 40,
-    height: 40,
+    width: Space.xl + Space.sm,
+    height: Space.xl + Space.sm,
     borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
@@ -393,7 +392,7 @@ const styles = StyleSheet.create({
   heroSubtitle: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
   skeletonWrap: {
     paddingTop: Space.sm,
@@ -405,7 +404,7 @@ const styles = StyleSheet.create({
     padding: Space.md,
   },
   skeletonLine: {
-    height: 16,
+    height: Space.md,
     borderRadius: Radius.sm,
   },
   listWrap: {
@@ -418,7 +417,7 @@ const styles = StyleSheet.create({
     padding: Space.md,
   },
   addressCardBody: {
-    gap: 2,
+    gap: Space.xs / 2,
   },
   addressCardHeader: {
     flexDirection: 'row',
@@ -439,9 +438,9 @@ const styles = StyleSheet.create({
   defaultBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Space.xs,
     paddingHorizontal: Space.sm - 2,
-    paddingVertical: 3,
+    paddingVertical: Space.xs - 1,
     borderRadius: Radius.full,
   },
   defaultBadgeText: {
@@ -459,7 +458,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
     letterSpacing: Type.bodyEmphasis.letterSpacing,
     lineHeight: Type.bodyEmphasis.lineHeight,
-    marginBottom: 2,
+    marginBottom: Space.xs / 2,
   },
   addressLine: {
     fontSize: Type.body.size,
@@ -472,7 +471,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
     lineHeight: Type.caption.lineHeight,
     letterSpacing: Type.caption.letterSpacing,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
   listFootnote: {
     fontSize: Type.caption.size,

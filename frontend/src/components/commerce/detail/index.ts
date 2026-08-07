@@ -32,6 +32,16 @@ export { CommerceDetailStateDock } from './CommerceDetailStateDock';
 export { CommerceDetailMediaRail } from './CommerceDetailMediaRail';
 export { CommerceDetailOfflineBanner } from './CommerceDetailOfflineBanner';
 export { CommerceDetailFreshnessBanner } from './CommerceDetailFreshnessBanner';
+export { MakeOfferSheet } from './MakeOfferSheet';
+export type { MakeOfferSheetProps, MakeOfferSheetListing } from './MakeOfferSheet';
+export { SellerInfoCard } from './SellerInfoCard';
+export type { SellerInfoCardProps } from './SellerInfoCard';
+export { RelatedItemsRail } from './RelatedItemsRail';
+export type { RelatedItemsRailProps } from './RelatedItemsRail';
+export { ShippingReturnsInfo } from './ShippingReturnsInfo';
+export type { ShippingReturnsInfoProps } from './ShippingReturnsInfo';
+export { SustainabilityImpact } from './SustainabilityImpact';
+export type { SustainabilityImpactProps } from './SustainabilityImpact';
 export type {
   CommerceDetailFamily,
   CommerceDetailSectionVariant,

@@ -14,6 +14,7 @@ export interface ListingSeller {
   rating?: number | null;
   reviewCount?: number | null;
   location?: string | null;
+  verified?: boolean | null;
 }
 
 export interface ListingEngagementSummaryApi {

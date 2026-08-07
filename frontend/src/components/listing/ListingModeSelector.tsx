@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography } from '../../theme/designTokens';
+import { Space, Typography, Radius, Type } from '../../theme/designTokens';
 
 export type ListingMode = 'sell_now' | 'co_own' | 'auction';
 
@@ -71,8 +71,8 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     gap: 6,
     backgroundColor: colors.surfaceAlt,
-    borderRadius: 10,
-    padding: 4,
+    borderRadius: Radius.lg,
+    padding: Space.xs,
   },
   segment: {
     flex: 1,
@@ -80,14 +80,14 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderRadius: 8,
+    paddingHorizontal: Space.sm,
+    borderRadius: Radius.md,
   },
   segmentActive: {
     backgroundColor: colors.brand,
   },
   segmentText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
     color: colors.textPrimary,
   },
@@ -96,11 +96,11 @@ function createStyles(colors: ThemeColors) {
     color: colors.textInverse,
   },
   modeDescription: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
-    marginTop: 8,
-    paddingHorizontal: 4,
+    marginTop: Space.sm,
+    paddingHorizontal: Space.xs,
   },
   });
 }

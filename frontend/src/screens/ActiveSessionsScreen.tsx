@@ -2,11 +2,11 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, Alert, Platform, RefreshControl, ScrollView, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useToast } from '../context/ToastContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { Space, Radius, Type , Typography  } from '../theme/designTokens';
+import { Space, Radius, Type , Typography, Stroke  } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
 import { AppButton } from '../components/ui/AppButton';
@@ -21,7 +21,7 @@ import {
 } from '../services/accountApi';
 import { haptics } from '../utils/haptics';
 
-type Props = StackScreenProps<RootStackParamList, 'ActiveSessions'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'ActiveSessions'>;
 
 function formatLastActive(iso: string | null): string {
   if (!iso) return 'Unknown';
@@ -301,8 +301,8 @@ function createStyles(colors: ThemeColors) {
     borderBottomWidth: 0,
   },
   deviceIcon: {
-    width: 40,
-    height: 40,
+    width: Space.xxl,
+    height: Space.xxl,
     borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
@@ -321,7 +321,7 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
     letterSpacing: Type.caption.letterSpacing,
   },
   currentBadge: {
@@ -386,7 +386,7 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     gap: Space.sm,
     borderRadius: Radius.lg,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     padding: Space.md,
     marginHorizontal: Space.md,
     marginBottom: Space.md,

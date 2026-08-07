@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { Space, Radius, Typography, Type } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AuctionValueLockup } from './AuctionValueLockup';
@@ -121,14 +121,14 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   title: {
     fontFamily: Typography.family.semibold,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     color: colors.textPrimary,
     letterSpacing: -0.2,
     lineHeight: 16,
   },
   time: {
     fontFamily: Typography.family.regular,
-    fontSize: 11,
+    fontSize: Type.meta.size,
     color: colors.textMuted,
   },
 });

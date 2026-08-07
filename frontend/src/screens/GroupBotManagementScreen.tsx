@@ -7,10 +7,11 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AgentIcon } from '../components/agents/AgentIcon';
 import { FlagshipHeader, FlagshipScreen } from '../components/flagship';
+import { EmptyState } from '../components/EmptyState';
 import { BodyEmphasis, Caption, Meta } from '../components/ui/Text';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useToast } from '../context/ToastContext';
@@ -21,9 +22,9 @@ import {
   undeployBotFromConversationOnApi,
 } from '../services/chatApi';
 import { useStore } from '../store/useStore';
-import { Space, Type } from '../theme/designTokens';
+import { Space, Type, Radius, Control } from '../theme/designTokens';
 
-type Props = StackScreenProps<RootStackParamList, 'GroupBotManagement'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'GroupBotManagement'>;
 
 type AgentRowModel = {
   id: string;
@@ -162,12 +163,11 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
         )}
 
         {deployedBots.length === 0 && availableToDeploy.length === 0 && (
-          <View style={styles.empty}>
-            <Ionicons name="chatbubble-ellipses-outline" size={30} color={colors.textMuted} />
-            <Caption color={colors.textMuted} style={styles.emptyText}>
-              No agents are ready to connect.
-            </Caption>
-          </View>
+          <EmptyState
+            icon="hardware-chip-outline"
+            title="No bots configured"
+            subtitle="No agents are ready to connect."
+          />
         )}
       </ScrollView>
     </FlagshipScreen>
@@ -307,65 +307,57 @@ function createStyles(colors: ThemeColors) {
     letterSpacing: Type.meta.letterSpacing,
   },
   agentRow: {
-    minHeight: 82,
+    minHeight: Space.xxl + Space.xxl + Space.xxl + 10,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    gap: 12,
+    paddingVertical: Space.sm + 4,
+    gap: Space.sm + 4,
   },
   agentIcon: {
-    width: 32,
-    height: 44,
+    width: Space.xl + Space.xs,
+    height: Control.hit,
     justifyContent: 'center',
     alignItems: 'center',
   },
   agentText: {
     flex: 1,
     justifyContent: 'center',
-    gap: 2,
+    gap: Space.xs / 2,
   },
   detailLine: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 2,
+    gap: Space.xs + 2,
+    marginTop: Space.xs / 2,
   },
   detailText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     flexShrink: 1,
   },
   metaDot: {
-    width: 3,
-    height: 3,
-    borderRadius: 2,
+    width: Space.xs / 2 - 1,
+    height: Space.xs / 2 - 1,
+    borderRadius: Radius.sm,
     backgroundColor: colors.textMuted,
   },
   statusText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     flexShrink: 0,
   },
   rowAction: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     justifyContent: 'center',
     alignItems: 'center',
   },
   divider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.border,
-    marginLeft: 44,
-  },
-  empty: {
-    alignItems: 'center',
-    paddingVertical: Space.xxl,
-    gap: Space.md,
-  },
-  emptyText: {
-    textAlign: 'center',
+    marginLeft: Control.hit,
   },
   headerAction: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     justifyContent: 'center',
     alignItems: 'center',
   },

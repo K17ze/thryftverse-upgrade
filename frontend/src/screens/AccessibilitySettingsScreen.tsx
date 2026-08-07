@@ -20,16 +20,16 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { RootStackParamList } from '../navigation/types';
 
-type Props = StackScreenProps<RootStackParamList, 'AccessibilitySettings'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'AccessibilitySettings'>;
 
 type TextSize = 'small' | 'medium' | 'large' | 'xlarge';
 
@@ -255,8 +255,8 @@ function createStyles(colors: ThemeColors) {
       gap: Space.md,
     },
     heroIcon: {
-      width: 44,
-      height: 44,
+      width: Control.hit,
+      height: Control.hit,
       borderRadius: Radius.full,
       justifyContent: 'center',
       alignItems: 'center',
@@ -272,7 +272,7 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
-      marginTop: 2,
+      marginTop: Space.xs - 2,
     },
 
     // Sections
@@ -284,7 +284,7 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
       textTransform: 'uppercase',
-      letterSpacing: 0.8,
+      letterSpacing: LetterSpacing.caps,
       opacity: 0.7,
       marginBottom: Space.xs,
       paddingHorizontal: Space.xs,
@@ -293,7 +293,7 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
-      lineHeight: 18,
+      lineHeight: Type.captionElevated.lineHeight,
       marginBottom: Space.md,
       paddingHorizontal: Space.xs,
     },
@@ -309,7 +309,7 @@ function createStyles(colors: ThemeColors) {
       gap: Space.xs,
       paddingVertical: Space.md,
       borderRadius: Radius.lg,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       borderColor: colors.border,
       backgroundColor: colors.surface,
     },
@@ -341,8 +341,8 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
     },
     toggleIcon: {
-      width: 36,
-      height: 36,
+      width: Control.chrome,
+      height: Control.chrome,
       borderRadius: Radius.md,
       justifyContent: 'center',
       alignItems: 'center',
@@ -357,8 +357,8 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.meta.size,
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
-      marginTop: 2,
-      lineHeight: 16,
+      marginTop: Space.xs - 2,
+      lineHeight: Type.caption.lineHeight,
     },
 
     // Info note — elevated card
@@ -373,8 +373,8 @@ function createStyles(colors: ThemeColors) {
       padding: Space.md,
     },
     noteIconWrap: {
-      width: 32,
-      height: 32,
+      width: Control.chromeCompact,
+      height: Control.chromeCompact,
       borderRadius: Radius.full,
       backgroundColor: colors.surfaceAlt,
       justifyContent: 'center',
@@ -385,13 +385,13 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
-      marginBottom: 2,
+      marginBottom: Space.xs - 2,
     },
     noteText: {
       fontSize: Type.meta.size,
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
-      lineHeight: 16,
+      lineHeight: Type.caption.lineHeight,
     },
   });
 }

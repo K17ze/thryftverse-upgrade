@@ -223,13 +223,13 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   primaryValueAuction: {
-    fontSize: 34,
-    lineHeight: 40,
+    fontSize: Type.display.size + 2,
+    lineHeight: Type.display.lineHeight + 2,
     letterSpacing: -0.8,
   },
   primaryValueCoOwn: {
-    fontSize: 32,
-    lineHeight: 38,
+    fontSize: Type.display.size,
+    lineHeight: Type.display.lineHeight,
     letterSpacing: -0.55,
   },
   auctionHeadline: {

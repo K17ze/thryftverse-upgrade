@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AppButton } from '../ui/AppButton';
@@ -37,7 +37,7 @@ export function ListingSellerRow({
           <CachedImage
             uri={seller.avatar || ''}
             style={styles.avatar}
-            containerStyle={{ width: 40, height: 40, borderRadius: 20 }}
+            containerStyle={{ width: 40, height: 40, borderRadius: Radius.xxl }}
             contentFit="cover"
           />
           <View style={styles.info}>
@@ -114,7 +114,7 @@ function createStyles(colors: ThemeColors) {
   avatar: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: Radius.xxl,
   },
   avatarFallback: {
     backgroundColor: colors.surfaceAlt,
@@ -125,7 +125,7 @@ function createStyles(colors: ThemeColors) {
     flex: 1,
   },
   name: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
@@ -136,21 +136,21 @@ function createStyles(colors: ThemeColors) {
     marginTop: 2,
   },
   metaText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },
   messageBtn: {
     minHeight: 34,
     paddingHorizontal: 14,
-    borderRadius: 17,
+    borderRadius: Radius.xxl,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     backgroundColor: colors.background,
   },
   messageBtnText: {
     color: colors.textPrimary,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
   },
   });

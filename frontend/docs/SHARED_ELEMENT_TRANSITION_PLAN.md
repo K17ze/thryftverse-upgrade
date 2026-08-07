@@ -1,6 +1,7 @@
 # Shared Element Transition Plan — Home → ItemDetail
 
-> **Status:** Research / planning only. NOT implemented yet.
+> **Status:** Navigator migration complete. Feature flag and screen type
+> import migration remain. NOT fully implemented yet.
 >
 > This document records the findings of an investigation into adding shared
 > element transitions for hero images when navigating from the Home discovery
@@ -146,29 +147,36 @@ in place.
 
 ## 5. Files that need to change
 
-### 5.1. Navigator migration (BLOCKER)
+### 5.1. Navigator migration (COMPLETE)
 
 **File:** `frontend/src/navigation/AppNavigator.tsx`
 
-Currently uses `@react-navigation/stack` (JS-based Stack navigator):
+**Status:** ✅ Migrated from `@react-navigation/stack` to
+`@react-navigation/native-stack`.
 
 ```tsx
-import { createStackNavigator, CardStyleInterpolators } from '@react-navigation/stack';
-const Stack = createStackNavigator<RootStackParamList>();
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+const Stack = createNativeStackNavigator<RootStackParamList>();
 ```
 
-**Problem:** Shared element transitions in Reanimated 4 require
-`@react-navigation/native-stack` (the native screen-based navigator).
-The JS-based `@react-navigation/stack` is explicitly listed as
-unsupported by the React Navigation docs for shared element transitions.
+The migration preserved all ~80 routes, all screen options, and all
+presentation styles. Key API mappings:
 
-**Required change:** Migrate from `createStackNavigator` (from
-`@react-navigation/stack`) to `createNativeStackNavigator` (from
-`@react-navigation/native-stack`).
+| JS stack option | native-stack equivalent |
+|---|---|
+| `CardStyleInterpolators.forHorizontalIOS` | default push (automatic) |
+| `CardStyleInterpolators.forVerticalIOS` | `presentation: 'modal'` |
+| `cardStyle` | `contentStyle` |
+| `transitionSpec` | removed (native handles transitions) |
+| `gestureDirection` | removed (native infers from presentation) |
+| `cardOverlayEnabled` | removed (transparentModal provides overlay) |
+| `animationEnabled: false` | `animation: 'none'` |
 
-This is a significant change that affects every screen in the app —
-gesture behaviour, header integration, transition defaults, and
-`CardStyleInterpolators` usage would all need to be audited.
+**Remaining work:** ~100 screen files still import `StackScreenProps` /
+`StackNavigationProp` from `@react-navigation/stack`. The
+`@react-navigation/stack` package remains installed so these imports
+resolve. See `docs/NAVIGATOR_MIGRATION_PLAN.md` for the incremental type
+migration plan.
 
 ### 5.2. Reanimated feature flag
 
@@ -333,21 +341,26 @@ standard push transitions with no code removal needed.
 
 ---
 
-## 8. Implementation order (when ready)
+## 8. Implementation order
 
-1. **Enable feature flag** in Reanimated Babel plugin config.
-2. **Migrate navigator** from `@react-navigation/stack` to
-   `@react-navigation/native-stack` (separate PR, fully audited).
-3. **Verify** shared transition plays with existing tag infrastructure
+1. ~~**Migrate navigator** from `@react-navigation/stack` to
+   `@react-navigation/native-stack`~~ ✅ Complete.
+2. **Enable feature flag** in Reanimated Babel plugin config
+   (`sharedElementTransitions: true`).
+3. **Migrate screen type imports** — ~100 files still import
+   `StackScreenProps` / `StackNavigationProp` from `@react-navigation/stack`.
+   Switch to `NativeStackScreenProps` / `NativeStackNavigationProp` from
+   `../navigation/types` (see `docs/NAVIGATOR_MIGRATION_PLAN.md`).
+4. **Verify** shared transition plays with existing tag infrastructure
    (tags already match — no tag changes needed).
-4. **Handle expo-image compatibility** if needed (may require source image
+5. **Handle expo-image compatibility** if needed (may require source image
    component swap on HomeScreen).
-5. **Align contentFit** between source and destination if crop shift is
+6. **Align contentFit** between source and destination if crop shift is
    visible.
-6. **Test** reduced-motion users (transition should be disabled or
+7. **Test** reduced-motion users (transition should be disabled or
    instant).
-7. **Test** swipe-back gesture on iOS.
-8. **Test** video tiles (should gracefully skip transition).
+8. **Test** swipe-back gesture on iOS.
+9. **Test** video tiles (should gracefully skip transition).
 
 ---
 
@@ -361,13 +374,14 @@ standard push transitions with no code removal needed.
 | Reanimated version supports it | Yes — 4.3.1 (with feature flag) |
 | New Architecture enabled | Yes |
 | Feature flag enabled | **No** — needs to be added |
-| Native stack navigator | **No** — uses JS stack (blocker) |
+| Native stack navigator | ✅ **Yes** — migrated to `@react-navigation/native-stack` |
+| Screen type imports migrated | **No** — ~100 files still use `StackScreenProps` from `@react-navigation/stack` (see `NAVIGATOR_MIGRATION_PLAN.md`) |
 | react-native-screens version | 4.25.2 (sufficient) |
 | expo-image compatibility | **Unknown** — needs testing |
 | Feature stability | Experimental — not production-ready |
 
 **Bottom line:** The tag infrastructure is already wired on both screens.
-The two blockers are (1) the feature flag and (2) the navigator migration
-from JS stack to native stack. The feature flag is a one-line config
-change; the navigator migration is a significant cross-app change that
-should be done as a separate, carefully audited PR.
+The navigator migration is complete. The remaining blockers are (1) the
+Reanimated feature flag and (2) the incremental screen type import
+migration (~100 files). The feature flag is a one-line config change; the
+type migration is mechanical but touches many files.

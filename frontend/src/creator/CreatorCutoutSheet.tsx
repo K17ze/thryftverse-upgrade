@@ -12,7 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Typography, Space, Radius } from '../theme/designTokens';
+import { Typography, Space, Radius, Type } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
@@ -311,7 +311,7 @@ function PathOverlay({ path, color, opacity }: { path: Point[]; color: string; o
             top: p.y - 20,
             width: 40,
             height: 40,
-            borderRadius: 20,
+            borderRadius: Radius.xxl,
             backgroundColor: color,
             opacity,
           }}
@@ -335,41 +335,41 @@ const styles = StyleSheet.create({
     backgroundColor: '#0A0A0A',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    paddingTop: 8,
+    paddingTop: Space.sm,
     zIndex: 301,
     elevation: 24,
   },
   handleRow: {
     alignItems: 'center',
-    paddingTop: 8,
-    paddingBottom: 4,
+    paddingTop: Space.sm,
+    paddingBottom: Space.xs,
   },
   handle: {
     width: 36,
     height: 4,
-    borderRadius: 2,
+    borderRadius: Radius.sm,
   },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
   },
   cancelText: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.regular,
   },
   title: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.semibold,
   },
   applyText: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.semibold,
   },
   instructions: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     color: 'rgba(255,255,255,0.5)',
     textAlign: 'center',
@@ -377,7 +377,7 @@ const styles = StyleSheet.create({
   },
   canvasArea: {
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: Space.sm,
     backgroundColor: '#000',
   },
   canvasFrame: {
@@ -388,7 +388,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 16,
-    paddingVertical: 16,
+    paddingVertical: Space.md,
   },
   toolBtn: {
     alignItems: 'center',
@@ -399,7 +399,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   toolLabel: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
   },
 });

@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography } from '../../theme/designTokens';
+import { Space, Typography, Type, Radius, Stroke } from '../../theme/designTokens';
 
 export interface TimelineEntry {
   id: string;
@@ -97,11 +97,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   warningRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
     marginBottom: Space.sm,
   },
   warningText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },
@@ -111,15 +111,15 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   leftCol: {
     alignItems: 'center',
-    width: 24,
+    width: Space.xl,
   },
   connector: {
-    width: 2,
+    width: Stroke.emphasis,
     flex: 1,
     backgroundColor: colors.border,
-    marginVertical: 4,
-    minHeight: 32,
-    borderRadius: 1,
+    marginVertical: Space.xs,
+    minHeight: Space.xl + Space.sm,
+    borderRadius: Radius.sm,
   },
   connectorCompleted: {
     backgroundColor: colors.brand,
@@ -135,7 +135,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginBottom: 2,
   },
   label: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
     flexShrink: 1,
@@ -147,13 +147,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.brand,
   },
   date: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     marginLeft: Space.sm,
   },
   subtitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
     lineHeight: 18,

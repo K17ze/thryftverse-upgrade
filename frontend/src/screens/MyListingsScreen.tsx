@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, RefreshControl } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation, RouteProp, useRoute, useFocusEffect } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { TypeStyles, Space, Radius, Type, Typography } from '../theme/designTokens';
 import { RootStackParamList } from '../navigation/types';
@@ -18,7 +19,7 @@ import { useToast } from '../context/ToastContext';
 import { useSellerTrust } from '../platform/product';
 import { fetchUserListingsFromApi, ListingApiItem } from '../services/listingsApi';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'MyListings'>;
 
 function ListingRow({ item, onPress }: { item: ListingApiItem; onPress: () => void }) {
@@ -269,7 +270,7 @@ export default function MyListingsScreen() {
           />
         </View>
       ) : (
-        <FlatList
+        <FlashList
           data={listings}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
@@ -281,6 +282,8 @@ export default function MyListingsScreen() {
               onPress={() => navigation.push('ManageListing', { itemId: item.id })}
             />
           )}
+          // Performance: long seller lists; FlashList v2 handles recycling
+          // automatically.
         />
       )}
     </FlagshipScreen>
@@ -322,14 +325,14 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   statValue: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
   },
   statLabel: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },
@@ -342,7 +345,7 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
     backgroundColor: colors.surface,
@@ -350,7 +353,7 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
   },
   quickActionText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.brand,
   },
@@ -365,7 +368,7 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.semibold,
     color: colors.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: Type.metaElevated.letterSpacing,
   },
   row: {
     flexDirection: 'row',
@@ -378,15 +381,15 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
   },
   rowImageWrap: {
-    width: 64,
-    height: 64,
+    width: Space.xxl + Space.md,
+    height: Space.xxl + Space.md,
     borderRadius: Radius.md,
     overflow: 'hidden',
     backgroundColor: colors.surfaceAlt,
   },
   rowImage: {
-    width: 64,
-    height: 64,
+    width: Space.xxl + Space.md,
+    height: Space.xxl + Space.md,
   },
   rowImageFallback: {
     alignItems: 'center',
@@ -394,7 +397,7 @@ function createStyles(colors: ThemeColors) {
   },
   rowBody: {
     flex: 1,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   rowTitle: {
     fontSize: Type.body.size,
@@ -410,16 +413,16 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
   statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs / 2,
     borderRadius: Radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
   },
   statusText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     textTransform: 'capitalize',
   },

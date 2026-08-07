@@ -8,7 +8,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
@@ -157,7 +157,7 @@ function createStyles(colors: ThemeColors) {
   iconBtn: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: Radius.xxl,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -165,21 +165,21 @@ function createStyles(colors: ThemeColors) {
     flex: 1,
   },
   brand: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
     letterSpacing: 0.3,
   },
   title: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
   priceRow: {
-    marginTop: 4,
+    marginTop: Space.xs,
   },
   price: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
   },

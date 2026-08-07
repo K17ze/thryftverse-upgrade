@@ -1,0 +1,57 @@
+# Maestro E2E flow — first-launch onboarding journey.
+#
+# Exercises the full first-run path: age gate (if present) → onboarding
+# slides → "Get started" → AuthLanding. Uses clearState so the app boots
+# into the first-run state every time.
+#
+# Run: maestro test .maestro/onboarding-flow.yml
+appId: ${MAESTRO_APP_ID}
+---
+# Boot into a clean first-run state so onboarding is shown.
+- launchApp:
+    clearState: true
+
+# The age-verification gate may appear before onboarding on a truly fresh
+# install. Tap "Continue" / "I'm 18+" if present; otherwise no-op.
+- runFlow:
+    when:
+      visible: "18"
+    commands:
+      - tapOn: "Continue"
+
+# Onboarding slide 1 — "Discover unique pieces"
+- assertVisible:
+    text: "Discover unique pieces"
+    timeout: 8000
+- takeScreenshot: onboarding-slide-1
+
+# Advance through the slides. The primary button reads "Next" until the
+# final slide, where it reads "Get started".
+- tapOn:
+    text: "Next"
+
+# Onboarding slide 2 — "Co-Own what you love"
+- assertVisible: "Co-Own what you love"
+- takeScreenshot: onboarding-slide-2
+- tapOn:
+    text: "Next"
+
+# Onboarding slide 3 — "Bid on live auctions"
+- assertVisible: "Bid on live auctions"
+- takeScreenshot: onboarding-slide-3
+- tapOn:
+    text: "Next"
+
+# Onboarding slide 4 — "Sell sustainably" (final slide)
+- assertVisible: "Sell sustainably"
+- takeScreenshot: onboarding-slide-4
+
+# Complete onboarding — the button now reads "Get started".
+- tapOn:
+    text: "Get started"
+
+# The user should land on the AuthLanding screen (sign-in / sign-up entry).
+- assertVisible:
+    text: ".*[Ss]ign.*"
+    timeout: 8000
+- takeScreenshot: onboarding-complete-auth-landing

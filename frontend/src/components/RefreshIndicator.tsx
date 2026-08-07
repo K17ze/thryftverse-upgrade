@@ -54,7 +54,7 @@ export function RefreshIndicator({ scrollY, isRefreshing, topInset = 60 }: Props
     <View style={[styles.container, { top: topInset }]}>
       <Reanimated.View style={animStyle}>
         <View style={styles.circle}>
-          <Text style={{ fontFamily: Typography.family.bold, color: '#111', fontSize: 16, marginTop: -2 }}>T</Text>
+          <Text style={{ fontFamily: Typography.family.bold, color: '#111', fontSize: Type.bodyLarge.size, marginTop: -2 }}>T</Text>
         </View>
       </Reanimated.View>
     </View>
@@ -62,7 +62,7 @@ export function RefreshIndicator({ scrollY, isRefreshing, topInset = 60 }: Props
 }
 
 import { Text } from 'react-native';
-import { Typography } from '../theme/designTokens';
+import { Typography, Radius, Type } from '../theme/designTokens';
 
 const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   container: {
@@ -75,7 +75,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   circle: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
     backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',

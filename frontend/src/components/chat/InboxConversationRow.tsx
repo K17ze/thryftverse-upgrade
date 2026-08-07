@@ -1,7 +1,16 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withSequence,
+  withTiming,
+  cancelAnimation,
+} from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { Space, Radius, Type, TypeStyles, Typography } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -19,11 +28,13 @@ export interface InboxConversationRowProps {
   itemId?: string;
   itemThumbUri?: string | null;
   avatarElement: React.ReactNode;
+  isTyping?: boolean;
   onPress: () => void;
+  onLongPress?: () => void;
   accessibilityHint?: string;
 }
 
-export function InboxConversationRow({
+function InboxConversationRowBase({
   displayTitle,
   lastMessage,
   lastMessageTime,
@@ -36,15 +47,44 @@ export function InboxConversationRow({
   itemId,
   itemThumbUri,
   avatarElement,
+  isTyping,
   onPress,
+  onLongPress,
   accessibilityHint,
 }: InboxConversationRowProps) {
   const { colors } = useAppTheme();
+  const { isEnabled } = useMotionConfig();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
+
+  const typingOpacity = useSharedValue(1);
+
+  React.useEffect(() => {
+    if (!isTyping || !isEnabled) {
+      typingOpacity.value = 1;
+      return;
+    }
+
+    typingOpacity.value = withRepeat(
+      withSequence(
+        withTiming(0.4, { duration: 700 }),
+        withTiming(1, { duration: 700 }),
+      ),
+      -1,
+      false,
+    );
+
+    return () => {
+      cancelAnimation(typingOpacity);
+    };
+  }, [isTyping, isEnabled, typingOpacity]);
+
+  const typingAnimStyle = useAnimatedStyle(() => ({
+    opacity: typingOpacity.value,
+  }));
 
   const accessibilityParts: string[] = [
     displayTitle,
-    lastMessage,
+    isTyping ? 'typing...' : lastMessage,
     lastMessageTime,
   ];
   if (unread) accessibilityParts.push('unread');
@@ -55,12 +95,13 @@ export function InboxConversationRow({
   return (
     <AnimatedPressable
       onPress={onPress}
+      onLongPress={onLongPress}
       activeOpacity={0.85}
       scaleValue={0.98}
       hapticFeedback="light"
       accessibilityLabel={accessibilityParts.join(', ')}
       accessibilityRole="button"
-      accessibilityHint={accessibilityHint ?? 'Opens the conversation thread'}
+      accessibilityHint={accessibilityHint ?? 'Opens the conversation thread. Long press for quick actions'}
     >
       <View style={styles.row}>
         <View style={styles.avatarWrap}>{avatarElement}</View>
@@ -98,16 +139,25 @@ export function InboxConversationRow({
                 Draft
               </Text>
             ) : null}
-            <Text
-              style={[
-                styles.preview,
-                unread && styles.previewUnread,
-                !draftText && isGroup && memberCount != null && styles.previewWithMemberPrefix,
-              ]}
-              numberOfLines={1}
-            >
-              {draftText ?? lastMessage}
-            </Text>
+            {isTyping ? (
+              <Reanimated.Text
+                style={[styles.preview, styles.typingPreview, typingAnimStyle]}
+                numberOfLines={1}
+              >
+                typing...
+              </Reanimated.Text>
+            ) : (
+              <Text
+                style={[
+                  styles.preview,
+                  unread && styles.previewUnread,
+                  !draftText && isGroup && memberCount != null && styles.previewWithMemberPrefix,
+                ]}
+                numberOfLines={1}
+              >
+                {draftText ?? lastMessage}
+              </Text>
+            )}
             {unread && !draftText ? (
               <View style={styles.unreadDot} />
             ) : null}
@@ -125,11 +175,13 @@ export function InboxConversationRow({
   );
 }
 
+export const InboxConversationRow = React.memo(InboxConversationRowBase);
+
 const createStyles = (colors: ThemeColors) => StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    paddingVertical: 12,
+    paddingVertical: Space.sm,
     paddingHorizontal: Space.md,
     gap: Space.sm + 2,
   },
@@ -139,7 +191,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   body: {
     flex: 1,
     justifyContent: 'center',
-    gap: 3,
+    gap: Space.xs,
   },
   topLine: {
     flexDirection: 'row',
@@ -198,6 +250,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.textSecondary,
     lineHeight: Type.caption.lineHeight,
   },
+  typingPreview: {
+    color: colors.brand,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+  },
   previewUnread: {
     color: colors.textPrimary,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
@@ -206,7 +262,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   unreadDot: {
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: Radius.sm,
     backgroundColor: colors.brand,
     marginLeft: 2,
   },

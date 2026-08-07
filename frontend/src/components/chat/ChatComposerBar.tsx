@@ -13,6 +13,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius, Type, TypeStyles } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
+import {
+  VoiceMessageRecorder,
+  VoiceRecordingIndicator,
+} from './VoiceMessageRecorder';
 
 interface AttachmentPreview {
   uri: string;
@@ -43,11 +47,16 @@ interface ChatComposerBarProps {
   cautionWarning?: string;
   onDismissDangerWarning?: () => void;
   onDismissCautionWarning?: () => void;
+  onVoicePress?: () => void;
+  isVoiceRecording?: boolean;
+  onVoiceCancel?: () => void;
+  onVoiceSend?: (uri: string, durationMs: number) => void;
 }
 
 const MAX_INPUT_HEIGHT = 120;
 const MAX_CHARS = 2000;
-const CHAR_WARN_THRESHOLD = 1800;
+const CHAR_WARN_THRESHOLD = 1500;
+const CHAR_DANGER_THRESHOLD = 1800;
 
 export function ChatComposerBar({
   value,
@@ -66,16 +75,21 @@ export function ChatComposerBar({
   cautionWarning,
   onDismissDangerWarning,
   onDismissCautionWarning,
+  onVoicePress,
+  isVoiceRecording = false,
+  onVoiceCancel,
+  onVoiceSend,
 }: ChatComposerBarProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const inputRef = useRef<TextInput>(null);
   const hasText = value.trim().length > 0;
   const canSend = (hasText || attachments.length > 0) && !isSending && !disabled;
-  const showQuickReplies = quickReplies.length > 0 && !hasText && attachments.length === 0;
+  const showQuickReplies = quickReplies.length > 0 && !hasText && attachments.length === 0 && !isVoiceRecording;
+  const showMicButton = !hasText && attachments.length === 0 && !isVoiceRecording && !!onVoiceSend;
   const charCount = value.length;
   const showCharCount = charCount > CHAR_WARN_THRESHOLD;
-  const charCountColor = charCount >= MAX_CHARS ? colors.danger : colors.textMuted;
+  const charCountColor = charCount >= MAX_CHARS ? colors.danger : charCount >= CHAR_DANGER_THRESHOLD ? colors.warning : colors.textMuted;
 
   return (
     <View style={styles.root}>
@@ -183,37 +197,53 @@ export function ChatComposerBar({
           hapticFeedback="light"
           accessibilityLabel="Add attachment"
           accessibilityRole="button"
-          disabled={disabled || isSending}
+          disabled={disabled || isSending || isVoiceRecording}
         >
           <Ionicons name="add-circle-outline" size={26} color={colors.textSecondary} />
         </AnimatedPressable>
 
-        <View style={styles.inputWrap}>
-          <TextInput
-            ref={inputRef}
-            style={styles.input}
-            value={value}
-            onChangeText={onChangeText}
-            placeholder={placeholder}
-            placeholderTextColor={colors.textMuted}
-            multiline
-            maxLength={MAX_CHARS}
-            editable={!disabled && !isSending}
-            autoCapitalize="sentences"
-            autoCorrect
-            textAlignVertical="center"
-            accessibilityLabel="Message input"
-            accessibilityRole="text"
-            onSubmitEditing={canSend ? onSend : undefined}
-          />
-          {showCharCount ? (
-            <Text style={[styles.charCount, { color: charCountColor }]}>
-              {charCount}/{MAX_CHARS}
-            </Text>
-          ) : null}
-        </View>
+        {isVoiceRecording ? (
+          <VoiceRecordingIndicator />
+        ) : (
+          <View style={styles.inputWrap}>
+            <TextInput
+              ref={inputRef}
+              style={styles.input}
+              value={value}
+              onChangeText={onChangeText}
+              placeholder={placeholder}
+              placeholderTextColor={colors.textMuted}
+              multiline
+              maxLength={MAX_CHARS}
+              editable={!disabled && !isSending}
+              autoCapitalize="sentences"
+              autoCorrect
+              textAlignVertical="center"
+              accessibilityLabel="Message input"
+              accessibilityRole="text"
+              onSubmitEditing={canSend ? onSend : undefined}
+            />
+            {showCharCount ? (
+              <Text style={[styles.charCount, { color: charCountColor }]}>
+                {charCount}/{MAX_CHARS}
+              </Text>
+            ) : null}
+          </View>
+        )}
 
-        {hasText || attachments.length > 0 ? (
+        {isVoiceRecording ? (
+          <AnimatedPressable
+            onPress={onVoiceCancel}
+            style={styles.actionBtn}
+            activeOpacity={0.7}
+            scaleValue={0.9}
+            hapticFeedback="light"
+            accessibilityLabel="Cancel voice recording"
+            accessibilityRole="button"
+          >
+            <Ionicons name="close" size={24} color={colors.danger} />
+          </AnimatedPressable>
+        ) : hasText || attachments.length > 0 ? (
           <AnimatedPressable
             onPress={onSend}
             style={[styles.sendBtn, canSend && styles.sendBtnActive]}
@@ -231,6 +261,15 @@ export function ChatComposerBar({
               <Ionicons name="arrow-up" size={20} color={canSend ? colors.textInverse : colors.textMuted} />
             )}
           </AnimatedPressable>
+        ) : showMicButton ? (
+          <VoiceMessageRecorder
+            onSend={(uri, durationMs) => onVoiceSend?.(uri, durationMs)}
+            onCancel={onVoiceCancel}
+            onRecordingChange={(recording) => {
+              if (recording) onVoicePress?.();
+            }}
+            disabled={disabled || isSending}
+          />
         ) : (
           <AnimatedPressable
             onPress={onCameraPress}
@@ -353,14 +392,14 @@ const createStyles = (colors: any) => StyleSheet.create({
     flexDirection: 'row',
     gap: Space.xs,
     paddingHorizontal: Space.md,
-    paddingVertical: 4,
+    paddingVertical: Space.xs,
   },
   quickReplyChip: {
     maxWidth: 210,
     minHeight: 44,
     justifyContent: 'center',
     paddingHorizontal: Space.sm + 2,
-    paddingVertical: 8,
+    paddingVertical: Space.sm,
     borderRadius: Radius.md,
     backgroundColor: 'transparent',
     borderWidth: StyleSheet.hairlineWidth,
@@ -405,7 +444,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     borderColor: colors.border,
   },
   charCount: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: TypeStyles.metadata.fontFamily,
     textAlign: 'right',
     paddingTop: 2,

@@ -22,10 +22,10 @@ import Reanimated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Typography, Space, Radius } from '../theme/designTokens';
+import { Typography, Space, Radius, Type, Control, LetterSpacing } from '../theme/designTokens';
 import { useStore } from '../store/useStore';
 import { useNavigation, useScrollToTop } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useBackendData } from '../context/BackendDataContext';
@@ -47,7 +47,7 @@ import { useProfileMediaUpload } from '../hooks/useProfileMediaUpload';
 import { isVideoUri } from '../utils/media';
 import { fetchLooksFromApi, type LookApiItem } from '../services/looksApi';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -79,6 +79,10 @@ export default function MyProfileScreen() {
     aboutLabel: { color: colors.textMuted },
     aboutValue: { color: colors.textPrimary },
     aboutEmpty: { color: colors.textMuted },
+    topUtilityVisible: { backgroundColor: `${colors.textPrimary}6B`, borderColor: `${colors.textInverse}2E` },
+    coverEditVisible: { backgroundColor: `${colors.textPrimary}8C`, borderColor: `${colors.textInverse}3D` },
+    coverFailure: { backgroundColor: `${colors.textPrimary}B8` },
+    soldOverlay: { backgroundColor: `${colors.textPrimary}80` },
   };
   const tMyProfile = {
     awayBanner: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
@@ -262,20 +266,6 @@ export default function MyProfileScreen() {
 
   const allOwnedListings = React.useMemo(() => listings.filter((item) => item.sellerId === profileUserId), [listings, profileUserId]);
 
-  const holdingsValue = React.useMemo(
-    () => coOwnHoldings.reduce((sum, asset) => sum + asset.yourUnits * asset.unitPriceGBP, 0),
-    [coOwnHoldings]
-  );
-
-  const holdingsUnrealized = React.useMemo(
-    () =>
-      coOwnHoldings.reduce((sum, asset) => {
-        const avgEntry = asset.avgEntryPriceGBP ?? asset.unitPriceGBP;
-        return sum + (asset.unitPriceGBP - avgEntry) * asset.yourUnits;
-      }, 0),
-    [coOwnHoldings]
-  );
-
   // Parallax scroll for cover
   const scrollY = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler({
@@ -345,6 +335,12 @@ export default function MyProfileScreen() {
         accessibilityLabel: 'View your orders',
       },
       {
+        icon: 'pulse-outline' as const,
+        label: 'Analytics',
+        onPress: () => { haptic.light(); navigation.navigate('CreatorAnalyticsDashboard'); },
+        accessibilityLabel: 'View your creator analytics',
+      },
+      {
         icon: 'bookmark-outline' as const,
         label: 'Closet',
         value: `${savedCount + wishlistCount} items`,
@@ -369,6 +365,13 @@ export default function MyProfileScreen() {
         value: coOwnHoldings.length > 0 ? `${coOwnHoldings.length} assets` : undefined,
         onPress: () => { haptic.light(); navigation.navigate('CoOwnHub'); },
         accessibilityLabel: 'Browse co-own market',
+      },
+      {
+        icon: 'images-outline' as const,
+        label: 'Posters',
+        onPress: () => { haptic.light(); navigation.navigate('PosterArchive'); },
+        accessibilityLabel: 'Poster archive',
+        accessibilityHint: 'View your archived posters',
       },
     ],
     [coOwnHoldings.length, savedCount, wishlistCount, allOwnedListings.length, haptic, navigation]
@@ -538,7 +541,6 @@ export default function MyProfileScreen() {
             </Pressable>
           ) : null}
 
-          {/* Profile completeness indicator — only shows when incomplete */}
           {/* ── 8. COMPACT MARKETPLACE UTILITY RAIL ── */}
           <ProfileUtilityRail items={utilityItems} />
 
@@ -607,7 +609,7 @@ export default function MyProfileScreen() {
                         <CachedImage
                           uri={item.images?.[0] ?? ''}
                           style={styles.gridImage}
-                          containerStyle={{ width: '100%', height: '100%', borderRadius: 6 }}
+                          containerStyle={{ width: '100%', height: '100%', borderRadius: Radius.md }}
                           contentFit="cover"
                         />
                         {item.isSold ? (
@@ -640,7 +642,7 @@ export default function MyProfileScreen() {
           <View style={{ backgroundColor: colors.background, paddingBottom: 100, paddingTop: Space.md }}>
             {looksLoading ? (
               <View style={{ alignItems: 'center', paddingVertical: 40 }}>
-                <Text style={{ color: colors.textMuted, fontSize: 14 }}>Loading looks...</Text>
+                <Text style={{ color: colors.textMuted, fontSize: Type.body.size }}>Loading looks...</Text>
               </View>
             ) : myLooks.length === 0 ? (
               <EmptyState
@@ -790,31 +792,31 @@ const myProfileStyles = StyleSheet.create({
   awayBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: Space.sm + 2,
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
   },
   awayBannerTextWrap: {
     flex: 1,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   awayBannerTitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
   },
   awayBannerSub: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
   },
 });
 
 const styles = StyleSheet.create({
   container: { flex: 1, overflow: 'hidden' },
-  scrollContent: { paddingBottom: 100, overflow: 'hidden' },
+  scrollContent: { paddingBottom: Space.xxl + Space.xxl + Space.xs, overflow: 'hidden' },
 
   // Cover
   coverWrap: {
@@ -836,22 +838,22 @@ const styles = StyleSheet.create({
   },
   topUtilityRow: {
     position: 'absolute',
-    left: 14,
-    right: 14,
+    left: Space.md - 2,
+    right: Space.md - 2,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   topUtilityIconBtn: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
   topUtilityVisible: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: Space.xl - 2,
+    height: Space.xl - 2,
+    borderRadius: Radius.xl,
     backgroundColor: 'rgba(0,0,0,0.42)',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.18)',
@@ -860,17 +862,17 @@ const styles = StyleSheet.create({
   },
   coverEditTarget: {
     position: 'absolute',
-    right: 14,
-    bottom: 8,
-    width: 44,
-    height: 44,
+    right: Space.md - 2,
+    bottom: Space.sm,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
   coverEditVisible: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: Space.xl + 2,
+    height: Space.xl + 2,
+    borderRadius: Radius.xxl,
     backgroundColor: 'rgba(0,0,0,0.55)',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.24)',
@@ -879,40 +881,40 @@ const styles = StyleSheet.create({
   },
   coverFailure: {
     position: 'absolute',
-    left: 14,
-    right: 14,
-    bottom: 8,
-    minHeight: 44,
-    paddingLeft: 12,
-    paddingRight: 5,
-    borderRadius: 12,
+    left: Space.md - 2,
+    right: Space.md - 2,
+    bottom: Space.sm,
+    minHeight: Control.hit,
+    paddingLeft: Space.sm + 4,
+    paddingRight: Space.xs + 1,
+    borderRadius: Radius.lg,
     backgroundColor: 'rgba(0,0,0,0.72)',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: Space.sm,
   },
   coverFailureCopy: {
     flex: 1,
     minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
+    gap: Space.xs + 3,
   },
   coverFailureText: {
     flexShrink: 1,
     fontFamily: Typography.family.semibold,
-    fontSize: 12,
+    fontSize: Type.caption.size,
   },
   coverFailureAction: {
-    minWidth: 52,
-    minHeight: 34,
-    paddingHorizontal: 8,
+    minWidth: Space.xxl + 4,
+    minHeight: Space.xl + 2,
+    paddingHorizontal: Space.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },
   coverFailureActionText: {
     fontFamily: Typography.family.semibold,
-    fontSize: 12,
+    fontSize: Type.caption.size,
   },
 
   // Collapsed header
@@ -925,13 +927,13 @@ const styles = StyleSheet.create({
     elevation: 4,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingBottom: 16,
+    paddingBottom: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   floatingHeaderTitle: {
-    fontSize: 17,
+    fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: -0.3,
+    letterSpacing: Type.priceList.letterSpacing,
   },
 
   // Listings grid
@@ -943,24 +945,24 @@ const styles = StyleSheet.create({
     marginBottom: Space.sm,
   },
   gridHeaderCount: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
   },
   gridHeaderAction: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: Space.md,
-    gap: 8,
+    gap: Space.sm,
   },
   gridCard: {
-    marginBottom: 12,
+    marginBottom: Space.sm + 4,
   },
   gridImageWrap: {
-    borderRadius: 6,
+    borderRadius: Radius.md,
     overflow: 'hidden',
     position: 'relative',
   },
@@ -975,24 +977,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   soldText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
-    letterSpacing: 1,
+    letterSpacing: LetterSpacing.caps + 0.18,
   },
   gridPrice: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
-    marginTop: 6,
+    marginTop: Space.xs + 2,
   },
   gridBrand: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    marginTop: 1,
+    marginTop: Space.xs / 4,
   },
   gridMeta: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    marginTop: 1,
+    marginTop: Space.xs / 4,
   },
 
   // Listings empty state — compact in-grid prompt, not full blank page
@@ -1004,25 +1006,25 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   listingsEmptyTitle: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
   },
   listingsEmptyBody: {
     maxWidth: 280,
     fontFamily: Typography.family.regular,
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     textAlign: 'center',
   },
   listingsEmptyCta: {
-    marginTop: 6,
-    minHeight: 42,
-    paddingHorizontal: 18,
+    marginTop: Space.xs + 2,
+    minHeight: Control.hit - 2,
+    paddingHorizontal: Space.md + 2,
     justifyContent: 'center',
-    borderRadius: 10,
+    borderRadius: Radius.lg,
   },
   listingsEmptyCtaText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
   },
 
@@ -1031,32 +1033,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
   },
   aboutSectionTitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.bold,
     paddingTop: Space.md + 2,
     paddingBottom: Space.xs,
   },
   aboutRow: {
-    paddingVertical: 14,
+    paddingVertical: Space.md - 2,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   aboutRowLast: {
     borderBottomWidth: 0,
   },
   aboutLabel: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     textTransform: 'uppercase',
-    letterSpacing: 0.7,
-    marginBottom: 4,
+    letterSpacing: LetterSpacing.caps - 0.12,
+    marginBottom: Space.xs,
   },
   aboutValue: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    lineHeight: 20,
+    lineHeight: Type.body.lineHeight,
   },
   aboutEmpty: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     textAlign: 'center',
     paddingVertical: Space.xl,

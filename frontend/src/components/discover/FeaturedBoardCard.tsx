@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Typography } from '../../theme/designTokens';
+import { Typography, Radius, Type, Space } from '../../theme/designTokens';
 
 export interface FeaturedBoard {
   id: string;
@@ -65,7 +65,7 @@ export function FeaturedBoardCard({ board }: Props) {
       <View style={styles.metaRow}>
         <Text style={styles.subtitle}>{board.subtitle}</Text>
         {board.isVerified && (
-          <Ionicons name="checkmark-circle" size={14} color={colors.brand} style={{ marginLeft: 4 }} />
+          <Ionicons name="checkmark-circle" size={14} color={colors.brand} style={{ marginLeft: Space.xs }} />
         )}
       </View>
       <Text style={styles.meta}>{board.meta}</Text>
@@ -81,7 +81,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   collage: {
     flexDirection: 'row',
     height: 150,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
     overflow: 'hidden',
     gap: 3,
     marginBottom: 12,
@@ -100,7 +100,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   title: {
     fontFamily: Typography.family.semibold,
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     color: colors.textPrimary,
     marginBottom: 3,
     letterSpacing: -0.2,
@@ -112,12 +112,12 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   subtitle: {
     fontFamily: Typography.family.medium,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     color: colors.textSecondary,
   },
   meta: {
     fontFamily: Typography.family.medium,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     color: colors.textMuted,
   },
 });

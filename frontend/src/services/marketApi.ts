@@ -673,6 +673,7 @@ export interface CreateAuctionInput {
   endsAt: string;
   startingBidGbp: number;
   buyNowPriceGbp?: number;
+  reservePriceGbp?: number;
   minIncrementGbp?: number;
   idempotencyKey?: string;
 }

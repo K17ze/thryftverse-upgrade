@@ -1,10 +1,10 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { View, StyleSheet, RefreshControl, ScrollView } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import Reanimated, { FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence, Easing } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useToast } from '../context/ToastContext';
@@ -17,6 +17,7 @@ import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { parseApiError } from '../lib/apiClient';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
+import { BottomSheet } from '../components/BottomSheet';
 import {
   convertDisplayToGbpAmount,
   getSuggestedBidDisplayAmount,
@@ -27,13 +28,15 @@ import {
   placeAuctionBid as placeAuctionBidRemote,
   addToWatchlist,
   removeFromWatchlist,
+  getAuctionDetail,
   type MarketAuction,
   type AuctionSortMode,
   type AuctionViewerState,
+  type AuctionBidActivity,
 } from '../services/marketApi';
 import { t } from '../i18n';
 import { Motion } from '../constants/motion';
-import { Space, Radius } from '../theme/designTokens';
+import { Space, Radius, Type, Stroke, Control, Typography } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import {
   MetricGrid,
@@ -45,6 +48,7 @@ import { CachedImage } from '../components/CachedImage';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { Meta, Body, BodyEmphasis } from '../components/ui/Text';
 import { createStableId } from '../utils/createStableId';
+import { formatBidActivityRow } from '../utils/auctionDetailLogic';
 
 type AuctionLifecycle = 'upcoming' | 'live' | 'ended';
 
@@ -87,7 +91,47 @@ function formatCountdown(ms: number) {
   return `${hours}:${minutes}:${seconds}`;
 }
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type TimerUrgency = 'critical' | 'urgent' | 'normal';
+
+function getTimerUrgency(msToEnd: number): TimerUrgency {
+  if (msToEnd <= 0) return 'normal';
+  const ONE_HOUR_MS = 60 * 60 * 1000;
+  const SIX_HOURS_MS = 6 * ONE_HOUR_MS;
+  if (msToEnd < ONE_HOUR_MS) return 'critical';
+  if (msToEnd < SIX_HOURS_MS) return 'urgent';
+  return 'normal';
+}
+
+function FeaturedLiveDot({ reducedMotion, color }: { reducedMotion: boolean; color: string }) {
+  const opacity = useSharedValue(1);
+  React.useEffect(() => {
+    if (reducedMotion) {
+      opacity.value = 1;
+      return;
+    }
+    opacity.value = withRepeat(
+      withSequence(
+        withTiming(0.3, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+      ),
+      -1,
+      true,
+    );
+  }, [opacity, reducedMotion]);
+  const dotStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+  }));
+  return (
+    <Reanimated.View
+      style={[
+        { width: Space.xs + 2, height: Space.xs + 2, borderRadius: Radius.md, backgroundColor: color },
+        dotStyle,
+      ]}
+    />
+  );
+}
+
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 const SORT_OPTIONS: { label: string; value: AuctionSortMode }[] = [
   { label: 'Ending Soon', value: 'endingSoon' },
@@ -100,7 +144,7 @@ const SORT_OPTIONS: { label: string; value: AuctionSortMode }[] = [
 const STATUS_OPTIONS: { label: string; value: StatusFilter }[] = [
   { label: 'All', value: 'all' },
   { label: 'Live', value: 'live' },
-  { label: 'Scheduled', value: 'scheduled' },
+  { label: 'Upcoming', value: 'scheduled' },
   { label: 'Ended', value: 'ended' },
 ];
 
@@ -129,6 +173,11 @@ export default function AuctionsScreen() {
   const [watchTogglingIds, setWatchTogglingIds] = React.useState<Set<string>>(new Set());
   const [nextCursor, setNextCursor] = React.useState<string | null>(null);
   const [isLoadingMore, setIsLoadingMore] = React.useState(false);
+  const [bidHistoryVisible, setBidHistoryVisible] = React.useState(false);
+  const [bidHistoryAuction, setBidHistoryAuction] = React.useState<AuctionViewModel | null>(null);
+  const [bidHistory, setBidHistory] = React.useState<AuctionBidActivity[]>([]);
+  const [bidHistoryLoading, setBidHistoryLoading] = React.useState(false);
+  const [bidHistoryError, setBidHistoryError] = React.useState(false);
 
   const syncAuctions = React.useCallback(async () => {
     setIsSyncingAuctions(true);
@@ -375,6 +424,29 @@ export default function AuctionsScreen() {
     navigation.navigate('AuctionDetail', { auctionId: auction.id });
   };
 
+  const openBidHistory = async (auction: AuctionViewModel) => {
+    setBidHistoryAuction(auction);
+    setBidHistoryVisible(true);
+    setBidHistoryLoading(true);
+    setBidHistoryError(false);
+    setBidHistory([]);
+    try {
+      const detail = await getAuctionDetail(auction.id);
+      setBidHistory(detail.bidActivity);
+    } catch {
+      setBidHistoryError(true);
+    } finally {
+      setBidHistoryLoading(false);
+    }
+  };
+
+  const closeBidHistory = () => {
+    setBidHistoryVisible(false);
+    setBidHistoryAuction(null);
+    setBidHistory([]);
+    setBidHistoryError(false);
+  };
+
   const renderSortBar = () => (
     <View style={styles.sortBar}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sortScrollContent}>
@@ -384,8 +456,9 @@ export default function AuctionsScreen() {
             style={[styles.sortChip, sortMode === opt.value && styles.sortChipActive]}
             activeOpacity={0.85}
             onPress={() => setSortMode(opt.value)}
-            accessibilityRole="button"
+            accessibilityRole="radio"
             accessibilityLabel={`Sort by ${opt.label}`}
+            accessibilityState={{ selected: sortMode === opt.value }}
           >
             <Meta style={[styles.sortChipText, sortMode === opt.value && styles.sortChipTextActive]}>
               {opt.label}
@@ -404,8 +477,9 @@ export default function AuctionsScreen() {
           style={[styles.statusChip, statusFilter === opt.value && styles.statusChipActive]}
           activeOpacity={0.85}
           onPress={() => setStatusFilter(opt.value)}
-          accessibilityRole="button"
+          accessibilityRole="tab"
           accessibilityLabel={`Filter by ${opt.label}`}
+          accessibilityState={{ selected: statusFilter === opt.value }}
         >
           <Meta style={[styles.statusChipText, statusFilter === opt.value && styles.statusChipTextActive]}>
             {opt.label}
@@ -417,6 +491,9 @@ export default function AuctionsScreen() {
 
   const renderFeaturedAuction = () => {
     if (!featuredAuction) return null;
+    const urgency = getTimerUrgency(featuredAuction.msToEnd);
+    const timerColor = urgency === 'critical' ? colors.danger : urgency === 'urgent' ? colors.warning : colors.success;
+    const endingSoon = featuredAuction.msToEnd > 0 && featuredAuction.msToEnd < 60 * 60 * 1000;
     return (
       <View style={styles.featuredWrap}>
         <BodyEmphasis style={styles.featuredLabel}>Featured Auction</BodyEmphasis>
@@ -442,9 +519,15 @@ export default function AuctionsScreen() {
             )}
             <View style={styles.featuredOverlay}>
               <View style={styles.featuredLivePill}>
-                <View style={styles.featuredLiveDot} />
+                <FeaturedLiveDot reducedMotion={reducedMotionEnabled} color={colors.danger} />
                 <Meta style={styles.featuredLiveText}>LIVE</Meta>
               </View>
+              {endingSoon ? (
+                <View style={styles.endingSoonBadge}>
+                  <Ionicons name="time-outline" size={10} color="#fff" />
+                  <Meta style={styles.endingSoonText}>ENDING SOON</Meta>
+                </View>
+              ) : null}
             </View>
           </View>
           <View style={styles.featuredMeta}>
@@ -462,7 +545,7 @@ export default function AuctionsScreen() {
               </View>
               <View>
                 <Meta style={styles.featuredStatLabel}>Ends In</Meta>
-                <BodyEmphasis style={[styles.featuredStatValue, styles.featuredTimer]}>
+                <BodyEmphasis style={[styles.featuredStatValue, { color: timerColor }]}>
                   {formatCountdown(featuredAuction.msToEnd)}
                 </BodyEmphasis>
               </View>
@@ -611,9 +694,9 @@ export default function AuctionsScreen() {
       {[0, 1, 2].map((i) => (
         <View key={i} style={styles.loadingCard}>
           <SkeletonLoader width="100%" height={172} borderRadius={12} />
-          <View style={{ padding: 12 }}>
-            <SkeletonLoader width="70%" height={16} borderRadius={8} style={{ marginBottom: 8 }} />
-            <SkeletonLoader width="40%" height={12} borderRadius={6} style={{ marginBottom: 8 }} />
+          <View style={{ padding: Space.sm + Space.xs }}>
+            <SkeletonLoader width="70%" height={16} borderRadius={8} style={{ marginBottom: Space.sm }} />
+            <SkeletonLoader width="40%" height={12} borderRadius={6} style={{ marginBottom: Space.sm }} />
             <SkeletonLoader width="100%" height={40} borderRadius={10} />
           </View>
         </View>
@@ -628,55 +711,71 @@ export default function AuctionsScreen() {
     return auctions;
   }, [auctions, liveAuctions, upcomingAuctions, endedAuctions, statusFilter]);
 
+  const renderAuctionCard = useCallback(({ item, index }: { item: AuctionViewModel; index: number }) => {
+    const sellerLabel = item.sellerDisplayName ?? `@${item.sellerUsername}`;
+    return (
+      <Reanimated.View
+        entering={
+          reducedMotionEnabled
+            ? undefined
+            : FadeInDown
+                .duration(Motion.list.enterDuration)
+                .delay(Math.min(index, Motion.list.maxStaggerItems) * Motion.list.staggerStep)
+        }
+      >
+        <AuctionCard
+          id={item.id}
+          title={item.title}
+          image={item.image}
+          sellerName={sellerLabel}
+          sellerId={item.sellerId}
+          currentBid={formatFromFiat(item.currentBid, 'GBP', { displayMode: 'fiat' })}
+          bidCount={item.bidCount}
+          timeRemaining={formatCountdown(item.msToEnd ?? 0)}
+          progress={item.progress ?? 0}
+          isLive={item.lifecycle === 'live'}
+          isWatching={item.isWatched}
+          viewerState={item.viewerState}
+          timerUrgency={getTimerUrgency(item.msToEnd ?? 0)}
+          endingSoon={item.lifecycle === 'live' && item.msToEnd > 0 && item.msToEnd < 60 * 60 * 1000}
+          buyNowPrice={item.buyNowPrice ? formatFromFiat(item.buyNowPrice, 'GBP', { displayMode: 'fiat' }) : undefined}
+          onPress={() => navigateToDetail(item)}
+          onBid={() => openBidComposer(item)}
+          onBuyNow={() => void handleBuyNow(item)}
+          onToggleWatch={() => void handleToggleWatch(item)}
+          onPressSeller={() => navigation.navigate('UserProfile', { userId: item.sellerId })}
+          onMessageSeller={() =>
+            navigation.navigate('Chat', {
+              conversationId: `${item.sellerId}_${item.listingId}`,
+              focusQuery: sellerLabel,
+              partnerUserId: item.sellerId,
+            })
+          }
+          onViewBidHistory={() => void openBidHistory(item)}
+          isBuyNowLoading={buyNowAuctionId === item.id}
+          isBidSubmitting={isSubmittingBid}
+        />
+      </Reanimated.View>
+    );
+  }, [
+    reducedMotionEnabled,
+    formatFromFiat,
+    navigateToDetail,
+    openBidComposer,
+    handleBuyNow,
+    handleToggleWatch,
+    navigation,
+    buyNowAuctionId,
+    isSubmittingBid,
+    openBidHistory,
+  ]);
+
   return (
     <>
       <FlashList
         data={displayAuctions}
         keyExtractor={(item) => item.id}
-        renderItem={({ item, index }) => {
-          const sellerLabel = item.sellerDisplayName ?? `@${item.sellerUsername}`;
-          return (
-            <Reanimated.View
-              entering={
-                reducedMotionEnabled
-                  ? undefined
-                  : FadeInDown
-                      .duration(Motion.list.enterDuration)
-                      .delay(Math.min(index, Motion.list.maxStaggerItems) * Motion.list.staggerStep)
-              }
-            >
-              <AuctionCard
-                id={item.id}
-                title={item.title}
-                image={item.image}
-                sellerName={sellerLabel}
-                sellerId={item.sellerId}
-                currentBid={formatFromFiat(item.currentBid, 'GBP', { displayMode: 'fiat' })}
-                bidCount={item.bidCount}
-                timeRemaining={formatCountdown(item.msToEnd ?? 0)}
-                progress={item.progress ?? 0}
-                isLive={item.lifecycle === 'live'}
-                isWatching={item.isWatched}
-                viewerState={item.viewerState}
-                buyNowPrice={item.buyNowPrice ? formatFromFiat(item.buyNowPrice, 'GBP', { displayMode: 'fiat' }) : undefined}
-                onPress={() => navigateToDetail(item)}
-                onBid={() => openBidComposer(item)}
-                onBuyNow={() => void handleBuyNow(item)}
-                onToggleWatch={() => void handleToggleWatch(item)}
-                onPressSeller={() => navigation.navigate('UserProfile', { userId: item.sellerId })}
-                onMessageSeller={() =>
-                  navigation.navigate('Chat', {
-                    conversationId: `${item.sellerId}_${item.listingId}`,
-                    focusQuery: sellerLabel,
-                    partnerUserId: item.sellerId,
-                  })
-                }
-                isBuyNowLoading={buyNowAuctionId === item.id}
-                isBidSubmitting={isSubmittingBid}
-              />
-            </Reanimated.View>
-          );
-        }}
+        renderItem={renderAuctionCard}
         ListHeaderComponent={renderHeader}
         ListEmptyComponent={
           isSyncingAuctions ? renderLoadingState() : (
@@ -727,6 +826,96 @@ export default function AuctionsScreen() {
         onCancel={closeBidComposer}
         onSubmit={() => void submitBid()}
       />
+
+      <BottomSheet
+        visible={bidHistoryVisible}
+        onDismiss={closeBidHistory}
+        snapPoint={0.6}
+      >
+        <View style={styles.bidHistorySheetContent}>
+          <BodyEmphasis style={styles.bidHistoryTitle}>Bid History</BodyEmphasis>
+          {bidHistoryAuction ? (
+            <Meta style={styles.bidHistorySubtitle} numberOfLines={1}>{bidHistoryAuction.title}</Meta>
+          ) : null}
+
+          {bidHistoryLoading ? (
+            <View style={styles.bidHistoryLoadingWrap}>
+              {[0, 1, 2, 3, 5].map((i) => (
+                <SkeletonLoader key={i} width="100%" height={48} borderRadius={8} style={{ marginBottom: Space.sm }} />
+              ))}
+            </View>
+          ) : bidHistoryError ? (
+            <View style={styles.bidHistoryEmptyWrap}>
+              <Ionicons name="cloud-offline-outline" size={32} color={colors.textMuted} />
+              <Meta style={styles.bidHistoryEmptyText}>Bid history unavailable</Meta>
+              <AppButton
+                title="Retry"
+                variant="secondary"
+                size="sm"
+                onPress={() => bidHistoryAuction ? void openBidHistory(bidHistoryAuction) : undefined}
+                style={{ marginTop: Space.sm }}
+              />
+            </View>
+          ) : bidHistory.length === 0 ? (
+            <View style={styles.bidHistoryEmptyWrap}>
+              <Ionicons name="hammer-outline" size={32} color={colors.textMuted} />
+              <Meta style={styles.bidHistoryEmptyText}>No bids yet</Meta>
+            </View>
+          ) : (
+            <>
+              {bidHistoryAuction ? (
+                <View style={styles.bidHistoryStatusRow}>
+                  {bidHistoryAuction.viewerState === 'leading' ? (
+                    <View style={styles.bidHistoryLeadingBanner}>
+                      <Ionicons name="trophy-outline" size={14} color={colors.brand} />
+                      <Meta style={styles.bidHistoryLeadingText}>You are the highest bidder</Meta>
+                    </View>
+                  ) : bidHistoryAuction.viewerState === 'outbid' ? (
+                    <View style={styles.bidHistoryOutbidBanner}>
+                      <Ionicons name="trending-down-outline" size={14} color={colors.danger} />
+                      <Meta style={styles.bidHistoryOutbidText}>Outbid</Meta>
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+
+              {bidHistoryAuction ? (
+                <View style={styles.bidHistoryMinNextBidRow}>
+                  <Meta style={styles.bidHistoryMinNextBidLabel}>Min next bid</Meta>
+                  <BodyEmphasis style={styles.bidHistoryMinNextBidValue}>
+                    {formatFromFiat(bidHistoryAuction.minimumNextBid, 'GBP', { displayMode: 'fiat' })}
+                  </BodyEmphasis>
+                </View>
+              ) : null}
+
+              <ScrollView style={styles.bidHistoryList} showsVerticalScrollIndicator={false}>
+                {bidHistory.slice(0, 5).map((bid, index) => {
+                  const row = formatBidActivityRow(bid, index, formatFromFiat);
+                  return (
+                    <View
+                      key={bid.id}
+                      style={[styles.bidHistoryRow, index === 0 && styles.bidHistoryRowTop]}
+                    >
+                      <View style={styles.bidHistoryRowLeft}>
+                        <Meta style={styles.bidHistoryRowLabel} numberOfLines={1}>
+                          {index === 0 ? 'Leading bid' : `Bid #${bidHistory.length - index}`}
+                        </Meta>
+                        <Meta style={styles.bidHistoryRowBidder} numberOfLines={1}>
+                          {row.bidderLabel}
+                          {row.relativeTime ? `  ·  ${row.relativeTime}` : ''}
+                        </Meta>
+                      </View>
+                      <BodyEmphasis style={styles.bidHistoryRowAmount}>
+                        {row.amountText}
+                      </BodyEmphasis>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            </>
+          )}
+        </View>
+      </BottomSheet>
     </>
   );
 }
@@ -734,7 +923,7 @@ export default function AuctionsScreen() {
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   contentContainer: {
-    paddingBottom: 130,
+    paddingBottom: Space.xxl * 2 + Space.xl + 2,
     paddingTop: Space.sm,
   },
   searchWrap: {
@@ -746,15 +935,15 @@ function createStyles(colors: ThemeColors) {
   },
   sortScrollContent: {
     paddingHorizontal: Space.md,
-    gap: 6,
+    gap: Space.xs + 2,
   },
   sortChip: {
     borderRadius: Radius.full,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     backgroundColor: colors.surface,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: Space.sm + 4,
+    paddingVertical: Space.xs + 2,
   },
   sortChipActive: {
     backgroundColor: colors.brand,
@@ -762,7 +951,7 @@ function createStyles(colors: ThemeColors) {
   },
   sortChipText: {
     color: colors.textSecondary,
-    fontSize: 12,
+    fontSize: Type.caption.size,
   },
   sortChipTextActive: {
     color: colors.textInverse,
@@ -771,15 +960,15 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     paddingHorizontal: Space.md,
     marginBottom: Space.sm,
-    gap: 6,
+    gap: Space.sm,
   },
   statusChip: {
     flex: 1,
     borderRadius: Radius.md,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     backgroundColor: colors.surface,
-    paddingVertical: 7,
+    paddingVertical: Space.xs + 3,
     alignItems: 'center',
   },
   statusChipActive: {
@@ -788,7 +977,7 @@ function createStyles(colors: ThemeColors) {
   },
   statusChipText: {
     color: colors.textSecondary,
-    fontSize: 12,
+    fontSize: Type.caption.size,
   },
   statusChipTextActive: {
     color: colors.textInverse,
@@ -797,7 +986,7 @@ function createStyles(colors: ThemeColors) {
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
     borderRadius: Radius.lg,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     backgroundColor: colors.surface,
     paddingHorizontal: Space.md,
@@ -808,12 +997,12 @@ function createStyles(colors: ThemeColors) {
   },
   launchTitle: {},
   launchHint: {
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
   launchBtn: {
-    borderRadius: 14,
-    minHeight: 34,
-    paddingHorizontal: 12,
+    borderRadius: Radius.md,
+    minHeight: Control.chromeCompact + 2,
+    paddingHorizontal: Space.sm + 4,
   },
   actionBtnRow: {
     flexDirection: 'row',
@@ -823,13 +1012,13 @@ function createStyles(colors: ThemeColors) {
   myBidsBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Space.xs,
     borderRadius: Radius.full,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     backgroundColor: colors.surface,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.xs + 3,
   },
   myBidsBtnText: {
     color: colors.brand,
@@ -844,32 +1033,32 @@ function createStyles(colors: ThemeColors) {
   },
   featuredLabel: {
     marginBottom: Space.sm,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     color: colors.textSecondary,
   },
   featuredCard: {
-    borderRadius: Radius.xl,
-    borderWidth: 1,
+    borderRadius: Radius.lg,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     backgroundColor: colors.surface,
     overflow: 'hidden',
   },
   featuredImageFrame: {
     width: '100%',
-    height: 200,
+    height: Space.xxl * 4 + Space.sm,
     position: 'relative',
   },
   featuredImageContainer: {
     width: '100%',
-    height: 200,
+    height: Space.xxl * 4 + Space.sm,
   },
   featuredImage: {
     width: '100%',
-    height: 200,
+    height: Space.xxl * 4 + Space.sm,
   },
   featuredImagePlaceholder: {
     width: '100%',
-    height: 200,
+    height: Space.xxl * 4 + Space.sm,
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
@@ -878,43 +1067,61 @@ function createStyles(colors: ThemeColors) {
     position: 'absolute',
     top: Space.sm,
     left: Space.sm,
+    right: Space.sm,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
   },
   featuredLivePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Space.xs,
     backgroundColor: 'rgba(0,0,0,0.7)',
     borderRadius: Radius.full,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
   },
   featuredLiveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: Space.xs + 2,
+    height: Space.xs + 2,
+    borderRadius: Radius.md,
     backgroundColor: colors.danger,
+  },
+  endingSoonBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs / 2 + 1,
+    backgroundColor: 'rgba(220,38,38,0.9)',
+    borderRadius: Radius.full,
+    paddingHorizontal: Space.xs + 3,
+    paddingVertical: Space.xs / 2 + 1,
+  },
+  endingSoonText: {
+    color: '#fff',
+    fontSize: Type.meta.size - 3,
+    fontWeight: '700',
   },
   featuredLiveText: {
     color: colors.textInverse,
-    fontSize: 10,
+    fontSize: Type.meta.size - 1,
   },
   featuredMeta: {
     padding: Space.md,
   },
   featuredTitle: {
     marginBottom: Space.sm,
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
   },
   featuredStatsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
   featuredStatLabel: {
-    fontSize: 11,
-    marginBottom: 2,
+    fontSize: Type.meta.size,
+    marginBottom: Space.xs / 2,
   },
   featuredStatValue: {
-    fontSize: 14,
+    fontSize: Type.body.size,
   },
   featuredTimer: {
     color: colors.danger,
@@ -922,10 +1129,10 @@ function createStyles(colors: ThemeColors) {
   outbidBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
     marginTop: Space.sm,
     paddingHorizontal: Space.sm,
-    paddingVertical: 6,
+    paddingVertical: Space.xs + 2,
     borderRadius: Radius.md,
     backgroundColor: 'rgba(255,68,68,0.1)',
   },
@@ -935,10 +1142,10 @@ function createStyles(colors: ThemeColors) {
   leadingBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
     marginTop: Space.sm,
     paddingHorizontal: Space.sm,
-    paddingVertical: 6,
+    paddingVertical: Space.xs + 2,
     borderRadius: Radius.md,
     backgroundColor: 'rgba(0,0,0,0.05)',
   },
@@ -961,20 +1168,20 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm,
   },
   upcomingCard: {
-    width: 208,
+    width: Space.xxl * 4 + Space.md,
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     overflow: 'hidden',
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
   },
   upcomingImageFrame: {
     width: '100%',
-    height: 120,
+    height: Space.xxl * 2 + Space.lg,
   },
   upcomingImageContainer: {
     width: '100%',
-    height: 120,
+    height: Space.xxl * 2 + Space.lg,
     borderTopLeftRadius: Radius.lg,
     borderTopRightRadius: Radius.lg,
   },
@@ -986,11 +1193,11 @@ function createStyles(colors: ThemeColors) {
     padding: Space.sm + 2,
   },
   upcomingTitle: {
-    marginBottom: 4,
+    marginBottom: Space.xs,
   },
   upcomingTimer: {
     color: colors.brand,
-    marginBottom: 2,
+    marginBottom: Space.xs / 2,
   },
   upcomingBid: {},
   loadingWrap: {
@@ -999,7 +1206,7 @@ function createStyles(colors: ThemeColors) {
   },
   loadingCard: {
     borderRadius: Radius.lg,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     backgroundColor: colors.surface,
     overflow: 'hidden',
@@ -1011,6 +1218,107 @@ function createStyles(colors: ThemeColors) {
   },
   loadMoreBtn: {
     minWidth: 140,
+  },
+  bidHistorySheetContent: {
+    padding: Space.md,
+    flex: 1,
+  },
+  bidHistoryTitle: {
+    fontSize: Type.bodyLarge.size,
+    marginBottom: Space.xs / 2,
+  },
+  bidHistorySubtitle: {
+    color: colors.textSecondary,
+    marginBottom: Space.md,
+  },
+  bidHistoryLoadingWrap: {
+    paddingVertical: Space.sm,
+  },
+  bidHistoryEmptyWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Space.xxl,
+    gap: Space.sm,
+  },
+  bidHistoryEmptyText: {
+    color: colors.textMuted,
+  },
+  bidHistoryStatusRow: {
+    marginBottom: Space.sm,
+  },
+  bidHistoryLeadingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs + 2,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs + 2,
+    borderRadius: Radius.md,
+    backgroundColor: `${colors.brand}1A`,
+  },
+  bidHistoryLeadingText: {
+    color: colors.brand,
+    fontFamily: Typography.family.semibold,
+  },
+  bidHistoryOutbidBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs + 2,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs + 2,
+    borderRadius: Radius.md,
+    backgroundColor: 'rgba(255,68,68,0.1)',
+  },
+  bidHistoryOutbidText: {
+    color: colors.danger,
+    fontFamily: Typography.family.semibold,
+  },
+  bidHistoryMinNextBidRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.md,
+    backgroundColor: colors.surfaceAlt,
+    marginBottom: Space.md,
+  },
+  bidHistoryMinNextBidLabel: {
+    color: colors.textSecondary,
+  },
+  bidHistoryMinNextBidValue: {
+    color: colors.brand,
+  },
+  bidHistoryList: {
+    flex: 1,
+  },
+  bidHistoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  bidHistoryRowTop: {
+    borderRadius: Radius.md,
+    backgroundColor: colors.surfaceAlt,
+    paddingHorizontal: Space.sm,
+    marginBottom: Space.xs,
+    borderBottomWidth: 0,
+  },
+  bidHistoryRowLeft: {
+    flex: 1,
+    marginRight: Space.sm,
+  },
+  bidHistoryRowLabel: {
+    color: colors.textSecondary,
+    marginBottom: 2,
+  },
+  bidHistoryRowBidder: {
+    color: colors.textPrimary,
+  },
+  bidHistoryRowAmount: {
+    color: colors.textPrimary,
   },
   });
 }

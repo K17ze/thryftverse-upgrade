@@ -8,16 +8,18 @@ import {
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
+  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { useHaptic } from '../hooks/useHaptic';
-import { useReducedMotion } from '../hooks/useReducedMotion';
-import { Motion } from '../constants/motion';
+import { useMotionConfig } from '../hooks/useMotionConfig';
+import { Motion } from '../theme/motionTokens';
 import { hapticForScale, triggerHaptic, HapticType } from '../utils/haptics';
+import { HapticPatterns } from '../utils/hapticPatterns';
 
 type HapticFeedbackStyle = 'none' | 'light' | 'medium' | 'heavy' | 'selection';
 
-interface Props extends Omit<PressableProps, 'style' | 'children'> {
+interface Props extends Omit<PressableProps, 'style' | 'children' | 'hitSlop'> {
   children?: React.ReactNode;
   style?: StyleProp<ViewStyle>;
   scaleValue?: number;
@@ -28,9 +30,24 @@ interface Props extends Omit<PressableProps, 'style' | 'children'> {
   autoHaptic?: boolean;
   accessibilityLabel?: string;
   accessibilityHint?: string;
+  /**
+   * Hit-slop padding expands the tappable area beyond the visible bounds.
+   * Defaults to 8pt on all sides so small icon-only controls meet the
+   * WCAG 2.2 SC 2.5.8 minimum 24×24 CSS-pixel touch target, and help
+   * approach the 44×44pt recommended target (AGENTS.md §13).
+   */
+  hitSlop?: PressableProps['hitSlop'];
 }
 
 const AnimatedNativePressable = Reanimated.createAnimatedComponent(Pressable);
+
+/**
+ * Default hit-slop — 8pt on all sides. This expands small icon-only controls
+ * (e.g. 20–24pt glyphs) to meet the WCAG 2.2 SC 2.5.8 minimum 24×24 CSS-pixel
+ * touch target and helps approach the 44×44pt recommended target.
+ * Callers can override with a custom `hitSlop` prop.
+ */
+const DEFAULT_HIT_SLOP = { top: 8, bottom: 8, left: 8, right: 8 };
 
 export function AnimatedPressable({
   children,
@@ -47,10 +64,11 @@ export function AnimatedPressable({
   autoHaptic = false,
   accessibilityState,
   accessibilityRole,
+  hitSlop,
   ...rest
 }: Props) {
   const haptic = useHaptic();
-  const reducedMotionEnabled = useReducedMotion();
+  const { spring, isEnabled } = useMotionConfig();
   const scale = useSharedValue(1);
   const opacity = useSharedValue(1);
 
@@ -82,10 +100,13 @@ export function AnimatedPressable({
     haptic.light();
   }, [haptic, hapticFeedback, autoHaptic, scaleValue]);
 
-  const animStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-    opacity: opacity.value,
-  }));
+  const animStyle = useAnimatedStyle(() => {
+    'worklet';
+    return {
+      transform: [{ scale: scale.value }],
+      opacity: opacity.value,
+    };
+  });
 
   const mergedAccessibilityState = React.useMemo(
     () => ({
@@ -101,20 +122,18 @@ export function AnimatedPressable({
       accessible={true}
       accessibilityRole={accessibilityRole ?? 'button'}
       accessibilityState={mergedAccessibilityState}
+      hitSlop={hitSlop ?? DEFAULT_HIT_SLOP}
       onPressIn={(event) => {
         if (!disabled && !disableAnimation) {
-          if (reducedMotionEnabled) {
-            scale.value = withTiming(1, { duration: 0 });
-          } else {
-            scale.value = withTiming(scaleValue, { duration: Motion.timing.pressIn });
-          }
+          // Spring-based scale feedback — settles naturally like a physical
+          // press. When reduced motion is on, the spring is critically
+          // damped so the scale change is effectively instant.
+          scale.value = withSpring(scaleValue, spring.press);
         }
         if (typeof activeOpacity === 'number') {
-          if (reducedMotionEnabled) {
-            opacity.value = withTiming(1, { duration: 0 });
-          } else {
-            opacity.value = withTiming(activeOpacity, { duration: Motion.timing.pressIn });
-          }
+          opacity.value = withTiming(activeOpacity, {
+            duration: isEnabled ? Motion.duration.fast : 0,
+          });
         }
         if (!disabled) {
           triggerHapticFeedback();
@@ -125,25 +144,24 @@ export function AnimatedPressable({
       }}
       onPressOut={(event) => {
         if (!disableAnimation) {
-          if (reducedMotionEnabled) {
-            scale.value = withTiming(1, { duration: 0 });
-          } else {
-            scale.value = withTiming(1, { duration: 120 });
-          }
+          scale.value = withSpring(1, spring.press);
         }
         if (typeof activeOpacity === 'number') {
-          if (reducedMotionEnabled) {
-            opacity.value = withTiming(1, { duration: 0 });
-          } else {
-            opacity.value = withTiming(1, { duration: Motion.timing.pressOut });
-          }
+          opacity.value = withTiming(1, {
+            duration: isEnabled ? Motion.duration.fast : 0,
+          });
         }
         if (onPressOut) {
           onPressOut(event);
         }
       }}
       onPress={disabled ? undefined : onPress}
-      onLongPress={disabled ? undefined : onLongPress}
+      onLongPress={disabled ? undefined : (event) => {
+        // Compound long-press haptic — heavy impact communicates the
+        // reveal/peek moment (per AGENTS.md §13 haptic level).
+        HapticPatterns.longPress();
+        if (onLongPress) onLongPress(event);
+      }}
       {...rest}
     >
       {children}

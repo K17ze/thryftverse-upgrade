@@ -14,7 +14,7 @@ import { useAppTheme } from '../../theme/ThemeContext';
 import type { Listing } from '../../data/mockData';
 import { CachedImage } from '../CachedImage';
 import { getListingCoverUri } from '../../utils/media';
-import { Typography } from '../../theme/designTokens';
+import { Typography, Radius, Type, Space } from '../../theme/designTokens';
 import { KeyboardAwareScrollView } from '../../platform/keyboard/KeyboardProvider';
 
 const { height: SCREEN_H } = Dimensions.get('window');
@@ -248,19 +248,19 @@ function createStyles(colors: any) {
   handle: {
     width: 36,
     height: 4,
-    borderRadius: 2,
+    borderRadius: Radius.sm,
     backgroundColor: colors.border,
   },
   scrollContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 32,
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.xl,
     gap: 16,
   },
   section: {
     gap: 8,
   },
   sectionLabel: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.bold,
     color: colors.textSecondary,
     textTransform: 'uppercase',
@@ -268,11 +268,11 @@ function createStyles(colors: any) {
   },
   listingRow: {
     gap: 10,
-    paddingBottom: 4,
+    paddingBottom: Space.xs,
   },
   listingCard: {
     width: 100,
-    borderRadius: 14,
+    borderRadius: Radius.xl,
     overflow: 'hidden',
     backgroundColor: colors.surface,
     borderWidth: 1,
@@ -287,10 +287,10 @@ function createStyles(colors: any) {
     height: 90,
   },
   listingMeta: {
-    padding: 8,
+    padding: Space.sm,
   },
   listingTitle: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
@@ -300,13 +300,13 @@ function createStyles(colors: any) {
     right: 6,
     width: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius: Radius.lg,
     backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
   },
   emptyText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
     paddingVertical: 20,
@@ -317,7 +317,7 @@ function createStyles(colors: any) {
   },
   expiryPill: {
     flex: 1,
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
@@ -329,7 +329,7 @@ function createStyles(colors: any) {
     backgroundColor: colors.brand + '15',
   },
   expiryPillText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
   },
@@ -339,18 +339,18 @@ function createStyles(colors: any) {
   },
   captionInput: {
     minHeight: 80,
-    borderRadius: 14,
+    borderRadius: Radius.xl,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
     color: colors.textPrimary,
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     paddingHorizontal: 12,
     paddingTop: 12,
   },
   charCount: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
     textAlign: 'right',
@@ -361,16 +361,16 @@ function createStyles(colors: any) {
     justifyContent: 'center',
     gap: 8,
     backgroundColor: colors.brand,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
     paddingVertical: 14,
-    marginTop: 8,
+    marginTop: Space.sm,
   },
   publishBtnDisabled: {
     opacity: 0.6,
   },
   publishBtnText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.bold,
   },
 });

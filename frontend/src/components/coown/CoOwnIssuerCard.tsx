@@ -204,7 +204,7 @@ const styles = StyleSheet.create({
   avatar: {
     width: 48,
     height: 48,
-    borderRadius: 24,
+    borderRadius: Radius.xxl,
   },
   avatarFallback: {
     alignItems: 'center',
@@ -231,7 +231,7 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     gap: Space.sm,
-    marginTop: 4,
+    marginTop: Space.xs,
     flexWrap: 'wrap',
   },
   statItem: {

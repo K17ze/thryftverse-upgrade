@@ -9,10 +9,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type } from '../theme/designTokens';
-import { Typography } from '../theme/designTokens';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
@@ -26,7 +24,8 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 
-type Props = StackScreenProps<RootStackParamList, 'AccountControl'>;
+import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
+type Props = NativeStackScreenProps<RootStackParamList, 'AccountControl'>;
 
 type Phase = 'overview' | 'export' | 'delete-info' | 'delete-confirm';
 
@@ -102,7 +101,7 @@ export default function AccountControlScreen({ navigation }: Props) {
         <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.heroRow}>
             <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
-              <Ionicons name="shield-outline" size={18} color={colors.textInverse} />
+              <Ionicons name="shield-outline" size={18} color={colors.textInverse} accessible={false} />
             </View>
             <View style={styles.heroText}>
               <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>Account control</Text>
@@ -118,7 +117,7 @@ export default function AccountControlScreen({ navigation }: Props) {
       <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
       <View style={[styles.optionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.optionHeader}>
-          <View style={[styles.optionIcon, { backgroundColor: colors.surfaceAlt }]}>
+          <View style={[styles.optionIcon, { borderColor: colors.border }]}>
             <Ionicons name="download-outline" size={20} color={colors.textPrimary} />
           </View>
           <View style={styles.optionHeaderText}>
@@ -132,7 +131,7 @@ export default function AccountControlScreen({ navigation }: Props) {
           We will generate a data export covering your addresses, payment methods, orders, bids, co-own holdings and consent records. A request ID is issued for tracking.
         </Text>
         <AnimatedPressable
-          style={[styles.optionBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
+          style={[styles.optionBtn, { borderColor: colors.border }]}
           onPress={handleDownloadData}
           disabled={isExporting}
           activeOpacity={0.8}
@@ -155,7 +154,7 @@ export default function AccountControlScreen({ navigation }: Props) {
       <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
       <View style={[styles.optionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.optionHeader}>
-          <View style={[styles.optionIcon, { backgroundColor: colors.surfaceAlt }]}>
+          <View style={[styles.optionIcon, { borderColor: colors.border }]}>
             <Ionicons name="trash-outline" size={20} color={colors.textSecondary} />
           </View>
           <View style={styles.optionHeaderText}>
@@ -169,7 +168,7 @@ export default function AccountControlScreen({ navigation }: Props) {
           This permanently erases your account, personal data, addresses, payment methods and wallet history. This action cannot be undone.
         </Text>
         <AnimatedPressable
-          style={[styles.optionBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
+          style={[styles.optionBtn, { borderColor: colors.border }]}
           onPress={() => { haptic.medium(); setPhase('delete-info'); }}
           activeOpacity={0.8}
           scaleValue={0.98}
@@ -189,7 +188,7 @@ export default function AccountControlScreen({ navigation }: Props) {
       <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
       <View style={styles.introBlock}>
         <View style={[styles.phaseBadge, { backgroundColor: `${colors.danger}15` }]}>
-          <Ionicons name="warning-outline" size={16} color={colors.danger} />
+          <Ionicons name="warning-outline" size={16} color={colors.danger} accessible={false} />
           <Text style={[styles.phaseBadgeText, { color: colors.danger }]}>Permanent action</Text>
         </View>
         <Text style={styles.introTitle}>Before you delete</Text>
@@ -248,7 +247,7 @@ export default function AccountControlScreen({ navigation }: Props) {
       <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
       <View style={styles.introBlock}>
         <View style={[styles.phaseBadge, { backgroundColor: `${colors.danger}15` }]}>
-          <Ionicons name="warning-outline" size={16} color={colors.danger} />
+          <Ionicons name="warning-outline" size={16} color={colors.danger} accessible={false} />
           <Text style={[styles.phaseBadgeText, { color: colors.danger }]}>Final confirmation</Text>
         </View>
         <Text style={styles.introTitle}>Type DELETE to confirm</Text>
@@ -279,7 +278,7 @@ export default function AccountControlScreen({ navigation }: Props) {
         ) : null}
         {deleteError ? (
           <View style={styles.deleteErrorRow}>
-            <Ionicons name="alert-circle" size={14} color={colors.danger} />
+            <Ionicons name="alert-circle" size={14} color={colors.danger} accessible={false} />
             <Text style={styles.deleteErrorText}>{deleteError}</Text>
           </View>
         ) : null}
@@ -366,7 +365,7 @@ function ConsequenceRow({ icon, text, isLast }: { icon: React.ComponentProps<typ
   return (
     <View style={[styles.consequenceRow, !isLast && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
       <View style={styles.consequenceIcon}>
-        <Ionicons name={icon} size={18} color={colors.textMuted} />
+        <Ionicons name={icon} size={18} color={colors.textMuted} accessible={false} />
       </View>
       <Text style={[styles.consequenceText, { color: colors.textSecondary }]}>{text}</Text>
     </View>
@@ -387,8 +386,8 @@ function createStyles(colors: ThemeColors) {
     gap: Space.md,
   },
   heroIcon: {
-    width: 40,
-    height: 40,
+    width: Space.xl + Space.sm,
+    height: Space.xl + Space.sm,
     borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
@@ -402,7 +401,7 @@ function createStyles(colors: ThemeColors) {
   heroSubtitle: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
   introBlock: {
     paddingTop: Space.md,
@@ -425,10 +424,10 @@ function createStyles(colors: ThemeColors) {
   phaseBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
     alignSelf: 'flex-start',
     paddingHorizontal: Space.sm,
-    paddingVertical: 4,
+    paddingVertical: Space.xs,
     borderRadius: Radius.full,
     marginBottom: Space.xs,
   },
@@ -450,11 +449,12 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.sm,
   },
   optionIcon: {
-    width: 40,
-    height: 40,
+    width: Space.xl + Space.sm,
+    height: Space.xl + Space.sm,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
   },
   optionHeaderText: {
     flex: 1,
@@ -468,7 +468,7 @@ function createStyles(colors: ThemeColors) {
   optionSubtitle: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
     letterSpacing: Type.caption.letterSpacing,
     lineHeight: Type.caption.lineHeight,
   },
@@ -485,7 +485,7 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    minHeight: 44,
+    minHeight: Control.hit,
   },
   optionBtnText: {
     fontSize: Type.body.size,
@@ -506,10 +506,10 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm,
   },
   consequenceIcon: {
-    width: 24,
+    width: Space.lg,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 1,
+    marginTop: Space.xs / 4,
   },
   consequenceText: {
     flex: 1,
@@ -542,7 +542,7 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    minHeight: 48,
+    minHeight: Space.xxl,
   },
   secondaryBtnText: {
     fontSize: Type.body.size,
@@ -556,7 +556,7 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    minHeight: 48,
+    minHeight: Space.xxl,
   },
   dangerBtnText: {
     fontSize: Type.body.size,
@@ -579,8 +579,8 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.md,
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: 2,
-    minHeight: 48,
+    letterSpacing: Space.xs / 2,
+    minHeight: Space.xxl,
   },
   confirmAccountLabel: {
     fontSize: Type.caption.size,
@@ -591,7 +591,7 @@ function createStyles(colors: ThemeColors) {
   deleteErrorRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
     marginTop: Space.sm,
   },
   deleteErrorText: {

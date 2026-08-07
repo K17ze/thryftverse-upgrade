@@ -1,17 +1,17 @@
 import React from 'react';
 import {
-  FlatList,
   RefreshControl,
   StyleSheet,
   Text,
   useWindowDimensions,
   View,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -19,7 +19,7 @@ import { fetchCoOwnHoldings, listCoOwnAssets } from '../services/marketApi';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useToast } from '../context/ToastContext';
 import { useBackendData } from '../context/BackendDataContext';
-import { Radius, Space, Type, Typography } from '../theme/designTokens';
+import { Radius, Space, Type, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
 import { haptics } from '../utils/haptics';
 import { getCategoryFocalPoint } from '../utils/media';
 import { AppInput } from '../components/ui/AppInput';
@@ -42,7 +42,7 @@ import {
 import { useConnectivity } from '../hooks/useConnectivity';
 import { formatCoOwnIze } from '../utils/currency';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 type SortOption = 'newest' | 'available' | 'allocation';
 type HubSegment = 'active' | 'new_issues' | 'watchlist';
 
@@ -498,7 +498,7 @@ export default function CoOwnHubScreen() {
               </AnimatedPressable>
             </View>
           ) : yourPositions.length > 0 ? (
-            <FlatList
+            <FlashList
               data={yourPositions}
               renderItem={renderPosition}
               keyExtractor={(position) => position.id}
@@ -510,7 +510,6 @@ export default function CoOwnHubScreen() {
               snapToAlignment="start"
               decelerationRate="fast"
               disableIntervalMomentum
-              removeClippedSubviews
               accessibilityLabel="Your positions"
             />
           ) : (
@@ -786,7 +785,7 @@ export default function CoOwnHubScreen() {
       <CoOwnMarketHeader title="Co-Own" onBack={handleBack} actions={headerActions} />
       <CoOwnOfflineBanner isOffline={isOffline} />
       <CoOwnReconciliationBanner isActive={false} />
-      <FlatList
+      <FlashList
         data={hubRows}
         renderItem={renderRow}
         keyExtractor={(item) => item.key}
@@ -801,9 +800,6 @@ export default function CoOwnHubScreen() {
           />
         }
         keyboardShouldPersistTaps="handled"
-        removeClippedSubviews
-        initialNumToRender={8}
-        windowSize={7}
       />
     </SafeAreaView>
   );
@@ -821,26 +817,26 @@ const styles = StyleSheet.create({
     paddingBottom: Space.md,
   },
   highlightsHeading: {
-    minHeight: 28,
+    minHeight: Space.xl - Space.xs,
     paddingHorizontal: Space.md,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   tabsSurface: {
-    minHeight: 50,
+    minHeight: Control.hit + 6,
     borderBottomWidth: StyleSheet.hairlineWidth,
     justifyContent: 'flex-end',
   },
   tabsRow: {
-    minHeight: 49,
+    minHeight: Control.hit + 5,
     paddingHorizontal: Space.sm,
     flexDirection: 'row',
     alignItems: 'stretch',
   },
   tab: {
     minWidth: 0,
-    minHeight: 49,
+    minHeight: Control.hit + 5,
     flex: 1,
     paddingHorizontal: Space.xs,
     alignItems: 'center',
@@ -850,15 +846,15 @@ const styles = StyleSheet.create({
   tabText: {
     fontSize: Type.captionElevated.size,
     lineHeight: Type.captionElevated.lineHeight,
-    letterSpacing: -0.1,
+    letterSpacing: LetterSpacing.normal - 0.1,
     textAlign: 'center',
   },
   tabIndicator: {
     position: 'absolute',
     bottom: 0,
-    width: 24,
-    height: 2,
-    borderRadius: 1,
+    width: Space.lg + 4,
+    height: Stroke.emphasis,
+    borderRadius: Stroke.hairline,
   },
   majorSection: {
     paddingTop: Space.lg,
@@ -875,28 +871,28 @@ const styles = StyleSheet.create({
   sectionHeadingGroup: {
     flex: 1,
     minWidth: 0,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   sectionEyebrow: {
     fontSize: Type.meta.size,
     lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: 1,
+    letterSpacing: LetterSpacing.caps,
     textTransform: 'uppercase',
   },
   sectionTitle: {
     fontSize: Type.title.size,
     lineHeight: Type.title.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: -0.45,
+    letterSpacing: LetterSpacing.tight,
   },
   sectionAction: {
-    minHeight: 44,
+    minHeight: Control.hit,
     paddingLeft: Space.md,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    gap: 2,
+    gap: Space.xs / 2,
   },
   sectionActionText: {
     fontSize: Type.captionElevated.size,
@@ -910,7 +906,7 @@ const styles = StyleSheet.create({
     width: POSITION_CARD_GAP,
   },
   inlineState: {
-    minHeight: 72,
+    minHeight: Space.xxl + Space.xxl + Space.xxl - 24,
     marginHorizontal: Space.md,
     paddingVertical: Space.md,
     flexDirection: 'row',
@@ -919,15 +915,15 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   inlineStateIcon: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
   inlineStateBody: {
     flex: 1,
     minWidth: 0,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   inlineStateTitle: {
     fontSize: Type.bodyEmphasis.size,
@@ -940,8 +936,8 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
   },
   inlineRetry: {
-    minWidth: 64,
-    minHeight: 44,
+    minWidth: Space.xxl + Space.xl + Space.xs,
+    minHeight: Control.hit,
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
@@ -961,7 +957,7 @@ const styles = StyleSheet.create({
     lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
     fontVariant: ['tabular-nums'],
-    paddingBottom: 4,
+    paddingBottom: Space.xs,
   },
   marketControls: {
     paddingHorizontal: Space.md,
@@ -974,20 +970,20 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   inputAction: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
   controlButton: {
-    minHeight: 44,
-    paddingHorizontal: 12,
+    minHeight: Control.hit,
+    paddingHorizontal: Space.sm + 4,
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
   },
   searchControl: {
     flex: 1,
@@ -1005,8 +1001,8 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   sortOption: {
-    minHeight: 44,
-    paddingHorizontal: 12,
+    minHeight: Control.hit,
+    paddingHorizontal: Space.sm + 4,
     borderRadius: Radius.full,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
@@ -1028,7 +1024,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   instrumentsEmptyWrap: {
-    minHeight: 260,
+    minHeight: Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xl - 4,
     paddingHorizontal: Space.md,
   },
   remainingContent: {
@@ -1037,7 +1033,7 @@ const styles = StyleSheet.create({
     gap: Space.md,
   },
   creatorLink: {
-    minHeight: 64,
+    minHeight: Space.xxl + Space.xl + Space.xs,
     paddingVertical: Space.md,
     flexDirection: 'row',
     alignItems: 'center',
@@ -1045,8 +1041,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   creatorIcon: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1055,7 +1051,7 @@ const styles = StyleSheet.create({
   creatorBody: {
     flex: 1,
     minWidth: 0,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   creatorTitle: {
     fontSize: Type.bodyEmphasis.size,
@@ -1068,7 +1064,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
   },
   ledgerLink: {
-    minHeight: 44,
+    minHeight: Control.hit,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,

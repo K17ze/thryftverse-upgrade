@@ -1,16 +1,15 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, StyleSheet } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Type, Typography } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { EmptyState } from '../components/EmptyState';
 import { ConversationManagementRow } from '../components/chat/ConversationManagementRow';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 export default function MutedConversationsScreen() {
   const navigation = useNavigation<NavT>();
@@ -41,15 +40,11 @@ export default function MutedConversationsScreen() {
       }
     >
       {mutedConversations.length === 0 ? (
-        <View style={styles.empty}>
-          <Ionicons name="notifications-off-outline" size={25} color={colors.textMuted} />
-          <Text style={styles.emptyTitle}>
-            No muted conversations
-          </Text>
-          <Text style={styles.emptyBody}>
-            Chats you mute will appear here with their notification state.
-          </Text>
-        </View>
+        <EmptyState
+          icon="notifications-off-outline"
+          title="No muted conversations"
+          subtitle="Chats you mute will appear here with their notification state."
+        />
       ) : (
         <View style={styles.list}>
           {mutedConversations.map((convo, index) => (
@@ -76,26 +71,6 @@ function createStyles(colors: ThemeColors) {
       borderTopWidth: StyleSheet.hairlineWidth,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
-    },
-    empty: {
-      alignItems: 'center',
-      paddingHorizontal: Space.xl,
-      paddingTop: 72,
-    },
-    emptyTitle: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-      marginTop: Space.md,
-    },
-    emptyBody: {
-      maxWidth: 300,
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-      textAlign: 'center',
-      lineHeight: 18,
-      marginTop: Space.xs,
     },
   });
 }

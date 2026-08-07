@@ -20,7 +20,7 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useBackendData } from '../context/BackendDataContext';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
-import { Space, Typography, Radius } from '../theme/designTokens';
+import { Space, Typography, Radius, Type, Stroke, Control, LetterSpacing } from '../theme/designTokens';
 import {
   CommerceOrder,
   OrderParcelEvent,
@@ -1535,22 +1535,22 @@ const txStyles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 6,
+    paddingVertical: Space.xs + 2,
   },
   label: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
   },
   labelBold: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.semibold,
   },
   value: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
   },
   valueBold: {
-    fontSize: 18,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.bold,
   },
 });
@@ -1568,8 +1568,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   headerBtn: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1587,16 +1587,16 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   headerTitle: {
-    fontSize: 17,
+    fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
   },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Space.xs,
   },
   headerSpacer: {
-    width: 44,
+    width: Control.hit,
   },
   scrollContent: {
     paddingHorizontal: Space.md,
@@ -1609,7 +1609,7 @@ const styles = StyleSheet.create({
     gap: Space.md,
   },
   loadingText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
   },
   errorContainer: {
@@ -1620,88 +1620,89 @@ const styles = StyleSheet.create({
     gap: Space.md,
   },
   errorTitle: {
-    fontSize: 18,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.semibold,
     textAlign: 'center',
   },
   errorBody: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: Type.body.lineHeight,
   },
   retryBtn: {
-    paddingVertical: 14,
+    paddingVertical: Space.md - 2,
     paddingHorizontal: Space.xl,
     borderRadius: Radius.lg,
-    minHeight: 48,
+    minHeight: Space.xxl,
     alignItems: 'center',
     justifyContent: 'center',
   },
   retryBtnText: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.semibold,
   },
   statusHeader: {
     paddingVertical: Space.sm,
-    gap: 4,
+    gap: Space.xs,
   },
   orderNumber: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: 1.2,
+    letterSpacing: LetterSpacing.caps + 0.38,
     textTransform: 'uppercase',
   },
   statusBadgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    gap: Space.xs + 2,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.xs + 1,
     borderRadius: Radius.full,
   },
   statusDot: {
-    width: 7,
-    height: 7,
+    width: Space.sm - 1,
+    height: Space.sm - 1,
     borderRadius: Radius.full,
   },
   statusBadgeText: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: 0.1,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   statusLabel: {
-    fontSize: 22,
+    fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
+    letterSpacing: Type.title.letterSpacing,
   },
   statusExplanation: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    lineHeight: 20,
+    lineHeight: Type.body.lineHeight,
   },
   lastUpdated: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
   refreshErrorRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
     paddingVertical: Space.xs,
   },
   refreshErrorText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
   },
   retryLink: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
   },
   sectionDivider: {
@@ -1709,10 +1710,10 @@ const styles = StyleSheet.create({
     marginVertical: Space.sm,
   },
   sectionLabel: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     textTransform: 'uppercase',
-    letterSpacing: 1.2,
+    letterSpacing: LetterSpacing.caps + 0.38,
     marginBottom: Space.sm,
   },
   counterpartySection: {
@@ -1731,13 +1732,13 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   counterpartyAvatar: {
-    width: 40,
-    height: 40,
+    width: Space.xxl,
+    height: Space.xxl,
     borderRadius: Radius.full,
   },
   counterpartyName: {
     flex: 1,
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
   },
   counterpartyActions: {
@@ -1745,16 +1746,16 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   counterpartyBtn: {
-    paddingVertical: 8,
+    paddingVertical: Space.sm,
     paddingHorizontal: Space.md,
     borderRadius: Radius.md,
-    borderWidth: 1,
-    minHeight: 44,
+    borderWidth: Stroke.standard,
+    minHeight: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
   counterpartyBtnText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
   },
   timelineSection: {
@@ -1763,7 +1764,7 @@ const styles = StyleSheet.create({
   escrowBanner: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 10,
+    gap: Space.sm + 2,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
     marginHorizontal: Space.md,
@@ -1772,29 +1773,29 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   escrowIconWrap: {
-    width: 28,
-    height: 28,
+    width: Space.lg + 4,
+    height: Space.lg + 4,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
   escrowTextWrap: {
     flex: 1,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   escrowTitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
   },
   escrowSub: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    lineHeight: 16,
+    lineHeight: Type.caption.lineHeight,
   },
   escrowCountdown: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
   shipmentSection: {
     paddingVertical: Space.sm,
@@ -1803,38 +1804,38 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 8,
-    gap: 12,
+    paddingVertical: Space.sm,
+    gap: Space.md,
   },
   detailLabel: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
   },
   detailValue: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     textAlign: 'right',
     flex: 1,
   },
   detailValueLink: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
   },
   copyRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
   },
   shippingLabelBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    marginTop: 4,
-    minHeight: 44,
+    gap: Space.xs + 2,
+    paddingVertical: Space.sm + 2,
+    marginTop: Space.xs,
+    minHeight: Control.hit,
   },
   shippingLabelBtnText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
   },
   transactionSection: {
@@ -1852,18 +1853,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.sm,
     paddingVertical: Space.sm,
-    minHeight: 44,
+    minHeight: Control.hit,
   },
   supportInfo: {
     flex: 1,
   },
   supportLabel: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
   },
   supportSub: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
 });

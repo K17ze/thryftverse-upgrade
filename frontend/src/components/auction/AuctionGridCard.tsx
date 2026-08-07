@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, useWindowDimensions, Platform } from 'react-native';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Typography, Stroke } from '../../theme/designTokens';
+import { Space, Radius, Typography, Stroke, Type, AspectRatio } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AuctionCountdown } from './AuctionCountdown';
@@ -111,7 +111,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   imageWrap: {
     position: 'relative',
-    aspectRatio: 4 / 5,
+    aspectRatio: AspectRatio.portrait,
     borderRadius: Radius.lg,
     overflow: 'hidden',
     backgroundColor: colors.surfaceAlt,
@@ -153,7 +153,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   personalMarkerText: {
     fontFamily: Typography.family.semibold,
-    fontSize: 11,
+    fontSize: Type.meta.size,
     color: colors.textInverse,
     letterSpacing: 0.4,
   },
@@ -163,13 +163,13 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   brand: {
     fontFamily: Typography.family.medium,
-    fontSize: 11,
+    fontSize: Type.meta.size,
     color: colors.textMuted,
     letterSpacing: 0.2,
   },
   title: {
     fontFamily: Typography.family.semibold,
-    fontSize: 14,
+    fontSize: Type.body.size,
     color: colors.textPrimary,
     letterSpacing: -0.3,
     lineHeight: 18,
@@ -182,7 +182,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   bidCount: {
     fontFamily: Typography.family.medium,
-    fontSize: 11,
+    fontSize: Type.meta.size,
     color: colors.textMuted,
   },
 });

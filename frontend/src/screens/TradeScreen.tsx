@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, StatusBar, useWindowDimensions, Keyboard } from
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
@@ -36,7 +36,7 @@ import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Space, Radius, Type, Typography, DockConstants } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, DockConstants, LetterSpacing } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useHaptic } from '../hooks/useHaptic';
 import {
@@ -60,7 +60,7 @@ import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { formatCoOwnIze } from '../utils/currency';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'Trade'>;
 
 const TRADE_SIDE_OPTIONS: Array<{ value: TradeSide; label: string; accessibilityLabel: string }> = [
@@ -745,7 +745,7 @@ const styles = StyleSheet.create({
   alertText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    lineHeight: 20,
+    lineHeight: Type.body.lineHeight,
   },
   illustrativeBanner: {
     flexDirection: 'row',
@@ -784,7 +784,7 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   ticketContextCol: {
-    width: 100,
+    width: Space.xxl * 2 + Space.xs,
     gap: Space.xs,
     paddingTop: Space.sm,
   },
@@ -796,7 +796,7 @@ const styles = StyleSheet.create({
   contextLabel: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    letterSpacing: 0.2,
+    letterSpacing: LetterSpacing.wide + 0.08,
     textTransform: 'uppercase',
   },
   contextValue: {
@@ -806,7 +806,7 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    letterSpacing: 0.2,
+    letterSpacing: LetterSpacing.wide + 0.08,
     textTransform: 'uppercase',
   },
   limitRow: {
@@ -817,15 +817,15 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   modePill: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
     borderRadius: Radius.full,
     flexShrink: 0,
   },
   modePillText: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.bold,
-    letterSpacing: 0.4,
+    letterSpacing: LetterSpacing.wide + 0.28,
   },
   maxLink: {
     fontSize: Type.caption.size,

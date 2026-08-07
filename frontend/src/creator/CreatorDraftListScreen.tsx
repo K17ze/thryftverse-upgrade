@@ -307,7 +307,7 @@ function createStyles(colors: ThemeColors) {
   },
   sortPill: {
     paddingHorizontal: Space.md,
-    paddingVertical: 8,
+    paddingVertical: Space.sm,
     borderRadius: Radius.lg,
   },
   sortPillActive: {
@@ -348,7 +348,7 @@ function createStyles(colors: ThemeColors) {
     opacity: 0.85,
   },
   draftThumb: {
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
     backgroundColor: colors.surfaceAlt,
     shadowColor: '#000',
@@ -358,7 +358,7 @@ function createStyles(colors: ThemeColors) {
     elevation: 2,
   },
   draftIcon: {
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
@@ -383,10 +383,10 @@ function createStyles(colors: ThemeColors) {
   },
   statusRow: {
     flexDirection: 'row',
-    marginTop: 4,
+    marginTop: Space.xs,
   },
   typeBadge: {
-    paddingHorizontal: 8,
+    paddingHorizontal: Space.sm,
     paddingVertical: 2,
     borderRadius: Radius.full,
   },
@@ -436,7 +436,7 @@ function createStyles(colors: ThemeColors) {
   },
   emptyCta: {
     backgroundColor: colors.brand,
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     paddingHorizontal: Space.lg,
     paddingVertical: Space.md,
     marginTop: Space.sm,

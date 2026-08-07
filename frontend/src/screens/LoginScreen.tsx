@@ -5,15 +5,14 @@ import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Type, Space } from '../theme/designTokens';
 import { useStore } from '../store/useStore';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { Typography } from '../theme/designTokens';
 import { markInteractive } from '../platform/monitoring';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
+import { Type, Space, Radius, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
 import {
   loginWithPassword,
   requestEmailOtp,
@@ -39,6 +38,8 @@ export default function LoginScreen() {
   const [recoveryCode, setRecoveryCode] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [infoMsg, setInfoMsg] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
   const reducedMotionEnabled = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const login = useStore(state => state.login);
@@ -84,6 +85,8 @@ export default function LoginScreen() {
 
     if (!normalizedEmail || !password) {
       setErrorMsg('Please fill in both email and password.');
+      setEmailError(!normalizedEmail ? 'Email is required.' : '');
+      setPasswordError(!password ? 'Password is required.' : '');
       setInfoMsg('');
       shake();
       return;
@@ -91,6 +94,7 @@ export default function LoginScreen() {
 
     if (!/^\S+@\S+\.\S+$/.test(normalizedEmail)) {
       setErrorMsg('Enter a valid email address.');
+      setEmailError('Enter a valid email address.');
       setInfoMsg('');
       shake();
       return;
@@ -98,12 +102,15 @@ export default function LoginScreen() {
 
     if (password.length < 6) {
       setErrorMsg('Password must be at least 6 characters.');
+      setPasswordError('Password must be at least 6 characters.');
       setInfoMsg('');
       shake();
       return;
     }
 
     setErrorMsg('');
+    setEmailError('');
+    setPasswordError('');
     setInfoMsg('');
     setIsSubmitting(true);
 
@@ -307,6 +314,7 @@ export default function LoginScreen() {
                 autoCorrect={false}
                 returnKeyType="next"
                 value={email}
+                errorText={emailError || undefined}
                 onChangeText={(value) => {
                   setEmail(value);
                   setRequiresTwoFactor(false);
@@ -318,6 +326,9 @@ export default function LoginScreen() {
                   }
                   if (errorMsg) {
                     setErrorMsg('');
+                  }
+                  if (emailError) {
+                    setEmailError('');
                   }
                   if (infoMsg) {
                     setInfoMsg('');
@@ -368,7 +379,16 @@ export default function LoginScreen() {
                 secureTextEntry
                 returnKeyType="done"
                 value={password}
-                onChangeText={setPassword}
+                errorText={passwordError || undefined}
+                onChangeText={(value) => {
+                  setPassword(value);
+                  if (errorMsg) {
+                    setErrorMsg('');
+                  }
+                  if (passwordError) {
+                    setPasswordError('');
+                  }
+                }}
                 onSubmitEditing={() => {
                   Keyboard.dismiss();
                   if (canSubmit) {
@@ -478,13 +498,14 @@ export default function LoginScreen() {
 
             <Reanimated.View style={shakeStyle} layout={layoutAnimation}>
               <AppButton
-                title={isSubmitting ? 'Logging in...' : 'Log In'}
+                title={isSubmitting ? 'Signing in...' : 'Log In'}
                 style={[styles.primaryBtn, !canSubmit && styles.primaryBtnDisabled]}
                 titleStyle={styles.primaryText}
                 variant="primary"
                 size="md"
                 onPress={handleLogin}
                 disabled={!canSubmit}
+                loading={isSubmitting}
                 accessibilityLabel="Log in"
                 hapticFeedback="medium"
               />
@@ -512,8 +533,8 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   header: { paddingHorizontal: Space.md, paddingTop: Space.sm, paddingBottom: Space.xs },
-  backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border },
-  backBtnSpacer: { width: 44, height: 44 },
+  backBtn: { width: Control.hit, height: Control.hit, borderRadius: Radius.xxl, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: Stroke.standard, borderColor: colors.border },
+  backBtnSpacer: { width: Control.hit, height: Control.hit },
 
   keyboardWrap: { flex: 1 },
   content: { flex: 1 },
@@ -541,7 +562,7 @@ function createStyles(colors: ThemeColors) {
   },
   dividerLine: {
     flex: 1,
-    height: 1,
+    height: Stroke.standard,
     backgroundColor: colors.border,
   },
   dividerText: {
@@ -549,12 +570,12 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    letterSpacing: LetterSpacing.caps,
   },
   otpRequestBtn: {
-    minHeight: 46,
-    borderRadius: 23,
-    borderWidth: 1,
+    minHeight: Control.hit + 2,
+    borderRadius: Radius.xxl,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
@@ -575,24 +596,24 @@ function createStyles(colors: ThemeColors) {
     color: colors.textMuted,
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    marginBottom: 2,
+    marginBottom: Space.xs / 2,
   },
   magicLinkBtn: {
-    minHeight: 42,
-    borderRadius: 21,
+    minHeight: Control.hit - 2,
+    borderRadius: Radius.xxl,
     borderWidth: 0,
     backgroundColor: 'transparent',
     marginTop: Space.sm + 2,
   },
   magicLinkText: {
     color: colors.textSecondary,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
     textDecorationLine: 'underline',
   },
   otpVerifyBtn: {
-    minHeight: 48,
-    borderRadius: 24,
+    minHeight: Space.xxl,
+    borderRadius: Radius.xxl,
     borderWidth: 0,
     backgroundColor: colors.brand,
   },
@@ -603,9 +624,9 @@ function createStyles(colors: ThemeColors) {
   },
 
   footer: { paddingTop: Space.sm, position: 'relative' },
-  infoText: { color: colors.success, fontSize: 13, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: Space.md - 4 },
-  errorText: { color: colors.danger, fontSize: 13, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: Space.md - 4 },
-  primaryBtn: { backgroundColor: colors.textPrimary, minHeight: 56, borderRadius: 28, borderWidth: 0 },
+  infoText: { color: colors.success, fontSize: Type.captionElevated.size, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: Space.md - 4 },
+  errorText: { color: colors.danger, fontSize: Type.captionElevated.size, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: Space.md - 4 },
+  primaryBtn: { backgroundColor: colors.textPrimary, minHeight: Space.xxl + Space.sm, borderRadius: Radius.xxl + 4, borderWidth: 0 },
   primaryBtnDisabled: { opacity: 0.45 },
   primaryText: { color: colors.background, fontSize: Type.body.size, fontFamily: Typography.family.semibold },
   switchRow: {
@@ -613,16 +634,16 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
   },
   switchText: {
     color: colors.textSecondary,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
   },
   switchLink: {
     color: colors.textPrimary,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     textDecorationLine: 'underline',
   },

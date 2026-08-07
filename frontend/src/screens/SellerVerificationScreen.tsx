@@ -11,7 +11,7 @@ import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Typography, Space, Radius, Type } from '../theme/designTokens';
+import { Typography, Space, Radius, Type, LetterSpacing, Stroke, Control } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { CachedImage } from '../components/CachedImage';
 import { useStore } from '../store/useStore';
@@ -354,13 +354,13 @@ function createStyles(colors: ThemeColors) {
     summaryLabel: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.medium,
-      letterSpacing: 0.2,
+      letterSpacing: LetterSpacing.wide + 0.08,
       textTransform: 'uppercase',
-      marginTop: 2,
+      marginTop: Space.xs - 2,
     },
     summaryDivider: {
-      width: 1,
-      height: 32,
+      width: Stroke.standard,
+      height: Space.xl,
     },
     section: {
       marginBottom: Space.lg,
@@ -368,10 +368,10 @@ function createStyles(colors: ThemeColors) {
     sectionTitle: {
       fontSize: Type.meta.size,
       fontFamily: Typography.family.semibold,
-      letterSpacing: 0.3,
+      letterSpacing: LetterSpacing.wide + 0.18,
       textTransform: 'uppercase',
       marginBottom: Space.sm,
-      marginLeft: 2,
+      marginLeft: Space.xs - 2,
     },
     demandCard: {
       borderRadius: Radius.lg,
@@ -386,13 +386,13 @@ function createStyles(colors: ThemeColors) {
       gap: Space.sm,
     },
     assetThumb: {
-      width: 44,
-      height: 44,
+      width: Control.hit,
+      height: Control.hit,
       borderRadius: Radius.md,
     },
     assetInfo: {
       flex: 1,
-      gap: 2,
+      gap: Space.xs - 2,
     },
     assetTitle: {
       fontSize: Type.bodyEmphasis.size,
@@ -408,12 +408,12 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'space-between',
       marginTop: Space.sm,
-      marginLeft: 44 + Space.sm,
+      marginLeft: Control.hit + Space.sm,
     },
     statusBadge: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 4,
+      gap: Space.xs,
     },
     statusText: {
       fontSize: Type.meta.size,
@@ -429,7 +429,7 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       gap: Space.xs,
       marginTop: Space.sm,
-      marginLeft: 44 + Space.sm,
+      marginLeft: Control.hit + Space.sm,
       paddingHorizontal: Space.sm,
       paddingVertical: Space.xs + 2,
       borderRadius: Radius.md,

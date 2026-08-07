@@ -2,10 +2,9 @@ import React, { useState, useMemo } from 'react';
 import { View, Text, TextInput, StyleSheet, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type } from '../theme/designTokens';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -14,9 +13,8 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsRow } from '../components/settings/SettingsRow';
 import { SettingsInfoBanner } from '../components/settings/SettingsInfoBanner';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Typography } from '../theme/designTokens';
-
-type Props = StackScreenProps<RootStackParamList, 'HelpSupport'>;
+import { Space, Radius, Type, Typography, Stroke } from '../theme/designTokens';
+type Props = NativeStackScreenProps<RootStackParamList, 'HelpSupport'>;
 
 export default function HelpSupportScreen({ navigation }: Props) {
   const { show } = useToast();
@@ -225,8 +223,8 @@ function createStyles(colors: ThemeColors) {
     gap: Space.md,
   },
   heroIcon: {
-    width: 40,
-    height: 40,
+    width: Space.xl + Space.sm,
+    height: Space.xl + Space.sm,
     borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
@@ -240,7 +238,7 @@ function createStyles(colors: ThemeColors) {
   heroSubtitle: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    marginTop: 2,
+    marginTop: Space.xs - 2,
   },
   searchWrap: {
     flexDirection: 'row',
@@ -250,7 +248,7 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.xl,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 4,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
   },
   searchInput: {

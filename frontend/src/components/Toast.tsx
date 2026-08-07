@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useToast, ToastType } from '../context/ToastContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AnimatedPressable } from './AnimatedPressable';
-import { Typography } from '../theme/designTokens';
+import { Typography, Radius, Space } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import Reanimated, { useSharedValue, useAnimatedStyle, withTiming, runOnJS, Easing } from 'react-native-reanimated';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -106,8 +106,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     // Toast is always dark with warm tint — intentional design for transient overlay
     backgroundColor: '#191714',
-    borderRadius: 14,
-    paddingHorizontal: 16,
+    borderRadius: Radius.xl,
+    paddingHorizontal: Space.md,
     paddingVertical: 14,
     borderLeftWidth: 4,
     gap: 12,

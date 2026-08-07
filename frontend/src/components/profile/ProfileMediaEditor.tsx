@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space } from '../../theme/designTokens';
+import { Typography, Space, Type } from '../../theme/designTokens';
 
 type MediaStatus = 'idle' | 'uploading' | 'failed' | 'confirmed';
 
@@ -76,18 +76,18 @@ function createStyles(colors: ThemeColors) {
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: Space.sm,
     paddingHorizontal: Space.md,
-    paddingVertical: 6,
+    paddingVertical: Space.xs + 2,
   },
   statusText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },
   failedContainer: {
     paddingHorizontal: Space.md,
-    paddingVertical: 8,
+    paddingVertical: Space.sm,
     backgroundColor: 'rgba(255,77,77,0.04)',
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -96,25 +96,25 @@ function createStyles(colors: ThemeColors) {
   failedRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 6,
+    gap: Space.xs + 2,
+    marginBottom: Space.xs + 2,
   },
   errorText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.danger,
-    lineHeight: 16,
+    lineHeight: Type.caption.lineHeight,
   },
   actionRow: {
     flexDirection: 'row',
-    gap: 16,
+    gap: Space.md + 2,
   },
   actionBtn: {
-    paddingVertical: 4,
+    paddingVertical: Space.xs,
   },
   actionText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: colors.brand,
   },

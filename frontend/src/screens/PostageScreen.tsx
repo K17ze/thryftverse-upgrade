@@ -7,10 +7,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeIn, FadeInDown } from 'react-native-reanimated';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
@@ -21,11 +20,11 @@ import { SettingsCell } from '../components/SettingsCell';
 import { RadioButton } from '../components/settings/RadioButton';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { SkeletonLoader } from '../components/SkeletonLoader';
-import { Typography } from '../theme/designTokens';
 import { PremiumListSection } from '../components/ui/PremiumListSection';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 
-type Props = StackScreenProps<RootStackParamList, 'Postage'>;
+import { Space, Radius, Type, Typography } from '../theme/designTokens';
+type Props = NativeStackScreenProps<RootStackParamList, 'Postage'>;
 
 const CARRIERS = [
   { key: 'evri', label: 'Evri', priceFromGBP: 2.89, selected: true },
@@ -235,7 +234,7 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     marginBottom: Space.md,
-    minHeight: 56,
+    minHeight: Space.xxl + Space.sm,
   },
   addressLinkLeft: {
     flexDirection: 'row',
@@ -252,7 +251,7 @@ function createStyles(colors: ThemeColors) {
   addressLinkSubtitle: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
     letterSpacing: Type.caption.letterSpacing,
     lineHeight: Type.caption.lineHeight,
   },
@@ -273,7 +272,7 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: colors.textPrimary,
-    marginBottom: 2,
+    marginBottom: Space.xs / 2,
     letterSpacing: Type.body.letterSpacing,
   },
   carrierPrice: {
@@ -321,8 +320,8 @@ function createStyles(colors: ThemeColors) {
     gap: Space.md,
   },
   heroIcon: {
-    width: 40,
-    height: 40,
+    width: Space.xxl - Space.sm,
+    height: Space.xxl - Space.sm,
     borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
@@ -336,7 +335,7 @@ function createStyles(colors: ThemeColors) {
   heroSubtitle: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
   });
 }

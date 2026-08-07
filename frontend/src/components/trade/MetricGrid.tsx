@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
     minHeight: 72,
   },
   iconWrap: {
-    marginBottom: 4,
+    marginBottom: Space.xs,
   },
   value: {
     textAlign: 'center',

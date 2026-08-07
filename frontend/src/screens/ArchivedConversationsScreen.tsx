@@ -1,18 +1,18 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Alert } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Type, Typography } from '../theme/designTokens';
+import { Type, Typography } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { EmptyState } from '../components/EmptyState';
 import { ConversationManagementRow } from '../components/chat/ConversationManagementRow';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 export default function ArchivedConversationsScreen() {
   const navigation = useNavigation<NavT>();
@@ -96,15 +96,13 @@ export default function ArchivedConversationsScreen() {
       }
     >
       {archivedConversations.length === 0 ? (
-        <View style={styles.empty}>
-          <Ionicons name="archive-outline" size={25} color={colors.textMuted} />
-          <Text style={styles.emptyTitle}>
-            No archived conversations
-          </Text>
-          <Text style={styles.emptyBody}>
-            Conversations you archive stay out of your inbox without being deleted.
-          </Text>
-        </View>
+        <EmptyState
+          icon="archive-outline"
+          title="No archived conversations"
+          subtitle="Conversations you archive stay out of your inbox without being deleted."
+          ctaLabel="Browse conversations"
+          onCtaPress={() => navigation.goBack()}
+        />
       ) : (
         <View style={styles.list}>
           {archivedConversations.map((convo, index) => {
@@ -150,26 +148,6 @@ function createStyles(colors: ThemeColors) {
       borderTopWidth: StyleSheet.hairlineWidth,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
-    },
-    empty: {
-      alignItems: 'center',
-      paddingHorizontal: Space.xl,
-      paddingTop: 72,
-    },
-    emptyTitle: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-      marginTop: Space.md,
-    },
-    emptyBody: {
-      maxWidth: 300,
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-      textAlign: 'center',
-      lineHeight: 18,
-      marginTop: Space.xs,
     },
     clearAllBtn: {
       fontSize: Type.caption.size,

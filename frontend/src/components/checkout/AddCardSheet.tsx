@@ -261,7 +261,7 @@ const createStyles = (themed: {
   providerMark: {
     width: 48,
     height: 48,
-    borderRadius: 24,
+    borderRadius: Radius.xxl,
     backgroundColor: themed.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
@@ -278,7 +278,7 @@ const createStyles = (themed: {
   subtitle: {
     color: themed.textSecondary,
     fontFamily: Typography.family.regular,
-    fontSize: 14,
+    fontSize: Type.body.size,
     lineHeight: 21,
     textAlign: 'center',
   },
@@ -303,13 +303,13 @@ const createStyles = (themed: {
   boundaryTitle: {
     color: themed.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: 14,
+    fontSize: Type.body.size,
     marginBottom: 2,
   },
   boundaryText: {
     color: themed.textSecondary,
     fontFamily: Typography.family.regular,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     lineHeight: 17,
   },
   separator: {
@@ -326,19 +326,19 @@ const createStyles = (themed: {
   blockedTitle: {
     color: themed.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: 14,
+    fontSize: Type.body.size,
     marginBottom: 3,
   },
   blockedText: {
     color: themed.textSecondary,
     fontFamily: Typography.family.regular,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     lineHeight: 18,
   },
   policy: {
     color: themed.textMuted,
     fontFamily: Typography.family.medium,
-    fontSize: 11,
+    fontSize: Type.meta.size,
     marginBottom: Space.md,
     textAlign: 'center',
   },
@@ -358,6 +358,6 @@ const createStyles = (themed: {
   primaryActionText: {
     color: themed.textInverse,
     fontFamily: Typography.family.bold,
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
   },
 });

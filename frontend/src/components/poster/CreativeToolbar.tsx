@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, Pressable, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Typography } from '../../theme/designTokens';
+import { Typography, Radius, Space } from '../../theme/designTokens';
 
 export type CreativeTool = 'text' | 'stickers' | 'draw' | 'filter' | 'preview' | null;
 
@@ -56,7 +56,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    paddingBottom: 24,
+    paddingBottom: Space.lg,
     paddingHorizontal: 12,
     zIndex: 15,
   },
@@ -65,7 +65,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     backgroundColor: 'rgba(0,0,0,0.45)',
-    borderRadius: 20,
+    borderRadius: Radius.xxl,
     paddingHorizontal: 12,
     paddingVertical: 10,
     alignSelf: 'center',
@@ -76,8 +76,8 @@ const styles = StyleSheet.create({
     gap: 3,
     minWidth: 52,
     paddingHorizontal: 6,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingVertical: Space.xs,
+    borderRadius: Radius.lg,
   },
   toolBtnActive: {
     backgroundColor: '#fff',

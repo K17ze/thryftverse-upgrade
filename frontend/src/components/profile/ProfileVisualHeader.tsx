@@ -11,7 +11,7 @@ import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Colors, ActiveTheme } from '../../constants/colors';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -208,19 +208,19 @@ const styles = StyleSheet.create({
   },
   editCoverBtn: {
     position: 'absolute',
-    bottom: 12,
-    right: 12,
+    bottom: Space.md,
+    right: Space.md,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Space.xs,
     backgroundColor: 'rgba(0,0,0,0.5)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.xs + 2,
     borderRadius: Radius.md,
   },
   editCoverText: {
     fontFamily: Typography.family.medium,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     color: '#fff',
   },
   identityBlock: {
@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
     right: 0,
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: Radius.xl,
     backgroundColor: 'rgba(0,0,0,0.6)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -262,7 +262,7 @@ const styles = StyleSheet.create({
     top: -2,
     right: -2,
     backgroundColor: Colors.surface,
-    borderRadius: 10,
+    borderRadius: Radius.lg,
   },
   nameBlock: {
     flex: 1,
@@ -271,22 +271,22 @@ const styles = StyleSheet.create({
   },
   displayName: {
     fontFamily: Typography.family.bold,
-    fontSize: 20,
+    fontSize: Type.priceList.size,
     color: Colors.textPrimary,
     letterSpacing: -0.4,
     lineHeight: 26,
   },
   handle: {
     fontFamily: Typography.family.medium,
-    fontSize: 14,
+    fontSize: Type.body.size,
     color: Colors.textSecondary,
     marginTop: 2,
   },
   bio: {
     fontFamily: Typography.family.regular,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     color: Colors.textSecondary,
-    marginTop: 4,
+    marginTop: Space.xs,
     lineHeight: 18,
   },
   statsRail: {
@@ -300,17 +300,17 @@ const styles = StyleSheet.create({
   },
   statCell: {
     alignItems: 'center',
-    gap: 2,
+    gap: Space.xs / 2,
   },
   statValue: {
     fontFamily: Typography.family.bold,
-    fontSize: 18,
+    fontSize: Type.bodyLarge.size,
     color: Colors.textPrimary,
-    letterSpacing: -0.3,
+    letterSpacing: Type.bodyLarge.letterSpacing,
   },
   statLabel: {
     fontFamily: Typography.family.medium,
-    fontSize: 11,
+    fontSize: Type.meta.size,
     color: Colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -334,7 +334,7 @@ const styles = StyleSheet.create({
   },
   actionBtnPrimaryText: {
     fontFamily: Typography.family.semibold,
-    fontSize: 14,
+    fontSize: Type.body.size,
     color: Colors.background,
   },
   actionBtnSecondary: {
@@ -345,7 +345,7 @@ const styles = StyleSheet.create({
   },
   actionBtnSecondaryText: {
     fontFamily: Typography.family.semibold,
-    fontSize: 14,
+    fontSize: Type.body.size,
     color: Colors.textPrimary,
   },
   contextRow: {
@@ -358,7 +358,7 @@ const styles = StyleSheet.create({
   contextPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Space.xs,
     backgroundColor: Colors.surfaceAlt,
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs + 2,
@@ -366,7 +366,7 @@ const styles = StyleSheet.create({
   },
   contextPillText: {
     fontFamily: Typography.family.medium,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     color: Colors.textMuted,
   },
 });

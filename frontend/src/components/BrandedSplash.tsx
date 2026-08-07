@@ -10,7 +10,7 @@ import Reanimated, {
   withTiming,
   Easing,
 } from 'react-native-reanimated';
-import { Typography } from '../theme/designTokens';
+import { Typography, Type, Space } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -91,7 +91,7 @@ function createStyles(colors: ThemeColors) {
   centerWrap: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: Space.lg,
   },
   brandRow: {
     flexDirection: 'row',
@@ -109,7 +109,7 @@ function createStyles(colors: ThemeColors) {
     marginTop: 14,
     color: colors.brand,
     fontFamily: Typography.family.medium,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     letterSpacing: 0.22,
   },
   });

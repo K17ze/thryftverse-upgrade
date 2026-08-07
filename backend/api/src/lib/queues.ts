@@ -2,6 +2,7 @@ import { Queue, Worker } from 'bullmq';
 import { Redis as IORedis } from 'ioredis';
 import { config } from '../config.js';
 import { recordBackgroundJob, recordBackgroundJobDuration } from './metrics.js';
+import { logger } from './logger.js';
 
 export interface PushJobData {
   eventId: string;
@@ -73,11 +74,11 @@ function logJobEvent(
   } else {
     const payload = msg ? { ...obj, msg } : obj;
     if (level === 'error') {
-      console.error('[queues]', JSON.stringify(payload));
+      logger.error(payload, '[queues]');
     } else if (level === 'warn') {
-      console.warn('[queues]', JSON.stringify(payload));
+      logger.warn(payload, '[queues]');
     } else {
-      console.log('[queues]', JSON.stringify(payload));
+      logger.info(payload, '[queues]');
     }
   }
 }
@@ -88,7 +89,7 @@ const queueConnection = new IORedis(config.redisUrl, {
   retryStrategy: (times) => Math.min(times * 500, 5000),
 });
 queueConnection.on('error', (err) => {
-  console.warn('[queues] queueConnection redis error:', err.message);
+  logger.warn({ err: err.message }, '[queues] queueConnection redis error');
 });
 
 const workerConnection = new IORedis(config.redisUrl, {
@@ -97,7 +98,7 @@ const workerConnection = new IORedis(config.redisUrl, {
   retryStrategy: (times) => Math.min(times * 500, 5000),
 });
 workerConnection.on('error', (err) => {
-  console.warn('[queues] workerConnection redis error:', err.message);
+  logger.warn({ err: err.message }, '[queues] workerConnection redis error');
 });
 
 const PUSH_QUEUE_NAME = 'push_notifications';

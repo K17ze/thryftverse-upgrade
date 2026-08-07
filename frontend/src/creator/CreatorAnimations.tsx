@@ -198,6 +198,6 @@ const sheetStyles = StyleSheet.create({
   handle: {
     width: 32,
     height: 4,
-    borderRadius: 2,
+    borderRadius: Radius.sm,
   },
 });

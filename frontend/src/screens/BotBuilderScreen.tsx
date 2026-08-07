@@ -1,20 +1,20 @@
 import React, { useMemo, useState } from 'react';
 import { ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Radius, Space, Type, Typography } from '../theme/designTokens';
+import { Radius, Space, Type, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import type { ChatAgentConfig } from '../data/mockData';
 
-type Props = StackScreenProps<RootStackParamList, 'BotBuilder'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'BotBuilder'>;
 type BotCategory = 'assistant' | 'moderation' | 'commerce' | 'safety' | 'automation' | 'styling';
 
 const DEFAULT_CONFIG: ChatAgentConfig = {
@@ -514,16 +514,16 @@ function createStyles(colors: ThemeColors) {
   intro: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: Space.md - 2,
     paddingVertical: Space.sm,
   },
   agentMark: {
-    width: 32,
-    height: 44,
+    width: Control.chromeCompact,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  introCopy: { flex: 1, gap: 3 },
+  introCopy: { flex: 1, gap: Space.xs - 1 },
   introTitle: {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
@@ -536,7 +536,7 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.captionElevated.size,
     lineHeight: Type.captionElevated.lineHeight,
   },
-  section: { gap: 14 },
+  section: { gap: Space.md - 2 },
   sectionTitle: {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
@@ -544,15 +544,15 @@ function createStyles(colors: ThemeColors) {
     lineHeight: Type.subtitle.lineHeight,
   },
   sectionDetail: {
-    marginTop: 2,
+    marginTop: Space.xs - 2,
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
     fontSize: Type.caption.size,
     lineHeight: Type.caption.lineHeight,
   },
-  multilineShort: { minHeight: 88, alignItems: 'flex-start' },
+  multilineShort: { minHeight: Control.hit * 2, alignItems: 'flex-start' },
   instructionsInput: { minHeight: 156, alignItems: 'flex-start' },
-  multilineInput: { textAlignVertical: 'top', paddingTop: 12 },
+  multilineInput: { textAlignVertical: 'top', paddingTop: Space.sm + Space.xs },
   fieldLabel: {
     color: colors.textSecondary,
     fontFamily: Typography.family.semibold,
@@ -560,9 +560,9 @@ function createStyles(colors: ThemeColors) {
   },
   optionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
   option: {
-    minHeight: 44,
+    minHeight: Control.hit,
     justifyContent: 'center',
-    paddingHorizontal: 14,
+    paddingHorizontal: Space.md - 2,
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
@@ -580,8 +580,8 @@ function createStyles(colors: ThemeColors) {
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
-  choiceRow: { minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: Space.md },
-  choiceCopy: { flex: 1, gap: 2 },
+  choiceRow: { minHeight: Control.hit + Space.lg, flexDirection: 'row', alignItems: 'center', gap: Space.md },
+  choiceCopy: { flex: 1, gap: Space.xs - 2 },
   choiceTitle: {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
@@ -595,16 +595,16 @@ function createStyles(colors: ThemeColors) {
   },
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border },
   radio: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 1,
+    width: Control.icon,
+    height: Control.icon,
+    borderRadius: Radius.lg,
+    borderWidth: Stroke.standard,
     borderColor: colors.textMuted,
     alignItems: 'center',
     justifyContent: 'center',
   },
   radioActive: { borderColor: colors.textPrimary },
-  radioDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: colors.textPrimary },
+  radioDot: { width: Space.sm + Space.xs, height: Space.sm + Space.xs, borderRadius: Radius.md, backgroundColor: colors.textPrimary },
   invocationPreview: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   invocationText: {
     flex: 1,
@@ -616,22 +616,22 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Space.sm,
-    paddingTop: 2,
+    paddingTop: Space.xs - 2,
   },
   cautionText: {
     flex: 1,
     color: colors.textSecondary,
     fontFamily: Typography.family.regular,
     fontSize: Type.caption.size,
-    lineHeight: 17,
+    lineHeight: Type.captionElevated.lineHeight - 1,
   },
   permissionList: {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
-  permissionRow: { minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: Space.md },
-  permissionCopy: { flex: 1, gap: 3 },
+  permissionRow: { minHeight: Space.xxl + Space.lg, flexDirection: 'row', alignItems: 'center', gap: Space.md },
+  permissionCopy: { flex: 1, gap: Space.xs - 1 },
   permissionTitle: {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
@@ -641,25 +641,25 @@ function createStyles(colors: ThemeColors) {
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
     fontSize: Type.caption.size,
-    lineHeight: 17,
+    lineHeight: Type.captionElevated.lineHeight - 1,
   },
   readiness: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: Space.sm + Space.xs,
     paddingTop: Space.md,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
   },
   readinessIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: Control.chrome,
+    height: Control.chrome,
+    borderRadius: Radius.xxl,
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  readinessCopy: { flex: 1, gap: 2 },
+  readinessCopy: { flex: 1, gap: Space.xs - 2 },
   readinessTitle: {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
@@ -669,7 +669,7 @@ function createStyles(colors: ThemeColors) {
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
     fontSize: Type.caption.size,
-    lineHeight: 17,
+    lineHeight: Type.captionElevated.lineHeight - 1,
   },
   actions: { flexDirection: 'row', gap: Space.sm },
   action: { flex: 1 },

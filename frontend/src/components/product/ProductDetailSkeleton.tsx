@@ -1,12 +1,12 @@
 import React from 'react';
 import { View, StyleSheet, useWindowDimensions } from 'react-native';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius } from '../../theme/designTokens';
+import { Space, Radius, AspectRatio } from '../../theme/designTokens';
 
 export function ProductDetailSkeleton() {
   const { colors } = useAppTheme();
   const { width, height } = useWindowDimensions();
-  const heroHeight = Math.min(height * (width < 390 ? 0.5 : 0.56), width * 1.35);
+  const heroHeight = Math.min(height * (width < 390 ? 0.54 : 0.58), width / AspectRatio.portrait);
   const block = { backgroundColor: colors.surfaceAlt };
 
   return (

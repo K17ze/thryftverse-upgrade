@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, useWindowDimensions, Platform } from 'react-nat
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Typography, Elevation } from '../../theme/designTokens';
+import { Space, Radius, Typography, Elevation, Type } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AuctionStateBadge } from './AuctionStateBadge';
@@ -298,27 +298,27 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   brand: {
     fontFamily: Typography.family.medium,
-    fontSize: 11,
+    fontSize: Type.meta.size,
     color: 'rgba(255,255,255,0.7)',
     letterSpacing: 0.2,
   },
   title: {
     fontFamily: Typography.family.bold,
-    fontSize: 20,
+    fontSize: Type.priceList.size,
     color: colors.textInverse,
     letterSpacing: -0.5,
     lineHeight: 24,
-    marginBottom: 4,
+    marginBottom: Space.xs,
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 4,
+    marginTop: Space.xs,
   },
   bidCount: {
     fontFamily: Typography.family.medium,
-    fontSize: 11,
+    fontSize: Type.meta.size,
     color: 'rgba(255,255,255,0.65)',
   },
 
@@ -330,13 +330,13 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   belowBrand: {
     fontFamily: Typography.family.medium,
-    fontSize: 11,
+    fontSize: Type.meta.size,
     color: colors.textMuted,
     letterSpacing: 0.2,
   },
   belowTitle: {
     fontFamily: Typography.family.bold,
-    fontSize: 20,
+    fontSize: Type.priceList.size,
     color: colors.textPrimary,
     letterSpacing: -0.5,
     lineHeight: 24,
@@ -346,11 +346,11 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 4,
+    marginTop: Space.xs,
   },
   belowBidCount: {
     fontFamily: Typography.family.medium,
-    fontSize: 11,
+    fontSize: Type.meta.size,
     color: colors.textMuted,
   },
   personalActionBtn: {
@@ -363,7 +363,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   personalActionText: {
     fontFamily: Typography.family.semibold,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     color: colors.textInverse,
     letterSpacing: 0.3,
   },

@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, LetterSpacing } from '../theme/designTokens';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
@@ -254,7 +254,7 @@ function createStyles(colors: ThemeColors) {
     headerRight: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 4,
+      gap: Space.xs,
     },
     headerSaved: {
       fontSize: Type.caption.size,
@@ -281,8 +281,8 @@ function createStyles(colors: ThemeColors) {
       gap: Space.md,
     },
     heroIcon: {
-      width: 40,
-      height: 40,
+      width: Space.xxl - Space.sm,
+      height: Space.xxl - Space.sm,
       borderRadius: Radius.full,
       justifyContent: 'center',
       alignItems: 'center',
@@ -296,12 +296,12 @@ function createStyles(colors: ThemeColors) {
     heroSubtitle: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
-      marginTop: 2,
+      marginTop: Space.xs / 2,
     },
     heroBadge: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 4,
+      gap: Space.xs,
       paddingHorizontal: Space.sm,
       paddingVertical: Space.xs,
       borderRadius: Radius.full,
@@ -319,7 +319,7 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
       textTransform: 'uppercase',
-      letterSpacing: 0.8,
+      letterSpacing: LetterSpacing.caps,
       marginBottom: Space.sm,
     },
 
@@ -336,7 +336,7 @@ function createStyles(colors: ThemeColors) {
       gap: Space.sm,
       paddingVertical: Space.md,
       marginTop: Space.sm,
-      minHeight: 48,
+      minHeight: Space.xxl,
     },
     resetBtnText: {
       fontSize: Type.body.size,

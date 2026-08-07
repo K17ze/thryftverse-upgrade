@@ -320,14 +320,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
     borderRadius: Radius.full,
   },
   statusDot: {
     width: 7,
     height: 7,
-    borderRadius: 4,
+    borderRadius: Radius.sm,
   },
   statusText: {
     fontSize: Type.meta.size,

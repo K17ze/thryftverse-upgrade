@@ -33,7 +33,7 @@ import {
   PayoutAccountPayload,
 } from '../services/walletApi';
 import { getUserCountryCapabilities, UserCountryCapabilities } from '../services/capabilitiesApi';
-import { Typography, Space, Radius, Elevation } from '../theme/designTokens';
+import { Typography, Space, Radius, Elevation, Type, Stroke, Control, LetterSpacing } from '../theme/designTokens';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import {
@@ -47,6 +47,8 @@ import {
   isPaymentMethodAllowed,
 } from '../utils/capabilityPolicy';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
+import { useBiometricGate } from '../hooks/useBiometricGate';
+import { BiometricGatePrompt } from '../components/security/BiometricGate';
 
 export default function WithdrawScreen() {
   const navigation = useNavigation<any>();
@@ -66,6 +68,11 @@ export default function WithdrawScreen() {
   const reducedMotionEnabled = useReducedMotion();
   const currentUser = useStore((state) => state.currentUser);
   const currencySymbol = CURRENCIES[currencyCode].symbol;
+
+  // ── Biometric gate (OWASP M5) ──
+  // Withdrawals move money out of the wallet. Require biometric re-authentication
+  // before showing the withdrawal form. Falls through when biometric is unavailable.
+  const biometricGate = useBiometricGate();
 
   useEffect(() => {
     const displayAmount = getDefaultWithdrawDisplayAmount(availableBalance, currencyCode, goldRates);
@@ -436,6 +443,40 @@ export default function WithdrawScreen() {
     }
   };
 
+  // Auto-prompt biometric once availability is confirmed.
+  useEffect(() => {
+    if (biometricGate.status === 'locked' && !biometricGate.isAuthenticating) {
+      void biometricGate.authenticate('Authenticate to withdraw funds');
+    }
+  }, [biometricGate.status, biometricGate.isAuthenticating, biometricGate.authenticate]);
+
+  // ── Biometric gate: block the withdrawal form until authenticated ──
+  if (biometricGate.status === 'pending' || biometricGate.status === 'locked') {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
+        <View style={styles.header}>
+          <AnimatedPressable
+            style={styles.backBtn}
+            onPress={() => navigation.goBack()}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            accessibilityHint="Returns to the previous screen"
+          >
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          </AnimatedPressable>
+          <Text style={styles.headerTitle}>Withdraw Balance</Text>
+          <View style={{ width: 44 }} />
+        </View>
+        <BiometricGatePrompt
+          gate={biometricGate}
+          reason="Authenticate to withdraw funds"
+          onBack={() => navigation.goBack()}
+        />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
@@ -587,9 +628,9 @@ export default function WithdrawScreen() {
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, height: 56, borderBottomWidth: 1, borderBottomColor: colors.border },
-  backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'flex-start' },
-  headerTitle: { fontSize: 17, fontFamily: Typography.family.semibold, color: colors.textPrimary },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Space.md, height: Space.xl + Space.xl + 8, borderBottomWidth: Stroke.standard, borderBottomColor: colors.border },
+  backBtn: { width: Control.hit, height: Control.hit, justifyContent: 'center', alignItems: 'flex-start' },
+  headerTitle: { fontSize: Type.subtitle.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
 
   heroCard: {
     borderRadius: Radius.lg,
@@ -600,48 +641,48 @@ function createStyles(colors: ThemeColors) {
   },
   heroRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
   heroIcon: {
-    width: 40,
-    height: 40,
+    width: Space.xl + Space.sm,
+    height: Space.xl + Space.sm,
     borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
   },
   heroText: { flex: 1 },
   heroTitle: {
-    fontSize: Typography.family.bold ? 22 : 22,
+    fontSize: Type.title.size - 2,
     fontFamily: Typography.family.bold,
   },
   heroSubtitle: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
 
-  content: { flex: 1, paddingHorizontal: 20 },
+  content: { flex: 1, paddingHorizontal: Space.md + Space.xs },
 
-  amountWrap: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 40, marginBottom: 12 },
-  currencySymbol: { fontSize: 44, fontFamily: Typography.family.bold, color: colors.textPrimary, marginRight: 8 },
-  amountInput: { fontSize: 56, fontFamily: Typography.family.bold, color: colors.textPrimary, minWidth: 150 },
-  availableText: { textAlign: 'center', fontSize: 14, fontFamily: Typography.family.medium, color: colors.textSecondary, marginBottom: 8 },
-  policyLabel: { textAlign: 'center', fontSize: 12, fontFamily: Typography.family.semibold, color: colors.textMuted, marginBottom: 4 },
-  policyHint: { textAlign: 'center', fontSize: 12, fontFamily: Typography.family.medium, color: colors.textMuted, marginBottom: 28 },
-  balanceError: { textAlign: 'center', marginTop: 4, marginBottom: 20, fontSize: 12, fontFamily: Typography.family.semibold, color: colors.danger },
-  sectionTitle: { fontSize: 13, fontFamily: Typography.family.semibold, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 12 },
+  amountWrap: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: Space.xl + Space.xl - 8, marginBottom: Space.sm + Space.xs },
+  currencySymbol: { fontSize: Type.priceLarge.size + 16, fontFamily: Typography.family.bold, color: colors.textPrimary, marginRight: Space.sm },
+  amountInput: { fontSize: Type.priceLarge.size + 28, fontFamily: Typography.family.bold, color: colors.textPrimary, minWidth: Space.xxl * 3 + Space.xs + 2 },
+  availableText: { textAlign: 'center', fontSize: Type.body.size, fontFamily: Typography.family.medium, color: colors.textSecondary, marginBottom: Space.sm },
+  policyLabel: { textAlign: 'center', fontSize: Type.caption.size, fontFamily: Typography.family.semibold, color: colors.textMuted, marginBottom: Space.xs },
+  policyHint: { textAlign: 'center', fontSize: Type.caption.size, fontFamily: Typography.family.medium, color: colors.textMuted, marginBottom: Space.lg + Space.xs },
+  balanceError: { textAlign: 'center', marginTop: Space.xs, marginBottom: Space.md + 4, fontSize: Type.caption.size, fontFamily: Typography.family.semibold, color: colors.danger },
+  sectionTitle: { fontSize: Type.captionElevated.size, fontFamily: Typography.family.semibold, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: LetterSpacing.caps + 0.38, marginBottom: Space.sm + Space.xs },
 
-  bankCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.surface, padding: 16, borderRadius: Radius.lg, marginBottom: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, ...Elevation.subtle },
-  bankLeft: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  bankIcon: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
-  bankName: { fontSize: 16, fontFamily: Typography.family.semibold, color: colors.textPrimary, marginBottom: 4 },
-  bankDetails: { fontSize: 13, fontFamily: Typography.family.regular, color: colors.textSecondary },
+  bankCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.surface, padding: Space.md, borderRadius: Radius.lg, marginBottom: Space.sm + 4, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, ...Elevation.subtle },
+  bankLeft: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
+  bankIcon: { width: Space.xl + Space.xl - 4, height: Space.xl + Space.xl - 4, borderRadius: Radius.xxl, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  bankName: { fontSize: Type.bodyLarge.size, fontFamily: Typography.family.semibold, color: colors.textPrimary, marginBottom: Space.xs },
+  bankDetails: { fontSize: Type.captionElevated.size, fontFamily: Typography.family.regular, color: colors.textSecondary },
 
-  addBankBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12 },
-  addBankText: { fontSize: 15, fontFamily: Typography.family.semibold, color: colors.brand },
-  railHintText: { fontSize: 12, fontFamily: Typography.family.medium, color: colors.textMuted, paddingVertical: 12 },
+  addBankBtn: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm + Space.xs },
+  addBankText: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.semibold, color: colors.brand },
+  railHintText: { fontSize: Type.caption.size, fontFamily: Typography.family.medium, color: colors.textMuted, paddingVertical: Space.sm + Space.xs },
 
-  footer: { paddingVertical: 20, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.background },
-  feeText: { fontSize: 12, fontFamily: Typography.family.regular, color: colors.textMuted, textAlign: 'center', marginBottom: 16 },
-  primaryBtn: { backgroundColor: colors.textPrimary, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
+  footer: { paddingVertical: Space.md + 4, borderTopWidth: Stroke.standard, borderTopColor: colors.border, backgroundColor: colors.background },
+  feeText: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textMuted, textAlign: 'center', marginBottom: Space.md },
+  primaryBtn: { backgroundColor: colors.textPrimary, height: Space.xl + Space.xl + 8, borderRadius: Space.lg + 4, alignItems: 'center', justifyContent: 'center' },
   primaryBtnDisabled: { opacity: 0.45 },
-  primaryText: { color: colors.background, fontSize: 16, fontFamily: Typography.family.bold },
+  primaryText: { color: colors.background, fontSize: Type.bodyLarge.size, fontFamily: Typography.family.bold },
   });
 }

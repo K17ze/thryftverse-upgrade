@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography } from '../../theme/designTokens';
+import { Space, Typography, Type } from '../../theme/designTokens';
 
 interface UtilityItem {
   icon: keyof typeof Ionicons.glyphMap;
@@ -11,6 +11,7 @@ interface UtilityItem {
   value?: string;
   onPress: () => void;
   accessibilityLabel: string;
+  accessibilityHint?: string;
 }
 
 export function ProfileUtilityRail({ items }: { items: UtilityItem[] }) {
@@ -44,6 +45,7 @@ export function ProfileUtilityRail({ items }: { items: UtilityItem[] }) {
             hapticFeedback="light"
             accessibilityRole="button"
             accessibilityLabel={item.accessibilityLabel}
+            accessibilityHint={item.accessibilityHint}
           >
             <Ionicons name={item.icon} size={20} color={colors.textPrimary} />
             <Text style={styles.label} numberOfLines={1}>
@@ -72,26 +74,26 @@ function createStyles(colors: ThemeColors) {
   },
   content: {
     paddingHorizontal: Space.md,
-    gap: 4,
+    gap: Space.xs,
   },
   item: {
-    width: 104,
-    minHeight: 76,
+    width: Space.xxl + Space.xxl + Space.xs,
+    minHeight: Space.xxl + Space.xxl + Space.xs - Space.xs,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
+    gap: Space.xs,
   },
   label: {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
   },
   value: {
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: 10,
-    lineHeight: 12,
+    fontSize: Type.meta.size - 2,
+    lineHeight: Type.meta.lineHeight,
   },
   valuePlaceholder: {
     height: 12,

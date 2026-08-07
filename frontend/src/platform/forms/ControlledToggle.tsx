@@ -3,7 +3,7 @@ import { StyleSheet, View, Text } from 'react-native';
 import { Controller, Control, FieldError, RegisterOptions } from 'react-hook-form';
 import { Switch } from '@expo/ui';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography } from '../../theme/designTokens';
+import { Typography, Type } from '../../theme/designTokens';
 
 export interface ControlledToggleProps {
   name: string;
@@ -46,7 +46,7 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: 12,
   },
   label: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.medium,
     color: colors.textPrimary,
     flex: 1,

@@ -15,7 +15,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Typography, DockConstants, Radius, Stroke } from '../theme/designTokens';
+import { Space, Typography, DockConstants, Radius, Stroke, Type, Control, LetterSpacing } from '../theme/designTokens';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
@@ -34,7 +34,6 @@ import { createListingOnApi, createListingImageOnApi } from '../services/listing
 import { ListingMediaStudio } from '../components/listing/ListingMediaStudio';
 import { ListingModeSelector, ListingMode } from '../components/listing/ListingModeSelector';
 import { ListingPublishFooter } from '../components/listing/ListingPublishFooter';
-import { ListingQualityMeter } from '../components/listing/ListingQualityMeter';
 import { calculateListingQuality } from '../utils/listingQuality';
 import { useListingAutofill } from '../hooks/useListingAutofill';
 import { useSoldComps } from '../hooks/useSoldComps';
@@ -99,8 +98,8 @@ export default function SellScreen() {
     autofillChipValue: { color: colors.textPrimary },
     autofillApplyBtn: { backgroundColor: `${colors.brand}10` },
     autofillApplyText: { color: colors.brand },
-    sectionHeading: { color: colors.textMuted },
-    fieldLabel: { color: colors.textSecondary },
+    sectionHeading: { color: colors.textSecondary },
+    fieldLabel: { color: colors.textMuted },
     fieldInput: { color: colors.textPrimary },
     fieldHelper: { color: colors.textMuted },
     fieldError: { color: colors.danger },
@@ -122,6 +121,25 @@ export default function SellScreen() {
     authThumb: { backgroundColor: colors.surfaceAlt },
     authAddBtn: { borderColor: colors.border, backgroundColor: colors.surface },
     inlineErrorText: { color: colors.danger },
+    photoGuideCard: { backgroundColor: colors.surface, borderColor: colors.border },
+    photoGuideTitle: { color: colors.textSecondary },
+    photoGuideTip: { color: colors.textMuted },
+    photoGuideMin: { color: colors.textMuted },
+    priceSuggestion: { color: colors.brand },
+    priceMarketHigh: { color: colors.warning },
+    priceMarketLow: { color: colors.textMuted },
+    priceMarketGood: { color: colors.success },
+    priceNoCompsHint: { color: colors.textMuted },
+    fieldValid: { color: colors.success },
+    fieldRequiredHint: { color: colors.textMuted },
+    charCountWarn: { color: colors.warning },
+    qualityBar: { backgroundColor: colors.surface, borderTopColor: colors.border },
+    qualityBarLabel: { color: colors.textPrimary },
+    qualityBarScore: { color: colors.textPrimary },
+    qualityBarTier: { color: colors.textSecondary },
+    qualityTipsRow: { backgroundColor: colors.surfaceAlt },
+    qualityTipsText: { color: colors.textSecondary },
+    qualityTipsLabel: { color: colors.brand },
   }), [colors]);
 
   const sellDraft = useStore((s) => s.sellDraft);
@@ -181,6 +199,8 @@ export default function SellScreen() {
   // AI autofill suggestions from first photo filename
   const autofillSuggestion = useListingAutofill(mediaDraftItems);
   const [autofillDismissed, setAutofillDismissed] = useState(false);
+  const [photoGuideCollapsed, setPhotoGuideCollapsed] = useState(false);
+  const [qualityTipsExpanded, setQualityTipsExpanded] = useState(false);
 
   // Reset dismiss when photos change (new photo -> new suggestions)
   useEffect(() => {
@@ -305,6 +325,13 @@ export default function SellScreen() {
   const hasValidSharePrice = Number.isFinite(parsedSharePrice) && parsedSharePrice > 0;
   const coOwnFinancialReady = listingMode !== 'co_own' || (hasValidShareCount && hasValidSharePrice);
   const coOwnAuthReady = listingMode !== 'co_own' || authPhotos.length > 0;
+
+  const priceVsMarket = useMemo(() => {
+    if (!soldComps.hasComps || !hasValidPrice) return null;
+    if (soldComps.minPrice != null && numericPrice < soldComps.minPrice * 0.8) return 'below' as const;
+    if (soldComps.maxPrice != null && numericPrice > soldComps.maxPrice * 1.2) return 'above' as const;
+    return 'in_range' as const;
+  }, [soldComps, hasValidPrice, numericPrice]);
 
   const publishReady = useMemo(() => {
     if (!hasBasePhotos) return false;
@@ -832,12 +859,29 @@ export default function SellScreen() {
     });
   }, [title, price, originalPrice, brand, condition, category, size, desc, photos, shippingMethod, shippingPayer, navigation]);
 
+  const qualityResult = useMemo(() => calculateListingQuality({
+    photos,
+    title,
+    brand,
+    category,
+    size,
+    condition,
+    description: desc,
+    price,
+    originalPrice,
+    tags,
+    shippingMethod,
+    shippingPayer,
+    listingMode,
+    startingBid,
+  }), [photos, title, brand, category, size, condition, desc, price, originalPrice, tags, shippingMethod, shippingPayer, listingMode, startingBid]);
+
   return (
     <SafeAreaView style={[styles.root, t.root]} edges={['top']}>
         {/* -- 1. COMPACT NAVIGATION HEADER -- */}
         <View style={[styles.navHeader, t.navHeader, { paddingTop: 0 }]}>
           <Pressable
-            style={styles.navCloseBtn}
+            style={({ pressed }) => [styles.navCloseBtn, pressed && { opacity: 0.5 }]}
             onPress={() => navigation.goBack()}
             accessibilityRole="button"
             accessibilityLabel="Close and go back"
@@ -870,6 +914,37 @@ export default function SellScreen() {
             onRetryItem={handleRetryItem}
           />
 
+          {/* -- 2a. PHOTO UPLOAD GUIDANCE -- */}
+          <View style={[styles.photoGuideCard, t.photoGuideCard]}>
+            <Pressable
+              style={({ pressed }) => [styles.photoGuideHeader, pressed && { opacity: 0.6 }]}
+              onPress={() => setPhotoGuideCollapsed((v) => !v)}
+              accessibilityRole="button"
+              accessibilityLabel={photoGuideCollapsed ? 'Expand photo tips' : 'Collapse photo tips'}
+            >
+              <Ionicons name="camera-outline" size={15} color={colors.textSecondary} />
+              <Text style={[styles.photoGuideTitle, t.photoGuideTitle]}>Photo tips</Text>
+              <Text style={[styles.photoGuideMin, t.photoGuideMin]}>Min 3 photos recommended</Text>
+              <Ionicons name={photoGuideCollapsed ? 'chevron-down' : 'chevron-up'} size={14} color={colors.textMuted} />
+            </Pressable>
+            {!photoGuideCollapsed && (
+              <View style={styles.photoGuideTips}>
+                <View style={styles.photoGuideTipRow}>
+                  <Ionicons name="sunny-outline" size={13} color={colors.textMuted} />
+                  <Text style={[styles.photoGuideTip, t.photoGuideTip]}>Good lighting</Text>
+                </View>
+                <View style={styles.photoGuideTipRow}>
+                  <Ionicons name="cube-outline" size={13} color={colors.textMuted} />
+                  <Text style={[styles.photoGuideTip, t.photoGuideTip]}>Show all angles</Text>
+                </View>
+                <View style={styles.photoGuideTipRow}>
+                  <Ionicons name="leaf-outline" size={13} color={colors.textMuted} />
+                  <Text style={[styles.photoGuideTip, t.photoGuideTip]}>Natural background</Text>
+                </View>
+              </View>
+            )}
+          </View>
+
           {/* -- 2b. AI AUTOFILL SUGGESTIONS -- */}
           {autofillSuggestion.hasSuggestions && !autofillDismissed && (
             <View style={[styles.autofillCard, t.autofillCard]}>
@@ -879,6 +954,7 @@ export default function SellScreen() {
                 <Pressable
                   hitSlop={8}
                   onPress={() => setAutofillDismissed(true)}
+                  style={({ pressed }) => pressed && { opacity: 0.5 }}
                   accessibilityLabel="Dismiss suggestions"
                   accessibilityRole="button"
                 >
@@ -909,7 +985,7 @@ export default function SellScreen() {
                 )}
               </View>
               <Pressable
-                style={[styles.autofillApplyBtn, t.autofillApplyBtn]}
+                style={({ pressed }) => [styles.autofillApplyBtn, t.autofillApplyBtn, pressed && { opacity: 0.6 }]}
                 onPress={handleApplyAutofill}
                 accessibilityLabel="Apply suggested fields"
                 accessibilityRole="button"
@@ -928,34 +1004,19 @@ export default function SellScreen() {
             />
           </View>
 
-          {/* -- 3b. LISTING QUALITY METER -- */}
-          <View style={styles.sectionSpacing}>
-            <ListingQualityMeter
-              result={useMemo(() => calculateListingQuality({
-                photos,
-                title,
-                brand,
-                category,
-                size,
-                condition,
-                description: desc,
-                price,
-                originalPrice,
-                tags,
-                shippingMethod,
-                shippingPayer,
-                listingMode,
-                startingBid,
-              }), [photos, title, brand, category, size, condition, desc, price, originalPrice, tags, shippingMethod, shippingPayer, listingMode, startingBid])}
-            />
-          </View>
-
           {/* -- 4. PRODUCT DETAILS -- */}
           <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.sectionGroup}>
             <Text style={[styles.sectionHeading, t.sectionHeading]}>Details</Text>
 
             <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, t.fieldLabel]}>Title</Text>
+              <View style={styles.fieldLabelRow}>
+                <Text style={[styles.fieldLabel, t.fieldLabel]}>Title</Text>
+                {title.trim().length > 0 ? (
+                  <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+                ) : (
+                  <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Required</Text>
+                )}
+              </View>
               <TextInput
                 style={[styles.fieldInput, t.fieldInput]}
                 value={title}
@@ -969,13 +1030,20 @@ export default function SellScreen() {
             </View>
 
             <Pressable
-              style={styles.pickerRow}
+              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.6 }]}
               onPress={() => setPickerMode('Category')}
               accessibilityRole="button"
               accessibilityLabel="Select category"
             >
               <View style={styles.pickerRowInner}>
-                <Text style={[styles.fieldLabel, t.fieldLabel]}>Category</Text>
+                <View style={styles.fieldLabelRow}>
+                  <Text style={[styles.fieldLabel, t.fieldLabel]}>Category</Text>
+                  {category ? (
+                    <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+                  ) : (
+                    <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Required</Text>
+                  )}
+                </View>
                 <Text style={[styles.pickerValue, t.pickerValue, !category && styles.pickerPlaceholder, !category && t.pickerPlaceholder]}>
                   {category || 'Select category'}
                 </Text>
@@ -986,13 +1054,20 @@ export default function SellScreen() {
             <View style={[styles.hairline, t.hairline]} />
 
             <Pressable
-              style={styles.pickerRow}
+              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.6 }]}
               onPress={() => setPickerMode('Brand')}
               accessibilityRole="button"
               accessibilityLabel="Select brand"
             >
               <View style={styles.pickerRowInner}>
-                <Text style={[styles.fieldLabel, t.fieldLabel]}>Brand</Text>
+                <View style={styles.fieldLabelRow}>
+                  <Text style={[styles.fieldLabel, t.fieldLabel]}>Brand</Text>
+                  {brand ? (
+                    <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+                  ) : (
+                    <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Required</Text>
+                  )}
+                </View>
                 <Text style={[styles.pickerValue, t.pickerValue, !brand && styles.pickerPlaceholder, !brand && t.pickerPlaceholder]}>
                   {brand || 'Select brand'}
                 </Text>
@@ -1002,13 +1077,20 @@ export default function SellScreen() {
             <View style={[styles.hairline, t.hairline]} />
 
             <Pressable
-              style={styles.pickerRow}
+              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.6 }]}
               onPress={() => setPickerMode('Size')}
               accessibilityRole="button"
               accessibilityLabel="Select size"
             >
               <View style={styles.pickerRowInner}>
-                <Text style={[styles.fieldLabel, t.fieldLabel]}>Size</Text>
+                <View style={styles.fieldLabelRow}>
+                  <Text style={[styles.fieldLabel, t.fieldLabel]}>Size</Text>
+                  {size ? (
+                    <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+                  ) : (
+                    <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Required</Text>
+                  )}
+                </View>
                 <Text style={[styles.pickerValue, t.pickerValue, !size && styles.pickerPlaceholder, !size && t.pickerPlaceholder]}>
                   {size || 'Select size'}
                 </Text>
@@ -1019,13 +1101,20 @@ export default function SellScreen() {
             <View style={[styles.hairline, t.hairline]} />
 
             <Pressable
-              style={styles.pickerRow}
+              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.6 }]}
               onPress={() => setPickerMode('Condition')}
               accessibilityRole="button"
               accessibilityLabel="Select condition"
             >
               <View style={styles.pickerRowInner}>
-                <Text style={[styles.fieldLabel, t.fieldLabel]}>Condition</Text>
+                <View style={styles.fieldLabelRow}>
+                  <Text style={[styles.fieldLabel, t.fieldLabel]}>Condition</Text>
+                  {condition ? (
+                    <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+                  ) : (
+                    <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Required</Text>
+                  )}
+                </View>
                 <Text style={[styles.pickerValue, t.pickerValue, !condition && styles.pickerPlaceholder, !condition && t.pickerPlaceholder]}>
                   {condition || 'Select condition'}
                 </Text>
@@ -1059,27 +1148,68 @@ export default function SellScreen() {
                   {errors.price ? <Text style={[styles.fieldError, t.fieldError]}>{errors.price}</Text> : null}
 
                   {/* Sold comparables hint -- truthful pricing guidance from real data */}
-                  {soldComps.hasComps && soldComps.minPrice != null && soldComps.maxPrice != null && (
-                    <Pressable
-                      style={styles.soldCompsHint}
-                      onPress={() => {
-                        if (!price && soldComps.medianPrice != null) {
-                          handlePriceChange(soldComps.medianPrice.toFixed(2));
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        }
-                      }}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Similar items sold for ${currencySymbol}${soldComps.minPrice.toFixed(0)} to ${currencySymbol}${soldComps.maxPrice.toFixed(0)}. Tap to set median price ${currencySymbol}${soldComps.medianPrice?.toFixed(0) ?? ''}.`}
-                    >
-                      <Ionicons name="pricetag-outline" size={13} color={colors.textMuted} />
-                      <Text style={[styles.soldCompsText, t.soldCompsText]}>
-                        Similar sold: {currencySymbol}{soldComps.minPrice.toFixed(0)}-"{currencySymbol}{soldComps.maxPrice.toFixed(0)}
-                        {' '}({soldComps.sampleSize} sold)
-                      </Text>
-                      {!price && soldComps.medianPrice != null && (
-                        <Text style={[styles.soldCompsAction, t.soldCompsAction]}>Tap for median</Text>
+                  {soldComps.hasComps && soldComps.minPrice != null && soldComps.maxPrice != null ? (
+                    <View style={styles.priceSuggestionBlock}>
+                      <View style={styles.soldCompsHint}>
+                        <Ionicons name="pricetag-outline" size={13} color={colors.textMuted} />
+                        <Text style={[styles.soldCompsText, t.soldCompsText]}>
+                          Similar items sold for {currencySymbol}{soldComps.minPrice.toFixed(0)}–{currencySymbol}{soldComps.maxPrice.toFixed(0)}
+                          {' '}({soldComps.sampleSize} sold)
+                        </Text>
+                      </View>
+                      {soldComps.medianPrice != null && (
+                        <Pressable
+                          style={({ pressed }) => [styles.soldCompsHint, pressed && { opacity: 0.6 }]}
+                          onPress={() => {
+                            if (!price) {
+                              handlePriceChange(soldComps.medianPrice!.toFixed(2));
+                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            }
+                          }}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Suggested price ${currencySymbol}${soldComps.medianPrice.toFixed(0)}. Tap to set suggested price.`}
+                        >
+                          <Ionicons name="bulb-outline" size={13} color={colors.brand} />
+                          <Text style={[styles.soldCompsText, t.priceSuggestion]}>
+                            Suggested price: {currencySymbol}{soldComps.medianPrice.toFixed(0)}
+                          </Text>
+                          {!price && (
+                            <Text style={[styles.soldCompsAction, t.soldCompsAction]}>Tap to set</Text>
+                          )}
+                        </Pressable>
                       )}
-                    </Pressable>
+                      {priceVsMarket === 'above' && (
+                        <View style={styles.soldCompsHint}>
+                          <Ionicons name="trending-up-outline" size={13} color={colors.warning} />
+                          <Text style={[styles.soldCompsText, t.priceMarketHigh]}>
+                            Priced above recent sold range
+                          </Text>
+                        </View>
+                      )}
+                      {priceVsMarket === 'below' && (
+                        <View style={styles.soldCompsHint}>
+                          <Ionicons name="trending-down-outline" size={13} color={colors.textMuted} />
+                          <Text style={[styles.soldCompsText, t.priceMarketLow]}>
+                            Priced below recent sold range
+                          </Text>
+                        </View>
+                      )}
+                      {priceVsMarket === 'in_range' && (
+                        <View style={styles.soldCompsHint}>
+                          <Ionicons name="checkmark-circle-outline" size={13} color={colors.success} />
+                          <Text style={[styles.soldCompsText, t.priceMarketGood]}>
+                            Within recent sold range
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  ) : (
+                    <View style={styles.soldCompsHint}>
+                      <Ionicons name="information-circle-outline" size={13} color={colors.textMuted} />
+                      <Text style={[styles.soldCompsText, t.priceNoCompsHint]}>
+                        Price competitively for faster sales
+                      </Text>
+                    </View>
                   )}
 
                   <View style={[styles.hairline, t.hairline]} />
@@ -1258,6 +1388,14 @@ export default function SellScreen() {
             <Text style={[styles.sectionHeading, t.sectionHeading]}>Description</Text>
 
             <View style={styles.fieldGroup}>
+              <View style={styles.fieldLabelRow}>
+                <Text style={[styles.fieldLabel, t.fieldLabel]}>Description</Text>
+                {desc.trim().length >= 10 ? (
+                  <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+                ) : (
+                  <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Required</Text>
+                )}
+              </View>
               <TextInput
                 style={[styles.fieldInput, t.fieldInput, styles.fieldInputMultiline]}
                 value={desc}
@@ -1267,7 +1405,9 @@ export default function SellScreen() {
                 multiline
                 textAlignVertical="top"
               />
-              <Text style={[styles.fieldHelper, t.fieldHelper]}>{desc.length} characters</Text>
+              <Text style={[styles.fieldHelper, desc.trim().length < 10 ? t.charCountWarn : t.fieldHelper]}>
+                {desc.length} characters{desc.trim().length < 10 ? ' · min 10' : desc.length < 60 ? ' · add more detail' : ''}
+              </Text>
               {errors.description ? <Text style={[styles.fieldError, t.fieldError]}>{errors.description}</Text> : null}
               <View style={[styles.hairline, t.hairline]} />
             </View>
@@ -1277,7 +1417,7 @@ export default function SellScreen() {
               {tags.map((tag) => (
                 <View key={tag} style={[styles.tagChip, t.tagChip]}>
                   <Text style={[styles.tagText, t.tagText]}>#{tag}</Text>
-                  <Pressable onPress={() => removeTag(tag)} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Remove tag ${tag}`}>
+                  <Pressable onPress={() => removeTag(tag)} hitSlop={8} style={({ pressed }) => pressed && { opacity: 0.5 }} accessibilityRole="button" accessibilityLabel={`Remove tag ${tag}`}>
                     <Ionicons name="close" size={12} color={colors.textMuted} />
                   </Pressable>
                 </View>
@@ -1313,7 +1453,7 @@ export default function SellScreen() {
                       accessibilityRole="button"
                       accessibilityLabel={`Set shipping method to ${m}`}
                     >
-                      <Ionicons name={m === 'standard' ? 'cube-outline' : 'rocket-outline'} size={14} color={active ? colors.textInverse : colors.textMuted} style={{ marginRight: 6 }} />
+                      <Ionicons name={m === 'standard' ? 'cube-outline' : 'rocket-outline'} size={14} color={active ? colors.textInverse : colors.textMuted} style={{ marginRight: Space.xs }} />
                       <Text style={[styles.toggleText, t.toggleText, active && styles.toggleTextActive, active && t.toggleTextActive]}>
                         {m === 'standard' ? 'Standard' : 'Express'}
                       </Text>
@@ -1337,7 +1477,7 @@ export default function SellScreen() {
                       accessibilityRole="button"
                       accessibilityLabel={`Set shipping payer to ${p}`}
                     >
-                      <Ionicons name={p === 'buyer' ? 'person-outline' : 'storefront-outline'} size={14} color={active ? colors.textInverse : colors.textMuted} style={{ marginRight: 6 }} />
+                      <Ionicons name={p === 'buyer' ? 'person-outline' : 'storefront-outline'} size={14} color={active ? colors.textInverse : colors.textMuted} style={{ marginRight: Space.xs }} />
                       <Text style={[styles.toggleText, t.toggleText, active && styles.toggleTextActive, active && t.toggleTextActive]}>
                         {p === 'buyer' ? 'Buyer pays' : 'I pay (free)'}
                       </Text>
@@ -1385,6 +1525,57 @@ export default function SellScreen() {
           <View style={{ height: DockConstants.singleActionHeight }} />
         </KeyboardAwareScrollView>
 
+      {/* -- 8b. COMPACT LISTING QUALITY METER (fixed above publish footer) -- */}
+      <View style={[styles.qualityBar, t.qualityBar]}>
+        <View style={styles.qualityBarRow}>
+          <View style={styles.qualityBarLeft}>
+            <Ionicons
+              name={qualityResult.tier === 'excellent' ? 'star' : qualityResult.tier === 'good' ? 'star-half-outline' : 'ellipse-outline'}
+              size={14}
+              color={colors.textSecondary}
+            />
+            <Text style={[styles.qualityBarLabel, t.qualityBarLabel]}>Listing quality</Text>
+          </View>
+          <View style={styles.qualityBarRight}>
+            <Text style={[styles.qualityBarScore, t.qualityBarScore]}>{qualityResult.score}%</Text>
+            <Text style={[styles.qualityBarTier, t.qualityBarTier]}>{qualityResult.tierLabel}</Text>
+            <Pressable
+              hitSlop={8}
+              onPress={() => setQualityTipsExpanded((v) => !v)}
+              style={({ pressed }) => [styles.qualityTipsToggle, pressed && { opacity: 0.6 }]}
+              accessibilityRole="button"
+              accessibilityLabel={qualityTipsExpanded ? 'Hide tips to improve' : 'Show tips to improve'}
+            >
+              <Text style={[styles.qualityTipsLabel, t.qualityTipsLabel]}>Tips to improve</Text>
+              <Ionicons name={qualityTipsExpanded ? 'chevron-up' : 'chevron-down'} size={12} color={colors.brand} />
+            </Pressable>
+          </View>
+        </View>
+        <View style={styles.qualityBarTrack}>
+          <View style={[styles.qualityBarFill, { width: `${qualityResult.score}%`, backgroundColor: colors.brand }]} />
+        </View>
+        {qualityTipsExpanded && qualityResult.missingItems.length > 0 && (
+          <View style={[styles.qualityTipsRow, t.qualityTipsRow]}>
+            {qualityResult.missingItems.slice(0, 6).map((item) => (
+              <View key={item.key} style={styles.qualityTipChip}>
+                <Ionicons name={item.icon as keyof typeof Ionicons.glyphMap} size={11} color={colors.textMuted} />
+                <Text style={[styles.qualityTipsText, t.qualityTipsText]}>{item.label}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+        {qualityTipsExpanded && qualityResult.tips.length > 0 && (
+          <View style={styles.qualityTipsList}>
+            {qualityResult.tips.slice(0, 4).map((tip, i) => (
+              <View key={i} style={styles.qualityTipBulletRow}>
+                <Text style={[styles.qualityTipBullet, t.qualityTipsText]}>•</Text>
+                <Text style={[styles.qualityTipsText, t.qualityTipsText]}>{tip}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
+
       {/* -- 9. RECOVERABLE PUBLICATION FEEDBACK + 10. STICKY PREVIEW / PUBLISH FOOTER -- */}
       <ListingPublishFooter
         mode={listingMode}
@@ -1424,26 +1615,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    paddingVertical: 10,
+    paddingVertical: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   navCloseBtn: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
   navTitle: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: -0.2,
+    letterSpacing: Type.bodyLarge.letterSpacing,
   },
   navDraftStatus: {
-    minWidth: 40,
+    minWidth: Space.xl + Space.sm,
     alignItems: 'flex-end',
   },
   navDraftText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
   },
 
@@ -1471,11 +1662,11 @@ const styles = StyleSheet.create({
   },
   autofillTitle: {
     flex: 1,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
   },
   autofillDesc: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     marginBottom: Space.sm,
   },
@@ -1490,19 +1681,19 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xs + 2,
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    minWidth: 80,
-    maxWidth: 180,
+    minWidth: Space.xxl + Space.lg,
+    maxWidth: Space.xxl + Space.xxl + Space.sm,
   },
   autofillChipLabel: {
-    fontSize: 10,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: Type.metaElevated.letterSpacing,
   },
   autofillChipValue: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
-    marginTop: 2,
+    marginTop: Space.xs,
   },
   autofillApplyBtn: {
     flexDirection: 'row',
@@ -1514,7 +1705,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   autofillApplyText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
   },
   sectionSpacing: {
@@ -1525,47 +1716,47 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
   },
   sectionHeading: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.bold,
     textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    letterSpacing: LetterSpacing.caps,
     marginBottom: Space.sm,
   },
 
   /* -- fields -- */
   fieldGroup: {
-    paddingVertical: 8,
+    paddingVertical: Space.sm,
   },
   fieldLabel: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    marginBottom: 6,
+    marginBottom: Space.xs,
   },
   fieldInput: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.regular,
-    paddingVertical: 8,
+    paddingVertical: Space.sm,
     paddingHorizontal: 0,
-    minHeight: 40,
+    minHeight: Control.hit + Space.sm,
   },
   fieldInputMultiline: {
-    minHeight: 80,
+    minHeight: Space.xxl + Space.xl,
     textAlignVertical: 'top',
-    paddingTop: 8,
+    paddingTop: Space.sm,
   },
   fieldHelper: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    marginTop: 4,
+    marginTop: Space.xs,
   },
   fieldError: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    marginTop: 4,
+    marginTop: Space.xs,
   },
   hairline: {
     height: StyleSheet.hairlineWidth,
-    marginTop: 8,
+    marginTop: Space.sm,
   },
 
   /* -- picker rows -- */
@@ -1573,13 +1764,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 10,
+    paddingVertical: Space.sm,
+    minHeight: Control.hit + Space.sm,
   },
   pickerRowInner: {
     flex: 1,
   },
   pickerValue: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.regular,
   },
   pickerPlaceholder: {
@@ -1589,38 +1781,39 @@ const styles = StyleSheet.create({
   priceInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 4,
+    paddingVertical: Space.xs,
+    minHeight: Control.hit + Space.sm,
   },
   currencySymbol: {
-    fontSize: 20,
+    fontSize: Type.priceList.size,
     fontFamily: Typography.family.semibold,
-    marginRight: 6,
+    marginRight: Space.xs,
   },
   priceInput: {
-    fontSize: 28,
+    fontSize: Type.priceLarge.size,
     fontFamily: Typography.family.bold,
-    minWidth: 100,
+    minWidth: Space.xxl + Space.lg + Space.sm,
     padding: 0,
   },
   discountPreview: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
-    marginTop: 4,
+    marginTop: Space.xs,
   },
   soldCompsHint: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    marginTop: 6,
-    paddingVertical: 2,
+    gap: Space.xs,
+    marginTop: Space.xs,
+    paddingVertical: Space.xs,
   },
   soldCompsText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     flex: 1,
   },
   soldCompsAction: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
   },
 
@@ -1639,11 +1832,12 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
+    minHeight: Control.hit,
   },
   togglePillActive: {
   },
   toggleText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
   },
   toggleTextActive: {
@@ -1668,15 +1862,15 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   tagText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
   },
   tagInput: {
     flex: 1,
-    minWidth: 80,
-    fontSize: 14,
+    minWidth: Space.xxl + Space.lg,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    paddingVertical: 6,
+    paddingVertical: Space.xs,
   },
 
   /* -- co-own auth photos -- */
@@ -1686,18 +1880,18 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
   },
   authThumb: {
-    width: 56,
-    height: 56,
+    width: Space.xxl + Space.xs,
+    height: Space.xxl + Space.xs,
     borderRadius: Radius.md,
     overflow: 'hidden',
   },
   authThumbImage: {
-    width: 56,
-    height: 56,
+    width: Space.xxl + Space.xs,
+    height: Space.xxl + Space.xs,
   },
   authAddBtn: {
-    width: 56,
-    height: 56,
+    width: Space.xxl + Space.xs,
+    height: Space.xxl + Space.xs,
     borderRadius: Radius.md,
     borderWidth: Stroke.standard,
     borderStyle: 'dashed',
@@ -1709,13 +1903,158 @@ const styles = StyleSheet.create({
   inlineErrorRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs,
     paddingHorizontal: Space.md,
-    paddingVertical: 8,
+    paddingVertical: Space.sm,
   },
   inlineErrorText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
+  },
+
+  /* -- photo guidance card -- */
+  photoGuideCard: {
+    marginHorizontal: Space.md,
+    marginTop: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm + 2,
+    borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  photoGuideHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs + 2,
+  },
+  photoGuideTitle: {
+    fontSize: Type.captionElevated.size,
+    fontFamily: Typography.family.semibold,
+  },
+  photoGuideMin: {
+    flex: 1,
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.regular,
+  },
+  photoGuideTips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Space.sm + 2,
+    marginTop: Space.sm,
+  },
+  photoGuideTipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  photoGuideTip: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+  },
+
+  /* -- price suggestion block -- */
+  priceSuggestionBlock: {
+    marginTop: Space.xs,
+    gap: 0,
+  },
+
+  /* -- field validation -- */
+  fieldLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Space.xs,
+  },
+  fieldRequiredHint: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.regular,
+  },
+
+  /* -- compact quality bar (fixed above footer) -- */
+  qualityBar: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
+    paddingBottom: Space.xs,
+    gap: Space.xs,
+  },
+  qualityBarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  qualityBarLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs + 2,
+  },
+  qualityBarLabel: {
+    fontSize: Type.captionElevated.size,
+    fontFamily: Typography.family.semibold,
+  },
+  qualityBarRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs + 2,
+  },
+  qualityBarScore: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.bold,
+  },
+  qualityBarTier: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+  },
+  qualityTipsToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs / 2,
+  },
+  qualityTipsLabel: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+  },
+  qualityBarTrack: {
+    height: Stroke.emphasis,
+    borderRadius: Radius.sm,
+    backgroundColor: 'transparent',
+    overflow: 'hidden',
+  },
+  qualityBarFill: {
+    height: '100%',
+    borderRadius: Radius.sm,
+  },
+  qualityTipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Space.xs + 1,
+    paddingVertical: Space.xs,
+    paddingHorizontal: Space.sm,
+    borderRadius: Radius.sm,
+    marginTop: Space.xs,
+  },
+  qualityTipChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs / 2 + 1,
+  },
+  qualityTipsList: {
+    gap: Space.xs - 1,
+    marginTop: Space.xs,
+  },
+  qualityTipBulletRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.xs + 2,
+  },
+  qualityTipBullet: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.bold,
+  },
+  qualityTipsText: {
+    flex: 1,
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.regular,
+    lineHeight: Type.caption.lineHeight - 1,
   },
 });

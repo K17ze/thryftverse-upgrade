@@ -13,9 +13,9 @@ export function OrderDetailSkeleton() {
       {/* Status header */}
       <View style={styles.statusHeader}>
         <SkeletonLoader width={120} height={12} borderRadius={6} />
-        <SkeletonLoader width={80} height={20} borderRadius={10} style={{ marginTop: 8 }} />
+        <SkeletonLoader width={80} height={20} borderRadius={10} style={{ marginTop: Space.sm }} />
         <SkeletonLoader width="90%" height={14} borderRadius={7} style={{ marginTop: 6 }} />
-        <SkeletonLoader width="60%" height={12} borderRadius={6} style={{ marginTop: 4 }} />
+        <SkeletonLoader width="60%" height={12} borderRadius={6} style={{ marginTop: Space.xs }} />
       </View>
 
       {/* Item summary */}
@@ -24,7 +24,7 @@ export function OrderDetailSkeleton() {
         <View style={styles.summaryText}>
           <SkeletonLoader width="80%" height={14} borderRadius={7} />
           <SkeletonLoader width="50%" height={12} borderRadius={6} style={{ marginTop: 6 }} />
-          <SkeletonLoader width="40%" height={14} borderRadius={7} style={{ marginTop: 8 }} />
+          <SkeletonLoader width="40%" height={14} borderRadius={7} style={{ marginTop: Space.sm }} />
         </View>
       </View>
 
@@ -33,7 +33,7 @@ export function OrderDetailSkeleton() {
         {Array.from({ length: 5 }).map((_, i) => (
           <View key={i} style={styles.stepperItem}>
             <SkeletonLoader width={28} height={28} borderRadius={14} />
-            <SkeletonLoader width={40} height={10} borderRadius={5} style={{ marginTop: 4 }} />
+            <SkeletonLoader width={40} height={10} borderRadius={5} style={{ marginTop: Space.xs }} />
           </View>
         ))}
       </View>
@@ -45,7 +45,7 @@ export function OrderDetailSkeleton() {
             <SkeletonLoader width={10} height={10} borderRadius={5} />
             <View style={styles.timelineText}>
               <SkeletonLoader width="70%" height={12} borderRadius={6} />
-              <SkeletonLoader width="40%" height={10} borderRadius={5} style={{ marginTop: 4 }} />
+              <SkeletonLoader width="40%" height={10} borderRadius={5} style={{ marginTop: Space.xs }} />
             </View>
           </View>
         ))}
@@ -73,7 +73,7 @@ const styles = StyleSheet.create({
   },
   statusHeader: {
     paddingVertical: Space.sm,
-    gap: 4,
+    gap: Space.xs,
   },
   summaryCard: {
     flexDirection: 'row',
@@ -91,7 +91,7 @@ const styles = StyleSheet.create({
   },
   stepperItem: {
     alignItems: 'center',
-    gap: 4,
+    gap: Space.xs,
   },
   timelineSection: {
     gap: Space.md,
@@ -106,7 +106,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   transactionSection: {
-    gap: 10,
+    gap: Space.sm + 2,
     paddingVertical: Space.sm,
   },
   txRow: {

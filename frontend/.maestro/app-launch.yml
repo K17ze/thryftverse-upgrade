@@ -1,0 +1,14 @@
+# Maestro E2E flow — app launch smoke test.
+#
+# Verifies the app launches and renders *something* within 5s. This is the
+# cheapest possible E2E check and should run on every PR.
+#
+# Run: maestro test .maestro/app-launch.yml
+# (or: npm run test:e2e:smoke)
+appId: ${MAESTRO_APP_ID}
+---
+- launchApp:
+    clearState: true
+- assertVisible:
+    text: ".*"
+    timeout: 5000

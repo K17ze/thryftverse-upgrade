@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { Space, Radius, Typography, Type } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 
 interface PremiumSelectRowProps {
@@ -93,7 +93,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginBottom: Space.md,
   },
   label: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
     marginBottom: Space.sm,
@@ -120,7 +120,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   valueText: {
     flex: 1,
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.medium,
     color: colors.textPrimary,
   },
@@ -129,14 +129,14 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   helperText: {
     marginTop: Space.sm,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
     lineHeight: 17,
   },
   errorText: {
     marginTop: Space.sm,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.danger,
     lineHeight: 17,

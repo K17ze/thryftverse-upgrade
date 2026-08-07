@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { ChatInfoRow, ChatInfoSection } from '../components/chat/ChatInfoSection';
@@ -15,7 +15,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { Radius, Space, Type, TypeStyles } from '../theme/designTokens';
 
-type Props = StackScreenProps<RootStackParamList, 'ConversationInfo'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'ConversationInfo'>;
 
 export default function ConversationInfoScreen({ navigation, route }: Props) {
   const { colors, isDark } = useAppTheme();
@@ -272,8 +272,8 @@ const styles = StyleSheet.create({
     paddingBottom: Space.xs,
   },
   avatar: {
-    width: 76,
-    height: 76,
+    width: Space.xxl + Space.xl - Space.xs,
+    height: Space.xxl + Space.xl - Space.xs,
     borderRadius: Radius.full,
     overflow: 'hidden',
     alignItems: 'center',
@@ -281,13 +281,13 @@ const styles = StyleSheet.create({
     marginBottom: Space.sm,
   },
   avatarImage: {
-    width: 76,
-    height: 76,
+    width: Space.xxl + Space.xl - Space.xs,
+    height: Space.xxl + Space.xl - Space.xs,
     borderRadius: Radius.full,
   },
   avatarText: {
     fontFamily: TypeStyles.title.fontFamily,
-    fontSize: 27,
+    fontSize: Type.title.size + 3,
   },
   displayName: {
     maxWidth: '88%',
@@ -299,20 +299,20 @@ const styles = StyleSheet.create({
   handle: {
     fontFamily: TypeStyles.body.fontFamily,
     fontSize: Type.captionElevated.size,
-    marginTop: 3,
+    marginTop: Space.xs / 2 + 1,
   },
   quickActions: {
-    minHeight: 72,
+    minHeight: Space.xxl + Space.xxl + Space.xxl - 24,
     flexDirection: 'row',
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   quickAction: {
     flex: 1,
-    minHeight: 72,
+    minHeight: Space.xxl + Space.xxl + Space.xxl - 24,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 5,
+    gap: Space.xs / 2 + 1,
   },
   quickActionLabel: {
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,

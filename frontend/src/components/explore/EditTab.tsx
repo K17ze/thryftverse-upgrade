@@ -15,7 +15,7 @@ import { useAppTheme } from '../../theme/ThemeContext';
 import type { ThemeColors } from '../../theme/ThemeContext';
 import { Type, Space, Radius, Typography } from '../../theme/designTokens';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -27,7 +27,7 @@ import { HorizontalRail } from '../HorizontalRail';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 /* ── Sub-components ── */
 function TrendingRailItem({ item, index, onPress, styles, reducedMotion }: { item: { id: string; title: string; brand: string; price: number; image: string }; index: number; onPress: () => void; styles: ReturnType<typeof createStyles>; reducedMotion: boolean }) {
@@ -265,7 +265,7 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
     letterSpacing: Type.meta.letterSpacing,
-    marginTop: 4,
+    marginTop: Space.xs,
   },
   trendingTitle: {
     fontSize: Type.body.size,
@@ -344,13 +344,13 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
-    marginTop: 4,
+    marginTop: Space.xs,
   },
   quizPill: {
     backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.full,
     paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingVertical: Space.xs,
   },
   quizPillText: {
     fontSize: Type.meta.size,

@@ -9,13 +9,13 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
-import { Space, Typography, DockConstants, Type, Radius } from '../theme/designTokens';
+import { Space, Typography, DockConstants, Type, Radius, Control, Stroke } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useStore } from '../store/useStore';
@@ -27,7 +27,7 @@ import { ListingQualityMeter } from '../components/listing/ListingQualityMeter';
 import { calculateListingQuality } from '../utils/listingQuality';
 import { CachedImage } from '../components/CachedImage';
 
-type Props = StackScreenProps<RootStackParamList, 'ListingPreview'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'ListingPreview'>;
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const HERO_HEIGHT = SCREEN_H * 0.65;
@@ -107,7 +107,7 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
           <View style={styles.topScrim} />
           <View style={[styles.floatingHeader, { paddingTop: Math.max(insets.top, 20) }]}>
             <Pressable
-              style={styles.controlBtn}
+              style={({ pressed }) => [styles.controlBtn, pressed && { opacity: 0.6 }]}
               onPress={handleBack}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               accessibilityRole="button"
@@ -116,7 +116,7 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
               <Ionicons name="arrow-back" size={24} color="#fff" />
             </Pressable>
             <Pressable
-              style={styles.controlBtn}
+              style={({ pressed }) => [styles.controlBtn, pressed && { opacity: 0.6 }]}
               onPress={handleBack}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               accessibilityRole="button"
@@ -220,7 +220,7 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
               <CachedImage
                 uri={sellerAvatar}
                 style={styles.sellerAvatar}
-                containerStyle={{ width: 40, height: 40, borderRadius: 20 }}
+                containerStyle={{ width: Space.xl + Space.xs, height: Space.xl + Space.xs, borderRadius: Radius.xxl }}
                 contentFit="cover"
               />
             ) : (
@@ -307,7 +307,7 @@ function createStyles(colors: ThemeColors) {
     top: 0,
     left: 0,
     right: 0,
-    height: 120,
+    height: Space.xxl + Space.xxl + Space.xxl + Space.xs,
     backgroundColor: 'rgba(0,0,0,0.12)',
   },
   floatingHeader: {
@@ -321,9 +321,9 @@ function createStyles(colors: ThemeColors) {
     zIndex: 10,
   },
   controlBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: Control.hit,
+    height: Control.hit,
+    borderRadius: Radius.xxl,
     backgroundColor: 'rgba(0,0,0,0.4)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -339,7 +339,7 @@ function createStyles(colors: ThemeColors) {
     left: Space.md,
     backgroundColor: 'rgba(0,0,0,0.55)',
     paddingHorizontal: Space.sm + 2,
-    paddingVertical: 5,
+    paddingVertical: Space.xs,
     borderRadius: Radius.md,
   },
   previewBadgeText: {
@@ -382,7 +382,7 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.sm,
   },
   specGrid: {
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: Stroke.hairline,
     borderColor: colors.border,
     borderRadius: Radius.md,
     overflow: 'hidden',
@@ -393,10 +393,10 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     paddingVertical: Space.sm + Space.xs,
     paddingHorizontal: Space.sm + Space.xs,
-    minHeight: 44,
+    minHeight: Control.hit,
   },
   specRowBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: Stroke.hairline,
     borderBottomColor: colors.border,
   },
   specLabel: {
@@ -430,9 +430,9 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.sm,
   },
   sellerAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: Space.xl + Space.xs,
+    height: Space.xl + Space.xs,
+    borderRadius: Radius.xxl,
   },
   sellerAvatarFallback: {
     backgroundColor: colors.surfaceAlt,
@@ -451,7 +451,7 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
   });
 }

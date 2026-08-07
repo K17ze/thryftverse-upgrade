@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, Dimensions } from 'react-native';
 import { SkeletonLoader } from '../SkeletonLoader';
-import { Space } from '../../theme/designTokens';
+import { Space, AspectRatio } from '../../theme/designTokens';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -19,7 +19,18 @@ export function MasonrySkeleton({
   gap = 3,
 }: Props) {
   const colWidth = (SCREEN_W - horizontalPadding * 2 - gap * (numColumns - 1)) / numColumns;
-  const heights = [160, 200, 140, 180, 170, 150];
+  // 3:4 portrait skeleton heights derived from the column width so the
+  // loading frame matches the final render (no loading→final geometry shift,
+  // AGENTS.md §4 / §14). Small variation preserves the masonry rhythm.
+  const baseHeight = Math.round(colWidth / AspectRatio.portrait);
+  const heights = [
+    baseHeight - 14,
+    baseHeight + 18,
+    baseHeight - 24,
+    baseHeight + 8,
+    baseHeight - 4,
+    baseHeight - 18,
+  ];
 
   const columns: { height: number; index: number }[][] = Array.from({ length: numColumns }, () => []);
   const colHeights = Array.from({ length: numColumns }, () => 0);

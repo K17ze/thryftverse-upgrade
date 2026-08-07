@@ -11,7 +11,6 @@ import {
   useWindowDimensions,
   Platform,
   PanResponder,
-  ActivityIndicator,
   Modal,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -35,6 +34,7 @@ import { CreatorEntryScreen } from './CreatorEntryScreen';
 import { CreatorCropSheet } from './CreatorCropSheet';
 import { CreatorCutoutSheet } from './CreatorCutoutSheet';
 import { PressScale, SheetContainer } from './CreatorAnimations';
+import { LiquidGlassBackdrop } from '../components/LiquidGlassBackdrop';
 import { useHaptic } from '../hooks/useHaptic';
 import { fetchLookByIdFromApi } from '../services/looksApi';
 import { lookToDocument } from './viewerAdapters';
@@ -72,7 +72,7 @@ function CreatorStudioInner() {
   const route = useRoute<any>();
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
-  const { document, activePageIndex, setActivePageIndex, selectedLayerId, selectLayer, canUndo, canRedo, undo, redo, isDirty, removeLayer, duplicateLayer, reorderLayer, updateLayer, addLayer, addPage, removePage, duplicatePage, updatePageDuration, reorderPages, commitLayerTransform, autosaveStatus, isLoadingDraft, setDocument, saveDraft } = useCreator();
+  const { document, activePageIndex, setActivePageIndex, selectedLayerId, selectLayer, canUndo, canRedo, undo, redo, isDirty, removeLayer, duplicateLayer, reorderLayer, updateLayer, addLayer, addPage, removePage, duplicatePage, updatePageDuration, reorderPages, commitLayerTransform, isLoadingDraft, setDocument, saveDraft } = useCreator();
 
   const [showLayers, setShowLayers] = useState(false);
   const [showPublish, setShowPublish] = useState(false);
@@ -319,9 +319,13 @@ function CreatorStudioInner() {
         </View>
       </View>
 
-      {/* ── Top bar — solid, themed, 56pt + safe area ─────────────────── */}
+      {/* ── Top bar — transparent floating, gradient scrim (Instagram pattern) ── */}
       <View style={[styles.topBarContainer, { paddingTop: insets.top }]}>
-        <View style={[styles.topBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        <LinearGradient
+          colors={['rgba(0,0,0,0.55)', 'rgba(0,0,0,0.25)', 'rgba(0,0,0,0)']}
+          style={styles.topBarScrim}
+        />
+        <View style={[styles.topBar, { backgroundColor: 'transparent', borderBottomColor: 'transparent' }]}>
           <View style={styles.topBarRow}>
             {selectedLayer ? (
               /* During selection: Done · object name · More */
@@ -331,11 +335,11 @@ function CreatorStudioInner() {
                   style={styles.topBtn}
                   accessibilityLabel="Done"
                 >
-                  <Text style={[styles.doneText, { color: colors.textPrimary }]}>Done</Text>
+                  <Text style={[styles.doneText, { color: '#fff' }]}>Done</Text>
                 </PressScale>
 
                 <View style={styles.topCenter}>
-                  <Text style={[styles.titleText, { color: colors.textPrimary }]} numberOfLines={1}>
+                  <Text style={[styles.titleText, { color: '#fff' }]} numberOfLines={1}>
                     {layerTypeLabel(selectedLayer.type)}
                   </Text>
                 </View>
@@ -346,12 +350,12 @@ function CreatorStudioInner() {
                     style={styles.topBtn}
                     accessibilityLabel="More options"
                   >
-                    <Ionicons name="ellipsis-horizontal" size={24} color={colors.textPrimary} />
+                    <Ionicons name="ellipsis-horizontal" size={24} color="#fff" />
                   </PressScale>
                 </View>
               </>
             ) : (
-              /* Default: Back · Undo · Redo · spacer · Preview · Settings · Autosave · Publish */
+              /* Default: Back · spacer · Preview · Publish (Instagram minimalism) */
               <>
                 <View style={styles.topLeftGroup}>
                   <PressScale
@@ -359,77 +363,17 @@ function CreatorStudioInner() {
                     style={styles.topBtn}
                     accessibilityLabel="Back"
                   >
-                    <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-                  </PressScale>
-                  <PressScale
-                    onPress={() => { undo(); }}
-                    disabled={!canUndo}
-                    style={[styles.topBtn, ...(canUndo ? [] : [{ opacity: 0.3 }])]}
-                    accessibilityLabel="Undo"
-                    accessibilityState={{ disabled: !canUndo }}
-                  >
-                    <Ionicons name="arrow-undo" size={22} color={colors.textPrimary} />
-                  </PressScale>
-                  <PressScale
-                    onPress={() => { redo(); }}
-                    disabled={!canRedo}
-                    style={[styles.topBtn, ...(canRedo ? [] : [{ opacity: 0.3 }])]}
-                    accessibilityLabel="Redo"
-                    accessibilityState={{ disabled: !canRedo }}
-                  >
-                    <Ionicons name="arrow-redo" size={22} color={colors.textPrimary} />
+                    <Ionicons name="chevron-back" size={26} color="#fff" />
                   </PressScale>
                 </View>
 
                 <View style={styles.topRightGroup}>
-                  {/* Autosave status — left of publish button */}
-                  {(() => {
-                    const status = isLoadingDraft ? 'saving' : autosaveStatus;
-                    if (status === 'saving') {
-                      return (
-                        <View style={styles.autosaveStatus}>
-                          <ActivityIndicator size={12} color={colors.textSecondary} />
-                          <Text style={[styles.autosaveText, { color: colors.textSecondary }]}>Saving…</Text>
-                        </View>
-                      );
-                    }
-                    if (status === 'failed') {
-                      return (
-                        <Pressable
-                          onPress={() => { saveDraft(); }}
-                          style={styles.autosaveStatus}
-                          accessibilityLabel="Retry save"
-                          accessibilityRole="button"
-                        >
-                          <Ionicons name="warning-outline" size={12} color={colors.danger} />
-                          <Text style={[styles.autosaveText, { color: colors.danger }]}>Tap to retry</Text>
-                        </Pressable>
-                      );
-                    }
-                    if (status === 'saved' && isDirty) {
-                      return (
-                        <View style={styles.autosaveStatus}>
-                          <Ionicons name="checkmark" size={12} color={colors.success} />
-                          <Text style={[styles.autosaveText, { color: colors.success }]}>Saved</Text>
-                        </View>
-                      );
-                    }
-                    return null;
-                  })()}
-
                   <PressScale
                     onPress={() => setShowPreview(true)}
                     style={styles.topBtn}
                     accessibilityLabel="Preview"
                   >
-                    <Ionicons name="eye-outline" size={22} color={colors.textPrimary} />
-                  </PressScale>
-                  <PressScale
-                    onPress={() => setShowSettings(true)}
-                    style={styles.topBtn}
-                    accessibilityLabel="Settings"
-                  >
-                    <Ionicons name="settings-outline" size={22} color={colors.textPrimary} />
+                    <Ionicons name="eye-outline" size={24} color="#fff" />
                   </PressScale>
                   <PressScale
                     onPress={() => setShowPublish(true)}
@@ -437,7 +381,7 @@ function CreatorStudioInner() {
                     accessibilityLabel="Publish"
                     scale={0.97}
                   >
-                    <Text style={[styles.publishBtnText, { color: colors.textInverse }]}>Publish</Text>
+                    <Text style={[styles.publishBtnText, { color: '#fff' }]}>Publish</Text>
                   </PressScale>
                 </View>
               </>
@@ -446,7 +390,7 @@ function CreatorStudioInner() {
         </View>
       </View>
 
-      {/* ── Page dots row (poster) — floating pill below top bar ──────── */}
+      {/* ── Page dots row (poster) — floating glass pill below top bar ──── */}
       {isPoster && document.pages.length > 1 && (
         <View
           style={[
@@ -454,7 +398,12 @@ function CreatorStudioInner() {
             { top: insets.top + 56 + Space.sm },
           ]}
         >
-          <View style={[styles.pageDotsPill, { backgroundColor: colors.surfaceAlt }]}>
+          <LiquidGlassBackdrop
+            intensity={40}
+            tint="dark"
+            absoluteFill={false}
+            style={styles.pageDotsPill}
+          >
             {document.pages.map((p, i) => (
               <PressScale
                 key={p.id}
@@ -465,43 +414,49 @@ function CreatorStudioInner() {
                 accessibilityState={{ selected: i === activePageIndex }}
                 hitSlop={8}
               >
-                <View style={[
-                  styles.pageDot,
-                  i === activePageIndex
-                    ? { backgroundColor: colors.brand, width: 8, height: 8 }
-                    : { backgroundColor: colors.textMuted, width: 6, height: 6 },
-                ]} />
+                {i === activePageIndex ? (
+                  <LinearGradient
+                    colors={[colors.brand, colors.brand]}
+                    style={styles.pageDotActive}
+                  />
+                ) : (
+                  <View style={[styles.pageDot, { backgroundColor: 'rgba(255,255,255,0.5)' }]} />
+                )}
               </PressScale>
             ))}
-          </View>
+          </LiquidGlassBackdrop>
 
           {/* Page count */}
-          <Text style={[styles.pageCountText, { color: colors.textSecondary }]}>
+          <Text style={[styles.pageCountText, { color: 'rgba(255,255,255,0.85)' }]}>
             {activePageIndex + 1}/{document.pages.length}
           </Text>
 
           {/* Add page button */}
           {document.pages.length < 10 && (
-            <PressScale
-              onPress={() => { selectLayer(null); addPage(); }}
-              style={[styles.addPageBtn, { backgroundColor: colors.surface, borderColor: colors.brand }]}
-              accessibilityLabel="Add page"
-              hitSlop={8}
+            <LiquidGlassBackdrop
+              intensity={40}
+              tint="dark"
+              absoluteFill={false}
+              style={styles.addPageBtn}
             >
-              <Ionicons name="add" size={18} color={colors.brand} />
-            </PressScale>
+              <PressScale
+                onPress={() => { selectLayer(null); addPage(); }}
+                style={styles.addPageBtnInner}
+                accessibilityLabel="Add page"
+                hitSlop={8}
+              >
+                <Ionicons name="add" size={18} color="#fff" />
+              </PressScale>
+            </LiquidGlassBackdrop>
           )}
         </View>
       )}
 
-      {/* ── Floating bottom rail with gradient fade ──────────────────── */}
-      {/* Semi-transparent gradient from transparent to black, with
-          blur. The tool dock sits on top of this gradient. */}
+      {/* ── Floating bottom rail with Liquid Glass backdrop ──────────── */}
+      {/* Premium glassmorphism: Liquid Glass on iOS 26+, BlurView fallback
+          elsewhere. The tool dock sits on top of this glass surface. */}
       <View style={[styles.bottomRailContainer, { paddingBottom: insets.bottom }]}>
-        <LinearGradient
-          colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.15)', 'rgba(0,0,0,0.4)']}
-          style={styles.bottomRailGradient}
-        >
+        <LiquidGlassBackdrop intensity={50} tint="dark" absoluteFill={false} style={styles.bottomRailGlass}>
           {/* Opacity slider — appears when a layer is selected (Instagram pattern) */}
           {selectedLayer && (
             <OpacityBar
@@ -542,10 +497,11 @@ function CreatorStudioInner() {
             onReorderLayer={(id, dir) => reorderLayer(id, dir)}
             onMore={() => setShowOverflow(true)}
             floating={true}
+            documentType={document.type}
             onAddPage={isPoster ? () => addPage() : undefined}
             onLayoutPresets={isLook ? () => setShowTemplates(true) : undefined}
           />
-        </LinearGradient>
+        </LiquidGlassBackdrop>
       </View>
 
       {/* ── Overflow menu ────────────────────────────────────────────── */}
@@ -971,13 +927,21 @@ const styles = StyleSheet.create({
   canvasStage: {
     ...StyleSheet.absoluteFill,
   },
-  // ── Floating top bar ──
+  // ── Floating top bar (transparent, gradient scrim) ──
   topBarContainer: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     zIndex: 100,
+  },
+  topBarScrim: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 140,
+    zIndex: -1,
   },
   topBarGradient: {
     paddingHorizontal: Space.sm,
@@ -1031,7 +995,7 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   statusText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: 'rgba(255,255,255,0.8)',
   },
@@ -1059,33 +1023,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.sm,
   },
-  // ── Solid top bar ──
+  // ── Transparent floating top bar ──
   topBar: {
     height: 56,
     paddingHorizontal: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: 0,
+    backgroundColor: 'transparent',
   },
-  // ── Autosave status ──
-  autosaveStatus: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  autosaveText: {
-    fontFamily: Typography.family.medium,
-    fontSize: Type.meta.size,
-  },
-  // ── Publish button ──
+  // ── Publish button (premium pill) ──
   publishBtn: {
-    borderRadius: Radius.xxl,
-    paddingHorizontal: Space.md,
+    borderRadius: Radius.full,
+    paddingHorizontal: Space.lg,
     paddingVertical: Space.sm,
     justifyContent: 'center',
     alignItems: 'center',
   },
   publishBtnText: {
     fontFamily: Typography.family.semibold,
-    fontSize: 14,
+    fontSize: Type.body.size,
   },
   // ── Page dots floating pill ──
   pageDotsFloat: {
@@ -1101,29 +1056,52 @@ const styles = StyleSheet.create({
   pageDotsPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    borderRadius: Radius.xl,
-    paddingHorizontal: Space.sm,
-    paddingVertical: 6,
+    gap: 8,
+    borderRadius: Radius.full,
+    paddingHorizontal: Space.md,
+    paddingVertical: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 6,
   },
   pageDotTarget: {
-    width: 28,
-    height: 28,
+    width: 32,
+    height: 32,
     alignItems: 'center',
     justifyContent: 'center',
   },
   pageDot: {
-    borderRadius: Radius.sm,
+    width: 7,
+    height: 7,
+    borderRadius: Radius.full,
+  },
+  pageDotActive: {
+    width: 10,
+    height: 10,
+    borderRadius: Radius.full,
   },
   pageCountText: {
     fontFamily: Typography.family.medium,
     fontSize: Type.meta.size,
   },
   addPageBtn: {
-    width: 28,
-    height: 28,
+    width: 32,
+    height: 32,
     borderRadius: Radius.full,
-    borderWidth: 1.5,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  addPageBtnInner: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1145,7 +1123,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  // ── Floating bottom rail ──
+  // ── Floating bottom rail (Liquid Glass) ──
   bottomRailContainer: {
     position: 'absolute',
     bottom: 0,
@@ -1153,7 +1131,11 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 100,
   },
-  bottomRailGradient: {
+  bottomRailGlass: {
+    flex: 1,
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+    overflow: 'hidden',
     paddingTop: Space.md,
   },
   // ── Opacity bar ──
@@ -1268,7 +1250,7 @@ const styles = StyleSheet.create({
   pageSheetDurationRow: {
     flexDirection: 'row',
     gap: Space.xs,
-    marginTop: 4,
+    marginTop: Space.xs,
   },
   pageSheetDurationBtn: {
     flex: 1,
@@ -1285,7 +1267,7 @@ const styles = StyleSheet.create({
   pageSheetActions: {
     flexDirection: 'row',
     gap: Space.sm,
-    marginTop: 4,
+    marginTop: Space.xs,
   },
   pageSheetActionBtn: {
     flex: 1,

@@ -8,11 +8,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Radius, Type } from '../theme/designTokens';
 import { AnimatedPressable } from './AnimatedPressable';
-import { Typography } from '../theme/designTokens';
 import { Caption, Meta } from './ui/Text';
 
+import { Space, Radius, Type, Typography } from '../theme/designTokens';
 interface VoiceMessagePlayerProps {
   duration: number; // in seconds
   waveform: number[]; // 40 bars, normalized 0-1

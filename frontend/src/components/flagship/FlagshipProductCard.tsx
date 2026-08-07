@@ -146,8 +146,8 @@ const createStyles = (colors: any) => StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     backgroundColor: 'rgba(0,0,0,0.45)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
     borderRadius: Radius.full,
   },
   bottomOverlay: {
@@ -193,9 +193,9 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
   conditionPill: {
     alignSelf: 'flex-start',
-    marginTop: 4,
+    marginTop: Space.xs,
     backgroundColor: colors.surfaceAlt,
-    paddingHorizontal: 8,
+    paddingHorizontal: Space.sm,
     paddingVertical: 3,
     borderRadius: Radius.full,
     borderWidth: 1,

@@ -35,7 +35,7 @@ export function ConnectedAccountsSkeleton() {
               <View style={styles.accountInfo}>
                 <SkeletonLoader width={100} height={15} borderRadius={Radius.sm} />
                 <SkeletonLoader width={160} height={12} borderRadius={Radius.sm} style={{ marginTop: 6 }} />
-                <SkeletonLoader width={90} height={11} borderRadius={Radius.sm} style={{ marginTop: 4 }} />
+                <SkeletonLoader width={90} height={11} borderRadius={Radius.sm} style={{ marginTop: Space.xs }} />
               </View>
             </View>
           </View>

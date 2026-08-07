@@ -12,10 +12,10 @@ import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Type, Space, Radius, Typography } from '../theme/designTokens';
+import { Type, Space, Radius, Typography, Stroke } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
@@ -27,7 +27,7 @@ import { LookMediaComposer, OutfitTag } from '../components/look/LookMediaCompos
 import { OutfitPieceEditor } from '../components/look/OutfitPieceEditor';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 type Visibility = 'public' | 'private';
 
@@ -301,13 +301,13 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    borderBottomWidth: 1,
+    borderBottomWidth: Stroke.standard,
     borderBottomColor: colors.border,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: Space.xxl,
+    height: Space.xxl,
+    borderRadius: Radius.xxl,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -317,7 +317,7 @@ function createStyles(colors: ThemeColors) {
     color: colors.textPrimary,
   },
   headerRight: {
-    minWidth: 60,
+    minWidth: Space.xxl + Space.lg,
     alignItems: 'flex-end',
   },
   scrollContent: {
@@ -337,15 +337,15 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     padding: Space.md,
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.medium,
     color: colors.textPrimary,
-    minHeight: 80,
-    borderWidth: 1,
+    minHeight: Space.xxl + Space.lg,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
   },
   charCount: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
     textAlign: 'right',
@@ -359,11 +359,11 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
+    gap: Space.xs + 2,
+    paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
     backgroundColor: colors.surface,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
   },
   audienceBtnActive: {
@@ -371,7 +371,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: 'rgba(99,102,241,0.06)',
   },
   audienceBtnText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
     color: colors.textSecondary,
   },
@@ -386,7 +386,7 @@ function createStyles(colors: ThemeColors) {
   publishBtn: {
     backgroundColor: colors.brand,
     borderRadius: Radius.lg,
-    paddingVertical: 14,
+    paddingVertical: Space.md + 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -394,7 +394,7 @@ function createStyles(colors: ThemeColors) {
     opacity: 0.4,
   },
   publishBtnText: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.bold,
     color: '#fff',
   },

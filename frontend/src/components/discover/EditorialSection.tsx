@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Typography } from '../../theme/designTokens';
+import { Typography, Radius, Type, Space } from '../../theme/designTokens';
 
 interface Props {
   kicker?: string;
@@ -53,7 +53,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    paddingHorizontal: Space.md,
     marginBottom: 12,
     gap: 8,
   },
@@ -63,7 +63,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   kicker: {
     fontFamily: Typography.family.medium,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     color: colors.textMuted,
     marginBottom: 2,
     letterSpacing: 0.1,
@@ -77,11 +77,11 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   searchBtn: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: Radius.xxl,
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
+    marginTop: Space.sm,
     flexShrink: 0,
   },
 });

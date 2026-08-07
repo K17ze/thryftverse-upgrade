@@ -220,7 +220,7 @@ const styles = StyleSheet.create({
   iconWrap: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: Radius.xxl,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,

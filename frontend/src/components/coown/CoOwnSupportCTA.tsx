@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
   availabilityDot: {
     width: 6,
     height: 6,
-    borderRadius: 3,
+    borderRadius: Radius.sm,
   },
   actionCol: {
     gap: 0,

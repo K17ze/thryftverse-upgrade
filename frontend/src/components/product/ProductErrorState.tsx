@@ -15,7 +15,7 @@ export function ProductErrorState({ onRetry, message }: ProductErrorStateProps) 
   const { colors } = useAppTheme();
   return (
     <View style={styles.container}>
-      <Ionicons name="alert-circle-outline" size={56} color={colors.textMuted} />
+      <Ionicons name="alert-circle-outline" size={56} color={colors.danger} />
       <Text style={[styles.title, { color: colors.textPrimary }]}>Something went wrong</Text>
       <Text style={[styles.message, { color: colors.textMuted }]}>
         {message ?? 'We could not load this listing. Please try again.'}

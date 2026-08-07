@@ -6,7 +6,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
@@ -14,9 +14,9 @@ import { useHaptic } from '../hooks/useHaptic';
 import { FlagshipScreen } from '../components/flagship';
 import { Video, ResizeMode } from '../components/compat/Video';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Type, TypeStyles, Radius, Elevation } from '../theme/designTokens';
+import { Control, Type, TypeStyles, Radius, Elevation, Space } from '../theme/designTokens';
 
-type Props = StackScreenProps<RootStackParamList, 'ChatMediaPreview'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'ChatMediaPreview'>;
 
 export default function ChatMediaPreviewScreen({ navigation, route }: Props) {
   const { mediaUri, mediaType = 'image', senderLabel, timestamp } = route.params;
@@ -135,8 +135,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 12,
     zIndex: 10,
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     borderRadius: Radius.full,
     backgroundColor: 'rgba(255,255,255,0.18)',
     justifyContent: 'center',
@@ -152,7 +152,7 @@ const styles = StyleSheet.create({
   errorWrap: {
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 12,
+    gap: Space.sm + Space.xs,
   },
   errorText: {
     fontSize: Type.subtitle.size,
@@ -165,9 +165,9 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.4)',
   },
   retryBtn: {
-    marginTop: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    marginTop: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
     borderRadius: Radius.full,
     backgroundColor: 'rgba(255,255,255,0.15)',
     ...Elevation.subtle,
@@ -182,9 +182,9 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignItems: 'center',
-    gap: 4,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
+    gap: Space.xs,
+    paddingVertical: Space.md,
+    paddingHorizontal: Space.md,
     backgroundColor: 'rgba(0,0,0,0.35)',
   },
   contextSender: {

@@ -2,14 +2,12 @@ import React from 'react';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Type, Space, Radius } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { Collection } from '../../store/useStore';
 import { Listing } from '../../data/mockData';
 import { useBackendData } from '../../context/BackendDataContext';
-import { Typography } from '../../theme/designTokens';
-
+import { Type, Space, Radius, Typography } from '../../theme/designTokens';
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_W = SCREEN_W - Space.md * 2;
 const COVER_SIZE = (CARD_W - 8) / 3; // 3-up collage with 4px gaps
@@ -103,7 +101,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   collage: {
     flexDirection: 'row',
     gap: 4,
-    padding: 4,
+    padding: Space.xs,
     height: COVER_SIZE * 2 + 4,
   },
   mainCover: {
@@ -141,7 +139,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: Space.sm,
   },
   emptyCoverText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
   },
@@ -158,13 +156,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: Space.sm,
   },
   name: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     flex: 1,
   },
   meta: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
     marginTop: 2,

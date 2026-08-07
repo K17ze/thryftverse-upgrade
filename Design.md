@@ -28,7 +28,7 @@ colors:
     brand-pressed: "#333333"       # dark: #D8D0C3
     text-primary: "#000000"        # dark: #FFFFFF
     text-secondary: "#666666"      # dark: #A3A3A3
-    text-muted: "#999999"          # dark: #666666
+    text-muted: "#767676"          # dark: #7A7A7A (WCAG 2.2 AA: 4.65:1 light / 4.64:1 dark)
     text-inverse: "#FFFFFF"        # dark: #000000
     border: "#E5E5E5"             # dark: #262626
     border-subtle: "#F0F0F0"      # dark: #333333
@@ -1271,6 +1271,47 @@ Do not substitute ADB poking for design implementation.
 - Draft persistence is visible and recoverable.
 - Publish failure is recoverable.
 - Unsupported video/file flows must not be exposed as working.
+
+### Poster / Story Composer
+
+The Poster composer (Instagram/Snapchat Stories equivalent) is a **media-first, full-screen, tools-on-top** surface. It is never a form, never a small canvas in a card, never a separate editor layout.
+
+**Architecture (non-negotiable):**
+
+- The canvas fills the entire screen. Media is the background layer. There is no padding, no card, no reserved space around the canvas.
+- All chrome floats on top of the media with gradient scrims or `LiquidGlassBackdrop`. The top bar is transparent with a dark gradient scrim (0.55 → 0). The bottom tool rail is a floating glass dock.
+- Entry is camera-first. The user opens the camera immediately, captures or selects from gallery, and the media becomes the canvas instantly. There is no "upload" step, no "start blank" button, no intermediate screen.
+- A small "Aa" text-mode button in the top-right of the camera view is the only path to a blank text poster (Instagram "Create" pattern). It is never a large "Blank canvas" button.
+- After capture/selection, the user is in edit mode immediately. There is no separate "preview" step before editing. The canvas IS the preview.
+- Multi-frame posters use floating page dots (Liquid Glass pill) below the top bar, not a frame strip at the bottom.
+
+**Tool layout (Instagram Stories pattern):**
+
+- Top bar (floating, transparent + scrim): Back · spacer · Preview · Publish. Minimal. Undo/Redo/Settings live in the overflow menu.
+- Bottom rail (floating glass dock): Primary tools (Text, Stickers, Draw, Music) are larger with labels. Secondary tools (Mention, Item, Look, Vote, Quiz, Question, Location, Hashtag, Link, Countdown, GIF) are icon-only. A divider separates primary from secondary.
+- Contextual tools (font selector, color picker, animation picker) appear as horizontal pill scrolls above the bottom rail only when a relevant layer is selected.
+- Drawing mode retracts UI to the edges and makes the entire canvas drawable.
+
+**Visual quality:**
+
+- Pure black background behind the canvas in dark mode; the media dominates.
+- Gradient scrims at top (0.55 → 0) and bottom (Liquid Glass) ensure chrome legibility without solid bars.
+- All chrome icons are white on the dark scrim, never `colors.textPrimary`.
+- The Publish button is a premium pill (`Radius.full`, brand color, white text).
+- Page dots use Liquid Glass with a gradient active dot.
+- The tool dock uses `LiquidGlassBackdrop` (intensity 50–60) with a hairline border and subtle shadow.
+
+**Entry point (HomeScreen):**
+
+- The story tray has a "Your Poster" create card as the first item, with a gradient ring and camera icon.
+- Tapping it navigates to `CreateCamera` with `mode: 'poster'` (camera-first), never to `CreatePoster` (legacy redirect).
+- The section header says "Posters" (not "Stories") with a camera button on the right.
+- Story cards have a 3.5px gradient ring (unseen) and 2px muted ring (seen), with subtle shadow.
+
+**Legacy prohibition:**
+
+- The legacy `CreatePosterScreen` / `PosterFrameComposer` / `PosterFrameCanvas` (small 360px canvas, tools below, form-like layout) must not be used. The `CreatePoster` route redirects to `CreatorStudio` which uses the correct `CreatorStudioShell` + `CreatorCanvas` + `CreatorToolDock` + `CreatorEntryScreen` architecture.
+- Never restore the small-canvas, separate-toolbar, form-based composer pattern. It is architecturally incompatible with flagship Stories quality.
 
 ### Messaging
 

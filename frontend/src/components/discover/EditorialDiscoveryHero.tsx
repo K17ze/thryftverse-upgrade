@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Colors, ActiveTheme } from '../../constants/colors';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -169,7 +169,7 @@ const styles = StyleSheet.create({
   },
   heroTitle: {
     fontFamily: Typography.family.bold,
-    fontSize: 28,
+    fontSize: Type.priceLarge.size,
     color: ActiveTheme === 'light' ? Colors.textPrimary : '#fff',
     letterSpacing: -0.6,
     lineHeight: 34,
@@ -179,9 +179,9 @@ const styles = StyleSheet.create({
   },
   heroSubtitle: {
     fontFamily: Typography.family.medium,
-    fontSize: 14,
+    fontSize: Type.body.size,
     color: ActiveTheme === 'light' ? Colors.textSecondary : 'rgba(255,255,255,0.85)',
-    marginTop: 4,
+    marginTop: Space.xs,
     textShadowColor: ActiveTheme === 'light' ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.3)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
@@ -191,7 +191,7 @@ const styles = StyleSheet.create({
     bottom: 52,
     right: Space.md,
     backgroundColor: Colors.textPrimary,
-    paddingHorizontal: 16,
+    paddingHorizontal: Space.md,
     paddingVertical: 10,
     borderRadius: Radius.full,
     flexDirection: 'row',
@@ -200,7 +200,7 @@ const styles = StyleSheet.create({
   },
   visitBtnText: {
     fontFamily: Typography.family.semibold,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     color: Colors.background,
   },
   dotsRow: {
@@ -209,17 +209,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     marginTop: 12,
-    marginBottom: 8,
+    marginBottom: Space.sm,
   },
   dot: {
     width: 6,
     height: 6,
-    borderRadius: 3,
+    borderRadius: Radius.sm,
     backgroundColor: ActiveTheme === 'light' ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.25)',
   },
   dotActive: {
     width: 18,
-    borderRadius: 3,
+    borderRadius: Radius.sm,
     backgroundColor: ActiveTheme === 'light' ? Colors.textPrimary : '#fff',
   },
 });

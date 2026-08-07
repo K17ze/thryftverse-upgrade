@@ -7,6 +7,7 @@ import {
   RefreshControl,
   ScrollView,
   Share,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Reanimated, {
@@ -19,8 +20,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
-import { Type, Space, Radius, DockConstants } from '../theme/designTokens';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -35,15 +35,16 @@ import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
 import { AppButton } from '../components/ui/AppButton';
-import { Typography } from '../theme/designTokens';
 import { MoodboardCollectionGrid } from '../components/profile/MoodboardCollectionGrid';
 import { BoardEmptyGraphic } from '../components/profile/BoardEmptyGraphic';
+import { OutfitCard } from '../components/outfit/OutfitCard';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
-type TabKey = 'SAVED' | 'WISHLIST' | 'COLLECTIONS';
+import { Type, Space, Radius, DockConstants, Typography, Stroke, LetterSpacing, Layout } from '../theme/designTokens';
+type TabKey = 'SAVED' | 'WISHLIST' | 'COLLECTIONS' | 'OUTFITS';
 type SortOption = 'Default' | 'Price: Low to High' | 'Price: High to Low' | 'Newest' | 'Recently saved';
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 const SORT_OPTIONS: SortOption[] = ['Default', 'Recently saved', 'Price: Low to High', 'Price: High to Low', 'Newest'];
 
@@ -103,6 +104,8 @@ export default function ClosetScreen() {
   const wishlistIds = useStore((state) => state.wishlist);
   const savedProductIds = useStore((state) => state.savedProducts);
   const collections = useStore((state) => state.collections);
+  const outfits = useStore((state) => state.outfits);
+  const removeOutfit = useStore((state) => state.removeOutfit);
   const loadCollectionsFromApi = useStore((state) => state.loadCollectionsFromApi);
   const currentUser = useStore((state) => state.currentUser);
   const { listings, refreshListings, isSyncing, lastError } = useBackendData();
@@ -222,6 +225,14 @@ export default function ClosetScreen() {
     [collections, searchQuery]
   );
 
+  const filteredOutfits = useMemo(
+    () => outfits.filter((o) =>
+      !searchQuery ||
+      o.name.toLowerCase().includes(searchQuery.toLowerCase())
+    ),
+    [outfits, searchQuery]
+  );
+
   const priceDropCount = useMemo(
     () => wishlistItems.filter((l) => l.originalPrice != null && l.originalPrice > l.price).length,
     [wishlistItems]
@@ -270,14 +281,16 @@ export default function ClosetScreen() {
       case 'SAVED': return filteredSaved.length;
       case 'WISHLIST': return filteredWishlist.length;
       case 'COLLECTIONS': return filteredCollections.length;
+      case 'OUTFITS': return filteredOutfits.length;
     }
-  }, [activeTab, filteredSaved, filteredWishlist, filteredCollections]);
+  }, [activeTab, filteredSaved, filteredWishlist, filteredCollections, filteredOutfits]);
 
   const searchPlaceholder = useMemo(() => {
     switch (activeTab) {
       case 'SAVED': return 'Search saved items';
       case 'WISHLIST': return 'Search wishlist';
       case 'COLLECTIONS': return 'Search collections';
+      case 'OUTFITS': return 'Search outfits';
     }
   }, [activeTab]);
 
@@ -289,6 +302,11 @@ export default function ClosetScreen() {
   const handleCreateCollection = useCallback(() => {
     haptic.medium();
     navigation.navigate('CreateCollection');
+  }, [haptic, navigation]);
+
+  const handleCreateOutfit = useCallback(() => {
+    haptic.medium();
+    navigation.navigate('OutfitBuilder');
   }, [haptic, navigation]);
 
   const scrollHandler = useAnimatedScrollHandler({
@@ -306,6 +324,7 @@ export default function ClosetScreen() {
     SAVED: 'bookmark-outline' as const,
     WISHLIST: 'heart-outline' as const,
     COLLECTIONS: 'folder-open-outline' as const,
+    OUTFITS: 'shirt-outline' as const,
   };
 
   const renderBrandChips = () => {
@@ -521,6 +540,82 @@ export default function ClosetScreen() {
     );
   };
 
+  const renderOutfitsContent = () => {
+    if (filteredOutfits.length === 0) {
+      if (outfits.length === 0) {
+        return (
+          <EmptyState
+            graphic={<FlagshipEmptyGraphic variant="bag" size={120} />}
+            title="No outfits yet"
+            subtitle="Combine items from your closet into styled outfits."
+            ctaLabel="Create Outfit"
+            onCtaPress={handleCreateOutfit}
+          />
+        );
+      }
+      return (
+        <EmptyState
+          icon="search-outline"
+          title="No outfits found"
+          subtitle={`No outfits matching "${searchQuery}".`}
+        />
+      );
+    }
+
+    const outfitBoardData = filteredOutfits.map((outfit) => {
+      const thumbs = outfit.itemIds
+        .slice(0, 4)
+        .map((id) => listings.find((l) => l.id === id))
+        .filter((l): l is NonNullable<typeof listings[0]> => !!l && Array.isArray(l.images) && l.images.length > 0)
+        .map((l) => l.images[0]);
+      return {
+        ...outfit,
+        thumbs,
+      };
+    });
+
+    return (
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(50)}>
+        <View style={styles.outfitsGrid}>
+          {outfitBoardData.map((outfit) => (
+            <OutfitCard
+              key={outfit.id}
+              name={outfit.name}
+              itemIds={outfit.itemIds}
+              thumbnailUris={outfit.thumbs}
+              backgroundColor={outfit.backgroundColor}
+              onPress={() => navigation.navigate('OutfitBuilder')}
+              onLongPress={() => {
+                Alert.alert(
+                  'Delete Outfit?',
+                  `"${outfit.name}" will be removed from your outfits.`,
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Delete',
+                      style: 'destructive',
+                      onPress: () => {
+                        haptic.medium();
+                        removeOutfit(outfit.id);
+                      },
+                    },
+                  ]
+                );
+              }}
+              style={styles.outfitCard}
+            />
+          ))}
+        </View>
+        <AppButton
+          title="Create Outfit"
+          icon={<Ionicons name="add" size={16} color={colors.background} />}
+          onPress={handleCreateOutfit}
+          style={styles.createCollectionBtn}
+        />
+      </Reanimated.View>
+    );
+  };
+
 
   return (
     <SafeAreaView style={[styles.container, t.container]} edges={['top']}>
@@ -632,13 +727,15 @@ export default function ClosetScreen() {
         {/* Tabs */}
         <View style={styles.tabsWrap}>
           <View style={[styles.tabBar, t.tabBar]}>
-            {(['SAVED', 'WISHLIST', 'COLLECTIONS'] as TabKey[]).map((tab) => {
+            {(['SAVED', 'WISHLIST', 'COLLECTIONS', 'OUTFITS'] as TabKey[]).map((tab) => {
               const isActive = activeTab === tab;
               const tabCounts = {
                 SAVED: savedItems.length,
                 WISHLIST: wishlistItems.length,
                 COLLECTIONS: collections.length,
+                OUTFITS: outfits.length,
               };
+              const tabLabel = tab === 'SAVED' ? 'Saved' : tab === 'WISHLIST' ? 'Wishlist' : tab === 'COLLECTIONS' ? 'Collections' : 'Outfits';
               return (
                 <AnimatedPressable
                   key={tab}
@@ -647,10 +744,10 @@ export default function ClosetScreen() {
                   activeOpacity={0.85}
                   accessibilityRole="button"
                   accessibilityState={{ selected: isActive }}
-                  accessibilityLabel={`${tab.toLowerCase()} tab, ${tabCounts[tab]} items`}
+                  accessibilityLabel={`${tabLabel.toLowerCase()} tab, ${tabCounts[tab]} items`}
                 >
                   <Text style={[styles.tabLabel, t.tabLabel, isActive && styles.tabLabelActive, isActive && t.tabLabelActive]}>
-                    {tab === 'SAVED' ? 'Saved' : tab === 'WISHLIST' ? 'Wishlist' : 'Collections'}
+                    {tabLabel}
                   </Text>
                   {isActive && <View style={[styles.tabIndicator, t.tabIndicator]} />}
                 </AnimatedPressable>
@@ -663,6 +760,7 @@ export default function ClosetScreen() {
         {activeTab === 'SAVED' && renderSavedContent()}
         {activeTab === 'WISHLIST' && renderWishlistContent()}
         {activeTab === 'COLLECTIONS' && renderCollectionsContent()}
+        {activeTab === 'OUTFITS' && renderOutfitsContent()}
 
         <View style={{ height: DockConstants.singleActionHeight }} />
       </Reanimated.ScrollView>
@@ -679,7 +777,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 90,
+    height: Space.xxl + Space.xl + Space.sm + 2,
     zIndex: 1,
   },
   header: {
@@ -692,36 +790,37 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   backBtn: {
-    width: 40,
-    height: 40,
+    width: Space.xl + Space.sm,
+    height: Space.xl + Space.sm,
     borderRadius: Radius.md,
     borderWidth: 0,
     alignItems: 'center',
     justifyContent: 'center',
   },
   shareBtn: {
-    width: 40,
-    height: 40,
+    width: Space.xl + Space.sm,
+    height: Space.xl + Space.sm,
     borderRadius: Radius.md,
     borderWidth: 0,
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: 22,
+    fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
+    letterSpacing: Type.title.letterSpacing,
   },
   tabBar: {
     flexDirection: 'row',
     gap: Space.lg,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: Stroke.hairline,
   },
   tabItem: {
     paddingVertical: Space.sm,
     position: 'relative',
   },
   tabLabel: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.medium,
   },
   tabLabelActive: {
@@ -732,21 +831,21 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 2,
-    borderTopLeftRadius: 1,
-    borderTopRightRadius: 1,
+    height: Stroke.emphasis,
+    borderTopLeftRadius: Radius.none + 1,
+    borderTopRightRadius: Radius.none + 1,
   },
   countPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    gap: Space.xs,
+    paddingHorizontal: Space.xs + 2,
+    paddingVertical: Space.xs,
     borderRadius: Radius.full,
     borderWidth: 0,
   },
   countBadge: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.bold,
   },
   searchWrap: {
@@ -768,26 +867,26 @@ const styles = StyleSheet.create({
     marginBottom: Space.sm,
   },
   resultCount: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
   },
   sortBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    gap: Space.xs,
+    paddingHorizontal: Space.xs + 2,
+    paddingVertical: Space.xs,
     borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: Stroke.hairline,
   },
   sortLabel: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
   },
   sortMenu: {
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
-    borderRadius: 0,
+    borderRadius: Radius.none,
     borderWidth: 0,
     overflow: 'visible',
   },
@@ -796,13 +895,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingVertical: Space.sm + 4,
+    borderBottomWidth: Stroke.hairline,
   },
   sortOptionActive: {
   },
   sortOptionText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
   },
   sortOptionTextActive: {
@@ -812,22 +911,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingHorizontal: Space.md,
     marginBottom: Space.sm,
-    gap: 8,
+    gap: Space.sm,
   },
   filterChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    gap: Space.xs / 2 + 1,
+    paddingHorizontal: Space.sm + 4,
+    paddingVertical: Space.xs / 2 + 2,
     borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    minHeight: 32,
+    borderWidth: Stroke.hairline,
+    minHeight: Space.xl + Space.xs,
   },
   filterChipActive: {
   },
   filterChipText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
   },
   filterChipTextActive: {
@@ -838,6 +937,16 @@ const styles = StyleSheet.create({
   createCollectionBtn: {
     marginTop: Space.lg,
     marginBottom: Space.md,
+  },
+  outfitsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: Space.md,
+    gap: Space.sm,
+    paddingTop: Space.sm,
+  },
+  outfitCard: {
+    width: (Layout.screenWidth - Space.md * 2 - Space.sm) / 2,
   },
   skeletonWrap: {
     paddingHorizontal: Space.md,
@@ -852,11 +961,11 @@ const styles = StyleSheet.create({
   statsCard: {
     marginHorizontal: Space.md,
     marginBottom: Space.md,
-    borderRadius: 0,
+    borderRadius: Radius.none,
     borderWidth: 0,
     padding: Space.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: Stroke.hairline,
+    borderBottomWidth: Stroke.hairline,
   },
   statsRow: {
     flexDirection: 'row',
@@ -865,33 +974,33 @@ const styles = StyleSheet.create({
   statItem: {
     flex: 1,
     alignItems: 'center',
-    gap: 2,
+    gap: Space.xs / 2,
   },
   statDivider: {
-    width: 1,
-    height: 28,
+    width: Stroke.standard,
+    height: Space.lg + 4,
   },
   statValue: {
-    fontSize: 17,
+    fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
-    letterSpacing: -0.3,
+    letterSpacing: LetterSpacing.tight + LetterSpacing.wide,
   },
   statLabel: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
     textTransform: 'uppercase',
-    letterSpacing: 0.4,
+    letterSpacing: LetterSpacing.caps + LetterSpacing.tight,
   },
   savingsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: Space.xs / 2 + 1,
     marginTop: Space.sm,
     paddingTop: Space.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: Stroke.hairline,
   },
   savingsText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
   },
   brandChipScroll: {
@@ -899,20 +1008,20 @@ const styles = StyleSheet.create({
   },
   brandChipContent: {
     paddingHorizontal: Space.md,
-    gap: 6,
+    gap: Space.xs + 2,
   },
   brandChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: Space.sm + 4,
+    paddingVertical: Space.xs / 2 + 2,
     borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    minHeight: 32,
+    borderWidth: Stroke.hairline,
+    minHeight: Space.xl + Space.xs,
     justifyContent: 'center',
   },
   brandChipActive: {
   },
   brandChipText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
   },
   brandChipTextActive: {

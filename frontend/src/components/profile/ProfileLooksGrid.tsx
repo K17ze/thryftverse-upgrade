@@ -11,16 +11,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { Space, Radius, Typography, Type } from '../../theme/designTokens';
 import type { LookApiItem } from '../../services/looksApi';
-import type { StackNavigationProp } from '@react-navigation/stack';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const GRID_GAP = 8;
 const TILE_WIDTH = (SCREEN_W - Space.md * 2 - GRID_GAP) / 2;
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 export interface ProfileLooksGridProps {
   looks: LookApiItem[];
@@ -163,7 +163,7 @@ function createStyles(colors: ThemeColors) {
     height: '100%',
   },
   tileCaption: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textPrimary,
     marginTop: 6,
@@ -171,7 +171,7 @@ function createStyles(colors: ThemeColors) {
   tileMeta: {
     flexDirection: 'row',
     gap: Space.sm,
-    marginTop: 4,
+    marginTop: Space.xs,
   },
   metaItem: {
     flexDirection: 'row',
@@ -179,7 +179,7 @@ function createStyles(colors: ThemeColors) {
     gap: 4,
   },
   metaText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },
@@ -191,37 +191,37 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.md,
   },
   stateTitle: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
   },
   stateSubtitle: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     textAlign: 'center',
   },
   retryBtn: {
-    marginTop: 4,
+    marginTop: Space.xs,
     paddingHorizontal: 20,
-    paddingVertical: 8,
+    paddingVertical: Space.sm,
     backgroundColor: colors.brand,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
   },
   retryBtnText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: '#fff',
   },
   createBtn: {
-    marginTop: 4,
+    marginTop: Space.xs,
     paddingHorizontal: 20,
-    paddingVertical: 8,
+    paddingVertical: Space.sm,
     backgroundColor: colors.brand,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
   },
   createBtnText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: '#fff',
   },

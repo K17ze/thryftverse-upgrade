@@ -16,7 +16,7 @@ import { Type, Space, Radius, Typography } from '../../theme/designTokens';
 import { useStore } from '../../store/useStore';
 import { useBackendData } from '../../context/BackendDataContext';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -26,7 +26,7 @@ import { formatCountdown } from '../../data/tradeHub';
 import { DiscoverySectionHeader } from '../discover/DiscoverySectionHeader';
 import { HorizontalRail } from '../HorizontalRail';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 const { width: SCREEN_W } = Dimensions.get('window');
 
 /* ── Activity item types ── */
@@ -309,17 +309,17 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: 4,
+    marginTop: Space.xs,
     backgroundColor: 'rgba(239,68,68,0.10)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
     borderRadius: Radius.full,
     alignSelf: 'flex-start',
   },
   liveDot: {
     width: 6,
     height: 6,
-    borderRadius: 3,
+    borderRadius: Radius.sm,
     backgroundColor: colors.danger,
   },
   liveText: {
@@ -355,14 +355,14 @@ function createStyles(colors: ThemeColors) {
     position: 'absolute',
     width: 24,
     height: 24,
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     backgroundColor: colors.danger,
     opacity: 0.25,
   },
   pulseCore: {
     width: 12,
     height: 12,
-    borderRadius: 6,
+    borderRadius: Radius.md,
     backgroundColor: colors.danger,
   },
   pulseBannerTitle: {
@@ -388,7 +388,7 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: Space.sm,
     borderRadius: Radius.full,
     gap: 6,
   },
@@ -400,7 +400,7 @@ function createStyles(colors: ThemeColors) {
   heatDot: {
     width: 6,
     height: 6,
-    borderRadius: 3,
+    borderRadius: Radius.sm,
   },
 
   /* Hot Sellers */
@@ -433,7 +433,7 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
-    marginTop: 8,
+    marginTop: Space.sm,
     letterSpacing: Type.caption.letterSpacing,
   },
   sellerMeta: {
@@ -449,14 +449,14 @@ function createStyles(colors: ThemeColors) {
     gap: 4,
     marginTop: 6,
     backgroundColor: 'rgba(52,199,89,0.12)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
     borderRadius: Radius.full,
   },
   sellerLiveDot: {
     width: 6,
     height: 6,
-    borderRadius: 3,
+    borderRadius: Radius.sm,
     backgroundColor: colors.success,
   },
   sellerLiveText: {

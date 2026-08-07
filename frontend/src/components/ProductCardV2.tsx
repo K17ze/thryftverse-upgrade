@@ -7,7 +7,6 @@ import React, { useState } from 'react';
 import { View, StyleSheet, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Radius, Control, Type } from '../theme/designTokens';
 import { T } from './ui/Text';
 import { AnimatedPressable } from './AnimatedPressable';
 import { CachedImage } from './CachedImage';
@@ -19,12 +18,14 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { Listing } from '../data/mockData';
 import { isVideoUri, getCategoryFocalPoint, FACE_FOCAL_POINT } from '../utils/media';
-import { Typography } from '../theme/designTokens';
 import { StaggeredItem } from './StaggeredGridEntrance';
 import { PressPresets } from '../hooks/usePremiumPressFeedback';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { resolveListingMediaAspectRatio } from '../utils/listingMediaGeometry';
+import { computeSustainabilityScore } from '../utils/sustainabilityScore';
+import { SustainabilityBadge } from './product/SustainabilityBadge';
 
+import { Space, Radius, Control, Type, Typography } from '../theme/designTokens';
 // A URI is only usable when it is a non-blank string. Backend rows can surface
 // `''`, `null`, or whitespace-only strings; treat all of these as "no media"
 // so the premium placeholder renders instead of a broken image.
@@ -46,7 +47,7 @@ interface ProductCardV2Props {
   onMessageSeller?: () => void;
 }
 
-export function ProductCardV2({
+function ProductCardV2Base({
   item,
   onPress,
   index = 0,
@@ -80,6 +81,23 @@ export function ProductCardV2({
   const showPlaceholder = !hasUsableImage || imageFailed;
   const sellerUsername = item.seller?.username ?? item.sellerId ?? null;
   const sellerAvatar = item.seller?.avatar ?? null;
+  const sellerVerified = item.seller?.verified === true;
+
+  // Sustainability — only surface A/B grades on the card to avoid visual
+  // noise on lower-impact items. Computed client-side from listing data.
+  const sustainabilityScore = React.useMemo(
+    () =>
+      computeSustainabilityScore({
+        condition: item.condition,
+        category: item.category,
+        subcategory: item.subcategory,
+        brand: item.brand,
+        sellerLocation: item.seller?.location ?? null,
+      }),
+    [item.condition, item.category, item.subcategory, item.brand, item.seller?.location],
+  );
+  const showSustainabilityChip =
+    !item.isSold && (sustainabilityScore.grade === 'A' || sustainabilityScore.grade === 'B');
 
   const handleToggleFav = () => {
     haptic.light();
@@ -109,7 +127,7 @@ export function ProductCardV2({
         style={styles.imageWrap}
         {...PressPresets.card}
         accessibilityRole="button"
-        accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}`}
+        accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}${item.condition ? `, ${item.condition}` : ''}${item.isSold ? ', Sold' : ''}`}
         accessibilityHint="Opens item details"
       >
         {showPlaceholder ? (
@@ -131,33 +149,35 @@ export function ProductCardV2({
           />
         )}
 
-        {/* Sold — editorial scrim keeps the image as visual anchor while
-            clearly deactivating the card. The pill communicates status
-            without washing out the media into a white rectangle. */}
-        {item.isSold && (
+        {/* Consolidated badge — only ONE badge at a time, by priority:
+            price drop > sold > condition > sustainability.
+            Media count stays as a separate small icon in the corner. */}
+        {item.isSold ? (
           <>
             <View style={styles.soldScrim} />
             <View style={styles.soldPill}>
               <Text style={styles.soldPillText}>Sold</Text>
             </View>
           </>
-        )}
-
-        {/* Condition badge - top left, more subtle */}
-        {!item.isSold && !hasPriceDrop && (
-          <View style={styles.conditionBadge}>
-            <Text style={styles.conditionText}>{item.condition}</Text>
-          </View>
-        )}
-
-        {/* A single top-left status keeps the image legible. */}
-        {hasPriceDrop && !item.isSold && (
+        ) : hasPriceDrop ? (
           <View style={[styles.conditionBadge, styles.priceDropBadge]}>
             <Text style={styles.conditionText}>-{priceDropPercent}%</Text>
           </View>
-        )}
+        ) : item.condition ? (
+          <View style={styles.conditionBadge}>
+            <Text style={styles.conditionText}>{item.condition}</Text>
+          </View>
+        ) : showSustainabilityChip ? (
+          <View style={styles.sustainabilityChipWrap}>
+            <SustainabilityBadge
+              score={sustainabilityScore}
+              variant="compact"
+              onMedia
+            />
+          </View>
+        ) : null}
 
-        {/* Media indicator - refined */}
+        {/* Media indicator — separate small icon in corner */}
         {(hasMultiple || hasVideo) && (
           <View style={styles.mediaBadge}>
             <Ionicons
@@ -179,8 +199,9 @@ export function ProductCardV2({
               {...PressPresets.iconButton}
               hitSlop={6}
               accessibilityRole="button"
-              accessibilityLabel={isSaved ? 'Remove from saved' : 'Save product'}
+              accessibilityLabel={isSaved ? 'Remove from saved' : 'Save item'}
               accessibilityHint="Toggles this product in your saved page"
+              accessibilityState={{ checked: isSaved }}
             >
               <Ionicons
                 name={isSaved ? 'bookmark' : 'bookmark-outline'}
@@ -249,6 +270,15 @@ export function ProductCardV2({
                 </View>
               )}
               <Text style={styles.sellerName} numberOfLines={1}>@{sellerUsername}</Text>
+              {sellerVerified ? (
+                <Ionicons
+                  name="shield-checkmark"
+                  size={11}
+                  color={colors.success}
+                  style={styles.sellerVerifiedIcon}
+                  accessibilityLabel="Verified seller"
+                />
+              ) : null}
               </AnimatedPressable>
               {onMessageSeller ? (
                 <AnimatedPressable
@@ -280,6 +310,8 @@ export function ProductCardV2({
     </StaggeredItem>
   );
 }
+
+export const ProductCardV2 = React.memo(ProductCardV2Base);
 
 // ============================================================================
 // MASONRY GRID
@@ -416,6 +448,11 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     alignItems: 'center',
     gap: 0,
   },
+  sustainabilityChipWrap: {
+    position: 'absolute',
+    bottom: Space.xs,
+    left: Space.xs,
+  },
 
   // Info - Clean hierarchy with breathing room
   info: {
@@ -482,12 +519,12 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   sellerAvatar: {
     width: 16,
     height: 16,
-    borderRadius: 8,
+    borderRadius: Radius.md,
   },
   sellerAvatarPlaceholder: {
     width: 16,
     height: 16,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     backgroundColor: colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
@@ -500,6 +537,9 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     fontFamily: Typography.family.medium,
     color: colors.textSecondary,
     flex: 1,
+  },
+  sellerVerifiedIcon: {
+    flexShrink: 0,
   },
   messageButton: {
     width: Control.hit,
@@ -514,7 +554,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     top: Space.sm,
     left: Space.sm,
     backgroundColor: 'rgba(0,0,0,0.45)',
-    paddingHorizontal: 8,
+    paddingHorizontal: Space.sm,
     paddingVertical: 5,
     borderRadius: Radius.md,
   },

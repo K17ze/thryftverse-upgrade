@@ -7,6 +7,7 @@ import {
 } from 'react-native';
 import { useAppTheme } from '../theme/ThemeContext';
 
+import { Space } from '../theme/designTokens';
 interface TypingIndicatorProps {
   dotCount?: number;
   dotSize?: number;
@@ -131,13 +132,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     height: 24,
-    paddingHorizontal: 16,
+    paddingHorizontal: Space.md,
   },
   dot: {
     // Base styles applied dynamically
   },
   compactContainer: {
     height: 20,
-    paddingHorizontal: 8,
+    paddingHorizontal: Space.sm,
   },
 });

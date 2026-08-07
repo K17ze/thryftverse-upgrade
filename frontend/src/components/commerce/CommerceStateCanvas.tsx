@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable, useWindowDimensions } from 'react-na
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { Space, Radius, Typography, Type } from '../../theme/designTokens';
 
 export type CommerceStateType = 'loading' | 'error' | 'unavailable';
 
@@ -210,7 +210,7 @@ const styles = StyleSheet.create({
     marginBottom: Space.xs,
   },
   message: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     textAlign: 'center',
     lineHeight: 20,
@@ -226,7 +226,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   retryText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
   },
   secondaryBtn: {
@@ -237,7 +237,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   secondaryText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
   },
   // ── Skeleton ──

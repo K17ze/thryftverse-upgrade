@@ -1,17 +1,20 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  withTiming,
+  withSpring,
   runOnJS,
 } from 'react-native-reanimated';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke, Control } from '../../theme/designTokens';
+import { Motion } from '../../theme/motionTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { PosterSticker as ApiPosterSticker } from '../../services/postersApi';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { useHaptic } from '../../hooks/useHaptic';
+import { AnimatedPressable } from '../AnimatedPressable';
 
 interface PosterStickerLayerProps {
   stickers: ApiPosterSticker[];
@@ -19,6 +22,9 @@ interface PosterStickerLayerProps {
   editable?: boolean;
   selectedStickerId?: string | null;
   onStickerPositionChange?: (id: string, x: number, y: number) => void;
+  onStickerTransformChange?: (id: string, updates: { scale?: number; rotation?: number }) => void;
+  /** Delete the selected sticker. When provided, a delete button appears on selection. */
+  onDeleteSticker?: (id: string) => void;
   containerWidth: number;
   containerHeight: number;
   style?: ViewStyle;
@@ -27,6 +33,10 @@ interface PosterStickerLayerProps {
 const CLAMP_MARGIN = 0.05;
 const STICKER_BASE_HALF_W = 22; // half of minWidth 44
 const STICKER_BASE_HALF_H = 22; // half of minHeight 44
+// Offset for the selection handle relative to the sticker base — matches
+// the half-width/half-height so the handle sits at the corner.
+const STICKER_HANDLE_OFFSET = 22;
+const HANDLE_SIZE = 12;
 
 function clampNormalizedScaled(
   value: number,
@@ -49,6 +59,8 @@ export function PosterStickerLayer({
   editable = false,
   selectedStickerId,
   onStickerPositionChange,
+  onStickerTransformChange,
+  onDeleteSticker,
   containerWidth,
   containerHeight,
   style,
@@ -66,6 +78,8 @@ export function PosterStickerLayer({
           containerHeight={containerHeight}
           onPress={onStickerPress}
           onPositionChange={onStickerPositionChange}
+          onTransformChange={onStickerTransformChange}
+          onDelete={onDeleteSticker}
           reducedMotion={reducedMotion}
         />
       ))}
@@ -81,8 +95,13 @@ interface DraggableStickerProps {
   containerHeight: number;
   onPress?: (sticker: ApiPosterSticker) => void;
   onPositionChange?: (id: string, x: number, y: number) => void;
+  onTransformChange?: (id: string, updates: { scale?: number; rotation?: number }) => void;
+  onDelete?: (id: string) => void;
   reducedMotion?: boolean;
 }
+
+const SCALE_MIN = 0.4;
+const SCALE_MAX = 3.0;
 
 function DraggableSticker({
   sticker,
@@ -92,21 +111,65 @@ function DraggableSticker({
   containerHeight,
   onPress,
   onPositionChange,
+  onTransformChange,
+  onDelete,
   reducedMotion = false,
 }: DraggableStickerProps) {
   const { colors } = useAppTheme();
+  const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const translateX = useSharedValue(sticker.x * containerWidth);
   const translateY = useSharedValue(sticker.y * containerHeight);
   const startX = useSharedValue(0);
   const startY = useSharedValue(0);
+  // Scale and rotation shared values for pinch/rotate gestures
+  const scale = useSharedValue(sticker.scale);
+  const rotation = useSharedValue(sticker.rotation);
+  const startScale = useSharedValue(sticker.scale);
+  const startRotation = useSharedValue(sticker.rotation);
+
+  // Selection appearance — spring-animated opacity for the border and
+  // spring-animated scale for the corner handle.
+  const selectionOpacity = useSharedValue(0);
+  const handleScale = useSharedValue(0);
+
+  // Stable haptic triggers for use inside gesture worklets (runOnJS).
+  const hapticLight = useCallback(() => haptic.light(), [haptic]);
+  const hapticSelection = useCallback(() => haptic.selection(), [haptic]);
+
+  useEffect(() => {
+    if (reducedMotion) {
+      selectionOpacity.value = isSelected ? 1 : 0;
+      handleScale.value = isSelected ? 1 : 0;
+    } else if (isSelected) {
+      selectionOpacity.value = withSpring(1, Motion.spring.entrance);
+      handleScale.value = withSpring(1, Motion.spring.entrance);
+    } else {
+      selectionOpacity.value = withSpring(0, Motion.spring.entrance);
+      handleScale.value = withSpring(0, Motion.spring.entrance);
+    }
+  }, [isSelected, reducedMotion, selectionOpacity, handleScale]);
+
+  const selectionBorderStyle = useAnimatedStyle(() => ({
+    opacity: selectionOpacity.value,
+  }));
+
+  const handleAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: selectionOpacity.value,
+    transform: [{ scale: handleScale.value }],
+  }));
 
   const handlePositionCommit = useCallback(
     (finalX: number, finalY: number) => {
       const normX = clampNormalizedScaled(finalX / containerWidth, sticker.scale, containerWidth, STICKER_BASE_HALF_W);
       const normY = clampNormalizedScaled(finalY / containerHeight, sticker.scale, containerHeight, STICKER_BASE_HALF_H);
-      translateX.value = withTiming(normX * containerWidth, { duration: reducedMotion ? 0 : 0 });
-      translateY.value = withTiming(normY * containerHeight, { duration: reducedMotion ? 0 : 0 });
+      if (reducedMotion) {
+        translateX.value = normX * containerWidth;
+        translateY.value = normY * containerHeight;
+      } else {
+        translateX.value = withSpring(normX * containerWidth, Motion.spring.entrance);
+        translateY.value = withSpring(normY * containerHeight, Motion.spring.entrance);
+      }
       onPositionChange?.(sticker.id, normX, normY);
     },
     [containerWidth, containerHeight, onPositionChange, sticker.id, translateX, translateY, reducedMotion]
@@ -120,6 +183,7 @@ function DraggableSticker({
         .onStart(() => {
           startX.value = translateX.value;
           startY.value = translateY.value;
+          runOnJS(hapticLight)();
         })
         .onUpdate((e) => {
           translateX.value = startX.value + e.translationX;
@@ -130,7 +194,7 @@ function DraggableSticker({
           const finalY = startY.value + e.translationY;
           runOnJS(handlePositionCommit)(finalX, finalY);
         }),
-    [editable, translateX, translateY, startX, startY, handlePositionCommit]
+    [editable, translateX, translateY, startX, startY, handlePositionCommit, hapticLight]
   );
 
   const tapGesture = useMemo(
@@ -139,24 +203,72 @@ function DraggableSticker({
         .enabled(editable && !!onPress)
         .onEnd(() => {
           if (onPress) {
+            runOnJS(hapticLight)();
             runOnJS(onPress)(sticker);
           }
         }),
-    [editable, onPress, sticker]
+    [editable, onPress, sticker, hapticLight]
+  );
+
+  // Pinch-to-resize gesture — Instagram/Snapchat core sticker manipulation.
+  // Two-finger pinch scales the sticker between SCALE_MIN and SCALE_MAX.
+  const pinchGesture = useMemo(
+    () =>
+      Gesture.Pinch()
+        .enabled(editable)
+        .onStart(() => {
+          startScale.value = scale.value;
+          runOnJS(hapticLight)();
+        })
+        .onUpdate((e) => {
+          const newScale = startScale.value * e.scale;
+          scale.value = Math.max(SCALE_MIN, Math.min(SCALE_MAX, newScale));
+        })
+        .onEnd(() => {
+          if (onTransformChange) {
+            runOnJS(onTransformChange)(sticker.id, { scale: scale.value });
+          }
+        }),
+    [editable, scale, startScale, onTransformChange, sticker.id, hapticLight]
+  );
+
+  // Two-finger rotation gesture — Instagram/Snapchat core sticker manipulation.
+  // Rotates the sticker freely; snaps to nearest 15° on end for precision.
+  const rotationGesture = useMemo(
+    () =>
+      Gesture.Rotation()
+        .enabled(editable)
+        .onStart(() => {
+          startRotation.value = rotation.value;
+        })
+        .onUpdate((e) => {
+          rotation.value = startRotation.value + (e.rotation * 180 / Math.PI);
+        })
+        .onEnd(() => {
+          // Snap to nearest 15° for precision
+          const snapped = Math.round(rotation.value / 15) * 15;
+          rotation.value = snapped;
+          runOnJS(hapticSelection)();
+          if (onTransformChange) {
+            runOnJS(onTransformChange)(sticker.id, { rotation: snapped });
+          }
+        }),
+    [editable, rotation, startRotation, onTransformChange, sticker.id, hapticSelection]
   );
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [
       { translateX: translateX.value },
       { translateY: translateY.value },
-      { scale: sticker.scale },
-      { rotate: `${sticker.rotation}deg` },
+      { scale: scale.value },
+      { rotate: `${rotation.value}deg` },
     ],
   }));
 
+  // Compose pan + pinch + rotation + tap — all simultaneous for natural manipulation.
   const composedGesture = useMemo(
-    () => Gesture.Race(panGesture, tapGesture),
-    [panGesture, tapGesture]
+    () => Gesture.Simultaneous(panGesture, pinchGesture, rotationGesture, tapGesture),
+    [panGesture, pinchGesture, rotationGesture, tapGesture]
   );
 
   if (editable) {
@@ -171,14 +283,40 @@ function DraggableSticker({
             animatedStyle,
           ]}
           pointerEvents="auto"
+          accessibilityLabel="Sticker"
+          accessibilityHint="Drag to move, pinch to resize, rotate to rotate"
+          accessibilityRole="adjustable"
         >
-          <View style={[styles.stickerInner, isSelected && styles.selectedWrap]}>
+          <View style={styles.stickerInner}>
             <StickerContent sticker={sticker} />
           </View>
           {isSelected && (
-            <View style={styles.selectionHandle} pointerEvents="none">
-              <View style={styles.handleDot} />
-            </View>
+            <>
+              {/* Spring-animated selection border overlay */}
+              <Reanimated.View
+                style={[StyleSheet.absoluteFill, styles.selectedWrap, selectionBorderStyle]}
+                pointerEvents="none"
+              />
+              {/* Spring scale-in corner handle */}
+              <Reanimated.View style={[styles.selectionHandle, handleAnimatedStyle]} pointerEvents="none">
+                <View style={styles.handleDot} />
+              </Reanimated.View>
+              {/* Delete button — medium haptic (delete is a meaningful action) */}
+              {onDelete && (
+                <AnimatedPressable
+                  style={styles.deleteButton}
+                  scaleValue={0.97}
+                  activeOpacity={0.85}
+                  hapticFeedback="medium"
+                  onPress={() => onDelete(sticker.id)}
+                  accessibilityLabel="Delete sticker"
+                  accessibilityHint="Removes this sticker from the frame"
+                  accessibilityRole="button"
+                >
+                  <Ionicons name="close-circle" size={Control.iconCompact} color="#fff" />
+                </AnimatedPressable>
+              )}
+            </>
           )}
         </Reanimated.View>
       </GestureDetector>
@@ -276,6 +414,68 @@ function StickerContent({ sticker }: { sticker: ApiPosterSticker }) {
         </View>
       );
 
+    case 'poll':
+      return (
+        <View
+          style={styles.pollWrap}
+          accessibilityLabel="Poll sticker"
+          accessibilityHint="Tap to vote on this poll"
+          accessibilityRole="button"
+        >
+          <Text style={styles.pollQuestion}>{sticker.payload.question}</Text>
+          {sticker.payload.options?.map((opt) => (
+            <View key={opt.id} style={styles.voteOption}>
+              <Text style={styles.voteOptionText}>{opt.label}</Text>
+            </View>
+          ))}
+        </View>
+      );
+
+    case 'quiz':
+      return (
+        <View
+          style={styles.quizWrap}
+          accessibilityLabel="Quiz sticker"
+          accessibilityHint="Tap to answer this quiz"
+          accessibilityRole="button"
+        >
+          <Text style={styles.quizQuestion}>{sticker.payload.question}</Text>
+          {sticker.payload.options?.map((opt) => (
+            <View key={opt.id} style={styles.voteOption}>
+              <Text style={styles.voteOptionText}>{opt.label}</Text>
+            </View>
+          ))}
+        </View>
+      );
+
+    case 'question':
+      return (
+        <View
+          style={styles.questionWrap}
+          accessibilityLabel="Question sticker"
+          accessibilityHint="Tap to reply to this question"
+          accessibilityRole="button"
+        >
+          <Text style={styles.questionText}>{sticker.payload.question}</Text>
+        </View>
+      );
+
+    case 'countdown':
+      return (
+        <View
+          style={styles.countdownWrap}
+          accessibilityLabel="Countdown sticker"
+          accessibilityHint="Shows time remaining until the countdown ends"
+        >
+          <Text style={styles.countdownLabel}>{sticker.payload.endLabel ?? 'Countdown'}</Text>
+          {sticker.payload.targetDate && (
+            <Text style={styles.countdownTime}>
+              {new Date(sticker.payload.targetDate).toLocaleDateString()}
+            </Text>
+          )}
+        </View>
+      );
+
     default:
       return null;
   }
@@ -290,10 +490,17 @@ function createStyles(colors: any) {
     minWidth: 44,
     minHeight: 44,
     justifyContent: 'center',
+    // Subtle drop shadow so stickers feel like they're floating above the
+    // media, not pasted on — Instagram-style sticker depth.
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 4,
   },
   selectedWrap: {
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.7)',
+    borderWidth: Stroke.standard,
+    borderColor: 'rgba(255,255,255,0.9)',
     borderRadius: Radius.sm,
   },
   selectionHandle: {
@@ -306,29 +513,54 @@ function createStyles(colors: any) {
     alignItems: 'center',
   },
   handleDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.brand,
-    borderWidth: 1.5,
-    borderColor: '#fff',
+    width: HANDLE_SIZE,
+    height: HANDLE_SIZE,
+    borderRadius: HANDLE_SIZE / 2,
+    backgroundColor: '#fff',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(0,0,0,0.2)',
+  },
+  // Delete button — positioned at the top-left corner of the selection,
+  // opposite the selection handle (top-right). Uses Space.xs padding and
+  // Control.iconCompact for the glyph.
+  deleteButton: {
+    position: 'absolute',
+    top: -8,
+    left: -8,
+    width: 28,
+    height: 28,
+    borderRadius: Radius.full,
+    backgroundColor: colors.danger,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Space.xs,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   textWrap: {
     alignItems: 'center',
-    paddingHorizontal: Space.sm,
+    paddingHorizontal: Space.sm + Space.xs,
     paddingVertical: Space.xs,
     borderRadius: Radius.sm,
   },
   textSticker: {
+    color: '#fff',
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
+    fontSize: Type.bodyLarge.size,
+    lineHeight: Type.bodyLarge.lineHeight,
     textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   mentionWrap: {
     backgroundColor: 'rgba(0,0,0,0.45)',
     borderRadius: Radius.full,
     paddingHorizontal: Space.sm + 4,
-    paddingVertical: 4,
+    paddingVertical: Space.xs,
   },
   mentionText: {
     color: '#fff',
@@ -364,7 +596,7 @@ function createStyles(colors: any) {
     backgroundColor: 'rgba(0,0,0,0.5)',
     borderRadius: Radius.full,
     paddingHorizontal: Space.sm + 2,
-    paddingVertical: 4,
+    paddingVertical: Space.xs,
   },
   lookText: {
     color: '#fff',
@@ -387,7 +619,7 @@ function createStyles(colors: any) {
   },
   voteOption: {
     backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: Radius.sm,
+    borderRadius: Radius.full,
     paddingVertical: 6,
     paddingHorizontal: Space.sm,
     alignItems: 'center',
@@ -396,6 +628,92 @@ function createStyles(colors: any) {
     color: '#fff',
     fontFamily: Typography.family.medium,
     fontSize: Type.caption.size,
+  },
+  // Poll sticker — tokenized padding/radius/typography per flagship spec
+  pollWrap: {
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: Radius.lg,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    gap: 6,
+    minWidth: 160,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  pollQuestion: {
+    color: '#fff',
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.body.size,
+    textAlign: 'center',
+  },
+  // Quiz sticker — tokenized padding/radius/typography per flagship spec
+  quizWrap: {
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: Radius.lg,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    gap: 6,
+    minWidth: 160,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  quizQuestion: {
+    color: '#fff',
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.body.size,
+    textAlign: 'center',
+  },
+  // Question sticker — tokenized padding/typography per flagship spec
+  questionWrap: {
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: Radius.lg,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  questionText: {
+    color: '#fff',
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.bodyLarge.size,
+    lineHeight: Type.bodyLarge.lineHeight,
+    textAlign: 'center',
+  },
+  // Countdown sticker — tokenized padding/typography per flagship spec
+  countdownWrap: {
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: Radius.lg,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    alignItems: 'center',
+    gap: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  countdownLabel: {
+    color: 'rgba(255,255,255,0.7)',
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.body.size,
+    textAlign: 'center',
+  },
+  countdownTime: {
+    color: '#fff',
+    fontFamily: Typography.family.bold,
+    fontSize: Type.bodyLarge.size,
+    lineHeight: Type.bodyLarge.lineHeight,
   },
 });
 }

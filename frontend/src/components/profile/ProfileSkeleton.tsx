@@ -167,7 +167,7 @@ const styles = StyleSheet.create({
   // Identity — full-width
   skeletonName: { width: 180, height: 20, borderRadius: Radius.sm, backgroundColor: SURFACE_ALT, marginBottom: 6 },
   skeletonHandle: { width: 120, height: 14, borderRadius: Radius.sm, backgroundColor: SURFACE_ALT, marginBottom: Space.sm },
-  skeletonBioLine: { width: '100%', height: 14, borderRadius: Radius.sm, backgroundColor: SURFACE_ALT, marginBottom: 4 },
+  skeletonBioLine: { width: '100%', height: 14, borderRadius: Radius.sm, backgroundColor: SURFACE_ALT, marginBottom: Space.xs },
   skeletonBioLineShort: { width: '60%', height: 14, borderRadius: Radius.sm, backgroundColor: SURFACE_ALT, marginBottom: Space.xs },
   // Trust line
   skeletonTrustLine: { width: 160, height: 13, borderRadius: Radius.sm, backgroundColor: SURFACE_ALT, marginBottom: Space.sm },

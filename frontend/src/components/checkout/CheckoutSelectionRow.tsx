@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography, Radius, Stroke } from '../../theme/designTokens';
+import { Space, Typography, Radius, Stroke, Type } from '../../theme/designTokens';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -142,14 +142,14 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: 2,
   },
   label: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     color: colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
   },
   title: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
@@ -158,7 +158,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.textSecondary,
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
     lineHeight: 19,
@@ -170,12 +170,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginTop: 3,
   },
   warningText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
     color: '#B8860B',
   },
   errorText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
     color: colors.danger,
   },
@@ -183,7 +183,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    paddingTop: 4,
+    paddingTop: Space.xs,
   },
   actionRow: {
     flexDirection: 'row',
@@ -191,7 +191,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: 2,
   },
   actionLabel: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },

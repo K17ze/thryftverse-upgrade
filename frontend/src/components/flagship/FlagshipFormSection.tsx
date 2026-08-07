@@ -1,9 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type } from '../../theme/designTokens';
-import { Typography } from '../../theme/designTokens';
-
+import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 export interface FlagshipFormSectionProps {
   title?: string;
   description?: string;

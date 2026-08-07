@@ -1,11 +1,27 @@
 import React from 'react';
 import { View, StyleSheet, Text } from 'react-native';
 import { useAppTheme } from '../../../theme/ThemeContext';
-import { Space, Type, Typography } from '../../../theme/designTokens';
+import { Space, Type, Typography, Radius } from '../../../theme/designTokens';
 import type {
   CommerceDetailFamily,
   CommerceDetailIdentityDensity,
 } from './types';
+
+// ── Media overlay text constants ──
+// Text rendered on top of media (images) is always white regardless of
+// theme mode — both light and dark apps use white text on image overlays
+// (Instagram, Depop, Vinted pattern). These are media-specific constants,
+// not theme colours, because no ThemeColors entry maps to "always white
+// on media" in both modes.
+const MEDIA_TEXT_PRIMARY = '#FFFFFF';
+const MEDIA_TEXT_SECONDARY = 'rgba(255,255,255,0.76)';
+const MEDIA_TEXT_MUTED = 'rgba(255,255,255,0.6)';
+const MEDIA_TEXT_TERTIARY = 'rgba(255,255,255,0.72)';
+const MEDIA_TEXT_BODY = 'rgba(255,255,255,0.8)';
+const MEDIA_SHADOW = 'rgba(0,0,0,0.55)';
+const MEDIA_SHADOW_SOFT = 'rgba(0,0,0,0.5)';
+const MEDIA_SHADOW_LIGHT = 'rgba(0,0,0,0.45)';
+const MEDIA_SHADOW_SUBTLE = 'rgba(0,0,0,0.4)';
 
 /**
  * Identity seam — one compact identity composition immediately after
@@ -97,7 +113,7 @@ export function CommerceDetailIdentity({
     family === 'co_own' && styles.titleCoOwn,
     density === 'compact' && styles.titleCompact,
     isMedia && styles.titleMedia,
-    { color: isMedia ? '#FFFFFF' : colors.textPrimary },
+    { color: isMedia ? MEDIA_TEXT_PRIMARY : colors.textPrimary },
   ];
 
   return (
@@ -116,7 +132,7 @@ export function CommerceDetailIdentity({
               style={[
                 styles.eyebrow,
                 isMedia && styles.eyebrowMedia,
-                { color: isMedia ? 'rgba(255,255,255,0.76)' : colors.textSecondary },
+                { color: isMedia ? MEDIA_TEXT_SECONDARY : colors.textSecondary },
               ]}
               numberOfLines={1}
             >
@@ -142,7 +158,7 @@ export function CommerceDetailIdentity({
               style={[
                 styles.primaryValue,
                 isMedia && styles.primaryValueMedia,
-                { color: isMedia ? '#FFFFFF' : colors.textPrimary },
+                { color: isMedia ? MEDIA_TEXT_PRIMARY : colors.textPrimary },
               ]}
               accessibilityRole="text"
             >
@@ -153,7 +169,7 @@ export function CommerceDetailIdentity({
             <Text
               style={[
                 styles.originalValue,
-                { color: isMedia ? 'rgba(255,255,255,0.6)' : colors.textMuted },
+                { color: isMedia ? MEDIA_TEXT_MUTED : colors.textMuted },
               ]}
               accessibilityRole="text"
             >
@@ -172,7 +188,7 @@ export function CommerceDetailIdentity({
               style={[
                 styles.secondaryLine,
                 isMedia && styles.secondaryLineMedia,
-                { color: isMedia ? 'rgba(255,255,255,0.8)' : colors.textSecondary },
+                { color: isMedia ? MEDIA_TEXT_BODY : colors.textSecondary },
               ]}
               numberOfLines={1}
             >
@@ -187,7 +203,7 @@ export function CommerceDetailIdentity({
           style={[
             styles.interest,
             isMedia && styles.interestMedia,
-            { color: isMedia ? 'rgba(255,255,255,0.72)' : colors.textMuted },
+            { color: isMedia ? MEDIA_TEXT_TERTIARY : colors.textMuted },
           ]}
           numberOfLines={1}
         >
@@ -223,40 +239,40 @@ const styles = StyleSheet.create({
     letterSpacing: Type.metaElevated.letterSpacing,
   },
   eyebrowMedia: {
-    fontSize: 10,
-    lineHeight: 14,
-    letterSpacing: 1,
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    letterSpacing: Type.metaElevated.letterSpacing,
     textTransform: 'uppercase',
-    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowColor: MEDIA_SHADOW_SOFT,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 6,
   },
   title: {
-    fontSize: 28,
-    lineHeight: 34,
+    fontSize: Type.priceLarge.size,
+    lineHeight: Type.priceLarge.lineHeight + 2,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.5,
   },
   titleDirect: {
-    fontSize: 30,
-    lineHeight: 35,
+    fontSize: Type.priceLarge.size + 2,
+    lineHeight: Type.priceLarge.lineHeight + 3,
     letterSpacing: -0.65,
   },
   titleAuction: {
-    fontSize: 26,
-    lineHeight: 31,
+    fontSize: Type.priceLarge.size - 2,
+    lineHeight: Type.priceLarge.lineHeight - 1,
     letterSpacing: -0.4,
   },
   titleCoOwn: {
-    fontSize: 28,
-    lineHeight: 33,
+    fontSize: Type.priceLarge.size,
+    lineHeight: Type.priceLarge.lineHeight + 1,
     letterSpacing: -0.45,
   },
   titleMedia: {
-    fontSize: 27,
-    lineHeight: 31,
+    fontSize: Type.priceLarge.size - 1,
+    lineHeight: Type.priceLarge.lineHeight - 1,
     letterSpacing: -0.6,
-    textShadowColor: 'rgba(0,0,0,0.55)',
+    textShadowColor: MEDIA_SHADOW,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 12,
   },
@@ -269,8 +285,8 @@ const styles = StyleSheet.create({
   // Per spec 05 §3: compact width uses 26pt title with tighter line
   // height so long titles do not crowd the first viewport.
   titleCompact: {
-    fontSize: 26,
-    lineHeight: 31,
+    fontSize: Type.priceLarge.size - 2,
+    lineHeight: Type.priceLarge.lineHeight - 1,
   },
   // Value row: price + secondary line sit on one baseline row. The
   // price is dominant; the secondary line is a quiet truth partner.
@@ -290,17 +306,17 @@ const styles = StyleSheet.create({
   // value, so the identity price remains the visual anchor while
   // the dock is the actionable repetition.
   primaryValue: {
-    fontSize: 22,
-    lineHeight: 27,
+    fontSize: Type.priceList.size + 2,
+    lineHeight: Type.priceList.lineHeight + 3,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.3,
     fontVariant: ['tabular-nums'],
   },
   primaryValueMedia: {
-    fontSize: 22,
-    lineHeight: 27,
+    fontSize: Type.priceList.size + 2,
+    lineHeight: Type.priceList.lineHeight + 3,
     letterSpacing: -0.3,
-    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowColor: MEDIA_SHADOW_SOFT,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 8,
   },
@@ -317,11 +333,11 @@ const styles = StyleSheet.create({
   // Discount badge — small danger-tinted pill with the savings %.
   // eBay pattern: draws the eye to the deal without dominating.
   discountBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    paddingHorizontal: Space.xs + 2,
+    paddingVertical: Space.xs / 2,
+    borderRadius: Radius.sm,
     alignSelf: 'flex-start',
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
   discountBadgeText: {
     fontSize: Type.meta.size,
@@ -337,7 +353,7 @@ const styles = StyleSheet.create({
   },
   secondaryLineMedia: {
     fontFamily: Typography.family.medium,
-    textShadowColor: 'rgba(0,0,0,0.45)',
+    textShadowColor: MEDIA_SHADOW_LIGHT,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 6,
   },
@@ -351,7 +367,7 @@ const styles = StyleSheet.create({
   },
   interestMedia: {
     fontFamily: Typography.family.medium,
-    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowColor: MEDIA_SHADOW_SUBTLE,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 5,
   },

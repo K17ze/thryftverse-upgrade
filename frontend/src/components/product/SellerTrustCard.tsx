@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 import type { SellerTrustSummary, VerificationTier } from '../../platform/product';
 import { VERIFICATION_TIERS, deriveSellerBadges, SELLER_BADGES } from '../../platform/product';
 import { CachedImage } from '../CachedImage';
@@ -109,7 +109,7 @@ export function SellerTrustCard({
               <CachedImage
                 uri={seller.avatar}
                 style={styles.avatar}
-                containerStyle={{ width: 52, height: 52, borderRadius: 26 }}
+                containerStyle={{ width: Space.xxl + Space.xl, height: Space.xxl + Space.xl, borderRadius: Radius.full }}
                 contentFit="cover"
               />
             ) : (
@@ -232,7 +232,7 @@ function createStyles(colors: ThemeColors) {
     padding: Space.md,
   },
   sectionTitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
     marginBottom: Space.sm,
@@ -251,20 +251,20 @@ function createStyles(colors: ThemeColors) {
     flexShrink: 0,
   },
   avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: Space.xxl + Space.xl,
+    height: Space.xxl + Space.xl,
+    borderRadius: Radius.full,
   },
   avatarFallback: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: Space.xxl + Space.xl,
+    height: Space.xxl + Space.xl,
+    borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarFallbackText: {
-    fontSize: 22,
+    fontSize: Type.title.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
   },
@@ -279,14 +279,14 @@ function createStyles(colors: ThemeColors) {
     minWidth: 0,
   },
   username: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
     flexShrink: 1,
     minWidth: 0,
   },
   location: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     marginTop: 2,
@@ -294,33 +294,33 @@ function createStyles(colors: ThemeColors) {
   badgeRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 4,
-    marginTop: 4,
+    gap: Space.xs,
+    marginTop: Space.xs,
   },
   badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs / 2,
     backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.sm,
   },
   badgeText: {
-    fontSize: 10,
+    fontSize: Type.meta.size - 2,
     fontFamily: Typography.family.medium,
     color: colors.textSecondary,
   },
   standardsBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
+    gap: Space.xs / 2 + 1,
+    paddingHorizontal: Space.xs + 3,
+    paddingVertical: Space.xs / 2,
     backgroundColor: `${colors.brand}10`,
     borderRadius: Radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: `${colors.brand}25`,
   },
   standardsBadgeText: {
-    fontSize: 10,
+    fontSize: Type.meta.size - 2,
     fontFamily: Typography.family.semibold,
     color: colors.brand,
   },
@@ -341,7 +341,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.surfaceAlt,
   },
   followText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textInverse,
   },
@@ -360,7 +360,7 @@ function createStyles(colors: ThemeColors) {
     gap: Space.xs,
   },
   messageText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
@@ -374,16 +374,16 @@ function createStyles(colors: ThemeColors) {
     width: '48%',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingVertical: 6,
+    gap: Space.xs + 2,
+    paddingVertical: Space.xs + 2,
   },
   metricLabel: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },
   metricValue: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },

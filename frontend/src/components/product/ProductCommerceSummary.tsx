@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 import type { ListingCommerceContext } from '../../platform/product';
 import { NativeSheet } from '../../platform/native';
 import { ProductPolicySheet } from './ProductPolicySheet';
@@ -176,7 +176,7 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.md,
   },
   sectionTitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
     marginBottom: Space.sm,
@@ -200,7 +200,7 @@ function createStyles(colors: ThemeColors) {
     flex: 1,
   },
   rowLabel: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
   },
@@ -211,7 +211,7 @@ function createStyles(colors: ThemeColors) {
     flexShrink: 1,
   },
   rowValue: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
     textAlign: 'right',

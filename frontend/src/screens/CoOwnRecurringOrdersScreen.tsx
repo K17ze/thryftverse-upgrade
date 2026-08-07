@@ -23,10 +23,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Control, Stroke, LetterSpacing } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useToast } from '../context/ToastContext';
@@ -42,7 +42,7 @@ import {
 } from '../services/marketApi';
 import { RootStackParamList } from '../navigation/types';
 
-type Props = StackScreenProps<RootStackParamList, 'CoOwnRecurringOrders'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'CoOwnRecurringOrders'>;
 
 function formatGbp(minor: number): string {
   return `£${(minor / 100).toFixed(2)}`;
@@ -449,8 +449,8 @@ function createStyles(colors: ThemeColors) {
       gap: Space.md,
     },
     heroIcon: {
-      width: 44,
-      height: 44,
+      width: Control.hit,
+      height: Control.hit,
       borderRadius: Radius.full,
       justifyContent: 'center',
       alignItems: 'center',
@@ -466,14 +466,14 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
-      marginTop: 2,
+      marginTop: Space.xs / 2,
     },
 
     introText: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
-      lineHeight: 20,
+      lineHeight: Type.body.lineHeight,
       marginTop: Space.lg,
       marginBottom: Space.md,
     },
@@ -492,14 +492,14 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
       textTransform: 'uppercase',
-      letterSpacing: 0.8,
+      letterSpacing: LetterSpacing.caps,
       opacity: 0.7,
     },
     sectionCount: {
       backgroundColor: colors.surfaceAlt,
       borderRadius: Radius.full,
       paddingHorizontal: Space.sm,
-      paddingVertical: 2,
+      paddingVertical: Space.xs / 2,
       minWidth: 24,
       alignItems: 'center',
     },
@@ -528,8 +528,8 @@ function createStyles(colors: ThemeColors) {
       gap: Space.sm,
     },
     freqBadge: {
-      width: 36,
-      height: 36,
+      width: Control.chrome,
+      height: Control.chrome,
       borderRadius: Radius.md,
       justifyContent: 'center',
       alignItems: 'center',
@@ -549,13 +549,13 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
-      marginTop: 2,
+      marginTop: Space.xs / 2,
     },
     orderMetaRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
-      marginTop: 6,
+      marginTop: Space.xs + 2,
     },
     orderMaxPrice: {
       fontSize: Type.meta.size,
@@ -594,8 +594,8 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.lg,
     },
     modalIconWrap: {
-      width: 44,
-      height: 44,
+      width: Control.hit,
+      height: Control.hit,
       borderRadius: Radius.full,
       backgroundColor: colors.brand,
       justifyContent: 'center',
@@ -612,7 +612,7 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
-      marginTop: 2,
+      marginTop: Space.xs / 2,
     },
     inputLabel: {
       fontSize: Type.meta.size,
@@ -622,7 +622,7 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.xs,
     },
     input: {
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       borderColor: colors.border,
       borderRadius: Radius.md,
       paddingHorizontal: Space.md,
@@ -641,7 +641,7 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.sm + 2,
       borderRadius: Radius.md,
       backgroundColor: colors.surfaceAlt,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       borderColor: colors.border,
       alignItems: 'center',
     },

@@ -357,7 +357,7 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   containerEmbedded: {
-    borderRadius: 0,
+    borderRadius: Radius.none,
     borderWidth: 0,
     paddingHorizontal: 0,
     paddingTop: Space.sm,
@@ -423,7 +423,7 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     left: 0,
-    borderRadius: 2,
+    borderRadius: Radius.sm,
   },
   depthBarRight: {
     left: undefined,

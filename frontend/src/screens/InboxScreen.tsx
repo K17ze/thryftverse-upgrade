@@ -12,19 +12,17 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { useNavigation, useScrollToTop } from '@react-navigation/native';
 
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import NetInfo from '@react-native-community/netinfo';
 
 import { useAppTheme } from '../theme/ThemeContext';
 
-import { TypeStyles } from '../theme/designTokens';
-
 import type { Conversation } from '../data/mockData';
 
 import { RootStackParamList } from '../navigation/types';
 
-import { Swipeable } from 'react-native-gesture-handler';
+import { SwipeableRow } from '../components/SwipeableRow';
 
 import Reanimated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
 
@@ -32,7 +30,7 @@ import { EmptyState } from '../components/EmptyState';
 
 import { useStore } from '../store/useStore';
 
-import { useToast } from '../context/ToastContext';
+import { useNotifications } from '../hooks/useNotifications';
 
 import { RefreshIndicator } from '../components/RefreshIndicator';
 
@@ -44,8 +42,6 @@ import { AppSearchBar } from '../components/ui/AppSearchBar';
 
 import { useHaptic } from '../hooks/useHaptic';
 
-import { Space, Radius, Type } from '../theme/designTokens';
-
 import { Caption } from '../components/ui/Text';
 
 import { AvatarRing } from '../components/chat/AvatarRing';
@@ -53,6 +49,7 @@ import { AvatarRing } from '../components/chat/AvatarRing';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 
 import { InboxConversationRow } from '../components/chat/InboxConversationRow';
+import { OfflineBanner } from '../components/OfflineBanner';
 
 import { MessagingSegmentRail, MessagingSegment } from '../components/chat/MessagingSegmentRail';
 
@@ -63,7 +60,8 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 
 
 
-type NavT = StackNavigationProp<RootStackParamList>;
+import { TypeStyles, Radius, Type, Space, Control, Stroke } from '../theme/designTokens';
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 
 
@@ -103,7 +101,7 @@ export default function InboxScreen() {
 
   const navigation = useNavigation<NavT>();
 
-  const { show } = useToast();
+  const { showSuccess, showInfo, showError } = useNotifications();
 
   const haptic = useHaptic();
 
@@ -120,6 +118,8 @@ export default function InboxScreen() {
   const toggleConversationPinned = useStore((state) => state.toggleConversationPinned);
 
   const markConversationRead = useStore((state) => state.markConversationRead);
+
+  const toggleConversationUnread = useStore((state) => state.toggleConversationUnread);
 
   const toggleMutedConversation = useStore((state) => state.toggleMutedConversation);
 
@@ -305,9 +305,7 @@ export default function InboxScreen() {
     requestsBannerText: { color: colors.textPrimary },
     requestsBannerSub: { color: colors.textMuted },
     requestBtnAcceptText: { color: colors.textInverse },
-    offlineBanner: { backgroundColor: colors.surfaceAlt, borderBottomColor: colors.border },
-    offlineBannerText: { color: colors.textSecondary },
-    errorBanner: { backgroundColor: colors.surfaceAlt, borderBottomColor: colors.border },
+    errorBanner: { backgroundColor: `${colors.danger}14`, borderBottomColor: colors.border },
     errorBannerTitle: { color: colors.danger },
     errorBannerSub: { color: colors.textMuted },
     errorBannerRetry: { color: colors.brand },
@@ -475,7 +473,7 @@ export default function InboxScreen() {
 
             deleteConversation(id);
 
-            show('Conversation deleted', 'error');
+            showError('Conversation deleted', 'This conversation was removed from your inbox.');
 
             try {
 
@@ -483,7 +481,7 @@ export default function InboxScreen() {
 
             } catch {
 
-              show('Failed to delete on server. Restoring conversation.', 'error');
+              showError('Delete failed', 'Failed to delete on server. Restoring conversation.');
 
               if (previous) {
 
@@ -501,7 +499,7 @@ export default function InboxScreen() {
 
     );
 
-  }, [conversations, deleteConversation, upsertConversation, show, haptic]);
+  }, [conversations, deleteConversation, upsertConversation, showError, haptic]);
 
 
 
@@ -513,9 +511,9 @@ export default function InboxScreen() {
 
     const nowMuted = !mutedIds.includes(id);
 
-    show(nowMuted ? 'Conversation muted' : 'Conversation unmuted', 'info');
+    showInfo(nowMuted ? 'Conversation muted' : 'Conversation unmuted');
 
-  }, [toggleMutedConversation, mutedIds, show, haptic]);
+  }, [toggleMutedConversation, mutedIds, showInfo, haptic]);
 
 
 
@@ -527,9 +525,9 @@ export default function InboxScreen() {
 
     const nowArchived = !archivedIds.includes(id);
 
-    show(nowArchived ? 'Conversation archived' : 'Conversation unarchived', 'info');
+    showInfo(nowArchived ? 'Conversation archived' : 'Conversation unarchived');
 
-  }, [toggleArchivedConversation, archivedIds, show, haptic]);
+  }, [toggleArchivedConversation, archivedIds, showInfo, haptic]);
 
 
 
@@ -539,9 +537,9 @@ export default function InboxScreen() {
 
     acceptMessageRequest(id);
 
-    show('Message request accepted', 'success');
+    showSuccess('Request accepted', 'Message request accepted.');
 
-  }, [acceptMessageRequest, show, haptic]);
+  }, [acceptMessageRequest, showSuccess, haptic]);
 
 
 
@@ -551,9 +549,9 @@ export default function InboxScreen() {
 
     declineMessageRequest(id);
 
-    show('Message request declined', 'info');
+    showInfo('Request declined', 'Message request declined.');
 
-  }, [declineMessageRequest, show, haptic]);
+  }, [declineMessageRequest, showInfo, haptic]);
 
 
 
@@ -563,117 +561,82 @@ export default function InboxScreen() {
 
     toggleConversationPinned(id);
 
-    show('Conversation pinned', 'success');
+    showSuccess('Pinned', 'Conversation pinned.');
 
-  }, [toggleConversationPinned, show, haptic]);
-
-
-
-  const renderRightActions = (id: string) => (
-
-    <View style={styles.swipeRightGroup}>
-
-      <AnimatedPressable
-
-        style={[styles.swipeArchive, t.swipeArchive]}
-
-        onPress={() => handleArchive(id)}
-
-        accessibilityLabel="Archive conversation"
-
-        accessibilityRole="button"
-
-        activeOpacity={0.7}
-
-        scaleValue={0.95}
-
-        hapticFeedback="light"
-
-      >
-
-        <Ionicons name="archive-outline" size={20} color={colors.brand} />
-
-      </AnimatedPressable>
-
-      <AnimatedPressable
-
-        style={[styles.swipeDelete, t.swipeDelete]}
-
-        onPress={() => handleDelete(id)}
-
-        accessibilityLabel="Delete conversation"
-
-        accessibilityRole="button"
-
-        activeOpacity={0.7}
-
-        scaleValue={0.95}
-
-        hapticFeedback="medium"
-
-      >
-
-        <Ionicons name="trash-outline" size={20} color={colors.danger} />
-
-      </AnimatedPressable>
-
-    </View>
-
-  );
+  }, [toggleConversationPinned, showSuccess, haptic]);
 
 
 
-  const renderLeftActions = (id: string) => (
+  const handleToggleRead = useCallback((id: string) => {
 
-    <View style={styles.swipeLeftGroup}>
+    const convo = conversations.find((c) => c.id === id);
 
-      <AnimatedPressable
+    const willMarkUnread = convo ? !convo.unread : false;
 
-        style={[styles.swipeMute, t.swipeMute]}
+    haptic.light();
 
-        onPress={() => handleMute(id)}
+    toggleConversationUnread(id);
 
-        accessibilityLabel="Mute conversation"
+    showInfo(willMarkUnread ? 'Marked unread' : 'Marked read', willMarkUnread ? 'Conversation marked as unread' : 'Conversation marked as read');
 
-        accessibilityRole="button"
+  }, [conversations, toggleConversationUnread, showInfo, haptic]);
 
-        activeOpacity={0.7}
 
-        scaleValue={0.95}
 
-        hapticFeedback="light"
+  // Long-press quick actions: a native alert sheet exposing mute, pin, and
+  // delete. Preserves the capabilities previously surfaced via the old
+  // multi-button swipe panels (AGENTS.md §8: preserve working functionality).
+  const handleQuickActions = useCallback((id: string) => {
 
-      >
+    const convo = conversations.find((c) => c.id === id);
 
-        <Ionicons name={mutedIds.includes(id) ? 'volume-high-outline' : 'volume-mute-outline'} size={20} color={colors.textPrimary} />
+    const isMuted = mutedIds.includes(id);
 
-      </AnimatedPressable>
+    const isPinned = !!convo?.isPinned;
 
-      <AnimatedPressable
+    Alert.alert(
 
-        style={[styles.swipePin, t.swipePin]}
+      'Quick actions',
 
-        onPress={() => handlePin(id)}
+      undefined,
 
-        accessibilityLabel="Pin conversation"
+      [
 
-        accessibilityRole="button"
+        {
 
-        activeOpacity={0.7}
+          text: isMuted ? 'Unmute' : 'Mute',
 
-        scaleValue={0.95}
+          onPress: () => handleMute(id),
 
-        hapticFeedback="light"
+        },
 
-      >
+        {
 
-        <Ionicons name="pin-outline" size={20} color={colors.brand} />
+          text: isPinned ? 'Unpin' : 'Pin',
 
-      </AnimatedPressable>
+          onPress: () => handlePin(id),
 
-    </View>
+        },
 
-  );
+        {
+
+          text: 'Delete',
+
+          style: 'destructive',
+
+          onPress: () => handleDelete(id),
+
+        },
+
+        { text: 'Cancel', style: 'cancel' },
+
+      ],
+
+      { cancelable: true }
+
+    );
+
+  }, [conversations, mutedIds, handleMute, handlePin, handleDelete]);
 
 
 
@@ -780,21 +743,31 @@ export default function InboxScreen() {
             focusQuery: searchQuery.trim() || undefined,
           });
         }}
+        onLongPress={() => handleQuickActions(item.id)}
       />
     );
 
     return (
       <View>
         {isRequest ? requestRow : (
-          <Swipeable
-            friction={2}
-            overshootLeft={false}
-            overshootRight={false}
-            renderRightActions={() => renderRightActions(item.id)}
-            renderLeftActions={() => renderLeftActions(item.id)}
+          <SwipeableRow
+            accessibilityLabel={safeDisplayTitle}
+            accessibilityHint="Opens the conversation thread. Swipe right to mark read or unread, swipe left to archive, long press for quick actions"
+            leftAction={{
+              icon: 'checkmark-done-outline',
+              label: item.unread ? 'Mark unread' : 'Mark read',
+              onPress: () => handleToggleRead(item.id),
+              color: colors.brand,
+            }}
+            rightAction={{
+              icon: 'archive-outline',
+              label: 'Archive',
+              onPress: () => handleArchive(item.id),
+              color: colors.surfaceAlt,
+            }}
           >
             {conversationRow}
-          </Swipeable>
+          </SwipeableRow>
         )}
         {!isRequest && <View style={[styles.rowSeparator, t.rowSeparator]} />}
       </View>
@@ -913,13 +886,7 @@ export default function InboxScreen() {
 
       {isOffline && (
 
-        <View style={[styles.offlineBanner, t.offlineBanner]}>
-
-          <Ionicons name="cloud-offline-outline" size={16} color={colors.textSecondary} />
-
-          <Text style={[styles.offlineBannerText, t.offlineBannerText]}>You are offline</Text>
-
-        </View>
+        <OfflineBanner message="You are offline" />
 
       )}
 
@@ -1314,7 +1281,7 @@ const styles = StyleSheet.create({
 
   headerTitleBlock: {
 
-    gap: 2,
+    gap: Space.xs / 2,
 
     marginBottom: Space.xs,
 
@@ -1354,9 +1321,9 @@ const styles = StyleSheet.create({
 
   iconBtn: {
 
-    width: 40,
+    width: Space.xxl,
 
-    height: 40,
+    height: Space.xxl,
 
     borderRadius: Radius.full,
 
@@ -1377,7 +1344,7 @@ const styles = StyleSheet.create({
 
     paddingHorizontal: Space.md,
 
-    paddingVertical: 10,
+    paddingVertical: Space.sm + 2,
 
     borderRadius: Radius.full,
 
@@ -1400,7 +1367,7 @@ const styles = StyleSheet.create({
 
     paddingHorizontal: Space.md,
 
-    minHeight: 40,
+    minHeight: Space.xxl,
 
   },
 
@@ -1411,8 +1378,8 @@ const styles = StyleSheet.create({
     paddingBottom: Space.xs,
   },
   filterChip: {
-    paddingVertical: 5,
-    paddingHorizontal: 12,
+    paddingVertical: Space.xs + 1,
+    paddingHorizontal: Space.sm + Space.xs,
     borderRadius: Radius.full,
     borderWidth: StyleSheet.hairlineWidth,
   },
@@ -1455,7 +1422,7 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
 
 
-    marginLeft: 72,
+    marginLeft: Space.xxl + Space.lg,
 
     marginRight: Space.md,
 
@@ -1465,9 +1432,9 @@ const styles = StyleSheet.create({
 
   groupAvatar: {
 
-    width: 56,
+    width: Space.xxl + Space.sm,
 
-    height: 56,
+    height: Space.xxl + Space.sm,
 
     borderRadius: Radius.full,
 
@@ -1497,14 +1464,14 @@ const styles = StyleSheet.create({
 
     right: -2,
 
-    width: 18,
+    width: Control.iconCompact,
 
-    height: 18,
+    height: Control.iconCompact,
 
     borderRadius: Radius.full,
 
 
-    borderWidth: 1.5,
+    borderWidth: Stroke.emphasis,
 
 
     justifyContent: 'center',
@@ -1513,7 +1480,7 @@ const styles = StyleSheet.create({
 
   },
 
-  messageBody: { flex: 1, justifyContent: 'center', gap: 2 },
+  messageBody: { flex: 1, justifyContent: 'center', gap: Space.xs / 2 },
 
   messageTop: {
 
@@ -1521,7 +1488,7 @@ const styles = StyleSheet.create({
 
     justifyContent: 'space-between',
 
-    marginBottom: 4,
+    marginBottom: Space.xs,
 
     alignItems: 'center',
 
@@ -1556,7 +1523,7 @@ const styles = StyleSheet.create({
 
   pinIcon: {
 
-    marginLeft: 2,
+    marginLeft: Space.xs / 2,
 
   },
 
@@ -1600,18 +1567,18 @@ const styles = StyleSheet.create({
   },
 
   unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: Space.sm,
+    height: Space.sm,
+    borderRadius: Radius.sm,
   },
   unreadPill: {
     borderRadius: Radius.sm,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: Space.xs + 2,
+    paddingVertical: Space.xs / 2,
     marginLeft: Space.xs,
   },
   unreadPillText: {
-    fontSize: 10,
+    fontSize: Type.meta.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
   },
   timeUnread: {
@@ -1621,7 +1588,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     justifyContent: 'space-between',
     gap: Space.xs,
-    minWidth: 40,
+    minWidth: Space.xxl,
     paddingLeft: Space.xs,
   },
   rowMetaBottom: {
@@ -1630,8 +1597,8 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   contextThumb: {
-    width: 28,
-    height: 28,
+    width: Space.lg + Space.xs,
+    height: Space.lg + Space.xs,
     borderRadius: Radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
     justifyContent: 'center',
@@ -1639,8 +1606,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   contextThumbImage: {
-    width: 28,
-    height: 28,
+    width: Space.lg + Space.xs,
+    height: Space.lg + Space.xs,
   },
 
   snippetWithBadge: {
@@ -1660,7 +1627,7 @@ const styles = StyleSheet.create({
 
     paddingHorizontal: Space.sm - 2,
 
-    paddingVertical: 2,
+    paddingVertical: Space.xs / 2,
 
     borderRadius: Radius.sm,
 
@@ -1713,9 +1680,9 @@ const styles = StyleSheet.create({
 
     alignItems: 'center',
 
-    width: 72,
+    width: Space.xxl + Space.lg,
 
-    borderRadius: Radius.md,
+    borderRadius: Radius.sm,
 
     flex: 1,
 
@@ -1728,9 +1695,9 @@ const styles = StyleSheet.create({
 
     alignItems: 'center',
 
-    width: 72,
+    width: Space.xxl + Space.lg,
 
-    borderRadius: Radius.md,
+    borderRadius: Radius.sm,
 
     flex: 1,
 
@@ -1743,9 +1710,9 @@ const styles = StyleSheet.create({
 
     alignItems: 'center',
 
-    width: 72,
+    width: Space.xxl + Space.lg,
 
-    borderRadius: Radius.md,
+    borderRadius: Radius.sm,
 
     flex: 1,
 
@@ -1758,9 +1725,9 @@ const styles = StyleSheet.create({
 
     alignItems: 'center',
 
-    width: 72,
+    width: Space.xxl + Space.lg,
 
-    borderRadius: Radius.md,
+    borderRadius: Radius.sm,
 
     flex: 1,
 
@@ -1809,9 +1776,9 @@ const styles = StyleSheet.create({
 
     justifyContent: 'center',
 
-    paddingVertical: 10,
+    paddingVertical: Space.sm + 2,
 
-    borderRadius: Radius.md,
+    borderRadius: Radius.sm,
 
 
     borderWidth: StyleSheet.hairlineWidth,
@@ -1836,9 +1803,9 @@ const styles = StyleSheet.create({
 
     justifyContent: 'center',
 
-    paddingVertical: 10,
+    paddingVertical: Space.sm + 2,
 
-    borderRadius: Radius.md,
+    borderRadius: Radius.sm,
 
 
   },
@@ -1859,15 +1826,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    paddingVertical: 10,
+    paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.md,
   },
   requestsAvatarStack: {
     flexDirection: 'row',
   },
   requestsAvatar: {
-    width: 36,
-    height: 36,
+    width: Control.chrome,
+    height: Control.chrome,
     borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1881,7 +1848,7 @@ const styles = StyleSheet.create({
 
     gap: Space.sm,
 
-    paddingVertical: 12,
+    paddingVertical: Space.sm + Space.xs,
 
     paddingHorizontal: Space.md,
 
@@ -1892,11 +1859,11 @@ const styles = StyleSheet.create({
 
   requestsBadge: {
 
-    width: 24,
+    width: Space.lg,
 
-    height: 24,
+    height: Space.lg,
 
-    borderRadius: Radius.md,
+    borderRadius: Radius.sm,
 
 
     justifyContent: 'center',
@@ -1915,8 +1882,8 @@ const styles = StyleSheet.create({
   },
 
   requestsIconWrap: {
-    width: 40,
-    height: 40,
+    width: Space.xxl,
+    height: Space.xxl,
     borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1929,7 +1896,7 @@ const styles = StyleSheet.create({
   requestsBannerSub: {
     fontSize: Type.caption.size,
     fontFamily: TypeStyles.body.fontFamily,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
 
   requestBtnAcceptText: {
@@ -1941,35 +1908,6 @@ const styles = StyleSheet.create({
 
   },
 
-  offlineBanner: {
-
-    flexDirection: 'row',
-
-    alignItems: 'center',
-
-    justifyContent: 'center',
-
-    gap: Space.xs,
-
-
-    borderBottomWidth: StyleSheet.hairlineWidth,
-
-
-    paddingVertical: Space.xs + 2,
-
-    paddingHorizontal: Space.md,
-
-  },
-
-  offlineBannerText: {
-
-
-    fontSize: Type.caption.size,
-
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-
-  },
-
   errorBanner: {
 
     flexDirection: 'row',
@@ -1977,8 +1915,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
 
     gap: Space.sm,
-
-    backgroundColor: '#FFF5F5',
 
     paddingVertical: Space.sm,
 
@@ -1991,7 +1927,7 @@ const styles = StyleSheet.create({
 
   errorBannerCopy: {
     flex: 1,
-    gap: 1,
+    gap: Space.xs / 4,
   },
 
   errorBannerTitle: {
@@ -2000,13 +1936,13 @@ const styles = StyleSheet.create({
   },
 
   errorBannerSub: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: TypeStyles.body.fontFamily,
   },
 
   errorBannerRetryBtn: {
     paddingHorizontal: Space.sm,
-    paddingVertical: 4,
+    paddingVertical: Space.xs,
   },
 
   errorBannerRetry: {
@@ -2056,8 +1992,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    paddingVertical: Space.xs + 2,
+    paddingHorizontal: Space.sm + Space.xs,
     borderRadius: Radius.full,
     borderWidth: StyleSheet.hairlineWidth,
   },

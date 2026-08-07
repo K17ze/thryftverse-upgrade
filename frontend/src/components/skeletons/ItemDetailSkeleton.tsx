@@ -3,6 +3,7 @@ import { View, Dimensions } from 'react-native';
 import { SkeletonLoader } from '../SkeletonLoader';
 import { useAppTheme } from '../../theme/ThemeContext';
 
+import { Radius, Space } from '../../theme/designTokens';
 const { width: W } = Dimensions.get('window');
 
 export function ItemDetailSkeleton() {
@@ -20,19 +21,19 @@ export function ItemDetailSkeleton() {
         <SkeletonLoader width="90%" height={18} borderRadius={9} />
         <SkeletonLoader width="70%" height={18} borderRadius={9} />
         {/* Meta pills */}
-        <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+        <View style={{ flexDirection: 'row', gap: 10, marginTop: Space.xs }}>
           <SkeletonLoader width={72} height={28} borderRadius={14} />
           <SkeletonLoader width={72} height={28} borderRadius={14} />
           <SkeletonLoader width={72} height={28} borderRadius={14} />
         </View>
         {/* Description block */}
-        <View style={{ gap: 8, marginTop: 8 }}>
+        <View style={{ gap: 8, marginTop: Space.sm }}>
           <SkeletonLoader width="100%" height={13} borderRadius={6} />
           <SkeletonLoader width="95%" height={13} borderRadius={6} />
           <SkeletonLoader width="80%" height={13} borderRadius={6} />
         </View>
         {/* Seller card */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 12, backgroundColor: sellerCardBg, borderRadius: 20, padding: 16 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 12, backgroundColor: sellerCardBg, borderRadius: Radius.xxl, padding: Space.md }}>
           <SkeletonLoader width={48} height={48} borderRadius={24} />
           <View style={{ flex: 1, gap: 8 }}>
             <SkeletonLoader width="50%" height={14} borderRadius={7} />

@@ -7,9 +7,31 @@ const POSTER_STORY_CACHE_KEY = 'thryftverse.poster-stories.cache.v1';
 
 // ── Types: Stickers ─────────────────────────────────────────────────
 
-export type PosterStickerType = 'text' | 'mention' | 'listing' | 'look' | 'style_vote';
+export type PosterStickerType = 'text' | 'mention' | 'listing' | 'look' | 'style_vote' | 'poll' | 'quiz' | 'question' | 'countdown';
 
 export type PosterTextStyle = 'editorial' | 'minimal' | 'label' | 'outline';
+
+export interface PollStickerPayload {
+  question: string;      // max 200
+  options: Array<{ id: string; label: string }>;  // exactly 2 options, label max 80
+}
+
+export interface QuizStickerPayload {
+  question: string;      // max 200
+  options: Array<{ id: string; label: string }>;  // 2-4 options, label max 80
+  correctOptionId: string;
+}
+
+export interface QuestionStickerPayload {
+  question: string;      // max 200
+  // Responses are collected as replies with a special prefix
+}
+
+export interface CountdownStickerPayload {
+  label: string;         // max 60
+  targetDate: string;    // ISO 8601 datetime
+  endLabel?: string;     // text shown when countdown ends, max 60
+}
 
 export interface PosterStickerPayload {
   text?: string;
@@ -27,6 +49,9 @@ export interface PosterStickerPayload {
   snapshotCaption?: string;
   question?: string;
   options?: Array<{ id: string; label: string }>;
+  correctOptionId?: string;
+  targetDate?: string;
+  endLabel?: string;
 }
 
 export interface PosterSticker {
@@ -70,6 +95,11 @@ export interface PosterStoryCreator {
   id: string;
   username: string | null;
   avatar: string | null;
+  /** Verification tier — if present, a badge is shown in the author row. */
+  isVerified?: boolean;
+  verificationTier?: 'email' | 'id' | 'seller';
+  /** Whether the current viewer follows this creator. */
+  isFollowing?: boolean;
 }
 
 export interface PosterStory {
@@ -278,6 +308,32 @@ export interface PosterStyleVoteResult {
   totalVotes: number;
 }
 
+// ── Types: Poll & Quiz Votes ────────────────────────────────────────
+
+export interface PollVoteResult {
+  selectedOptionId: string;
+  options: Array<{
+    id: string;
+    label: string;
+    voteCount: number;
+    percentage: number;
+  }>;
+  totalVotes: number;
+}
+
+export interface QuizVoteResult {
+  selectedOptionId: string;
+  isCorrect: boolean;
+  correctOptionId: string;
+  options: Array<{
+    id: string;
+    label: string;
+    voteCount: number;
+    percentage: number;
+  }>;
+  totalVotes: number;
+}
+
 // ── Legacy types (for backward compat with existing posters table) ──
 
 export interface PosterApiItem {
@@ -444,6 +500,123 @@ export async function votePosterStyle(
   );
 }
 
+// ── API Functions: Poll Votes ───────────────────────────────────────
+
+export async function votePosterPoll(
+  stickerId: string,
+  optionId: string
+): Promise<PollVoteResult> {
+  if (ENABLE_RUNTIME_MOCKS) {
+    return mockVotePosterPoll(stickerId, optionId);
+  }
+  return fetchJson<PollVoteResult>(
+    `/poster-stickers/${stickerId}/poll-vote`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ optionId }),
+    }
+  );
+}
+
+// ── API Functions: Quiz Votes ───────────────────────────────────────
+
+export async function votePosterQuiz(
+  stickerId: string,
+  optionId: string
+): Promise<QuizVoteResult> {
+  if (ENABLE_RUNTIME_MOCKS) {
+    return mockVotePosterQuiz(stickerId, optionId);
+  }
+  return fetchJson<QuizVoteResult>(
+    `/poster-stickers/${stickerId}/quiz-vote`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ optionId }),
+    }
+  );
+}
+
+// ── API Functions: Question Answers ─────────────────────────────────
+
+export async function answerPosterQuestion(
+  stickerId: string,
+  answer: string
+): Promise<{ ok: true }> {
+  if (ENABLE_RUNTIME_MOCKS) {
+    return { ok: true };
+  }
+  return fetchJson<{ ok: true }>(
+    `/poster-stickers/${stickerId}/answer`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ answer }),
+    }
+  );
+}
+
+// ── Mock Implementations (runtime mock fallbacks) ───────────────────
+
+function mockVotePosterPoll(
+  _stickerId: string,
+  optionId: string
+): Promise<PollVoteResult> {
+  const mockVotes = Math.floor(Math.random() * 50) + 10;
+  const otherVotes = Math.floor(Math.random() * 40) + 5;
+  const total = mockVotes + otherVotes;
+  return Promise.resolve({
+    selectedOptionId: optionId,
+    options: [
+      {
+        id: optionId,
+        label: 'Option A',
+        voteCount: mockVotes,
+        percentage: Math.round((mockVotes / total) * 100),
+      },
+      {
+        id: 'other',
+        label: 'Option B',
+        voteCount: otherVotes,
+        percentage: Math.round((otherVotes / total) * 100),
+      },
+    ],
+    totalVotes: total,
+  });
+}
+
+function mockVotePosterQuiz(
+  _stickerId: string,
+  optionId: string
+): Promise<QuizVoteResult> {
+  const correctId = 'correct';
+  const isCorrect = optionId === correctId;
+  const correctVotes = Math.floor(Math.random() * 40) + 15;
+  const wrongVotes = Math.floor(Math.random() * 30) + 5;
+  const total = correctVotes + wrongVotes;
+  return Promise.resolve({
+    selectedOptionId: optionId,
+    isCorrect,
+    correctOptionId: correctId,
+    options: [
+      {
+        id: correctId,
+        label: 'Correct answer',
+        voteCount: correctVotes,
+        percentage: Math.round((correctVotes / total) * 100),
+      },
+      {
+        id: 'wrong',
+        label: 'Wrong answer',
+        voteCount: wrongVotes,
+        percentage: Math.round((wrongVotes / total) * 100),
+      },
+    ],
+    totalVotes: total,
+  });
+}
+
 // ── API Functions: Activity ─────────────────────────────────────────
 
 export async function fetchPosterStoryActivity(storyId: string): Promise<PosterStoryActivity> {
@@ -548,5 +721,74 @@ export async function scheduleCreatorDocument(documentId: string, scheduledFor: 
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ scheduledFor }),
+  });
+}
+
+// ── Highlights ────────────────────────────────────────────────────────
+
+export interface PosterHighlightFrame {
+  frameId: string;
+  sortOrder: number;
+  mediaUrl: string;
+  mediaType: string;
+  caption: string;
+  backgroundColor: string | null;
+}
+
+export interface PosterHighlight {
+  id: string;
+  title: string;
+  coverFrameId: string | null;
+  coverUrl: string | null;
+  sortOrder: number;
+  createdAt: string;
+  frames: PosterHighlightFrame[];
+}
+
+export async function fetchPosterHighlights(userId: string): Promise<{ items: PosterHighlight[] }> {
+  return fetchJson<{ items: PosterHighlight[] }>(`/users/${userId}/poster-highlights`);
+}
+
+export async function createPosterHighlight(body: {
+  id: string;
+  title: string;
+  coverFrameId?: string;
+  frameIds: string[];
+}): Promise<{ ok: boolean; highlightId: string }> {
+  return fetchJson<{ ok: boolean; highlightId: string }>(`/poster-highlights`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function updatePosterHighlight(
+  highlightId: string,
+  body: { title?: string; coverFrameId?: string }
+): Promise<{ ok: boolean }> {
+  return fetchJson<{ ok: boolean }>(`/poster-highlights/${highlightId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deletePosterHighlight(highlightId: string): Promise<{ ok: boolean }> {
+  return fetchJson<{ ok: boolean }>(`/poster-highlights/${highlightId}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function addFrameToHighlight(highlightId: string, frameId: string): Promise<{ ok: boolean }> {
+  return fetchJson<{ ok: boolean }>(`/poster-highlights/${highlightId}/frames`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ frameId }),
+  });
+}
+
+export async function removeFrameFromHighlight(highlightId: string, frameId: string): Promise<{ ok: boolean }> {
+  return fetchJson<{ ok: boolean }>(`/poster-highlights/${highlightId}/frames/${frameId}`, {
+    method: 'DELETE',
   });
 }

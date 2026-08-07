@@ -7,7 +7,7 @@ import Reanimated, {
   Easing,
 } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography } from '../../theme/designTokens';
+import { Space, Typography, Type } from '../../theme/designTokens';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const TAB_HEIGHT = 44;
@@ -224,7 +224,7 @@ function createStyles(colors: ThemeColors) {
     gap: 5,
   },
   tabLabel: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
     color: colors.textSecondary,
     letterSpacing: -0.2,
@@ -234,7 +234,7 @@ function createStyles(colors: ThemeColors) {
     color: colors.textPrimary,
   },
   tabCount: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     minWidth: 14,
@@ -259,7 +259,7 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.md,
   },
   segmentLabel: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     letterSpacing: -0.1,

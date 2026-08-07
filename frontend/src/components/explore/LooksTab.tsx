@@ -17,9 +17,9 @@ import { CachedImage } from '../CachedImage';
 import { SharedTransitionView } from '../SharedTransitionView';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { Space, Radius, Typography, Type } from '../../theme/designTokens';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { EmptyState } from '../EmptyState';
 import { DiscoverySectionHeader } from '../discover/DiscoverySectionHeader';
@@ -28,7 +28,7 @@ import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 function LookCard({
   look,
@@ -241,6 +241,12 @@ export default function LooksTab() {
       }
       data={looks}
       keyExtractor={(item) => item.id}
+      // Performance: looks feeds can grow long; clip off-screen cards and
+      // cap the render batch to keep scroll at 58+ fps.
+      removeClippedSubviews
+      windowSize={7}
+      maxToRenderPerBatch={4}
+      initialNumToRender={6}
       renderItem={({ item, index }) => (
         <LookCard
           look={item}
@@ -280,20 +286,20 @@ function createStyles(colors: ThemeColors) {
     color: colors.textPrimary,
   },
   errorSubtitle: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
     textAlign: 'center',
   },
   retryBtn: {
     marginTop: Space.sm,
-    paddingHorizontal: 24,
+    paddingHorizontal: Space.lg,
     paddingVertical: 10,
     backgroundColor: colors.brand,
-    borderRadius: 20,
+    borderRadius: Radius.xxl,
   },
   retryBtnText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: '#fff',
   },
@@ -302,7 +308,7 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: colors.surfaceAlt,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     paddingHorizontal: Space.md,
     paddingVertical: 10,
     marginBottom: Space.md,
@@ -310,12 +316,12 @@ function createStyles(colors: ThemeColors) {
   },
   refreshErrorText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textSecondary,
   },
   retryLink: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: colors.brand,
   },
@@ -361,9 +367,9 @@ function createStyles(colors: ThemeColors) {
   },
   overlayCreator: {
     fontFamily: Typography.family.medium,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     color: 'rgba(255,255,255,0.9)',
-    marginTop: 4,
+    marginTop: Space.xs,
     textShadowColor: 'rgba(0,0,0,0.4)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
@@ -387,7 +393,7 @@ function createStyles(colors: ThemeColors) {
   },
   overlayStatCount: {
     color: 'rgba(255,255,255,0.9)',
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
   },
   tagWrap: {
@@ -397,7 +403,7 @@ function createStyles(colors: ThemeColors) {
   tagDot: {
     width: 14,
     height: 14,
-    borderRadius: 7,
+    borderRadius: Radius.md,
     backgroundColor: 'rgba(255,255,255,0.9)',
     borderWidth: 2,
     borderColor: 'rgba(0,0,0,0.25)',
@@ -407,7 +413,7 @@ function createStyles(colors: ThemeColors) {
     left: 20,
     top: -6,
     backgroundColor: 'rgba(0,0,0,0.8)',
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     paddingHorizontal: 10,
     paddingVertical: 5,
     flexDirection: 'row',
@@ -415,7 +421,7 @@ function createStyles(colors: ThemeColors) {
   },
   tagPillText: {
     color: '#fff',
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
     marginLeft: 6,
   },
@@ -426,14 +432,14 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.92)',
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    borderRadius: Radius.lg,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
     gap: 4,
     zIndex: 2,
   },
   tagBadgeText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },

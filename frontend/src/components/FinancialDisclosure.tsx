@@ -72,7 +72,7 @@ function createStyles(colors: ThemeColors) {
     bullet: {
       width: 4,
       height: 4,
-      borderRadius: 2,
+      borderRadius: Radius.sm,
       backgroundColor: colors.textMuted,
       marginTop: 6,
     },

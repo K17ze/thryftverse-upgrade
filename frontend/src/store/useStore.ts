@@ -126,7 +126,7 @@ interface CreateGroupConversationInput {
   creatorId?: string;
 }
 
-type BrowseSortOption = 'Recommended' | 'Newest' | 'Price: Low to High' | 'Price: High to Low';
+type BrowseSortOption = 'Recommended' | 'Newest' | 'Price: Low to High' | 'Price: High to Low' | 'Most liked' | 'Ending soon';
 type BrowseConditionOption = 'Any' | 'New with tags' | 'Very good' | 'Good' | 'Satisfactory';
 
 interface BrowseFilterState {
@@ -135,6 +135,8 @@ interface BrowseFilterState {
   brands: string[];
   sizes: string[];
   condition: BrowseConditionOption;
+  /** Client-side filter: only show items with an estimated A/B sustainability grade. */
+  sustainableOnly: boolean;
 }
 
 interface SavedSearch {
@@ -314,6 +316,15 @@ export interface Collection {
   updatedAt: number;
 }
 
+export interface Outfit {
+  id: string;
+  name: string;
+  itemIds: string[];
+  backgroundColor?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 interface StoreState {
   // Auth
   currentUser: User | null;
@@ -322,6 +333,13 @@ interface StoreState {
   logout: () => void;
   updateUserProfile: (updates: Partial<User>) => void;
   fetchMyProfile: () => Promise<void>;
+
+  // General app onboarding — first-launch gate.
+  // The authoritative check lives in AsyncStorage (@thryftverse_onboarding_complete)
+  // via OnboardingScreen.isOnboardingComplete; this flag mirrors it for in-app
+  // access (e.g. Settings reset) and is persisted so returning users skip it.
+  hasCompletedOnboarding: boolean;
+  setHasCompletedOnboarding: (value: boolean) => void;
 
   // Global Interactions
   wishlist: string[]; // array of string item IDs
@@ -422,6 +440,7 @@ interface StoreState {
   availableChatBots: ChatBot[];
   upsertConversation: (conversation: Conversation) => void;
   markConversationRead: (id: string) => void;
+  toggleConversationUnread: (id: string) => void;
   archiveConversation: (id: string) => void;
   deleteConversation: (id: string) => void;
   toggleConversationPinned: (id: string) => void;
@@ -502,6 +521,11 @@ interface StoreState {
   updateUserAvatar: (uri: string) => void;
   updateUserCover: (uri: string) => void;
 
+  // Outfits — user-created styling arrangements from closet items
+  outfits: Outfit[];
+  addOutfit: (outfit: Outfit) => void;
+  removeOutfit: (id: string) => void;
+
   // Create action sheet
   createSheetVisible: boolean;
   setCreateSheetVisible: (visible: boolean) => void;
@@ -512,6 +536,8 @@ export const useStore = create<StoreState>()(
     (set, get) => ({
   currentUser: null, // Note: For a real app, load this from secure storage initially
   isAuthenticated: false,
+  hasCompletedOnboarding: false,
+  setHasCompletedOnboarding: (value) => set({ hasCompletedOnboarding: value }),
   login: (user) => {
     set({ currentUser: user, isAuthenticated: true });
     persistLocalAuthSnapshot(user, get().twoFactorEnabled);
@@ -1091,6 +1117,7 @@ export const useStore = create<StoreState>()(
     brands: [],
     sizes: [],
     condition: 'Any',
+    sustainableOnly: false,
   },
   updateBrowseFilters: (updates) =>
     set((state) => ({
@@ -1107,6 +1134,7 @@ export const useStore = create<StoreState>()(
         brands: [],
         sizes: [],
         condition: 'Any',
+        sustainableOnly: false,
       },
     }),
 
@@ -1249,6 +1277,12 @@ export const useStore = create<StoreState>()(
     set((state) => ({
       conversations: state.conversations.map((c) =>
         c.id === id ? { ...c, unread: false } : c
+      ),
+    })),
+  toggleConversationUnread: (id) =>
+    set((state) => ({
+      conversations: state.conversations.map((c) =>
+        c.id === id ? { ...c, unread: !c.unread } : c
       ),
     })),
   archiveConversation: (id) =>
@@ -1818,6 +1852,16 @@ export const useStore = create<StoreState>()(
       };
     }),
 
+  outfits: [],
+  addOutfit: (outfit) =>
+    set((state) => ({
+      outfits: [outfit, ...state.outfits],
+    })),
+  removeOutfit: (id) =>
+    set((state) => ({
+      outfits: state.outfits.filter((o) => o.id !== id),
+    })),
+
   createSheetVisible: false,
   setCreateSheetVisible: (visible) => set({ createSheetVisible: visible }),
 }),
@@ -1846,6 +1890,7 @@ export const useStore = create<StoreState>()(
       },
       partialize: (state) => ({
         // Only persist user-critical data, not transient UI state
+        hasCompletedOnboarding: state.hasCompletedOnboarding,
         wishlist: state.wishlist,
         savedProducts: state.savedProducts,
         collections: state.collections,
@@ -1879,6 +1924,7 @@ export const useStore = create<StoreState>()(
         enabledBotIds: state.enabledBotIds,
         customBots: state.customBots,
         supportTickets: state.supportTickets,
+        outfits: state.outfits,
       }),
     },
   ),

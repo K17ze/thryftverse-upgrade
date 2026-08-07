@@ -9,22 +9,23 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Elevation } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Elevation, Control, LetterSpacing } from '../theme/designTokens';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
+import { EmptyState } from '../components/EmptyState';
 import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 
-type Props = StackScreenProps<RootStackParamList, 'EditCollection'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'EditCollection'>;
 
 export default function EditCollectionScreen({ navigation, route }: Props) {
   const { collectionId } = route.params;
@@ -108,9 +109,13 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
       <SafeAreaView style={styles.container} edges={['top']}>
         <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
         <ScreenHeader title="Edit Collection" onBack={() => navigation.goBack()} />
-        <View style={styles.center}>
-          <Text style={styles.emptyText}>Collection not found</Text>
-        </View>
+        <EmptyState
+          icon="folder-open-outline"
+          title="Collection not found"
+          subtitle="This collection may have been deleted."
+          ctaLabel="Go back"
+          onCtaPress={() => navigation.goBack()}
+        />
       </SafeAreaView>
     );
   }
@@ -240,16 +245,6 @@ function createStyles(colors: ThemeColors) {
     paddingBottom: Space.xl,
     gap: Space.md,
   },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textMuted,
-  },
   headerAction: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
@@ -270,11 +265,11 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.semibold,
     color: colors.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: 1.2,
+    letterSpacing: LetterSpacing.caps + 0.38,
     marginBottom: Space.sm,
   },
   textArea: {
-    minHeight: 80,
+    minHeight: Space.xl + Space.xxl,
     textAlignVertical: 'top',
   },
   charCount: {
@@ -290,8 +285,8 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm + 4,
   },
   toggleIconWrap: {
-    width: 36,
-    height: 36,
+    width: Control.chrome,
+    height: Control.chrome,
     borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
@@ -310,27 +305,27 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
     letterSpacing: Type.caption.letterSpacing,
   },
   togglePill: {
-    width: 48,
-    height: 28,
-    borderRadius: 14,
+    width: Space.xxl,
+    height: Space.lg + Space.xs,
+    borderRadius: Radius.xl,
     backgroundColor: colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     justifyContent: 'center',
-    paddingHorizontal: 3,
+    paddingHorizontal: Space.xs - 1,
   },
   togglePillActive: {
     backgroundColor: colors.textPrimary,
     borderColor: colors.textPrimary,
   },
   toggleKnob: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: Control.iconCompact + 2,
+    height: Control.iconCompact + 2,
+    borderRadius: Radius.lg,
     backgroundColor: colors.background,
     ...Elevation.card,
   },
@@ -349,7 +344,7 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.semibold,
     color: colors.danger,
     textTransform: 'uppercase',
-    letterSpacing: 1.2,
+    letterSpacing: LetterSpacing.caps + 0.38,
     marginBottom: Space.sm,
   },
   deleteBtn: {

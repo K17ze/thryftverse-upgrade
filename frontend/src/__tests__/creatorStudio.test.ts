@@ -14,10 +14,10 @@ import {
   migratePosterFramesToDocument,
   type CreatorDocument,
   type CreatorLayer,
+  type ComposerFrame,
 } from '../creator/composition';
 import { HistoryStack } from '../creator/history';
 import type { OutfitTag } from '../components/look/LookMediaComposer';
-import type { ComposerFrame } from '../components/poster/PosterFrameStrip';
 
 describe('CreatorDocument schema', () => {
   it('creates a valid empty look document', () => {

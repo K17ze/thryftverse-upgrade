@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { Space, Radius, Typography, Type, Stroke } from '../../theme/designTokens';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -139,22 +139,22 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   stageColumn: {
     alignItems: 'center',
-    gap: 4,
-    width: 52,
+    gap: Space.xs,
+    width: Space.xxl + Space.xl,
   },
   stageIconWrap: {
-    width: 32,
-    height: 32,
+    width: Space.xl + Space.sm,
+    height: Space.xl + Space.sm,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
   stageIconWrapActive: {
-    borderWidth: 2,
+    borderWidth: Stroke.emphasis,
     borderColor: colors.brand,
   },
   stageLabel: {
-    fontSize: 10,
+    fontSize: Type.meta.size - 2,
     fontFamily: Typography.family.medium,
     letterSpacing: 0.1,
     textAlign: 'center',
@@ -163,24 +163,24 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontFamily: Typography.family.semibold,
   },
   stageTimestamp: {
-    fontSize: 8,
+    fontSize: Type.meta.size - 4,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     textAlign: 'center',
-    marginTop: 1,
+    marginTop: Space.xs / 4,
   },
   connectorWrap: {
     flex: 1,
-    height: 32,
+    height: Space.xl + Space.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 2,
+    paddingHorizontal: Space.xs / 2,
   },
   connectorLine: {
     width: '100%',
-    height: 2,
-    borderRadius: 1,
-    marginTop: -14,
+    height: Stroke.emphasis,
+    borderRadius: Radius.sm,
+    marginTop: -Space.sm - 2,
   },
   failureContainer: {
     flexDirection: 'row',
@@ -192,7 +192,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: `${colors.danger}15`,
   },
   failureLabel: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
   },
 });

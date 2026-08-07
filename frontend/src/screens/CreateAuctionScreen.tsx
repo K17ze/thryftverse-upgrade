@@ -4,7 +4,7 @@ import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
@@ -20,7 +20,7 @@ import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { TradeHeader, TradeCard } from '../components/trade';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Space, Radius, Typography } from '../theme/designTokens';
+import { Space, Radius, Typography, Type, Stroke, Control, LetterSpacing } from '../theme/designTokens';
 import { Motion } from '../constants/motion';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Meta, BodyEmphasis, Body, Headline } from '../components/ui/Text';
@@ -31,7 +31,7 @@ import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../platform/server/queryKeys';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 const AUCTION_WINDOW_HOURS = 6;
 const DURATION_OPTIONS = [
@@ -72,11 +72,12 @@ export default function CreateAuctionScreen() {
   const [startInMinutes, setStartInMinutes] = React.useState(0);
   const [durationHours, setDurationHours] = React.useState(6);
   const [startingBidInput, setStartingBidInput] = React.useState('');
+  const [reservePriceInput, setReservePriceInput] = React.useState('');
   const [buyNowEnabled, setBuyNowEnabled] = React.useState(true);
   const [buyNowInput, setBuyNowInput] = React.useState('');
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [stage, setStage] = React.useState(0);
-  const [resultData, setResultData] = React.useState<{ auctionId: string; title: string; imageUrl: string; startLabel: string; durationLabel: string; startingBid: string; buyNow: string | null } | null>(null);
+  const [resultData, setResultData] = React.useState<{ auctionId: string; title: string; imageUrl: string; startLabel: string; durationLabel: string; startingBid: string; reservePrice: string | null; buyNow: string | null } | null>(null);
 
   const fromGbpToDisplay = React.useCallback(
     (amountGbp: number) => {
@@ -134,6 +135,19 @@ export default function CreateAuctionScreen() {
       return;
     }
 
+    let reservePriceGbp: number | undefined;
+    if (reservePriceInput.trim()) {
+      reservePriceGbp = fromDisplayToGbp(Number(reservePriceInput));
+      if (!Number.isFinite(reservePriceGbp) || reservePriceGbp <= 0) {
+        show('Enter a valid reserve price', 'error');
+        return;
+      }
+      if (reservePriceGbp < startingBid) {
+        show('Reserve price must be at least the starting bid', 'error');
+        return;
+      }
+    }
+
     let buyNowPriceGbp: number | undefined;
     if (buyNowEnabled) {
       buyNowPriceGbp = fromDisplayToGbp(Number(buyNowInput));
@@ -156,6 +170,7 @@ export default function CreateAuctionScreen() {
         endsAt: new Date(endsAtMs).toISOString(),
         startingBidGbp: startingBid,
         idempotencyKey,
+        ...(reservePriceGbp ? { reservePriceGbp } : {}),
         ...(buyNowPriceGbp ? { buyNowPriceGbp } : {}),
       });
       const startLabel = startInMinutes === 0 ? 'Immediately' : `In ${START_WINDOWS.find(w => w.minutes === startInMinutes)?.label ?? startInMinutes + 'm'}`;
@@ -167,6 +182,7 @@ export default function CreateAuctionScreen() {
         startLabel,
         durationLabel,
         startingBid: `${currencyCode} ${startingBidInput}`,
+        reservePrice: reservePriceInput ? `${currencyCode} ${reservePriceInput}` : null,
         buyNow: buyNowEnabled && buyNowInput ? `${currencyCode} ${buyNowInput}` : null,
       });
       show(startInMinutes > 0 ? 'Auction scheduled successfully' : 'Auction is now live', 'success');
@@ -380,6 +396,23 @@ export default function CreateAuctionScreen() {
 
                 <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(150)}>
                   <TradeCard style={styles.formCard}>
+                    <Meta style={styles.sectionLabel}>RESERVE PRICE (OPTIONAL)</Meta>
+                    <AppInput
+                      value={reservePriceInput}
+                      onChangeText={setReservePriceInput}
+                      keyboardType="decimal-pad"
+                      placeholder="0.00"
+                      prefix={currencyCode}
+                      accessibilityLabel="Reserve price (optional)"
+                      accessibilityHint="Minimum sale price — item won't sell unless reserve is met"
+                      helperText="Minimum sale price — item won't sell unless reserve is met"
+                      containerStyle={styles.input}
+                    />
+                  </TradeCard>
+                </Reanimated.View>
+
+                <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(150)}>
+                  <TradeCard style={styles.formCard}>
                     <View style={styles.buyNowRow}>
                       <Meta style={styles.sectionLabel}>BUY NOW PRICE</Meta>
                       <AnimatedPressable
@@ -461,6 +494,19 @@ export default function CreateAuctionScreen() {
                         {startingBidInput && (
                           <Text style={styles.termsIzeText}>
                             {formatIzeAmount(toIze(Number(startingBidInput), currencyCode, goldRates))}
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                    <View style={styles.termsRow}>
+                      <Meta style={styles.termsLabel}>Reserve price</Meta>
+                      <View style={styles.termsValueCol}>
+                        <Body style={styles.termsValue}>
+                          {reservePriceInput ? `${currencyCode} ${reservePriceInput}` : 'None'}
+                        </Body>
+                        {reservePriceInput && (
+                          <Text style={styles.termsIzeText}>
+                            {formatIzeAmount(toIze(Number(reservePriceInput), currencyCode, goldRates))}
                           </Text>
                         )}
                       </View>
@@ -591,6 +637,19 @@ export default function CreateAuctionScreen() {
                   )}
                 </View>
               </View>
+              {resultData.reservePrice && (
+                <View style={styles.termsRow}>
+                  <Meta style={styles.termsLabel}>Reserve price</Meta>
+                  <View style={styles.termsValueCol}>
+                    <Body style={styles.termsValue}>{resultData.reservePrice}</Body>
+                    {reservePriceInput && (
+                      <Text style={styles.termsIzeText}>
+                        {formatIzeAmount(toIze(Number(reservePriceInput), currencyCode, goldRates))}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              )}
               {resultData.buyNow && (
                 <View style={styles.termsRow}>
                   <Meta style={styles.termsLabel}>Buy now</Meta>
@@ -639,8 +698,8 @@ function createStyles(colors: ThemeColors) {
   },
   headerLaunchBtn: {
     borderRadius: Radius.md,
-    minHeight: 34,
-    paddingHorizontal: 12,
+    minHeight: Control.chrome - 2,
+    paddingHorizontal: Space.sm + 4,
   },
   content: {
     paddingBottom: Space.xl,
@@ -657,7 +716,7 @@ function createStyles(colors: ThemeColors) {
     paddingBottom: Space.sm,
   },
   listingCard: {
-    width: 150,
+    width: Space.xxl * 3 + Space.xs + 2,
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
@@ -670,7 +729,7 @@ function createStyles(colors: ThemeColors) {
   },
   listingCardSelected: {
     borderColor: colors.brand,
-    borderWidth: 2,
+    borderWidth: Stroke.emphasis,
     ...Platform.select({
       ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.16, shadowRadius: 12 },
       android: { elevation: 6 },
@@ -678,7 +737,7 @@ function createStyles(colors: ThemeColors) {
   },
   listingImageContainer: {
     width: '100%',
-    height: 170,
+    height: Space.xxl * 3 + Space.lg + 2,
     borderTopLeftRadius: Radius.lg,
     borderTopRightRadius: Radius.lg,
     overflow: 'hidden',
@@ -691,20 +750,20 @@ function createStyles(colors: ThemeColors) {
     padding: Space.sm,
   },
   listingTitle: {
-    marginBottom: 2,
+    marginBottom: Space.xs / 2,
   },
   listingPrice: {},
   selectedTick: {
     position: 'absolute',
     top: Space.sm,
     right: Space.sm,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: Control.icon,
+    height: Control.icon,
+    borderRadius: Radius.lg,
     backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
+    borderWidth: Stroke.emphasis,
     borderColor: colors.surface,
   },
   // ── Preview card ──
@@ -714,7 +773,7 @@ function createStyles(colors: ThemeColors) {
   },
   previewImageContainer: {
     width: '100%',
-    height: 240,
+    height: Space.xxl * 5,
     borderRadius: Radius.lg,
     overflow: 'hidden',
   },
@@ -727,7 +786,7 @@ function createStyles(colors: ThemeColors) {
   },
   previewTitle: {},
   previewPrice: {
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
   // ── Form cards ──
   formCard: {
@@ -747,8 +806,8 @@ function createStyles(colors: ThemeColors) {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     backgroundColor: colors.surfaceAlt,
-    paddingVertical: 12,
-    minHeight: 44,
+    paddingVertical: Space.sm + 4,
+    minHeight: Control.hit,
   },
   windowChipActive: {
     backgroundColor: colors.brand,
@@ -776,9 +835,9 @@ function createStyles(colors: ThemeColors) {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     backgroundColor: colors.surfaceAlt,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    minWidth: 48,
+    paddingHorizontal: Space.sm + 4,
+    paddingVertical: Space.xs + 1,
+    minWidth: Space.xxl,
     alignItems: 'center',
   },
   toggleChipActive: {
@@ -788,12 +847,12 @@ function createStyles(colors: ThemeColors) {
   toggleText: {
     color: colors.textSecondary,
     fontFamily: Typography.family.medium,
-    fontSize: 12,
+    fontSize: Type.caption.size,
   },
   toggleTextActive: {
     color: colors.textInverse,
     fontFamily: Typography.family.bold,
-    fontSize: 12,
+    fontSize: Type.caption.size,
   },
   launchBtn: {
     marginHorizontal: Space.md,
@@ -811,13 +870,13 @@ function createStyles(colors: ThemeColors) {
   stepItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
   },
   stepDot: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    borderWidth: 1.5,
+    width: Space.md + 2,
+    height: Space.md + 2,
+    borderRadius: Radius.xl,
+    borderWidth: Stroke.emphasis,
     borderColor: colors.border,
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
@@ -832,7 +891,7 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.brand,
   },
   stepDotText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     color: colors.textMuted,
     fontWeight: '700',
     fontFamily: Typography.family.bold,
@@ -841,7 +900,7 @@ function createStyles(colors: ThemeColors) {
     color: colors.textInverse,
   },
   stepLabel: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     color: colors.textMuted,
     fontFamily: Typography.family.medium,
   },
@@ -852,26 +911,26 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.semibold,
   },
   stepConnector: {
-    width: 28,
-    height: 1.5,
+    width: Space.lg + 4,
+    height: Stroke.emphasis,
     backgroundColor: colors.border,
-    marginHorizontal: 6,
+    marginHorizontal: Space.xs + 2,
   },
   stepConnectorActive: {
     backgroundColor: colors.brand,
-    height: 2,
+    height: Stroke.emphasis,
   },
   // ── Review ──
   reviewHeadline: {
-    fontSize: 26,
+    fontSize: Type.priceLarge.size - 2,
     paddingHorizontal: Space.md,
     marginTop: Space.lg,
-    letterSpacing: -0.6,
+    letterSpacing: Type.title.letterSpacing,
   },
   reviewSubheadline: {
     color: colors.textMuted,
     paddingHorizontal: Space.md,
-    marginTop: 4,
+    marginTop: Space.xs,
     marginBottom: Space.sm,
   },
   stageNavRow: {
@@ -892,31 +951,31 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: Space.xs + 2,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
   termsLabel: {
     color: colors.textMuted,
-    fontSize: 10,
+    fontSize: Type.meta.size - 1,
     fontFamily: Typography.family.semibold,
-    letterSpacing: 0.6,
+    letterSpacing: LetterSpacing.caps,
     textTransform: 'uppercase',
   },
   termsValue: {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontVariant: ['tabular-nums'],
   },
   termsValueCol: {
     alignItems: 'flex-end',
   },
   termsIzeText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    marginTop: 1,
+    marginTop: Space.xs / 4,
     fontVariant: ['tabular-nums'],
   },
   // ── Terms & fees — inline, lighter than summary ──
@@ -932,26 +991,26 @@ function createStyles(colors: ThemeColors) {
     gap: Space.xs,
   },
   termsSectionLabel: {
-    fontSize: 10,
+    fontSize: Type.meta.size - 1,
     color: colors.textMuted,
     fontFamily: Typography.family.semibold,
-    letterSpacing: 0.6,
+    letterSpacing: LetterSpacing.caps,
     textTransform: 'uppercase',
     marginBottom: Space.xs,
   },
   termsInlineRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
   },
   termsInlineLabel: {
     flex: 1,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     color: colors.textSecondary,
     fontFamily: Typography.family.regular,
   },
   termsInlineValue: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     color: colors.textPrimary,
     fontFamily: Typography.family.medium,
   },
@@ -972,7 +1031,7 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.xl,
     padding: Space.lg,
     width: '100%',
-    maxWidth: 380,
+    maxWidth: Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl - 4,
     alignItems: 'center',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
@@ -983,29 +1042,29 @@ function createStyles(colors: ThemeColors) {
   },
   resultIconWrap: {
     marginBottom: Space.sm,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: Space.xxl + Space.xxl + 8,
+    height: Space.xxl + Space.xxl + 8,
+    borderRadius: Space.lg + 4,
     backgroundColor: 'rgba(22,163,74,0.12)',
-    borderWidth: 1.5,
+    borderWidth: Stroke.emphasis,
     borderColor: 'rgba(22,163,74,0.25)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   resultTitle: {
-    fontSize: 24,
+    fontSize: Type.title.size,
     textAlign: 'center',
-    letterSpacing: -0.5,
+    letterSpacing: Type.priceLarge.letterSpacing,
   },
   resultSubtitle: {
     color: colors.textMuted,
     textAlign: 'center',
-    marginTop: 4,
+    marginTop: Space.xs,
     marginBottom: Space.md,
   },
   resultImageContainer: {
     width: '100%',
-    height: 180,
+    height: Space.xxl * 3 + Space.xl + Space.xs,
     borderRadius: Radius.lg,
     marginBottom: Space.md,
     overflow: 'hidden',

@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable, useWindowDimensions, Modal, ScrollVi
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Typography, Elevation, Stroke } from '../../theme/designTokens';
+import { Space, Radius, Typography, Elevation, Stroke, Type } from '../../theme/designTokens';
 
 export type AuctionHeaderActionKey = 'search' | 'filter' | 'create' | 'seller' | 'activity';
 
@@ -213,14 +213,14 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   title: {
     fontFamily: Typography.family.bold,
-    fontSize: 24,
+    fontSize: Type.title.size,
     color: colors.textPrimary,
     letterSpacing: -0.6,
   },
   // Context elevated — 14pt medium with tighter tracking for editorial feel
   context: {
     fontFamily: Typography.family.medium,
-    fontSize: 14,
+    fontSize: Type.body.size,
     color: colors.textSecondary,
     marginTop: 2,
     letterSpacing: -0.3,
@@ -275,7 +275,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   overflowLabel: {
     flex: 1,
     fontFamily: Typography.family.medium,
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     color: colors.textPrimary,
   },
   overflowBadge: {

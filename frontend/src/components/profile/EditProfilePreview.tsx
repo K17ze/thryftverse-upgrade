@@ -10,7 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 
 const COVER_H = 120;
@@ -173,7 +173,7 @@ function createStyles(colors: ThemeColors) {
     gap: 6,
   },
   coverFallbackText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
   },
@@ -190,7 +190,7 @@ function createStyles(colors: ThemeColors) {
     bottom: Space.md,
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: Radius.xxl,
     backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -232,7 +232,7 @@ function createStyles(colors: ThemeColors) {
     bottom: -2,
     width: 30,
     height: 30,
-    borderRadius: 15,
+    borderRadius: Radius.xl,
     backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
@@ -251,20 +251,20 @@ function createStyles(colors: ThemeColors) {
     marginBottom: 2,
   },
   username: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
-    marginBottom: 4,
+    marginBottom: Space.xs,
   },
   bio: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: colors.textPrimary,
     lineHeight: 20,
-    marginBottom: 4,
+    marginBottom: Space.xs,
   },
   contextText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },

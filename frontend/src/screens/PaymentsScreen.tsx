@@ -8,8 +8,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type } from '../theme/designTokens';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { formatCountryPolicyScope, isPaymentMethodAllowed } from '../utils/capabilityPolicy';
@@ -26,11 +25,13 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { AppButton } from '../components/ui/AppButton';
 import { SettingsCell } from '../components/SettingsCell';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Typography } from '../theme/designTokens';
 import { PremiumListSection } from '../components/ui/PremiumListSection';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
+import { useBiometricGate } from '../hooks/useBiometricGate';
+import { BiometricGatePrompt } from '../components/security/BiometricGate';
 
-type Props = StackScreenProps<RootStackParamList, 'Payments'>;
+import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
+type Props = NativeStackScreenProps<RootStackParamList, 'Payments'>;
 
 export default function PaymentsScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
@@ -48,6 +49,11 @@ export default function PaymentsScreen({ navigation }: Props) {
   const clearSavedPaymentMethod = useStore((state) => state.clearSavedPaymentMethod);
   const { show } = useToast();
   const reducedMotionEnabled = useReducedMotion();
+
+  // ── Biometric gate (OWASP M5) ──
+  // Payment methods are sensitive. Require biometric re-authentication before
+  // revealing content. Falls through when biometric is unavailable.
+  const biometricGate = useBiometricGate();
 
   const getCardBrand = (label: string) => {
     const lower = label.toLowerCase();
@@ -248,6 +254,35 @@ export default function PaymentsScreen({ navigation }: Props) {
   };
 
   const hasError = !isSyncing && backendPaymentMethods.length === 0 && countryCapabilities === null;
+
+  // Auto-prompt biometric once availability is confirmed.
+  useEffect(() => {
+    if (biometricGate.status === 'locked' && !biometricGate.isAuthenticating) {
+      void biometricGate.authenticate('Authenticate to view payment methods');
+    }
+  }, [biometricGate.status, biometricGate.isAuthenticating, biometricGate.authenticate]);
+
+  // ── Biometric gate: block sensitive content until authenticated ──
+  if (biometricGate.status === 'pending' || biometricGate.status === 'locked') {
+    return (
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Payment Centre"
+            subtitle="Manage your payment methods"
+            onBack={() => navigation.goBack()}
+          />
+        }
+        scrollEnabled={false}
+      >
+        <BiometricGatePrompt
+          gate={biometricGate}
+          reason="Authenticate to view payment methods"
+          onBack={() => navigation.goBack()}
+        />
+      </FlagshipScreen>
+    );
+  }
 
   return (
     <FlagshipScreen
@@ -452,8 +487,8 @@ function createStyles(colors: ThemeColors) {
     gap: Space.md,
   },
   heroIcon: {
-    width: 40,
-    height: 40,
+    width: Space.xl + Space.sm,
+    height: Space.xl + Space.sm,
     borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
@@ -467,12 +502,12 @@ function createStyles(colors: ThemeColors) {
   heroSubtitle: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
   heroBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Space.xs,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
     borderRadius: Radius.full,
@@ -544,7 +579,7 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
     letterSpacing: Type.caption.letterSpacing,
     lineHeight: Type.caption.lineHeight,
   },
@@ -575,8 +610,8 @@ function createStyles(colors: ThemeColors) {
     letterSpacing: Type.body.letterSpacing,
   },
   brandIconCircle: {
-    width: 48,
-    height: 48,
+    width: Space.xxl,
+    height: Space.xxl,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
@@ -610,8 +645,8 @@ function createStyles(colors: ThemeColors) {
     borderBottomColor: colors.border,
   },
   iconCircle: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
@@ -622,21 +657,21 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
-    marginBottom: 4,
+    marginBottom: Space.xs,
     letterSpacing: Type.body.letterSpacing,
   },
   paymentSub: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
-    paddingRight: 10,
+    paddingRight: Space.sm + 2,
     letterSpacing: Type.caption.letterSpacing,
     lineHeight: Type.caption.lineHeight,
   },
   defaultBadge: {
     backgroundColor: colors.surfaceAlt,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
     borderRadius: Radius.md,
   },
   defaultText: {
@@ -654,9 +689,9 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm,
   },
   addIconWrap: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    width: Control.iconCompact,
+    height: Control.iconCompact,
+    borderRadius: Radius.lg,
     backgroundColor: 'transparent',
   },
   addText: {

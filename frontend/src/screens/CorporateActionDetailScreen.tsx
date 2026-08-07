@@ -15,12 +15,12 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
-import { Space, Radius, Type, Typography, DockConstants } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, DockConstants, Stroke, LetterSpacing } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { haptics } from '../utils/haptics';
 import {
@@ -37,7 +37,7 @@ import { fetchCoOwnAssetCorporateActions, fetchGovernanceVotes, castGovernanceVo
 import { useToast } from '../context/ToastContext';
 
 type RouteT = RouteProp<RootStackParamList, 'CorporateActionDetail'>;
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 const ACTION_DESCRIPTIONS: Record<string, string> = {
   distribution: 'A cash distribution to unit-holders, proportional to settled units on the record date.',
@@ -484,7 +484,7 @@ function createStyles(colors: ThemeColors) {
   sectionTitle: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: -0.3,
+    letterSpacing: LetterSpacing.tight + LetterSpacing.wide,
     marginBottom: Space.sm,
   },
   sectionBody: {
@@ -513,7 +513,7 @@ function createStyles(colors: ThemeColors) {
   amountLabel: {
     fontSize: Type.priceLarge.size,
     fontFamily: Typography.family.bold,
-    letterSpacing: -0.5,
+    letterSpacing: Type.priceLarge.letterSpacing,
     marginTop: Space.sm,
   },
   totalLabel: {
@@ -533,7 +533,7 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    letterSpacing: LetterSpacing.caps,
     marginBottom: Space.xs,
   },
   voteResultRow: {
@@ -545,12 +545,12 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    width: 72,
+    width: Space.xxl + Space.lg,
   },
   voteResultDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: Space.xs + 2,
+    height: Space.xs + 2,
+    borderRadius: Radius.sm,
   },
   voteResultLabel: {
     fontSize: Type.caption.size,
@@ -558,19 +558,19 @@ function createStyles(colors: ThemeColors) {
   },
   voteResultBar: {
     flex: 1,
-    height: 8,
-    borderRadius: 4,
+    height: Space.sm,
+    borderRadius: Radius.sm,
     backgroundColor: 'rgba(128,128,128,0.15)',
     overflow: 'hidden',
   },
   voteResultFill: {
     height: '100%',
-    borderRadius: 4,
+    borderRadius: Radius.sm,
   },
   voteResultPct: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    width: 48,
+    width: Space.xxl,
     textAlign: 'right',
     fontVariant: ['tabular-nums'],
   },
@@ -595,8 +595,8 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.md,
   },
   voteHeaderIcon: {
-    width: 40,
-    height: 40,
+    width: Space.xl + Space.sm,
+    height: Space.xl + Space.sm,
     borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
@@ -605,7 +605,7 @@ function createStyles(colors: ThemeColors) {
   voteHeaderSubtitle: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    lineHeight: 18,
+    lineHeight: Type.caption.lineHeight + 2,
   },
   myVoteBadge: {
     flexDirection: 'row',
@@ -627,14 +627,14 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.xs,
   },
   voteInput: {
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderRadius: Radius.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    minHeight: 60,
-    maxHeight: 120,
+    minHeight: Space.xxl + Space.sm + Space.xs,
+    maxHeight: Space.xxl + Space.xxl + Space.lg,
     marginBottom: Space.md,
   },
   voteButtons: {

@@ -10,7 +10,7 @@ import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type, AspectRatio } from '../../theme/designTokens';
 import type { RecommendationSection } from '../../platform/product';
 import { isRecommendationLook } from '../../platform/product';
 import { ProductAnalytics } from '../../platform/product';
@@ -121,10 +121,14 @@ export function RecommendationRail({
 
   const isComplementary = section.key === 'complete_the_look';
   const isPersonalised = section.personalised;
+  // Portrait 3:4 card geometry (2026 Poshmark/Depop standard).
+  // Card width targets 160–180px so taller portrait cards still show 2+ media
+  // objects in the first viewport. Height is derived from width via the 3:4
+  // ratio so the frame always matches the image crop.
   const cardWidth = isComplementary
-    ? (screenWidth - Space.md * 2 - Space.sm * 2) / 2.1
-    : (screenWidth - Space.md * 2 - Space.sm * 2) / 2.5;
-  const cardHeight = isComplementary ? 200 : 175;
+    ? (screenWidth - Space.md * 2 - Space.sm * 2) / 2.0
+    : (screenWidth - Space.md * 2 - Space.sm * 2) / 2.15;
+  const cardHeight = Math.round(cardWidth / AspectRatio.portrait);
   const showAccent = isPersonalised;
 
   return (
@@ -253,7 +257,7 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
     },
     card: {
-      width: 140,
+      width: 160,
     },
     cardAccent: {
       borderWidth: 1.5,
@@ -262,8 +266,8 @@ function createStyles(colors: ThemeColors) {
       padding: 2,
     },
     cardImageWrap: {
-      width: 140,
-      height: 175,
+      width: 160,
+      height: 213,
       borderRadius: Radius.lg,
       overflow: 'hidden',
       backgroundColor: colors.surfaceAlt,

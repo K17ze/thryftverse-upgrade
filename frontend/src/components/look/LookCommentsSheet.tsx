@@ -14,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { Space, Radius, Typography, Type } from '../../theme/designTokens';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useToast } from '../../context/ToastContext';
 import { KeyboardStickyView } from '../../platform/keyboard/KeyboardProvider';
@@ -285,7 +285,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   closeBtn: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: Radius.xxl,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -302,7 +302,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   avatarWrap: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
@@ -311,25 +311,25 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   avatar: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
   },
   commentBody: {
     flex: 1,
     gap: 2,
   },
   commentAuthor: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
   commentText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
     color: colors.textSecondary,
     lineHeight: 20,
   },
   commentTime: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     marginTop: 2,
@@ -340,12 +340,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: 40,
   },
   emptyText: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
   },
   emptySubtext: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
   },
@@ -366,15 +366,15 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.lg,
     paddingHorizontal: Space.md,
-    paddingVertical: 8,
-    fontSize: 15,
+    paddingVertical: Space.sm,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.medium,
     color: colors.textPrimary,
   },
   sendBtn: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: Radius.xxl,
     backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
@@ -396,14 +396,14 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     height: 44,
-    paddingHorizontal: 24,
-    borderRadius: 22,
+    paddingHorizontal: Space.lg,
+    borderRadius: Radius.xxl,
     borderWidth: 1,
     borderColor: colors.brand,
     backgroundColor: 'rgba(99,102,241,0.06)',
   },
   signInBtnText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.brand,
   },

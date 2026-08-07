@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { Space, Radius, Typography, Type } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 
 interface Props {
@@ -122,7 +122,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   contextLine: {
     fontFamily: Typography.family.regular,
-    fontSize: 11,
+    fontSize: Type.meta.size,
     color: colors.textMuted,
     textAlign: 'center',
     marginBottom: Space.xs,
@@ -144,7 +144,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   primaryText: {
     fontFamily: Typography.family.bold,
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     color: colors.textInverse,
     letterSpacing: 0.2,
   },
@@ -158,7 +158,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   secondaryText: {
     fontFamily: Typography.family.semibold,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     color: colors.textPrimary,
   },
   terminalRow: {
@@ -170,7 +170,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   terminalText: {
     fontFamily: Typography.family.semibold,
-    fontSize: 14,
+    fontSize: Type.body.size,
   },
   sellerRow: {
     flexDirection: 'row',
@@ -181,7 +181,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   sellerText: {
     fontFamily: Typography.family.semibold,
-    fontSize: 14,
+    fontSize: Type.body.size,
     color: colors.textPrimary,
   },
 });

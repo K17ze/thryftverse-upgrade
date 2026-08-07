@@ -1129,7 +1129,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                     { color: sampleColor },
                     e.key === 'shadow' && { textShadowColor: '#000', textShadowOffset: { width: 1, height: 2 }, textShadowRadius: 3 },
                     e.key === 'neon' && { textShadowColor: isActive ? colors.brand : '#7B68EE', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 10 },
-                    e.key === 'outline' && { borderWidth: 1, borderColor: sampleColor, paddingHorizontal: 4, borderRadius: Radius.sm },
+                    e.key === 'outline' && { borderWidth: 1, borderColor: sampleColor, paddingHorizontal: Space.xs, borderRadius: Radius.sm },
                     e.key === 'glow' && { textShadowColor: isActive ? colors.brand : '#F5D547', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8 },
                   ]}
                 >
@@ -2094,7 +2094,7 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               accessibilityState={{ selected: emoji === e }}
               hitSlop={12}
             >
-              <Text style={{ fontSize: 24 }}>{e}</Text>
+              <Text style={{ fontSize: Type.title.size }}>{e}</Text>
             </Pressable>
           ))}
         </ScrollView>
@@ -2330,7 +2330,7 @@ function EmojiSliderPicker({ onClose, onAddLayer, editingLayer }: { onClose: () 
               accessibilityState={{ selected: emoji === e }}
               hitSlop={12}
             >
-              <Text style={{ fontSize: 24 }}>{e}</Text>
+              <Text style={{ fontSize: Type.title.size }}>{e}</Text>
             </Pressable>
           ))}
         </ScrollView>
@@ -2418,7 +2418,7 @@ function CountdownPicker({ onClose, onAddLayer, editingLayer }: { onClose: () =>
           <Text style={{ color: '#fff', fontFamily: Typography.family.semibold, fontSize: Type.bodyEmphasis.size }}>
             {label.trim() || 'Event countdown'}
           </Text>
-          <Text style={{ color: 'rgba(255,255,255,0.8)', fontFamily: Typography.family.medium, fontSize: Type.title.size, marginTop: 4 }}>
+          <Text style={{ color: 'rgba(255,255,255,0.8)', fontFamily: Typography.family.medium, fontSize: Type.title.size, marginTop: Space.xs }}>
             {formatDate(endDate)}
           </Text>
         </View>
@@ -3373,7 +3373,7 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     gap: 2,
     backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 4,
+    paddingHorizontal: Space.xs,
     paddingVertical: 2,
     borderRadius: Radius.sm,
   },
@@ -3399,7 +3399,7 @@ function createStyles(colors: ThemeColors) {
   },
   mediaGridSelectionText: {
     color: '#000',
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.bold,
   },
   headerRight: {
@@ -3408,8 +3408,8 @@ function createStyles(colors: ThemeColors) {
     gap: Space.xs,
   },
   addBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
     borderRadius: Radius.full,
   },
   addBtnText: {
@@ -3548,7 +3548,7 @@ function createStyles(colors: ThemeColors) {
   },
   drawCanvasHintText: {
     fontFamily: Typography.family.regular,
-    fontSize: 11,
+    fontSize: Type.meta.size,
     color: 'rgba(255,255,255,0.28)',
     letterSpacing: 0.3,
   },
@@ -3593,7 +3593,7 @@ function createStyles(colors: ThemeColors) {
   // ── Quiz picker ──
   quizOptionRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginBottom: Space.xs },
   quizCorrectDot: { width: 28, height: 28, borderRadius: Radius.full, borderWidth: 2, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' },
-  quizRemoveBtn: { padding: 4 },
+  quizRemoveBtn: { padding: Space.xs },
   quizAddOptionBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: Space.sm },
   quizAddOptionText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.brand },
   // ── Countdown picker ──
@@ -3601,12 +3601,12 @@ function createStyles(colors: ThemeColors) {
   countdownDateText: { flex: 1, fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textPrimary },
   // ── Sticker tray ──
   stickerSearchWrap: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.sm, backgroundColor: colors.surfaceAlt, borderRadius: Radius.lg, marginHorizontal: Space.md, marginBottom: Space.sm },
-  stickerSearchInput: { flex: 1, fontSize: Type.body.size, color: colors.textPrimary, fontFamily: Typography.family.regular, paddingVertical: 4 },
+  stickerSearchInput: { flex: 1, fontSize: Type.body.size, color: colors.textPrimary, fontFamily: Typography.family.regular, paddingVertical: Space.xs },
   stickerSearchClear: { width: 32, height: 32, justifyContent: 'center', alignItems: 'center' },
   stickerCategoryScroll: { marginHorizontal: -Space.md, marginBottom: Space.xs },
   stickerCategoryContent: { paddingHorizontal: Space.md, gap: 8 },
-  stickerCategoryChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: Radius.xl, backgroundColor: colors.surfaceAlt },
-  stickerCategoryChipText: { fontFamily: Typography.family.semibold, fontSize: 13, color: colors.textSecondary },
+  stickerCategoryChip: { paddingHorizontal: 14, paddingVertical: Space.sm, borderRadius: Radius.xl, backgroundColor: colors.surfaceAlt },
+  stickerCategoryChipText: { fontFamily: Typography.family.semibold, fontSize: Type.captionElevated.size, color: colors.textSecondary },
   stickerGridScroll: { flex: 1 },
   stickerGridContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
   stickerCategorySection: { marginBottom: Space.lg },
@@ -3620,10 +3620,10 @@ function createStyles(colors: ThemeColors) {
   // ── Sticker preview pill (shared by Link/Location/Hashtag/Time/Weather) ──
   stickerPreviewPill: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.md, borderRadius: Radius.lg, backgroundColor: 'rgba(201,164,106,0.9)', alignSelf: 'center', marginBottom: Space.sm },
   stickerPreviewPillText: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: '#fff' },
-  stickerPreviewPillEmoji: { fontSize: 20 },
+  stickerPreviewPillEmoji: { fontSize: Type.priceList.size },
   // ── Weather picker ──
   weatherPreviewPill: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.md, borderRadius: Radius.xl, backgroundColor: 'rgba(201,164,106,0.95)', alignSelf: 'center', marginBottom: Space.sm, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 3, minWidth: 180 },
-  weatherPreviewEmoji: { fontSize: 32 },
+  weatherPreviewEmoji: { fontSize: Type.display.size },
   weatherPreviewInfo: { gap: 0 },
   weatherPreviewTemp: { fontFamily: Typography.family.bold, fontSize: Type.subtitle.size, color: '#fff' },
   weatherPreviewCondition: { fontFamily: Typography.family.regular, fontSize: Type.caption.size, color: 'rgba(255,255,255,0.85)' },
@@ -3632,7 +3632,7 @@ function createStyles(colors: ThemeColors) {
   weatherGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
   weatherCell: { width: 80, height: 80, borderRadius: Radius.lg, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', gap: 4 },
   weatherCellActive: { backgroundColor: colors.brand },
-  weatherCellEmoji: { fontSize: 28 },
+  weatherCellEmoji: { fontSize: Type.priceLarge.size },
   weatherCellLabel: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary, textAlign: 'center' },
   inputCardLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary, marginBottom: 6, marginTop: Space.sm },
   inputCard: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, backgroundColor: colors.surface, borderRadius: Radius.lg, padding: Space.md, marginBottom: Space.xs },
@@ -3653,7 +3653,7 @@ function createStyles(colors: ThemeColors) {
   // ── Text effect chips (visual preview) ──
   effectChip: { width: 56, height: 56, borderRadius: Radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, marginRight: Space.sm, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', gap: 2 },
   effectChipActive: { borderColor: colors.brand, backgroundColor: `${colors.brand}18`, borderWidth: 1.5 },
-  effectChipSample: { fontFamily: Typography.family.bold, fontSize: 20, lineHeight: 24 },
+  effectChipSample: { fontFamily: Typography.family.bold, fontSize: Type.priceList.size, lineHeight: 24 },
   effectChipLabel: { fontFamily: Typography.family.medium, fontSize: 9, color: colors.textSecondary },
   effectChipLabelActive: { color: colors.brand },
   // ── Text animation chips (visual preview) ──
@@ -3670,8 +3670,8 @@ function createStyles(colors: ThemeColors) {
   // ── GIF category chips ──
   gifCategoryScroll: { marginHorizontal: -Space.md, marginBottom: Space.sm },
   gifCategoryContent: { paddingHorizontal: Space.md, gap: 8 },
-  gifCategoryChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: Radius.xl, backgroundColor: colors.surfaceAlt },
-  gifCategoryChipText: { fontFamily: Typography.family.semibold, fontSize: 13, color: colors.textSecondary },
+  gifCategoryChip: { paddingHorizontal: 14, paddingVertical: Space.sm, borderRadius: Radius.xl, backgroundColor: colors.surfaceAlt },
+  gifCategoryChipText: { fontFamily: Typography.family.semibold, fontSize: Type.captionElevated.size, color: colors.textSecondary },
   // ── Vote preview ──
   votePreviewWrap: { backgroundColor: colors.surface, borderRadius: Radius.lg, padding: Space.md, marginBottom: Space.sm, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
   votePreviewQuestion: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: colors.textPrimary, marginBottom: Space.sm, textAlign: 'center' },
@@ -3680,8 +3680,8 @@ function createStyles(colors: ThemeColors) {
   votePreviewOptionText: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textPrimary },
   addOptionBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: Space.sm, marginBottom: Space.xs },
   addOptionBtnText: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.brand },
-  timerChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: Radius.xl, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, marginRight: 8 },
-  timerChipText: { fontFamily: Typography.family.semibold, fontSize: 13, color: colors.textSecondary },
+  timerChip: { paddingHorizontal: 14, paddingVertical: Space.sm, borderRadius: Radius.xl, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, marginRight: Space.sm },
+  timerChipText: { fontFamily: Typography.family.semibold, fontSize: Type.captionElevated.size, color: colors.textSecondary },
   // ── Quiz preview ──
   quizPreviewWrap: { backgroundColor: colors.surface, borderRadius: Radius.lg, padding: Space.md, marginBottom: Space.sm, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, gap: Space.xs },
   quizPreviewHeader: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginBottom: Space.xs },
@@ -3701,7 +3701,7 @@ function createStyles(colors: ThemeColors) {
   sliderPreviewWrap: { backgroundColor: colors.surface, borderRadius: Radius.xl, padding: Space.md + 2, marginBottom: Space.sm, gap: Space.sm, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, elevation: 2, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 6, shadowOffset: { width: 0, height: 3 } },
   sliderPreviewQuestion: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: colors.textPrimary, textAlign: 'center' },
   sliderPreviewRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
-  sliderPreviewEmoji: { fontSize: 32 },
+  sliderPreviewEmoji: { fontSize: Type.display.size },
   sliderPreviewTrack: { flex: 1, height: 8, borderRadius: Radius.sm, backgroundColor: colors.surfaceAlt, position: 'relative' },
   sliderPreviewFill: { height: '100%', borderRadius: Radius.sm },
   sliderPreviewHandle: { position: 'absolute', top: -6, width: 20, height: 20, borderRadius: Radius.full, marginLeft: -10, borderWidth: 2, borderColor: '#fff', elevation: 2, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },

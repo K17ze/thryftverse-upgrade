@@ -199,7 +199,7 @@ const styles = StyleSheet.create({
   },
   tickCell: {
     borderRadius: Radius.sm,
-    paddingHorizontal: 4,
+    paddingHorizontal: Space.xs,
     paddingVertical: 1,
   },
   body: {

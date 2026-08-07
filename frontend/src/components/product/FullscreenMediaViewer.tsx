@@ -25,7 +25,7 @@ import {
 } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 import { isVideoUri } from '../../utils/media';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -361,7 +361,7 @@ const styles = StyleSheet.create({
   closeButton: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: Radius.xxl,
     backgroundColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -377,11 +377,11 @@ const styles = StyleSheet.create({
   },
   indicatorText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
     backgroundColor: 'rgba(0,0,0,0.5)',
     paddingHorizontal: 12,
-    paddingVertical: 4,
+    paddingVertical: Space.xs,
     borderRadius: Radius.full,
   },
 });

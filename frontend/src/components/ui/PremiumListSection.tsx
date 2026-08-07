@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, ViewStyle, StyleProp } from 'react-native';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { Space, Radius, Typography, Type } from '../../theme/designTokens';
 
 interface PremiumListSectionProps {
   title?: string;
@@ -46,14 +46,14 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: 2,
   },
   title: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.bold,
     color: colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
   },
   subtitle: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     lineHeight: 17,

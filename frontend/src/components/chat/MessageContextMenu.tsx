@@ -184,7 +184,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     width: 40,
     height: 4,
     backgroundColor: colors.border,
-    borderRadius: 2,
+    borderRadius: Radius.sm,
     alignSelf: 'center',
     marginBottom: Space.md,
   },

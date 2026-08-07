@@ -1,6 +1,36 @@
 import type { NavigatorScreenParams } from '@react-navigation/native';
+import type {
+  NativeStackScreenProps as RNNativeStackScreenProps,
+  NativeStackNavigationProp as RNNativeStackNavigationProp,
+} from '@react-navigation/native-stack';
+
+// ---------------------------------------------------------------------------
+// Navigator migration: @react-navigation/stack → @react-navigation/native-stack
+// ---------------------------------------------------------------------------
+// AppNavigator now uses createNativeStackNavigator. The navigator passes
+// NativeStackNavigationProp to every screen at runtime.
+//
+// ~100 screen files still import StackScreenProps / StackNavigationProp from
+// '@react-navigation/stack'. Those types are structurally similar but NOT
+// identical to the native-stack equivalents. The @react-navigation/stack
+// package remains installed so those imports continue to resolve.
+//
+// During the incremental migration, screens should switch their imports to
+// the aliases below. See docs/NAVIGATOR_MIGRATION_PLAN.md for the full plan.
+// ---------------------------------------------------------------------------
+
+/** Drop-in replacement for StackScreenProps from @react-navigation/stack. */
+export type NativeStackScreenProps<ParamList extends Record<string, any | undefined>, RouteName extends keyof ParamList = keyof ParamList> =
+  RNNativeStackScreenProps<ParamList, RouteName>;
+
+/** Drop-in replacement for StackNavigationProp from @react-navigation/stack. */
+export type NativeStackNavigationProp<ParamList extends Record<string, any | undefined>, RouteName extends keyof ParamList = keyof ParamList> =
+  RNNativeStackNavigationProp<ParamList, RouteName>;
 
 export type RootStackParamList = {
+  // Age gate — shown before onboarding/auth on first launch (18+ marketplace).
+  AgeVerification: undefined;
+  Onboarding: undefined;
   AuthLanding: undefined;
   Login: undefined;
   SignUp: undefined;
@@ -18,7 +48,10 @@ export type RootStackParamList = {
   CreatePoster: { mode?: 'poster' | 'look' } | undefined;
   PosterStoryActivity: { storyId: string };
   PosterArchive: undefined;
+  PosterHighlightViewer: { highlightId: string };
+  CreatePosterHighlight: { storyId?: string; frameIds?: string[] } | undefined;
   AuctionHome: undefined;
+  Auctions: undefined;
   SellerAuctionCentre: undefined;
   CreateAuction: { listingId?: string } | undefined;
   AuctionDetail: {
@@ -76,6 +109,7 @@ export type RootStackParamList = {
     };
   };
   CreateGroupChat: undefined;
+  GroupChat: { groupId: string; groupName: string };
   GroupChatInfo: { conversationId: string };
   GroupMembers: { conversationId: string };
   GroupBotManagement: { conversationId: string };
@@ -140,6 +174,7 @@ export type RootStackParamList = {
         price?: number;
         categoryId?: string;
         photoUri?: string;
+        smartSellEnabled?: boolean;
       }
     | undefined;
   // Phase 27
@@ -264,12 +299,48 @@ export type RootStackParamList = {
   DataExport: undefined;
   // Trust & Verification
   Verification: undefined;
+  VerificationStatus: undefined;
   // Seller analytics (entry via MyListings)
   SellerAnalytics: undefined;
+  // Creator analytics — creator-side performance insights (views, engagement, timeline)
+  CreatorAnalyticsDashboard: undefined;
   BundleBag: { sellerId: string; sellerName?: string } | undefined;
   // Seller verification response — sellers view and respond to Co-Own verification demands
   SellerVerification: undefined;
   VerificationResponse: { assetId: string; demandId: number } | undefined;
+  // Live shopping — Whatnot/Tilt-style live commerce
+  LiveShopping: undefined;
+  // Live stream viewer — watch + bid + chat
+  LiveStreamViewer: { sessionId: string };
+  // Live stream seller — broadcast + manage lots
+  LiveStreamSeller: { sessionId?: string };
+  // AI-powered listing creation
+  AIPoweredListing: undefined;
+  // Pro seller tools
+  BulkListing: undefined;
+  // Inventory management — full seller inventory dashboard
+  InventoryManagement: undefined;
+  // Full KYC verification flow — multi-step identity verification
+  KYCVerification: undefined;
+  // Galleria — editorial discovery surface for Co-Own assets & curated collections
+  Galleria: undefined;
+  GalleriaCollectionDetail: { collectionId: string };
+  // Algorithm transparency — "Your Algorithm" dashboard
+  YourAlgorithm: undefined;
+  // AI photo enhancement — Photoroom-equivalent editing surface
+  AIPhotoEnhancement: { imageUri: string; itemId?: string };
+  // Conversational AI search — natural language search
+  ConversationalSearch: undefined;
+  // Moodboard — user-generated editorial collage tools
+  MoodboardHome: undefined;
+  MoodboardEditor: { moodboardId?: string };
+  // Settings sub-departments — 2026 settings enhancement
+  AIPreferences: undefined;
+  SustainabilityPreferences: undefined;
+  DataPrivacy: undefined;
+  NotificationPreferences: undefined;
+  // AI provider API integration — bring-your-own-key for OpenAI / Anthropic / Gemini / custom
+  AIAgentIntegration: undefined;
 };
 
 export type TabParamList = {

@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { RootStackParamList } from '../navigation/types';
 import { Confetti } from '../components/Confetti';
@@ -20,7 +20,7 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { CachedImage } from '../components/CachedImage';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
-import { Typography, Space, Type, Radius, FontSize } from '../theme/designTokens';
+import { Typography, Space, Type, Radius, FontSize, Stroke, Control } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import { PremiumStatusPill } from '../components/ui/PremiumStatusPill';
@@ -29,7 +29,7 @@ import { useBackendData } from '../context/BackendDataContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../platform/server/queryKeys';
 
-type Props = StackScreenProps<RootStackParamList, 'ListingSuccess'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'ListingSuccess'>;
 
 export default function ListingSuccessScreen({ navigation, route }: Props) {
   const { colors, isDark } = useAppTheme();
@@ -44,6 +44,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
   const routePrice = typeof route.params?.price === 'number' ? route.params.price : null;
   const routeCategory = route.params?.categoryId;
   const routePhoto = route.params?.photoUri;
+  const smartSellEnabled = route.params?.smartSellEnabled === true;
 
   const [backendListing, setBackendListing] = React.useState<any>(null);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -194,6 +195,21 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
           </View>
         </ElevatedSurface>
         </Reanimated.View>
+
+        {/* Smart Sell demo banner (truthful UI) */}
+        {smartSellEnabled && (
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(200)}>
+            <ElevatedSurface variant="surface" style={styles.smartSellBanner}>
+              <Ionicons name="sparkles" size={18} color={colors.brand} />
+              <View style={styles.smartSellBannerBody}>
+                <Text style={styles.smartSellBannerTitle}>Smart Sell enabled (demo)</Text>
+                <Text style={styles.smartSellBannerText}>
+                  Auto-negotiation settings are illustrative — no offers will be auto-accepted until a real backend is connected.
+                </Text>
+              </View>
+            </ElevatedSurface>
+          </Reanimated.View>
+        )}
 
         {/* Actions */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(240)}>
@@ -370,11 +386,11 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.xl,
   },
   iconCircle: {
-    width: 104,
-    height: 104,
+    width: Space.xxl + Space.xxl + Space.xs,
+    height: Space.xxl + Space.xxl + Space.xs,
     borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
@@ -415,7 +431,7 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     gap: Space.xs,
     backgroundColor: colors.success + '14',
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.success + '33',
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
@@ -447,11 +463,11 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.xl,
   },
   summaryImageWrap: {
-    width: 72,
-    height: 90,
+    width: Space.xxl + Space.xxl,
+    height: Space.xxl + Space.xxl + Space.sm,
     borderRadius: Radius.lg,
     backgroundColor: colors.surfaceAlt,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
@@ -497,8 +513,9 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: Space.md,
-    borderBottomWidth: 1,
+    borderBottomWidth: Stroke.standard,
     borderBottomColor: colors.border,
+    minHeight: Control.hit,
   },
   actionLeft: {
     flexDirection: 'row',
@@ -506,11 +523,11 @@ function createStyles(colors: ThemeColors) {
     gap: Space.md,
   },
   actionIconBox: {
-    width: 48,
-    height: 48,
+    width: Space.xl + Space.sm,
+    height: Space.xl + Space.sm,
     borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
@@ -529,7 +546,7 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.md,
     backgroundColor: `${colors.brand}08`,
     borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: Stroke.hairline,
     borderColor: `${colors.brand}20`,
     gap: Space.sm,
   },
@@ -554,7 +571,30 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
-    lineHeight: Type.caption.lineHeight + 1,
+    lineHeight: Type.caption.lineHeight + Space.xs / 2,
+  },
+
+  smartSellBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.sm,
+    marginBottom: Space.md,
+    padding: Space.md,
+  },
+  smartSellBannerBody: {
+    flex: 1,
+  },
+  smartSellBannerTitle: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.textPrimary,
+    marginBottom: Space.xs / 2,
+  },
+  smartSellBannerText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: colors.textSecondary,
+    lineHeight: Type.caption.lineHeight,
   },
 
   supportLink: {

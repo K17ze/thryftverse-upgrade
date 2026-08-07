@@ -9,7 +9,7 @@ import Reanimated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { ActiveTheme, Colors } from '../constants/colors';
-import { Typography } from '../theme/designTokens';
+import { Typography, Radius, Type, Space } from '../theme/designTokens';
 import { AnimatedPressable } from './AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
@@ -168,9 +168,9 @@ const styles = StyleSheet.create({
     elevation: 20,
   },
   handleContainer: { alignItems: 'center', paddingVertical: 14 },
-  handle: { width: 44, height: 5, borderRadius: 3, backgroundColor: HANDLE_BG },
+  handle: { width: 44, height: 5, borderRadius: Radius.sm, backgroundColor: HANDLE_BG },
   header: { alignItems: 'center', marginBottom: 12 },
-  headerTitle: { fontSize: 20, fontFamily: Typography.family.semibold, color: Colors.textPrimary, letterSpacing: 0.08 },
+  headerTitle: { fontSize: Type.priceList.size, fontFamily: Typography.family.semibold, color: Colors.textPrimary, letterSpacing: 0.08 },
 
   searchContainer: {
     flexDirection: 'row',
@@ -179,12 +179,12 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: SEARCH_BORDER,
     marginHorizontal: 20,
-    paddingHorizontal: 16,
+    paddingHorizontal: Space.md,
     height: 50,
     borderRadius: 25,
-    marginBottom: 16,
+    marginBottom: Space.md,
   },
-  searchInput: { flex: 1, marginLeft: 10, color: Colors.textPrimary, fontFamily: Typography.family.medium, fontSize: 16, letterSpacing: 0.08 },
+  searchInput: { flex: 1, marginLeft: 10, color: Colors.textPrimary, fontFamily: Typography.family.medium, fontSize: Type.bodyLarge.size, letterSpacing: 0.08 },
 
   scrollList: { flex: 1 },
   scrollContent: { paddingHorizontal: 20, paddingBottom: 100 },
@@ -193,11 +193,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 16,
+    paddingVertical: Space.md,
     borderBottomWidth: 0.5,
     borderBottomColor: OPTION_BORDER,
   },
-  optionText: { fontSize: 16, fontFamily: Typography.family.medium, color: Colors.textPrimary, letterSpacing: 0.08 },
+  optionText: { fontSize: Type.bodyLarge.size, fontFamily: Typography.family.medium, color: Colors.textPrimary, letterSpacing: 0.08 },
   optionTextActive: { fontFamily: Typography.family.semibold, color: Colors.brand },
 
   noResultsText: { textAlign: 'center', color: Colors.textMuted, marginTop: 40, fontFamily: Typography.family.medium },

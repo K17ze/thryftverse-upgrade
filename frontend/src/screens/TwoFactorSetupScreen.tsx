@@ -10,10 +10,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeIn, FadeInDown } from 'react-native-reanimated';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
@@ -29,7 +29,7 @@ import { SettingsInfoBanner } from '../components/settings/SettingsInfoBanner';
 import QRCode from 'qrcode';
 import * as Clipboard from 'expo-clipboard';
 
-type Props = StackScreenProps<RootStackParamList, 'TwoFactorSetup'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'TwoFactorSetup'>;
 
 type Phase = 'setup' | 'verify' | 'recovery' | 'disable' | 'disable-confirm';
 
@@ -599,10 +599,10 @@ function createStyles(colors: ThemeColors) {
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
     alignSelf: 'flex-start',
     paddingHorizontal: Space.sm,
-    paddingVertical: 4,
+    paddingVertical: Space.xs,
     borderRadius: Radius.full,
     marginBottom: Space.xs,
   },
@@ -627,7 +627,7 @@ function createStyles(colors: ThemeColors) {
   },
   infoText: {
     flex: 1,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   infoLabel: {
     fontSize: Type.body.size,
@@ -655,8 +655,8 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.md,
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: 2,
-    minHeight: 48,
+    letterSpacing: LetterSpacing.caps + 1.18,
+    minHeight: Space.xxl,
   },
   inputDivider: {
     fontSize: Type.caption.size,
@@ -676,8 +676,8 @@ function createStyles(colors: ThemeColors) {
     borderWidth: StyleSheet.hairlineWidth,
   },
   qrImage: {
-    width: 240,
-    height: 240,
+    width: Space.xxl * 5,
+    height: Space.xxl * 5,
     borderRadius: Radius.lg,
   },
   qrLoading: {
@@ -696,7 +696,7 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: Radius.lg,
-    width: 240,
+    width: Space.xxl * 5,
   },
   qrErrorText: {
     fontSize: Type.body.size,
@@ -736,7 +736,7 @@ function createStyles(colors: ThemeColors) {
     flex: 1,
     fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    letterSpacing: 1,
+    letterSpacing: LetterSpacing.caps + 0.18,
   },
   // OTP cells
   otpRow: {
@@ -748,9 +748,9 @@ function createStyles(colors: ThemeColors) {
   otpCell: {
     flex: 1,
     aspectRatio: 0.75,
-    borderWidth: 1.5,
+    borderWidth: Stroke.standard + Stroke.hairline,
     borderRadius: Radius.md,
-    fontSize: 24,
+    fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
     textAlign: 'center',
     textAlignVertical: 'center',
@@ -779,14 +779,14 @@ function createStyles(colors: ThemeColors) {
   recoveryCodeIndex: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    width: 20,
+    width: Space.lg - Space.xs,
     textAlign: 'right',
   },
   recoveryCodeValue: {
     flex: 1,
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: 2,
+    letterSpacing: LetterSpacing.caps + 1.18,
   },
   recoveryActions: {
     flexDirection: 'row',
@@ -802,7 +802,7 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.md,
     paddingVertical: Space.sm + 2,
     borderWidth: StyleSheet.hairlineWidth,
-    minHeight: 44,
+    minHeight: Control.hit,
   },
   recoveryActionText: {
     fontSize: Type.body.size,

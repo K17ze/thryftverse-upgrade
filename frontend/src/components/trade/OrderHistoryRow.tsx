@@ -2,7 +2,7 @@ import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius } from '../../theme/designTokens';
+import { Space, Radius, Stroke } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { AppStatusPill } from '../ui/AppStatusPill';
@@ -234,7 +234,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: Radius.md,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: Space.sm,
@@ -260,7 +260,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   metaRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 4,
+    marginBottom: Space.xs,
     gap: Space.sm,
   },
   metaLabel: {
@@ -291,7 +291,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: Space.xs + 1,
     marginTop: Space.xs,
     paddingRight: Space.sm,
   },
@@ -310,7 +310,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   issuerChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
   },
   issuerAvatarWrap: {
     width: 20,

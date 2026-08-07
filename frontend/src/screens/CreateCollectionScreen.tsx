@@ -10,14 +10,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import type { ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Elevation } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Elevation, Control, LetterSpacing } from '../theme/designTokens';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
@@ -25,7 +25,7 @@ import { AppInput } from '../components/ui/AppInput';
 import { useHaptic } from '../hooks/useHaptic';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 export default function CreateCollectionScreen() {
   const navigation = useNavigation<NavT>();
@@ -196,11 +196,11 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.semibold,
     color: colors.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: 1.2,
+    letterSpacing: LetterSpacing.caps + 0.38,
     marginBottom: Space.sm,
   },
   textArea: {
-    minHeight: 80,
+    minHeight: Space.xl + Space.xxl,
     textAlignVertical: 'top',
   },
   charCount: {
@@ -216,8 +216,8 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm + 4,
   },
   toggleIconWrap: {
-    width: 36,
-    height: 36,
+    width: Control.chrome,
+    height: Control.chrome,
     borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
@@ -236,27 +236,27 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
     letterSpacing: Type.caption.letterSpacing,
   },
   togglePill: {
-    width: 48,
-    height: 28,
-    borderRadius: 14,
+    width: Space.xxl,
+    height: Space.lg + Space.xs,
+    borderRadius: Radius.xl,
     backgroundColor: colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     justifyContent: 'center',
-    paddingHorizontal: 3,
+    paddingHorizontal: Space.xs - 1,
   },
   togglePillActive: {
     backgroundColor: colors.textPrimary,
     borderColor: colors.textPrimary,
   },
   toggleKnob: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: Space.lg - Space.xs,
+    height: Space.lg - Space.xs,
+    borderRadius: Radius.lg,
     backgroundColor: colors.background,
     ...Elevation.card,
   },

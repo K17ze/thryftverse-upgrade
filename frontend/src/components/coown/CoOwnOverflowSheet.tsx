@@ -174,7 +174,7 @@ const styles = StyleSheet.create({
   handle: {
     width: 36,
     height: 4,
-    borderRadius: 2,
+    borderRadius: Radius.sm,
     alignSelf: 'center',
     marginTop: Space.sm,
   },

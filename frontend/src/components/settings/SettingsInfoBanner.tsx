@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Type , Typography  } from '../../theme/designTokens';
+import { Space, Type , Typography, Radius } from '../../theme/designTokens';
 
 export interface SettingsInfoBannerProps {
   text: string;
@@ -38,7 +38,7 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 4,
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     marginHorizontal: Space.md,
     marginBottom: Space.md,
   },

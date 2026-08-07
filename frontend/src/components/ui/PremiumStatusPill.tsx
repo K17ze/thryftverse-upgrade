@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { Space, Radius, Typography, Type } from '../../theme/designTokens';
 
 export type StatusPillTone =
   | 'active'
@@ -114,26 +114,26 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   pillCompact: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
     borderRadius: Radius.sm,
   },
   dot: {
     width: 6,
     height: 6,
-    borderRadius: 3,
+    borderRadius: Radius.sm,
   },
   icon: {
     marginRight: 0,
   },
   label: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: 0.3,
     textTransform: 'capitalize',
   },
   labelCompact: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     letterSpacing: 0.2,
   },
 });

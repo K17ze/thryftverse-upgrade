@@ -14,7 +14,7 @@ import * as MediaLibrary from 'expo-media-library/legacy';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Typography } from '../theme/designTokens';
+import { Typography, Radius, Type, Space } from '../theme/designTokens';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { Linking } from 'react-native';
@@ -280,25 +280,25 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     fontFamily: Typography.family.semibold,
     fontSize: 18,
     color: '#fff',
-    marginTop: 8,
+    marginTop: Space.sm,
   },
   permissionText: {
     fontFamily: Typography.family.regular,
-    fontSize: 14,
+    fontSize: Type.body.size,
     color: 'rgba(255,255,255,0.7)',
     textAlign: 'center',
     lineHeight: 20,
   },
   permissionBtn: {
-    marginTop: 16,
-    paddingHorizontal: 24,
+    marginTop: Space.md,
+    paddingHorizontal: Space.lg,
     paddingVertical: 12,
-    borderRadius: 24,
+    borderRadius: Radius.xxl,
     backgroundColor: colors.brand,
   },
   permissionBtnText: {
     fontFamily: Typography.family.semibold,
-    fontSize: 14,
+    fontSize: Type.body.size,
     color: colors.textInverse,
   },
   focusReticle: {
@@ -307,7 +307,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     height: 60,
     borderWidth: 2,
     borderColor: '#fff',
-    borderRadius: 4,
+    borderRadius: Radius.sm,
     pointerEvents: 'none',
   },
   // Corner brackets
@@ -387,7 +387,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 12,
-    paddingBottom: 8,
+    paddingBottom: Space.sm,
   },
   topRightControls: {
     flexDirection: 'row',
@@ -396,7 +396,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   topIconBtn: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: Radius.xxl,
     backgroundColor: 'rgba(0,0,0,0.35)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -409,8 +409,8 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    paddingHorizontal: 24,
-    paddingTop: 16,
+    paddingHorizontal: Space.lg,
+    paddingTop: Space.md,
   },
   galleryBtn: {
     alignItems: 'center',
@@ -420,7 +420,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   galleryThumb: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: Radius.xxl,
     borderWidth: 2,
     borderColor: '#fff',
     backgroundColor: 'rgba(255,255,255,0.15)',
@@ -432,7 +432,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   bottomLabel: {
     fontFamily: Typography.family.medium,
-    fontSize: 11,
+    fontSize: Type.meta.size,
     color: 'rgba(255,255,255,0.85)',
   },
   shutterOuter: {
@@ -455,14 +455,14 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     position: 'absolute',
     bottom: 120,
     alignSelf: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: Space.md,
     paddingVertical: 6,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
   modeText: {
     fontFamily: Typography.family.medium,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     color: '#fff',
   },
 });

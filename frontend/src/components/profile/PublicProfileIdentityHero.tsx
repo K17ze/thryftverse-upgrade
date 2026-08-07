@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space } from '../../theme/designTokens';
+import { Typography, Space, Type } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 
 const AVATAR_SIZE = 96;
@@ -89,7 +89,7 @@ function createStyles(colors: ThemeColors) {
   avatarRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: Space.md + 2,
     marginBottom: Space.sm,
   },
   avatarWrap: {
@@ -111,19 +111,19 @@ function createStyles(colors: ThemeColors) {
     flex: 1,
   },
   displayName: {
-    fontSize: 22,
+    fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
-    letterSpacing: -0.4,
+    letterSpacing: Type.title.letterSpacing,
     marginBottom: 2,
   },
   username: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
   },
   bio: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: colors.textPrimary,
     lineHeight: 20,
@@ -132,16 +132,16 @@ function createStyles(colors: ThemeColors) {
   contextRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
     flexWrap: 'wrap',
   },
   contextText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },
   contextSep: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     color: colors.textMuted,
   },
   });

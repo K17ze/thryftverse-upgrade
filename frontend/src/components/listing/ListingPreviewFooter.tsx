@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography } from '../../theme/designTokens';
+import { Space, Typography, Radius, Type } from '../../theme/designTokens';
 import { haptics } from '../../utils/haptics';
 
 interface ListingPreviewFooterProps {
@@ -74,15 +74,15 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     gap: 4,
     paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
+    paddingHorizontal: Space.md,
+    borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     backgroundColor: colors.surface,
     minHeight: 48,
   },
   secondaryText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
@@ -91,12 +91,12 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 14,
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     backgroundColor: colors.brand,
     minHeight: 48,
   },
   primaryText: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.bold,
     color: colors.textInverse,
   },

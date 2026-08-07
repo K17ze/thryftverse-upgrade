@@ -17,7 +17,7 @@ import * as MediaLibrary from 'expo-media-library/legacy';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Typography, Radius } from '../theme/designTokens';
+import { Typography, Radius, Type, Space } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
@@ -885,23 +885,23 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 4,
+    marginBottom: Space.xs,
   },
   permissionTitle: {
     fontFamily: Typography.family.semibold,
     fontSize: 18,
     color: '#fff',
-    marginTop: 4,
+    marginTop: Space.xs,
   },
   permissionText: {
     fontFamily: Typography.family.regular,
-    fontSize: 14,
+    fontSize: Type.body.size,
     color: 'rgba(255,255,255,0.7)',
     textAlign: 'center',
     lineHeight: 20,
   },
   permissionBtn: {
-    marginTop: 16,
+    marginTop: Space.md,
     paddingHorizontal: 28,
     paddingVertical: 14,
     borderRadius: Radius.xxl,
@@ -909,7 +909,7 @@ const styles = StyleSheet.create({
   },
   permissionBtnText: {
     fontFamily: Typography.family.semibold,
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     color: '#000',
   },
   galleryFallbackBtn: {
@@ -924,7 +924,7 @@ const styles = StyleSheet.create({
   },
   galleryFallbackText: {
     color: 'rgba(255,255,255,0.7)',
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
   },
   btnPressed: {
@@ -997,14 +997,14 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 220,
     alignSelf: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
     borderRadius: Radius.xxl,
     backgroundColor: 'rgba(0,0,0,0.6)',
   },
   zoomIndicatorText: {
     fontFamily: Typography.family.bold,
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     color: '#fff',
   },
   // Capture flash — full-screen white overlay
@@ -1108,7 +1108,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 12,
-    paddingBottom: 8,
+    paddingBottom: Space.sm,
   },
   topRightControls: {
     flexDirection: 'row',
@@ -1143,7 +1143,7 @@ const styles = StyleSheet.create({
   },
   zoomLabel: {
     fontFamily: Typography.family.bold,
-    fontSize: 14,
+    fontSize: Type.body.size,
     color: '#fff',
   },
   // Recent photos carousel
@@ -1154,7 +1154,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   recentCarouselContent: {
-    paddingHorizontal: 16,
+    paddingHorizontal: Space.md,
     gap: 8,
   },
   recentThumbWrap: {
@@ -1171,12 +1171,12 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 120,
     alignSelf: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: Space.md,
     paddingVertical: 6,
   },
   modeText: {
     fontFamily: Typography.family.medium,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     color: '#fff',
   },
   // Bottom bar
@@ -1188,7 +1188,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    paddingHorizontal: 24,
+    paddingHorizontal: Space.lg,
     paddingTop: 10,
     minHeight: 120,
   },
@@ -1221,7 +1221,7 @@ const styles = StyleSheet.create({
   },
   bottomLabel: {
     fontFamily: Typography.family.medium,
-    fontSize: 11,
+    fontSize: Type.meta.size,
     color: 'rgba(255,255,255,0.85)',
   },
   // Shutter
@@ -1259,8 +1259,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    paddingHorizontal: 32,
-    paddingTop: 16,
+    paddingHorizontal: Space.xl,
+    paddingTop: Space.md,
   },
   reviewBtn: {
     alignItems: 'center',
@@ -1268,7 +1268,7 @@ const styles = StyleSheet.create({
   },
   reviewBtnLabel: {
     fontFamily: Typography.family.medium,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     color: 'rgba(255,255,255,0.85)',
   },
   reviewPrimaryBtn: {
@@ -1282,7 +1282,7 @@ const styles = StyleSheet.create({
   },
   reviewPrimaryLabel: {
     fontFamily: Typography.family.bold,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     color: '#000',
   },
 });

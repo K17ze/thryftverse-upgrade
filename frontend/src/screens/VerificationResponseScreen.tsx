@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Typography, Space, Radius, Type } from '../theme/designTokens';
+import { Typography, Space, Radius, Type, Control, LetterSpacing } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { CachedImage } from '../components/CachedImage';
 import { AppButton } from '../components/ui/AppButton';
@@ -511,8 +511,8 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.lg,
     },
     respondedIcon: {
-      width: 80,
-      height: 80,
+      width: Space.xxl + Space.xl,
+      height: Space.xxl + Space.xl,
       borderRadius: Radius.full,
       alignItems: 'center',
       justifyContent: 'center',
@@ -531,7 +531,7 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.regular,
       lineHeight: Type.body.lineHeight,
       textAlign: 'center',
-      maxWidth: 280,
+      maxWidth: Space.xxl * 6 - Space.sm,
     },
     evidencePreview: {
       flexDirection: 'row',
@@ -543,18 +543,18 @@ function createStyles(colors: ThemeColors) {
       borderWidth: StyleSheet.hairlineWidth,
     },
     evidenceThumb: {
-      width: 56,
-      height: 56,
+      width: Space.xxl + Space.sm,
+      height: Space.xxl + Space.sm,
       borderRadius: Radius.md,
     },
     evidenceInfo: {
       flex: 1,
-      gap: 2,
+      gap: Space.xs / 2,
     },
     evidenceLabel: {
       fontSize: Type.meta.size,
       fontFamily: Typography.family.semibold,
-      letterSpacing: 0.3,
+      letterSpacing: LetterSpacing.wide + 0.18,
       textTransform: 'uppercase',
     },
     evidenceDate: {
@@ -574,20 +574,20 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.sm,
     },
     demandTypeIcon: {
-      width: 40,
-      height: 40,
+      width: Control.chrome + Space.xs,
+      height: Control.chrome + Space.xs,
       borderRadius: Radius.md,
       alignItems: 'center',
       justifyContent: 'center',
     },
     demandTypeInfo: {
       flex: 1,
-      gap: 2,
+      gap: Space.xs / 2,
     },
     demandTypeLabel: {
       fontSize: Type.meta.size,
       fontFamily: Typography.family.semibold,
-      letterSpacing: 0.3,
+      letterSpacing: LetterSpacing.wide + 0.18,
       textTransform: 'uppercase',
     },
     demandTypeTitle: {
@@ -618,7 +618,7 @@ function createStyles(colors: ThemeColors) {
     sectionLabel: {
       fontSize: Type.meta.size,
       fontFamily: Typography.family.semibold,
-      letterSpacing: 0.3,
+      letterSpacing: LetterSpacing.wide + 0.18,
       textTransform: 'uppercase',
       marginBottom: Space.xs,
     },
@@ -638,8 +638,8 @@ function createStyles(colors: ThemeColors) {
       position: 'relative',
     },
     photoTile: {
-      width: 100,
-      height: 100,
+      width: Space.xxl * 2 + Space.xs,
+      height: Space.xxl * 2 + Space.xs,
       borderRadius: Radius.md,
     },
     photoRemoveBtn: {
@@ -676,13 +676,13 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.lg,
       borderWidth: StyleSheet.hairlineWidth,
       padding: Space.md,
-      minHeight: 120,
+      minHeight: Space.lg * 5,
     },
     input: {
       fontSize: Type.body.size,
       fontFamily: Typography.family.regular,
       lineHeight: Type.body.lineHeight,
-      minHeight: 80,
+      minHeight: Space.xxl + Space.xl,
       padding: 0,
     },
     charCount: {

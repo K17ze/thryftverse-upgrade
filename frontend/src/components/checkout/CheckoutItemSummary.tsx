@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography } from '../../theme/designTokens';
+import { Space, Typography, Radius, Type } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 
 interface SellerInfo {
@@ -80,7 +80,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   image: {
     width: 96,
     height: 120,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     backgroundColor: colors.surfaceAlt,
   },
   info: {
@@ -89,7 +89,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: 4,
   },
   title: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
     lineHeight: 21,
@@ -100,12 +100,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: Space.sm,
   },
   sellerName: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
   },
   price: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     marginTop: 2,

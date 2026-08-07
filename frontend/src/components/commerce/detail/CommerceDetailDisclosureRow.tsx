@@ -2,7 +2,7 @@ import React from 'react';
 import { View, StyleSheet, Text, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../../theme/ThemeContext';
-import { Space, Type, Typography } from '../../../theme/designTokens';
+import { Space, Type, Typography, Radius } from '../../../theme/designTokens';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useHaptic } from '../../../hooks/useHaptic';
 
@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
     minWidth: 22,
     height: 22,
     paddingHorizontal: Space.xs + 2,
-    borderRadius: 11,
+    borderRadius: Radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
   },

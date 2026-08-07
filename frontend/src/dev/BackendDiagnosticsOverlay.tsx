@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, Modal, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Typography, Space, Radius } from '../theme/designTokens';
+import { Typography, Space, Radius, Type } from '../theme/designTokens';
 import {
   getBackendDiagnostics,
   subscribeToBackendDiagnostics,
@@ -151,11 +151,11 @@ function createStyles(colors: ThemeColors) {
     chipDot: {
       width: 8,
       height: 8,
-      borderRadius: 4,
+      borderRadius: Radius.sm,
     },
     chipText: {
       color: '#fff',
-      fontSize: 11,
+      fontSize: Type.meta.size,
       fontFamily: Typography.family.bold,
       letterSpacing: 0.4,
     },
@@ -181,7 +181,7 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.md,
     },
     sheetTitle: {
-      fontSize: 17,
+      fontSize: Type.subtitle.size,
       fontFamily: Typography.family.bold,
       color: colors.textPrimary,
     },
@@ -195,14 +195,14 @@ function createStyles(colors: ThemeColors) {
       gap: 2,
     },
     rowLabel: {
-      fontSize: 11,
+      fontSize: Type.meta.size,
       fontFamily: Typography.family.medium,
       color: colors.textMuted,
       textTransform: 'uppercase',
       letterSpacing: 0.6,
     },
     rowValue: {
-      fontSize: 14,
+      fontSize: Type.body.size,
       fontFamily: Typography.family.regular,
       color: colors.textPrimary,
     },
@@ -219,12 +219,12 @@ function createStyles(colors: ThemeColors) {
     },
     probeBtnText: {
       color: colors.background,
-      fontSize: 14,
+      fontSize: Type.body.size,
       fontFamily: Typography.family.bold,
     },
     footnote: {
       marginTop: Space.md,
-      fontSize: 11,
+      fontSize: Type.meta.size,
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
       textAlign: 'center',

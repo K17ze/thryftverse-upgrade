@@ -15,6 +15,7 @@ import { useAppTheme } from '../../theme/ThemeContext';
 import { useToast } from '../../context/ToastContext';
 import { useHaptic } from '../../hooks/useHaptic';
 
+import { Radius, Type, Typography, Space } from '../../theme/designTokens';
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const SHUTTER_SIZE = 88;
 const INNER_SHUTTER_SIZE = 72;
@@ -256,14 +257,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    paddingHorizontal: Space.md,
     paddingTop: 52,
     paddingBottom: 12,
   },
   topIconBtn: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: Radius.xxl,
     backgroundColor: 'rgba(0,0,0,0.35)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -274,7 +275,7 @@ const styles = StyleSheet.create({
     height: 60,
     borderWidth: 2,
     borderColor: '#C9A46A',
-    borderRadius: 4,
+    borderRadius: Radius.sm,
     pointerEvents: 'none',
   },
   zoomBar: {
@@ -287,15 +288,15 @@ const styles = StyleSheet.create({
   zoomBtn: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
     backgroundColor: 'rgba(0,0,0,0.35)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   zoomText: {
     color: 'rgba(255,255,255,0.8)',
-    fontSize: 11,
-    fontFamily: 'Inter_700Bold',
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.bold,
   },
   shutterWrap: {
     position: 'absolute',
@@ -326,8 +327,8 @@ const styles = StyleSheet.create({
   },
   hintText: {
     color: 'rgba(255,255,255,0.65)',
-    fontSize: 12,
-    fontFamily: 'Inter_500Medium',
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
     marginTop: 14,
   },
 });

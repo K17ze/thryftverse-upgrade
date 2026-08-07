@@ -2,7 +2,7 @@ import React from 'react';
 import { TextInput, TextInputProps, StyleSheet, View, Text } from 'react-native';
 import { Controller, Control, FieldError, RegisterOptions } from 'react-hook-form';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography } from '../../theme/designTokens';
+import { Typography, Radius, Type, Space } from '../../theme/designTokens';
 
 export interface ControlledAppInputProps {
   name: string;
@@ -53,7 +53,7 @@ function createStyles(colors: ThemeColors) {
     marginBottom: 12,
   },
   label: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
     color: colors.textSecondary,
     marginBottom: 6,
@@ -61,10 +61,10 @@ function createStyles(colors: ThemeColors) {
   input: {
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 10,
+    borderRadius: Radius.lg,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     color: colors.textPrimary,
     fontFamily: Typography.family.regular,
   },
@@ -72,9 +72,9 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.danger,
   },
   errorText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     color: colors.danger,
-    marginTop: 4,
+    marginTop: Space.xs,
     fontFamily: Typography.family.regular,
   },
   });

@@ -15,13 +15,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
 import * as ImagePicker from 'expo-image-picker';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
+import { EmptyState } from '../components/EmptyState';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { useToast } from '../context/ToastContext';
 import { useBackendData } from '../context/BackendDataContext';
@@ -33,7 +34,7 @@ import { Listing } from '../data/mockData';
 import { visualSearch } from '../services/listingsApi';
 import VisualSearchCamera from '../components/VisualSearchCamera';
 
-type Props = StackScreenProps<RootStackParamList, 'VisualSearch'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'VisualSearch'>;
 
 type ResultStatus = 'idle' | 'loading' | 'populated' | 'empty' | 'error';
 
@@ -600,40 +601,22 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
 
   // ── Empty / filtered-empty recovery ───────────────────────────────────
   const renderEmptyState = () => (
-    <View style={styles.emptyState}>
-      <View style={styles.emptyIconWrap}>
-        <Ionicons name="search-outline" size={36} color={colors.textMuted} />
-      </View>
-      <Text style={styles.emptyTitle}>No items match your photo filters</Text>
-      <Text style={styles.emptyText}>
-        Try clearing filters, broadening your description, or browse a category instead.
-      </Text>
-      {hasActiveFilters && (
-        <AppButton
-          title="Clear filters"
-          variant="secondary"
-          size="md"
-          onPress={handleClearFilters}
-          style={styles.emptyAction}
-        />
-      )}
-      {availableCategories.length > 0 && (
-        <View style={styles.emptyCategoryRow}>
-          {availableCategories.slice(0, 4).map(({ category }) => (
-            <AnimatedPressable
-              key={category}
-              style={styles.emptyCategoryChip}
-              onPress={() => handleBrowseCategory(category, category)}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-              accessibilityLabel={`Browse ${category} instead`}
-            >
-              <Text style={styles.emptyCategoryText}>{category}</Text>
-            </AnimatedPressable>
-          ))}
-        </View>
-      )}
-    </View>
+    <EmptyState
+      icon="eye-outline"
+      title="No matches found"
+      subtitle="Try clearing filters, broadening your description, or browse a category instead."
+      {...(hasActiveFilters
+        ? { ctaLabel: 'Clear filters', onCtaPress: handleClearFilters }
+        : {})}
+      {...(availableCategories.length > 0
+        ? {
+            suggestedActions: availableCategories.slice(0, 4).map(({ category }) => ({
+              label: category,
+              onPress: () => handleBrowseCategory(category, category),
+            })),
+          }
+        : {})}
+    />
   );
 
   // ── Error state with retry ────────────────────────────────────────────
@@ -759,8 +742,8 @@ function createStyles(colors: ThemeColors) {
     marginTop: Space.md,
   },
   queryThumbWrap: {
-    width: 72,
-    height: 72,
+    width: Space.xxl + Space.xxl + Space.xs,
+    height: Space.xxl + Space.xxl + Space.xs,
     borderRadius: Radius.md,
     overflow: 'hidden',
     backgroundColor: colors.surfaceAlt,
@@ -777,7 +760,7 @@ function createStyles(colors: ThemeColors) {
     position: 'absolute',
     left: 0,
     right: 0,
-    height: 2,
+    height: Space.xs / 2,
     backgroundColor: colors.brand,
     shadowColor: colors.brand,
     shadowOffset: { width: 0, height: 0 },
@@ -787,52 +770,52 @@ function createStyles(colors: ThemeColors) {
   },
   scanBracketTL: {
     position: 'absolute',
-    top: 6,
-    left: 6,
-    width: 12,
-    height: 12,
-    borderTopWidth: 2,
-    borderLeftWidth: 2,
+    top: Space.xs + 2,
+    left: Space.xs + 2,
+    width: Space.sm + Space.xs,
+    height: Space.sm + Space.xs,
+    borderTopWidth: Stroke.emphasis,
+    borderLeftWidth: Stroke.emphasis,
     borderColor: colors.brand,
   },
   scanBracketTR: {
     position: 'absolute',
-    top: 6,
-    right: 6,
-    width: 12,
-    height: 12,
-    borderTopWidth: 2,
-    borderRightWidth: 2,
+    top: Space.xs + 2,
+    right: Space.xs + 2,
+    width: Space.sm + Space.xs,
+    height: Space.sm + Space.xs,
+    borderTopWidth: Stroke.emphasis,
+    borderRightWidth: Stroke.emphasis,
     borderColor: colors.brand,
   },
   scanBracketBL: {
     position: 'absolute',
-    bottom: 6,
-    left: 6,
-    width: 12,
-    height: 12,
-    borderBottomWidth: 2,
-    borderLeftWidth: 2,
+    bottom: Space.xs + 2,
+    left: Space.xs + 2,
+    width: Space.sm + Space.xs,
+    height: Space.sm + Space.xs,
+    borderBottomWidth: Stroke.emphasis,
+    borderLeftWidth: Stroke.emphasis,
     borderColor: colors.brand,
   },
   scanBracketBR: {
     position: 'absolute',
-    bottom: 6,
-    right: 6,
-    width: 12,
-    height: 12,
-    borderBottomWidth: 2,
-    borderRightWidth: 2,
+    bottom: Space.xs + 2,
+    right: Space.xs + 2,
+    width: Space.sm + Space.xs,
+    height: Space.sm + Space.xs,
+    borderBottomWidth: Stroke.emphasis,
+    borderRightWidth: Stroke.emphasis,
     borderColor: colors.brand,
   },
   queryThumbRemove: {
     position: 'absolute',
-    top: 4,
-    right: 4,
+    top: Space.xs,
+    right: Space.xs,
     backgroundColor: 'rgba(0,0,0,0.55)',
-    borderRadius: 11,
-    width: 22,
-    height: 22,
+    borderRadius: Radius.lg,
+    width: Control.icon,
+    height: Control.icon,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -840,9 +823,9 @@ function createStyles(colors: ThemeColors) {
   queryActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    gap: Space.xs + 2,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.xs + 2,
     borderRadius: Radius.md,
     backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
@@ -874,9 +857,9 @@ function createStyles(colors: ThemeColors) {
   textInputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    gap: Space.sm,
+    paddingHorizontal: Space.sm + 4,
+    paddingVertical: Space.sm + 4,
     borderRadius: Radius.md,
     backgroundColor: colors.background,
     borderWidth: StyleSheet.hairlineWidth,
@@ -892,11 +875,11 @@ function createStyles(colors: ThemeColors) {
   },
 
   // ── Category rail ─────────────────────────────────────────────────────
-  categoryRail: { marginHorizontal: -4 },
-  categoryRailContent: { paddingHorizontal: 4, gap: 8 },
+  categoryRail: { marginHorizontal: -Space.xs },
+  categoryRailContent: { paddingHorizontal: Space.xs, gap: Space.sm },
   categoryPill: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.sm,
     borderRadius: Radius.full,
     backgroundColor: colors.background,
     borderWidth: StyleSheet.hairlineWidth,
@@ -907,7 +890,7 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.brand,
   },
   categoryPillText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
     color: colors.textPrimary,
   },
@@ -916,51 +899,51 @@ function createStyles(colors: ThemeColors) {
   },
 
   // ── Filter row ────────────────────────────────────────────────────────
-  filterRow: { flexDirection: 'row', gap: 8 },
-  filterInputWrap: { flex: 1, gap: 4 },
+  filterRow: { flexDirection: 'row', gap: Space.sm },
+  filterInputWrap: { flex: 1, gap: Space.xs },
   filterInputLabel: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
-    letterSpacing: 0.3,
+    letterSpacing: LetterSpacing.wide + 0.18,
   },
   filterInput: {
-    paddingHorizontal: 10,
-    paddingVertical: 10,
+    paddingHorizontal: Space.xs + 2,
+    paddingVertical: Space.xs + 2,
     borderRadius: Radius.md,
     backgroundColor: colors.background,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     color: colors.textPrimary,
   },
 
   // ── Brand suggestions ─────────────────────────────────────────────────
-  suggestionRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 },
+  suggestionRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: Space.xs + 2 },
   suggestionLabel: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },
   suggestionChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: Space.xs + 2,
+    paddingVertical: Space.xs / 2 + 1,
     borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
   },
   suggestionText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textPrimary,
   },
 
   // ── Refinement actions ────────────────────────────────────────────────
-  refinementActions: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginTop: 4 },
+  refinementActions: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginTop: Space.xs },
   applyBtn: { flex: 1 },
   clearBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm + 4,
     borderRadius: Radius.md,
     backgroundColor: colors.surfaceAlt,
   },
@@ -974,19 +957,19 @@ function createStyles(colors: ThemeColors) {
   honestNote: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 8,
+    gap: Space.sm,
     paddingHorizontal: Space.sm,
-    paddingVertical: 10,
+    paddingVertical: Space.xs + 2,
     marginBottom: Space.sm,
     backgroundColor: colors.surface,
     borderRadius: Radius.md,
   },
   honestNoteText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
-    lineHeight: 17,
+    lineHeight: Type.caption.size + 3,
   },
 
   // ── Results ───────────────────────────────────────────────────────────
@@ -1004,8 +987,8 @@ function createStyles(colors: ThemeColors) {
   // ── Empty / error ─────────────────────────────────────────────────────
   emptyState: { alignItems: 'center', gap: Space.sm, paddingVertical: Space.xl, paddingHorizontal: Space.md },
   emptyIconWrap: {
-    width: 72,
-    height: 72,
+    width: Space.xxl + Space.xxl + Space.xs,
+    height: Space.xxl + Space.xxl + Space.xs,
     borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
@@ -1023,54 +1006,34 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: Type.caption.size + 4,
   },
   emptyAction: { marginTop: Space.xs },
-  emptyCategoryRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    justifyContent: 'center',
-    marginTop: Space.sm,
-  },
-  emptyCategoryChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: Radius.full,
-    backgroundColor: colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
-  emptyCategoryText: {
-    fontSize: 13,
-    fontFamily: Typography.family.medium,
-    color: colors.textPrimary,
-  },
 
   // ── Category chips (capture surface) ──────────────────────────────────
   categoryChipsWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: Space.sm,
   },
   categoryChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 20,
+    gap: Space.xs + 2,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.xs + 1,
+    borderRadius: Radius.xxl,
     backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
   categoryChipText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
     color: colors.textPrimary,
   },
   categoryChipCount: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },

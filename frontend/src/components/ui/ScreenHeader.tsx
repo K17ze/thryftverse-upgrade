@@ -1,11 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Control, Type } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
-import { Typography } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 
+import { Space, Control, Type, Typography } from '../../theme/designTokens';
 export type ScreenHeaderVariant = 'standard' | 'large' | 'minimal' | 'modal';
 
 interface ScreenHeaderProps {

@@ -105,7 +105,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     right: 8,
     width: 10,
     height: 10,
-    borderRadius: 5,
+    borderRadius: Radius.sm,
     borderWidth: 2,
     borderColor: colors.surface,
   },
@@ -144,13 +144,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   allocationBarBg: {
     flex: 1,
     height: 4,
-    borderRadius: 2,
+    borderRadius: Radius.sm,
     backgroundColor: colors.surfaceAlt,
     overflow: 'hidden',
   },
   allocationBarFill: {
     height: 4,
-    borderRadius: 2,
+    borderRadius: Radius.sm,
     backgroundColor: colors.brand,
   },
   allocationText: {

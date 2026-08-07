@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Space, Type, Typography, Radius } from '../theme/designTokens';
+import { Space, Type, Typography, Radius, Stroke, Control } from '../theme/designTokens';
 import {
   AnimatedPressable,
 } from '../components/AnimatedPressable';
@@ -16,7 +16,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -41,7 +41,7 @@ import {
 import { haptics } from '../utils/haptics';
 import { createStableId } from '../utils/createStableId';
 
-type Props = StackScreenProps<RootStackParamList, 'MakeOffer'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'MakeOffer'>;
 
 export default function MakeOfferScreen({ navigation, route }: Props) {
   const { itemId, price, title } = route.params;
@@ -518,8 +518,8 @@ const styles = StyleSheet.create({
     paddingVertical: Space.md,
   },
   itemThumb: {
-    width: 56,
-    height: 56,
+    width: Space.xxl + Space.sm,
+    height: Space.xxl + Space.sm,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -550,7 +550,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.sm,
     paddingVertical: Space.sm + Space.xs,
-    minHeight: 44,
+    minHeight: Control.hit,
   },
   messageActionText: {
     flex: 1,
@@ -574,19 +574,19 @@ const styles = StyleSheet.create({
   priceInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderBottomWidth: 2,
+    borderBottomWidth: Stroke.emphasis,
     paddingBottom: Space.xs,
   },
   currencySymbol: {
-    fontSize: 32,
+    fontSize: Type.display.size,
     fontFamily: Typography.family.bold,
     marginRight: Space.sm,
   },
   priceInput: {
     flex: 1,
-    fontSize: 40,
+    fontSize: Type.display.size + 8,
     fontFamily: Typography.family.bold,
-    letterSpacing: -1.2,
+    letterSpacing: Type.title.letterSpacing * 2,
     paddingVertical: Space.sm,
   },
   discountRow: {
@@ -609,9 +609,9 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     alignItems: 'center',
-    gap: 2,
+    gap: Space.xs / 2,
   },
   quickOfferChipLabel: {
     fontSize: Type.bodyEmphasis.size,
@@ -648,7 +648,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     alignItems: 'center',
   },
   expiryChipText: {
@@ -672,7 +672,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: Space.sm + 2,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    minHeight: 44,
+    minHeight: Control.hit,
   },
   summaryLabelCluster: {
     flexDirection: 'row',
@@ -695,7 +695,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingTop: Space.md,
-    minHeight: 44,
+    minHeight: Control.hit,
   },
   totalLabel: {
     fontSize: Type.bodyEmphasis.size,

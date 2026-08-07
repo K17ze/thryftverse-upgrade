@@ -1,7 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
@@ -9,6 +8,7 @@ import { useAppTheme } from '../theme/ThemeContext';
 import { useCreator } from './CreatorContext';
 import { PressScale } from './CreatorAnimations';
 import { useHaptic } from '../hooks/useHaptic';
+import { LiquidGlassBackdrop } from '../components/LiquidGlassBackdrop';
 import type { CreatorLayer } from './composition';
 import type { AssetPickerMode } from './CreatorAssetPicker';
 
@@ -49,6 +49,9 @@ export interface CreatorToolDockProps {
   onCropLayer?: (layer: CreatorLayer) => void;
   /** Look-specific: cutout a media layer */
   onCutoutLayer?: (layer: CreatorLayer) => void;
+  /** Document type — drives Poster-specific Instagram-style tool set.
+   *  Falls back to the CreatorContext document type when omitted. */
+  documentType?: 'poster' | 'look';
 }
 
 export function CreatorToolDock({
@@ -65,20 +68,24 @@ export function CreatorToolDock({
   onLayoutPresets,
   onCropLayer,
   onCutoutLayer,
+  documentType,
 }: CreatorToolDockProps) {
   const { document } = useCreator();
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const insets = useSafeAreaInsets();
-  const isLook = document.type === 'look';
+  const isLook = (documentType ?? document.type) === 'look';
+  const isPoster = (documentType ?? document.type) === 'poster';
   const [hoveredTool, setHoveredTool] = useState<string | null>(null);
 
   const isSelectionMode = !!selectedLayer;
 
-  // Build contextual tools based on selection state and mode
+  // Build contextual tools based on selection state and mode.
+  // Poster mode uses an Instagram Stories tool set; Look mode keeps the
+  // collage-first editorial tool set.
   const tools: RailTool[] = selectedLayer
     ? buildSelectionTools(selectedLayer, isLook, onEditLayer, onDeleteLayer, onDuplicateLayer, onReorderLayer, onCropLayer, onCutoutLayer)
-    : buildDefaultTools(isLook, onToolPress, onAddPage, onLayoutPresets);
+    : buildDefaultTools(isLook, isPoster, onToolPress, onAddPage, onLayoutPresets);
 
   // Split into primary / secondary groups so a divider can separate them.
   // In selection mode every tool is secondary (no primary flag), so no divider.
@@ -106,23 +113,29 @@ export function CreatorToolDock({
   }, [haptic, onMore]);
 
   // ── Mode-aware visual hierarchy ────────────────────────────────────
-  // Default (look/poster) mode: 48×48 buttons, primary tools get brand fill.
-  // Selection mode: 44×44 buttons, surface fill, danger uses danger icon.
-  const toolSize = isSelectionMode ? 44 : 48;
-  const toolRadius = isSelectionMode ? 10 : 12;
-  const toolIconSize = isSelectionMode ? 22 : 24;
+  // Instagram-style: primary tools are larger pill buttons with filled
+  // backgrounds; secondary tools are smaller, transparent, label-less.
+  // Selection mode collapses to a single compact tier.
+  const primarySize = 48;
+  const secondarySize = 44;
+  const toolSize = isSelectionMode
+    ? 44
+    : (tool: RailTool) => (tool.primary ? primarySize : secondarySize);
+  const toolRadius = Radius.full;
+  const primaryIconSize = 24;
+  const secondaryIconSize = 22;
   const toolGap = isSelectionMode ? Space.xs : Space.sm;
 
   // Floating (glass) dock keeps its own translucent palette.
-  const iconColor = floating ? '#fff' : colors.textPrimary;
-  const labelColor = floating ? 'rgba(255,255,255,0.75)' : colors.textMuted;
+  const labelColor = floating ? 'rgba(255,255,255,0.7)' : colors.textMuted;
   const dangerIconColor = floating ? '#E06666' : colors.danger;
   const dangerLabelColor = floating ? 'rgba(224,102,102,0.85)' : colors.danger;
 
   const getToolBg = (tool: RailTool): string => {
     if (floating) {
       if (tool.danger) return 'transparent';
-      return tool.primary ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.08)';
+      // Active (primary) tools get a filled white tint; secondary tools stay transparent.
+      return tool.primary ? 'rgba(255,255,255,0.18)' : 'transparent';
     }
     if (tool.danger) return 'transparent';
     if (isSelectionMode) return colors.surface;
@@ -131,51 +144,67 @@ export function CreatorToolDock({
 
   const getToolIconColor = (tool: RailTool): string => {
     if (tool.danger) return dangerIconColor;
-    if (floating) return '#fff';
+    if (floating) {
+      // Primary (active) tools render solid white; secondary tools render at 85%.
+      return tool.primary ? '#fff' : 'rgba(255,255,255,0.85)';
+    }
     if (isSelectionMode) return colors.textPrimary;
     return tool.primary ? colors.textInverse : colors.textPrimary;
   };
 
+  const getToolIconSize = (tool: RailTool): number => {
+    if (isSelectionMode) return 22;
+    return tool.primary ? primaryIconSize : secondaryIconSize;
+  };
+
   // Render a single tool button — shared by both dock variants.
-  const renderTool = (tool: RailTool) => (
-    <PressScale
-      key={tool.label}
-      onPress={() => handleToolPress(tool)}
-      onLongPress={() => setHoveredTool(tool.label)}
-      onPressOut={() => setHoveredTool(null)}
-      style={styles.toolBtn}
-      accessibilityLabel={tool.label}
-      hitSlop={8}
-    >
-      <View
-        style={[
-          styles.toolIconWrap,
-          {
-            width: toolSize,
-            height: toolSize,
-            borderRadius: toolRadius,
-            backgroundColor: getToolBg(tool),
-          },
-        ]}
+  const renderTool = (tool: RailTool) => {
+    const size = typeof toolSize === 'function' ? toolSize(tool) : toolSize;
+    // Only primary tools show a caption label (Instagram pattern); secondary
+    // tools are icon-only to keep the dock minimal and contextual.
+    const showLabel = tool.primary || isSelectionMode;
+    return (
+      <PressScale
+        key={tool.label}
+        onPress={() => handleToolPress(tool)}
+        onLongPress={() => setHoveredTool(tool.label)}
+        onPressOut={() => setHoveredTool(null)}
+        style={styles.toolBtn}
+        accessibilityLabel={tool.label}
+        hitSlop={8}
       >
-        <Ionicons
-          name={tool.icon}
-          size={toolIconSize}
-          color={getToolIconColor(tool)}
-        />
-      </View>
-      <Text
-        style={[
-          styles.toolLabel,
-          { color: tool.danger ? dangerLabelColor : labelColor },
-          tool.primary && styles.toolLabelPrimary,
-        ]}
-        numberOfLines={1}
-      >
-        {tool.label}
-      </Text>
-    </PressScale>
-  );
+        <View
+          style={[
+            styles.toolIconWrap,
+            {
+              width: size,
+              height: size,
+              borderRadius: toolRadius,
+              backgroundColor: getToolBg(tool),
+            },
+          ]}
+        >
+          <Ionicons
+            name={tool.icon}
+            size={getToolIconSize(tool)}
+            color={getToolIconColor(tool)}
+          />
+        </View>
+        {showLabel ? (
+          <Text
+            style={[
+              styles.toolLabel,
+              { color: tool.danger ? dangerLabelColor : labelColor },
+              tool.primary && styles.toolLabelPrimary,
+            ]}
+            numberOfLines={1}
+          >
+            {tool.label}
+          </Text>
+        ) : null}
+      </PressScale>
+    );
+  };
 
   // Render the tool list with an optional divider between primary/secondary.
   const renderToolList = () => {
@@ -204,7 +233,25 @@ export function CreatorToolDock({
       ]}
     >
       {floating ? (
-        <BlurView intensity={60} tint="dark" style={styles.blurPill}>
+        <LiquidGlassBackdrop
+          intensity={60}
+          tint="dark"
+          absoluteFill={false}
+          style={[
+            styles.blurPill,
+            {
+              borderWidth: StyleSheet.hairlineWidth,
+              borderColor: 'rgba(255,255,255,0.15)',
+              shadowColor: '#000',
+              shadowOpacity: 0.3,
+              shadowRadius: 20,
+              shadowOffset: { width: 0, height: 8 },
+              elevation: 12,
+              minHeight: 64,
+              paddingHorizontal: Space.sm,
+            },
+          ]}
+        >
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -212,7 +259,7 @@ export function CreatorToolDock({
           >
             {renderToolList()}
           </ScrollView>
-        </BlurView>
+        </LiquidGlassBackdrop>
       ) : (
         <View style={styles.scrollWrap}>
           <ScrollView
@@ -272,6 +319,7 @@ export function CreatorToolDock({
 
 function buildDefaultTools(
   isLook: boolean,
+  isPoster: boolean,
   onToolPress: (mode: AssetPickerMode) => void,
   onAddPage?: () => void,
   onLayoutPresets?: () => void,
@@ -290,7 +338,34 @@ function buildDefaultTools(
       ...(onLayoutPresets ? [{ icon: 'grid-outline' as const, label: 'Layout', action: onLayoutPresets }] : []),
     ];
   }
-  // Poster: story-first, unified sticker tray (Instagram pattern)
+  if (isPoster) {
+    // Poster: Instagram Stories pattern.
+    // Primary tools (Text, Stickers, Draw, Music) are always visible with
+    // filled icon backgrounds. Secondary sticker tools follow a divider and
+    // are icon-only, keeping the dock minimal and contextual.
+    return [
+      // ── Primary (always visible) ──
+      { icon: 'text', label: 'Text', action: () => onToolPress('text'), primary: true },
+      { icon: 'happy-outline', label: 'Stickers', action: () => onToolPress('stickers'), primary: true },
+      { icon: 'brush-outline', label: 'Draw', action: () => onToolPress('draw'), primary: true },
+      { icon: 'musical-notes-outline', label: 'Music', action: () => onToolPress('music'), primary: true },
+      // ── Secondary (sticker tray) ──
+      { icon: 'at-outline', label: 'Mention', action: () => onToolPress('mention') },
+      { icon: 'pricetag-outline', label: 'Item', action: () => onToolPress('product') },
+      { icon: 'shirt-outline', label: 'Look', action: () => onToolPress('look') },
+      { icon: 'bar-chart-outline', label: 'Vote', action: () => onToolPress('vote') },
+      { icon: 'help-circle-outline', label: 'Quiz', action: () => onToolPress('quiz') },
+      { icon: 'chatbubble-outline', label: 'Question', action: () => onToolPress('question') },
+      { icon: 'location-outline', label: 'Location', action: () => onToolPress('location') },
+      { icon: 'pricetags-outline', label: 'Hashtag', action: () => onToolPress('hashtag') },
+      { icon: 'link-outline', label: 'Link', action: () => onToolPress('link') },
+      { icon: 'time-outline', label: 'Countdown', action: () => onToolPress('countdown') },
+      { icon: 'image-outline', label: 'GIF', action: () => onToolPress('gif') },
+      // Page management stays accessible at the end of the secondary tray.
+      ...(onAddPage ? [{ icon: 'add-circle-outline' as const, label: 'Add Page', action: onAddPage }] : []),
+    ];
+  }
+  // Fallback (no document type resolved) — keep the legacy Poster set.
   return [
     { icon: 'images', label: 'Media', action: () => onToolPress('media'), primary: true },
     { icon: 'text', label: 'Text', action: () => onToolPress('text'), primary: true },
@@ -427,7 +502,7 @@ const styles = StyleSheet.create({
     minWidth: 56,
     minHeight: 56,
     paddingHorizontal: Space.xs + 2,
-    borderRadius: Radius.md,
+    borderRadius: Radius.full,
     gap: 4,
   },
   toolIconWrap: {
@@ -441,13 +516,15 @@ const styles = StyleSheet.create({
     marginHorizontal: Space.xs,
   },
   toolLabel: {
-    fontSize: 10,
+    fontSize: 9,
     fontFamily: Typography.family.medium,
     letterSpacing: 0.1,
+    marginTop: 2,
+    color: 'rgba(255,255,255,0.7)',
   },
   toolLabelPrimary: {
     fontFamily: Typography.family.semibold,
-    fontSize: 10.5,
+    fontSize: 9.5,
   },
   // Long-press tooltip label — centered below the dock.
   hoverLabel: {

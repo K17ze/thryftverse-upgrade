@@ -19,12 +19,12 @@ import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke } from '../theme/designTokens';
 import { haptics } from '../utils/haptics';
 import { useToast } from '../context/ToastContext';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
@@ -37,7 +37,7 @@ import {
 } from '../services/commerceApi';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
-type Props = StackScreenProps<RootStackParamList, 'BuyerProtection'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'BuyerProtection'>;
 
 function formatGbp(minor: number): string {
   return `£${(minor / 100).toFixed(2)}`;
@@ -351,7 +351,7 @@ function createStyles(colors: ThemeColors) {
     },
     coverageCard: {
       borderRadius: Radius.xl,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       padding: Space.lg,
       marginHorizontal: Space.md,
       marginTop: Space.md,
@@ -362,8 +362,8 @@ function createStyles(colors: ThemeColors) {
       gap: Space.md,
     },
     coverageIcon: {
-      width: 48,
-      height: 48,
+      width: Space.xxl,
+      height: Space.xxl,
       borderRadius: Radius.full,
       justifyContent: 'center',
       alignItems: 'center',
@@ -380,7 +380,7 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
-      marginTop: 2,
+      marginTop: Space.xs / 2,
     },
     coverageDetails: {
       marginTop: Space.md,
@@ -403,7 +403,7 @@ function createStyles(colors: ThemeColors) {
     },
     sectionCard: {
       borderRadius: Radius.lg,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       padding: Space.md,
       marginHorizontal: Space.md,
       marginTop: Space.md,
@@ -460,7 +460,7 @@ function createStyles(colors: ThemeColors) {
     },
     claimForm: {
       borderRadius: Radius.lg,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       padding: Space.md,
       marginHorizontal: Space.md,
       marginTop: Space.md,
@@ -474,14 +474,14 @@ function createStyles(colors: ThemeColors) {
     },
     input: {
       borderRadius: Radius.md,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
       fontSize: Type.body.size,
       fontFamily: Typography.family.regular,
     },
     textArea: {
-      minHeight: 100,
+      minHeight: Space.xxl * 2 + Space.xs,
       paddingTop: Space.sm,
     },
     claimFormActions: {

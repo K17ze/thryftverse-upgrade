@@ -20,10 +20,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useToast } from '../context/ToastContext';
@@ -38,7 +38,7 @@ import {
 } from '../services/accountApi';
 import { RootStackParamList } from '../navigation/types';
 
-type Props = StackScreenProps<RootStackParamList, 'ConnectedAccounts'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'ConnectedAccounts'>;
 
 const PROVIDER_META: Record<string, { label: string; icon: React.ComponentProps<typeof Ionicons>['name']; color: string; gradient: string }> = {
   google: { label: 'Google', icon: 'logo-google', color: '#4285F4', gradient: '#4285F4' },
@@ -263,8 +263,8 @@ function createStyles(colors: ThemeColors) {
       gap: Space.md,
     },
     heroIcon: {
-      width: 44,
-      height: 44,
+      width: Control.hit,
+      height: Control.hit,
       borderRadius: Radius.full,
       justifyContent: 'center',
       alignItems: 'center',
@@ -282,14 +282,14 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
-      marginTop: 2,
+      marginTop: Space.xs / 2,
     },
 
     introText: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
-      lineHeight: 20,
+      lineHeight: Type.body.lineHeight,
       marginTop: Space.lg,
       marginBottom: Space.md,
     },
@@ -301,8 +301,8 @@ function createStyles(colors: ThemeColors) {
       gap: Space.sm,
     },
     emptyIconWrap: {
-      width: 64,
-      height: 64,
+      width: Space.xl * 2,
+      height: Space.xl * 2,
       borderRadius: Radius.full,
       backgroundColor: colors.surface,
       justifyContent: 'center',
@@ -319,7 +319,7 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
       textAlign: 'center',
-      lineHeight: 18,
+      lineHeight: Type.captionElevated.lineHeight,
       paddingHorizontal: Space.lg,
     },
 
@@ -342,8 +342,8 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
     },
     providerIcon: {
-      width: 44,
-      height: 44,
+      width: Control.hit,
+      height: Control.hit,
       borderRadius: Radius.full,
       justifyContent: 'center',
       alignItems: 'center',
@@ -358,13 +358,13 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
-      marginTop: 2,
+      marginTop: Space.xs / 2,
     },
     linkedRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
-      marginTop: 4,
+      marginTop: Space.xs,
     },
     linkedDate: {
       fontSize: Type.meta.size,
@@ -384,8 +384,8 @@ function createStyles(colors: ThemeColors) {
       padding: Space.md,
     },
     securityIconWrap: {
-      width: 36,
-      height: 36,
+      width: Control.chrome,
+      height: Control.chrome,
       borderRadius: Radius.full,
       backgroundColor: colors.success + '15',
       justifyContent: 'center',
@@ -398,13 +398,13 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.captionElevated.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
-      marginBottom: 2,
+      marginBottom: Space.xs / 2,
     },
     securityNoteText: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
-      lineHeight: 17,
+      lineHeight: Type.caption.lineHeight + 1,
     },
   });
 }

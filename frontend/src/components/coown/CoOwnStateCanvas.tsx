@@ -158,14 +158,14 @@ const styles = StyleSheet.create({
   skeletonTitle: {
     width: 140,
     height: 18,
-    borderRadius: 4,
+    borderRadius: Radius.sm,
     marginTop: Space.md,
     backgroundColor: 'rgba(128,128,128,0.12)',
   },
   skeletonSubtitle: {
     width: 200,
     height: 14,
-    borderRadius: 4,
+    borderRadius: Radius.sm,
     marginTop: Space.xs,
     backgroundColor: 'rgba(128,128,128,0.10)',
   },

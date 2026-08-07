@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { Colors, ActiveTheme } from '../../constants/colors';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -101,7 +101,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontFamily: Typography.family.medium,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     color: 'rgba(255,255,255,0.8)',
     marginTop: 2,
     textShadowColor: 'rgba(0,0,0,0.25)',

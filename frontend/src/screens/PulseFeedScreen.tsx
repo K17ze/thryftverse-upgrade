@@ -10,14 +10,14 @@ import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Type, Space, Radius, Typography } from '../theme/designTokens';
+import { Type, Space, Radius, Typography, LetterSpacing } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { EmptyState } from '../components/EmptyState';
@@ -26,7 +26,7 @@ import { ScreenHeader } from '../components/ui/ScreenHeader';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 type ActivityType = 'auction_live' | 'fresh_drop' | 'price_drop' | 'sold';
 
@@ -217,24 +217,24 @@ function createStyles(colors: ThemeColors) {
       gap: Space.md,
     },
     cardImage: {
-      width: 80,
-      height: 80,
+      width: Space.xxl + Space.xl,
+      height: Space.xxl + Space.xl,
       borderRadius: Radius.md,
       backgroundColor: colors.surfaceAlt,
     },
     cardContent: {
       flex: 1,
-      gap: 4,
+      gap: Space.xs,
     },
     cardHeader: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 6,
+      gap: Space.xs + 2,
     },
     cardTypeLabel: {
       fontSize: Type.meta.size,
       fontFamily: Typography.family.semibold,
-      letterSpacing: 0.8,
+      letterSpacing: LetterSpacing.caps,
     },
     cardTitle: {
       fontSize: Type.body.size,
@@ -254,7 +254,7 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.medium,
       color: colors.textMuted,
       letterSpacing: Type.meta.letterSpacing,
-      marginTop: 2,
+      marginTop: Space.xs / 2,
     },
     cardMetaAccent: {
       color: colors.danger,

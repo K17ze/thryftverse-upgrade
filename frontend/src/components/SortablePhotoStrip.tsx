@@ -17,7 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from './AnimatedPressable';
 import { isVideoUri } from '../utils/media';
 import { haptics } from '../utils/haptics';
-import { Typography } from '../theme/designTokens';
+import { Typography, Radius, Type, Space } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
 const { width } = Dimensions.get('window');
@@ -232,13 +232,13 @@ function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, re
 
 const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   container: {
-    paddingVertical: 16,
+    paddingVertical: Space.md,
     height: ITEM_SIZE + 60,
   },
   itemWrap: {
     width: ITEM_SIZE,
     height: ITEM_SIZE,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
     backgroundColor: colors.surfaceAlt,
     overflow: 'hidden',
     shadowColor: '#000',
@@ -248,13 +248,13 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   image: {
     width: '100%',
     height: '100%',
-    borderRadius: 16,
+    borderRadius: Radius.xl,
   },
   addBtn: {
     position: 'absolute',
     width: ITEM_SIZE,
     height: ITEM_SIZE,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
     borderWidth: 2,
     borderColor: colors.border,
     borderStyle: 'dashed',
@@ -267,7 +267,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     right: 6,
     width: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius: Radius.lg,
     backgroundColor: 'rgba(0,0,0,0.6)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -288,9 +288,9 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   hintText: {
     color: colors.textMuted,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     textAlign: 'center',
-    marginTop: 16,
+    marginTop: Space.md,
   },
 });

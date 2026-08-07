@@ -644,7 +644,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
     paddingVertical: 2,
     borderRadius: Radius.sm,
-    marginLeft: 4,
+    marginLeft: Space.xs,
   },
   lastAgeText: {
     fontSize: Type.meta.size,

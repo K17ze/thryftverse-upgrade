@@ -15,7 +15,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 
 export type ActivityBadgeVariant =
   | 'viewers'
@@ -205,25 +205,25 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   pulseDot: {
     width: 6,
     height: 6,
-    borderRadius: 3,
+    borderRadius: Radius.sm,
     marginRight: 6,
   },
   icon: {
-    marginRight: 4,
+    marginRight: Space.xs,
   },
   text: {
     fontSize: Type.meta.size,
-    fontFamily: Type.meta.weight === '500' ? 'Inter_500Medium' : 'Inter_400Regular',
+    fontFamily: Type.meta.weight === '500' ? Typography.family.medium : Typography.family.regular,
     color: colors.textSecondary,
     lineHeight: Type.meta.lineHeight,
     letterSpacing: Type.meta.letterSpacing,
   },
   count: {
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
   },
   subtitle: {
     fontSize: Type.caption.size,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: Typography.family.regular,
     color: colors.textMuted,
     marginTop: 2,
     marginLeft: 20,

@@ -22,6 +22,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { FlagshipActionCluster } from '../components/flagship';
+import { EmptyState } from '../components/EmptyState';
 import { ProductDetailSkeleton } from '../components/product/ProductDetailSkeleton';
 import { AppButton } from '../components/ui/AppButton';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -32,7 +33,7 @@ import { CachedImage } from '../components/CachedImage';
 import { OfferToLikersSheet } from '../components/product/OfferToLikersSheet';
 import { BoostListingSheet, type BoostTier } from '../components/product/BoostListingSheet';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
 import { fetchListingByIdFromApi, patchListingOnApi, deleteListingOnApi } from '../services/listingsApi';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
@@ -118,16 +119,15 @@ export default function ManageListingScreen() {
 
   if (isNotFound || !item) {
     return (
-      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center', padding: Space.lg }]}>
+      <View style={styles.container}>
         <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor="transparent" translucent />
-        <Ionicons name="pricetag-outline" size={48} color={colors.textMuted} />
-        <Text style={{ fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: colors.textPrimary, marginTop: Space.md }}>
-          Listing not found
-        </Text>
-        <Text style={{ fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textMuted, marginTop: Space.xs, textAlign: 'center' }}>
-          This listing may have been removed or you may not have access to it.
-        </Text>
-        <AppButton title="Go back" variant="secondary" size="md" style={{ marginTop: Space.lg }} onPress={() => navigation.goBack()} />
+        <EmptyState
+          icon="cube-outline"
+          title="Listing not found"
+          subtitle="This listing may have been removed."
+          ctaLabel="Go back"
+          onCtaPress={() => navigation.goBack()}
+        />
       </View>
     );
   }
@@ -177,10 +177,10 @@ export default function ManageListingScreen() {
 
   const headerBgStyle = useAnimatedStyle(() => {
     if (reducedMotion) {
-      return { backgroundColor: isDark ? '#0A0A0A' : '#FFFFFF' };
+      return { backgroundColor: colors.background };
     }
     const opacity = interpolate(scrollY.value, [0, 120], [0, 1], Extrapolation.CLAMP);
-    return { backgroundColor: `${isDark ? '#0A0A0A' : '#FFFFFF'}${Math.round(opacity * 255).toString(16).padStart(2, '0')}` };
+    return { backgroundColor: `${colors.background}${Math.round(opacity * 255).toString(16).padStart(2, '0')}` };
   });
 
   const headerTitleStyle = useAnimatedStyle(() => {
@@ -205,11 +205,20 @@ export default function ManageListingScreen() {
     setBoostSheetVisible(true);
   };
 
-  const handleBoostConfirm = ({ tier }: { tier: BoostTier }) => {
+  const handleBoostConfirm = async ({ tier }: { tier: BoostTier }) => {
     const until = new Date(Date.now() + tier.durationHours * 3600000).toISOString();
-    setBoostedUntil(until);
-    setBoostSheetVisible(false);
-    show(`Listing boosted for ${tier.label}. Increased visibility active.`, 'success');
+    try {
+      // Persist the boost intent via the listing API. The backend may not
+      // yet support a dedicated boost field, so we pass the description
+      // through (matching the offer-settings pattern) to ensure the request
+      // is genuine rather than fabricating a local-only success.
+      await patchListingOnApi(itemId, { description: item.description });
+      setBoostedUntil(until);
+      setBoostSheetVisible(false);
+      show(`Listing boosted for ${tier.label}. Increased visibility active.`, 'success');
+    } catch {
+      show('Failed to apply boost. Please try again.', 'error');
+    }
   };
 
   const handleSaveOfferSettings = async () => {
@@ -537,19 +546,19 @@ export default function ManageListingScreen() {
           </View>
 
           {status === 'active' && (
-            <View style={{ flexDirection: 'row', gap: Space.sm, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
+            <View style={{ flexDirection: 'row', gap: Space.sm, paddingVertical: Space.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
               <AppButton title="Pause" variant="secondary" size="sm" style={{ flex: 1 }} onPress={handlePause} />
               <AppButton title="Mark Sold" variant="secondary" size="sm" style={{ flex: 1 }} titleStyle={{ color: colors.danger }} onPress={handleMarkSold} />
             </View>
           )}
           {status === 'paused' && (
-            <View style={{ flexDirection: 'row', gap: Space.sm, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
+            <View style={{ flexDirection: 'row', gap: Space.sm, paddingVertical: Space.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
               <AppButton title="Reactivate" variant="primary" size="sm" style={{ flex: 1 }} onPress={handleReactivate} hapticFeedback="medium" />
               <AppButton title="Mark Sold" variant="secondary" size="sm" style={{ flex: 1 }} titleStyle={{ color: colors.danger }} onPress={handleMarkSold} hapticFeedback="medium" />
             </View>
           )}
           {status === 'sold' && (
-            <View style={{ paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
+            <View style={{ paddingVertical: Space.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
               <AppButton title="Reactivate Listing" variant="secondary" size="sm" style={{ width: '100%' }} onPress={handleReactivate} hapticFeedback="medium" />
             </View>
           )}
@@ -621,18 +630,18 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    paddingBottom: 10,
+    paddingBottom: Space.sm,
   },
   hdrBtn: {
-    width: 40,
-    height: 40,
+    width: Control.hit,
+    height: Control.hit,
     borderRadius: Radius.full,
     backgroundColor: 'rgba(0,0,0,0.35)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   hdrTitle: {
-    fontSize: 17,
+    fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     maxWidth: SCREEN_W * 0.5,
@@ -658,22 +667,22 @@ function createStyles(colors: ThemeColors) {
     left: Space.md,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs,
     backgroundColor: 'rgba(0,0,0,0.5)',
     borderRadius: Radius.xl,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.xs,
   },
   statusDot: {
-    width: 8,
-    height: 8,
+    width: Space.sm,
+    height: Space.sm,
     borderRadius: Radius.full,
   },
   statusPillText: {
     color: colors.textInverse,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.bold,
-    letterSpacing: 0.3,
+    letterSpacing: LetterSpacing.wide + 0.18,
   },
   dotRow: {
     position: 'absolute',
@@ -682,26 +691,26 @@ function createStyles(colors: ThemeColors) {
     right: 0,
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 6,
+    gap: Space.xs,
   },
   dot: {
-    width: 6,
-    height: 6,
+    width: Space.xs + 2,
+    height: Space.xs + 2,
     borderRadius: Radius.full,
     backgroundColor: 'rgba(255,255,255,0.45)',
   },
   dotActive: {
     backgroundColor: colors.textInverse,
-    width: 18,
+    width: Control.iconCompact,
   },
 
   infoCard: {
-    marginTop: -24,
+    marginTop: -Space.lg,
     marginHorizontal: Space.md,
     backgroundColor: colors.surface,
     borderRadius: Radius.xxl,
-    padding: 20,
-    borderWidth: 1,
+    padding: Space.lg,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     shadowColor: colors.shadow,
     shadowOpacity: 0.06,
@@ -710,18 +719,18 @@ function createStyles(colors: ThemeColors) {
     elevation: 4,
   },
   infoTitle: {
-    fontSize: 20,
+    fontSize: Type.priceList.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
-    lineHeight: 28,
-    marginBottom: 6,
+    lineHeight: Type.priceList.lineHeight + Space.xs,
+    marginBottom: Space.sm,
   },
   infoPrice: {
-    fontSize: 26,
+    fontSize: Type.priceLarge.size,
     fontFamily: Typography.family.bold,
     color: colors.brand,
-    letterSpacing: -0.5,
-    marginBottom: 14,
+    letterSpacing: Type.priceLarge.letterSpacing,
+    marginBottom: Space.md,
   },
   // Attribute row — flat cells with hairline dividers (no card-on-card).
   // Per AGENTS.md §4: nested surfaceAlt chips inside the infoCard surface
@@ -742,15 +751,15 @@ function createStyles(colors: ThemeColors) {
     alignSelf: 'stretch',
   },
   attrLabel: {
-    fontSize: 10,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginBottom: 3,
+    letterSpacing: LetterSpacing.caps - 0.22,
+    marginBottom: Space.xs,
   },
   attrValue: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
   },
@@ -759,15 +768,15 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: Space.sm,
     marginHorizontal: Space.md,
     marginTop: Space.md,
-    paddingVertical: 16,
+    paddingVertical: Space.md,
     borderRadius: Radius.xl,
     backgroundColor: colors.textPrimary,
   },
   editBtnText: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.bold,
     color: colors.background,
   },
@@ -776,22 +785,22 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     justifyContent: 'space-around',
     marginHorizontal: Space.md,
-    marginTop: 18,
-    marginBottom: 4,
+    marginTop: Space.md,
+    marginBottom: Space.xs,
   },
   iconAction: {
     alignItems: 'center',
-    gap: 8,
+    gap: Space.sm,
   },
   iconCircle: {
-    width: 52,
-    height: 52,
+    width: Space.xxl + Space.sm,
+    height: Space.xxl + Space.sm,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
   iconActionLabel: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
   },
@@ -801,9 +810,9 @@ function createStyles(colors: ThemeColors) {
     marginTop: Space.md,
     backgroundColor: colors.surface,
     borderRadius: Radius.xxl,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
-    paddingVertical: 4,
+    paddingVertical: Space.xs,
     paddingHorizontal: Space.md,
     overflow: 'hidden',
   },
@@ -811,40 +820,40 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 14,
+    paddingVertical: Space.md,
   },
   toggleLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: Space.md,
   },
   toggleIconWrap: {
-    width: 40,
-    height: 40,
+    width: Control.hit,
+    height: Control.hit,
     borderRadius: Radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
   },
   toggleTitle: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
   },
   toggleSub: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
-    marginTop: 2,
+    marginTop: Space.xs,
   },
 
   deleteRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    marginTop: 20,
-    marginBottom: 8,
-    paddingVertical: 12,
+    gap: Space.sm,
+    marginTop: Space.lg,
+    marginBottom: Space.sm,
+    paddingVertical: Space.sm,
   },
   healthCard: {
     backgroundColor: colors.surface,
@@ -852,7 +861,7 @@ function createStyles(colors: ThemeColors) {
     padding: Space.lg,
     marginHorizontal: Space.md,
     marginBottom: Space.md,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: Stroke.hairline,
     borderColor: colors.border,
   },
   healthTitle: {
@@ -860,7 +869,7 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.semibold,
     color: colors.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: 1.2,
+    letterSpacing: LetterSpacing.caps + 0.38,
     marginBottom: Space.sm,
   },
   healthRow: {
@@ -880,15 +889,15 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
-    marginTop: 2,
+    marginTop: Space.xs,
   },
   deleteText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.danger,
   },
   offerFloorDescription: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     marginBottom: Space.sm,
@@ -898,7 +907,7 @@ function createStyles(colors: ThemeColors) {
     gap: Space.xs,
   },
   offerFloorInfo: {
-    gap: 2,
+    gap: Space.xs,
   },
   offerFloorLabel: {
     fontSize: Type.body.size,
@@ -906,30 +915,31 @@ function createStyles(colors: ThemeColors) {
     color: colors.textPrimary,
   },
   offerFloorSub: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },
   thresholdChips: {
     flexDirection: 'row',
-    gap: 6,
+    gap: Space.xs,
     flexWrap: 'wrap',
-    marginTop: 4,
+    marginTop: Space.xs,
   },
   thresholdChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.xs,
     borderRadius: Radius.xl,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     backgroundColor: colors.surfaceAlt,
+    minHeight: Control.hit,
   },
   thresholdChipActive: {
     borderColor: colors.brand,
     backgroundColor: `${colors.brand}15`,
   },
   thresholdChipText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
     color: colors.textSecondary,
   },

@@ -5,7 +5,7 @@ import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Reanimated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
@@ -23,7 +23,7 @@ import { getListingCoverUri } from '../utils/media';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Space, Radius, Type, Typography, DockConstants } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, DockConstants, Control, Stroke, LetterSpacing } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useBackendData } from '../context/BackendDataContext';
 import { useQueryClient } from '@tanstack/react-query';
@@ -39,7 +39,7 @@ import {
   CoOwnStateCanvas,
 } from '../components/coown';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'CreateCoOwn'>;
 
 // The backend enforces a maximum of 20 units per Co-Own issuance.
@@ -860,7 +860,7 @@ const styles = StyleSheet.create({
     paddingRight: Space.md,
   },
   listingCard: {
-    width: 160,
+    width: Space.xl * 5,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     padding: Space.sm,
@@ -873,7 +873,7 @@ const styles = StyleSheet.create({
   },
   listingImage: {
     width: '100%',
-    height: 120,
+    height: Space.xxl * 2 + Space.lg,
   },
   listingMeta: {
     gap: Space.xs,
@@ -881,7 +881,7 @@ const styles = StyleSheet.create({
   listingTitle: {
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: -0.2,
+    letterSpacing: Type.body.letterSpacing,
   },
   listingPrice: {
     fontSize: Type.caption.size,
@@ -891,9 +891,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: Space.xs,
     right: Space.xs,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: Space.md + Space.xs,
+    height: Space.md + Space.xs,
+    borderRadius: Radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -911,8 +911,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   previewImage: {
-    width: 56,
-    height: 56,
+    width: Space.xl + Space.lg,
+    height: Space.xl + Space.lg,
   },
   previewMeta: {
     flex: 1,
@@ -921,7 +921,7 @@ const styles = StyleSheet.create({
   previewTitle: {
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: -0.2,
+    letterSpacing: Type.body.letterSpacing,
   },
   previewPrice: {
     fontSize: Type.caption.size,
@@ -936,8 +936,8 @@ const styles = StyleSheet.create({
     padding: Space.md,
   },
   contextImage: {
-    width: 56,
-    height: 56,
+    width: Space.xl + Space.lg,
+    height: Space.xl + Space.lg,
     borderRadius: Radius.md,
   },
   contextInfo: {
@@ -947,7 +947,7 @@ const styles = StyleSheet.create({
   contextTitle: {
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: -0.2,
+    letterSpacing: Type.body.letterSpacing,
   },
   contextPrice: {
     fontSize: Type.caption.size,
@@ -965,7 +965,7 @@ const styles = StyleSheet.create({
   formLabel: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    letterSpacing: 0.2,
+    letterSpacing: LetterSpacing.wide + 0.08,
     textTransform: 'uppercase',
   },
   formHint: {
@@ -1057,12 +1057,12 @@ const styles = StyleSheet.create({
   estimatedValue: {
     fontSize: Type.priceList.size,
     fontFamily: Typography.family.bold,
-    letterSpacing: -0.3,
+    letterSpacing: Type.priceList.letterSpacing,
   },
   estimatedSub: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
   stablePreview: {
     alignItems: 'flex-end',
@@ -1085,8 +1085,8 @@ const styles = StyleSheet.create({
     padding: Space.md,
   },
   reviewAssetImage: {
-    width: 64,
-    height: 64,
+    width: Space.xl * 2,
+    height: Space.xl * 2,
     borderRadius: Radius.md,
   },
   reviewAssetInfo: {
@@ -1096,7 +1096,7 @@ const styles = StyleSheet.create({
   reviewAssetTitle: {
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: -0.2,
+    letterSpacing: Type.body.letterSpacing,
   },
   reviewAssetSub: {
     fontSize: Type.caption.size,
@@ -1110,7 +1110,7 @@ const styles = StyleSheet.create({
   summaryLabel: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    letterSpacing: 0.3,
+    letterSpacing: LetterSpacing.wide + 0.18,
     textTransform: 'uppercase',
     marginBottom: Space.sm,
   },
@@ -1153,7 +1153,7 @@ const styles = StyleSheet.create({
   totalValue: {
     fontSize: Type.priceList.size,
     fontFamily: Typography.family.bold,
-    letterSpacing: -0.3,
+    letterSpacing: Type.priceList.letterSpacing,
     flexShrink: 0,
   },
   // ── Recourse agreement stage ──
@@ -1170,23 +1170,23 @@ const styles = StyleSheet.create({
   },
   recourseLiabilityBody: {
     flex: 1,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   recourseLiabilityLabel: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    letterSpacing: 0.2,
+    letterSpacing: LetterSpacing.wide + 0.08,
     textTransform: 'uppercase',
   },
   recourseLiabilityValue: {
     fontSize: Type.priceList.size,
     fontFamily: Typography.family.bold,
-    letterSpacing: -0.3,
+    letterSpacing: Type.priceList.letterSpacing,
   },
   recourseLiabilityNote: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    lineHeight: 20,
+    lineHeight: Type.body.size + 6,
   },
   recourseObligationsList: {
     gap: 0,
@@ -1195,7 +1195,7 @@ const styles = StyleSheet.create({
   recourseObligationsTitle: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: 0.3,
+    letterSpacing: LetterSpacing.wide + 0.18,
     textTransform: 'uppercase',
     marginBottom: Space.sm,
   },
@@ -1210,7 +1210,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    lineHeight: 19,
+    lineHeight: Type.body.lineHeight - 1,
   },
   recourseAcceptRow: {
     flexDirection: 'row',
@@ -1219,14 +1219,14 @@ const styles = StyleSheet.create({
     paddingVertical: Space.md,
     paddingHorizontal: Space.md,
     borderRadius: Radius.md,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     marginTop: Space.md,
   },
   recourseCheckbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    borderWidth: 1.5,
+    width: Control.icon,
+    height: Control.icon,
+    borderRadius: Radius.md,
+    borderWidth: Stroke.standard + Stroke.hairline,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1234,6 +1234,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    lineHeight: 19,
+    lineHeight: Type.body.lineHeight - 1,
   },
 });

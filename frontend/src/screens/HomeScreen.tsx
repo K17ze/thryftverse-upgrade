@@ -34,8 +34,7 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { fetchPosterStories } from '../services/postersApi';
 import type { PosterStory } from '../services/postersApi';
 import { useNavigation, useScrollToTop } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
-import { RootStackParamList } from '../navigation/types';
+import { NativeStackNavigationProp, RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useTabScroll } from '../context/TabScrollContext';
 // Phase 3: Removed AnimatedBadge (badge clutter reduced)
@@ -53,7 +52,6 @@ import { PremiumSkeletonTile } from '../components/discover/PremiumSkeletonTile'
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { MasonryGrid, ProductCardV2 } from '../components/ProductCardV2';
 import { DoubleTapHeart } from '../components/DoubleTapHeart';
-import { getBackendSyncStatus } from '../utils/syncStatus';
 import { isVideoUri, getCategoryFocalPoint } from '../utils/media';
 import { AppButton } from '../components/ui/AppButton';
 import { Space, Radius, Type, Stroke } from '../theme/designTokens';
@@ -85,7 +83,7 @@ import { resolveListingMediaHeightRatio } from '../utils/listingMediaGeometry';
 import { safeValidateDocument, type CreatorDocument } from '../creator/composition';
 import { CreatorCanvas } from '../creator/CreatorCanvas';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 const HEADER_EXPANDED = 58;
 const HEADER_COLLAPSED = 52;
@@ -94,10 +92,7 @@ const GRID_GAP = 12; // 12pt — breathable discovery gutter (flagship spacing)
 // Keep the fallback compact while real assets continue to use their API geometry.
 const MISSING_MEDIA_HEIGHT_RATIO = 0.78;
 const POSTER_CARD_WIDTH = 76;
-// Tightened from 135 → 116 to reclaim first-viewport space for the product
-// grid below. All poster overlays (creator, frame count, unwatched badge)
-// remain comfortably within the tile at this height.
-const POSTER_CARD_HEIGHT = 116;
+const POSTER_CARD_HEIGHT = 135;
 const LISTING_CARD_CHROME_HEIGHT = 110;
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -165,15 +160,6 @@ function MediaPreview({
   );
 }
 
-type StoryStatus = 'new-listing' | 'live-auction' | 'co-own-launching' | 'sold-recently';
-
-const STORY_STATUS_LABEL: Record<StoryStatus, string> = {
-  'new-listing': 'new listing',
-  'live-auction': 'auction',
-  'co-own-launching': 'co-own launch',
-  'sold-recently': 'sold recently',
-};
-
 // Trend clips removed — demo-only content, not real data
 
 type ExploreTile = {
@@ -189,17 +175,6 @@ type ExploreTile = {
   caption: string;
   category?: string;
   aspectRatio: number;
-  isSaved?: boolean;
-};
-
-type StoryBubble = {
-  id: string;
-  userId: string;
-  username: string;
-  avatar: string;
-  posterId?: string;
-  isNew: boolean;
-  status: StoryStatus;
   isSaved?: boolean;
 };
 
@@ -602,16 +577,6 @@ export default function HomeScreen() {
     return () => { mounted = false; };
   }, []);
 
-  const feedStatus = React.useMemo(
-    () =>
-      getBackendSyncStatus({
-        isSyncing,
-        source,
-        hasError: Boolean(lastError),
-      }),
-    [isSyncing, lastError, source],
-  );
-
   const showFeedLoadingSkeleton = isSyncing && !lastError;
 
   const gridTileWidth = React.useMemo(
@@ -735,6 +700,15 @@ export default function HomeScreen() {
         <View style={styles.postersSection}>
           <View style={styles.posterSectionHeading}>
             <Text style={styles.posterSectionTitle}>Posters</Text>
+            <Pressable
+              style={styles.posterHeaderCameraBtn}
+              onPress={() => { haptic.light(); navigation.navigate('CreateCamera', { mode: 'poster' }); }}
+              accessibilityRole="button"
+              accessibilityLabel="Create poster with camera"
+              accessibilityHint="Opens camera to create a new poster"
+            >
+              <Ionicons name="camera-outline" size={22} color={colors.textPrimary} />
+            </Pressable>
           </View>
           <HorizontalRail contentContainerStyle={styles.postersScroll}>
             {Array.from({ length: 4 }).map((_, index) => (
@@ -756,13 +730,48 @@ export default function HomeScreen() {
       <View style={styles.postersSection}>
         <View style={styles.posterSectionHeading}>
           <Text style={styles.posterSectionTitle}>Posters</Text>
+          <Pressable
+            style={styles.posterHeaderCameraBtn}
+            onPress={() => { haptic.light(); navigation.navigate('CreateCamera', { mode: 'poster' }); }}
+            accessibilityRole="button"
+            accessibilityLabel="Create poster with camera"
+            accessibilityHint="Opens camera to create a new poster"
+          >
+            <Ionicons name="camera-outline" size={22} color={colors.textPrimary} />
+          </Pressable>
         </View>
 
         <HorizontalRail
           contentContainerStyle={styles.postersScroll}
         >
+          <AnimatedPressable
+            key="poster-create"
+            style={styles.posterCreateCard}
+            activeOpacity={0.9}
+            onPress={() => { haptic.light(); navigation.navigate('CreateCamera', { mode: 'poster' }); }}
+            accessibilityRole="button"
+            accessibilityLabel="Create poster with camera"
+            accessibilityHint="Opens camera to create a new poster"
+          >
+            <View style={styles.posterCreateTile}>
+              <LinearGradient
+                colors={['#FF6B6B', '#FF8E53', '#FFA500']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.posterCreateGradient}
+              >
+                <View style={styles.posterCreateInner}>
+                  <Ionicons name="camera" size={28} color={colors.textPrimary} />
+                </View>
+              </LinearGradient>
+              <View style={styles.posterCreatePlusBadge}>
+                <Ionicons name="add" size={14} color="#fff" />
+              </View>
+            </View>
+            <Text style={styles.posterCreateLabel} numberOfLines={1}>Your Poster</Text>
+          </AnimatedPressable>
           {(() => {
-            // Sort stories: unwatched-first, then watched
+            // Sort posters: unwatched-first, then watched
             const sortedPosters = [...realPosters].sort((a, b) => {
               if (a.seenByViewer === b.seenByViewer) return 0;
               return a.seenByViewer ? 1 : -1;
@@ -770,7 +779,7 @@ export default function HomeScreen() {
             const unwatchedCount = realPosters.filter((s) => !s.seenByViewer).length;
             return sortedPosters.map((story, idx) => {
             const isUnwatched = !story.seenByViewer;
-            // Show unwatched badge on the first unwatched story
+            // Show unwatched badge on the first unwatched poster
             const showUnwatchedBadge = isUnwatched && idx === 0 && unwatchedCount > 1;
             return (
             <AnimatedPressable
@@ -779,8 +788,8 @@ export default function HomeScreen() {
               activeOpacity={0.9}
               onPress={() => { haptic.light(); navigation.navigate('PosterViewer', { storyId: story.id }); }}
               accessibilityRole="button"
-              accessibilityLabel={`Open poster story by @${story.creator.username ?? story.creatorId}${isUnwatched ? ', new' : ''}`}
-              accessibilityHint="Opens poster story viewer"
+              accessibilityLabel={`Open poster by @${story.creator.username ?? story.creatorId}${isUnwatched ? ', new' : ''}`}
+              accessibilityHint="Opens poster viewer"
             >
               <View style={[styles.posterTile, isUnwatched ? styles.posterTileUnseen : styles.posterTileSeen, isUnwatched && styles.posterTileRing]}>
                 <PosterStoryArtwork story={story} />
@@ -900,46 +909,6 @@ export default function HomeScreen() {
     });
   }, [navigation, haptic]);
 
-  // Memoized FlashList callbacks — stable references prevent FlashList from
-  // re-rendering every item on each parent render. The item renderer looks up
-  // the seller for each tile; deps capture the active listings + handlers.
-  const renderFeedItem = React.useCallback(
-    ({ item }: { item: ExploreTile }) => {
-      const listing = activeListings.find((l) => l.id === item.routeId);
-      return (
-        <View style={styles.flashListItem}>
-          <ExploreGridItem
-            item={item}
-            tileWidth={gridTileWidth}
-            formatPrice={formatFromFiat}
-            onPress={handleTilePress}
-            onLongPress={handleTileLongPress}
-            onPressSellerProfile={handleSellerProfilePress}
-            onPressSellerMessage={handleSellerMessagePress}
-            sellerUsername={listing?.seller?.username}
-            sellerAvatar={listing?.seller?.avatar}
-          />
-        </View>
-      );
-    },
-    [
-      activeListings,
-      gridTileWidth,
-      formatFromFiat,
-      handleTilePress,
-      handleTileLongPress,
-      handleSellerProfilePress,
-      handleSellerMessagePress,
-      styles.flashListItem,
-    ],
-  );
-
-  const feedKeyExtractor = React.useCallback((item: ExploreTile) => item.id, []);
-
-  const handleFeedEndReached = React.useCallback(() => {
-    if (hasMore && !isLoadingMore) void loadMoreListings();
-  }, [hasMore, isLoadingMore, loadMoreListings]);
-
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
@@ -953,6 +922,28 @@ export default function HomeScreen() {
           </Reanimated.View>
 
           <View style={styles.headerRight}>
+            <AnimatedPressable
+              style={styles.headerBtn}
+              onPress={() => navigation.navigate('Galleria')}
+              accessibilityLabel="Galleria"
+              accessibilityRole="button"
+              accessibilityHint="Opens curated Co-Own collections"
+              activeOpacity={0.58}
+              scaleValue={0.94}
+            >
+              <Ionicons name="grid-outline" size={22} color={colors.textPrimary} />
+            </AnimatedPressable>
+            <AnimatedPressable
+              style={styles.headerBtn}
+              onPress={() => navigation.navigate('AuctionHome')}
+              accessibilityLabel="Auctions"
+              accessibilityRole="button"
+              accessibilityHint="Opens live and upcoming auctions"
+              activeOpacity={0.58}
+              scaleValue={0.94}
+            >
+              <Ionicons name="hammer-outline" size={22} color={colors.textPrimary} />
+            </AnimatedPressable>
             <AnimatedPressable
               style={styles.headerBtn}
               onPress={() => navigation.navigate('Sell')}
@@ -1002,13 +993,32 @@ export default function HomeScreen() {
         data={feedGridData}
         numColumns={2}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.feedContent, { paddingTop: headerExpandedHeight + Space.xs }]}
+        contentContainerStyle={[styles.feedContent, { paddingTop: headerExpandedHeight + Space.sm }]}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
-        onEndReached={handleFeedEndReached}
+        onEndReached={() => {
+          if (hasMore && !isLoadingMore) void loadMoreListings();
+        }}
         onEndReachedThreshold={0.5}
-        keyExtractor={feedKeyExtractor}
-        renderItem={renderFeedItem}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => {
+          const listing = activeListings.find((l) => l.id === item.routeId);
+          return (
+            <View style={styles.flashListItem}>
+              <ExploreGridItem
+                item={item}
+                tileWidth={gridTileWidth}
+                formatPrice={formatFromFiat}
+                onPress={handleTilePress}
+                onLongPress={handleTileLongPress}
+                onPressSellerProfile={handleSellerProfilePress}
+                onPressSellerMessage={handleSellerMessagePress}
+                sellerUsername={listing?.seller?.username}
+                sellerAvatar={listing?.seller?.avatar}
+              />
+            </View>
+          );
+        }}
         overrideItemLayout={(layout) => {
           layout.span = 1;
         }}
@@ -1240,13 +1250,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.textPrimary,
     lineHeight: 26,
   },
-  brandSubtitle: {
-    marginTop: 2,
-    fontSize: 11,
-    fontFamily: Typography.family.regular,
-    letterSpacing: 0.25,
-    color: colors.textSecondary,
-  },
   headerRight: {
     flexDirection: 'row',
     gap: 2,
@@ -1285,9 +1288,9 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginBottom: 2,
   },
   feedTabBar: {
-    minHeight: 40,
+    minHeight: 46,
     marginHorizontal: Space.md,
-    marginBottom: Space.sm,
+    marginBottom: Space.md,
     flexDirection: 'row',
     alignItems: 'stretch',
     gap: Space.lg,
@@ -1360,7 +1363,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   newListingsBannerIconWrap: {
     width: 14,
     height: 14,
-    borderRadius: Radius.full,
+    borderRadius: 7,
     backgroundColor: 'transparent',
   },
   newListingsBannerText: {
@@ -1390,207 +1393,16 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     letterSpacing: 0.22,
   },
 
-  storiesSection: {
-    paddingTop: 6,
-    paddingBottom: 10,
-  },
-  storiesScroll: {
-    paddingHorizontal: 16,
-    gap: 14,
-  },
-  storyCreateWrap: {
-    alignItems: 'center',
-    width: 68,
-  },
-  storyCreateRing: {
-    width: 62,
-    height: 62,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 2,
-    marginBottom: 6,
-  },
-  storyItem: {
-    alignItems: 'center',
-    width: 68,
-  },
-  storyRingGradient: {
-    width: 62,
-    height: 62,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-    position: 'relative',
-  },
-  storyRingGradientMuted: {
-    opacity: 0.64,
-  },
-  storyRingInner: {
-    width: 58,
-    height: 58,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.background,
-  },
-  storyAvatarWrap: {
-    width: 54,
-    height: 54,
-    borderRadius: Radius.full,
-  },
-  storyAvatar: {
-    width: '100%',
-    height: '100%',
-    borderRadius: Radius.full,
-  },
-  storyPulseDot: {
-    width: 10,
-    height: 10,
-    borderRadius: Radius.full,
-    backgroundColor: colors.brand,
-    position: 'absolute',
-    right: 1,
-    top: 1,
-    borderWidth: 1,
-    borderColor: colors.background,
-  },
-  storyName: {
-    fontSize: 10,
-    fontFamily: Typography.family.medium,
-    color: colors.textSecondary,
-    width: 66,
-    textAlign: 'center',
-  },
-  storyStatus: {
-    marginTop: 2,
-    fontSize: 9,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-    width: 66,
-    textAlign: 'center',
-    textTransform: 'uppercase',
-    letterSpacing: 0.24,
-  },
-
-  looksSection: {
-    marginTop: 4,
-    marginBottom: 12,
-  },
-  looksRail: {
-    paddingHorizontal: 16,
-    gap: 12,
-  },
-  lookCard: {
-    width: SCREEN_WIDTH * 0.82,
-    borderRadius: Radius.xxl,
-    overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceAlt,
-  },
-  lookImageWrap: {
-    width: '100%',
-    height: 280,
-  },
-  lookFeedRow: {
-    paddingHorizontal: GRID_GAP,
-    marginBottom: GRID_GAP,
-  },
-  lookFeedCard: {
-    width: '100%',
-    borderRadius: Radius.xxl,
-    overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceAlt,
-  },
-  lookFeedImageWrap: {
-    width: '100%',
-    aspectRatio: 3 / 4,
-  },
-  lookImage: {
-    width: '100%',
-    height: '100%',
-  },
-  lookOverlay: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-  },
-  lookOwnerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 6,
-  },
-  lookOwnerAvatarWrap: {
-    width: 20,
-    height: 20,
-    borderRadius: Radius.full,
-  },
-  lookOwnerAvatar: {
-    width: '100%',
-    height: '100%',
-    borderRadius: Radius.full,
-  },
-  lookOwnerName: {
-    color: colors.textInverse,
-    fontSize: 11,
-    fontFamily: Typography.family.semibold,
-  },
-  lookTitle: {
-    color: colors.textInverse,
-    fontSize: 21,
-    fontFamily: Typography.family.extrabold,
-    letterSpacing: -0.4,
-    lineHeight: 24,
-  },
-  lookDescription: {
-    color: 'rgba(255,255,255,0.85)',
-    fontSize: 12,
-    fontFamily: Typography.family.medium,
-    marginTop: 2,
-  },
-  lookMetaRow: {
-    marginTop: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  lookMetaPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: Radius.lg,
-    backgroundColor: 'rgba(0,0,0,0.34)',
-  },
-  lookMetaText: {
-    color: colors.textInverse,
-    fontSize: 11,
-    fontFamily: Typography.family.semibold,
-  },
-  lookTime: {
-    color: 'rgba(255,255,255,0.82)',
-    fontSize: 11,
-    fontFamily: Typography.family.medium,
-    marginLeft: 'auto',
-  },
-
   postersSection: {
     marginTop: 2,
-    paddingBottom: Space.xs,
+    paddingBottom: Space.sm,
   },
   posterSectionHeading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    marginBottom: 2,
+    marginBottom: Space.xs,
   },
   posterSectionTitle: {
     color: colors.textPrimary,
@@ -1598,6 +1410,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     lineHeight: Type.subtitle.lineHeight,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.3,
+  },
+  posterHeaderCameraBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   postersScroll: {
     paddingHorizontal: Space.md,
@@ -1619,6 +1438,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     overflow: 'hidden',
     position: 'relative',
     backgroundColor: colors.surfaceAlt,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
   },
   posterTileUnseen: {
     borderWidth: 2,
@@ -1635,6 +1459,57 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
+  posterCreateCard: {
+    width: POSTER_CARD_WIDTH,
+  },
+  posterCreateTile: {
+    width: POSTER_CARD_WIDTH,
+    height: POSTER_CARD_HEIGHT,
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
+  posterCreateGradient: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 3.5,
+  },
+  posterCreateInner: {
+    width: '100%',
+    height: '100%',
+    borderRadius: Radius.lg - 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.background,
+  },
+  posterCreatePlusBadge: {
+    position: 'absolute',
+    bottom: 6,
+    right: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.brand,
+    borderWidth: 2,
+    borderColor: colors.background,
+  },
+  posterCreateLabel: {
+    marginTop: 6,
+    fontSize: 10,
+    fontFamily: Typography.family.medium,
+    color: colors.textSecondary,
+    width: POSTER_CARD_WIDTH,
+    textAlign: 'center',
+  },
   posterImage: {
     width: '100%',
     height: '100%',
@@ -1650,7 +1525,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     position: 'absolute',
     width: 88,
     height: 88,
-    borderRadius: Radius.full,
+    borderRadius: 44,
     top: -42,
     right: -34,
     backgroundColor: 'rgba(255,255,255,0.08)',
@@ -1673,7 +1548,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     left: 5,
     width: 24,
     height: 24,
-    borderRadius: Radius.full,
+    borderRadius: 12,
     overflow: 'hidden',
     borderWidth: 2,
     borderColor: colors.textInverse,
@@ -1686,12 +1561,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   posterAvatarOverlayWrap: {
     width: 24,
     height: 24,
-    borderRadius: Radius.full,
+    borderRadius: 12,
   },
   posterAvatarOverlayImage: {
     width: '100%',
     height: '100%',
-    borderRadius: Radius.full,
+    borderRadius: 12,
   },
   posterTopRow: {
     position: 'absolute',
@@ -1709,19 +1584,19 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.6)',
     paddingHorizontal: 5,
     paddingVertical: 3,
-    borderRadius: Radius.lg,
+    borderRadius: 12,
     flex: 1,
     gap: 4,
   },
   posterOwnerAvatarWrap: {
     width: 14,
     height: 14,
-    borderRadius: Radius.full,
+    borderRadius: 7,
   },
   posterOwnerAvatar: {
     width: '100%',
     height: '100%',
-    borderRadius: Radius.full,
+    borderRadius: 7,
   },
   posterOwnerName: {
     color: colors.textInverse,
@@ -1734,7 +1609,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     gap: 3,
     backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: Radius.lg,
+    borderRadius: 12,
     paddingHorizontal: 6,
     paddingVertical: 3,
   },
@@ -1786,7 +1661,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     gap: 2,
     backgroundColor: 'rgba(0,0,0,0.55)',
-    borderRadius: Radius.md,
+    borderRadius: 8,
     paddingHorizontal: 5,
     paddingVertical: 2,
   },
@@ -1800,7 +1675,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     bottom: 6,
     left: 6,
     backgroundColor: colors.brand,
-    borderRadius: Radius.md,
+    borderRadius: 8,
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
@@ -1812,13 +1687,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   posterFreshDot: {
     width: 7,
     height: 7,
-    borderRadius: Radius.full,
+    borderRadius: 4,
     backgroundColor: colors.brand,
   },
   posterSeenDot: {
     width: 7,
     height: 7,
-    borderRadius: Radius.full,
+    borderRadius: 4,
     backgroundColor: colors.border,
   },
 
@@ -1863,7 +1738,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     position: 'absolute',
     width: 170,
     height: 170,
-    borderRadius: Radius.full,
+    borderRadius: 85,
     top: -76,
     right: -64,
     borderWidth: StyleSheet.hairlineWidth,
@@ -1874,7 +1749,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     position: 'absolute',
     width: 96,
     height: 96,
-    borderRadius: Radius.full,
+    borderRadius: 48,
     bottom: -44,
     left: -30,
     borderWidth: StyleSheet.hairlineWidth,
@@ -1931,17 +1806,17 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   exploreSellerAvatarWrap: {
     width: 20,
     height: 20,
-    borderRadius: Radius.full,
+    borderRadius: 10,
   },
   exploreSellerAvatar: {
     width: 20,
     height: 20,
-    borderRadius: Radius.full,
+    borderRadius: 10,
   },
   exploreSellerAvatarFallback: {
     width: 20,
     height: 20,
-    borderRadius: Radius.full,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surfaceAlt,
@@ -2059,7 +1934,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   peekPrimaryIconWrap: {
     width: 16,
     height: 16,
-    borderRadius: Radius.md,
+    borderRadius: 8,
     backgroundColor: 'transparent',
   },
   peekPrimaryText: {

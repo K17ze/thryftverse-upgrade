@@ -4,9 +4,8 @@ import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
-import { Space, Radius, Type } from '../theme/designTokens';
 import { PUSH_NOTIFICATION_DEFINITIONS, PUSH_NOTIFICATION_GROUPS } from '../preferences/settingsPreferences';
 import { useToast } from '../context/ToastContext';
 import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
@@ -14,7 +13,6 @@ import { useStore } from '../store/useStore';
 import { parseApiError } from '../lib/apiClient';
 import { deactivateNotificationDevice, registerNotificationDevice, getNotificationPreferences, updateNotificationPreferences, listNotificationDevices } from '../services/notificationsApi';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Typography } from '../theme/designTokens';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsRow } from '../components/settings/SettingsRow';
@@ -23,7 +21,8 @@ import { haptics } from '../utils/haptics';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
-type Props = StackScreenProps<RootStackParamList, 'PushNotifications'>;
+import { Space, Radius, Type, Typography, Stroke, Control } from '../theme/designTokens';
+type Props = NativeStackScreenProps<RootStackParamList, 'PushNotifications'>;
 
 const NOTIFICATIONS = PUSH_NOTIFICATION_DEFINITIONS;
 
@@ -406,13 +405,13 @@ export default function PushNotificationsScreen({ navigation }: Props) {
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     iconBtn: {
-      width: 40,
-      height: 40,
+      width: Control.chrome + Space.xs,
+      height: Control.chrome + Space.xs,
       borderRadius: Radius.md,
       backgroundColor: 'rgba(255,255,255,0.05)',
       justifyContent: 'center',
       alignItems: 'center',
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       borderColor: colors.border,
     },
     progressRow: {
@@ -423,14 +422,14 @@ function createStyles(colors: ThemeColors) {
     },
     progressTrack: {
       flex: 1,
-      height: 6,
-      borderRadius: 3,
+      height: Space.xs + 2,
+      borderRadius: Radius.sm,
       backgroundColor: colors.border,
       overflow: 'hidden',
     },
     progressFill: {
       height: '100%',
-      borderRadius: 3,
+      borderRadius: Radius.sm,
       backgroundColor: colors.brand,
     },
     progressLabel: {
@@ -438,7 +437,7 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.semibold,
       color: colors.textSecondary,
       letterSpacing: Type.caption.letterSpacing,
-      minWidth: 60,
+      minWidth: Space.xxl + Space.sm + Space.xs,
       textAlign: 'right',
     },
     footerNote: {
@@ -483,8 +482,8 @@ function createStyles(colors: ThemeColors) {
       gap: Space.md,
     },
     heroIcon: {
-      width: 40,
-      height: 40,
+      width: Control.chrome + Space.xs,
+      height: Control.chrome + Space.xs,
       borderRadius: Radius.full,
       justifyContent: 'center',
       alignItems: 'center',
@@ -498,7 +497,7 @@ function createStyles(colors: ThemeColors) {
     heroSubtitle: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
-      marginTop: 2,
+      marginTop: Space.xs / 2,
     },
     quietHoursRow: {
       flexDirection: 'row',
@@ -517,7 +516,7 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.md,
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm + 2,
-      minHeight: 48,
+      minHeight: Space.xxl,
     },
     quietTimePickerPressed: {
       opacity: 0.7,
@@ -530,7 +529,7 @@ function createStyles(colors: ThemeColors) {
     },
     quietTimeValue: {
       flex: 1,
-      fontSize: 15,
+      fontSize: Type.bodyEmphasis.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
     },
@@ -547,14 +546,14 @@ function createStyles(colors: ThemeColors) {
     quietHoursPickerGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: 6,
+      gap: Space.xs + 2,
     },
     quietHourCell: {
-      paddingHorizontal: 12,
-      paddingVertical: 10,
+      paddingHorizontal: Space.md - Space.xs,
+      paddingVertical: Space.sm + 2,
       borderRadius: Radius.sm,
       backgroundColor: colors.surfaceAlt,
-      minHeight: 40,
+      minHeight: Control.chrome + Space.xs,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -566,7 +565,7 @@ function createStyles(colors: ThemeColors) {
       transform: [{ scale: 0.96 }],
     },
     quietHourCellText: {
-      fontSize: 12,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.medium,
       color: colors.textPrimary,
     },

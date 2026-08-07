@@ -9,11 +9,12 @@ import {
   ScrollView,
   Linking,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
@@ -38,8 +39,9 @@ import {
 import { parseApiError } from '../lib/apiClient';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 
-type Props = StackScreenProps<RootStackParamList, 'Verification'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'Verification'>;
 
 type KycStep = 'status' | 'identity' | 'document' | 'review';
 type Dac7Step = 'status' | 'details' | 'review';
@@ -57,6 +59,7 @@ export default function VerificationScreen({ navigation }: Props) {
   const { isOffline } = useConnectivity();
   const reducedMotionEnabled = useReducedMotion();
   const { colors } = useAppTheme();
+  const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const currentUser = useStore((state) => state.currentUser);
   const coOwnCompliance = useStore((state) => state.coOwnCompliance);
@@ -256,7 +259,15 @@ export default function VerificationScreen({ navigation }: Props) {
           onBack={() => navigation.goBack()}
         />
       }
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
     >
+      <KeyboardAwareScrollView
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        contentContainerStyle={{ paddingHorizontal: Space.md, paddingTop: Space.sm, paddingBottom: Math.max(insets.bottom, Space.md) + Space.lg }}
+      >
       {/* ── STATUS CARD ── */}
       <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <View style={[styles.statusCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -667,6 +678,7 @@ export default function VerificationScreen({ navigation }: Props) {
         </Text>
         .
       </Text>
+      </KeyboardAwareScrollView>
     </FlagshipScreen>
   );
 }
@@ -679,13 +691,13 @@ function createStyles(colors: ThemeColors) {
     gap: Space.md,
     padding: Space.md,
     borderRadius: Radius.lg,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     marginBottom: Space.md,
   },
   statusIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: Control.chrome + 2,
+    height: Control.chrome + 2,
+    borderRadius: Radius.xxl,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -693,7 +705,7 @@ function createStyles(colors: ThemeColors) {
   statusTitle: {
     fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
-    marginBottom: 2,
+    marginBottom: Space.xs / 2,
   },
   statusDescription: {
     fontSize: Type.body.size,
@@ -703,7 +715,7 @@ function createStyles(colors: ThemeColors) {
   flowCard: {
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     marginBottom: Space.md,
     overflow: 'hidden',
@@ -725,14 +737,14 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm,
   },
   fieldLabel: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    marginBottom: 4,
+    marginBottom: Space.xs,
   },
   input: {
-    height: 44,
+    height: Control.hit,
     borderRadius: Radius.md,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     paddingHorizontal: Space.sm,
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
@@ -748,7 +760,7 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm,
     padding: Space.sm,
     borderRadius: Radius.md,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
   },
   docOptionText: {
     flex: 1,
@@ -761,12 +773,12 @@ function createStyles(colors: ThemeColors) {
     gap: Space.xs,
     paddingVertical: Space.lg,
     borderRadius: Radius.md,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     borderStyle: 'dashed',
   },
   uploadText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     textAlign: 'center',
     paddingHorizontal: Space.md,
@@ -776,12 +788,12 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.xs,
     borderRadius: Radius.sm,
     backgroundColor: colors.surfaceAlt,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     marginTop: Space.xs,
   },
   uploadBtnText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
@@ -792,9 +804,9 @@ function createStyles(colors: ThemeColors) {
   },
   flowBackBtn: {
     flex: 1,
-    height: 44,
+    height: Control.hit,
     borderRadius: Radius.md,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
@@ -806,7 +818,7 @@ function createStyles(colors: ThemeColors) {
   },
   flowPrimaryBtn: {
     flex: 1,
-    height: 44,
+    height: Control.hit,
     borderRadius: Radius.md,
     backgroundColor: colors.brand,
     alignItems: 'center',
@@ -830,7 +842,7 @@ function createStyles(colors: ThemeColors) {
     gap: Space.md,
   },
   reviewLabel: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
   },
   reviewValue: {
@@ -840,20 +852,20 @@ function createStyles(colors: ThemeColors) {
     textAlign: 'right',
   },
   countryScroll: {
-    marginVertical: -4,
+    marginVertical: -Space.xs,
   },
   countryScrollContent: {
-    gap: 6,
-    paddingVertical: 4,
+    gap: Space.xs + 2,
+    paddingVertical: Space.xs,
   },
   countryChip: {
     paddingHorizontal: Space.sm,
-    paddingVertical: 6,
+    paddingVertical: Space.xs + 2,
     borderRadius: Radius.sm,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
   },
   countryChipText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
   },
   checkboxRow: {
@@ -864,12 +876,12 @@ function createStyles(colors: ThemeColors) {
   },
   checkboxText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    lineHeight: 18,
+    lineHeight: Type.captionElevated.lineHeight,
   },
   footerNote: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     textAlign: 'center',
     paddingHorizontal: Space.lg,

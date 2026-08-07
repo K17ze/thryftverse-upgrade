@@ -30,7 +30,7 @@ export function LookDetailSkeleton() {
           <SkeletonLoader width={40} height={40} borderRadius={Radius.full} />
           <View style={styles.creatorInfo}>
             <SkeletonLoader width={120} height={14} borderRadius={Radius.sm} />
-            <SkeletonLoader width={80} height={11} borderRadius={Radius.sm} style={{ marginTop: 4 }} />
+            <SkeletonLoader width={80} height={11} borderRadius={Radius.sm} style={{ marginTop: Space.xs }} />
           </View>
         </View>
       </View>
@@ -55,7 +55,7 @@ export function LookDetailSkeleton() {
             <View key={i} style={styles.trayCard}>
               <SkeletonLoader width={148} height={184} borderRadius={Radius.lg} />
               <SkeletonLoader width="80%" height={12} borderRadius={Radius.sm} style={{ marginTop: 6 }} />
-              <SkeletonLoader width={50} height={11} borderRadius={Radius.sm} style={{ marginTop: 4 }} />
+              <SkeletonLoader width={50} height={11} borderRadius={Radius.sm} style={{ marginTop: Space.xs }} />
             </View>
           ))}
         </View>

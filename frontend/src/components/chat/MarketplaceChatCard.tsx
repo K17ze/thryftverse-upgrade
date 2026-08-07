@@ -378,7 +378,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: Space.xs + 2,
-    paddingVertical: 4,
+    paddingVertical: Space.xs,
     borderRadius: Radius.sm,
     alignSelf: 'flex-start',
   },

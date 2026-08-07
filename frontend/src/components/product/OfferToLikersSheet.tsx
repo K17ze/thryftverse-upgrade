@@ -369,7 +369,7 @@ const createStyles = (themed: {
   handle: {
     width: 36,
     height: 4,
-    borderRadius: 2,
+    borderRadius: Radius.sm,
     backgroundColor: themed.border,
     alignSelf: 'center',
     marginTop: Space.sm,
@@ -399,22 +399,22 @@ const createStyles = (themed: {
     marginTop: 2,
   },
   title: {
-    fontSize: 17,
+    fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
     color: themed.textPrimary,
     marginBottom: 2,
   },
   subtitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     color: themed.textSecondary,
     lineHeight: 17,
   },
   closeText: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
     color: themed.brand,
-    marginTop: 4,
+    marginTop: Space.xs,
   },
   scroll: {
     paddingHorizontal: Space.md,
@@ -450,21 +450,21 @@ const createStyles = (themed: {
     flex: 1,
   },
   itemTitle: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
     color: themed.textPrimary,
-    marginBottom: 4,
+    marginBottom: Space.xs,
     lineHeight: 19,
   },
   itemPrice: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     color: themed.textMuted,
   },
 
   // Section labels
   sectionLabel: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: themed.textSecondary,
     letterSpacing: 0.2,
@@ -494,7 +494,7 @@ const createStyles = (themed: {
     borderWidth: 1.5,
   },
   discountChipText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: themed.textSecondary,
     textAlign: 'center',
@@ -521,22 +521,22 @@ const createStyles = (themed: {
     gap: Space.sm,
   },
   customPriceToggleLabel: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
     color: themed.textPrimary,
   },
   customPriceInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Space.xs,
   },
   currencySymbol: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.bold,
     color: themed.brand,
   },
   customPriceInput: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.bold,
     color: themed.textPrimary,
     minWidth: 60,
@@ -570,13 +570,13 @@ const createStyles = (themed: {
     justifyContent: 'center',
   },
   toggleTitle: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: themed.textPrimary,
     marginBottom: 2,
   },
   toggleSub: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: themed.textMuted,
     lineHeight: 15,
@@ -605,7 +605,7 @@ const createStyles = (themed: {
     borderWidth: 1.5,
   },
   expiryChipText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: themed.textSecondary,
   },
@@ -613,7 +613,7 @@ const createStyles = (themed: {
     color: themed.brand,
   },
   expiryHint: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: themed.textMuted,
     marginTop: Space.xs,
@@ -641,12 +641,12 @@ const createStyles = (themed: {
     paddingTop: 10,
   },
   summaryLabel: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
     color: themed.textSecondary,
   },
   summaryValue: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.bold,
     color: themed.textPrimary,
   },
@@ -655,12 +655,12 @@ const createStyles = (themed: {
   infoNote: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 6,
+    gap: Space.xs + 2,
     paddingHorizontal: Space.xs,
   },
   infoNoteText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: themed.textMuted,
     lineHeight: 16,

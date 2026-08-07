@@ -1,6 +1,28 @@
 import { z } from 'zod';
 import type { OutfitTag } from '../components/look/LookMediaComposer';
-import type { ComposerFrame } from '../components/poster/PosterFrameStrip';
+import type { PosterStickerType } from '../services/postersApi';
+
+// ── Legacy poster frame type (migrated from PosterFrameStrip.tsx) ──
+export interface ComposerFrame {
+  id: string;
+  mediaType: 'image' | 'video' | 'text';
+  mediaUri: string | null;
+  backgroundColor: string | null;
+  caption: string;
+  durationMs: number;
+  videoDurationMs?: number | null;
+  thumbnailUri?: string | null;
+  stickers: Array<{
+    id: string;
+    type: PosterStickerType;
+    x: number;
+    y: number;
+    scale: number;
+    rotation: number;
+    payload: Record<string, unknown>;
+    sortOrder: number;
+  }>;
+}
 
 // ── Layer payload schemas ──────────────────────────────────────────
 

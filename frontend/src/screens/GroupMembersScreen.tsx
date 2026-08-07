@@ -6,18 +6,18 @@ import {
   ScrollView,
   TextInput,
 } from 'react-native';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
 import { Caption, BodyEmphasis, Meta } from '../components/ui/Text';
 
-type Props = StackScreenProps<RootStackParamList, 'GroupMembers'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'GroupMembers'>;
 
 type MemberRole = 'owner' | 'admin' | 'member';
 
@@ -192,18 +192,18 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Space.md,
-    paddingVertical: 12,
+    paddingVertical: Space.sm + 4,
     gap: Space.sm,
   },
   memberAvatar: {
-    width: 40,
-    height: 40,
+    width: Space.xl + 8,
+    height: Space.xl + 8,
     borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
   },
   memberAvatarText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
   },
@@ -240,12 +240,12 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm,
   },
   roleBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: Space.xs + 2,
+    paddingVertical: Space.xs - 2,
     borderRadius: Radius.sm,
   },
   roleBadgeText: {
-    fontSize: 10,
+    fontSize: Type.meta.size - 1,
     fontFamily: Typography.family.semibold,
   },
   emptyWrap: {
@@ -268,18 +268,18 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Space.md,
-    paddingVertical: 14,
+    paddingVertical: Space.sm + 2,
     gap: Space.sm + 4,
   },
   memberAvatarV2: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
   },
   memberAvatarTextV2: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
   },

@@ -13,6 +13,7 @@ import Reanimated, {
 import { LinearGradient } from 'expo-linear-gradient';
 import { ActiveTheme, Colors } from '../constants/colors';
 
+import { Space } from '../theme/designTokens';
 // ELEVATED: Flagship shimmer with brand tint
 const IS_LIGHT = ActiveTheme === 'light';
 const BASE_BG = Colors.surface;
@@ -31,14 +32,24 @@ interface SkeletonProps {
   height: number;
   borderRadius?: number;
   style?: StyleProp<ViewStyle>;
+  /** When true, disable shimmer/breathing animations (reduced motion). */
+  reducedMotion?: boolean;
 }
 
-export function SkeletonLoader({ width, height, borderRadius = 8, style }: SkeletonProps) {
+export function SkeletonLoader({ width, height, borderRadius = 8, style, reducedMotion = false }: SkeletonProps) {
   const translateX = useSharedValue(-400);
   const breathe = useSharedValue(1);
   const brandTranslate = useSharedValue(-400);
 
   useEffect(() => {
+    if (reducedMotion) {
+      // Static placeholder — no animation cycles.
+      translateX.value = 0;
+      breathe.value = 1;
+      brandTranslate.value = 0;
+      return;
+    }
+
     // Primary wave sweep
     translateX.value = withRepeat(
       withSequence(
@@ -68,7 +79,7 @@ export function SkeletonLoader({ width, height, borderRadius = 8, style }: Skele
       -1,
       false,
     );
-  }, [translateX, breathe]);
+  }, [translateX, breathe, brandTranslate, reducedMotion]);
 
   const waveStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],
@@ -96,25 +107,29 @@ export function SkeletonLoader({ width, height, borderRadius = 8, style }: Skele
         style,
       ]}
     >
-      {/* Primary white shimmer wave */}
-      <Reanimated.View style={[StyleSheet.absoluteFill, waveStyle]}>
-        <LinearGradient
-          colors={SHIMMER_WAVE as [string, string, string]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={{ width: 280, height: '100%' }}
-        />
-      </Reanimated.View>
+      {/* Primary white shimmer wave — hidden when reduced motion is on */}
+      {reducedMotion ? null : (
+        <Reanimated.View style={[StyleSheet.absoluteFill, waveStyle]}>
+          <LinearGradient
+            colors={SHIMMER_WAVE as [string, string, string]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={{ width: 280, height: '100%' }}
+          />
+        </Reanimated.View>
+      )}
 
       {/* Secondary brand-tinted wave (slightly delayed for depth) */}
-      <Reanimated.View style={[StyleSheet.absoluteFill, brandWaveStyle]}>
-        <LinearGradient
-          colors={BRAND_TINT as [string, string, string]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={{ width: 200, height: '100%' }}
-        />
-      </Reanimated.View>
+      {reducedMotion ? null : (
+        <Reanimated.View style={[StyleSheet.absoluteFill, brandWaveStyle]}>
+          <LinearGradient
+            colors={BRAND_TINT as [string, string, string]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={{ width: 200, height: '100%' }}
+          />
+        </Reanimated.View>
+      )}
     </Reanimated.View>
   );
 }
@@ -160,7 +175,7 @@ export function ConversationListSkeleton({ count = 6 }: { count?: number }) {
           <SkeletonLoader width={50} height={50} borderRadius={25} />
           <View style={convoStyles.textCol}>
             <SkeletonLoader width="55%" height={12} borderRadius={6} />
-            <SkeletonLoader width="80%" height={10} borderRadius={6} style={{ marginTop: 8 }} />
+            <SkeletonLoader width="80%" height={10} borderRadius={6} style={{ marginTop: Space.sm }} />
           </View>
           <SkeletonLoader width={36} height={10} borderRadius={5} />
         </View>
@@ -192,17 +207,17 @@ export function ProfileSkeleton() {
 }
 
 const gridStyles = StyleSheet.create({
-  container: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', paddingHorizontal: 16 },
+  container: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', paddingHorizontal: Space.md },
   card: { marginBottom: 20 },
 });
 
 const storiesStyles = StyleSheet.create({
-  container: { flexDirection: 'row', paddingHorizontal: 16, gap: 14, paddingVertical: 12 },
+  container: { flexDirection: 'row', paddingHorizontal: Space.md, gap: 14, paddingVertical: 12 },
   item: { alignItems: 'center' },
 });
 
 const convoStyles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, gap: 12 },
+  row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Space.md, paddingVertical: 14, gap: 12 },
   textCol: { flex: 1 },
 });
 
@@ -211,5 +226,5 @@ const profileStyles = StyleSheet.create({
   avatarRow: { alignItems: 'flex-start', paddingHorizontal: 20, marginTop: -42 },
   avatar: { borderWidth: 3, borderColor: Colors.background },
   info: { paddingHorizontal: 20, marginTop: 12 },
-  statsRow: { flexDirection: 'row', gap: 14, marginTop: 16 },
+  statsRow: { flexDirection: 'row', gap: 14, marginTop: Space.md },
 });

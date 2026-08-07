@@ -10,6 +10,7 @@ import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
+import { Radius } from '../theme/designTokens';
 interface PremiumToggleProps {
   value: boolean;
   onValueChange: (v: boolean) => void;
@@ -68,14 +69,14 @@ const styles = StyleSheet.create({
   track: {
     width: 52,
     height: 30,
-    borderRadius: 15,
+    borderRadius: Radius.xl,
     justifyContent: 'center',
     paddingHorizontal: 2,
   },
   knob: {
     width: 26,
     height: 26,
-    borderRadius: 13,
+    borderRadius: Radius.xl,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,

@@ -22,7 +22,7 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
   if (defaultResolveRequest) {
     return defaultResolveRequest(context, moduleName, platform);
   }
-  // Fallback to Metro's built-in resolver via context
+  // Fallback to Metro's built-in resolvers via context
   return context.resolveRequest(context, moduleName, platform);
 };
 

@@ -11,13 +11,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { Space, Radius, Type, Typography, Elevation } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Elevation, Stroke, Control } from '../theme/designTokens';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
@@ -30,7 +30,7 @@ import { getListingCoverUri } from '../utils/media';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 
-type Props = StackScreenProps<RootStackParamList, 'SupportTicketDetail'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'SupportTicketDetail'>;
 
 const STATUS_CONFIG: Record<string, { label: string; tone: 'pending' | 'success' | 'error' | 'shipped' | 'paid' | 'delivered' }> = {
   open: { label: 'Open', tone: 'pending' },
@@ -343,8 +343,8 @@ function createStyles(colors: ThemeColors) {
     gap: Space.md,
   },
   statusIconWrap: {
-    width: 52,
-    height: 52,
+    width: Control.hit + Space.sm,
+    height: Control.hit + Space.sm,
     borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
@@ -353,10 +353,10 @@ function createStyles(colors: ThemeColors) {
   statusTitle: {
     fontSize: Type.title.size,
     color: colors.textPrimary,
-    marginBottom: 2,
+    marginBottom: Space.xs / 2,
   },
   statusId: {
-    letterSpacing: 0.5,
+    letterSpacing: Type.metaElevated.letterSpacing,
   },
   metaRow: {
     flexDirection: 'row',
@@ -366,7 +366,7 @@ function createStyles(colors: ThemeColors) {
     paddingTop: Space.md,
   },
   metaItem: {
-    gap: 4,
+    gap: Space.xs,
   },
   metaValue: {
     fontSize: Type.body.size,
@@ -408,7 +408,7 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
-    marginTop: 4,
+    marginTop: Space.xs,
     lineHeight: Type.caption.lineHeight + 2,
   },
   actionsCard: {
@@ -445,13 +445,13 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm,
   },
   orderContextThumb: {
-    width: 48,
-    height: 48,
+    width: Space.xl + Space.xl - 4,
+    height: Space.xl + Space.xl - 4,
     borderRadius: Radius.md,
   },
   orderContextInfo: {
     flex: 1,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   orderContextTitle: {
     fontSize: Type.body.size,
@@ -481,8 +481,8 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm,
   },
   evidenceThumb: {
-    width: 80,
-    height: 80,
+    width: Space.xxl + Space.xl,
+    height: Space.xxl + Space.xl,
     borderRadius: Radius.md,
   },
   timelineListCard: {
@@ -497,8 +497,8 @@ function createStyles(colors: ThemeColors) {
     gap: Space.md,
   },
   timelineDot: {
-    width: 12,
-    height: 12,
+    width: Space.sm + Space.xs,
+    height: Space.sm + Space.xs,
     borderRadius: Radius.full,
   },
   timelineDotActive: {
@@ -506,12 +506,12 @@ function createStyles(colors: ThemeColors) {
   },
   timelineDotPending: {
     backgroundColor: colors.surfaceAlt,
-    borderWidth: 2,
+    borderWidth: Stroke.emphasis,
     borderColor: colors.border,
   },
   timelineLine: {
-    width: 2,
-    height: 24,
+    width: Stroke.emphasis,
+    height: Space.lg,
     backgroundColor: colors.border,
     marginLeft: 5,
   },
@@ -527,7 +527,7 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
   });
 }

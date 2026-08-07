@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
@@ -13,9 +13,9 @@ import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import type { ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke } from '../theme/designTokens';
 
-type Props = StackScreenProps<RootStackParamList, 'ChatSettings'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'ChatSettings'>;
 
 export default function ChatSettingsScreen({ navigation }: Props) {
   const { show } = useToast();
@@ -226,8 +226,8 @@ function createStyles(colors: ThemeColors) {
       gap: Space.md,
     },
     heroIcon: {
-      width: 40,
-      height: 40,
+      width: Space.xl + Space.sm,
+      height: Space.xl + Space.sm,
       borderRadius: Radius.full,
       justifyContent: 'center',
       alignItems: 'center',
@@ -241,7 +241,7 @@ function createStyles(colors: ThemeColors) {
     heroSubtitle: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
-      marginTop: 2,
+      marginTop: Space.xs / 2,
     },
     heroStats: {
       flexDirection: 'row',
@@ -256,11 +256,11 @@ function createStyles(colors: ThemeColors) {
     heroStatLabel: {
       fontSize: Type.meta.size,
       fontFamily: Typography.family.regular,
-      marginTop: 2,
+      marginTop: Space.xs / 2,
     },
     heroStatDivider: {
-      width: 1,
-      height: 28,
+      width: Stroke.standard,
+      height: Space.lg + Space.xs,
     },
   });
 }

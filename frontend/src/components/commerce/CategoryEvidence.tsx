@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 import type { EvidenceGroup } from '../../platform/commerce/categoryEvidence';
 
 export interface CategoryEvidenceProps {
@@ -87,7 +87,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginTop: Space.md,
   },
   primarySummary: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
     lineHeight: 20,
@@ -103,13 +103,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: 2,
   },
   factLabel: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     flexShrink: 0,
   },
   factValue: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
     color: colors.textPrimary,
     textAlign: 'right',
@@ -123,7 +123,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: Space.xs,
   },
   expandableTitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
   },

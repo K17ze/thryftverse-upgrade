@@ -4,7 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
@@ -15,7 +15,7 @@ import { parseApiError } from '../lib/apiClient';
 import { fetchCoOwnAssetById, fetchCoOwnHoldings, createCoOwnBuyoutOffer } from '../services/marketApi';
 import { AppButton } from '../components/ui/AppButton';
 import { CachedImage } from '../components/CachedImage';
-import { Space, Radius, Type, Typography, DockConstants } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, DockConstants, Stroke } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { haptics } from '../utils/haptics';
@@ -26,7 +26,7 @@ import {
 } from '../components/coown';
 
 type RouteT = RouteProp<RootStackParamList, 'Buyout'>;
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 export default function BuyoutScreen() {
   const navigation = useNavigation<NavT>();
@@ -328,7 +328,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
-    letterSpacing: -0.5,
+    letterSpacing: Type.title.letterSpacing + 0.1,
     lineHeight: Type.title.lineHeight,
     marginBottom: Space.md,
   },
@@ -362,9 +362,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   statusIconWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: Space.xxl + Space.sm,
+    height: Space.xxl + Space.sm,
+    borderRadius: Radius.xxl + 4,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Space.xs,
@@ -372,13 +372,13 @@ const styles = StyleSheet.create({
   statusTitle: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: -0.3,
+    letterSpacing: Type.subtitle.letterSpacing + 0.1,
     textAlign: 'center',
   },
   statusBody: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    lineHeight: 20,
+    lineHeight: Type.body.lineHeight,
     textAlign: 'center',
   },
   futureFeatures: {
@@ -407,7 +407,7 @@ const styles = StyleSheet.create({
     marginBottom: Space.xs,
   },
   input: {
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderRadius: Radius.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,

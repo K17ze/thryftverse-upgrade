@@ -124,6 +124,7 @@ export const registerAiTruthRoutes = ({
         perConversationPerHourLimit: AI_RATE_LIMITS.perConversationPerHour,
         maxRetries: AI_RATE_LIMITS.maxRetries,
         maxOutputTokens: AI_RATE_LIMITS.hardMaxOutputTokens,
+        defaultConfidenceThreshold: AI_RATE_LIMITS.defaultConfidenceThreshold,
       },
     };
   });

@@ -214,7 +214,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontFamily: TypeStyles.body.fontFamily,
     color: colors.textPrimary,
     paddingHorizontal: Space.sm,
-    paddingVertical: 8,
+    paddingVertical: Space.sm,
     backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.md,
   },
@@ -264,7 +264,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.full,
   },
   avatarText: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: TypeStyles.title.fontFamily,
     color: colors.textPrimary,
   },

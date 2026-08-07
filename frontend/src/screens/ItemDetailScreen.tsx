@@ -35,6 +35,7 @@ import { toIze, formatIzeAmount } from '../utils/currency';
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { useBackendData } from '../context/BackendDataContext';
 import { CachedImage } from '../components/CachedImage';
+import { ImageEmptyGraphic } from '../components/ImageEmptyGraphic';
 import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
 import { ShareSheet } from '../components/ShareSheet';
 import { BottomSheet } from '../components/BottomSheet';
@@ -49,7 +50,9 @@ import {
   SizeGuideSheet,
   BundleUpsellRow,
   ListingQA,
+  SustainabilityBadge,
 } from '../components/product';
+import { computeSustainabilityScore } from '../utils/sustainabilityScore';
 import {
   CommerceMediaStage,
   CommerceStateCanvas,
@@ -58,7 +61,6 @@ import {
 import {
   CommerceDetailHeader,
   CommerceDetailIdentity,
-  CommerceDetailSellerRow,
   CommerceDetailSection,
   CommerceDetailDisclosureRow,
   CommerceDetailMetricRow,
@@ -67,9 +69,16 @@ import {
   CommerceDetailUnavailableInline,
   CommerceDetailOfflineBanner,
   COMMERCE_DETAIL_COMPACT_WIDTH,
+  SellerInfoCard,
+  RelatedItemsRail,
+  ShippingReturnsInfo,
+  SustainabilityImpact,
+  MakeOfferSheet,
 } from '../components/commerce/detail';
-import { VerificationBadge } from '../components/profile/VerificationBadge';
-import { SellerStandardsBadges } from '../components/profile/SellerStandardsBadges';
+import { SellerTrustBadge } from '../components/seller/SellerTrustBadge';
+import { HorizontalRail } from '../components/HorizontalRail';
+import { ProductCardV2 } from '../components/ProductCardV2';
+import type { Listing as CatalogListing } from '../data/mockData';
 import { resolveEvidenceGroups } from '../platform/commerce/categoryEvidence';
 import {
   useListingDetail,
@@ -90,7 +99,7 @@ import {
 } from '../platform/product';
 import type { RecommendationLook } from '../platform/product';
 import { trackTelemetryEvent } from '../lib/telemetry';
-import { Space, Type, Typography, Radius, DockConstants } from '../theme/designTokens';
+import { Space, Type, Typography, Radius, DockConstants, Control, AspectRatio, Stroke, LetterSpacing } from '../theme/designTokens';
 import { t } from '../i18n';
 
 export default function ItemDetailScreen() {
@@ -114,6 +123,9 @@ export default function ItemDetailScreen() {
   const [qaSheetVisible, setQaSheetVisible] = useState(false);
   const [purchaseDetailsVisible, setPurchaseDetailsVisible] = useState(false);
   const [overflowVisible, setOverflowVisible] = useState(false);
+  const [sustainabilityExpanded, setSustainabilityExpanded] = useState(false);
+  const [makeOfferVisible, setMakeOfferVisible] = useState(false);
+  const [conditionInfoVisible, setConditionInfoVisible] = useState(false);
 
   const isItemSavedAnywhere = useStore((state) => state.isItemSavedAnywhere);
   const isFav = useStore((state) => state.isWishlisted(route.params?.itemId));
@@ -379,6 +391,21 @@ export default function ItemDetailScreen() {
     ? sellerTrustData
     : buildSellerTrustSummary(item.seller);
 
+  // Sustainability score — heuristic, client-side estimate from listing
+  // attributes (condition, category, brand, seller location). Truthfully
+  // labeled as "Estimated impact" per AGENTS.md §11.
+  const sustainabilityScore = useMemo(
+    () =>
+      computeSustainabilityScore({
+        condition: item.condition,
+        category: item.category,
+        subcategory: item.subcategory,
+        brand: item.brand,
+        sellerLocation: seller?.location ?? item.seller?.location ?? null,
+      }),
+    [item.condition, item.category, item.subcategory, item.brand, seller?.location, item.seller?.location],
+  );
+
   const recommendationSections = recommendationsData?.sections ?? [];
   const seenInLooksSection = recommendationSections.find((s) => s.key === 'seen_in_looks');
   const railSections = recommendationSections.filter(
@@ -392,6 +419,23 @@ export default function ItemDetailScreen() {
         (i): i is DisplayReadyListing => !isRecommendationLook(i)
       )
     : [];
+
+  // "More from this seller" browse rail — real listings from the same
+  // seller, excluding the current item and sold items. Only rendered when
+  // there are at least 2 items so the rail is never an empty shell.
+  const moreFromSellerRailItems: Listing[] = useMemo(
+    () =>
+      backendListings
+        .filter(
+          (l) =>
+            l.id !== item.id &&
+            !l.isSold &&
+            item.sellerId != null &&
+            l.sellerId === item.sellerId,
+        )
+        .slice(0, 6),
+    [backendListings, item.id, item.sellerId],
+  );
 
   const handlePressRecommendation = (recItem: Listing) => {
     navigation.push('ItemDetail', { itemId: recItem.id });
@@ -417,6 +461,23 @@ export default function ItemDetailScreen() {
     item.condition,
     item.category,
   ].filter(Boolean).join(' · ');
+
+  // Condition colour-coding + definition. Maps each ListingCondition to a
+  // semantic accent and a plain-English definition shown on tap.
+  const conditionMeta = (() => {
+    switch (item.condition) {
+      case 'New with tags':
+        return { color: colors.success, definition: 'New: Unworn, with original tags and packaging intact.' };
+      case 'Very good':
+        return { color: colors.commerceTrust, definition: 'Very good: No visible flaws, minimal wear.' };
+      case 'Good':
+        return { color: colors.warning, definition: 'Good: Light wear consistent with gentle use; no major flaws.' };
+      case 'Satisfactory':
+        return { color: colors.bronze, definition: 'Satisfactory: Visible wear or minor flaws; fully wearable.' };
+      default:
+        return null;
+    }
+  })();
 
   const secondaryLine = [
     formattedProtectionTotal ? `${formattedProtectionTotal} with Buyer Protection` : null,
@@ -509,6 +570,8 @@ export default function ItemDetailScreen() {
         contentContainerStyle={{ paddingBottom: scrollBottomPadding }}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
+        accessibilityElementsHidden={collectionModalVisible || shareVisible || fullscreenVisible || sizeGuideVisible || qaSheetVisible || purchaseDetailsVisible || overflowVisible || makeOfferVisible || conditionInfoVisible}
+        importantForAccessibility={collectionModalVisible || shareVisible || fullscreenVisible || sizeGuideVisible || qaSheetVisible || purchaseDetailsVisible || overflowVisible || makeOfferVisible || conditionInfoVisible ? 'no-hide-descendants' : 'auto'}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -534,7 +597,7 @@ export default function ItemDetailScreen() {
           scrollY={scrollY}
           onBack={() => navigation.goBack()}
           onShare={handleShare}
-          onSave={() => { haptic.medium(); setCollectionModalVisible(true); }}
+          onSave={() => { haptic.patterns.save(); setCollectionModalVisible(true); }}
           onToggleFav={handleToggleFav}
           onDoubleTap={handleDoubleTap}
           onZoomStart={() => { if (item) ProductAnalytics.mediaZoom(item.id); }}
@@ -568,7 +631,7 @@ export default function ItemDetailScreen() {
               icon: isItemSavedAnywhere(item.id) ? 'bookmark' : 'bookmark-outline',
               activeIcon: 'bookmark',
               label: isItemSavedAnywhere(item.id) ? 'Saved to collection' : 'Save to collection',
-              onPress: () => { haptic.medium(); setCollectionModalVisible(true); },
+              onPress: () => { haptic.patterns.save(); setCollectionModalVisible(true); },
               isActive: isItemSavedAnywhere(item.id),
             },
           ]}
@@ -608,11 +671,25 @@ export default function ItemDetailScreen() {
                     it gets a distinct visual treatment instead of
                     blending into muted text. */}
                 {item.condition ? (
-                  <View style={[styles.conditionChip, { backgroundColor: colors.surfaceAlt }]}>
+                  <Pressable
+                    onPress={() => { haptic.light(); setConditionInfoVisible(true); }}
+                    hitSlop={4}
+                    style={[
+                      styles.conditionChip,
+                      {
+                        borderColor: conditionMeta ? `${conditionMeta.color}66` : colors.borderSubtle,
+                        backgroundColor: conditionMeta ? `${conditionMeta.color}14` : 'transparent',
+                      },
+                    ]}
+                    accessibilityLabel={`Condition: ${item.condition}. Tap for definition.`}
+                    accessibilityRole="button"
+                  >
+                    <View style={[styles.conditionDot, { backgroundColor: conditionMeta?.color ?? colors.textMuted }]} />
                     <Text style={[styles.conditionChipText, { color: colors.textPrimary }]}>
                       {item.condition}
                     </Text>
-                  </View>
+                    <Ionicons name="information-circle-outline" size={13} color={colors.textMuted} />
+                  </Pressable>
                 ) : null}
                 {(() => {
                   const remaining = [
@@ -708,90 +785,91 @@ export default function ItemDetailScreen() {
 
         {seller && (
           <View style={[styles.sellerRowWrap, { borderTopColor: colors.borderSubtle }]}>
-            <CommerceDetailSellerRow
-              avatarUri={seller.avatar ?? undefined}
-              name={seller.username}
-              verified={seller.verified}
-              ratingLine={
-                seller.rating != null
-                  ? `${seller.rating.toFixed(1)}${seller.reviewCount != null ? ` · ${seller.reviewCount} reviews` : ''}`
-                  : undefined
-              }
-              locationLine={seller.location ?? seller.dispatchTimeLabel ?? undefined}
-              onPress={() => {
+            <SellerInfoCard
+              seller={seller}
+              isOwner={capabilities.isOwner}
+              isFollowing={sellerTrustData?.isFollowing ?? false}
+              isFollowPending={sellerFollowMutation.isPending}
+              onFollow={() => {
+                if (!currentUser?.id) {
+                  show('Sign in to follow this seller.', 'error');
+                  return;
+                }
+                sellerFollowMutation.mutate(undefined, {
+                  onSuccess: (data) => {
+                    show(data.isFollowing ? 'Followed seller' : 'Unfollowed seller', 'success');
+                  },
+                  onError: () => {
+                    show('Could not follow seller. Please try again.', 'error');
+                  },
+                });
+              }}
+              onMessage={async () => {
+                if (!currentUser?.id) {
+                  show('Sign in to message the seller.', 'error');
+                  return;
+                }
+                if (isResolvingConversation) return;
+                if (item) ProductAnalytics.sellerMessageStart(item.id);
+                setIsResolvingConversation(true);
+                try {
+                  const conversation = await createDmConversationOnApi({
+                    recipientUserId: seller.id,
+                    itemId: item.id,
+                  });
+                  upsertConversation(conversation);
+                  navigation.navigate('Chat', {
+                    conversationId: conversation.id,
+                    partnerUserId: seller.id,
+                  });
+                } catch {
+                  show('Could not start conversation. Please try again.', 'error');
+                } finally {
+                  setIsResolvingConversation(false);
+                }
+              }}
+              onViewShop={() => {
                 if (item) ProductAnalytics.sellerProfileOpen(item.id, seller.id);
                 navigation.navigate('UserProfile', { userId: seller.id });
               }}
-              primaryAction={
-                !capabilities.isOwner
-                  ? {
-                      label: isResolvingConversation ? 'Starting…' : 'Message',
-                      onPress: async () => {
-                        if (!currentUser?.id) {
-                          show('Sign in to message the seller.', 'error');
-                          return;
-                        }
-                        if (isResolvingConversation) return;
-                        if (item) ProductAnalytics.sellerMessageStart(item.id);
-                        setIsResolvingConversation(true);
-                        try {
-                          const conversation = await createDmConversationOnApi({
-                            recipientUserId: seller.id,
-                            itemId: item.id,
-                          });
-                          upsertConversation(conversation);
-                          navigation.navigate('Chat', {
-                            conversationId: conversation.id,
-                            partnerUserId: seller.id,
-                          });
-                        } catch {
-                          show('Could not start conversation. Please try again.', 'error');
-                        } finally {
-                          setIsResolvingConversation(false);
-                        }
-                      },
-                    }
-                  : undefined
-              }
-              secondaryAction={
-                !capabilities.isOwner
-                  ? {
-                      label: sellerFollowMutation.isPending ? 'Following…' : (sellerTrustData?.isFollowing ? 'Following' : 'Follow'),
-                      onPress: () => {
-                        if (!currentUser?.id) {
-                          show('Sign in to follow this seller.', 'error');
-                          return;
-                        }
-                        sellerFollowMutation.mutate(undefined, {
-                          onSuccess: (data) => {
-                            show(data.isFollowing ? 'Followed seller' : 'Unfollowed seller', 'success');
-                          },
-                          onError: () => {
-                            show('Could not follow seller. Please try again.', 'error');
-                          },
-                        });
-                      },
-                    }
-                  : undefined
-              }
             />
           </View>
         )}
 
-        {/* ── Seller verification + standards badges ──
-            Per 2026 marketplace UX research: trust signals above the fold
-            on the listing page increase conversion more than any other
-            single change. Show verification tier and earned badges here. */}
-        {seller && (seller.verificationTier || seller.verified) && (
+        {seller ? (
           <View style={styles.sellerBadgesRow}>
-            {(() => {
-              const tier = seller.verificationTier ?? (seller.verified ? 'email' : null);
-              if (!tier) return null;
-              return <VerificationBadge tier={tier} />;
-            })()}
-            <SellerStandardsBadges sellerTrust={seller} size="sm" limit={2} />
+            <SellerTrustBadge seller={seller} />
           </View>
-        )}
+        ) : null}
+
+        {/* ── More from this seller ──
+            Horizontal browse rail of other live listings from the same
+            seller. Only rendered when there are at least 2 real items —
+            no empty state, no fabricated listings. Uses ProductCardV2
+            inside HorizontalRail so the cards match discovery surfaces. */}
+        {moreFromSellerRailItems.length >= 2 ? (
+          <View style={styles.moreFromSellerRailWrap}>
+            <Text style={[styles.moreFromSellerRailTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+              More from {seller?.username ?? 'this seller'}
+            </Text>
+            <HorizontalRail
+              contentContainerStyle={styles.railContent}
+              accessibilityLabel={`More from ${seller?.username ?? 'this seller'}`}
+            >
+              {moreFromSellerRailItems.map((railItem) => (
+                <View key={railItem.id} style={styles.railCardWrap}>
+                  <ProductCardV2
+                    item={railItem as unknown as CatalogListing}
+                    onPress={() => handlePressRecommendation(railItem)}
+                    showSaveButton={false}
+                    enableEntranceAnimation={false}
+                    visualOnly
+                  />
+                </View>
+              ))}
+            </HorizontalRail>
+          </View>
+        ) : null}
 
         {/* ── Zone D — Purchase details ──
             The top trust signals are now elevated to the trust strip
@@ -811,6 +889,10 @@ export default function ItemDetailScreen() {
                 setPurchaseDetailsVisible(true);
               }}
               leadingIcon="information-circle-outline"
+            />
+            <ShippingReturnsInfo
+              commerce={commerce}
+              carbonNeutral={commerce.shippingPayer === 'seller'}
             />
           </CommerceDetailSection>
         ) : null}
@@ -887,6 +969,43 @@ export default function ItemDetailScreen() {
             <Text style={[styles.postedDate, { color: colors.textMuted }]} numberOfLines={1}>
               Posted {new Date(item.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
             </Text>
+          ) : null}
+        </CommerceDetailSection>
+
+        {/* ── Zone E2 — Sustainability ──
+            Estimated impact from listing attributes (condition, category,
+            brand, seller location). Truthfully labeled as estimates per
+            AGENTS.md §11. Compact chip is always visible; tapping expands
+            the full breakdown inline. */}
+        <CommerceDetailSection label="Sustainability" divider variant="editorial">
+          <Pressable
+            onPress={() => {
+              haptic.light();
+              setSustainabilityExpanded((prev) => !prev);
+            }}
+            accessibilityLabel={
+              sustainabilityExpanded ? 'Hide sustainability breakdown' : 'Show sustainability breakdown'
+            }
+            accessibilityRole="button"
+            accessibilityState={{ expanded: sustainabilityExpanded }}
+            style={styles.sustainabilityRow}
+          >
+            <SustainabilityBadge score={sustainabilityScore} variant="compact" />
+            <Text style={[styles.sustainabilitySummary, { color: colors.textSecondary }]} numberOfLines={2}>
+              {sustainabilityScore.summary}
+            </Text>
+            <Ionicons
+              name={sustainabilityExpanded ? 'chevron-up' : 'chevron-down'}
+              size={16}
+              color={colors.textMuted}
+            />
+          </Pressable>
+
+          {sustainabilityExpanded ? (
+            <View style={styles.sustainabilityDetailWrap}>
+              <SustainabilityBadge score={sustainabilityScore} variant="detailed" />
+              <SustainabilityImpact score={sustainabilityScore} />
+            </View>
           ) : null}
         </CommerceDetailSection>
 
@@ -1025,9 +1144,10 @@ export default function ItemDetailScreen() {
                           contentFit="cover"
                         />
                       ) : (
-                        <View style={[styles.moreLikeThisImage, { backgroundColor: colors.surfaceAlt }]}>
-                          <Ionicons name="shirt-outline" size={20} color={colors.textMuted} />
-                        </View>
+                        <ImageEmptyGraphic
+                          icon="shirt-outline"
+                          style={styles.moreLikeThisImage}
+                        />
                       )}
                       <Text style={[styles.moreLikeThisTitle, { color: colors.textPrimary }]} numberOfLines={2}>
                         {simItem.title}
@@ -1056,6 +1176,31 @@ export default function ItemDetailScreen() {
             />
           </View>
         )}
+
+        {/* ── Zone H2 — Related items rail ──
+            Horizontal "You may also like" rail with portrait 3:4 cards.
+            Uses backend recommendations when available, falls back to
+            backend listings filtered by category/brand. */}
+        {(() => {
+          const railItems: Listing[] = railSections.length > 0
+            ? railSections.flatMap((s) => s.items.filter(
+                (i): i is DisplayReadyListing => !isRecommendationLook(i)
+              )).map((i) => i as unknown as Listing)
+            : backendListings.filter((l) =>
+                l.id !== item.id && !l.isSold &&
+                (l.category === item.category || l.brand === item.brand)
+              );
+          if (railItems.length < 2) return null;
+          return (
+            <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(220).delay(160)}>
+              <RelatedItemsRail
+                items={railItems.slice(0, 10)}
+                onPressItem={handlePressRecommendation}
+                headerLabel={item.brand ? `More from ${item.brand}` : 'You may also like'}
+              />
+            </Reanimated.View>
+          );
+        })()}
       </Reanimated.ScrollView>
 
       {/* ── Zone I — Sticky action dock ──
@@ -1146,6 +1291,12 @@ export default function ItemDetailScreen() {
               label: t('product.buyNow'),
               onPress: () => {
                 if (item) ProductAnalytics.checkoutStart(item.id);
+                // Per AGENTS.md §11: do not fire a success haptic before the
+                // purchase has actually completed. "Buy now" navigates to
+                // checkout — it does not complete the purchase. A medium
+                // impact acknowledges the primary-action press; the success
+                // pattern belongs in the Checkout confirmation flow.
+                haptic.medium();
                 navigation.navigate('Checkout', { itemId: item.id });
               },
             }}
@@ -1155,11 +1306,7 @@ export default function ItemDetailScreen() {
                     label: 'Make offer',
                     onPress: () => {
                       if (item) ProductAnalytics.offerStart(item.id);
-                      navigation.navigate('MakeOffer', {
-                        itemId: item.id,
-                        price: item.price!,
-                        title: displayTitle,
-                      });
+                      setMakeOfferVisible(true);
                     },
                   }
                 : undefined
@@ -1366,6 +1513,68 @@ export default function ItemDetailScreen() {
           <Text style={[styles.overflowRowText, { color: colors.textSecondary }]}>Report listing</Text>
         </Pressable>
       </BottomSheet>
+
+      {/* ── Make Offer bottom sheet ──
+          Replaces the full-screen MakeOffer navigation with an inline
+          bottom sheet (2026 UX benchmark — Poshmark/Depop use sheets
+          for offers). Uses the server-authoritative offer API. */}
+      <MakeOfferSheet
+        visible={makeOfferVisible}
+        onDismiss={() => setMakeOfferVisible(false)}
+        listing={item ? {
+          id: item.id,
+          title: displayTitle,
+          price: item.price ?? 0,
+          image: item.images?.[0],
+        } : null}
+        sellerId={item?.seller?.id ?? null}
+        onSent={(payload) => {
+          setMakeOfferVisible(false);
+          show('Offer sent', 'success');
+          navigation.navigate('Chat', {
+            conversationId: payload.conversationId,
+            partnerUserId: payload.partnerUserId,
+          });
+        }}
+      />
+
+      {/* ── Condition definition sheet ──
+          Tapping the colour-coded condition badge opens a compact
+          definition so buyers understand exactly what the grade means. */}
+      <BottomSheet
+        visible={conditionInfoVisible}
+        onDismiss={() => setConditionInfoVisible(false)}
+        snapPoint={0.36}
+      >
+        <View style={styles.conditionSheetWrap}>
+          <View style={styles.conditionSheetHeader}>
+            <Text style={[styles.conditionSheetTitle, { color: colors.textPrimary }]}>
+              Condition
+            </Text>
+            <Pressable
+              onPress={() => setConditionInfoVisible(false)}
+              style={styles.sheetCloseTarget}
+              accessibilityLabel="Close condition definition"
+              accessibilityRole="button"
+            >
+              <Ionicons name="close" size={22} color={colors.textSecondary} />
+            </Pressable>
+          </View>
+          <View style={styles.conditionSheetBody}>
+            <View style={[styles.conditionSheetBadge, { backgroundColor: conditionMeta ? `${conditionMeta.color}1F` : colors.surfaceAlt }]}>
+              <View style={[styles.conditionDot, { backgroundColor: conditionMeta?.color ?? colors.textMuted }]} />
+              <Text style={[styles.conditionSheetBadgeText, { color: conditionMeta?.color ?? colors.textPrimary }]}>
+                {item.condition}
+              </Text>
+            </View>
+            {conditionMeta ? (
+              <Text style={[styles.conditionSheetDefinition, { color: colors.textSecondary }]}>
+                {conditionMeta.definition}
+              </Text>
+            ) : null}
+          </View>
+        </View>
+      </BottomSheet>
     </View>
   );
 }
@@ -1410,9 +1619,21 @@ const styles = StyleSheet.create({
   // inside 44px hit target. paddingVertical 5 gives a 26px visible
   // height with 12px caption text — premium pill proportion.
   conditionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
     paddingHorizontal: Space.sm + 2,
-    paddingVertical: 5,
+    paddingVertical: Space.xs + 1,
     borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'transparent', // overridden inline with theme color
+    flexShrink: 0,
+    minHeight: Control.hit,
+  },
+  conditionDot: {
+    width: Space.xs + 2,
+    height: Space.xs + 2,
+    borderRadius: (Space.xs + 2) / 2,
     flexShrink: 0,
   },
   conditionChipText: {
@@ -1431,7 +1652,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   quietTextTarget: {
-    minHeight: 44,
+    minHeight: Control.hit,
     justifyContent: 'center',
   },
   izeText: {
@@ -1439,7 +1660,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.medium,
     paddingHorizontal: Space.md,
     paddingBottom: Space.sm,
-    letterSpacing: 0.1,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   // ── Elevated trust strip ──
   // Compact inline trust signals placed immediately after the identity
@@ -1478,6 +1699,25 @@ const styles = StyleSheet.create({
     gap: Space.xs,
     paddingHorizontal: Space.md,
     paddingBottom: Space.sm,
+  },
+  // ── More from this seller rail ──
+  moreFromSellerRailWrap: {
+    paddingTop: Space.sm,
+    paddingBottom: Space.sm,
+  },
+  moreFromSellerRailTitle: {
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
+    fontFamily: Typography.family.semibold,
+    paddingHorizontal: Space.md,
+    marginBottom: Space.sm,
+  },
+  railContent: {
+    paddingHorizontal: Space.md,
+    gap: Space.sm,
+  },
+  railCardWrap: {
+    width: 160,
   },
   // ── Purchase details ──
   // Trust chips — flat inline icon+text pairs. No card, no surface fill,
@@ -1522,7 +1762,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
   },
   purchaseSheetSubtitle: {
-    marginTop: 2,
+    marginTop: Space.xs / 2,
     fontSize: Type.captionElevated.size,
     lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
@@ -1532,8 +1772,8 @@ const styles = StyleSheet.create({
     paddingTop: Space.sm,
   },
   sheetCloseTarget: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1550,7 +1790,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: 28,
+    height: Space.lg + Space.xs,
   },
   descriptionText: {
     fontSize: Type.body.size,
@@ -1567,13 +1807,30 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
     paddingTop: Space.xs,
   },
+  // ── Sustainability row ──
+  sustainabilityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    minHeight: Control.hit,
+  },
+  sustainabilitySummary: {
+    flex: 1,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.body.letterSpacing / 2,
+  },
+  sustainabilityDetailWrap: {
+    marginTop: Space.sm,
+  },
   // ── Price insight alert row ──
   alertRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: Space.sm,
-    minHeight: 44,
+    minHeight: Control.hit,
   },
   alertRowLeft: {
     flexDirection: 'row',
@@ -1586,17 +1843,17 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
   },
   toggleTrack: {
-    width: 36,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 1,
+    width: Control.chrome,
+    height: Space.md + Space.xs,
+    borderRadius: Radius.lg,
+    borderWidth: Stroke.standard,
     justifyContent: 'center',
-    paddingHorizontal: 2,
+    paddingHorizontal: Space.xs / 2,
   },
   toggleThumb: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
+    width: Space.md - 2,
+    height: Space.md - 2,
+    borderRadius: Radius.md,
   },
   // ── Sync retry ──
   syncRetryWrap: {
@@ -1620,7 +1877,7 @@ const styles = StyleSheet.create({
   },
   moreLikeThisImage: {
     width: '100%',
-    aspectRatio: 0.86,
+    aspectRatio: AspectRatio.portrait,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1630,7 +1887,7 @@ const styles = StyleSheet.create({
     lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.semibold,
     fontVariant: ['tabular-nums'],
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
   moreLikeThisTitle: {
     fontSize: Type.body.size,
@@ -1679,7 +1936,7 @@ const styles = StyleSheet.create({
   dockStateBadge: {
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: 0,
+    letterSpacing: LetterSpacing.normal,
   },
   // ── Overflow sheet (rendered inside canonical BottomSheet) ──
   overflowHeader: {
@@ -1696,7 +1953,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.md,
     paddingVertical: Space.md,
-    minHeight: 48,
+    minHeight: Control.hit + Space.xs,
   },
   overflowRowText: {
     fontSize: Type.body.size,
@@ -1705,5 +1962,47 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.85,
     transform: [{ scale: 0.97 }],
+  },
+  // ── Condition definition sheet ──
+  conditionSheetWrap: {
+    paddingBottom: Space.md,
+  },
+  conditionSheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingLeft: Space.md,
+    paddingRight: Space.xs,
+    paddingVertical: Space.sm,
+    minHeight: Control.hit + Space.sm,
+  },
+  conditionSheetTitle: {
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
+    fontFamily: Typography.family.semibold,
+  },
+  conditionSheetBody: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
+    gap: Space.md,
+  },
+  conditionSheetBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    alignSelf: 'flex-start',
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.lg,
+  },
+  conditionSheetBadgeText: {
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontFamily: Typography.family.semibold,
+  },
+  conditionSheetDefinition: {
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight + Space.xs,
+    fontFamily: Typography.family.regular,
   },
 });

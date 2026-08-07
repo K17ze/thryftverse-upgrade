@@ -59,7 +59,12 @@ export function ReviewPromptSheet({
       animationType="slide"
       onRequestClose={onClose}
     >
-      <Pressable style={styles.backdrop} onPress={onClose}>
+      <Pressable
+        style={styles.backdrop}
+        onPress={onClose}
+        accessibilityLabel="Close review prompt"
+        accessibilityRole="button"
+      >
         <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
           <View style={styles.handle} />
 
@@ -161,7 +166,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   handle: {
     width: 36,
     height: 4,
-    borderRadius: 2,
+    borderRadius: Radius.sm,
     backgroundColor: 'rgba(0,0,0,0.15)',
     alignSelf: 'center',
     marginTop: Space.sm,
@@ -227,7 +232,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   starsContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 10,
+    gap: Space.sm + 2,
     marginTop: Space.lg,
   },
   ratingLabel: {

@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 
 export interface BuyerProtectionStripProps {
   /** Optional policy label from server (e.g. "Thryftverse Buyer Protection") */
@@ -87,16 +87,16 @@ function createStyles(colors: ThemeColors) {
   },
   textWrap: {
     flex: 1,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   title: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
     letterSpacing: 0.1,
   },
   subtitle: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
     lineHeight: 16,
@@ -108,7 +108,7 @@ function createStyles(colors: ThemeColors) {
   compactContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     backgroundColor: `${colors.success}0A`,
@@ -118,7 +118,7 @@ function createStyles(colors: ThemeColors) {
   },
   compactText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textSecondary,
   },

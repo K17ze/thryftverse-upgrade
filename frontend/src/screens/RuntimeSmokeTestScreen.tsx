@@ -9,19 +9,18 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Typography } from '../theme/designTokens';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DevSettings } from 'react-native';
-import { Space, Radius, Type } from '../theme/designTokens';
 import { BodyEmphasis, Caption, Meta } from '../components/ui/Text';
 
-type Props = StackScreenProps<RootStackParamList, 'RuntimeSmokeTest'>;
+import { Typography, Space, Radius, Type } from '../theme/designTokens';
+type Props = NativeStackScreenProps<RootStackParamList, 'RuntimeSmokeTest'>;
 
 /**
  * Lightweight runtime error logger for diagnostic navigation.
@@ -289,7 +288,7 @@ function createStyles(colors: ThemeColors) {
   },
   scrollContent: {
     padding: Space.md,
-    paddingBottom: Space.xxl + 24,
+    paddingBottom: Space.xxl + Space.lg,
   },
   headerRow: {
     flexDirection: 'row',
@@ -340,7 +339,7 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    minHeight: 72,
+    minHeight: Space.xxl + Space.lg,
     gap: Space.xs,
   },
   tileDisabled: {
@@ -357,7 +356,7 @@ function createStyles(colors: ThemeColors) {
     color: colors.textMuted,
   },
   tileMissing: {
-    fontSize: 10,
+    fontSize: Type.meta.size,
     color: colors.danger,
   },
   resetTile: {
@@ -380,7 +379,7 @@ function createStyles(colors: ThemeColors) {
     textAlign: 'center',
   },
   resetTileCaption: {
-    fontSize: 10,
+    fontSize: Type.meta.size,
     color: colors.textMuted,
     textAlign: 'center',
   },

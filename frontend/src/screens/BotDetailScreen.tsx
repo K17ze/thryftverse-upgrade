@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Alert, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AgentIcon } from '../components/agents/AgentIcon';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -17,10 +17,10 @@ import {
   undeployBotFromConversationOnApi,
 } from '../services/chatApi';
 import { useStore } from '../store/useStore';
-import { Space, Type, Typography } from '../theme/designTokens';
+import { Space, Type, Typography, Control } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 
-type Props = StackScreenProps<RootStackParamList, 'BotDetail'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'BotDetail'>;
 
 export default function BotDetailScreen({ navigation, route }: Props) {
   const { botId, conversationId } = route.params;
@@ -272,8 +272,8 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
   },
   headerAction: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -285,18 +285,18 @@ function createStyles(colors: ThemeColors) {
   identity: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: Space.sm + Space.xs,
     paddingTop: Space.sm,
   },
   identityIcon: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
   identityCopy: {
     flex: 1,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   agentName: {
     color: colors.textPrimary,
@@ -314,7 +314,7 @@ function createStyles(colors: ThemeColors) {
     color: colors.textSecondary,
     fontFamily: Typography.family.regular,
     fontSize: Type.body.size,
-    lineHeight: 22,
+    lineHeight: Type.body.lineHeight + 2,
   },
   chatAction: {
     marginTop: Space.xs,

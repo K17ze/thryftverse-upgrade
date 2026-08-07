@@ -129,14 +129,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    paddingHorizontal: 8,
+    paddingHorizontal: Space.sm,
     borderRadius: Radius.full,
     backgroundColor: 'rgba(0,0,0,0.58)',
   },
   statusDot: {
     width: 5,
     height: 5,
-    borderRadius: 3,
+    borderRadius: Radius.sm,
   },
   statusText: {
     color: '#FFFFFF',

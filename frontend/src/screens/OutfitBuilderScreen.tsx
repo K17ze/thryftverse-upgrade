@@ -13,6 +13,7 @@ import {
   Dimensions,
   Alert,
   Platform,
+  Share,
 } from 'react-native';
 import Reanimated, {
   FadeInDown,
@@ -25,7 +26,7 @@ import Reanimated, {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { RootStackParamList } from '../navigation/types';
@@ -36,9 +37,8 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { haptics } from '../utils/haptics';
 import { AppButton } from '../components/ui/AppButton';
-import { Typography, DockConstants } from '../theme/designTokens';
 import { T } from '../components/ui/Text';
-import { Space, Radius, Type } from '../theme/designTokens';
+import { Typography, DockConstants, Radius, Type, Space, Stroke, LetterSpacing } from '../theme/designTokens';
 import {
   OutfitSlot,
   StyleItem,
@@ -50,11 +50,13 @@ import {
   getSlotIcon,
 } from '../services/styleGraph';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 const { width: SCREEN_W } = Dimensions.get('window');
 const SLOT_SIZE = (SCREEN_W - Space.md * 2 - Space.sm * 4) / 5;
 
 const SLOTS: OutfitSlot[] = ['top', 'bottom', 'shoes', 'outerwear', 'accessory'];
+
+const BG_COLORS = ['#F5F5F0', '#E8E4DF', '#D4C9BE', '#C9D9E8', '#D9D0E1', '#E8D4D4', '#D4E8D6', '#1A1A1A'];
 
 // ── Helper Components ──
 
@@ -106,7 +108,7 @@ function createSlotStyles(colors: ThemeColors) {
     height: SLOT_SIZE,
     borderRadius: Radius.lg,
     backgroundColor: colors.surface,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     overflow: 'hidden',
     justifyContent: 'center',
@@ -114,7 +116,7 @@ function createSlotStyles(colors: ThemeColors) {
   },
   circleActive: {
     borderColor: colors.brand,
-    borderWidth: 2,
+    borderWidth: Stroke.emphasis,
   },
   image: {
     width: '100%',
@@ -127,10 +129,10 @@ function createSlotStyles(colors: ThemeColors) {
   },
   activeRing: {
     position: 'absolute',
-    bottom: 4,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    bottom: Space.xs,
+    width: Space.xs + 2,
+    height: Space.xs + 2,
+    borderRadius: Radius.sm,
     backgroundColor: colors.brand,
   },
   });
@@ -192,18 +194,18 @@ function createThumbStyles(colors: ThemeColors) {
     width: (SCREEN_W - Space.md * 2 - Space.sm) / 2,
     borderRadius: Radius.lg,
     backgroundColor: colors.surface,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     overflow: 'hidden',
     marginBottom: Space.sm,
   },
   cardSelected: {
     borderColor: colors.brand,
-    borderWidth: 2,
+    borderWidth: Stroke.emphasis,
   },
   image: {
     width: '100%',
-    height: 140,
+    height: Space.xxl * 3 - Space.xs,
     backgroundColor: colors.surfaceAlt,
   },
   placeholder: {
@@ -253,10 +255,10 @@ function ScoreBadge({ score }: { score: number }) {
 function createScoreStyles(colors: ThemeColors) {
   return StyleSheet.create({
   badge: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 2,
+    width: Space.xl + Space.sm,
+    height: Space.xl + Space.sm,
+    borderRadius: Radius.xxl,
+    borderWidth: Stroke.emphasis,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: colors.surface,
@@ -272,6 +274,7 @@ export default function OutfitBuilderScreen() {
   const collections = useStore((s) => s.collections);
   const createCollectionFn = useStore((s) => s.createCollection);
   const addToCollection = useStore((s) => s.addToCollection);
+  const addOutfitToStore = useStore((s) => s.addOutfit);
   const { colors, isDark } = useAppTheme();
   const reducedMotionEnabled = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -284,6 +287,7 @@ export default function OutfitBuilderScreen() {
     outerwear: undefined,
     accessory: undefined,
   });
+  const [backgroundColor, setBackgroundColor] = useState<string | undefined>(undefined);
 
   // Convert listings to StyleItems
   const availableItems = useMemo<StyleItem[]>(() => {
@@ -335,16 +339,42 @@ export default function OutfitBuilderScreen() {
     const collectionName = outfit.name;
     const collectionId = createCollectionFn(collectionName, `Outfit with ${filledCount} items — score ${outfit.score}`);
 
-    // Add each item to the new collection
     SLOTS.forEach((slot) => {
       const item = outfitItems[slot];
       if (item) addToCollection(collectionId, item.id);
     });
 
+    const itemIds = SLOTS.map((slot) => outfitItems[slot]?.id).filter(Boolean) as string[];
+    addOutfitToStore({
+      id: outfit.id,
+      name: outfit.name,
+      itemIds,
+      backgroundColor,
+      createdAt: outfit.createdAt,
+      updatedAt: outfit.createdAt,
+    });
+
     haptics.success();
-    Alert.alert('Outfit Saved', `"${collectionName}" added to your collections.`, [
+    Alert.alert('Outfit Saved', `"${collectionName}" added to your outfits.`, [
       { text: 'OK', onPress: () => navigation.goBack() },
     ]);
+  };
+
+  const handleShare = async () => {
+    if (filledCount < 1) {
+      Alert.alert('No items', 'Add at least one item to share your outfit.');
+      return;
+    }
+    const outfit = createOutfit(outfitItems);
+    const itemNames = SLOTS.map((slot) => outfitItems[slot])
+      .filter(Boolean)
+      .map((it) => it!.title)
+      .join(', ');
+    try {
+      await Share.share({
+        message: `Check out my outfit "${outfit.name}" on Thryftverse — ${itemNames}`,
+      });
+    } catch { /* user cancelled */ }
   };
 
   const handleClear = () => {
@@ -355,6 +385,7 @@ export default function OutfitBuilderScreen() {
         style: 'destructive',
         onPress: () => {
           setOutfitItems({ top: undefined, bottom: undefined, shoes: undefined, outerwear: undefined, accessory: undefined });
+          setBackgroundColor(undefined);
           haptics.error();
         },
       },
@@ -399,7 +430,7 @@ export default function OutfitBuilderScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {/* Outfit Preview */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.previewWrap}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={[styles.previewWrap, backgroundColor ? { backgroundColor } : undefined]}>
           <View style={styles.slotRow}>
             {SLOTS.map((slot) => (
               <View key={slot} style={styles.slotWrap}>
@@ -432,6 +463,36 @@ export default function OutfitBuilderScreen() {
             <View style={{ flexDirection: 'row', gap: Space.xs }}>
               <T.Meta color={colors.textMuted}>{filledCount}/{SLOTS.length}</T.Meta>
             </View>
+          </View>
+
+          {/* Background color picker */}
+          <View style={styles.bgRow}>
+            <T.Meta color={colors.textMuted}>Background</T.Meta>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.bgSwatches}>
+              <AnimatedPressable
+                style={[styles.swatch, !backgroundColor && styles.swatchActive]}
+                onPress={() => { haptics.tap(); setBackgroundColor(undefined); }}
+                accessibilityRole="button"
+                accessibilityLabel="Default background"
+                accessibilityState={{ selected: !backgroundColor }}
+              >
+                <Ionicons name="close" size={14} color={colors.textMuted} />
+              </AnimatedPressable>
+              {BG_COLORS.map((c) => (
+                <AnimatedPressable
+                  key={c}
+                  style={[
+                    styles.swatch,
+                    { backgroundColor: c },
+                    backgroundColor === c && styles.swatchActive,
+                  ]}
+                  onPress={() => { haptics.tap(); setBackgroundColor(c); }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Background color ${c}`}
+                  accessibilityState={{ selected: backgroundColor === c }}
+                />
+              ))}
+            </ScrollView>
           </View>
         </Reanimated.View>
 
@@ -494,15 +555,29 @@ export default function OutfitBuilderScreen() {
 
       {/* Footer CTA */}
       <View style={styles.footer}>
-        <AppButton
-          title={filledCount >= 2 ? 'Save Outfit' : `Select ${2 - filledCount} more item${filledCount === 1 ? '' : 's'}`}
-          variant={filledCount >= 2 ? 'primary' : 'secondary'}
-          size="lg"
-          onPress={handleSave}
-          disabled={filledCount < 2}
-          icon={<Ionicons name="bookmark-outline" size={18} color={filledCount >= 2 ? colors.background : colors.textPrimary} />}
-          trailingIcon={<Ionicons name="arrow-forward" size={18} color={filledCount >= 2 ? colors.background : colors.textMuted} />}
-        />
+        <View style={styles.footerRow}>
+          <AnimatedPressable
+            style={styles.shareBtn}
+            onPress={handleShare}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Share outfit"
+            hapticFeedback="light"
+          >
+            <Ionicons name="share-outline" size={22} color={colors.textPrimary} />
+          </AnimatedPressable>
+          <View style={{ flex: 1 }}>
+            <AppButton
+              title={filledCount >= 2 ? 'Save Outfit' : `Select ${2 - filledCount} more item${filledCount === 1 ? '' : 's'}`}
+              variant={filledCount >= 2 ? 'primary' : 'secondary'}
+              size="lg"
+              onPress={handleSave}
+              disabled={filledCount < 2}
+              icon={<Ionicons name="bookmark-outline" size={18} color={filledCount >= 2 ? colors.background : colors.textPrimary} />}
+              trailingIcon={<Ionicons name="arrow-forward" size={18} color={filledCount >= 2 ? colors.background : colors.textMuted} />}
+            />
+          </View>
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -522,10 +597,10 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.sm,
   },
   iconBtn: {
-    width: 40,
-    height: 40,
+    width: Space.xl + Space.sm,
+    height: Space.xl + Space.sm,
     borderRadius: Radius.md,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     backgroundColor: colors.surface,
     justifyContent: 'center',
@@ -533,7 +608,7 @@ function createStyles(colors: ThemeColors) {
   },
   headerTitle: {
     textTransform: 'uppercase',
-    letterSpacing: 1,
+    letterSpacing: LetterSpacing.caps,
     fontSize: Type.subtitle.size,
   },
   scrollContent: {
@@ -545,7 +620,7 @@ function createStyles(colors: ThemeColors) {
     padding: Space.md,
     borderRadius: Radius.lg,
     backgroundColor: colors.surface,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
   },
   slotRow: {
@@ -565,15 +640,42 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderTopWidth: 1,
+    borderTopWidth: Stroke.standard,
     borderTopColor: colors.border,
     paddingTop: Space.md,
+  },
+  bgRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: Stroke.hairline,
+    borderTopColor: colors.border,
+    paddingTop: Space.md,
+    marginTop: Space.md,
+  },
+  bgSwatches: {
+    flexDirection: 'row',
+    gap: Space.xs,
+    alignItems: 'center',
+  },
+  swatch: {
+    width: Space.lg + Space.xs,
+    height: Space.lg + Space.xs,
+    borderRadius: Radius.full,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  swatchActive: {
+    borderWidth: Stroke.emphasis,
+    borderColor: colors.brand,
   },
   aiCard: {
     padding: Space.md,
     borderRadius: Radius.lg,
     backgroundColor: colors.surface,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
   },
   aiRow: {
@@ -604,8 +706,23 @@ function createStyles(colors: ThemeColors) {
     paddingTop: Space.sm,
     paddingBottom: Platform.OS === 'ios' ? Space.md : Space.sm,
     backgroundColor: colors.background,
-    borderTopWidth: 1,
+    borderTopWidth: Stroke.standard,
     borderTopColor: colors.border,
+  },
+  footerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+  },
+  shareBtn: {
+    width: Space.xl + Space.sm,
+    height: Space.xl + Space.sm,
+    borderRadius: Radius.md,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   });
 }

@@ -3,7 +3,7 @@ import { StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-n
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { AnimatedPressable } from './AnimatedPressable';
 import { trackTelemetryEvent } from '../lib/telemetry';
-import { Typography } from '../theme/designTokens';
+import { Typography, Radius, Type, Space } from '../theme/designTokens';
 
 interface SyncRetryBannerProps {
   message: string;
@@ -83,12 +83,12 @@ export function SyncRetryBanner({
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: {
-      borderRadius: 12,
+      borderRadius: Radius.lg,
       borderWidth: 1,
       borderColor: colors.border,
       backgroundColor: colors.surfaceAlt,
       paddingHorizontal: 10,
-      paddingVertical: 8,
+      paddingVertical: Space.sm,
       flexDirection: 'row',
       alignItems: 'center',
       gap: 8,
@@ -96,12 +96,12 @@ function createStyles(colors: ThemeColors) {
     message: {
       flex: 1,
       color: colors.textSecondary,
-      fontSize: 11,
+      fontSize: Type.meta.size,
       lineHeight: 15,
       fontFamily: Typography.family.medium,
     },
     actionBtn: {
-      borderRadius: 12,
+      borderRadius: Radius.lg,
       borderWidth: 1,
       borderColor: colors.border,
       backgroundColor: colors.surface,
@@ -110,7 +110,7 @@ function createStyles(colors: ThemeColors) {
     },
     actionText: {
       color: colors.textPrimary,
-      fontSize: 11,
+      fontSize: Type.meta.size,
       fontFamily: Typography.family.semibold,
     },
   });

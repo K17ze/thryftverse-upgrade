@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type, Control } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 
 interface PublicProfileActionRowProps {
@@ -63,7 +63,7 @@ function createStyles(colors: ThemeColors) {
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: Space.sm + 2,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
   },
@@ -72,24 +72,24 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    height: 44,
-    borderRadius: 22,
+    gap: Space.sm,
+    height: Control.hit,
+    borderRadius: Radius.xxl,
     backgroundColor: colors.brand,
   },
   messageBtnText: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
     color: colors.textInverse,
   },
   secondaryRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: Space.sm,
   },
   secondaryBtn: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: Radius.xxl,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     backgroundColor: colors.background,

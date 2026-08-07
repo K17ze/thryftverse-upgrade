@@ -8,7 +8,7 @@ import {
   TextInput,
   Alert,
 } from 'react-native';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -22,7 +22,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { AppButton } from '../components/ui/AppButton';
 import { Caption, BodyEmphasis, Meta } from '../components/ui/Text';
 
-type Props = StackScreenProps<RootStackParamList, 'EditGroup'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'EditGroup'>;
 
 export default function EditGroupScreen({ navigation, route }: Props) {
   const { conversationId } = route.params;
@@ -233,14 +233,14 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.surface,
   },
   avatar: {
-    width: 80,
-    height: 80,
+    width: Space.xxl + Space.xl,
+    height: Space.xxl + Space.xl,
     borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarText: {
-    fontSize: 28,
+    fontSize: Type.priceLarge.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
   },
@@ -258,19 +258,19 @@ function createStyles(colors: ThemeColors) {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     paddingHorizontal: Space.md,
-    paddingVertical: 14,
+    paddingVertical: Space.md - 2,
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: colors.textPrimary,
   },
   textarea: {
-    minHeight: 80,
+    minHeight: Space.xxl + Space.xl,
     textAlignVertical: 'top',
-    paddingTop: 14,
+    paddingTop: Space.md - 2,
   },
   charCount: {
     textAlign: 'right',
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
   dangerZone: {
     marginTop: Space.lg,
@@ -284,7 +284,7 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     gap: Space.sm,
     paddingHorizontal: Space.md,
-    paddingVertical: 14,
+    paddingVertical: Space.md - 2,
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
@@ -306,7 +306,7 @@ function createStyles(colors: ThemeColors) {
   },
   limitationText: {
     flex: 1,
-    lineHeight: 18,
+    lineHeight: Type.captionElevated.lineHeight,
   },
   });
 }

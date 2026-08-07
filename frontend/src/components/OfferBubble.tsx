@@ -7,14 +7,13 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type } from '../theme/designTokens';
 import { CachedImage } from './CachedImage';
 import { AppButton } from './ui/AppButton';
 import { ChatCard } from './chat/ChatCard';
 import { Caption, BodyEmphasis, Meta } from './ui/Text';
-import { Typography } from '../theme/designTokens';
 import { AnimatedPressable } from './AnimatedPressable';
 
+import { Space, Radius, Type, Typography } from '../theme/designTokens';
 export type OfferType = 'offer' | 'counter' | 'accept' | 'decline' | 'expired';
 
 interface OfferBubbleProps {

@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { CachedImage } from '../CachedImage';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { Space, Radius, Typography, Type } from '../../theme/designTokens';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useToast } from '../../context/ToastContext';
 
@@ -277,7 +277,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.textSecondary,
   },
   placeholderSubtitle: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
   },
@@ -297,7 +297,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderColor: colors.border,
   },
   sourceBtnText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
     color: colors.textSecondary,
   },
@@ -325,7 +325,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   tagDot: {
     width: 14,
     height: 14,
-    borderRadius: 7,
+    borderRadius: Radius.md,
     backgroundColor: 'rgba(255,255,255,0.9)',
     borderWidth: 2,
     borderColor: 'rgba(0,0,0,0.25)',
@@ -335,27 +335,27 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderColor: '#fff',
     width: 18,
     height: 18,
-    borderRadius: 9,
+    borderRadius: Radius.lg,
   },
   tagPill: {
     position: 'absolute',
     top: 24,
     backgroundColor: 'rgba(0,0,0,0.8)',
-    borderRadius: 10,
+    borderRadius: Radius.lg,
     paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingVertical: Space.xs,
     maxWidth: 120,
   },
   tagPillText: {
     color: '#fff',
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
   },
   tagEditor: {
     position: 'absolute',
     top: 26,
     backgroundColor: 'rgba(0,0,0,0.88)',
-    borderRadius: 10,
+    borderRadius: Radius.lg,
     paddingHorizontal: 10,
     paddingVertical: 6,
     gap: 2,
@@ -363,7 +363,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   tagEditorLabel: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
   },
   tagEditorHint: {
@@ -390,7 +390,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   changePhotoText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
   },
   tapHint: {
@@ -404,7 +404,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   tapHintText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
   },
 });

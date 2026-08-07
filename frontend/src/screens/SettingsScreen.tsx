@@ -1,9 +1,10 @@
 import React from 'react';
 import { Linking, View, Text, StyleSheet, Pressable } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { logoutFromSession } from '../services/authApi';
@@ -29,16 +30,16 @@ import {
 } from '../theme/themePreference';
 import { useAppTheme } from '../theme/ThemeContext';
 import { t } from '../i18n';
-import { Space, Radius, Type, Elevation } from '../theme/designTokens';
-import { Typography } from '../theme/designTokens';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
 import { AppSearchBar } from '../components/ui/AppSearchBar';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsSignOutRow } from '../components/settings/SettingsSignOutRow';
+import { SettingsListSkeleton } from '../components/skeletons/SettingsListSkeleton';
 import { useAppTheme as useTheme } from '../theme/ThemeContext';
 
-type Props = StackScreenProps<RootStackParamList, 'Settings'>;
+import { Space, Radius, Type, Elevation, Typography, Control } from '../theme/designTokens';
+type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
 interface DestinationMeta {
   key: keyof RootStackParamList;
@@ -68,6 +69,15 @@ const ROUTE_METADATA: DestinationMeta[] = [
   { key: 'EmailNotifications', label: 'Email preferences', searchTerms: 'email notifications preferences categories', section: 'Messages & notifications' },
   { key: 'ConnectedAccounts', label: 'Connected accounts', searchTerms: 'connected accounts google apple oauth social login', section: 'Security', showSection: true },
   { key: 'AccessibilitySettings', label: 'Accessibility', searchTerms: 'accessibility text size reduced motion high contrast screen reader', section: 'Personalisation & appearance' },
+  { key: 'AIPreferences', label: 'AI Preferences', searchTerms: 'ai preferences artificial intelligence listing suggestions photo enhancement autocomplete chat agents smart sell confidence algorithm personalisation', section: 'AI & Agents', showSection: true },
+  { key: 'AIAgentIntegration', label: 'AI API Integration', searchTerms: 'ai api integration openai anthropic claude gemini custom endpoint api key bring your own key byok provider credentials', section: 'AI & Agents' },
+  { key: 'BotDirectory', label: 'Agent Directory', searchTerms: 'bot directory agents ai assistant browse catalogue system agents deploy', section: 'AI & Agents' },
+  { key: 'CustomBots', label: 'My Agents', searchTerms: 'custom bots my agents created deployed manage draft published', section: 'AI & Agents' },
+  { key: 'BotBuilder', label: 'Create Agent', searchTerms: 'bot builder create agent ai assistant custom automation instructions model trigger', section: 'AI & Agents' },
+  { key: 'YourAlgorithm', label: 'Your Algorithm', searchTerms: 'algorithm feed recommendations topics signals transparency personalisation ai agents', section: 'AI & Agents' },
+  { key: 'SustainabilityPreferences', label: 'Sustainability', searchTerms: 'sustainability carbon neutral shipping packaging badges impact local secondhand goals eco', section: 'Preferences' },
+  { key: 'DataPrivacy', label: 'Data & Privacy', searchTerms: 'data privacy gdpr download delete retention third party sharing cookies controls', section: 'Account' },
+  { key: 'NotificationPreferences', label: 'Notification preferences', searchTerms: 'notification preferences push offers messages listings orders live shopping price drop marketing quiet hours preview', section: 'Messages & notifications' },
   { key: 'CoOwnPriceAlerts', label: 'Co-Own price alerts', searchTerms: 'co-own price alerts notifications syndicate', section: 'Co-Own', showSection: true },
   { key: 'CoOwnRecurringOrders', label: 'Auto-invest plans', searchTerms: 'co-own recurring orders auto invest syndicate', section: 'Co-Own' },
   { key: 'CoOwnTaxDocuments', label: 'Tax documents', searchTerms: 'co-own tax documents statements cgt syndicate', section: 'Co-Own' },
@@ -91,6 +101,8 @@ export default function SettingsScreen({ navigation }: Props) {
     pushEnabledCount,
     pushTotalCount,
     setLanguage,
+    analyticsOptOut,
+    setAnalyticsOptOut,
   } = useSettingsPreferences();
 
   const [currencyPickerVisible, setCurrencyPickerVisible] = React.useState(false);
@@ -100,6 +112,18 @@ export default function SettingsScreen({ navigation }: Props) {
   const [searchVisible, setSearchVisible] = React.useState(false);
   const [pushPermissionGranted, setPushPermissionGranted] = React.useState<boolean | null>(null);
   const [isTogglingPush, setIsTogglingPush] = React.useState(false);
+  const [isHydrating, setIsHydrating] = React.useState(!useStore.persist.hasHydrated());
+
+  // Track persist-store hydration so the screen can show a skeleton until the
+  // user/session data is available instead of flashing "Not signed in".
+  React.useEffect(() => {
+    if (useStore.persist.hasHydrated()) {
+      setIsHydrating(false);
+      return;
+    }
+    const unsub = useStore.persist.onFinishHydration(() => setIsHydrating(false));
+    return unsub;
+  }, []);
 
   // Read the current system push permission status on mount so the "Enable
   // notifications" toggle reflects the real OS-level state.
@@ -223,6 +247,15 @@ export default function SettingsScreen({ navigation }: Props) {
     navigation.replace('AuthLanding');
   }, [logout, navigation]);
 
+  const handleClearSearchHistory = React.useCallback(async () => {
+    try {
+      await AsyncStorage.removeItem('@thryftverse_recent_searches');
+      show('Search history cleared', 'success');
+    } catch {
+      show('Unable to clear search history', 'error');
+    }
+  }, [show]);
+
   const isSearching = searchQuery.trim().length > 0;
   const q = searchQuery.toLowerCase().trim();
 
@@ -239,10 +272,17 @@ export default function SettingsScreen({ navigation }: Props) {
   const displayName = currentUser?.displayName ?? currentUser?.username ?? 'Not signed in';
   const username = currentUser?.username ?? '';
 
-  // Security badges for identity card
-  const securityBadges: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; color: string }[] = [];
-  if (twoFactorEnabled) securityBadges.push({ icon: 'shield-checkmark', label: '2FA', color: colors.success });
-  if (currentUser?.emailVerified) securityBadges.push({ icon: 'checkmark-circle', label: 'Verified', color: colors.success });
+  const verificationBadges: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; color: string; verified: boolean }[] = [];
+  if (currentUser?.emailVerified) {
+    verificationBadges.push({ icon: 'mail', label: 'Email verified', color: colors.success, verified: true });
+  } else {
+    verificationBadges.push({ icon: 'mail-outline', label: 'Email not verified', color: colors.textMuted, verified: false });
+  }
+  if (currentUser?.phone) {
+    verificationBadges.push({ icon: 'call', label: 'Phone added', color: colors.success, verified: true });
+  } else {
+    verificationBadges.push({ icon: 'call-outline', label: 'No phone', color: colors.textMuted, verified: false });
+  }
 
   const notificationSummary = `${pushEnabledCount}/${pushTotalCount} categories`;
 
@@ -315,17 +355,17 @@ export default function SettingsScreen({ navigation }: Props) {
         />
       }
     >
-      {/* ── IDENTITY HERO CARD — sole profile/account editor entrypoint ── */}
-      <AnimatedPressable
-        onPress={() => navigation.navigate('EditProfile', {})}
-        activeOpacity={0.9}
-        scaleValue={0.99}
-        hapticFeedback="light"
-        accessibilityRole="button"
-        accessibilityLabel="Edit profile and account"
-        accessibilityHint="Opens profile, private details, security and account editor"
-      >
-        <View style={[styles.identityHero, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      {/* ── ACCOUNT SUMMARY CARD — profile, verification status, quick actions ── */}
+      <View style={[styles.identityHero, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <AnimatedPressable
+          onPress={() => navigation.navigate('EditProfile', {})}
+          activeOpacity={0.9}
+          scaleValue={0.99}
+          hapticFeedback="light"
+          accessibilityRole="button"
+          accessibilityLabel="Edit profile and account"
+          accessibilityHint="Opens profile, private details, security and account editor"
+        >
           <View style={styles.identityHeroMain}>
             <View style={[styles.identityAvatarWrap, { backgroundColor: colors.surfaceAlt }]}>
               {avatarUri ? (
@@ -343,26 +383,62 @@ export default function SettingsScreen({ navigation }: Props) {
                   @{username}
                 </Text>
               ) : null}
-              {securityBadges.length > 0 ? (
-                <View style={styles.identityBadges}>
-                  {securityBadges.map((badge, i) => (
-                    <View key={i} style={[styles.identityBadge, { backgroundColor: `${badge.color}15` }]}>
-                      <Ionicons name={badge.icon} size={11} color={badge.color} />
-                      <Text style={[styles.identityBadgeText, { color: badge.color }]}>{badge.label}</Text>
-                    </View>
-                  ))}
-                </View>
+              {currentUser?.email ? (
+                <Text style={[styles.identityEmail, { color: colors.textMuted }]} numberOfLines={1}>
+                  {currentUser.email}
+                </Text>
               ) : null}
             </View>
             <View style={[styles.identityEditAffordance, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
               <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
             </View>
           </View>
-        </View>
-      </AnimatedPressable>
+        </AnimatedPressable>
 
-      {/* ── ACCOUNT SECTION (card) — no profile/private details rows (top card is the entrypoint) ── */}
-      <SettingsSection title="Account" noCard>
+        {verificationBadges.length > 0 ? (
+          <View style={styles.identityBadges}>
+            {verificationBadges.map((badge, i) => (
+              <View key={i} style={[styles.identityBadge, { backgroundColor: `${badge.color}15` }]}>
+                <Ionicons name={badge.icon} size={11} color={badge.color} />
+                <Text style={[styles.identityBadgeText, { color: badge.color }]}>{badge.label}</Text>
+                {badge.verified ? (
+                  <Ionicons name="checkmark-circle" size={10} color={badge.color} />
+                ) : null}
+              </View>
+            ))}
+          </View>
+        ) : null}
+
+        <View style={styles.identityQuickActions}>
+          <AnimatedPressable
+            style={[styles.identityQuickBtn, { borderColor: colors.border }]}
+            onPress={() => navigation.navigate('EditProfile', {})}
+            activeOpacity={0.8}
+            scaleValue={0.97}
+            hapticFeedback="light"
+            accessibilityRole="button"
+            accessibilityLabel="Edit profile"
+          >
+            <Ionicons name="create-outline" size={15} color={colors.textPrimary} />
+            <Text style={[styles.identityQuickBtnText, { color: colors.textPrimary }]}>Edit profile</Text>
+          </AnimatedPressable>
+          <AnimatedPressable
+            style={[styles.identityQuickBtn, styles.identityQuickBtnPrimary, { backgroundColor: `${colors.brand}15`, borderColor: `${colors.brand}40` }]}
+            onPress={() => navigation.navigate('Verification')}
+            activeOpacity={0.8}
+            scaleValue={0.97}
+            hapticFeedback="light"
+            accessibilityRole="button"
+            accessibilityLabel="Verify identity"
+          >
+            <Ionicons name="shield-checkmark-outline" size={15} color={colors.brand} />
+            <Text style={[styles.identityQuickBtnText, { color: colors.brand }]}>Verify identity</Text>
+          </AnimatedPressable>
+        </View>
+      </View>
+
+      {/* ── ACCOUNT ── */}
+      <SettingsSection title="Account" icon="person-circle-outline" noCard>
         <SettingsRow
           icon="shield-checkmark-outline"
           iconColor={currentUser?.emailVerified ? colors.success : colors.textMuted}
@@ -370,6 +446,18 @@ export default function SettingsScreen({ navigation }: Props) {
           subtitle={currentUser?.emailVerified ? 'Verified' : 'Get the verified badge'}
           onPress={() => navigation.navigate('Verification')}
           isFirst
+        />
+        <SettingsRow
+          icon="location-outline"
+          title="Saved addresses"
+          subtitle={savedAddress ? '1 saved' : 'None saved'}
+          onPress={() => navigation.navigate('SavedAddresses')}
+        />
+        <SettingsRow
+          icon="card-outline"
+          title="Payment methods"
+          subtitle={savedPaymentMethod ? savedPaymentMethod.label : 'None saved'}
+          onPress={() => navigation.navigate('Payments')}
         />
         <SettingsRow
           icon="key-outline"
@@ -387,29 +475,29 @@ export default function SettingsScreen({ navigation }: Props) {
           title="Connected accounts"
           subtitle="Google, Apple sign-in"
           onPress={() => navigation.navigate('ConnectedAccounts')}
+        />
+        <SettingsRow
+          icon="eye-outline"
+          title="Privacy & safety"
+          subtitle="Visibility, blocked users"
+          onPress={() => navigation.navigate('PrivacySettings')}
+        />
+        <SettingsRow
+          icon="lock-closed-outline"
+          title="Data & Privacy"
+          subtitle="Download, delete, privacy controls"
+          onPress={() => navigation.navigate('DataPrivacy')}
           isLast
         />
       </SettingsSection>
 
-      {/* ── BUYING & SELLING (card) ── */}
-      <SettingsSection title="Buying & selling" noCard>
-        <SettingsRow
-          icon="location-outline"
-          title="Saved addresses"
-          subtitle={savedAddress ? '1 saved' : 'None saved'}
-          onPress={() => navigation.navigate('SavedAddresses')}
-          isFirst
-        />
-        <SettingsRow
-          icon="card-outline"
-          title="Payment methods"
-          subtitle={savedPaymentMethod ? savedPaymentMethod.label : 'None saved'}
-          onPress={() => navigation.navigate('Payments')}
-        />
+      {/* ── BUYING & SELLING ── */}
+      <SettingsSection title="Buying & selling" icon="bag-outline" noCard>
         <SettingsRow
           icon="heart-outline"
           title="Saved & collections"
           onPress={() => navigation.navigate('Closet')}
+          isFirst
         />
         <SettingsRow
           icon="wallet-outline"
@@ -418,39 +506,20 @@ export default function SettingsScreen({ navigation }: Props) {
           onPress={() => navigation.navigate('Wallet')}
         />
         <SettingsRow
-          icon="cash-outline"
-          title="Payout history"
-          onPress={() => navigation.navigate('BalanceHistory')}
-        />
-        <SettingsRow
           icon="cube-outline"
           title="Shipping preferences"
           onPress={() => navigation.navigate('Postage')}
+        />
+        <SettingsRow
+          icon="cash-outline"
+          title="Payout history"
+          onPress={() => navigation.navigate('BalanceHistory')}
           isLast
         />
       </SettingsSection>
 
-      {/* ── PRIVACY & NOTIFICATIONS (card) ── */}
-      <SettingsSection title="Privacy & notifications" noCard>
-        <SettingsRow
-          icon="eye-outline"
-          title="Privacy & safety"
-          subtitle="Visibility, blocked users"
-          onPress={() => navigation.navigate('PrivacySettings')}
-          isFirst
-        />
-        <SettingsRow
-          icon="ban-outline"
-          title="Blocked users"
-          subtitle={blockedCount > 0 ? `${blockedCount} blocked` : 'None'}
-          onPress={() => navigation.navigate('BlockedUsers')}
-        />
-        <SettingsRow
-          icon="chatbubble-outline"
-          title="Chat privacy"
-          subtitle="Who can message you"
-          onPress={() => navigation.navigate('ChatSettings')}
-        />
+      {/* ── NOTIFICATIONS ── */}
+      <SettingsSection title="Notifications" icon="notifications-outline" noCard>
         <SettingsRow
           icon="notifications"
           title="Enable notifications"
@@ -458,6 +527,19 @@ export default function SettingsScreen({ navigation }: Props) {
           toggleValue={pushPermissionGranted === true}
           onToggle={(v) => void handleTogglePushPermission(v)}
           disabled={isTogglingPush}
+          isFirst
+        />
+        <SettingsRow
+          icon="mail-outline"
+          title="Email notifications"
+          subtitle={emailNotificationsEnabled ? 'On' : 'Off'}
+          onPress={() => navigation.navigate('EmailNotifications')}
+        />
+        <SettingsRow
+          icon="options-outline"
+          title="Notification preferences"
+          subtitle="Master toggle, quiet hours, preview"
+          onPress={() => navigation.navigate('NotificationPreferences')}
         />
         <SettingsRow
           icon="notifications-outline"
@@ -466,22 +548,28 @@ export default function SettingsScreen({ navigation }: Props) {
           onPress={() => navigation.navigate('PushNotifications')}
         />
         <SettingsRow
-          icon="mail-outline"
-          title="Email notifications"
-          subtitle={emailNotificationsEnabled ? 'On' : 'Off'}
-          onPress={() => navigation.navigate('EmailNotifications')}
+          icon="chatbubble-outline"
+          title="Chat privacy"
+          subtitle="Who can message you"
+          onPress={() => navigation.navigate('ChatSettings')}
           isLast
         />
       </SettingsSection>
 
-      {/* ── PREFERENCES (card) ── */}
-      <SettingsSection title="Preferences" noCard>
+      {/* ── PREFERENCES ── */}
+      <SettingsSection title="Preferences" icon="options-outline" noCard>
+        <SettingsRow
+          icon="color-palette-outline"
+          title="Theme"
+          value={getThemePreferenceLabel(themePreference)}
+          onPress={() => setThemePickerVisible(true)}
+          isFirst
+        />
         <SettingsRow
           icon="swap-horizontal-outline"
           title="Currency display"
           value={displayModeLabel}
           onPress={cycleDisplayMode}
-          isFirst
         />
         <SettingsRow
           icon="globe-outline"
@@ -490,16 +578,28 @@ export default function SettingsScreen({ navigation }: Props) {
           onPress={() => setCurrencyPickerVisible(true)}
         />
         <SettingsRow
-          icon="color-palette-outline"
-          title="Theme"
-          value={getThemePreferenceLabel(themePreference)}
-          onPress={() => setThemePickerVisible(true)}
-        />
-        <SettingsRow
           icon="language-outline"
           title="Language"
           value={selectedLanguage}
           onPress={() => setLanguagePickerVisible(true)}
+        />
+        <SettingsRow
+          icon="accessibility-outline"
+          title="Accessibility"
+          subtitle="Text size, motion, contrast"
+          onPress={() => navigation.navigate('AccessibilitySettings')}
+        />
+        <SettingsRow
+          icon="sparkles-outline"
+          title="Your Algorithm"
+          subtitle="Manage your recommendations"
+          onPress={() => navigation.navigate('YourAlgorithm')}
+        />
+        <SettingsRow
+          icon="leaf-outline"
+          title="Sustainability"
+          subtitle="Goals, shipping, impact tracking"
+          onPress={() => navigation.navigate('SustainabilityPreferences')}
         />
         <SettingsRow
           icon="options-outline"
@@ -508,16 +608,65 @@ export default function SettingsScreen({ navigation }: Props) {
           onPress={() => navigation.navigate('Personalisation')}
         />
         <SettingsRow
-          icon="accessibility-outline"
-          title="Accessibility"
-          subtitle="Text size, motion, contrast"
-          onPress={() => navigation.navigate('AccessibilitySettings')}
+          icon="time-outline"
+          title="Search history"
+          subtitle="Clear your recent searches"
+          onPress={() => void handleClearSearchHistory()}
+        />
+        <SettingsRow
+          icon="ban-outline"
+          title="Blocked users"
+          subtitle={blockedCount > 0 ? `${blockedCount} blocked` : 'None'}
+          onPress={() => navigation.navigate('BlockedUsers')}
+        />
+        <SettingsRow
+          icon="analytics-outline"
+          title="Data sharing"
+          subtitle="Analytics and personalization"
+          toggleValue={!analyticsOptOut}
+          onToggle={(v) => setAnalyticsOptOut(!v)}
           isLast
         />
       </SettingsSection>
 
-      {/* ── CO-OWN (card) ── */}
-      <SettingsSection title="Co-Own" noCard>
+      {/* ── AI & AGENTS ── */}
+      <SettingsSection title="AI & Agents" icon="sparkles-outline" noCard>
+        <SettingsRow
+          icon="sparkles-outline"
+          title="AI Preferences"
+          subtitle="Listing suggestions, photo, chat agents, Smart Sell"
+          onPress={() => navigation.navigate('AIPreferences')}
+          isFirst
+        />
+        <SettingsRow
+          icon="key-outline"
+          title="AI API Integration"
+          subtitle="OpenAI, Anthropic, Gemini — bring your own key"
+          onPress={() => navigation.navigate('AIAgentIntegration')}
+        />
+        <SettingsRow
+          icon="people-outline"
+          title="Agent Directory"
+          subtitle="Browse and deploy AI assistants"
+          onPress={() => navigation.navigate('BotDirectory')}
+        />
+        <SettingsRow
+          icon="person-circle-outline"
+          title="My Agents"
+          subtitle="Manage your created AI agents"
+          onPress={() => navigation.navigate('CustomBots')}
+        />
+        <SettingsRow
+          icon="create-outline"
+          title="Create Agent"
+          subtitle="Build a custom AI assistant"
+          onPress={() => navigation.navigate('BotBuilder', {})}
+          isLast
+        />
+      </SettingsSection>
+
+      {/* ── CO-OWN ── */}
+      <SettingsSection title="Co-Own" icon="diamond-outline" noCard>
         <SettingsRow
           icon="notifications-outline"
           title="Price alerts"
@@ -540,8 +689,8 @@ export default function SettingsScreen({ navigation }: Props) {
         />
       </SettingsSection>
 
-      {/* ── ACCOUNT CONTROL (card, sober) ── */}
-      <SettingsSection title="Account control" noCard>
+      {/* ── ACCOUNT CONTROL ── */}
+      <SettingsSection title="Account control" icon="shield-outline" noCard>
         <SettingsRow
           icon="shield-outline"
           title="Account control"
@@ -558,8 +707,8 @@ export default function SettingsScreen({ navigation }: Props) {
         />
       </SettingsSection>
 
-      {/* ── DANGER ZONE (visually separated) ── */}
-      <SettingsSection title="Danger zone" noCard>
+      {/* ── DANGER ZONE ── */}
+      <SettingsSection title="Danger zone" icon="warning-outline" noCard>
         <SettingsRow
           icon="trash-outline"
           title="Delete account"
@@ -571,8 +720,8 @@ export default function SettingsScreen({ navigation }: Props) {
         />
       </SettingsSection>
 
-      {/* ── HELP & ABOUT (card) ── */}
-      <SettingsSection title="Help & about" noCard>
+      {/* ── HELP & ABOUT ── */}
+      <SettingsSection title="Help & about" icon="help-circle-outline" noCard>
         <SettingsRow
           icon="help-circle-outline"
           title="Help Centre"
@@ -642,15 +791,15 @@ export default function SettingsScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   searchBtn: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
   searchField: {
-    borderRadius: 999,
+    borderRadius: Radius.full,
     backgroundColor: 'transparent',
-    height: 44,
+    height: Control.hit,
   },
   // ── Identity hero card ──
   identityHero: {
@@ -666,31 +815,31 @@ const styles = StyleSheet.create({
     gap: Space.md,
   },
   identityAvatarWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: Space.xxl + Space.sm,
+    height: Space.xxl + Space.sm,
+    borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
   },
   identityAvatarImage: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: Space.xxl + Space.sm,
+    height: Space.xxl + Space.sm,
+    borderRadius: Radius.full,
   },
   identityAvatarText: {
-    fontSize: 22,
+    fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
   },
   identityHeroText: {
     flex: 1,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   identityName: {
     fontSize: Type.bodyEmphasis.size + 1,
     fontFamily: Typography.family.bold,
-    letterSpacing: -0.2,
-    lineHeight: 22,
+    letterSpacing: Type.body.letterSpacing,
+    lineHeight: Type.bodyLarge.lineHeight,
   },
   identityHandle: {
     fontSize: Type.caption.size,
@@ -698,28 +847,57 @@ const styles = StyleSheet.create({
     letterSpacing: Type.caption.letterSpacing,
     lineHeight: Type.caption.lineHeight,
   },
+  identityEmail: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.meta.letterSpacing,
+    lineHeight: Type.meta.lineHeight,
+  },
   identityBadges: {
     flexDirection: 'row',
-    gap: 6,
-    marginTop: 6,
+    flexWrap: 'wrap',
+    gap: Space.xs + 2,
+    marginTop: Space.sm,
   },
   identityBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    gap: Space.xs - 1,
+    paddingHorizontal: Space.xs + 2,
+    paddingVertical: Space.xs / 2,
     borderRadius: Radius.full,
   },
   identityBadgeText: {
-    fontSize: 10,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: 0.3,
+    letterSpacing: Type.meta.letterSpacing * 2,
+  },
+  identityQuickActions: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    marginTop: Space.md,
+  },
+  identityQuickBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.xs,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    minHeight: Control.hit,
+  },
+  identityQuickBtnPrimary: {},
+  identityQuickBtnText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.caption.letterSpacing,
   },
   identityEditAffordance: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: Control.chromeCompact,
+    height: Control.chromeCompact,
+    borderRadius: Radius.xl,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,

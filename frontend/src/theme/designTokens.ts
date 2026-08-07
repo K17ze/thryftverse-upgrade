@@ -458,3 +458,24 @@ export const Stroke = {
   /** Selection/focus only; never routine card decoration. */
   emphasis: 2,
 } as const;
+
+// ============================================================================
+// ASPECT RATIOS (width / height)
+// 2026 standard: portrait 3:4 imagery (Poshmark March 2026 redesign).
+// Use these tokens instead of inline numeric ratios so media geometry stays
+// consistent across discovery, detail, and creator surfaces.
+// ============================================================================
+export const AspectRatio = {
+  /** 1:1 — legacy/default square */
+  square: 1,
+  /** 3:4 — Poshmark 2026 portrait standard */
+  portrait: 3 / 4,
+  /** 9:16 — story / tall portrait format */
+  portraitTall: 9 / 16,
+  /** 4:3 — landscape */
+  landscape: 4 / 3,
+  /** 16:9 — wide */
+  wide: 16 / 9,
+  /** 4:5 — marketplace standard (Depop, Instagram) */
+  marketplace: 4 / 5,
+} as const;

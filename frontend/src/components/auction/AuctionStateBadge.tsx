@@ -41,14 +41,14 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    paddingVertical: 4,
+    paddingVertical: Space.xs,
     borderRadius: Radius.full,
     alignSelf: 'flex-start',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.12)',
   },
   dot: {
-    borderRadius: 999,
+    borderRadius: Radius.full,
     backgroundColor: colors.danger,
   },
   label: {

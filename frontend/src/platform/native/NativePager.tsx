@@ -1,7 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { StyleSheet, View, Text, Pressable, ScrollView, useWindowDimensions } from 'react-native';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography } from '../../theme/designTokens';
+import { Typography, Type, Space } from '../../theme/designTokens';
 
 export interface NativePagerPage {
   key: string;
@@ -92,7 +92,7 @@ function createStyles(colors: ThemeColors) {
     borderBottomColor: colors.border,
   },
   tabBarCompact: {
-    paddingHorizontal: 8,
+    paddingHorizontal: Space.sm,
   },
   tab: {
     flex: 1,
@@ -102,7 +102,7 @@ function createStyles(colors: ThemeColors) {
   },
   tabActive: {},
   tabText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
     color: colors.textSecondary,
   },

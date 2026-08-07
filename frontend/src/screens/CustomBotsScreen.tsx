@@ -7,21 +7,21 @@ import {
   Alert,
   StatusBar,
 } from 'react-native';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AgentIcon } from '../components/agents/AgentIcon';
 import { useHaptic } from '../hooks/useHaptic';
 import { Caption, BodyEmphasis, Meta } from '../components/ui/Text';
 
-type Props = StackScreenProps<RootStackParamList, 'CustomBots'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'CustomBots'>;
 
 export default function CustomBotsScreen({ navigation }: Props) {
   const { colors, isDark } = useAppTheme();
@@ -278,8 +278,8 @@ function createStyles(colors: ThemeColors) {
     gap: Space.lg,
   },
   createBtn: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -293,50 +293,50 @@ function createStyles(colors: ThemeColors) {
   },
   card: {
     backgroundColor: colors.background,
-    gap: 1,
+    gap: Space.xs / 4,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: Space.sm + 2,
     gap: Space.sm,
   },
   iconWrap: {
-    width: 32,
-    height: 44,
+    width: Space.xl + Space.xs,
+    height: Control.hit,
     justifyContent: 'center',
     alignItems: 'center',
   },
   botText: {
     flex: 1,
     justifyContent: 'center',
-    gap: 2,
+    gap: Space.xs / 2,
   },
   rowActions: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   rowAction: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
   empty: {
     alignItems: 'center',
     paddingHorizontal: Space.lg,
-    paddingTop: 72,
-    gap: 12,
+    paddingTop: Space.xxl + Space.xxl + Space.xxl - 24,
+    gap: Space.sm + 4,
   },
   emptyMark: {
-    width: 48,
-    height: 48,
+    width: Space.xl + Space.xl - 4,
+    height: Space.xl + Space.xl - 4,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Space.sm,
   },
   emptyTitle: {
-    maxWidth: 300,
+    maxWidth: Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xl - 4,
     textAlign: 'center',
     color: colors.textPrimary,
     fontSize: Type.subtitle.size,
@@ -345,14 +345,14 @@ function createStyles(colors: ThemeColors) {
   },
   emptyText: {
     textAlign: 'center',
-    maxWidth: 310,
+    maxWidth: Space.xxl * 6 + Space.lg - 2,
     fontSize: Type.captionElevated.size,
-    lineHeight: 19,
+    lineHeight: Type.captionElevated.lineHeight + 1,
   },
   createEmptyBtn: {
     backgroundColor: colors.brand,
     paddingHorizontal: Space.md,
-    paddingVertical: 12,
+    paddingVertical: Space.sm + 4,
     borderRadius: Radius.lg,
   },
   createEmptyBtnText: {
@@ -363,7 +363,7 @@ function createStyles(colors: ThemeColors) {
   emptyNote: {
     marginTop: Space.xs,
     textAlign: 'center',
-    lineHeight: 17,
+    lineHeight: Type.caption.lineHeight + 1,
   },
   });
 }

@@ -21,10 +21,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Control, LetterSpacing } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -38,7 +38,7 @@ import {
 } from '../services/marketApi';
 import { RootStackParamList } from '../navigation/types';
 
-type Props = StackScreenProps<RootStackParamList, 'CoOwnPriceAlerts'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'CoOwnPriceAlerts'>;
 
 function formatGbp(minor: number): string {
   return `£${(minor / 100).toFixed(2)}`;
@@ -280,8 +280,8 @@ function createStyles(colors: ThemeColors) {
       gap: Space.md,
     },
     heroIcon: {
-      width: 44,
-      height: 44,
+      width: Control.hit,
+      height: Control.hit,
       borderRadius: Radius.full,
       justifyContent: 'center',
       alignItems: 'center',
@@ -297,7 +297,7 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
-      marginTop: 2,
+      marginTop: Space.xs / 2,
     },
 
     // Section headers
@@ -314,15 +314,15 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
       textTransform: 'uppercase',
-      letterSpacing: 0.8,
+      letterSpacing: LetterSpacing.caps,
       opacity: 0.7,
     },
     sectionCount: {
       backgroundColor: colors.surfaceAlt,
       borderRadius: Radius.full,
       paddingHorizontal: Space.sm,
-      paddingVertical: 2,
-      minWidth: 24,
+      paddingVertical: Space.xs / 2,
+      minWidth: Space.lg,
       alignItems: 'center',
     },
     sectionCountText: {
@@ -350,8 +350,8 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
     },
     conditionBadge: {
-      width: 40,
-      height: 40,
+      width: Space.xl + Space.sm,
+      height: Space.xl + Space.sm,
       borderRadius: Radius.full,
       justifyContent: 'center',
       alignItems: 'center',
@@ -362,13 +362,13 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.medium,
       color: colors.textSecondary,
       textTransform: 'uppercase',
-      letterSpacing: 0.5,
+      letterSpacing: Type.metaElevated.letterSpacing,
     },
     alertPrice: {
       fontSize: Type.priceList.size,
       fontFamily: Typography.family.bold,
       color: colors.textPrimary,
-      marginTop: 2,
+      marginTop: Space.xs / 2,
       fontVariant: ['tabular-nums'],
       letterSpacing: Type.priceList.letterSpacing,
     },
@@ -376,7 +376,7 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.meta.size,
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
-      marginTop: 4,
+      marginTop: Space.xs,
     },
     deleteButton: {
       padding: Space.sm,

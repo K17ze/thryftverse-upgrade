@@ -1,5 +1,4 @@
-import { Typography } from '../theme/designTokens';
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -14,7 +13,7 @@ import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { Swipeable } from 'react-native-gesture-handler';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { EmptyState } from '../components/EmptyState';
 import { SkeletonLoader } from '../components/SkeletonLoader';
@@ -35,13 +34,13 @@ import { resolveNotificationRoute } from '../utils/notificationRouting';
 import { haptics } from '../utils/haptics';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Motion } from '../constants/motion';
-import { Space, Radius, Type } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 import { isQuietHoursActive } from '../preferences/settingsPreferences';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+import { Typography, Radius, Type, Space, Stroke, Control } from '../theme/designTokens';
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 type NotificationCardType = 'new_item' | 'like' | 'review' | 'order' | 'price' | 'resolution' | 'auction' | 'generic';
 
@@ -254,42 +253,44 @@ function aggregateNotifications(notifications: NotificationCard[]): Notification
   return result;
 }
 
+type NotificationGroupKey = 'orders' | 'social' | 'system';
+
+const NOTIFICATION_GROUP_ORDER: NotificationGroupKey[] = ['orders', 'social', 'system'];
+
+const NOTIFICATION_GROUP_LABELS: Record<NotificationGroupKey, string> = {
+  orders: 'Orders',
+  social: 'Social',
+  system: 'System',
+};
+
+function getNotificationGroupKey(type: NotificationCardType): NotificationGroupKey {
+  if (type === 'order' || type === 'resolution') return 'orders';
+  if (type === 'like' || type === 'review' || type === 'new_item') return 'social';
+  return 'system';
+}
+
 function groupNotifications(notifications: NotificationCard[]) {
-  const now = Date.now();
-  const today: NotificationCard[] = [];
-  const thisWeek: NotificationCard[] = [];
-  const earlier: NotificationCard[] = [];
+  const buckets: Record<NotificationGroupKey, NotificationCard[]> = {
+    orders: [],
+    social: [],
+    system: [],
+  };
 
   notifications.forEach((notification) => {
-    const parsed = new Date(notification.createdAt);
-    if (Number.isNaN(parsed.getTime())) {
-      today.push(notification);
-      return;
-    }
-
-    const ageHours = Math.max(0, (now - parsed.getTime()) / 3_600_000);
-    if (ageHours < 24) {
-      today.push(notification);
-      return;
-    }
-
-    if (ageHours < 24 * 7) {
-      thisWeek.push(notification);
-      return;
-    }
-
-    earlier.push(notification);
+    const groupKey = getNotificationGroupKey(notification.type);
+    buckets[groupKey].push(notification);
   });
 
-  const sections: Array<{ title: string; data: NotificationCard[] }> = [];
-  if (today.length > 0) {
-    sections.push({ title: 'Today', data: today });
+  for (const key of NOTIFICATION_GROUP_ORDER) {
+    buckets[key].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
-  if (thisWeek.length > 0) {
-    sections.push({ title: 'This Week', data: thisWeek });
-  }
-  if (earlier.length > 0) {
-    sections.push({ title: 'Earlier', data: earlier });
+
+  const sections: Array<{ title: string; data: NotificationCard[]; unreadCount: number }> = [];
+  for (const key of NOTIFICATION_GROUP_ORDER) {
+    const data = buckets[key];
+    if (data.length === 0) continue;
+    const unreadCount = data.filter((n) => !n.read).length;
+    sections.push({ title: NOTIFICATION_GROUP_LABELS[key], data, unreadCount });
   }
 
   return sections;
@@ -429,7 +430,7 @@ export default function NotificationsScreen() {
 
   const renderSwipeRightAction = React.useCallback(
     (notification: NotificationCard) => {
-      if (notification.read) return <View style={{ width: 0, height: 80 }} />;
+      if (notification.read) return <View style={{ width: 0, height: Space.xxl + Space.xl }} />;
       return (
         <View style={styles.swipeActionContainer}>
           <View style={styles.swipeReadAction}>
@@ -468,6 +469,7 @@ export default function NotificationsScreen() {
       return;
     }
 
+    haptics.success();
     const previousNotifications = notifications;
     setNotifications((previous) => previous.map((item) => ({ ...item, read: true })));
     try {
@@ -511,6 +513,151 @@ export default function NotificationsScreen() {
     [navigation, show]
   );
 
+  const renderNotificationCard = useCallback(({ item, index }: { item: NotificationCard; index: number }) => {
+    const listingId = typeof item.payload.listingId === 'string' ? item.payload.listingId : undefined;
+    const actorUserId = item.actorUserId ?? getPayloadString(item.payload, ['sellerId', 'actorUserId', 'fromUserId', 'counterpartyUserId']);
+    const actorHandle = item.actorUsername ?? actorUserId ?? null;
+    const visualUri = item.itemImage || item.actorAvatar || '';
+
+    return (
+      <Reanimated.View
+        entering={
+          reducedMotionEnabled
+            ? undefined
+            : FadeInDown
+                .delay(Math.min(index, Motion.list.maxStaggerItems) * Motion.list.staggerStep)
+                .duration(Motion.list.enterDuration)
+        }
+      >
+        <Swipeable
+          ref={(ref) => { swipeableRefs.current[item.id] = ref; }}
+          renderRightActions={() => renderSwipeRightAction(item)}
+          renderLeftActions={() => renderSwipeLeftAction()}
+          onSwipeableRightOpen={() => {
+            void handleSwipeMarkRead(item);
+            swipeableRefs.current[item.id]?.close();
+          }}
+          onSwipeableLeftOpen={() => {
+            handleSwipeDismiss(item);
+            swipeableRefs.current[item.id]?.close();
+          }}
+          rightThreshold={80}
+          leftThreshold={80}
+          overshootRight={false}
+          overshootLeft={false}
+        >
+        <View style={[styles.notifCard, !item.read && styles.notifCardUnread]}>
+          {!item.read ? <View style={styles.unreadDot} /> : null}
+          <AnimatedPressable
+            style={styles.notifMainTap}
+            activeOpacity={0.8}
+            onPress={() => handleOpenNotification(item)}
+            accessibilityRole="button"
+            accessibilityLabel={`${item.read ? '' : 'Unread: '}${item.text}, ${item.time}`}
+          >
+            <View style={styles.notifImageWrap}>
+              <SharedTransitionView
+                style={styles.notifImageShared}
+                sharedTransitionTag={listingId ? `image-${listingId}-0` : undefined}
+              >
+                <CachedImage
+                  uri={visualUri}
+                  style={styles.notifImage}
+                  contentFit="cover"
+                  emptyIcon="notifications-outline"
+                  emptyLabel={item.title || 'Notification'}
+                />
+              </SharedTransitionView>
+            </View>
+
+            <View style={styles.notifBody}>
+              {item.title ? (
+                <Text style={[styles.notifTitle, !item.read && styles.notifTitleUnread]} numberOfLines={1}>
+                  {item.title}
+                </Text>
+              ) : null}
+              <Text style={[styles.notifText, !item.read && styles.notifTextUnread]} numberOfLines={item.title ? 2 : 3}>
+                {item.body || item.text}
+              </Text>
+              <View style={styles.notifMetaRow}>
+                {item.aggregatedCount && item.aggregatedCount > 1 ? (
+                  <View style={styles.notifAggregatedRow}>
+                    {item.actorAvatar ? (
+                      <CachedImage
+                        uri={item.actorAvatar}
+                        style={styles.notifAggregatedAvatar}
+                        contentFit="cover"
+                      />
+                    ) : (
+                      <View style={styles.notifAggregatedAvatarFallback}>
+                        <Ionicons name="person" size={10} color={colors.textSecondary} />
+                      </View>
+                    )}
+                    <View style={styles.notifAggregatedCountBadge}>
+                      <Text style={styles.notifAggregatedCountText}>
+                        +{item.aggregatedCount - 1}
+                      </Text>
+                    </View>
+                  </View>
+                ) : null}
+                <Text style={styles.notifTime}>{item.time}</Text>
+              </View>
+            </View>
+          </AnimatedPressable>
+
+          {actorUserId && actorHandle ? (
+            <View style={styles.notifActionRow}>
+              <AnimatedPressable
+                style={styles.notifActorChip}
+                onPress={() => navigation.navigate('UserProfile', { userId: actorUserId })}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={`Open @${actorHandle} profile`}
+                accessibilityHint="Shows sender profile details"
+              >
+                <AvatarRing
+                  uri={item.actorAvatar ?? undefined}
+                  size={28}
+                  isUnread={!item.read}
+                />
+                <Text style={styles.notifActorText} numberOfLines={1}>@{actorHandle}</Text>
+              </AnimatedPressable>
+
+              <AnimatedPressable
+                style={styles.notifMessageBtn}
+                onPress={() =>
+                  navigation.navigate('Chat', {
+                    conversationId: listingId ? `${actorUserId}_${listingId}` : `profile_${actorUserId}`,
+                    focusQuery: actorHandle,
+                    partnerUserId: actorUserId,
+                    itemId: listingId,
+                  })}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={`Message @${actorHandle}`}
+                accessibilityHint="Opens chat with this user"
+              >
+                <Ionicons name="chatbubble-outline" size={18} color={colors.textPrimary} />
+              </AnimatedPressable>
+            </View>
+          ) : null}
+        </View>
+        </Swipeable>
+      </Reanimated.View>
+    );
+  }, [
+    reducedMotionEnabled,
+    swipeableRefs,
+    renderSwipeRightAction,
+    renderSwipeLeftAction,
+    handleSwipeMarkRead,
+    handleSwipeDismiss,
+    handleOpenNotification,
+    navigation,
+    colors,
+    styles,
+  ]);
+
   return (
     <FlagshipScreen
       header={
@@ -521,20 +668,24 @@ export default function NotificationsScreen() {
             <View style={styles.headerActions}>
               <AnimatedPressable
                 style={styles.headerAction}
-                onPress={() => navigation.navigate('PushNotifications')}
+                onPress={() => navigation.navigate('NotificationPreferences')}
                 accessibilityLabel="Manage notification preferences"
                 accessibilityRole="button"
+                hapticFeedback="light"
               >
                 <Ionicons name="settings-outline" size={20} color={colors.textSecondary} />
               </AnimatedPressable>
-              <AnimatedPressable
-                style={styles.headerAction}
-                onPress={handleMarkAllAsRead}
-                accessibilityRole="button"
-                accessibilityLabel={hasUnread ? 'Mark all notifications as read' : 'All caught up'}
-              >
-                <Ionicons name="checkmark-done-outline" size={22} color={hasUnread ? colors.textPrimary : colors.textMuted} />
-              </AnimatedPressable>
+              {unreadCount > 0 ? (
+                <AnimatedPressable
+                  style={styles.headerAction}
+                  onPress={handleMarkAllAsRead}
+                  accessibilityRole="button"
+                  accessibilityLabel="Mark all notifications as read"
+                  hapticFeedback="light"
+                >
+                  <Ionicons name="checkmark-done-outline" size={22} color={colors.textPrimary} />
+                </AnimatedPressable>
+              ) : null}
             </View>
           }
         />
@@ -565,12 +716,21 @@ export default function NotificationsScreen() {
                 accessibilityLabel={`Filter: ${tab.label}${count > 0 ? `, ${count} items` : ''}`}
                 accessibilityState={{ selected: isActive }}
               >
-                <Text
-                  style={[styles.filterTabText, isActive && styles.filterTabTextActive]}
-                  numberOfLines={1}
-                >
-                  {tab.label}
-                </Text>
+                <View style={styles.filterTabContent}>
+                  <Text
+                    style={[styles.filterTabText, isActive && styles.filterTabTextActive]}
+                    numberOfLines={1}
+                  >
+                    {tab.label}
+                  </Text>
+                  {count > 0 ? (
+                    <View style={[styles.filterTabCount, isActive && styles.filterTabCountActive]}>
+                      <Text style={[styles.filterTabCountText, isActive && styles.filterTabCountTextActive]}>
+                        {count}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
                 {isActive ? <View style={styles.filterTabIndicator} /> : null}
               </Pressable>
             );
@@ -619,141 +779,23 @@ export default function NotificationsScreen() {
         }
         onEndReached={loadMore}
         onEndReachedThreshold={0.3}
-        renderSectionHeader={({ section: { title } }) => (
-          <Text style={styles.sectionTitle}>{title}</Text>
-        )}
-        renderItem={({ item, index }) => {
-          const listingId = typeof item.payload.listingId === 'string' ? item.payload.listingId : undefined;
-          const actorUserId = item.actorUserId ?? getPayloadString(item.payload, ['sellerId', 'actorUserId', 'fromUserId', 'counterpartyUserId']);
-          const actorHandle = item.actorUsername ?? actorUserId ?? null;
-          const visualUri = item.itemImage || item.actorAvatar || '';
-
-          return (
-            <Reanimated.View
-              entering={
-                reducedMotionEnabled
-                  ? undefined
-                  : FadeInDown
-                      .delay(Math.min(index, Motion.list.maxStaggerItems) * Motion.list.staggerStep)
-                      .duration(Motion.list.enterDuration)
-              }
-            >
-              <Swipeable
-                ref={(ref) => { swipeableRefs.current[item.id] = ref; }}
-                renderRightActions={() => renderSwipeRightAction(item)}
-                renderLeftActions={() => renderSwipeLeftAction()}
-                onSwipeableRightOpen={() => {
-                  void handleSwipeMarkRead(item);
-                  swipeableRefs.current[item.id]?.close();
-                }}
-                onSwipeableLeftOpen={() => {
-                  handleSwipeDismiss(item);
-                  swipeableRefs.current[item.id]?.close();
-                }}
-                rightThreshold={80}
-                leftThreshold={80}
-                overshootRight={false}
-                overshootLeft={false}
-              >
-              <View style={[styles.notifCard, !item.read && styles.notifCardUnread]}>
-                <AnimatedPressable
-                  style={styles.notifMainTap}
-                  activeOpacity={0.8}
-                  onPress={() => handleOpenNotification(item)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${item.read ? '' : 'Unread: '}${item.text}, ${item.time}`}
-                >
-                  <View style={styles.notifImageWrap}>
-                    <SharedTransitionView
-                      style={styles.notifImageShared}
-                      sharedTransitionTag={listingId ? `image-${listingId}-0` : undefined}
-                    >
-                      <CachedImage
-                        uri={visualUri}
-                        style={styles.notifImage}
-                        contentFit="cover"
-                        emptyIcon="notifications-outline"
-                        emptyLabel={item.title || 'Notification'}
-                      />
-                    </SharedTransitionView>
-                  </View>
-
-                  <View style={styles.notifBody}>
-                    {item.title ? (
-                      <Text style={[styles.notifTitle, !item.read && styles.notifTitleUnread]} numberOfLines={1}>
-                        {item.title}
-                      </Text>
-                    ) : null}
-                    <Text style={[styles.notifText, !item.read && styles.notifTextUnread]} numberOfLines={item.title ? 2 : 3}>
-                      {item.body || item.text}
-                    </Text>
-                    <View style={styles.notifMetaRow}>
-                      {item.aggregatedCount && item.aggregatedCount > 1 ? (
-                        <View style={styles.notifAggregatedRow}>
-                          {item.actorAvatar ? (
-                            <CachedImage
-                              uri={item.actorAvatar}
-                              style={styles.notifAggregatedAvatar}
-                              contentFit="cover"
-                            />
-                          ) : (
-                            <View style={styles.notifAggregatedAvatarFallback}>
-                              <Ionicons name="person" size={10} color={colors.textSecondary} />
-                            </View>
-                          )}
-                          <View style={styles.notifAggregatedCountBadge}>
-                            <Text style={styles.notifAggregatedCountText}>
-                              +{item.aggregatedCount - 1}
-                            </Text>
-                          </View>
-                        </View>
-                      ) : null}
-                      <Text style={styles.notifTime}>{item.time}</Text>
-                    </View>
-                  </View>
-                </AnimatedPressable>
-
-                {actorUserId && actorHandle ? (
-                  <View style={styles.notifActionRow}>
-                    <AnimatedPressable
-                      style={styles.notifActorChip}
-                      onPress={() => navigation.navigate('UserProfile', { userId: actorUserId })}
-                      activeOpacity={0.85}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Open @${actorHandle} profile`}
-                      accessibilityHint="Shows sender profile details"
-                    >
-                      <AvatarRing
-                        uri={item.actorAvatar ?? undefined}
-                        size={28}
-                        isUnread={!item.read}
-                      />
-                      <Text style={styles.notifActorText} numberOfLines={1}>@{actorHandle}</Text>
-                    </AnimatedPressable>
-
-                    <AnimatedPressable
-                      style={styles.notifMessageBtn}
-                      onPress={() =>
-                        navigation.navigate('Chat', {
-                          conversationId: listingId ? `${actorUserId}_${listingId}` : `profile_${actorUserId}`,
-                          focusQuery: actorHandle,
-                          partnerUserId: actorUserId,
-                          itemId: listingId,
-                        })}
-                      activeOpacity={0.85}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Message @${actorHandle}`}
-                      accessibilityHint="Opens chat with this user"
-                    >
-                      <Ionicons name="chatbubble-outline" size={18} color={colors.textPrimary} />
-                    </AnimatedPressable>
-                  </View>
-                ) : null}
+        renderSectionHeader={({ section: { title, unreadCount } }) => (
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>{title}</Text>
+            {unreadCount > 0 ? (
+              <View style={styles.sectionCountBadge}>
+                <Text style={styles.sectionCountText}>{unreadCount}</Text>
               </View>
-              </Swipeable>
-            </Reanimated.View>
-          );
-        }}
+            ) : null}
+          </View>
+        )}
+        // Performance: notification lists can grow long; clip off-screen
+        // items and cap the render batch to keep scroll at 58+ fps.
+        removeClippedSubviews
+        windowSize={7}
+        maxToRenderPerBatch={6}
+        initialNumToRender={8}
+        renderItem={renderNotificationCard}
         ListEmptyComponent={
           isLoading ? (
             <View style={styles.notificationSkeletonList} accessibilityLabel="Loading notifications">
@@ -762,8 +804,8 @@ export default function NotificationsScreen() {
                   <SkeletonLoader width={52} height={52} borderRadius={10} />
                   <View style={styles.notificationSkeletonCopy}>
                     <SkeletonLoader width={index % 2 === 0 ? '58%' : '44%'} height={13} borderRadius={6} />
-                    <SkeletonLoader width={index % 2 === 0 ? '88%' : '76%'} height={11} borderRadius={5} style={{ marginTop: 8 }} />
-                    <SkeletonLoader width="30%" height={9} borderRadius={4} style={{ marginTop: 8 }} />
+                    <SkeletonLoader width={index % 2 === 0 ? '88%' : '76%'} height={11} borderRadius={5} style={{ marginTop: Space.sm }} />
+                    <SkeletonLoader width="30%" height={9} borderRadius={4} style={{ marginTop: Space.sm }} />
                   </View>
                 </View>
               ))}
@@ -817,8 +859,8 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
   },
   headerAction: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -828,23 +870,51 @@ function createStyles(colors: ThemeColors) {
     borderBottomColor: colors.border,
   },
   filterTabsContent: {
-    paddingHorizontal: 16,
-    gap: 20,
+    paddingHorizontal: Space.md,
+    gap: Space.xl,
   },
   filterTab: {
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 46,
+    minHeight: Control.hit + 2,
     position: 'relative',
   },
   filterTabActive: {
     backgroundColor: 'transparent',
+  },
+  filterTabContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs + 1,
   },
   filterTabText: {
     fontSize: Type.captionElevated.size,
     lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
+  },
+  filterTabCount: {
+    minWidth: Space.md + 2,
+    height: Space.md + 2,
+    borderRadius: Radius.full,
+    paddingHorizontal: Space.xs + 1,
+    backgroundColor: colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
+  filterTabCountActive: {
+    backgroundColor: `${colors.brand}20`,
+    borderColor: `${colors.brand}40`,
+  },
+  filterTabCountText: {
+    fontSize: Type.meta.size - 2,
+    fontFamily: Typography.family.semibold,
+    color: colors.textMuted,
+  },
+  filterTabCountTextActive: {
+    color: colors.brand,
   },
   filterTabTextActive: {
     color: colors.textPrimary,
@@ -855,98 +925,117 @@ function createStyles(colors: ThemeColors) {
     bottom: -StyleSheet.hairlineWidth,
     left: 0,
     right: 0,
-    height: 2,
+    height: Stroke.emphasis,
     borderRadius: Radius.sm,
-    backgroundColor: colors.textPrimary,
+    backgroundColor: colors.brand,
   },
 
   swipeActionContainer: {
     justifyContent: 'center',
     alignItems: 'center',
-    width: 80,
-    marginBottom: 10,
+    width: Space.xxl + Space.xl,
+    marginBottom: Space.sm + 2,
   },
   swipeReadAction: {
     flex: 1,
-    width: 80,
+    width: Space.xxl + Space.xl,
     borderRadius: Radius.xxl,
     backgroundColor: `${colors.success}20`,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: `${colors.success}40`,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
+    gap: Space.xs,
   },
   swipeReadText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     color: colors.success,
   },
   swipeDeleteAction: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 80,
+    width: Space.xxl + Space.xxl + Space.xs,
     height: '100%',
-    gap: 4,
+    gap: Space.xs,
   },
   swipeDeleteText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     color: colors.danger,
   },
 
-  listContent: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 120 },
+  listContent: { paddingHorizontal: Space.md, paddingTop: Space.sm, paddingBottom: Space.xxl + Space.xxl + Space.lg },
 
   summaryBannerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 4,
+    gap: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm + 2,
+    paddingBottom: Space.xs,
   },
   unreadSummaryBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    minHeight: 32,
+    gap: Space.xs + 1,
+    minHeight: Control.chromeCompact,
   },
   unreadSummaryDot: {
-    width: 6,
-    height: 6,
+    width: Space.xs + 2,
+    height: Space.xs + 2,
     borderRadius: Radius.full,
     backgroundColor: colors.brand,
   },
   unreadSummaryText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.brand,
   },
   quietHoursBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    gap: Space.xs + 1,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.xs + 1,
     borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
   quietHoursText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textMuted,
   },
 
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs + 1,
+    marginTop: Space.md + 4,
+    marginBottom: Space.sm,
+    marginLeft: Space.xs,
+  },
   sectionTitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: colors.textMuted,
-    letterSpacing: 0.1,
-    marginTop: 20,
-    marginBottom: 8,
-    marginLeft: 4,
+    letterSpacing: Type.captionElevated.letterSpacing,
+  },
+  sectionCountBadge: {
+    minWidth: Space.md + 4,
+    height: Space.md + 4,
+    borderRadius: Radius.full,
+    paddingHorizontal: Space.xs + 2,
+    backgroundColor: colors.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sectionCountText: {
+    fontSize: Type.meta.size - 2,
+    fontFamily: Typography.family.bold,
+    color: colors.background,
   },
 
   notifCard: {
@@ -966,19 +1055,19 @@ function createStyles(colors: ThemeColors) {
 
   unreadDot: {
     position: 'absolute',
-    top: 18,
-    left: 8,
-    width: 8,
-    height: 8,
+    top: Control.iconCompact,
+    left: Space.sm,
+    width: Space.sm,
+    height: Space.sm,
     borderRadius: Radius.full,
     backgroundColor: colors.brand,
   },
 
   notifImageWrap: {
-    width: 52, height: 52, borderRadius: Radius.lg,
+    width: Space.xxl + Space.xs, height: Space.xxl + Space.xs, borderRadius: Radius.lg,
     overflow: 'hidden',
     backgroundColor: colors.surfaceAlt,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
   },
   notifImageShared: {
@@ -992,7 +1081,7 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     lineHeight: Type.body.lineHeight,
-    marginBottom: 2,
+    marginBottom: Space.xs / 2,
   },
   notifTitleUnread: {
     color: colors.textPrimary,
@@ -1000,81 +1089,81 @@ function createStyles(colors: ThemeColors) {
   },
   notifText: {
     color: colors.textSecondary, fontSize: Type.body.size, fontFamily: Typography.family.regular,
-    lineHeight: Type.body.lineHeight, marginBottom: 8,
+    lineHeight: Type.body.lineHeight, marginBottom: Space.sm,
   },
   notifTextUnread: { color: colors.textPrimary, fontFamily: Typography.family.medium },
 
-  notifMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  notifTime: { fontSize: 12, color: colors.textMuted, fontFamily: Typography.family.regular },
+  notifMetaRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
+  notifTime: { fontSize: Type.caption.size, color: colors.textMuted, fontFamily: Typography.family.regular },
   notifAggregatedRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   notifAggregatedAvatar: {
-    width: 18,
-    height: 18,
+    width: Control.iconCompact,
+    height: Control.iconCompact,
     borderRadius: Radius.full,
-    marginRight: -6,
-    borderWidth: 1.5,
+    marginRight: -(Space.sm - Space.xs / 2),
+    borderWidth: Stroke.standard + Stroke.hairline,
     borderColor: colors.surface,
   },
   notifAggregatedAvatarFallback: {
-    width: 18,
-    height: 18,
+    width: Control.iconCompact,
+    height: Control.iconCompact,
     borderRadius: Radius.full,
-    marginRight: -6,
-    borderWidth: 1.5,
+    marginRight: -(Space.sm - Space.xs / 2),
+    borderWidth: Stroke.standard + Stroke.hairline,
     borderColor: colors.surface,
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
   notifAggregatedCountBadge: {
-    minWidth: 20,
-    height: 20,
+    minWidth: Space.md + 4,
+    height: Space.md + 4,
     borderRadius: Radius.full,
-    paddingHorizontal: 6,
+    paddingHorizontal: Space.xs + 2,
     backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
+    borderWidth: Stroke.standard + Stroke.hairline,
     borderColor: colors.surface,
   },
   notifAggregatedCountText: {
-    fontSize: 10,
+    fontSize: Type.meta.size - 2,
     fontFamily: Typography.family.bold,
     color: colors.background,
   },
   notifActionRow: {
     marginTop: 0,
-    marginHorizontal: 16,
-    marginBottom: 8,
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 8,
+    gap: Space.sm,
   },
   notifActorChip: {
     flex: 1,
-    minHeight: 44,
+    minHeight: Control.hit,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
     paddingHorizontal: 0,
   },
   notifActorAvatarWrap: {
-    width: 18,
-    height: 18,
+    width: Control.iconCompact,
+    height: Control.iconCompact,
     borderRadius: Radius.full,
   },
   notifActorAvatar: {
-    width: 18,
-    height: 18,
+    width: Control.iconCompact,
+    height: Control.iconCompact,
     borderRadius: Radius.full,
   },
   notifActorAvatarFallback: {
-    minWidth: 20,
-    height: 20,
+    minWidth: Space.md + 4,
+    height: Space.md + 4,
     borderRadius: Radius.sm,
     backgroundColor: colors.brand,
     alignItems: 'center',
@@ -1084,12 +1173,12 @@ function createStyles(colors: ThemeColors) {
   notifActorText: {
     flex: 1,
     color: colors.textSecondary,
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
   },
   notifMessageBtn: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1098,7 +1187,7 @@ function createStyles(colors: ThemeColors) {
     paddingTop: Space.sm,
   },
   notificationSkeletonRow: {
-    minHeight: 84,
+    minHeight: Space.xxl + Space.xl + Space.xs,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm + 2,
@@ -1111,13 +1200,13 @@ function createStyles(colors: ThemeColors) {
   },
 
   loadingState: {
-    marginTop: 40,
+    marginTop: Space.xl + Space.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
+    gap: Space.sm + 2,
   },
   loadingText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
   },

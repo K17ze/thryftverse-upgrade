@@ -1,8 +1,17 @@
 import React from 'react';
-import { createStackNavigator, CardStyleInterpolators } from '@react-navigation/stack';
+import { View, Pressable, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { RootStackParamList } from './types';
 import { useStore } from '../store/useStore';
-import { Motion } from '../constants/motion';
+import { isOnboardingComplete } from '../screens/OnboardingScreen';
+import { isAgeVerified } from '../screens/AgeVerificationScreen';
+import { InAppNotificationCenter } from '../components/notifications/InAppNotificationCenter';
+import { CommandPalette } from '../components/CommandPalette';
+import {
+  registerRecentScreen,
+  useCommandPaletteStore,
+} from '../hooks/useCommandPalette';
 
 // Eager — initial routes needed immediately at startup.
 // AuthLandingScreen is the initial route when unauthenticated;
@@ -10,68 +19,115 @@ import { Motion } from '../constants/motion';
 import AuthLandingScreen from '../screens/AuthLandingScreen';
 import TabNavigator from './TabNavigator';
 
-const Stack = createStackNavigator<RootStackParamList>();
+const Stack = createNativeStackNavigator<RootStackParamList>();
 
+// native-stack: horizontal push is the default presentation.
+// gestureEnabled keeps iOS swipe-back. No transitionSpec needed —
+// native UINavigationController/Fragment handles transitions.
 const pushScreenOptions = {
   headerShown: false,
-  cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
   gestureEnabled: true,
-  gestureDirection: 'horizontal' as const,
-  transitionSpec: {
-    open: {
-      animation: 'timing' as const,
-      config: {
-        duration: Motion.navigation.pushOpenDuration,
-      },
-    },
-    close: {
-      animation: 'timing' as const,
-      config: {
-        duration: Motion.navigation.pushCloseDuration,
-      },
-    },
-  },
 };
 
+// native-stack: presentation: 'modal' maps to native modal presentation
+// (slide-from-bottom on iOS, bottom-sheet-style on Android).
+// gestureEnabled keeps swipe-to-dismiss. No transitionSpec needed.
 const modalScreenOptions = {
   presentation: 'modal' as const,
-  cardStyleInterpolator: CardStyleInterpolators.forVerticalIOS,
   gestureEnabled: true,
-  gestureDirection: 'vertical' as const,
-  transitionSpec: {
-    open: {
-      animation: 'timing' as const,
-      config: {
-        duration: Motion.navigation.modalOpenDuration,
-      },
-    },
-    close: {
-      animation: 'timing' as const,
-      config: {
-        duration: Motion.navigation.modalCloseDuration,
-      },
-    },
-  },
 };
 
+// native-stack: transparentModal provides overlay automatically.
+// cardStyle → contentStyle. animationEnabled: false → animation: 'none'.
 const transparentSheetScreenOptions = {
   presentation: 'transparentModal' as const,
   headerShown: false,
-  cardOverlayEnabled: true,
-  cardStyle: { backgroundColor: 'transparent' },
+  contentStyle: { backgroundColor: 'transparent' },
   gestureEnabled: false,
-  animationEnabled: false,
+  animation: 'none' as const,
 };
 
 export default function AppNavigator() {
   const isAuthenticated = useStore((state) => state.isAuthenticated);
+  const storeOnboardingComplete = useStore((state) => state.hasCompletedOnboarding);
+  // Onboarding is a first-run gate that sits ahead of auth. The persisted
+  // store flag lets returning users skip the AsyncStorage round-trip; for
+  // first-launch users we still confirm against AsyncStorage (the
+  // authoritative source) before showing the onboarding screen.
+  const [onboardingChecked, setOnboardingChecked] = React.useState(storeOnboardingComplete);
+  const [needsOnboarding, setNeedsOnboarding] = React.useState(!storeOnboardingComplete);
+  // Age verification gate — checked ahead of onboarding. Persisted in
+  // SecureStore (see AgeVerificationScreen) so returning users skip it.
+  const [ageCheckChecked, setAgeCheckChecked] = React.useState(false);
+  const [needsAgeVerification, setNeedsAgeVerification] = React.useState(true);
+
+  React.useEffect(() => {
+    let mounted = true;
+    isAgeVerified().then((verified) => {
+      if (mounted) {
+        setNeedsAgeVerification(!verified);
+        setAgeCheckChecked(true);
+      }
+    });
+    return () => { mounted = false; };
+  }, []);
+
+  React.useEffect(() => {
+    if (storeOnboardingComplete) return; // store already says complete
+    let mounted = true;
+    isOnboardingComplete().then((complete) => {
+      if (mounted) {
+        setNeedsOnboarding(!complete);
+        setOnboardingChecked(true);
+      }
+    });
+    return () => { mounted = false; };
+  }, [storeOnboardingComplete]);
+
+  if (!ageCheckChecked || !onboardingChecked) {
+    return null;
+  }
+
+  // First-launch users see the age gate, then onboarding, before auth.
+  // Returning users go straight to the auth/main entry point.
+  const initialRoute = needsAgeVerification
+    ? 'AgeVerification'
+    : needsOnboarding
+      ? 'Onboarding'
+      : isAuthenticated
+        ? 'MainTabs'
+        : 'AuthLanding';
 
   return (
+    <View style={{ flex: 1 }}>
     <Stack.Navigator
       key={isAuthenticated ? 'authenticated' : 'anonymous'}
-      initialRouteName={isAuthenticated ? 'MainTabs' : 'AuthLanding'}
+      initialRouteName={initialRoute}
       screenOptions={pushScreenOptions}
+      screenListeners={{
+        focus: (e) => {
+          // Track recently visited screens for the command palette "Recent"
+          // section. The native-stack navigator emits focus with the route
+          // name; we persist a friendly title derived from the route name.
+          const routeName = (e.target as string | undefined)?.split('-')[0];
+          if (routeName) {
+            const title = routeName
+              .replace(/([A-Z])/g, ' $1')
+              .replace(/^./, (c) => c.toUpperCase())
+              .trim();
+            registerRecentScreen(routeName, title).catch(() => {
+              // Best-effort — never block navigation.
+            });
+          }
+        },
+      }}
     >
+
+      {/* Age gate — 18+ marketplace verification, first-launch only */}
+      <Stack.Screen name="AgeVerification" getComponent={() => require('../screens/AgeVerificationScreen').default} options={{ headerShown: false, gestureEnabled: false }} />
+
+      {/* General app onboarding — first-launch only */}
+      <Stack.Screen name="Onboarding" getComponent={() => require('../screens/OnboardingScreen').default} />
 
       {/* Auth Flow */}
       <Stack.Screen name="AuthLanding" component={AuthLandingScreen} />
@@ -89,11 +145,15 @@ export default function AppNavigator() {
       <Stack.Screen name="CreatePoster" getComponent={() => require('../screens/CreatePosterRedirect').CreatePosterRedirect} options={modalScreenOptions} />
       <Stack.Screen name="PosterStoryActivity" getComponent={() => require('../screens/PosterStoryActivityScreen').default} options={modalScreenOptions} />
       <Stack.Screen name="PosterArchive" getComponent={() => require('../screens/PosterArchiveScreen').default} options={modalScreenOptions} />
+      <Stack.Screen name="PosterHighlightViewer" getComponent={() => require('../screens/PosterHighlightViewerScreen').default} options={modalScreenOptions} />
+      <Stack.Screen name="CreatePosterHighlight" getComponent={() => require('../screens/CreatePosterHighlightScreen').default} options={modalScreenOptions} />
 
       <Stack.Screen name="Sell" getComponent={() => require('../screens/SellScreen').default} options={modalScreenOptions} />
       <Stack.Screen name="TradeHub" getComponent={() => require('../screens/TradeHubScreen').default} />
       <Stack.Screen name="Verification" getComponent={() => require('../screens/VerificationScreen').default} />
+      <Stack.Screen name="KYCVerification" getComponent={() => require('../screens/KYCVerificationScreen').default} />
       <Stack.Screen name="AuctionHome" getComponent={() => require('../screens/AuctionHomeScreen').default} />
+      <Stack.Screen name="Auctions" getComponent={() => require('../screens/AuctionsScreen').default} />
       <Stack.Screen name="SellerAuctionCentre" getComponent={() => require('../screens/SellerAuctionCentreScreen').default} />
       <Stack.Screen name="CreateAuction" getComponent={() => require('../screens/CreateAuctionScreen').default} options={modalScreenOptions} />
       <Stack.Screen name="AuctionDetail" getComponent={() => require('../screens/AuctionDetailScreen').default} />
@@ -105,7 +165,9 @@ export default function AppNavigator() {
       <Stack.Screen name="Portfolio" getComponent={() => require('../screens/PortfolioScreen').default} />
       <Stack.Screen name="MyBids" getComponent={() => require('../screens/MyBidsScreen').default} />
       <Stack.Screen name="MyListings" getComponent={() => require('../screens/MyListingsScreen').default} />
+      <Stack.Screen name="InventoryManagement" getComponent={() => require('../screens/InventoryManagementScreen').default} />
       <Stack.Screen name="SellerAnalytics" getComponent={() => require('../screens/SellerAnalyticsScreen').default} />
+      <Stack.Screen name="CreatorAnalyticsDashboard" getComponent={() => require('../screens/CreatorAnalyticsDashboardScreen').default} />
       <Stack.Screen name="BundleBag" getComponent={() => require('../screens/BundleBagScreen').default} />
       <Stack.Screen name="SellerVerification" getComponent={() => require('../screens/SellerVerificationScreen').default} />
       <Stack.Screen name="VerificationResponse" getComponent={() => require('../screens/VerificationResponseScreen').default} options={modalScreenOptions} />
@@ -117,6 +179,7 @@ export default function AppNavigator() {
       <Stack.Screen name="CoOwnOnboarding" getComponent={() => require('../screens/SyndicateOnboardingScreen').default} options={modalScreenOptions} />
       <Stack.Screen name="Chat" getComponent={() => require('../screens/ChatScreen').default} />
       <Stack.Screen name="CreateGroupChat" getComponent={() => require('../screens/CreateGroupChatScreen').default} options={modalScreenOptions} />
+      <Stack.Screen name="GroupChat" getComponent={() => require('../screens/GroupChatScreen').default} />
       <Stack.Screen name="GroupChatInfo" getComponent={() => require('../screens/GroupChatInfoScreen').default} />
       <Stack.Screen name="GroupMembers" getComponent={() => require('../screens/GroupMembersScreen').default} />
       <Stack.Screen name="GroupBotManagement" getComponent={() => require('../screens/GroupBotManagementScreen').default} />
@@ -232,10 +295,96 @@ export default function AppNavigator() {
       <Stack.Screen name="ListingPreview" getComponent={() => require('../screens/ListingPreviewScreen').default} options={modalScreenOptions} />
       <Stack.Screen name="TradeConfirm" getComponent={() => require('../screens/TradeConfirmScreen').default} options={modalScreenOptions} />
 
+      {/* Verification status dashboard */}
+      <Stack.Screen name="VerificationStatus" getComponent={() => require('../screens/VerificationStatusScreen').default} />
+
+      {/* Live shopping — Whatnot/Tilt-style live commerce */}
+      <Stack.Screen name="LiveShopping" getComponent={() => require('../screens/LiveShoppingHomeScreen').default} />
+      <Stack.Screen name="LiveStreamViewer" getComponent={() => require('../screens/LiveStreamViewerScreen').LiveStreamViewerScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="LiveStreamSeller" getComponent={() => require('../screens/LiveStreamSellerScreen').LiveStreamSellerScreen} options={{ headerShown: false }} />
+
+      {/* AI-powered listing creation */}
+      <Stack.Screen name="AIPoweredListing" getComponent={() => require('../screens/AIPoweredListingScreen').default} options={modalScreenOptions} />
+
+      {/* Pro seller tools */}
+      <Stack.Screen name="BulkListing" getComponent={() => require('../screens/BulkListingScreen').default} options={modalScreenOptions} />
+
+      {/* Galleria — editorial discovery surface for Co-Own assets & curated collections */}
+      <Stack.Screen name="Galleria" getComponent={() => require('../screens/GalleriaScreen').default} />
+      <Stack.Screen name="GalleriaCollectionDetail" getComponent={() => require('../screens/GalleriaCollectionDetailScreen').default} />
+
+      {/* Algorithm transparency — "Your Algorithm" dashboard */}
+      <Stack.Screen name="YourAlgorithm" getComponent={() => require('../screens/YourAlgorithmScreen').default} />
+
+      {/* AI photo enhancement */}
+      <Stack.Screen name="AIPhotoEnhancement" getComponent={() => require('../screens/AIPhotoEnhancementScreen').default} options={modalScreenOptions} />
+
+      {/* Conversational AI search */}
+      <Stack.Screen name="ConversationalSearch" getComponent={() => require('../screens/ConversationalSearchScreen').default} />
+
+      {/* Moodboard — user-generated editorial collage tools */}
+      <Stack.Screen name="MoodboardHome" getComponent={() => require('../screens/MoodboardHomeScreen').default} />
+      <Stack.Screen name="MoodboardEditor" getComponent={() => require('../screens/MoodboardEditorScreen').default} options={modalScreenOptions} />
+
+      {/* Settings sub-departments — 2026 settings enhancement */}
+      <Stack.Screen name="AIPreferences" getComponent={() => require('../screens/AIPreferencesScreen').default} />
+      <Stack.Screen name="SustainabilityPreferences" getComponent={() => require('../screens/SustainabilityPreferencesScreen').default} />
+      <Stack.Screen name="DataPrivacy" getComponent={() => require('../screens/DataPrivacyScreen').default} />
+      <Stack.Screen name="NotificationPreferences" getComponent={() => require('../screens/NotificationPreferencesScreen').default} />
+      {/* AI provider API integration — bring-your-own-key for OpenAI / Anthropic / Gemini / custom */}
+      <Stack.Screen name="AIAgentIntegration" getComponent={() => require('../screens/AIAgentIntegrationScreen').default} />
+
       {/* Diagnostic — dev only */}
       {__DEV__ && (
         <Stack.Screen name="RuntimeSmokeTest" getComponent={() => require('../screens/RuntimeSmokeTestScreen').default} />
       )}
     </Stack.Navigator>
+    {/* Global in-app notification overlay — renders above all screens but
+        below native modals (modals are presented by the OS above this view). */}
+    <InAppNotificationCenter />
+    {/* Command palette — global ⌘K-style search/navigation modal. Available
+        everywhere via long-press on the Home search entry, the dev-only
+        floating trigger below, or any other surface that calls
+        useCommandPaletteStore().open(). Rendered at the root so it overlays
+        every screen. */}
+    <CommandPalette />
+    {__DEV__ && <CommandPaletteTrigger />}
+    </View>
   );
 }
+
+/**
+ * Dev-only floating trigger for the command palette. A small, unobtrusive
+ * chrome-receding button anchored to the bottom-right edge so the palette is
+ * reachable from any screen during development without wiring up a per-screen
+ * trigger. Hidden in production builds.
+ */
+function CommandPaletteTrigger() {
+  const open = useCommandPaletteStore((s) => s.open);
+  return (
+    <Pressable
+      onPress={open}
+      hitSlop={12}
+      style={triggerStyles.fab}
+      accessibilityRole="button"
+      accessibilityLabel="Open command palette"
+      accessibilityHint="Opens the global command palette"
+    >
+      <Ionicons name="terminal-outline" size={22} color="#FFFFFF" />
+    </Pressable>
+  );
+}
+
+const triggerStyles = StyleSheet.create({
+  fab: {
+    position: 'absolute',
+    right: 16,
+    bottom: 96,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(120,120,120,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});

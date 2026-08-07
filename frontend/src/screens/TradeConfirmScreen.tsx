@@ -4,7 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
@@ -23,7 +23,7 @@ import {
   CoOwnRiskDisclosure,
 } from '../components/coown';
 
-type Props = StackScreenProps<RootStackParamList, 'TradeConfirm'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'TradeConfirm'>;
 
 export default function TradeConfirmScreen({ navigation, route }: Props) {
   const {

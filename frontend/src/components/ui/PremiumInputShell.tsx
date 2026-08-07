@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { Space, Radius, Typography, Type } from '../../theme/designTokens';
 
 interface PremiumInputShellProps extends Omit<TextInputProps, 'style'> {
   label?: string;
@@ -147,7 +147,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginBottom: Space.md,
   },
   label: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
     marginBottom: Space.sm,
@@ -177,7 +177,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   input: {
     flex: 1,
     color: colors.textPrimary,
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.medium,
     paddingVertical: 14,
     textAlignVertical: 'center',
@@ -192,14 +192,14 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   helperText: {
     marginTop: Space.sm,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
     lineHeight: 17,
   },
   errorText: {
     marginTop: Space.sm,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.danger,
     lineHeight: 17,

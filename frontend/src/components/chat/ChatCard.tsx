@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Radius, Elevation } from '../../theme/designTokens';
+import { Radius, Elevation, Stroke } from '../../theme/designTokens';
 
 export type ChatCardVariant = 'surface' | 'elevated' | 'tint';
 
@@ -64,7 +64,7 @@ export function ChatCard({
 const createStyles = (colors: ThemeColors) => StyleSheet.create({
   base: {
     borderRadius: Radius.lg,
-    borderWidth: 0.5,
+    borderWidth: Stroke.hairline,
     paddingHorizontal: Radius.lg,
     paddingVertical: Radius.md,
   },

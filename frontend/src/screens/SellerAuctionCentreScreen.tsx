@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RootStackParamList } from '../navigation/types';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -32,13 +32,14 @@ import { CachedImage } from '../components/CachedImage';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { AppButton } from '../components/ui/AppButton';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Space, Radius, Typography } from '../theme/designTokens';
+import { RetryState } from '../components/RetryState';
+import { Space, Radius, Typography, Type, Stroke, Control } from '../theme/designTokens';
 import {
   listAuctions,
   type MarketAuction,
 } from '../services/marketApi';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 type SellerTab = 'scheduled' | 'live' | 'sold' | 'unsold' | 'cancelled';
 
@@ -554,23 +555,10 @@ export default function SellerAuctionCentreScreen() {
     }
     if (error) {
       return (
-        <View style={styles.inlineStateWrap}>
-          <Text style={styles.inlineStateTitle}>Couldn't load auctions</Text>
-          <Text style={styles.inlineStateMessage}>
-            Check your connection and try again.
-          </Text>
-          <Pressable
-            style={({ pressed }) => [
-              styles.retryBtn,
-              pressed && styles.retryBtnPressed,
-            ]}
-            onPress={() => void fetchAuctions(false)}
-            accessibilityRole="button"
-            accessibilityLabel="Retry loading auctions"
-          >
-            <Text style={styles.retryBtnText}>Retry</Text>
-          </Pressable>
-        </View>
+        <RetryState
+          message="Couldn't load auctions. Check your connection and try again."
+          onRetry={() => void fetchAuctions(false)}
+        />
       );
     }
     const emptyConfig: Record<SellerTab, { title: string; message: string; cta?: string }> = {
@@ -807,11 +795,11 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    minHeight: 44,
+    minHeight: Control.hit,
   },
   headerIconBtn: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -824,16 +812,16 @@ function createStyles(colors: ThemeColors) {
   },
   headerTitle: {
     fontFamily: Typography.family.bold,
-    fontSize: 26,
+    fontSize: Type.priceLarge.size - 2,
     color: colors.textPrimary,
     letterSpacing: -0.6,
-    lineHeight: 30,
+    lineHeight: Type.priceLarge.size - 2 + 4,
   },
   headerSubtitle: {
     fontFamily: Typography.family.regular,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     color: colors.textSecondary,
-    marginTop: 1,
+    marginTop: Space.xs / 4,
     letterSpacing: -0.1,
   },
   // ── Seller summary — one integrated surface ──
@@ -854,7 +842,7 @@ function createStyles(colors: ThemeColors) {
     gap: Space.md,
   },
   summaryContextText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
     fontVariant: ['tabular-nums'],
@@ -864,21 +852,21 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'flex-start',
   },
   summaryPrimaryValue: {
-    fontSize: 32,
+    fontSize: Type.display.size,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.8,
     fontVariant: ['tabular-nums'],
-    lineHeight: 34,
+    lineHeight: Type.display.size + 2,
   },
   summaryPrimaryLabel: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    marginTop: 3,
+    marginTop: Space.xs / 2 + 1,
     letterSpacing: 0.1,
   },
   summaryPrimaryDivider: {
     width: StyleSheet.hairlineWidth,
-    height: 36,
+    height: Space.xl + Space.xl + 4,
     backgroundColor: colors.border,
   },
   summarySecondary: {
@@ -892,17 +880,17 @@ function createStyles(colors: ThemeColors) {
     flex: 1,
   },
   summarySecondaryValue: {
-    fontSize: 17,
+    fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.3,
   },
   summarySecondaryLabel: {
-    fontSize: 10,
+    fontSize: Type.meta.size - 1,
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    marginTop: 3,
+    marginTop: Space.xs / 2 + 1,
     letterSpacing: 0.1,
   },
   // ── Tab bar — text-first, underline indicator, sticky container ──
@@ -915,22 +903,22 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     paddingHorizontal: Space.md,
     gap: Space.md,
-    height: 44,
+    height: Control.hit,
     alignItems: 'center',
   },
   tab: {
-    height: 44,
+    height: Control.hit,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 2,
+    gap: Space.xs / 2 + 1,
+    paddingHorizontal: Space.xs / 2,
     position: 'relative',
   },
   tabPressed: {
     opacity: 0.5,
   },
   tabText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     color: colors.textSecondary,
     fontFamily: Typography.family.medium,
   },
@@ -939,7 +927,7 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.semibold,
   },
   tabCount: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
     fontVariant: ['tabular-nums'],
@@ -949,12 +937,12 @@ function createStyles(colors: ThemeColors) {
   },
   tabIndicator: {
     position: 'absolute',
-    bottom: -1,
-    left: 2,
-    right: 2,
-    height: 2,
+    bottom: -Stroke.hairline,
+    left: Space.xs / 2,
+    right: Space.xs / 2,
+    height: Stroke.emphasis,
     backgroundColor: colors.textPrimary,
-    borderRadius: 1,
+    borderRadius: Stroke.hairline,
   },
   // ── List ──
   listContent: {
@@ -991,13 +979,13 @@ function createStyles(colors: ThemeColors) {
   },
   rowLiveDot: {
     position: 'absolute',
-    top: 6,
-    left: 6,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    top: Space.xs + 2,
+    left: Space.xs + 2,
+    width: Space.xs / 2 + 2,
+    height: Space.xs / 2 + 2,
+    borderRadius: Radius.sm,
     backgroundColor: colors.danger,
-    borderWidth: 1.5,
+    borderWidth: Stroke.emphasis,
     borderColor: colors.background,
   },
   rowBody: {
@@ -1013,23 +1001,23 @@ function createStyles(colors: ThemeColors) {
   },
   rowTitle: {
     flex: 1,
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    lineHeight: 19,
+    lineHeight: Type.bodyEmphasis.size + 4,
     letterSpacing: -0.2,
   },
   rowStateText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: 0.2,
-    paddingTop: 3,
+    paddingTop: Space.xs / 2 + 1,
   },
   rowBrand: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
   rowHairline: {
     height: StyleSheet.hairlineWidth,
@@ -1044,25 +1032,25 @@ function createStyles(colors: ThemeColors) {
   },
   rowValueCol: {
     flex: 1,
-    gap: 1,
+    gap: Space.xs / 4,
   },
   rowIze: {
-    fontSize: 17,
+    fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.4,
-    lineHeight: 21,
+    lineHeight: Type.subtitle.size - 3,
   },
   rowValuePrefix: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
     color: colors.textSecondary,
     fontVariant: ['tabular-nums'],
     letterSpacing: 0.1,
   },
   rowLocal: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     fontVariant: ['tabular-nums'],
@@ -1071,34 +1059,34 @@ function createStyles(colors: ThemeColors) {
   rowActionCol: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 1,
-    paddingBottom: 1,
+    gap: Space.xs / 4,
+    paddingBottom: Space.xs / 4,
   },
   rowActionLabel: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     color: colors.textSecondary,
     fontFamily: Typography.family.medium,
     letterSpacing: 0.1,
   },
   rowActionChevron: {
-    marginTop: 1,
+    marginTop: Space.xs / 4,
   },
   rowLeadingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Space.sm,
-    marginTop: 4,
+    marginTop: Space.xs,
   },
   rowLeading: {
     flex: 1,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.1,
   },
   rowBidCount: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
     fontVariant: ['tabular-nums'],
@@ -1142,58 +1130,40 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'flex-start',
   },
   inlineStateTitle: {
-    fontSize: 17,
+    fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
     letterSpacing: -0.3,
   },
   inlineStateMessage: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     color: colors.textSecondary,
     fontFamily: Typography.family.regular,
-    marginTop: 6,
-    lineHeight: 20,
-  },
-  retryBtn: {
-    marginTop: Space.md,
-    paddingVertical: Space.sm,
-    paddingHorizontal: Space.lg,
-    borderRadius: Radius.md,
-    backgroundColor: colors.surfaceAlt,
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  retryBtnPressed: {
-    opacity: 0.6,
-  },
-  retryBtnText: {
-    fontSize: 14,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
+    marginTop: Space.xs + 2,
+    lineHeight: Type.body.lineHeight,
   },
   inlineCtaBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Space.xs,
     marginTop: Space.md,
     paddingVertical: Space.sm,
     paddingHorizontal: Space.lg,
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.brand,
-    minHeight: 44,
+    minHeight: Control.hit,
   },
   inlineCtaPressed: {
     opacity: 0.6,
   },
   inlineCtaText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.brand,
   },
   inlineCtaIcon: {
-    marginTop: 1,
+    marginTop: Space.xs / 4,
   },
   // ── Load more ──
   loadMoreWrap: {
@@ -1203,7 +1173,7 @@ function createStyles(colors: ThemeColors) {
   loadMoreBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
     paddingVertical: Space.sm,
     paddingHorizontal: Space.lg,
     borderRadius: Radius.full,
@@ -1212,7 +1182,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.surface,
   },
   loadMoreText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     color: colors.brand,
     fontFamily: Typography.family.semibold,
   },
@@ -1223,7 +1193,7 @@ function createStyles(colors: ThemeColors) {
     right: Space.md,
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
+        shadowColor: colors.shadow,
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.12,
         shadowRadius: 12,

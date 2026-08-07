@@ -1,9 +1,9 @@
 import React, { useMemo } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
-import { Space, Typography, Type, Radius } from '../theme/designTokens';
+import { Space, Typography, Type, Radius, Control, Stroke } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import {
   FlagshipHeader,
@@ -14,7 +14,7 @@ import { reportListing, type ListingReportReason } from '../services/listingsApi
 import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 
-type Props = StackScreenProps<RootStackParamList, 'Report'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'Report'>;
 
 const REPORT_REASONS: Array<{
   key: ReportReason;
@@ -281,7 +281,7 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
   },
   reason: {
-    minHeight: 68,
+    minHeight: Control.hit + Space.lg,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
@@ -293,7 +293,7 @@ function createStyles(colors: ThemeColors) {
   reasonCopy: {
     minWidth: 0,
     flex: 1,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   reasonLabel: {
     color: colors.textPrimary,
@@ -308,10 +308,10 @@ function createStyles(colors: ThemeColors) {
     lineHeight: Type.captionElevated.lineHeight + 2,
   },
   radio: {
-    width: 20,
-    height: 20,
+    width: Space.lg - Space.xs,
+    height: Space.lg - Space.xs,
     borderRadius: Radius.full,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
@@ -320,8 +320,8 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.textPrimary,
   },
   radioDot: {
-    width: 10,
-    height: 10,
+    width: Space.sm + 2,
+    height: Space.sm + 2,
     borderRadius: Radius.full,
     backgroundColor: colors.textPrimary,
   },
@@ -336,9 +336,9 @@ function createStyles(colors: ThemeColors) {
     lineHeight: Type.captionElevated.lineHeight,
   },
   detailsInput: {
-    minHeight: 116,
+    minHeight: Space.xl * 3 + Space.md + Space.xs,
     padding: Space.md,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     borderRadius: Radius.md,
     color: colors.textPrimary,
@@ -357,7 +357,7 @@ function createStyles(colors: ThemeColors) {
     textAlign: 'right',
   },
   submitAction: {
-    minHeight: 48,
+    minHeight: Space.xxl,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
@@ -375,7 +375,7 @@ function createStyles(colors: ThemeColors) {
   complete: {
     alignItems: 'center',
     paddingHorizontal: Space.xl,
-    paddingTop: 88,
+    paddingTop: Control.hit * 2,
   },
   completeTitle: {
     marginTop: Space.md,
@@ -397,7 +397,7 @@ function createStyles(colors: ThemeColors) {
   },
   doneAction: {
     minWidth: 150,
-    minHeight: 44,
+    minHeight: Control.hit,
     marginTop: Space.lg,
     paddingHorizontal: Space.lg,
     borderRadius: Radius.full,
@@ -413,10 +413,10 @@ function createStyles(colors: ThemeColors) {
   },
   secondaryDoneAction: {
     minWidth: 140,
-    minHeight: 44,
+    minHeight: Control.hit,
     marginTop: Space.lg,
     paddingHorizontal: Space.lg,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     borderRadius: Radius.full,
     alignItems: 'center',

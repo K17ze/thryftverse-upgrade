@@ -50,6 +50,7 @@ export interface AiHealthCheck {
     maxOutputTokens: number;
     timeoutMs: number;
     maxRetries: number;
+    defaultConfidenceThreshold: number;
   };
   checkedAt: string;
   error?: string;
@@ -228,6 +229,7 @@ export async function buildAiHealth(
       maxOutputTokens: config.openAiAgentMaxOutputTokens,
       timeoutMs: config.openAiAgentTimeoutMs,
       maxRetries: AI_RATE_LIMITS.maxRetries,
+      defaultConfidenceThreshold: AI_RATE_LIMITS.defaultConfidenceThreshold,
     },
     checkedAt: new Date().toISOString(),
     error,
@@ -250,6 +252,8 @@ export const AI_RATE_LIMITS = {
   retryBaseDelayMs: 750,
   /** Hard ceiling on output tokens per request, regardless of config. */
   hardMaxOutputTokens: 4_000,
+  /** Default confidence threshold below which agent responses are flagged for human review. */
+  defaultConfidenceThreshold: 0.6,
 } as const;
 
 /**

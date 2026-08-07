@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -26,7 +26,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 import { isVideoUri } from '../../utils/media';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -48,9 +48,9 @@ const applyRubberBand = (v: number, min: number, max: number, friction = 0.24) =
   return v;
 };
 
-const subComponentStyles = StyleSheet.create({
+const createSubComponentStyles = (colors: ThemeColors) => StyleSheet.create({
   page: {
-    backgroundColor: '#0a0a0a',
+    backgroundColor: colors.background,
   },
   image: {
     width: '100%',
@@ -78,6 +78,8 @@ function MediaPage({
   onOpenFullscreen,
 }: MediaPageProps) {
   const reducedMotion = useReducedMotion();
+  const { colors } = useAppTheme();
+  const subComponentStyles = useMemo(() => createSubComponentStyles(colors), [colors]);
   const [failed, setFailed] = useState(false);
   // Track zoom state in React state so the pan gesture can be
   // disabled when not zoomed. This is critical: when the pan gesture
@@ -237,6 +239,8 @@ function VideoPage({
   // Pause video when the page is offscreen (scrolled away) or the app
   // is backgrounded. This prevents audio bleed and saves resources.
   const [appIsActive, setAppIsActive] = useState(true);
+  const { colors } = useAppTheme();
+  const subComponentStyles = useMemo(() => createSubComponentStyles(colors), [colors]);
 
   React.useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
@@ -722,7 +726,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   soldText: {
     color: colors.background,
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.bold,
     letterSpacing: 1,
   },
@@ -743,7 +747,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   controlBtn: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: Radius.xxl,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -806,7 +810,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   indexText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
   },
   videoBadge: {
@@ -823,7 +827,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   videoBadgeText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
   },
   // Zoom hint — bottom-center pill, fades out after 2.8s or on first
@@ -847,7 +851,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   zoomHintText: {
     color: '#fff',
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
   },
   bottomScrim: {
@@ -900,7 +904,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     right: 2,
     width: 14,
     height: 14,
-    borderRadius: 7,
+    borderRadius: Radius.md,
     backgroundColor: 'rgba(0,0,0,0.6)',
     alignItems: 'center',
     justifyContent: 'center',

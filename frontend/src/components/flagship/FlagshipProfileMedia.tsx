@@ -3,8 +3,10 @@ import { View, Text, StyleSheet, Dimensions, ViewStyle, ActivityIndicator, Press
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { Space, Radius, Typography, Type } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
+import { ImageEmptyGraphic } from '../ImageEmptyGraphic';
+import { ActiveTheme } from '../../constants/colors';
 import { FACE_FOCAL_POINT } from '../../utils/media';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Video, ResizeMode } from '../compat/Video';
@@ -74,7 +76,12 @@ export function FlagshipProfileMedia({
             cacheBuster={cacheBuster}
           />
         ) : (
-          <View style={[styles.coverImage, { height: coverHeight }, styles.coverFallback]} />
+          <ImageEmptyGraphic
+            icon="image-outline"
+            width={SCREEN_W}
+            height={coverHeight}
+            style={styles.coverFallback}
+          />
         )}
 
         {/* Bottom gradient for text legibility */}
@@ -151,7 +158,19 @@ export function FlagshipProfileMedia({
               />
             ) : (
               <View style={[styles.avatarImage, styles.avatarFallback]}>
-                <Ionicons name="person" size={32} color={colors.textMuted} />
+                <LinearGradient
+                  colors={ActiveTheme === 'light'
+                    ? ['#F0EBE6', '#E2DDD6']
+                    : ['#1F1F1F', '#161616']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={StyleSheet.absoluteFill}
+                />
+                <Ionicons
+                  name="person"
+                  size={32}
+                  color={ActiveTheme === 'light' ? 'rgba(0,0,0,0.22)' : 'rgba(255,255,255,0.22)'}
+                />
               </View>
             )}
 
@@ -219,7 +238,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   editCoverVisible: {
     width: 34,
     height: 34,
-    borderRadius: 17,
+    borderRadius: Radius.xxl,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.55)',
@@ -236,10 +255,10 @@ const createStyles = (colors: any) => StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.65)',
     paddingHorizontal: 12,
     paddingVertical: 10,
-    borderRadius: 10,
+    borderRadius: Radius.lg,
   },
   coverErrorText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.danger,
   },
@@ -249,14 +268,14 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
   coverErrorBtn: {
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.md,
     backgroundColor: 'rgba(255,255,255,0.15)',
     minHeight: 44,
     justifyContent: 'center',
   },
   coverErrorBtnText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: '#fff',
   },

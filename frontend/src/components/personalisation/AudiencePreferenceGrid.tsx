@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography } from '../../theme/designTokens';
+import { Space, Typography, Radius, Type } from '../../theme/designTokens';
 
 export interface AudienceOption {
   key: string;
@@ -88,7 +88,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     width: '48%',
     flexGrow: 1,
     padding: Space.md,
-    borderRadius: 10,
+    borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     backgroundColor: colors.surface,
@@ -105,7 +105,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginBottom: Space.sm,
   },
   tileLabel: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
     marginBottom: 2,
@@ -114,7 +114,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.textPrimary,
   },
   tileSubtitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     lineHeight: 17,

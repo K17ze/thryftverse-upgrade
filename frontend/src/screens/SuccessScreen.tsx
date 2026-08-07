@@ -13,9 +13,7 @@ import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Confetti } from '../components/Confetti';
 import { useToast } from '../context/ToastContext';
-import { Typography } from '../theme/designTokens';
 import { FlagshipActionCluster } from '../components/flagship';
-import { Space, Radius } from '../theme/designTokens';
 import { RootStackParamList } from '../navigation/types';
 import { CommerceOrder, getOrder } from '../services/commerceApi';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -24,8 +22,7 @@ import { getListingCoverUri } from '../utils/media';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
-import { Elevation } from '../theme/designTokens';
-
+import { Typography, Radius, Type, Space, Elevation, Stroke } from '../theme/designTokens';
 type RouteT = RouteProp<RootStackParamList, 'Success'>;
 
 export default function SuccessScreen() {
@@ -244,16 +241,16 @@ function createTimelineStyles(colors: ThemeColors) {
   return StyleSheet.create({
   step: {
     flexDirection: 'row',
-    gap: 12,
-    paddingBottom: 16,
+    gap: Space.sm + 4,
+    paddingBottom: Space.md,
   },
   iconCol: {
     alignItems: 'center',
   },
   iconWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: Space.lg + 4,
+    height: Space.lg + 4,
+    borderRadius: Radius.xl,
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
@@ -265,29 +262,29 @@ function createTimelineStyles(colors: ThemeColors) {
     backgroundColor: colors.brand,
   },
   connector: {
-    width: 2,
+    width: Stroke.standard,
     flex: 1,
     backgroundColor: colors.border,
-    marginTop: 4,
-    minHeight: 20,
+    marginTop: Space.xs,
+    minHeight: Space.md + 4,
   },
   connectorComplete: {
     backgroundColor: colors.success,
   },
   textCol: {
     flex: 1,
-    gap: 2,
-    paddingBottom: 4,
+    gap: Space.xs / 2,
+    paddingBottom: Space.xs,
   },
   label: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
   },
   detail: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
-    lineHeight: 16,
+    lineHeight: Type.caption.size + 4,
   },
   });
 }
@@ -295,73 +292,73 @@ function createTimelineStyles(colors: ThemeColors) {
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  scrollContent: { flexGrow: 1, paddingHorizontal: 24 },
-  centerContent: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 40, paddingBottom: 20 },
+  scrollContent: { flexGrow: 1, paddingHorizontal: Space.lg },
+  centerContent: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: Space.xl + Space.xl - 8, paddingBottom: 20 },
   iconCircle: {
-    width: 96, height: 96, borderRadius: 48,
+    width: Space.xxl + Space.xxl + Space.xxl, height: Space.xxl + Space.xxl + Space.xxl, borderRadius: Radius.full,
     backgroundColor: colors.success,
     alignItems: 'center', justifyContent: 'center',
-    marginBottom: 32,
+    marginBottom: Space.xl,
   },
 
-  title: { fontSize: 28, fontFamily: Typography.family.bold, color: colors.textPrimary, marginBottom: 12, textAlign: 'center' },
-  subtitle: { fontSize: 15, fontFamily: Typography.family.regular, color: colors.textSecondary, textAlign: 'center', lineHeight: 22 },
+  title: { fontSize: Type.priceLarge.size, fontFamily: Typography.family.bold, color: colors.textPrimary, marginBottom: Space.sm + 4, textAlign: 'center' },
+  subtitle: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.regular, color: colors.textSecondary, textAlign: 'center', lineHeight: 22 },
 
-  orderCardWrap: { width: '100%', marginTop: 24 },
+  orderCardWrap: { width: '100%', marginTop: Space.lg },
   orderCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    padding: 12,
+    gap: Space.sm + 4,
+    padding: Space.sm + 4,
     borderRadius: Radius.lg,
     backgroundColor: colors.surfaceAlt,
   },
-  orderImage: { width: 64, height: 64, borderRadius: Radius.md },
+  orderImage: { width: Space.xxl + Space.xl + Space.xs, height: Space.xxl + Space.xl + Space.xs, borderRadius: Radius.md },
   orderInfo: { flex: 1, gap: 2 },
-  orderTitle: { fontSize: 15, fontFamily: Typography.family.semibold, color: colors.textPrimary },
-  orderSeller: { fontSize: 13, fontFamily: Typography.family.regular, color: colors.textSecondary },
-  orderAmount: { fontSize: 15, fontFamily: Typography.family.bold, color: colors.textPrimary, marginTop: 2 },
+  orderTitle: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
+  orderSeller: { fontSize: Type.captionElevated.size, fontFamily: Typography.family.regular, color: colors.textSecondary },
+  orderAmount: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.bold, color: colors.textPrimary, marginTop: 2 },
 
   timelineWrap: {
     width: '100%',
-    marginTop: 28,
-    paddingHorizontal: 4,
+    marginTop: Space.xl + 4,
+    paddingHorizontal: Space.xs,
   },
   timelineTitle: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
-    marginBottom: 14,
+    marginBottom: Space.sm + 2,
     textAlign: 'left',
   },
   timeline: {
-    paddingLeft: 4,
+    paddingLeft: Space.xs,
   },
 
-  supportRowWrap: { marginTop: 24, width: '100%' },
+  supportRowWrap: { marginTop: Space.lg, width: '100%' },
   supportIdentity: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: Space.xs + 2,
     borderRadius: Radius.md,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     backgroundColor: colors.surface,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingHorizontal: Space.sm + 4,
+    paddingVertical: Space.xs + 2,
   },
   supportAvatarWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: Space.lg + 4,
+    height: Space.lg + 4,
+    borderRadius: Radius.xl,
   },
   supportText: {
     flex: 1,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
 
-  footer: { paddingHorizontal: 24, paddingBottom: 40, gap: 12 },
+  footer: { paddingHorizontal: Space.lg, paddingBottom: Space.xl + Space.xl - 8, gap: 12 },
   });
 }

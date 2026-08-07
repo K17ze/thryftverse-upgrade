@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
@@ -16,7 +16,7 @@ import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { updateActivityStatus, updateSearchVisibility } from '../services/accountApi';
 import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 
-type Props = StackScreenProps<RootStackParamList, 'PrivacySettings'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'PrivacySettings'>;
 
 export default function PrivacySettingsScreen({ navigation }: Props) {
   const { show } = useToast();
@@ -212,8 +212,8 @@ function createStyles(colors: ThemeColors) {
       gap: Space.md,
     },
     heroIcon: {
-      width: 40,
-      height: 40,
+      width: Space.xxl,
+      height: Space.xxl,
       borderRadius: Radius.full,
       justifyContent: 'center',
       alignItems: 'center',
@@ -227,7 +227,7 @@ function createStyles(colors: ThemeColors) {
     heroSubtitle: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
-      marginTop: 2,
+      marginTop: Space.xs / 2,
     },
     postureBadge: {
       borderRadius: Radius.full,

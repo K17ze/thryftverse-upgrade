@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography } from '../../theme/designTokens';
+import { Space, Typography, Radius, Type } from '../../theme/designTokens';
 
 interface Props {
   /** ISO timestamp of order creation (dispatch window start) */
@@ -116,41 +116,41 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     marginTop: Space.sm,
     paddingHorizontal: Space.md,
-    paddingVertical: 10,
-    borderRadius: 10,
+    paddingVertical: Space.sm + 2,
+    borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
   },
   progressTrack: {
     height: 3,
-    borderRadius: 2,
+    borderRadius: Radius.sm,
     backgroundColor: 'rgba(128,128,128,0.15)',
-    marginTop: 8,
+    marginTop: Space.sm,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    borderRadius: 2,
+    borderRadius: Radius.sm,
   },
   label: {
     flex: 1,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
   },
   countdown: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.3,
   },
   overdueHint: {
-    marginTop: 4,
-    fontSize: 11,
+    marginTop: Space.xs,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },

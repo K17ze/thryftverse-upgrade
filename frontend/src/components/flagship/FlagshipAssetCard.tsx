@@ -125,7 +125,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     right: 6,
     width: 10,
     height: 10,
-    borderRadius: 5,
+    borderRadius: Radius.sm,
     borderWidth: 2,
     borderColor: colors.surface,
   },
@@ -163,13 +163,13 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
   ownershipBarBg: {
     height: 4,
-    borderRadius: 2,
+    borderRadius: Radius.sm,
     backgroundColor: colors.surfaceAlt,
     overflow: 'hidden',
   },
   ownershipBarFill: {
     height: 4,
-    borderRadius: 2,
+    borderRadius: Radius.sm,
   },
   ownershipText: {
     fontSize: Type.meta.size,

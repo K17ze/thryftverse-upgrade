@@ -390,7 +390,7 @@ function createStyles(colors: ThemeColors) {
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginTop: Space.sm,
-    marginBottom: 4,
+    marginBottom: Space.xs,
   },
   input: {
     borderWidth: 1,
@@ -438,7 +438,7 @@ function createStyles(colors: ThemeColors) {
     minHeight: 72,
   },
   ratioPreview: {
-    borderRadius: 4,
+    borderRadius: Radius.sm,
   },
   ratioBtnText: {
     fontFamily: Typography.family.medium,
@@ -450,7 +450,7 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
   },
   charCount: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
   },
   draftSection: {
@@ -469,7 +469,7 @@ function createStyles(colors: ThemeColors) {
   },
   retryBtn: {
     paddingHorizontal: Space.sm,
-    paddingVertical: 4,
+    paddingVertical: Space.xs,
     borderRadius: Radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
@@ -532,7 +532,7 @@ function createStyles(colors: ThemeColors) {
     marginHorizontal: -Space.md,
   },
   bgScrollContent: {
-    paddingHorizontal: 16,
+    paddingHorizontal: Space.md,
     gap: 10,
   },
   bgTileWrap: {
@@ -542,7 +542,7 @@ function createStyles(colors: ThemeColors) {
   bgTile: {
     width: 64,
     height: 80,
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     borderWidth: 2,
     overflow: 'hidden',
   },
@@ -556,14 +556,14 @@ function createStyles(colors: ThemeColors) {
     right: 6,
     width: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius: Radius.lg,
     backgroundColor: colors.brand,
     justifyContent: 'center',
     alignItems: 'center',
   },
   bgTileLabel: {
     fontFamily: Typography.family.medium,
-    fontSize: 11,
+    fontSize: Type.meta.size,
     letterSpacing: 0.1,
   },
   });

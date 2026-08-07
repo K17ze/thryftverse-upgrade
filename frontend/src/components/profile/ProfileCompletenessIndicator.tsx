@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type, Stroke } from '../../theme/designTokens';
 
 export interface ProfileCompletenessInput {
   avatar?: string | null;
@@ -114,7 +114,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    gap: 8,
+    gap: Space.sm,
   },
   headerRow: {
     flexDirection: 'row',
@@ -124,39 +124,39 @@ function createStyles(colors: ThemeColors) {
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
   },
   title: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
   barTrack: {
-    height: 4,
-    borderRadius: 2,
+    height: Stroke.standard * 2,
+    borderRadius: Radius.sm,
     backgroundColor: colors.surfaceAlt,
     overflow: 'hidden',
   },
   barFill: {
     height: '100%',
-    borderRadius: 2,
+    borderRadius: Radius.sm,
   },
   itemsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 5,
+    gap: Space.xs + 1,
   },
   missingChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
+    gap: Space.xs / 2 + 1,
+    paddingHorizontal: Space.xs + 3,
+    paddingVertical: Space.xs / 2 + 1,
     backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.sm,
   },
   missingChipText: {
-    fontSize: 10,
+    fontSize: Type.meta.size - 2,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
   },

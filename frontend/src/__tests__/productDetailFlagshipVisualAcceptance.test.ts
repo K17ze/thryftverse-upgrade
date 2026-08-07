@@ -63,8 +63,12 @@ describe('product-detail-flagship-reconstruction: visual acceptance', () => {
         expect(readScreen(screen)).toContain('CommerceDetailMediaRail');
       });
 
-      it(`${screen} imports CommerceDetailSellerRow`, () => {
-        expect(readScreen(screen)).toContain('CommerceDetailSellerRow');
+      it(`${screen} imports CommerceDetailSellerRow or SellerInfoCard`, () => {
+        const src = readScreen(screen);
+        // SellerInfoCard is the enriched canonical seller surface for
+        // ItemDetailScreen; CommerceDetailSellerRow remains the slim row
+        // for Auction/Asset detail. Either is acceptable.
+        expect(src).toMatch(/CommerceDetailSellerRow|SellerInfoCard/);
       });
     }
 
@@ -210,7 +214,10 @@ describe('product-detail-flagship-reconstruction: visual acceptance', () => {
 
     it('ItemDetailScreen does not render both SellerTrustCard and CommerceDetailSellerRow', () => {
       const src = readScreen('ItemDetailScreen.tsx');
-      expect(src).toContain('CommerceDetailSellerRow');
+      // SellerInfoCard is the canonical enriched seller surface for
+      // ItemDetailScreen; the slim CommerceDetailSellerRow is not used
+      // here, and the legacy SellerTrustCard must not appear.
+      expect(src).toContain('SellerInfoCard');
       expect(src).not.toContain('<SellerTrustCard');
     });
   });

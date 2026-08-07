@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyReply } from 'fastify';
 import type { Redis } from 'ioredis';
+import { logger } from './logger.js';
 
 export interface RealtimeEnvelope {
   id: string;
@@ -148,7 +149,7 @@ export async function startRealtimeBridge(publisher: Redis): Promise<void> {
   });
 
   subscriber.on('error', (error) => {
-    console.error('[realtime] Redis subscriber error', error);
+    logger.error({ err: error }, '[realtime] Redis subscriber error');
   });
 
   await subscriber.subscribe(REALTIME_CHANNEL);
@@ -452,7 +453,7 @@ export function publishRealtimeEvent(input: {
     };
 
     void realtimePublisher.publish(REALTIME_CHANNEL, JSON.stringify(message)).catch((error) => {
-      console.error('[realtime] Redis publish failed', error);
+      logger.error({ err: error }, '[realtime] Redis publish failed');
     });
   }
 

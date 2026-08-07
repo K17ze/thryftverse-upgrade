@@ -92,7 +92,7 @@ export function CreatorCanvas({
     return <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surfaceAlt }]} />;
   };
 
-  // Canvas borderRadius: 0 in edit mode (the canvas IS the stage),
+  // Canvas borderRadius: Radius.none in edit mode (the canvas IS the stage),
   // rounded in view/preview mode (thumbnails, publish preview).
   const canvasRadius = mode === 'edit' ? 0 : Radius.lg;
 
@@ -1373,7 +1373,7 @@ function MusicLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'mu
           {payload.trackName}
         </Text>
         {payload.artistName ? (
-          <Text style={{ fontFamily: Typography.family.regular, fontSize: 11, color: 'rgba(255,255,255,0.6)' }} numberOfLines={1}>
+          <Text style={{ fontFamily: Typography.family.regular, fontSize: Type.meta.size, color: 'rgba(255,255,255,0.6)' }} numberOfLines={1}>
             {payload.artistName}
           </Text>
         ) : null}
@@ -1423,7 +1423,7 @@ function LocationLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 
       alignItems: 'center',
       gap: 6,
       paddingHorizontal: 12,
-      paddingVertical: 8,
+      paddingVertical: Space.sm,
       borderRadius: Radius.md,
       backgroundColor: 'rgba(0,0,0,0.6)',
       minWidth: 100,
@@ -1445,7 +1445,7 @@ function HashtagLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
       alignItems: 'center',
       gap: 6,
       paddingHorizontal: 12,
-      paddingVertical: 8,
+      paddingVertical: Space.sm,
       borderRadius: Radius.md,
       backgroundColor: payload.backgroundColor,
       minWidth: 80,
@@ -1472,7 +1472,7 @@ function TimeLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tim
       alignItems: 'center',
       gap: 6,
       paddingHorizontal: 12,
-      paddingVertical: 8,
+      paddingVertical: Space.sm,
       borderRadius: Radius.md,
       backgroundColor: payload.backgroundColor ?? 'rgba(0,0,0,0.6)',
       minWidth: 80,
@@ -1499,7 +1499,7 @@ function WeatherLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
       backgroundColor: payload.backgroundColor ?? 'rgba(0,0,0,0.6)',
       minWidth: 120,
     }}>
-      <Text style={{ fontSize: 20 }}>{payload.emoji}</Text>
+      <Text style={{ fontSize: Type.priceList.size }}>{payload.emoji}</Text>
       <View style={{ gap: 1 }}>
         <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.caption.size + 1, color: payload.textColor }} numberOfLines={1}>
           {payload.temperature}° {payload.condition}
@@ -1784,7 +1784,7 @@ const styles = StyleSheet.create({
   },
   gestureBadgeText: {
     fontFamily: Typography.family.semibold,
-    fontSize: 12,
+    fontSize: Type.caption.size,
   },
   // Locked badge
   lockedBadge: {
@@ -1806,7 +1806,7 @@ const mediaStyles = StyleSheet.create({
     left: Space.xs,
     backgroundColor: 'rgba(0,0,0,0.5)',
     borderRadius: Radius.sm,
-    paddingHorizontal: 4,
+    paddingHorizontal: Space.xs,
     paddingVertical: 2,
   },
 });
@@ -1930,13 +1930,13 @@ function createProductStyles(colors: ThemeColors) {
   hotspotLabel: {
     color: '#fff',
     fontFamily: Typography.family.semibold,
-    fontSize: 11,
+    fontSize: Type.meta.size,
     flex: 1,
   },
   hotspotPrice: {
     color: colors.brand,
     fontFamily: Typography.family.bold,
-    fontSize: 11,
+    fontSize: Type.meta.size,
   },
   });
 }
@@ -1946,7 +1946,7 @@ const mentionStyles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.45)',
     borderRadius: Radius.full,
     paddingHorizontal: Space.sm + 4,
-    paddingVertical: 4,
+    paddingVertical: Space.xs,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1965,7 +1965,7 @@ const lookStyles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     borderRadius: Radius.full,
     paddingHorizontal: Space.sm + 2,
-    paddingVertical: 4,
+    paddingVertical: Space.xs,
     justifyContent: 'center',
   },
   text: {
@@ -2023,7 +2023,7 @@ const voteStyles = StyleSheet.create({
   option: {
     backgroundColor: 'rgba(255,255,255,0.18)',
     borderRadius: Radius.sm,
-    paddingVertical: 8,
+    paddingVertical: Space.sm,
     paddingHorizontal: Space.md,
     alignItems: 'center',
     minWidth: 60,
@@ -2072,7 +2072,7 @@ const quizStyles = StyleSheet.create({
     justifyContent: 'space-between',
     backgroundColor: 'rgba(255,255,255,0.12)',
     borderRadius: Radius.sm,
-    paddingVertical: 8,
+    paddingVertical: Space.sm,
     paddingHorizontal: Space.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.08)',
@@ -2113,7 +2113,7 @@ const questionStyles = StyleSheet.create({
     color: '#fff',
     fontFamily: Typography.family.semibold,
     fontSize: Type.bodyEmphasis.size,
-    marginBottom: 8,
+    marginBottom: Space.sm,
   },
   inputAffordance: {
     flexDirection: 'row',
@@ -2122,7 +2122,7 @@ const questionStyles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.12)',
     borderRadius: Radius.md,
     paddingHorizontal: Space.sm + 2,
-    paddingVertical: 8,
+    paddingVertical: Space.sm,
   },
   placeholder: {
     flex: 1,
@@ -2192,7 +2192,7 @@ const sliderStyles = StyleSheet.create({
   endLabel: {
     color: 'rgba(255,255,255,0.7)',
     fontFamily: Typography.family.medium,
-    fontSize: 11,
+    fontSize: Type.meta.size,
   },
 });
 

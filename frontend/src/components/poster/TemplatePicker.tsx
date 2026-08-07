@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { POSTER_TEMPLATES, PosterTemplate } from '../../data/posters';
-import { Typography } from '../../theme/designTokens';
+import { Typography, Radius, Type, Space } from '../../theme/designTokens';
 
 const { height: SCREEN_H } = Dimensions.get('window');
 const DRAWER_HEIGHT = SCREEN_H * 0.45;
@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
   handle: {
     width: 36,
     height: 4,
-    borderRadius: 2,
+    borderRadius: Radius.sm,
     backgroundColor: 'rgba(255,255,255,0.2)',
   },
   title: {
@@ -152,20 +152,20 @@ const styles = StyleSheet.create({
   tabRow: {
     flexDirection: 'row',
     gap: 8,
-    paddingHorizontal: 16,
+    paddingHorizontal: Space.md,
     paddingBottom: 10,
   },
   tab: {
     paddingHorizontal: 14,
     paddingVertical: 7,
-    borderRadius: 10,
+    borderRadius: Radius.lg,
     backgroundColor: 'rgba(255,255,255,0.06)',
   },
   tabActive: {
     backgroundColor: 'rgba(255,255,255,0.2)',
   },
   tabText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: 'rgba(255,255,255,0.6)',
   },
@@ -176,8 +176,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 12,
-    paddingHorizontal: 16,
-    paddingBottom: 24,
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.lg,
     justifyContent: 'flex-start',
   },
   card: {
@@ -191,7 +191,7 @@ const styles = StyleSheet.create({
   thumb: {
     width: 72,
     height: 72,
-    borderRadius: 14,
+    borderRadius: Radius.xl,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
@@ -204,13 +204,13 @@ const styles = StyleSheet.create({
     right: 4,
     width: 18,
     height: 18,
-    borderRadius: 9,
+    borderRadius: Radius.lg,
     backgroundColor: '#215634',
     alignItems: 'center',
     justifyContent: 'center',
   },
   cardLabel: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     color: 'rgba(255,255,255,0.7)',
     textAlign: 'center',

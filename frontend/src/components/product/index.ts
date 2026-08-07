@@ -21,3 +21,4 @@ export * from './BundleUpsellRow';
 export * from './OfferToLikersSheet';
 export * from './CuratedCollectionsRail';
 export * from './ListingQA';
+export * from './SustainabilityBadge';

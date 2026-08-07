@@ -8,7 +8,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { FlashList } from '@shopify/flash-list';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
@@ -23,7 +23,7 @@ import { EmptyState } from '../components/EmptyState';
 import { useBackendData } from '../context/BackendDataContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 export default function MessageRequestsScreen() {
   const navigation = useNavigation<NavT>();
@@ -328,15 +328,15 @@ function createStyles(colors: ThemeColors) {
       borderBottomColor: colors.border,
     },
     backBtn: {
-      width: 40,
-      height: 40,
+      width: Space.xl + Space.xs + 4,
+      height: Space.xl + Space.xs + 4,
       alignItems: 'center',
       justifyContent: 'center',
     },
     headerTitleWrap: {
       flex: 1,
       alignItems: 'center',
-      gap: 2,
+      gap: Space.xs / 2,
     },
     headerTitle: {
       fontSize: Type.subtitle.size,
@@ -367,7 +367,7 @@ function createStyles(colors: ThemeColors) {
     requestText: {
       flex: 1,
       justifyContent: 'center',
-      gap: 2,
+      gap: Space.xs / 2,
     },
     requestTop: {
       flexDirection: 'row',
@@ -380,7 +380,7 @@ function createStyles(colors: ThemeColors) {
     },
     requestPreview: {
       lineHeight: Type.caption.lineHeight + 2,
-      marginTop: 2,
+      marginTop: Space.xs / 2,
     },
     listingCard: {
       flexDirection: 'row',
@@ -393,13 +393,13 @@ function createStyles(colors: ThemeColors) {
       borderColor: colors.border,
     },
     listingThumb: {
-      width: 40,
-      height: 40,
+      width: Space.xl + Space.xs + 4,
+      height: Space.xl + Space.xs + 4,
       borderRadius: Radius.sm,
     },
     listingThumbPlaceholder: {
-      width: 40,
-      height: 40,
+      width: Space.xl + Space.xs + 4,
+      height: Space.xl + Space.xs + 4,
       borderRadius: Radius.sm,
       backgroundColor: colors.surface,
       justifyContent: 'center',
@@ -407,7 +407,7 @@ function createStyles(colors: ThemeColors) {
     },
     listingInfo: {
       flex: 1,
-      gap: 2,
+      gap: Space.xs / 2,
     },
     listingTitle: {
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
@@ -436,7 +436,7 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
-      paddingVertical: 11,
+      paddingVertical: Space.xs + 3,
       borderRadius: Radius.md,
       backgroundColor: colors.surfaceAlt,
       borderWidth: StyleSheet.hairlineWidth,
@@ -451,7 +451,7 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
-      paddingVertical: 11,
+      paddingVertical: Space.xs + 3,
       borderRadius: Radius.md,
       backgroundColor: colors.textPrimary,
     },
@@ -476,8 +476,8 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: 6,
-      paddingVertical: 10,
+      gap: Space.xs + 2,
+      paddingVertical: Space.xs + 2,
       borderRadius: Radius.md,
       backgroundColor: colors.surfaceAlt,
       borderWidth: StyleSheet.hairlineWidth,
@@ -497,8 +497,8 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: 4,
-      paddingVertical: 8,
+      gap: Space.xs,
+      paddingVertical: Space.sm,
     },
     moreBtnText: {
       fontSize: Type.meta.size,

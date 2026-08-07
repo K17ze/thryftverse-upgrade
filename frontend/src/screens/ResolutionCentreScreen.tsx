@@ -3,17 +3,17 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
   Pressable,
   RefreshControl,
   ScrollView,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Typography, Radius, Type } from '../theme/designTokens';
+import { Space, Typography, Radius, Type, Stroke } from '../theme/designTokens';
 import { useStore } from '../store/useStore';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { haptics } from '../utils/haptics';
@@ -159,7 +159,7 @@ export default function ResolutionCentreScreen() {
             : 'If you have an issue with an order, open the order and tap "Report an issue".'}
         />
       ) : (
-        <FlatList
+        <FlashList
           data={filteredTickets}
           keyExtractor={(item) => item.id}
           contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 20 }]}
@@ -167,6 +167,8 @@ export default function ResolutionCentreScreen() {
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.brand} />
           }
+          // Performance: support ticket lists can grow long; FlashList v2
+          // handles recycling automatically.
           renderItem={({ item, index }) => {
             const statusCfg = statusConfig[item.status] ?? statusConfig.open;
             return (
@@ -215,8 +217,8 @@ function createStyles(colors: ThemeColors) {
     gap: Space.md,
   },
   heroIcon: {
-    width: 40,
-    height: 40,
+    width: Space.xl + Space.xs + 4,
+    height: Space.xl + Space.xs + 4,
     borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
@@ -230,7 +232,7 @@ function createStyles(colors: ThemeColors) {
   heroSubtitle: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
   filterRail: {
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -240,14 +242,14 @@ function createStyles(colors: ThemeColors) {
   },
   filterRailContent: {
     paddingHorizontal: Space.md,
-    gap: 8,
+    gap: Space.sm,
     alignItems: 'center',
   },
   filterChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.xs + 3,
     borderRadius: Radius.full,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
@@ -256,7 +258,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.brand,
   },
   filterChipText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
   },
@@ -265,7 +267,7 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.semibold,
   },
   filterChipCount: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
     opacity: 0.7,
   },
@@ -276,7 +278,7 @@ function createStyles(colors: ThemeColors) {
   ticketCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: Space.sm + 4,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
     marginBottom: Space.sm,
@@ -286,8 +288,8 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
   },
   statusIconWrap: {
-    width: 40,
-    height: 40,
+    width: Space.xl + Space.xs + 4,
+    height: Space.xl + Space.xs + 4,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
@@ -295,36 +297,36 @@ function createStyles(colors: ThemeColors) {
   },
   ticketInfo: {
     flex: 1,
-    gap: 3,
+    gap: Space.xs / 2 + 1,
   },
   ticketTopic: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
   ticketDetails: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
-    lineHeight: 16,
+    lineHeight: Type.caption.size + 4,
   },
   ticketMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginTop: 4,
+    gap: Space.sm,
+    marginTop: Space.xs,
   },
   statusPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs / 2,
     borderRadius: Radius.full,
   },
   ticketStatus: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
   },
   ticketDate: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },

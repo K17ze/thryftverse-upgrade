@@ -10,15 +10,15 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../theme/ThemeContext';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useSavedSearchAlerts } from '../hooks/useSavedSearchAlerts';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { EmptyState } from '../components/EmptyState';
-import { Typography, Space, Radius } from '../theme/designTokens';
+import { Typography, Space, Radius, Type, Stroke, Control } from '../theme/designTokens';
 
-type Props = StackScreenProps<RootStackParamList, 'SavedSearches'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'SavedSearches'>;
 
 type FilterTab = 'all' | 'new';
 
@@ -93,40 +93,40 @@ export default function SavedSearchesScreen({ navigation }: Props) {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: 12,
-      paddingVertical: 10,
+      paddingHorizontal: Space.sm + 4,
+      paddingVertical: Space.xs + 2,
     },
     backBtn: {
-      width: 44,
-      height: 44,
+      width: Control.hit,
+      height: Control.hit,
       borderRadius: Radius.full,
       alignItems: 'center',
       justifyContent: 'center',
     },
     markSeenBtn: {
-      width: 44,
-      height: 44,
+      width: Control.hit,
+      height: Control.hit,
       borderRadius: Radius.full,
       alignItems: 'center',
       justifyContent: 'center',
     },
     headerTitle: {
-      fontSize: 17,
+      fontSize: Type.subtitle.size,
       fontFamily: Typography.family.bold,
       color: colors.textPrimary,
     },
     tabRow: {
       flexDirection: 'row',
-      gap: 8,
+      gap: Space.sm,
       marginBottom: Space.sm,
     },
     tab: {
       flex: 1,
-      paddingVertical: 9,
-      paddingHorizontal: 12,
+      paddingVertical: Space.xs + 1,
+      paddingHorizontal: Space.sm + 4,
       borderRadius: Radius.lg,
       backgroundColor: colors.surface,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       borderColor: colors.border,
       alignItems: 'center',
     },
@@ -135,7 +135,7 @@ export default function SavedSearchesScreen({ navigation }: Props) {
       borderColor: colors.brand,
     },
     tabText: {
-      fontSize: 13,
+      fontSize: Type.captionElevated.size,
       fontFamily: Typography.family.medium,
       color: colors.textMuted,
     },
@@ -145,21 +145,21 @@ export default function SavedSearchesScreen({ navigation }: Props) {
     },
     noNewWrap: {
       alignItems: 'center',
-      gap: 10,
-      paddingVertical: 40,
+      gap: Space.xs + 2,
+      paddingVertical: Space.xl + Space.xl - 8,
     },
     noNewText: {
-      fontSize: 14,
+      fontSize: Type.body.size,
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
       textAlign: 'center',
     },
     listWrap: {
-      paddingHorizontal: 16,
+      paddingHorizontal: Space.md,
       paddingTop: Space.sm,
     },
     sectionHint: {
-      fontSize: 12,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
       marginBottom: Space.md,
@@ -168,24 +168,24 @@ export default function SavedSearchesScreen({ navigation }: Props) {
     searchCard: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 8,
-      paddingVertical: 12,
-      paddingHorizontal: 14,
+      gap: Space.sm,
+      paddingVertical: Space.sm + 4,
+      paddingHorizontal: Space.sm + 2,
       borderRadius: Radius.xl,
       backgroundColor: colors.surface,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
-      marginBottom: 8,
+      marginBottom: Space.sm,
     },
     searchMain: {
       flex: 1,
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 12,
+      gap: Space.sm + 4,
     },
     searchIconWrap: {
-      width: 38,
-      height: 38,
+      width: Space.xl + 6,
+      height: Space.xl + 6,
       borderRadius: Radius.full,
       backgroundColor: colors.surfaceAlt,
       alignItems: 'center',
@@ -196,10 +196,10 @@ export default function SavedSearchesScreen({ navigation }: Props) {
     },
     searchTextWrap: {
       flex: 1,
-      gap: 3,
+      gap: Space.xs / 2 + 1,
     },
     searchQuery: {
-      fontSize: 15,
+      fontSize: Type.bodyEmphasis.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
       flexShrink: 1,
@@ -207,17 +207,17 @@ export default function SavedSearchesScreen({ navigation }: Props) {
     searchQueryRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 6,
+      gap: Space.xs + 2,
     },
     newBadge: {
       backgroundColor: `${colors.brand}15`,
       borderRadius: Radius.lg,
-      paddingHorizontal: 7,
-      paddingVertical: 2,
+      paddingHorizontal: Space.xs + 3,
+      paddingVertical: Space.xs / 2,
       flexShrink: 0,
     },
     newBadgeText: {
-      fontSize: 10,
+      fontSize: Type.meta.size - 1,
       fontFamily: Typography.family.semibold,
       color: colors.brand,
       letterSpacing: 0.2,
@@ -225,32 +225,32 @@ export default function SavedSearchesScreen({ navigation }: Props) {
     newMatchesBanner: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 8,
+      gap: Space.sm,
       backgroundColor: `${colors.brand}10`,
       borderRadius: Radius.lg,
-      paddingHorizontal: 14,
-      paddingVertical: 10,
+      paddingHorizontal: Space.sm + 2,
+      paddingVertical: Space.xs + 2,
       marginBottom: Space.sm + 2,
     },
     newMatchesText: {
       flex: 1,
-      fontSize: 13,
+      fontSize: Type.captionElevated.size,
       fontFamily: Typography.family.semibold,
       color: colors.brand,
     },
     searchMeta: {
-      fontSize: 11,
+      fontSize: Type.meta.size,
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
     },
     searchActions: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 4,
+      gap: Space.xs,
     },
     actionBtn: {
-      width: 40,
-      height: 40,
+      width: Space.xl + Space.xs + 4,
+      height: Space.xl + Space.xs + 4,
       borderRadius: Radius.full,
       alignItems: 'center',
       justifyContent: 'center',

@@ -12,7 +12,7 @@ import {
 import * as Clipboard from 'expo-clipboard';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useToast } from '../context/ToastContext';
@@ -20,9 +20,9 @@ import { useStore } from '../store/useStore';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { Space, Radius, Type, Typography, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, LetterSpacing, Stroke, Control } from '../theme/designTokens';
 
-type Props = StackScreenProps<RootStackParamList, 'InviteFriends'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'InviteFriends'>;
 
 /**
  * Generate a deterministic referral code from a user ID.
@@ -138,7 +138,7 @@ export default function InviteFriendsScreen({ navigation }: Props) {
             <View style={styles.codeRow}>
               <Text style={styles.codeText}>{referralCode}</Text>
               <AnimatedPressable style={styles.copyBtn} onPress={() => void handleCopyCode()} accessibilityLabel="Copy referral code" accessibilityRole="button">
-                <Ionicons name="copy-outline" size={16} color={ACCENT} />
+                <Ionicons name="copy-outline" size={18} color={ACCENT} />
                 <Text style={styles.copyText}>Copy</Text>
               </AnimatedPressable>
             </View>
@@ -156,7 +156,7 @@ export default function InviteFriendsScreen({ navigation }: Props) {
                 {inviteLink}
               </Text>
               <AnimatedPressable style={styles.copyBtn} onPress={() => void handleCopyLink()} accessibilityLabel="Copy invite link" accessibilityRole="button">
-                <Ionicons name="copy-outline" size={16} color={ACCENT} />
+                <Ionicons name="copy-outline" size={18} color={ACCENT} />
                 <Text style={styles.copyText}>Copy</Text>
               </AnimatedPressable>
             </View>
@@ -243,15 +243,15 @@ export default function InviteFriendsScreen({ navigation }: Props) {
             </View>
             <View style={styles.loyaltyBenefitsRow}>
               <View style={styles.loyaltyBenefit}>
-                <Ionicons name="pricetag-outline" size={14} color={MUTED} />
+                <Ionicons name="pricetag-outline" size={16} color={MUTED} />
                 <Text style={styles.loyaltyBenefitText}>Reduced fees</Text>
               </View>
               <View style={styles.loyaltyBenefit}>
-                <Ionicons name="flash-outline" size={14} color={MUTED} />
+                <Ionicons name="flash-outline" size={16} color={MUTED} />
                 <Text style={styles.loyaltyBenefitText}>Priority support</Text>
               </View>
               <View style={styles.loyaltyBenefit}>
-                <Ionicons name="star-outline" size={14} color={MUTED} />
+                <Ionicons name="star-outline" size={16} color={MUTED} />
                 <Text style={styles.loyaltyBenefitText}>Exclusive drops</Text>
               </View>
             </View>
@@ -272,7 +272,7 @@ export default function InviteFriendsScreen({ navigation }: Props) {
             ] as Array<{ icon: React.ComponentProps<typeof Ionicons>['name']; text: string }>).map((step, i) => (
               <View key={i} style={styles.stepRow}>
                 <View style={styles.stepIconWrap}>
-                  <Ionicons name={step.icon} size={16} color={ACCENT} />
+                  <Ionicons name={step.icon} size={18} color={ACCENT} />
                 </View>
                 <Text style={styles.stepText}>{step.text}</Text>
               </View>
@@ -290,7 +290,7 @@ function createStyles(colors: ThemeColors) {
     content: { padding: Space.lg },
     heroCard: {
       backgroundColor: colors.surface,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       borderColor: colors.border,
       borderRadius: Radius.xl,
       padding: Space.xl,
@@ -330,7 +330,7 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'space-between',
       backgroundColor: colors.surface,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       borderColor: colors.border,
       borderRadius: Radius.lg,
       paddingHorizontal: Space.md,
@@ -339,7 +339,7 @@ function createStyles(colors: ThemeColors) {
     codeText: {
       fontSize: Type.title.size,
       lineHeight: Type.title.lineHeight,
-      letterSpacing: 2,
+      letterSpacing: Space.xs / 2,
       fontFamily: Typography.family.extrabold,
       color: colors.textPrimary,
     },
@@ -347,7 +347,7 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       backgroundColor: colors.surface,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       borderColor: colors.border,
       borderRadius: Radius.lg,
       paddingHorizontal: Space.md,
@@ -374,12 +374,12 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'space-around',
       marginBottom: Space.xl,
     },
-    shareIconBtn: { alignItems: 'center', gap: 6 },
+    shareIconBtn: { alignItems: 'center', gap: Space.xs + 2 },
     shareIconCircle: {
-      width: 56,
-      height: 56,
-      borderRadius: 28,
-      borderWidth: 1.5,
+      width: Space.xxl + Space.xxl + 8,
+      height: Space.xxl + Space.xxl + 8,
+      borderRadius: Space.lg + 4,
+      borderWidth: Stroke.emphasis,
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: colors.surfaceAlt,
@@ -393,7 +393,7 @@ function createStyles(colors: ThemeColors) {
     },
     rewardsCard: {
       backgroundColor: colors.surface,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       borderColor: colors.border,
       borderRadius: Radius.xl,
       padding: Space.lg,
@@ -420,7 +420,7 @@ function createStyles(colors: ThemeColors) {
     statCell: {
       flex: 1,
       alignItems: 'center',
-      gap: 2,
+      gap: Space.xs / 2,
     },
     statValue: {
       fontSize: Type.title.size,
@@ -435,8 +435,8 @@ function createStyles(colors: ThemeColors) {
       color: colors.textMuted,
     },
     statDivider: {
-      width: 1,
-      height: 32,
+      width: Stroke.standard,
+      height: Space.xl + Space.xs,
       backgroundColor: colors.border,
     },
     rewardsFootnote: {
@@ -447,7 +447,7 @@ function createStyles(colors: ThemeColors) {
     },
     loyaltyCard: {
       backgroundColor: colors.surface,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       borderColor: colors.border,
       borderRadius: Radius.xl,
       padding: Space.lg,
@@ -460,17 +460,17 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.md,
     },
     loyaltyIconWrap: {
-      width: 48,
-      height: 48,
-      borderRadius: 24,
-      borderWidth: 2,
+      width: Space.xl + Space.xl - 4,
+      height: Space.xl + Space.xl - 4,
+      borderRadius: Radius.xxl,
+      borderWidth: Stroke.emphasis,
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: colors.surfaceAlt,
     },
     loyaltyInfo: {
       flex: 1,
-      gap: 2,
+      gap: Space.xs / 2,
     },
     loyaltyTierName: {
       fontSize: Type.subtitle.size,
@@ -483,15 +483,15 @@ function createStyles(colors: ThemeColors) {
       color: colors.textMuted,
     },
     loyaltyProgressTrack: {
-      height: 6,
-      borderRadius: 3,
+      height: Space.xs + 2,
+      borderRadius: Radius.sm,
       backgroundColor: colors.border,
       marginBottom: Space.md,
       overflow: 'hidden',
     },
     loyaltyProgressFill: {
       height: '100%',
-      borderRadius: 3,
+      borderRadius: Radius.sm,
     },
     loyaltyBenefitsRow: {
       flexDirection: 'row',
@@ -501,16 +501,16 @@ function createStyles(colors: ThemeColors) {
     loyaltyBenefit: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 4,
+      gap: Space.xs,
     },
     loyaltyBenefitText: {
-      fontSize: 11,
+      fontSize: Type.meta.size,
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
     },
     howItWorksCard: {
       backgroundColor: colors.surface,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       borderColor: colors.border,
       borderRadius: Radius.xl,
       padding: Space.lg,
@@ -523,9 +523,9 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.sm,
     },
     stepIconWrap: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
+      width: Control.chromeCompact,
+      height: Space.xl + Space.xs,
+      borderRadius: Radius.xl,
       backgroundColor: `${colors.brand}15`,
       alignItems: 'center',
       justifyContent: 'center',

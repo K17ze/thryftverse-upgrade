@@ -345,7 +345,7 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   sidePill: {
-    paddingHorizontal: 8,
+    paddingHorizontal: Space.sm,
     paddingVertical: 3,
     borderRadius: Radius.full,
   },

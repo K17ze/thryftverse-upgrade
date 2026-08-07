@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useToast } from '../context/ToastContext';
-import { Typography, Space, Radius, Type, Elevation } from '../theme/designTokens';
+import { Typography, Space, Radius, Type, Elevation, LetterSpacing } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
@@ -261,7 +261,7 @@ export default function WriteReviewScreen() {
                           <Pressable
                             style={styles.photoRemoveBtn}
                             onPress={() => handleRemovePhoto(index)}
-                            hitSlop={8}
+                            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                             accessibilityRole="button"
                             accessibilityLabel={`Remove photo ${index + 1}`}
                           >
@@ -339,13 +339,13 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm,
   },
   orderThumb: {
-    width: 48,
-    height: 48,
+    width: Space.xxl,
+    height: Space.xxl,
     borderRadius: Radius.md,
   },
   orderInfo: {
     flex: 1,
-    gap: 2,
+    gap: Space.xs - 2,
   },
   orderTitle: {
     fontSize: Type.body.size,
@@ -367,7 +367,7 @@ function createStyles(colors: ThemeColors) {
   starsContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 12,
+    gap: Space.sm + 4,
     marginBottom: Space.sm,
   },
   ratingLabel: {
@@ -378,7 +378,7 @@ function createStyles(colors: ThemeColors) {
   },
   sectionLabel: {
     marginLeft: Space.sm,
-    letterSpacing: 1.2,
+    letterSpacing: LetterSpacing.caps + 0.38,
     marginBottom: Space.sm,
   },
   inputCard: {
@@ -388,7 +388,7 @@ function createStyles(colors: ThemeColors) {
     ...Elevation.subtle,
   },
   input: {
-    minHeight: 120,
+    minHeight: Space.lg * 5,
     maxHeight: 240,
     color: colors.textPrimary,
     fontSize: Type.body.size,
@@ -407,16 +407,16 @@ function createStyles(colors: ThemeColors) {
     position: 'relative',
   },
   photoTile: {
-    width: 76,
-    height: 76,
+    width: Space.xxl + 28,
+    height: Space.xxl + 28,
     borderRadius: Radius.md,
   },
   photoRemoveBtn: {
     position: 'absolute',
-    top: -6,
-    right: -6,
+    top: -(Space.xs + 2),
+    right: -(Space.xs + 2),
     backgroundColor: colors.background,
-    borderRadius: 10,
+    borderRadius: Radius.lg,
   },
   photoAddBtn: {
     flexDirection: 'row',

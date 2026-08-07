@@ -20,10 +20,9 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
-import { Type, Space, Radius, DockConstants } from '../theme/designTokens';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
@@ -34,15 +33,15 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
-import { Typography } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { BoardEmptyGraphic } from '../components/profile/BoardEmptyGraphic';
 import { ShareSheet } from '../components/ShareSheet';
+import { Type, Space, Radius, DockConstants, Typography, Stroke, Control } from '../theme/designTokens';
 const { width: SCREEN_W } = Dimensions.get('window');
 const COVER_H = 180;
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 export default function CollectionDetailScreen() {
   const navigation = useNavigation<NavT>();
@@ -400,9 +399,9 @@ function MoreLikeThisRow({
   if (similarItems.length === 0) return null;
 
   return (
-    <View style={{ marginTop: 32, paddingBottom: 8 }}>
+    <View style={{ marginTop: Space.xl, paddingBottom: Space.sm }}>
       <Text style={styles.moreTitle}>More like this</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingRight: 20 }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Space.xs + 2, paddingRight: 20 }}>
         {similarItems.map((item) => (
           <AnimatedPressable
             key={item.id}
@@ -417,7 +416,7 @@ function MoreLikeThisRow({
               <CachedImage
                 uri={item.images?.[0] ?? ''}
                 style={styles.moreImg}
-                containerStyle={{ width: '100%', height: '100%', borderRadius: 12 }}
+                containerStyle={{ width: '100%', height: '100%', borderRadius: Radius.lg }}
                 contentFit="cover"
               />
             </SharedTransitionView>
@@ -442,35 +441,35 @@ function createStyles(colors: ThemeColors) {
     right: 0,
     zIndex: 50,
     backgroundColor: colors.background,
-    borderBottomWidth: 1,
+    borderBottomWidth: Stroke.standard,
     borderBottomColor: colors.border,
   },
   headerInner: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Space.md,
-    paddingTop: 44,
+    paddingTop: Control.hit,
     paddingBottom: Space.sm,
     gap: Space.sm,
   },
   floatingTitle: {
     flex: 1,
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     textAlign: 'center',
   },
   absoluteBack: {
     position: 'absolute',
-    top: 44,
+    top: Control.hit,
     left: Space.md,
     zIndex: 60,
   },
   backBtn: {
-    width: 40,
-    height: 40,
+    width: Space.xl + Space.xs + 4,
+    height: Space.xl + Space.xs + 4,
     borderRadius: Radius.md,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     backgroundColor: colors.surface,
     alignItems: 'center',
@@ -497,7 +496,7 @@ function createStyles(colors: ThemeColors) {
     right: Space.md,
   },
   coverTitle: {
-    fontSize: 24,
+    fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
     color: '#fff',
     textShadowColor: 'rgba(0,0,0,0.5)',
@@ -505,14 +504,14 @@ function createStyles(colors: ThemeColors) {
     textShadowRadius: 4,
   },
   coverMeta: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
     color: 'rgba(255,255,255,0.85)',
-    marginTop: 4,
+    marginTop: Space.xs,
   },
   coverActions: {
     position: 'absolute',
-    top: 44,
+    top: Control.hit,
     left: Space.md,
     right: Space.md,
     flexDirection: 'row',
@@ -524,8 +523,8 @@ function createStyles(colors: ThemeColors) {
     gap: Space.xs,
   },
   actionBtnOverlay: {
-    width: 36,
-    height: 36,
+    width: Space.xl + 4,
+    height: Space.xl + 4,
     borderRadius: Radius.md,
     backgroundColor: 'rgba(0,0,0,0.35)',
     alignItems: 'center',
@@ -541,15 +540,15 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.md,
   },
   noCoverTitle: {
-    fontSize: 22,
+    fontSize: Type.title.size - 2,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
   },
   noCoverMeta: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
   coverTitleRow: {
     flexDirection: 'row',
@@ -557,52 +556,52 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm,
   },
   coverDesc: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     color: 'rgba(255,255,255,0.85)',
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
   noCoverDesc: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
   privacyBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    gap: Space.xs / 2 + 1,
+    paddingHorizontal: Space.xs + 2,
+    paddingVertical: Space.xs / 2,
     borderRadius: Radius.full,
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
   privacyText: {
-    fontSize: 10,
+    fontSize: Type.meta.size - 1,
     fontFamily: Typography.family.bold,
     color: colors.textInverse,
   },
   privacyBadgeOutline: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    gap: Space.xs / 2 + 1,
+    paddingHorizontal: Space.xs + 2,
+    paddingVertical: Space.xs / 2,
     borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
   privacyTextOutline: {
-    fontSize: 10,
+    fontSize: Type.meta.size - 1,
     fontFamily: Typography.family.bold,
     color: colors.textMuted,
   },
   actionBtn: {
-    width: 40,
-    height: 40,
+    width: Space.xl + Space.xs + 4,
+    height: Space.xl + Space.xs + 4,
     borderRadius: Radius.md,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     backgroundColor: colors.surface,
     alignItems: 'center',
@@ -622,42 +621,42 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.md,
     borderRadius: Radius.lg,
     backgroundColor: colors.surface,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
   },
   manageRowText: {
     flex: 1,
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
   listContent: {
-    paddingBottom: 120,
+    paddingBottom: Space.xxl * 2 + Space.xl,
   },
   moreTitle: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
-    marginBottom: 14,
+    marginBottom: Space.md - 2,
     paddingHorizontal: Space.md,
   },
   moreCard: {
-    width: 140,
+    width: Space.xxl * 2 + Control.hit,
     paddingLeft: Space.md,
   },
   moreMediaWrap: {
-    width: 140,
-    height: 180,
-    borderRadius: 12,
+    width: Space.xxl * 2 + Control.hit,
+    height: Space.xxl * 3 + Control.chrome,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
-    marginBottom: 8,
+    marginBottom: Space.sm,
   },
   moreImg: {
     width: '100%',
     height: '100%',
   },
   morePrice: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
   },

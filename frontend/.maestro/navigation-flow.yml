@@ -1,0 +1,65 @@
+# Maestro E2E flow — bottom-tab navigation journey.
+#
+# Launches the app (preserving state so onboarding/auth is already passed
+# in the test build) and walks the five primary tabs in order:
+# Home → Explore → Create → Inbox → Profile. Verifies each tab loads by
+# asserting its accessibility label becomes focused/visible.
+#
+# NOTE: The Create tab opens the camera (CreateCamera). The flow dismisses
+# it so navigation can continue. If the camera permission prompt appears,
+# it is accepted first.
+#
+# Run: maestro test .maestro/navigation-flow.yml
+# (or: npm run test:e2e:smoke)
+appId: ${MAESTRO_APP_ID}
+---
+# Launch with state preserved — assumes the test build is already past
+# onboarding and auth (see README.md "Test build preparation").
+- launchApp:
+    clearState: false
+
+# ── Home tab ──
+- tapOn:
+    label: "Home"
+- assertVisible:
+    label: "Home"
+    timeout: 5000
+- takeScreenshot: nav-home
+
+# ── Explore tab ──
+- tapOn:
+    label: "Explore"
+- assertVisible:
+    label: "Explore"
+    timeout: 5000
+- takeScreenshot: nav-explore
+
+# ── Create tab ──
+# Create opens the camera. Accept the permission prompt if it appears,
+# then dismiss the camera to return to the tab bar.
+- tapOn:
+    label: "Create"
+- runFlow:
+    when:
+      visible: "Allow"
+    commands:
+      - tapOn: "Allow"
+- takeScreenshot: nav-create-camera
+# Dismiss the camera via the system back / Cancel so we can continue.
+- back
+
+# ── Inbox tab ──
+- tapOn:
+    label: "Inbox"
+- assertVisible:
+    label: "Inbox"
+    timeout: 5000
+- takeScreenshot: nav-inbox
+
+# ── Profile tab ──
+- tapOn:
+    label: "Profile"
+- assertVisible:
+    label: "Profile"
+    timeout: 5000
+- takeScreenshot: nav-profile

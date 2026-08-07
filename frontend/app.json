@@ -8,6 +8,7 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "jsEngine": "hermes",
     "ios": {
       "bundleIdentifier": "com.thryftverse.app",
       "supportsTablet": true,
@@ -19,7 +20,8 @@
         "NSCameraUsageDescription": "ThryftVerse needs camera access to capture photos and videos for listings, posters, and looks.",
         "NSPhotoLibraryUsageDescription": "ThryftVerse needs photo library access to select images for listings, posters, and looks.",
         "NSPhotoLibraryAddUsageDescription": "ThryftVerse needs photo library access to save captured photos.",
-        "NSUserTrackingUsageDescription": "ThryftVerse does not track you across other companies' apps or websites."
+        "NSUserTrackingUsageDescription": "ThryftVerse does not track you across other companies' apps or websites.",
+        "NSFaceIDUsageDescription": "ThryftVerse uses Face ID to protect your wallet, payments, and account settings."
       }
     },
     "android": {

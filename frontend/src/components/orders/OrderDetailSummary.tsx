@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CachedImage } from '../CachedImage';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography } from '../../theme/designTokens';
+import { Space, Typography, Radius, Type } from '../../theme/designTokens';
 
 interface Props {
   title: string;
@@ -69,38 +69,38 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   image: {
     width: 96,
     height: 120,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     backgroundColor: colors.surfaceAlt,
   },
   info: {
     flex: 1,
-    gap: 4,
+    gap: Space.xs,
   },
   title: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
-    lineHeight: 21,
+    lineHeight: Type.bodyLarge.lineHeight,
   },
   subtitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
   },
   price: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
   unavailableRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
+    gap: Space.xs,
+    marginTop: Space.xs,
   },
   unavailableText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },

@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleSheet, View, Text, Pressable } from 'react-native';
 import { Controller, Control, FieldError, RegisterOptions } from 'react-hook-form';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography } from '../../theme/designTokens';
+import { Typography, Type, Space } from '../../theme/designTokens';
 import { NativePicker, type NativePickerOption } from '../native/NativePicker';
 
 export interface ControlledSelectProps {
@@ -52,15 +52,15 @@ function createStyles(colors: ThemeColors) {
     marginBottom: 12,
   },
   label: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
     color: colors.textSecondary,
     marginBottom: 6,
   },
   errorText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     color: colors.danger,
-    marginTop: 4,
+    marginTop: Space.xs,
     fontFamily: Typography.family.regular,
   },
   });

@@ -1,5 +1,5 @@
 import React, { ErrorInfo, ReactNode } from 'react';
-import { View, Text, StyleSheet, Linking, Platform } from 'react-native';
+import { View, Text, StyleSheet, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ExpoLinking from 'expo-linking';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
@@ -8,7 +8,7 @@ import { trackTelemetryEvent } from '../../lib/telemetry';
 import { Sentry, isSentryAvailable } from './sentry';
 import { resetNavigationToHome, getAppNavigationRef } from './appNavigation';
 import { AnimatedPressable } from '../../components/AnimatedPressable';
-import { Typography } from '../../theme/designTokens';
+import { Typography, Radius, Type, Space } from '../../theme/designTokens';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 interface AppErrorBoundaryProps {
@@ -24,8 +24,6 @@ interface AppErrorBoundaryState {
   // remounts with a fresh key — prevents re-crashing on the same screen.
   recoveryAttempt: number;
 }
-
-const WORDMARK = 'THRYFTVERSE';
 
 /**
  * Reload the app. Prefer expo-updates OTA reload so the user gets a fresh JS
@@ -192,15 +190,9 @@ function CrashRecoveryUI({
   return (
     <View style={styles.container}>
       <Reanimated.View entering={enter} style={styles.content}>
-        {/* App logo / wordmark */}
+        {/* App wordmark */}
         <Reanimated.View entering={enter} style={styles.logoWrap}>
-          <View style={styles.logoRow}>
-            {WORDMARK.split('').map((letter, index) => (
-              <Text key={`${letter}_${index}`} style={styles.logoLetter}>
-                {letter}
-              </Text>
-            ))}
-          </View>
+          <Text style={styles.logoText}>Thryftverse</Text>
         </Reanimated.View>
 
         {/* Warning icon */}
@@ -309,7 +301,7 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.background,
       justifyContent: 'center',
       alignItems: 'center',
-      paddingHorizontal: 32,
+      paddingHorizontal: Space.xl,
     },
     content: {
       alignItems: 'center',
@@ -317,54 +309,46 @@ function createStyles(colors: ThemeColors) {
       maxWidth: 360,
     },
     logoWrap: {
-      marginBottom: 32,
+      marginBottom: Space.xl,
     },
-    logoRow: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      justifyContent: 'center',
-      gap: 2,
-    },
-    logoLetter: {
+    logoText: {
       color: colors.textPrimary,
       fontFamily: Typography.family.bold,
-      fontSize: 22,
-      letterSpacing: 0.42,
+      fontSize: 24,
+      letterSpacing: -0.4,
+      textAlign: 'center',
     },
     iconBox: {
       width: 96,
       height: 96,
       borderRadius: 48,
-      backgroundColor: Platform.select({
-        ios: colors.danger + '14',
-        android: colors.danger,
-      }),
-      opacity: Platform.select({ ios: 1, android: 0.12 }),
+      backgroundColor: colors.danger + '14',
       justifyContent: 'center',
       alignItems: 'center',
-      marginBottom: 24,
+      marginBottom: Space.lg,
+      overflow: 'hidden',
     },
     title: {
-      fontSize: 24,
+      fontSize: Type.title.size,
       fontFamily: Typography.family.bold,
       color: colors.textPrimary,
       marginBottom: 12,
       textAlign: 'center',
     },
     subtext: {
-      fontSize: 15,
+      fontSize: Type.bodyEmphasis.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
       textAlign: 'center',
-      marginBottom: 32,
+      marginBottom: Space.xl,
       lineHeight: 21,
     },
     devMessage: {
-      fontSize: 13,
+      fontSize: Type.captionElevated.size,
       fontFamily: Typography.family.regular,
       color: colors.danger,
       textAlign: 'center',
-      marginBottom: 24,
+      marginBottom: Space.lg,
       lineHeight: 18,
       opacity: 0.8,
     },
@@ -373,14 +357,14 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: colors.textPrimary,
-      paddingVertical: 16,
-      borderRadius: 14,
+      paddingVertical: Space.md,
+      borderRadius: Radius.xl,
       width: '100%',
       marginBottom: 12,
     },
     primaryBtnText: {
       color: colors.background,
-      fontSize: 16,
+      fontSize: Type.bodyLarge.size,
       fontFamily: Typography.family.bold,
     },
     secondaryBtn: {
@@ -388,43 +372,43 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: colors.surface,
-      paddingVertical: 16,
-      borderRadius: 14,
+      paddingVertical: Space.md,
+      borderRadius: Radius.xl,
       width: '100%',
       marginBottom: 12,
     },
     secondaryBtnText: {
       color: colors.textPrimary,
-      fontSize: 16,
+      fontSize: Type.bodyLarge.size,
       fontFamily: Typography.family.semibold,
     },
     tertiaryBtn: {
       alignItems: 'center',
       justifyContent: 'center',
       paddingVertical: 14,
-      borderRadius: 14,
+      borderRadius: Radius.xl,
       width: '100%',
       marginBottom: 12,
     },
     tertiaryBtnText: {
       color: colors.textSecondary,
-      fontSize: 15,
+      fontSize: Type.bodyEmphasis.size,
       fontFamily: Typography.family.medium,
     },
     feedbackBtn: {
       alignItems: 'center',
       justifyContent: 'center',
       paddingVertical: 12,
-      marginTop: 8,
+      marginTop: Space.sm,
     },
     feedbackBtnText: {
       color: colors.textSecondary,
-      fontSize: 14,
+      fontSize: Type.body.size,
       fontFamily: Typography.family.regular,
       textDecorationLine: 'underline',
     },
     btnIcon: {
-      marginRight: 8,
+      marginRight: Space.sm,
     },
   });
 }

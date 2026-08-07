@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { Pressable } from 'react-native';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Type, TypeStyles, Typography } from '../../theme/designTokens';
+import { Space, Type, TypeStyles, Typography, Radius } from '../../theme/designTokens';
 
 export type MessagingSegment = 'all' | 'buying' | 'selling' | 'requests' | 'groups';
 
@@ -72,7 +72,7 @@ export function MessagingSegmentRail({
 const createStyles = (colors: ThemeColors) => StyleSheet.create({
   root: {
     paddingHorizontal: Space.md,
-    paddingVertical: 8,
+    paddingVertical: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
@@ -85,7 +85,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingBottom: 8,
+    paddingBottom: Space.sm,
     position: 'relative',
   },
   label: {
@@ -103,11 +103,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   badge: {
     minWidth: 16,
     height: 16,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     backgroundColor: colors.brand,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: Space.xs,
   },
   badgeText: {
     fontSize: 10,

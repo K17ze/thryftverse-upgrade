@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { haptics } from '../utils/haptics';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Reanimated, {
   useSharedValue,
   useAnimatedScrollHandler,
@@ -17,7 +17,7 @@ import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { Space, Type, Typography, Radius, DockConstants } from '../theme/designTokens';
+import { Space, Type, Typography, Radius, DockConstants, Stroke, Control, LetterSpacing } from '../theme/designTokens';
 import {
   fetchCoOwnAssetById,
   fetchCoOwnOrderBook,
@@ -93,7 +93,7 @@ import { useConnectivity } from '../hooks/useConnectivity';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
 type RouteT = RouteProp<RootStackParamList, 'AssetDetail'>;
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 // Local type for recommendation items — replaces the mockData Listing import.
 // The recommendation rail returns items that have an `id` field; we only need
@@ -1718,15 +1718,15 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   marketStatusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: Space.sm,
+    height: Space.sm,
+    borderRadius: Radius.sm,
   },
   marketStatusText: {
     fontSize: Type.captionElevated.size,
     lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: 0,
+    letterSpacing: LetterSpacing.normal,
   },
   marketStatusStale: {
     fontSize: Type.captionElevated.size,
@@ -1836,8 +1836,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   sheetCloseTarget: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1920,7 +1920,7 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xs,
     paddingHorizontal: Space.sm,
     borderRadius: Radius.md,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
   },
   refreshBtnText: {
     fontSize: Type.meta.size,
@@ -1985,7 +1985,7 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   allocationBar: {
-    height: 8,
+    height: Space.sm,
     borderRadius: Radius.full,
     overflow: 'hidden',
   },
@@ -2015,7 +2015,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: Space.sm,
     paddingVertical: Space.sm + 2,
-    minHeight: 44,
+    minHeight: Control.hit,
   },
   unavailableRowLabelCluster: {
     flexDirection: 'row',
@@ -2037,7 +2037,7 @@ const styles = StyleSheet.create({
   dockStateBadge: {
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: 0,
+    letterSpacing: LetterSpacing.normal,
   },
   // ── Discovery ──
   recommendationSection: {
@@ -2064,8 +2064,8 @@ const priceAlertStyles = StyleSheet.create({
     marginBottom: Space.lg,
   },
   headerIcon: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
@@ -2077,12 +2077,12 @@ const priceAlertStyles = StyleSheet.create({
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: Type.subtitle.letterSpacing,
-    marginBottom: 2,
+    marginBottom: Space.xs - 2,
   },
   sheetSubtitle: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    lineHeight: 18,
+    lineHeight: Type.captionElevated.lineHeight,
   },
   conditionRow: {
     flexDirection: 'row',
@@ -2097,7 +2097,7 @@ const priceAlertStyles = StyleSheet.create({
     gap: Space.xs,
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
   },
   conditionText: {
     fontSize: Type.body.size,
@@ -2109,7 +2109,7 @@ const priceAlertStyles = StyleSheet.create({
     marginBottom: Space.xs,
   },
   input: {
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderRadius: Radius.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,

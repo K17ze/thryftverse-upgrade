@@ -2,15 +2,16 @@ import React, { useMemo } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { EmptyState } from '../components/EmptyState';
 import { SettingsListSkeleton } from '../components/skeletons/SettingsListSkeleton';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import {
@@ -19,7 +20,7 @@ import {
   type PublicProfileUser,
 } from '../services/profileApi';
 
-type Props = StackScreenProps<RootStackParamList, 'BlockedUsers'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'BlockedUsers'>;
 
 export default function BlockedUsersScreen({ navigation }: Props) {
   const { show } = useToast();
@@ -109,15 +110,11 @@ export default function BlockedUsersScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {blockedIds.length === 0 ? (
-        <View style={styles.empty}>
-          <View style={[styles.emptyIconWrap, { backgroundColor: colors.surface }]}>
-            <Ionicons name="shield-checkmark-outline" size={36} color={colors.textMuted} />
-          </View>
-          <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No blocked accounts</Text>
-          <Text style={[styles.emptyBody, { color: colors.textMuted }]}>
-            Accounts you block will appear here and will not be able to contact you.
-          </Text>
-        </View>
+        <EmptyState
+          icon="shield-checkmark-outline"
+          title="No blocked accounts"
+          subtitle="Accounts you block will appear here and will not be able to contact you."
+        />
       ) : loadingProfiles && Object.keys(profiles).length === 0 ? (
         <SettingsListSkeleton count={3} />
       ) : (
@@ -208,8 +205,8 @@ function createStyles(colors: ThemeColors) {
       gap: Space.md,
     },
     heroIcon: {
-      width: 40,
-      height: 40,
+      width: Space.xl + Space.sm,
+      height: Space.xl + Space.sm,
       borderRadius: Radius.full,
       justifyContent: 'center',
       alignItems: 'center',
@@ -223,28 +220,28 @@ function createStyles(colors: ThemeColors) {
     heroSubtitle: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
-      marginTop: 2,
+      marginTop: Space.xs / 2,
     },
     list: {
       borderTopWidth: StyleSheet.hairlineWidth,
       borderBottomWidth: StyleSheet.hairlineWidth,
     },
     userRow: {
-      minHeight: 74,
+      minHeight: Space.xxl + Space.lg + 2,
       marginLeft: Space.md,
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 12,
+      gap: Space.sm + Space.xs,
     },
     avatar: {
-      width: 46,
-      height: 46,
-      borderRadius: 23,
+      width: Space.xxl - 2,
+      height: Space.xxl - 2,
+      borderRadius: Radius.xxl,
     },
     avatarFallback: {
-      width: 46,
-      height: 46,
-      borderRadius: 23,
+      width: Space.xxl - 2,
+      height: Space.xxl - 2,
+      borderRadius: Radius.xxl,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -254,17 +251,17 @@ function createStyles(colors: ThemeColors) {
     },
     userName: {
       fontFamily: Typography.family.semibold,
-      fontSize: 14,
+      fontSize: Type.body.size,
     },
     userMeta: {
       fontFamily: Typography.family.regular,
-      fontSize: 12,
-      marginTop: 3,
+      fontSize: Type.caption.size,
+      marginTop: Space.xs - 1,
     },
     unblockTarget: {
       minWidth: 76,
-      minHeight: 36,
-      paddingHorizontal: 12,
+      minHeight: Control.chrome,
+      paddingHorizontal: Space.sm + Space.xs,
       marginRight: Space.md,
       borderRadius: Radius.full,
       alignItems: 'center',
@@ -272,32 +269,7 @@ function createStyles(colors: ThemeColors) {
     },
     unblockText: {
       fontFamily: Typography.family.semibold,
-      fontSize: 12,
-    },
-    empty: {
-      alignItems: 'center',
-      paddingHorizontal: Space.xl,
-      paddingTop: 48,
-    },
-    emptyIconWrap: {
-      width: 72,
-      height: 72,
-      borderRadius: Radius.full,
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginBottom: Space.md,
-    },
-    emptyTitle: {
-      fontFamily: Typography.family.semibold,
-      fontSize: Type.body.size,
-    },
-    emptyBody: {
-      maxWidth: 300,
-      marginTop: Space.xs,
-      fontFamily: Typography.family.regular,
       fontSize: Type.caption.size,
-      lineHeight: 18,
-      textAlign: 'center',
     },
   });
 }

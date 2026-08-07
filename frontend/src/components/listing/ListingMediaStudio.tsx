@@ -11,7 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography, Radius } from '../../theme/designTokens';
+import { Space, Typography, Radius, Type } from '../../theme/designTokens';
 import { SortablePhotoStrip } from '../SortablePhotoStrip';
 import { ListingMediaDraftItem } from '../../utils/mediaUploadAsset';
 import { UploadQueueItem, UploadQueueItemState } from '../../services/mediaUploadQueue';
@@ -125,7 +125,7 @@ export function ListingMediaStudio({
               accessibilityRole="button"
               accessibilityLabel="Choose from library"
             >
-              <Ionicons name="images-outline" size={18} color={colors.textInverse} style={{ marginRight: 8 }} />
+              <Ionicons name="images-outline" size={18} color={colors.textInverse} style={{ marginRight: Space.sm }} />
               <Text style={styles.emptyPrimaryText}>Choose from library</Text>
             </Pressable>
             <Pressable
@@ -403,13 +403,13 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.md,
   },
   emptyTitle: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
-    marginBottom: 4,
+    marginBottom: Space.xs,
   },
   emptySub: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     marginBottom: Space.lg,
@@ -428,7 +428,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.brand,
   },
   emptyPrimaryText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textInverse,
   },
@@ -444,12 +444,12 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
   },
   emptySecondaryText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
   emptyCount: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     marginTop: Space.md,
@@ -470,8 +470,8 @@ function createStyles(colors: ThemeColors) {
     top: Space.sm,
     left: Space.sm,
     backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
     borderRadius: Radius.sm,
   },
   coverBadgeText: {
@@ -488,8 +488,8 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     gap: 4,
     backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
     borderRadius: Radius.sm,
   },
   videoText: {
@@ -502,12 +502,12 @@ function createStyles(colors: ThemeColors) {
     bottom: Space.sm,
     left: Space.sm,
     backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
     borderRadius: Radius.sm,
   },
   countText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     color: '#fff',
   },
@@ -550,7 +550,7 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.md,
   },
   coverFailedText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     color: '#fff',
   },
@@ -564,7 +564,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: 'rgba(255,255,255,0.2)',
   },
   coverRetryText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.bold,
     color: '#fff',
   },
@@ -576,12 +576,12 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     gap: 4,
     backgroundColor: 'rgba(0,0,0,0.5)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
     borderRadius: Radius.sm,
   },
   coverCancelledText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     color: '#fff',
   },
@@ -715,24 +715,24 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 4,
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.xs,
     minHeight: 44,
   },
   studioActionText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
   },
   errorText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.danger,
     paddingHorizontal: Space.md,
-    paddingTop: 4,
+    paddingTop: Space.xs,
   },
   lockedNote: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     paddingHorizontal: Space.md,

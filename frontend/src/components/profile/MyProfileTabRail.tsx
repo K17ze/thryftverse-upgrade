@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space } from '../../theme/designTokens';
+import { Typography, Space, Type } from '../../theme/designTokens';
 
 interface TabItem {
   key: string;
@@ -74,7 +74,7 @@ function createStyles(colors: ThemeColors) {
     gap: 5,
   },
   label: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },
@@ -83,7 +83,7 @@ function createStyles(colors: ThemeColors) {
     color: colors.textPrimary,
   },
   count: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },

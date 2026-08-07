@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Type, Typography } from '../../theme/designTokens';
+import { Space, Type, Typography, Radius } from '../../theme/designTokens';
 import type {
   CoOwnRecourseAgreement,
   CoOwnSellerLiability,
@@ -297,7 +297,7 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.md,
-    borderRadius: 10,
+    borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     marginTop: Space.sm,
   },

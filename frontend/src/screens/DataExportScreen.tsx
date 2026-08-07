@@ -8,9 +8,9 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke, Control } from '../theme/designTokens';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
@@ -21,7 +21,7 @@ import { requestDataExport, type DataExportResult } from '../services/accountApi
 import { AppButton } from '../components/ui/AppButton';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 
-type Props = StackScreenProps<RootStackParamList, 'DataExport'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'DataExport'>;
 
 type ExportState = 'idle' | 'loading' | 'success' | 'error';
 
@@ -303,8 +303,8 @@ function createStyles(colors: ThemeColors) {
       gap: Space.md,
     },
     heroIcon: {
-      width: 40,
-      height: 40,
+      width: Space.xl + 8,
+      height: Space.xl + 8,
       borderRadius: Radius.full,
       alignItems: 'center',
       justifyContent: 'center',
@@ -321,7 +321,7 @@ function createStyles(colors: ThemeColors) {
     heroSubtitle: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
-      marginTop: 2,
+      marginTop: Space.xs - 2,
       letterSpacing: Type.caption.letterSpacing,
       lineHeight: Type.caption.lineHeight,
     },
@@ -344,10 +344,10 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.sm + 2,
       paddingHorizontal: Space.md,
       gap: Space.sm,
-      minHeight: 48,
+      minHeight: Space.xxl,
     },
     categoryIcon: {
-      width: 24,
+      width: Space.lg,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -363,7 +363,7 @@ function createStyles(colors: ThemeColors) {
     categoryDesc: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
-      marginTop: 1,
+      marginTop: Space.xs - 3,
       letterSpacing: Type.caption.letterSpacing,
       lineHeight: Type.caption.lineHeight,
     },
@@ -391,7 +391,7 @@ function createStyles(colors: ThemeColors) {
     },
     successCard: {
       borderRadius: Radius.lg,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       padding: Space.md,
       marginBottom: Space.lg,
     },
@@ -402,8 +402,8 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.md,
     },
     successIcon: {
-      width: 36,
-      height: 36,
+      width: Control.chrome,
+      height: Control.chrome,
       borderRadius: Radius.full,
       alignItems: 'center',
       justifyContent: 'center',
@@ -420,7 +420,7 @@ function createStyles(colors: ThemeColors) {
     successSubtitle: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
-      marginTop: 1,
+      marginTop: Space.xs - 3,
       letterSpacing: Type.caption.letterSpacing,
       lineHeight: Type.caption.lineHeight,
     },
@@ -453,7 +453,7 @@ function createStyles(colors: ThemeColors) {
     },
     errorCard: {
       borderRadius: Radius.lg,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       padding: Space.md,
       marginBottom: Space.lg,
     },
@@ -463,8 +463,8 @@ function createStyles(colors: ThemeColors) {
       gap: Space.sm,
     },
     errorIcon: {
-      width: 36,
-      height: 36,
+      width: Control.chrome,
+      height: Control.chrome,
       borderRadius: Radius.full,
       alignItems: 'center',
       justifyContent: 'center',

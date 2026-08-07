@@ -8,7 +8,7 @@ import {
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useBackendData } from '../context/BackendDataContext';
 import { useStore } from '../store/useStore';
@@ -29,7 +29,7 @@ import { ProductAnalytics } from '../platform/product/productAnalytics';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'ExploreCollection'>;
 
 export default function ExploreCollectionScreen() {
@@ -132,13 +132,13 @@ export default function ExploreCollectionScreen() {
       <SafeAreaView style={styles.container} edges={['top']}>
         <ScreenHeader title={title} onBack={() => navigation.goBack()} />
         <View style={styles.loadingWrap}>
-          <SkeletonLoader width={120} height={18} borderRadius={8} style={{ marginBottom: 16 }} />
+          <SkeletonLoader width={120} height={18} borderRadius={8} style={{ marginBottom: Space.md }} />
           <View style={styles.loadingGrid}>
             {Array.from({ length: 4 }).map((_, i) => (
               <View key={i} style={styles.loadingCard}>
                 <SkeletonLoader width="100%" height={180} borderRadius={Radius.md} />
-                <SkeletonLoader width="60%" height={14} borderRadius={6} style={{ marginTop: 8 }} />
-                <SkeletonLoader width="40%" height={14} borderRadius={6} style={{ marginTop: 4 }} />
+                <SkeletonLoader width="60%" height={14} borderRadius={6} style={{ marginTop: Space.sm }} />
+                <SkeletonLoader width="40%" height={14} borderRadius={6} style={{ marginTop: Space.xs }} />
               </View>
             ))}
           </View>
@@ -185,7 +185,7 @@ function createStyles(colors: ThemeColors) {
     headerInfo: {
       paddingHorizontal: Space.md,
       paddingBottom: Space.sm,
-      gap: 4,
+      gap: Space.xs,
     },
     headerSubtitle: {
       fontSize: Type.meta.size,

@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 import type { ListingCapabilities } from '../../platform/product';
@@ -190,13 +190,13 @@ function createStyles(colors: ThemeColors) {
     minWidth: 0,
   },
   priceLabel: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },
   priceValue: {
     minWidth: 0,
-    fontSize: 20,
+    fontSize: Type.priceList.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
   },
@@ -231,7 +231,7 @@ function createStyles(colors: ThemeColors) {
   },
   offerText: {
     minWidth: 0,
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
@@ -257,7 +257,7 @@ function createStyles(colors: ThemeColors) {
   },
   buyText: {
     minWidth: 0,
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.bold,
     color: colors.textInverse,
   },
@@ -285,7 +285,7 @@ function createStyles(colors: ThemeColors) {
   },
   messageBtnText: {
     minWidth: 0,
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
@@ -311,7 +311,7 @@ function createStyles(colors: ThemeColors) {
   manageText: {
     minWidth: 0,
     flexShrink: 1,
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
     color: colors.textInverse,
   },
@@ -327,7 +327,7 @@ function createStyles(colors: ThemeColors) {
   soldText: {
     minWidth: 0,
     flexShrink: 1,
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
     color: colors.textSecondary,
   },

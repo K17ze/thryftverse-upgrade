@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable } from 'r
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { RootStackParamList } from '../navigation/types';
@@ -14,7 +14,7 @@ import { fetchUserListingsFromApi, ListingApiItem } from '../services/listingsAp
 import { fetchSellerAnalytics, fetchTopPerformers, type SellerAnalytics, type TopPerformerListing } from '../services/commerceApi';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 interface AnalyticsMetric {
   icon: React.ComponentProps<typeof Ionicons>['name'];
@@ -259,8 +259,8 @@ function createStyles(colors: ThemeColors) {
     gap: Space.md,
   },
   heroIcon: {
-    width: 40,
-    height: 40,
+    width: Space.xxl,
+    height: Space.xxl,
     borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
@@ -274,7 +274,7 @@ function createStyles(colors: ThemeColors) {
   heroSubtitle: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    marginTop: 2,
+    marginTop: Space.xs - 2,
   },
   scrollContent: {
     paddingHorizontal: Space.md,
@@ -316,12 +316,12 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    gap: 4,
+    gap: Space.xs,
   },
   metricHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
   },
   metricLabel: {
     fontSize: Type.caption.size,
@@ -354,7 +354,7 @@ function createStyles(colors: ThemeColors) {
   },
   topInfo: {
     flex: 1,
-    gap: 2,
+    gap: Space.xs - 2,
   },
   topTitle: {
     fontSize: Type.body.size,
@@ -381,7 +381,7 @@ function createStyles(colors: ThemeColors) {
     color: colors.textPrimary,
   },
   emptySubtext: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },

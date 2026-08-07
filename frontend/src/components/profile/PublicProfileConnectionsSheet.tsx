@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { NativeSheet } from '../../platform/native';
 import { CachedImage } from '../CachedImage';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography } from '../../theme/designTokens';
+import { Space, Typography, Radius, Type } from '../../theme/designTokens';
 import { SegmentedControl } from './ProfileTabRail';
 import { useFollowersInfinite, useFollowingInfinite } from '../../platform/server';
 import type { FollowListUser } from '../../services/profileApi';
@@ -97,7 +97,7 @@ export function PublicProfileConnectionsSheet({
             <CachedImage
               uri={item.avatar}
               style={styles.avatar}
-              containerStyle={{ width: 44, height: 44, borderRadius: 22 }}
+              containerStyle={{ width: 44, height: 44, borderRadius: Radius.xxl }}
               contentFit="cover"
             />
           ) : (
@@ -210,28 +210,28 @@ export function PublicProfileConnectionsSheet({
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   container: { paddingHorizontal: Space.md, paddingVertical: Space.sm, flex: 1 },
-  title: { fontSize: 20, fontFamily: Typography.family.bold, color: colors.textPrimary, letterSpacing: -0.4, marginBottom: Space.sm },
+  title: { fontSize: Type.priceList.size, fontFamily: Typography.family.bold, color: colors.textPrimary, letterSpacing: -0.4, marginBottom: Space.sm },
   // Rows ΓÇö no chevron, pressed feedback, divider rhythm
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, minHeight: 56 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingVertical: Space.sm + 2, minHeight: Space.xxl + Space.xxl + Space.xs },
   rowPressed: { opacity: 0.6 },
   rowDivider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: 56 },
   avatarWrap: {},
-  avatar: { width: 44, height: 44, borderRadius: 22 },
+  avatar: { width: 44, height: 44, borderRadius: Radius.xxl },
   avatarFallback: { backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
-  avatarInitials: { fontSize: 15, fontFamily: Typography.family.bold, color: colors.textSecondary },
+  avatarInitials: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.bold, color: colors.textSecondary },
   identityCol: { flex: 1 },
-  displayName: { fontSize: 15, fontFamily: Typography.family.semibold, color: colors.textPrimary },
-  handle: { fontSize: 13, fontFamily: Typography.family.regular, color: colors.textSecondary, marginTop: 1 },
+  displayName: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
+  handle: { fontSize: Type.captionElevated.size, fontFamily: Typography.family.regular, color: colors.textSecondary, marginTop: 1 },
   // Skeleton rows
-  skeletonRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, minHeight: 56 },
-  skeletonAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surfaceAlt },
-  skeletonIdentity: { flex: 1, gap: 4 },
-  skeletonName: { width: 140, height: 14, borderRadius: 4, backgroundColor: colors.surfaceAlt },
-  skeletonHandle: { width: 100, height: 12, borderRadius: 4, backgroundColor: colors.surfaceAlt },
+  skeletonRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingVertical: Space.sm + 2, minHeight: Space.xxl + Space.xxl + Space.xs },
+  skeletonAvatar: { width: Space.xl + Space.sm + 4, height: Space.xl + Space.sm + 4, borderRadius: Radius.xxl, backgroundColor: colors.surfaceAlt },
+  skeletonIdentity: { flex: 1, gap: Space.xs },
+  skeletonName: { width: Space.xxl + Space.xxl + Space.xs + Space.xs, height: Type.body.size, borderRadius: Radius.sm, backgroundColor: colors.surfaceAlt },
+  skeletonHandle: { width: Space.xxl + Space.xxl - Space.xs, height: Type.caption.size, borderRadius: Radius.sm, backgroundColor: colors.surfaceAlt },
   // States
-  stateWrap: { alignItems: 'center', justifyContent: 'center', paddingVertical: Space.xl * 2, gap: 8, paddingHorizontal: Space.md },
-  stateTitle: { fontSize: 15, fontFamily: Typography.family.semibold, color: colors.textPrimary },
-  stateSub: { fontSize: 13, fontFamily: Typography.family.regular, color: colors.textMuted, textAlign: 'center' },
+  stateWrap: { alignItems: 'center', justifyContent: 'center', paddingVertical: Space.xl * 2, gap: Space.sm, paddingHorizontal: Space.md },
+  stateTitle: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
+  stateSub: { fontSize: Type.captionElevated.size, fontFamily: Typography.family.regular, color: colors.textMuted, textAlign: 'center' },
   footerIndicator: { paddingVertical: Space.md, alignItems: 'center' },
   });
 }

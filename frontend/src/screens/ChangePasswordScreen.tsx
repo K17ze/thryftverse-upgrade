@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { RootStackParamList } from '../navigation/types';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
@@ -22,7 +22,7 @@ import { FlagshipScreen, FlagshipHeader, FlagshipStickyFooter, FlagshipFormSecti
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
 export default function ChangePasswordScreen() {
-  const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { show } = useToast();
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -211,8 +211,8 @@ function createStyles(colors: ThemeColors) {
       gap: Space.md,
     },
     heroIcon: {
-      width: 40,
-      height: 40,
+      width: Space.xxl,
+      height: Space.xxl,
       borderRadius: Radius.full,
       justifyContent: 'center',
       alignItems: 'center',
@@ -226,8 +226,8 @@ function createStyles(colors: ThemeColors) {
     heroSubtitle: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
-      lineHeight: 18,
-      marginTop: 2,
+      lineHeight: Type.captionElevated.lineHeight,
+      marginTop: Space.xs - 2,
     },
     heroAction: {
       flexDirection: 'row',
@@ -247,9 +247,9 @@ function createStyles(colors: ThemeColors) {
       marginTop: Space.xs,
     },
     matchDot: {
-      width: 8,
-      height: 8,
-      borderRadius: 4,
+      width: Space.sm,
+      height: Space.sm,
+      borderRadius: Radius.sm,
     },
     matchText: {
       fontSize: Type.meta.size,
@@ -278,7 +278,7 @@ function createStyles(colors: ThemeColors) {
     noteText: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
-      lineHeight: 18,
+      lineHeight: Type.captionElevated.lineHeight,
       flex: 1,
     },
     sessionsLink: {

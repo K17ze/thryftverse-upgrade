@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, View, Text, Pressable, StyleProp, ViewStyle } from 'react-native';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography } from '../../theme/designTokens';
+import { Typography, Radius, Type } from '../../theme/designTokens';
 
 export interface NativeSegmentedControlOption<T extends string> {
   value: T;
@@ -54,7 +54,7 @@ function createStyles(colors: ThemeColors) {
   container: {
     flexDirection: 'row',
     backgroundColor: colors.surfaceAlt,
-    borderRadius: 10,
+    borderRadius: Radius.lg,
     padding: 3,
     gap: 2,
   },
@@ -62,7 +62,7 @@ function createStyles(colors: ThemeColors) {
     flex: 1,
     paddingVertical: 7,
     paddingHorizontal: 12,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -75,7 +75,7 @@ function createStyles(colors: ThemeColors) {
     elevation: 2,
   },
   optionText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
     color: colors.textSecondary,
   },

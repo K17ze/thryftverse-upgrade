@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { Space, Radius, Typography, Type } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useToast } from '../../context/ToastContext';
@@ -268,21 +268,21 @@ function createStyles(colors: ThemeColors) {
   },
   sectionTitle: {
     flex: 1,
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
   countBadge: {
     minWidth: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius: Radius.lg,
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 6,
   },
   countText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     color: colors.textMuted,
   },
@@ -299,7 +299,7 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
     backgroundColor: colors.surfaceAlt,
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: colors.textPrimary,
   },
@@ -317,15 +317,15 @@ function createStyles(colors: ThemeColors) {
   emptyWrap: {
     alignItems: 'center',
     paddingVertical: Space.lg,
-    gap: 6,
+    gap: Space.xs + 2,
   },
   emptyText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
   },
   emptySubtext: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },
@@ -346,28 +346,28 @@ function createStyles(colors: ThemeColors) {
   avatarPlaceholder: {
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: Radius.xl,
     backgroundColor: `${colors.brand}20`,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.brand,
   },
   qAsker: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
   qTime: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },
   qText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     lineHeight: 19,
     fontFamily: Typography.family.regular,
     color: colors.textPrimary,
@@ -382,17 +382,17 @@ function createStyles(colors: ThemeColors) {
   answerHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginBottom: 4,
+    gap: Space.xs,
+    marginBottom: Space.xs,
   },
   answerLabel: {
     flex: 1,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.success,
   },
   answerText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     lineHeight: 18,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
@@ -400,9 +400,9 @@ function createStyles(colors: ThemeColors) {
   answerBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    gap: Space.xs,
+    paddingVertical: Space.xs + 2,
+    paddingHorizontal: Space.md,
     borderRadius: Radius.sm,
     backgroundColor: `${colors.brand}10`,
     alignSelf: 'flex-start',
@@ -412,7 +412,7 @@ function createStyles(colors: ThemeColors) {
     transform: [{ scale: 0.97 }],
   },
   answerBtnText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: colors.brand,
   },
@@ -427,7 +427,7 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
     backgroundColor: colors.surfaceAlt,
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: colors.textPrimary,
   },
@@ -444,23 +444,23 @@ function createStyles(colors: ThemeColors) {
     opacity: 0.6,
   },
   cancelAnswerText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
   },
   postAnswerBtn: {
     paddingVertical: 6,
-    paddingHorizontal: 16,
+    paddingHorizontal: Space.md,
     borderRadius: Radius.sm,
     backgroundColor: colors.brand,
   },
   postAnswerText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: '#fff',
   },
   pendingAnswer: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     fontStyle: 'italic',

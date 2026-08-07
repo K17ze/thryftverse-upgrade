@@ -5,7 +5,7 @@ import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
@@ -21,7 +21,7 @@ import { useToast } from '../context/ToastContext';
 import { OrderHistoryRow } from '../components/trade';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { SkeletonLoader } from '../components/SkeletonLoader';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { parseApiError } from '../lib/apiClient';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -30,7 +30,7 @@ import { formatCoOwnIze } from '../utils/currency';
 import { CoOwnMarketHeader, CoOwnStateCanvas } from '../components/coown';
 import type { OrderStatus } from '../data/coOwnModels';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 type SideFilter = 'all' | 'buy' | 'sell';
 type DateFilter = 'all' | '24h' | '7d' | '30d';
@@ -392,7 +392,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   filterToolbar: {
-    minHeight: 54,
+    minHeight: Space.xxl + Space.xs + 2,
     paddingHorizontal: Space.md,
     flexDirection: 'row',
     alignItems: 'center',
@@ -406,8 +406,8 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
   },
   sideTab: {
-    minWidth: 54,
-    minHeight: 54,
+    minWidth: Space.xxl + Space.xs + 2,
+    minHeight: Space.xxl + Space.xs + 2,
     paddingHorizontal: Space.sm,
     alignItems: 'center',
     justifyContent: 'center',
@@ -424,20 +424,20 @@ const styles = StyleSheet.create({
   sideTabIndicator: {
     position: 'absolute',
     bottom: -StyleSheet.hairlineWidth,
-    width: 24,
-    height: 2,
-    borderRadius: 1,
+    width: Space.lg + 4,
+    height: Stroke.emphasis,
+    borderRadius: Stroke.hairline,
   },
   periodButton: {
-    minWidth: 106,
-    maxWidth: 148,
-    minHeight: 40,
+    minWidth: Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + 2,
+    maxWidth: Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + 12,
+    minHeight: Space.xl + Space.xs + 4,
     paddingHorizontal: Space.sm,
     borderRadius: Radius.md,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
   },
   periodButtonText: {
     flexShrink: 1,
@@ -455,6 +455,6 @@ const styles = StyleSheet.create({
   loadingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: Space.sm + 2,
   },
 });

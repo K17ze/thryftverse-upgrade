@@ -2,7 +2,7 @@ import React, { memo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography } from '../../theme/designTokens';
+import { Space, Typography, Radius, Type } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import {
   normaliseOrderStatus,
@@ -169,7 +169,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   thumbContainer: {
     width: THUMB_SIZE,
     height: THUMB_SIZE * 1.25,
-    borderRadius: 6,
+    borderRadius: Radius.md,
     overflow: 'hidden',
   },
   thumb: {
@@ -178,44 +178,44 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   content: {
     flex: 1,
-    gap: 3,
+    gap: Space.xs / 2 + 1,
   },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    marginBottom: 2,
+    gap: Space.xs + 1,
+    marginBottom: Space.xs / 2,
   },
   statusDot: {
     width: 6,
     height: 6,
-    borderRadius: 3,
+    borderRadius: Radius.sm,
   },
   statusText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: 0.3,
   },
   title: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
     lineHeight: 20,
   },
   total: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     marginTop: 1,
   },
   context: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     marginTop: 2,
   },
   tracking: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     marginTop: 1,
@@ -223,13 +223,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   progressRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: 6,
+    gap: Space.xs,
+    marginTop: Space.xs + 2,
   },
   progressDot: {
     width: 6,
     height: 6,
-    borderRadius: 3,
+    borderRadius: Radius.sm,
     backgroundColor: colors.border,
   },
   progressLine: {
@@ -238,10 +238,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.border,
   },
   progressLabel: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
     color: colors.textSecondary,
-    marginLeft: 4,
+    marginLeft: Space.xs,
   },
   chevron: {
     marginTop: 2,
@@ -249,11 +249,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   nextActionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
+    gap: Space.xs,
+    marginTop: Space.xs,
   },
   nextActionText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.brand,
   },

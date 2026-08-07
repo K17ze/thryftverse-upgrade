@@ -93,7 +93,7 @@ const styles = StyleSheet.create({
   notificationDot: {
     width: 6,
     height: 6,
-    borderRadius: 3,
+    borderRadius: Radius.sm,
     marginLeft: 2,
   },
 });

@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 
 export interface PriceInsightStripProps {
   /** Current listing price in fiat */
@@ -200,11 +200,11 @@ function createStyles(colors: ThemeColors) {
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
     marginBottom: Space.sm,
   },
   sectionTitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
     letterSpacing: 0.2,
@@ -227,12 +227,12 @@ function createStyles(colors: ThemeColors) {
     flex: 1,
   },
   rowLabel: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
   },
   rowValue: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     textAlign: 'right',
   },
@@ -242,7 +242,7 @@ function createStyles(colors: ThemeColors) {
   toggleTrack: {
     width: 36,
     height: 20,
-    borderRadius: 10,
+    borderRadius: Radius.lg,
     backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
     borderColor: colors.border,
@@ -256,7 +256,7 @@ function createStyles(colors: ThemeColors) {
   toggleThumb: {
     width: 14,
     height: 14,
-    borderRadius: 7,
+    borderRadius: Radius.md,
     backgroundColor: colors.textMuted,
     alignSelf: 'flex-start',
   },

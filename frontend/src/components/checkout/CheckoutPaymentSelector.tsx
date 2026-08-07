@@ -44,6 +44,7 @@ export function CheckoutPaymentSelector({
                 onSelect(method);
               }}
               disabled={isSelecting}
+              hitSlop={{ top: 4, bottom: 4, left: 8, right: 8 }}
               style={({ pressed }) => [
                 styles.row,
                 isSelected && styles.rowSelected,
@@ -105,6 +106,7 @@ export function CheckoutPaymentSelector({
           <Pressable
             onPress={onAddCard}
             disabled={isSelecting}
+            hitSlop={{ top: 4, bottom: 4, left: 8, right: 8 }}
             style={({ pressed }) => [styles.addCardRow, pressed && styles.addCardRowPressed]}
             accessibilityRole="button"
             accessibilityLabel="Add a new card"
@@ -143,17 +145,14 @@ const createStyles = (colors: any) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    minHeight: 44,
     paddingVertical: Space.md,
     paddingHorizontal: Space.md,
-    borderRadius: Radius.md,
-    marginBottom: Space.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
   },
   rowSelected: {
-    borderColor: colors.brand,
-    backgroundColor: `${colors.brand}08`,
+    backgroundColor: `${colors.brand}06`,
   },
   rowPressed: {
     opacity: 0.7,
@@ -176,7 +175,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     backgroundColor: `${colors.brand}15`,
   },
   walletIconText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontWeight: '700',
     color: colors.textPrimary,
   },
@@ -190,18 +189,18 @@ const createStyles = (colors: any) => StyleSheet.create({
     gap: 6,
   },
   methodLabel: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
   methodDetails: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
   },
   defaultBadge: {
     backgroundColor: `${colors.brand}12`,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     paddingHorizontal: 6,
     paddingVertical: 1,
   },
@@ -215,13 +214,10 @@ const createStyles = (colors: any) => StyleSheet.create({
   addCardRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    minHeight: 44,
     gap: Space.sm + 2,
     paddingVertical: Space.md,
     paddingHorizontal: Space.md,
-    borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    borderStyle: 'dashed',
     marginTop: Space.xs,
   },
   addCardRowPressed: {
@@ -237,7 +233,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
   addCardText: {
     flex: 1,
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
     color: colors.brand,
   },
@@ -251,7 +247,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     borderTopColor: colors.border,
   },
   trustText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
     letterSpacing: 0.2,

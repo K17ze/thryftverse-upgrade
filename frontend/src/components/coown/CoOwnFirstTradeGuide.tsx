@@ -280,7 +280,7 @@ const styles = StyleSheet.create({
   handle: {
     width: 36,
     height: 4,
-    borderRadius: 2,
+    borderRadius: Radius.sm,
     alignSelf: 'center',
     marginTop: Space.sm,
     marginBottom: Space.xs,
@@ -308,20 +308,20 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   title: {
-    fontSize: 17,
+    fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.3,
     marginBottom: 2,
   },
   subtitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     lineHeight: 17,
   },
   skipText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    marginTop: 4,
+    marginTop: Space.xs,
   },
   progressRow: {
     flexDirection: 'row',
@@ -333,11 +333,11 @@ const styles = StyleSheet.create({
   progressDot: {
     width: 6,
     height: 6,
-    borderRadius: 3,
+    borderRadius: Radius.sm,
   },
   progressDotActive: {
     width: 20,
-    borderRadius: 4,
+    borderRadius: Radius.sm,
   },
   scroll: {
     paddingHorizontal: Space.md,

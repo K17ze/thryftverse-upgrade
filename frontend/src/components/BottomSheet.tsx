@@ -6,21 +6,23 @@ import {
   Pressable,
   BackHandler,
 } from 'react-native';
-import { BlurView } from 'expo-blur';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   runOnJS,
+  withSpring,
   withTiming,
-  Easing,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useHaptic } from '../hooks/useHaptic';
-import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useMotionConfig } from '../hooks/useMotionConfig';
+import { Motion } from '../theme/motionTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
+import { LiquidGlassBackdrop } from './LiquidGlassBackdrop';
 
+import { Radius, Space } from '../theme/designTokens';
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface BottomSheetProps {
@@ -44,7 +46,7 @@ export function BottomSheet({
 }: BottomSheetProps) {
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
-  const reducedMotion = useReducedMotion();
+  const { spring, isEnabled } = useMotionConfig();
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const sheetHeight = SCREEN_HEIGHT * snapPoint;
@@ -53,29 +55,28 @@ export function BottomSheet({
   const contextY = useSharedValue(0);
 
   const open = useCallback(() => {
-    if (reducedMotion) {
-      translateY.value = 0;
-      backdropOpacity.value = 1;
-    } else {
-      // Timing-based open — clean, controlled, premium feel
-      translateY.value = withTiming(0, { duration: 320, easing: Easing.out(Easing.cubic) });
-      backdropOpacity.value = withTiming(1, { duration: 240 });
-    }
-  }, [translateY, backdropOpacity, reducedMotion]);
+    // Spring-based entrance — smooth, confident settle (Motion.spring.entrance).
+    // When reduced motion is on the spring is critically damped so the sheet
+    // appears instantly without visible travel.
+    translateY.value = withSpring(0, spring.entrance);
+    backdropOpacity.value = withTiming(1, {
+      duration: isEnabled ? Motion.duration.normal : 0,
+    });
+  }, [translateY, backdropOpacity, spring, isEnabled]);
 
   const close = useCallback(() => {
-    if (reducedMotion) {
-      translateY.value = sheetHeight;
-      backdropOpacity.value = 0;
-      runOnJS(onDismiss)();
-    } else {
-      // Timing-based dismiss — predictable duration for callback timing
-      translateY.value = withTiming(sheetHeight, { duration: 260, easing: Easing.in(Easing.cubic) });
-      backdropOpacity.value = withTiming(0, { duration: 200 });
-      const t = setTimeout(() => runOnJS(onDismiss)(), 260);
-      return () => clearTimeout(t);
-    }
-  }, [translateY, backdropOpacity, sheetHeight, onDismiss, reducedMotion]);
+    // Spring-based dismiss — the sheet settles down with the same entrance
+    // physics. onDismiss fires when the spring completes so the caller can
+    // unmount cleanly.
+    translateY.value = withSpring(sheetHeight, spring.entrance, (finished) => {
+      if (finished) {
+        runOnJS(onDismiss)();
+      }
+    });
+    backdropOpacity.value = withTiming(0, {
+      duration: isEnabled ? Motion.duration.normal : 0,
+    });
+  }, [translateY, backdropOpacity, sheetHeight, onDismiss, spring, isEnabled]);
 
   useEffect(() => {
     if (visible) {
@@ -97,12 +98,15 @@ export function BottomSheet({
 
   const panGesture = Gesture.Pan()
     .onStart(() => {
+      'worklet';
       contextY.value = translateY.value;
     })
     .onUpdate((e) => {
+      'worklet';
       translateY.value = Math.max(0, contextY.value + e.translationY);
     })
     .onEnd((e) => {
+      'worklet';
       const threshold = sheetHeight * 0.35;
       const shouldClose = translateY.value > threshold || e.velocityY > 600;
 
@@ -110,32 +114,44 @@ export function BottomSheet({
         runOnJS(haptic.medium)();
         runOnJS(close)();
       } else {
-        // Snap back to open with timing
-        translateY.value = withTiming(0, { duration: 200, easing: Easing.out(Easing.cubic) });
+        // Snap back to open with the entrance spring
+        translateY.value = withSpring(0, spring.entrance);
       }
     });
 
-  const sheetStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-  }));
+  const sheetStyle = useAnimatedStyle(() => {
+    'worklet';
+    return {
+      transform: [{ translateY: translateY.value }],
+    };
+  });
 
-  const backdropStyle = useAnimatedStyle(() => ({
-    opacity: backdropOpacity.value,
-    pointerEvents: backdropOpacity.value > 0.01 ? 'auto' : 'none',
-  }));
+  const backdropStyle = useAnimatedStyle(() => {
+    'worklet';
+    return {
+      opacity: backdropOpacity.value,
+      pointerEvents: backdropOpacity.value > 0.01 ? 'auto' : 'none',
+    };
+  });
 
   if (!visible) return null;
 
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+    <View style={StyleSheet.absoluteFill} pointerEvents="box-none" accessibilityViewIsModal={true}>
       {/* Backdrop with blur */}
       <Reanimated.View style={[styles.backdrop, backdropStyle]}>
-        <BlurView
+        <LiquidGlassBackdrop
           intensity={blurIntensity}
           tint={colors.background === '#FFFFFF' ? 'light' : 'dark'}
           style={StyleSheet.absoluteFill}
         />
-        <Pressable style={StyleSheet.absoluteFill} onPress={close} />
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={close}
+          accessibilityRole="button"
+          accessibilityLabel="Close sheet"
+          accessibilityHint="Dismisses this overlay"
+        />
       </Reanimated.View>
 
       {/* Sheet */}
@@ -150,8 +166,8 @@ export function BottomSheet({
             sheetStyle,
           ]}
         >
-          {/* Drag handle */}
-          <View style={styles.handleWrap}>
+          {/* Drag handle — visual only, hidden from screen readers */}
+          <View style={styles.handleWrap} accessible={false} importantForAccessibility="no-hide-descendants">
             <View style={styles.handle} />
           </View>
 
@@ -195,12 +211,12 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   handleWrap: {
     alignItems: 'center',
     paddingTop: 10,
-    paddingBottom: 8,
+    paddingBottom: Space.sm,
   },
   handle: {
     width: 40,
     height: 5,
-    borderRadius: 3,
+    borderRadius: Radius.sm,
     backgroundColor: colors.textMuted + '80',
   },
   contentWrap: {

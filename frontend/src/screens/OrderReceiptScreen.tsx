@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Typography } from '../theme/designTokens';
+import { Space, Typography, Radius, Type, Control, LetterSpacing } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
@@ -158,12 +158,12 @@ export default function OrderReceiptScreen() {
         <View style={styles.skeletonContainer}>
           {/* Receipt header skeleton */}
           <SkeletonLoader width={100} height={12} borderRadius={6} />
-          <SkeletonLoader width={140} height={20} borderRadius={10} style={{ marginTop: 8 }} />
+          <SkeletonLoader width={140} height={20} borderRadius={10} style={{ marginTop: Space.sm }} />
           <SkeletonLoader width="80%" height={14} borderRadius={7} style={{ marginTop: 6 }} />
           {/* Item row skeleton */}
           <View style={styles.skeletonItemRow}>
             <SkeletonLoader width={56} height={56} borderRadius={8} />
-            <View style={{ flex: 1, gap: 6 }}>
+            <View style={{ flex: 1, gap: Space.xs + 2 }}>
               <SkeletonLoader width="70%" height={14} borderRadius={7} />
               <SkeletonLoader width="40%" height={12} borderRadius={6} />
             </View>
@@ -403,8 +403,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   headerBtn: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -419,11 +419,11 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   headerTitle: {
-    fontSize: 17,
+    fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
   },
   headerSpacer: {
-    width: 44,
+    width: Control.hit,
   },
   headerRight: {
     flexDirection: 'row',
@@ -436,7 +436,7 @@ const styles = StyleSheet.create({
     gap: Space.md,
   },
   loadingText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
   },
   skeletonContainer: {
@@ -455,7 +455,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 4,
+    paddingVertical: Space.xs,
   },
   errorContainer: {
     flex: 1,
@@ -465,20 +465,20 @@ const styles = StyleSheet.create({
     gap: Space.md,
   },
   errorTitle: {
-    fontSize: 18,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.semibold,
     textAlign: 'center',
   },
   retryBtn: {
-    paddingVertical: 14,
+    paddingVertical: Space.md + 2,
     paddingHorizontal: Space.xl,
-    borderRadius: 10,
-    minHeight: 48,
+    borderRadius: Radius.lg,
+    minHeight: Space.xxl,
     alignItems: 'center',
     justifyContent: 'center',
   },
   retryBtnText: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.semibold,
   },
   scrollContent: {
@@ -488,27 +488,27 @@ const styles = StyleSheet.create({
   successHeader: {
     alignItems: 'center',
     paddingVertical: Space.lg,
-    gap: 6,
+    gap: Space.xs + 2,
   },
   successIconWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: Space.xxl + Space.xxl + Space.xs,
+    height: Space.xxl + Space.xxl + Space.xs,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 4,
+    marginBottom: Space.xs,
   },
   successTitle: {
-    fontSize: 18,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.bold,
-    letterSpacing: -0.3,
+    letterSpacing: Type.bodyLarge.letterSpacing,
   },
   successSubtitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
   },
   receiptCard: {
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     padding: Space.md,
   },
   receiptHeader: {
@@ -518,41 +518,41 @@ const styles = StyleSheet.create({
     marginBottom: Space.md,
   },
   receiptTitle: {
-    fontSize: 18,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.bold,
   },
   orderIdRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Space.xs,
   },
   orderIdLabel: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
   },
   receiptSection: {
-    gap: 8,
+    gap: Space.sm,
   },
   sectionLabel: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     textTransform: 'uppercase',
-    letterSpacing: 1.2,
-    marginBottom: 4,
+    letterSpacing: LetterSpacing.caps + 0.38,
+    marginBottom: Space.xs,
   },
   receiptRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 4,
-    gap: 12,
+    paddingVertical: Space.xs,
+    gap: Space.md,
   },
   receiptRowLabel: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
   },
   receiptRowValue: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
     textAlign: 'right',
     flex: 1,
@@ -568,58 +568,58 @@ const styles = StyleSheet.create({
     paddingTop: Space.xs,
   },
   totalLabel: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.bold,
   },
   totalValue: {
-    fontSize: 18,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.bold,
   },
   immutableNotice: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 6,
+    gap: Space.xs + 2,
   },
   immutableText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    lineHeight: 16,
+    lineHeight: Type.caption.lineHeight,
   },
   pendingNotice: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 6,
+    gap: Space.xs + 2,
     marginTop: Space.xs,
   },
   pendingText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    lineHeight: 16,
+    lineHeight: Type.caption.lineHeight,
   },
   nextStepsCard: {
     marginTop: Space.md,
     padding: Space.md,
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
   },
   nextStepsTitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     marginBottom: Space.sm,
-    letterSpacing: -0.2,
+    letterSpacing: Type.body.letterSpacing,
   },
   nextStepItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 4,
+    gap: Space.sm,
+    paddingVertical: Space.xs,
   },
   nextStepDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: Space.sm,
+    height: Space.sm,
+    borderRadius: Radius.sm,
   },
   nextStepDotActive: {
   },
@@ -627,27 +627,27 @@ const styles = StyleSheet.create({
   },
   nextStepText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    lineHeight: 16,
+    lineHeight: Type.caption.lineHeight,
   },
   nextStepTextMuted: {
     flex: 1,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    lineHeight: 16,
+    lineHeight: Type.caption.lineHeight,
   },
   viewDetailBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
+    gap: Space.xs,
     paddingVertical: Space.md,
     marginTop: Space.md,
-    minHeight: 48,
+    minHeight: Space.xxl,
   },
   viewDetailBtnText: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
   },
 });

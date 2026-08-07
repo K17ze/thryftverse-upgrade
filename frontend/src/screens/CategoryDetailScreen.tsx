@@ -18,7 +18,7 @@ import { EmptyState } from '../components/EmptyState';
 import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGrid';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { SkeletonLoader } from '../components/SkeletonLoader';
-import { Space, Typography } from '../theme/designTokens';
+import { Space, Typography, Type, Control, Stroke } from '../theme/designTokens';
 
 const normalize = (value?: string) =>
   (value ?? '').trim().toLocaleLowerCase().replace(/[^a-z0-9]+/g, '-');
@@ -71,19 +71,19 @@ export default function CategoryDetailScreen() {
           paddingHorizontal: Space.md,
           paddingTop: Space.xs,
           paddingBottom: Space.md,
-          gap: 4,
+          gap: Space.xs,
         },
         count: {
           color: colors.textPrimary,
           fontFamily: Typography.family.semibold,
-          fontSize: 14,
-          lineHeight: 20,
+          fontSize: Type.body.size,
+          lineHeight: Type.body.lineHeight,
         },
         summaryText: {
           color: colors.textSecondary,
           fontFamily: Typography.family.regular,
-          fontSize: 13,
-          lineHeight: 19,
+          fontSize: Type.captionElevated.size,
+          lineHeight: Type.captionElevated.lineHeight + 1,
         },
         categoryRail: {
           paddingHorizontal: Space.md,
@@ -91,15 +91,15 @@ export default function CategoryDetailScreen() {
           gap: Space.lg,
         },
         categoryAction: {
-          minHeight: 44,
+          minHeight: Control.hit,
           justifyContent: 'center',
-          borderBottomWidth: 1,
+          borderBottomWidth: Stroke.standard,
           borderBottomColor: colors.border,
         },
         categoryActionText: {
           color: colors.textPrimary,
           fontFamily: Typography.family.semibold,
-          fontSize: 14,
+          fontSize: Type.body.size,
         },
         grid: {
           paddingTop: Space.xs,
@@ -118,10 +118,10 @@ export default function CategoryDetailScreen() {
           marginTop: Space.sm,
         },
         skeletonMeta: {
-          marginTop: 6,
+          marginTop: Space.xs + 2,
         },
         emptyWrap: {
-          minHeight: 360,
+          minHeight: Space.xxl * 7 + Space.lg,
           justifyContent: 'center',
         },
       }),

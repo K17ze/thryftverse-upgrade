@@ -1,11 +1,12 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, RefreshControl } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke } from '../theme/designTokens';
 import { RootStackParamList } from '../navigation/types';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -18,7 +19,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useToast } from '../context/ToastContext';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'BundleBag'>;
 
 interface BundleTier {
@@ -205,12 +206,14 @@ export default function BundleBagScreen() {
           </View>
           </Reanimated.View>
 
-          <FlatList
+          <FlashList
             data={sellerListings}
             keyExtractor={(item) => item.id}
             renderItem={renderItem}
             contentContainerStyle={styles.list}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            // Performance: bundle bags can list many seller items; FlashList
+            // v2 handles recycling automatically.
           />
 
           {/* Sticky checkout footer */}
@@ -268,8 +271,8 @@ function createStyles(colors: ThemeColors) {
     gap: Space.md,
   },
   heroIcon: {
-    width: 40,
-    height: 40,
+    width: Space.xl + 8,
+    height: Space.xl + 8,
     borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
@@ -283,7 +286,7 @@ function createStyles(colors: ThemeColors) {
   heroSubtitle: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
   heroBadge: {
     paddingHorizontal: Space.sm,
@@ -312,11 +315,11 @@ function createStyles(colors: ThemeColors) {
   tierChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 14,
-    borderWidth: 1,
+    gap: Space.xs,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.xs + 1,
+    borderRadius: Radius.xl,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
@@ -325,7 +328,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: `${colors.brand}10`,
   },
   tierChipText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
   },
@@ -347,7 +350,7 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
     backgroundColor: colors.surface,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
   },
   itemRowSelected: {
@@ -355,10 +358,10 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: `${colors.brand}08`,
   },
   checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
+    width: Space.lg,
+    height: Space.lg,
+    borderRadius: Radius.lg,
+    borderWidth: Stroke.emphasis,
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
@@ -368,8 +371,8 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.brand,
   },
   itemImage: {
-    width: 56,
-    height: 56,
+    width: Space.xxl + Space.sm,
+    height: Space.xxl + Space.sm,
     borderRadius: Radius.md,
     backgroundColor: colors.surfaceAlt,
   },
@@ -379,7 +382,7 @@ function createStyles(colors: ThemeColors) {
   },
   itemInfo: {
     flex: 1,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   itemTitle: {
     fontSize: Type.body.size,
@@ -392,7 +395,7 @@ function createStyles(colors: ThemeColors) {
     color: colors.textPrimary,
   },
   itemMeta: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },
@@ -402,33 +405,33 @@ function createStyles(colors: ThemeColors) {
     left: 0,
     right: 0,
     backgroundColor: colors.surface,
-    borderTopWidth: 1,
+    borderTopWidth: Stroke.standard,
     borderTopColor: colors.border,
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
-    gap: 4,
+    gap: Space.xs,
   },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 2,
+    paddingVertical: Space.xs / 2,
   },
   summaryLabel: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
   },
   summaryValue: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
   totalRow: {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
-    marginTop: 4,
-    paddingTop: 8,
+    marginTop: Space.xs,
+    paddingTop: Space.sm,
   },
   totalLabel: {
     fontSize: Type.body.size,

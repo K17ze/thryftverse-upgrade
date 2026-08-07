@@ -10,12 +10,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Elevation } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Elevation, LetterSpacing, Stroke } from '../theme/designTokens';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -33,7 +33,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { uploadMedia } from '../services/mediaUpload';
 import { parseApiError } from '../lib/apiClient';
 
-type Props = StackScreenProps<RootStackParamList, 'OrderSupport'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'OrderSupport'>;
 
 interface SupportTopic {
   id: string;
@@ -441,7 +441,7 @@ function createStyles(colors: ThemeColors) {
   },
   sectionLabel: {
     marginLeft: Space.sm,
-    letterSpacing: 1.2,
+    letterSpacing: LetterSpacing.caps,
     marginBottom: Space.sm,
   },
   topicsCard: {
@@ -458,12 +458,12 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: `${colors.brand}08`,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: `${colors.brand}25`,
-    gap: 6,
+    gap: Space.xs + 2,
   },
   guidanceHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
   },
   guidanceTitle: {
     fontSize: Type.body.size,
@@ -474,17 +474,17 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
-    lineHeight: 17,
+    lineHeight: Type.caption.size + 5,
   },
   escrowNoticeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    marginTop: 2,
+    gap: Space.xs / 2 + 1,
+    marginTop: Space.xs / 2,
   },
   escrowNoticeText: {
     flex: 1,
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
     color: colors.success,
   },
@@ -492,7 +492,7 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm + 4,
-    paddingVertical: 12,
+    paddingVertical: Space.sm + 4,
     paddingHorizontal: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
@@ -501,8 +501,8 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.textPrimary,
   },
   topicIcon: {
-    width: 36,
-    height: 36,
+    width: Space.xl + 4,
+    height: Space.xl + 4,
     borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
@@ -519,7 +519,7 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.medium,
     color: colors.textPrimary,
     letterSpacing: Type.body.letterSpacing,
-    marginBottom: 2,
+    marginBottom: Space.xs / 2,
   },
   topicLabelActive: {
     color: colors.textInverse,
@@ -531,7 +531,7 @@ function createStyles(colors: ThemeColors) {
     ...Elevation.subtle,
   },
   textArea: {
-    minHeight: 120,
+    minHeight: Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + 4,
     textAlignVertical: 'top',
   },
   charCount: {
@@ -590,13 +590,13 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm,
   },
   orderThumb: {
-    width: 48,
-    height: 48,
+    width: Space.xl + Space.xl - 4,
+    height: Space.xl + Space.xl - 4,
     borderRadius: Radius.md,
   },
   orderInfo: {
     flex: 1,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   orderTitle: {
     fontSize: Type.body.size,
@@ -646,8 +646,8 @@ function createStyles(colors: ThemeColors) {
     position: 'relative',
   },
   evidenceThumb: {
-    width: 72,
-    height: 72,
+    width: Space.xl + Space.xl + Space.sm,
+    height: Space.xl + Space.xl + Space.sm,
     borderRadius: Radius.md,
   },
   evidenceRemoveBtn: {
@@ -662,9 +662,9 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.sm,
-    paddingVertical: 12,
+    paddingVertical: Space.sm + 4,
     borderRadius: Radius.md,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderStyle: 'dashed',
     borderColor: colors.border,
   },

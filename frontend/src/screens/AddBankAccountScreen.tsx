@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useStore } from '../store/useStore';
@@ -24,9 +24,9 @@ import { getUserCountryCapabilities, UserCountryCapabilities } from '../services
 import { parseApiError } from '../lib/apiClient';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, LetterSpacing } from '../theme/designTokens';
 
-type Props = StackScreenProps<RootStackParamList, 'AddBankAccount'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'AddBankAccount'>;
 
 export default function AddBankAccountScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
@@ -309,8 +309,8 @@ function createStyles(colors: ThemeColors) {
       gap: Space.md,
     },
     heroIcon: {
-      width: 40,
-      height: 40,
+      width: Space.xxl - Space.sm,
+      height: Space.xxl - Space.sm,
       borderRadius: Radius.full,
       justifyContent: 'center',
       alignItems: 'center',
@@ -324,12 +324,12 @@ function createStyles(colors: ThemeColors) {
     heroSubtitle: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
-      marginTop: 2,
+      marginTop: Space.xs / 2,
     },
     heroBadge: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 4,
+      gap: Space.xs,
       paddingHorizontal: Space.sm,
       paddingVertical: Space.xs,
       borderRadius: Radius.full,
@@ -349,7 +349,7 @@ function createStyles(colors: ThemeColors) {
     sectionLabel: {
       fontSize: Type.meta.size,
       fontFamily: Typography.family.semibold,
-      letterSpacing: 1.2,
+      letterSpacing: LetterSpacing.caps,
       textTransform: 'uppercase',
       marginBottom: Space.sm,
       marginLeft: Space.xs,

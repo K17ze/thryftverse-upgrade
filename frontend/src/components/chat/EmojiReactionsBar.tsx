@@ -2,7 +2,7 @@ import React from 'react';
 import { View, StyleSheet, ViewStyle } from 'react-native';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography , Space, Radius  } from '../../theme/designTokens';
+import { Typography , Space, Radius, Type } from '../../theme/designTokens';
 import { Caption } from '../ui/Text';
 
 export type EmojiReaction = {
@@ -162,14 +162,14 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: `${colors.brand}10`,
   },
   emoji: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
   },
   count: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
   },
   plus: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.semibold,
   },
   expandedDivider: {

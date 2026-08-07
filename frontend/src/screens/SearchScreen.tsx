@@ -16,19 +16,21 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useNavigation, useScrollToTop } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { RefreshIndicator } from '../components/RefreshIndicator';
 import { EmptyState } from '../components/EmptyState';
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { useBackendData } from '../context/BackendDataContext';
-import { Type , Typography, Space, Radius  } from '../theme/designTokens';
+import { Type, Typography, Space, Radius, Stroke, Control, LetterSpacing } from '../theme/designTokens';
 import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGrid';
+import { MasonrySkeleton } from '../components/skeletons/MasonrySkeleton';
 import PulseTab from '../components/explore/PulseTab';
 import LooksTab from '../components/explore/LooksTab';
 import EditTab from '../components/explore/EditTab';
+import { OfflineBanner } from '../components/OfflineBanner';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const EXPLORE_TABS = [
@@ -83,66 +85,66 @@ export default function SearchScreen() {
 
   // Header
   headerRow: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 12,
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
+    paddingBottom: Space.sm + Space.xs,
   },
   hugeTitle: {
     fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
-    letterSpacing: -0.5,
+    letterSpacing: LetterSpacing.tight,
   },
   itemCount: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
-    letterSpacing: 0.12,
+    letterSpacing: LetterSpacing.wide,
     color: colors.textSecondary,
   },
   headerStatusWrap: {
-    marginTop: 7,
+    marginTop: Space.xs + 3,
   },
   discoverBtn: {
-    marginTop: 8,
-    minHeight: 32,
+    marginTop: Space.sm,
+    minHeight: Control.chromeCompact,
     borderRadius: Radius.xl,
     borderWidth: 0,
     backgroundColor: colors.surfaceAlt,
     alignSelf: 'flex-end',
-    paddingHorizontal: 12,
+    paddingHorizontal: Space.sm + Space.xs,
   },
   discoverBtnIconWrap: {
-    width: 18,
-    height: 18,
+    width: Control.iconCompact,
+    height: Control.iconCompact,
     borderRadius: Radius.full,
     backgroundColor: 'transparent',
   },
   discoverBtnText: {
     color: colors.textInverse,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: 0.2,
+    letterSpacing: LetterSpacing.wide,
   },
 
   // Search
   searchRow: {
-    paddingHorizontal: 16,
-    paddingBottom: 10,
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.sm + 2,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: Space.sm + 2,
   },
   searchBar: {
     flex: 1,
-    minHeight: 46,
+    minHeight: Control.hit + 2,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: Space.sm + 2,
     backgroundColor: colors.background,
     borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: Stroke.hairline,
     borderColor: colors.border,
-    paddingHorizontal: 14,
+    paddingHorizontal: Space.sm + 6,
   },
   searchPlaceholder: {
     flex: 1,
@@ -150,36 +152,36 @@ export default function SearchScreen() {
     lineHeight: Type.body.lineHeight,
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    letterSpacing: 0.08,
+    letterSpacing: LetterSpacing.wide,
   },
   visualSearchButton: {
-    width: 46,
-    height: 46,
+    width: Control.hit + 2,
+    height: Control.hit + 2,
     borderRadius: Radius.md,
     backgroundColor: 'transparent',
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: Stroke.hairline,
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   exploreTabs: {
-    minHeight: 48,
-    marginBottom: 10,
-    paddingHorizontal: 8,
+    minHeight: Space.xxl,
+    marginBottom: Space.sm + 2,
+    paddingHorizontal: Space.sm,
     flexDirection: 'row',
     alignItems: 'stretch',
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: Stroke.hairline,
     borderBottomColor: colors.border,
   },
   exploreTab: {
     flex: 1,
     minWidth: 0,
-    minHeight: 48,
+    minHeight: Space.xxl,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
-    paddingHorizontal: 4,
+    paddingHorizontal: Space.sm,
   },
   exploreTabText: {
     fontSize: Type.captionElevated.size,
@@ -193,32 +195,32 @@ export default function SearchScreen() {
   },
   exploreTabIndicator: {
     position: 'absolute',
-    bottom: -StyleSheet.hairlineWidth,
-    width: 28,
-    height: 2,
+    bottom: -Stroke.hairline,
+    width: Space.xl,
+    height: Space.xs / 2,
     borderRadius: Radius.sm,
     backgroundColor: colors.textPrimary,
   },
 
   // Tabs
-  tabsContainer: { paddingHorizontal: 16, paddingBottom: 12 },
-  tabsWrapper: { flexDirection: 'row', backgroundColor: 'transparent', gap: 10 },
+  tabsContainer: { paddingHorizontal: Space.md, paddingBottom: Space.sm + Space.xs },
+  tabsWrapper: { flexDirection: 'row', backgroundColor: 'transparent', gap: Space.sm + 2 },
   tab: {
     flex: 1,
     borderRadius: Radius.xxl,
-    minHeight: 40,
+    minHeight: Space.xl + Space.sm,
     borderWidth: 0,
     backgroundColor: colors.surface,
-    paddingHorizontal: 12,
+    paddingHorizontal: Space.sm + Space.xs,
   },
   activeTab: { backgroundColor: colors.textPrimary },
   tabIconWrap: {
-    width: 16,
-    height: 16,
+    width: Space.md,
+    height: Space.md,
     borderRadius: Radius.md,
     backgroundColor: 'transparent',
   },
-  tabText: { fontSize: 13, fontFamily: Typography.family.semibold, color: colors.textMuted, letterSpacing: 0.2 },
+  tabText: { fontSize: Type.captionElevated.size, fontFamily: Typography.family.semibold, color: colors.textMuted, letterSpacing: LetterSpacing.wide },
   activeTabText: { color: colors.textPrimary },
   tabCountWrap: {
     width: 'auto',
@@ -229,16 +231,16 @@ export default function SearchScreen() {
     paddingVertical: 0,
   },
   tabCount: {
-    marginLeft: 6,
-    minWidth: 20,
+    marginLeft: Space.xs + 2,
+    minWidth: Space.lg - Space.xs,
     textAlign: 'center',
     borderRadius: Radius.lg,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: Space.xs + 2,
+    paddingVertical: Space.xs / 2,
     overflow: 'hidden',
     backgroundColor: colors.surfaceAlt,
     color: colors.textSecondary,
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
   },
   tabCountActive: {
@@ -246,24 +248,24 @@ export default function SearchScreen() {
     color: colors.textInverse,
   },
   syncRetryBanner: {
-    marginHorizontal: 16,
-    marginBottom: 12,
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm + Space.xs,
   },
 
   // Lists
-  listContent: { paddingHorizontal: 16, paddingBottom: 120 },
-  gridContent: { paddingBottom: 120 },
+  listContent: { paddingHorizontal: Space.md, paddingBottom: Space.xxl * 2 + Space.lg },
+  gridContent: { paddingBottom: Space.xxl * 2 + Space.lg },
   gridRow: { justifyContent: 'space-between' },
   wishlistLoadingGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingBottom: 120,
-    rowGap: 12,
+    paddingHorizontal: Space.sm + Space.xs,
+    paddingBottom: Space.xxl * 2 + Space.lg,
+    rowGap: Space.sm + Space.xs,
   },
   wishlistLoadingCard: {
-    width: (SCREEN_WIDTH - 32) / 2,
+    width: (SCREEN_WIDTH - Space.xl) / 2,
     borderRadius: Radius.xl,
     borderWidth: 0,
     borderColor: 'transparent',
@@ -271,56 +273,56 @@ export default function SearchScreen() {
     overflow: 'hidden',
   },
   wishlistLoadingBody: {
-    paddingHorizontal: 10,
-    paddingVertical: 10,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.sm + 2,
   },
 
   emptyFooter: {
     alignItems: 'center',
-    paddingVertical: 24,
+    paddingVertical: Space.lg,
   },
   footerHint: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     textAlign: 'center',
-    letterSpacing: 0.1,
+    letterSpacing: LetterSpacing.wide,
   },
   closetShortcut: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginHorizontal: 16,
-    marginBottom: 16,
-    padding: 14,
+    marginHorizontal: Space.md,
+    marginBottom: Space.md,
+    padding: Space.md,
     borderRadius: Radius.lg,
     backgroundColor: colors.surface,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
   },
   closetShortcutLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: Space.sm + Space.xs,
   },
   closetShortcutIcon: {
-    width: 40,
-    height: 40,
+    width: Space.xxl - Space.sm,
+    height: Space.xxl - Space.sm,
     borderRadius: Radius.lg,
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
   closetShortcutTitle: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
   closetShortcutSub: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
   }), [colors]);
 
@@ -413,6 +415,8 @@ export default function SearchScreen() {
             />
           }
         >
+          <OfflineBanner onRetry={() => void handleRefresh()} />
+
           <View style={styles.exploreTabs} accessibilityRole="tablist">
             {EXPLORE_TABS.map((tab) => {
               const selected = activeTab === tab.value;
@@ -435,8 +439,18 @@ export default function SearchScreen() {
             })}
           </View>
 
-          {/* Error state when sync failed and no cached listings */}
-          {lastError && listings.length === 0 && !isSyncing ? (
+          {/* Loading skeleton during initial sync (no cached listings yet) */}
+          {isSyncing && listings.length === 0 && !lastError ? (
+            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+              {activeTab === 'discover' ? (
+                <MasonrySkeleton itemCount={6} />
+              ) : (
+                <View style={styles.listContent}>
+                  <MasonrySkeleton itemCount={4} horizontalPadding={0} />
+                </View>
+              )}
+            </Reanimated.View>
+          ) : lastError && listings.length === 0 && !isSyncing ? (
             <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400)}>
               <EmptyState
                 density="compact"

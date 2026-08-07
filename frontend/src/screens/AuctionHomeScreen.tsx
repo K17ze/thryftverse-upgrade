@@ -14,7 +14,7 @@ import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
@@ -36,7 +36,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { HorizontalRail } from '../components/HorizontalRail';
 import { EmptyState } from '../components/EmptyState';
 import { haptics } from '../utils/haptics';
-import { Space, Radius, Typography } from '../theme/designTokens';
+import { Space, Radius, Typography, Type, Stroke, Control, LetterSpacing } from '../theme/designTokens';
 import { toIze, formatIzeAmount, formatFiatAmount } from '../utils/currency';
 import { BottomSheet } from '../components/BottomSheet';
 import {
@@ -62,7 +62,7 @@ import {
   type SellerSummary,
 } from '../services/marketApi';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 type MarketSegment = 'live' | 'endingSoon' | 'upcoming' | 'watching';
 
@@ -640,6 +640,36 @@ export default function AuctionHomeScreen() {
     setFilterSort('endingSoon');
   }, []);
 
+  // ── Primary filter pills (Live / Upcoming / Ended) ──
+  // These are the prominent top-level filter mechanism. The segment rail
+  // below remains as a secondary refinement within the home composition.
+  const primaryFilterLiveActive = !isFiltering && activeSegment === 'live';
+  const primaryFilterUpcomingActive = !isFiltering && activeSegment === 'upcoming';
+  const primaryFilterEndedActive = isFiltering && filterStatus === 'ended';
+
+  const handlePrimaryFilterLive = useCallback(() => {
+    haptics.selection();
+    if (isFiltering) {
+      clearAllFilters();
+    }
+    setActiveSegment('live');
+  }, [isFiltering, clearAllFilters]);
+
+  const handlePrimaryFilterUpcoming = useCallback(() => {
+    haptics.selection();
+    if (isFiltering) {
+      clearAllFilters();
+    }
+    setActiveSegment('upcoming');
+  }, [isFiltering, clearAllFilters]);
+
+  const handlePrimaryFilterEnded = useCallback(() => {
+    haptics.selection();
+    setFilterStatus('ended');
+    setFilterSort('endingSoon');
+    setFilterCategory(null);
+  }, []);
+
   // ── 1ZE + local semantic display ──
   const formatDualPrice = useCallback((amountGbp: number): DualPriceResult => {
     const izeAmount = toIze(amountGbp, 'GBP', goldRates);
@@ -733,7 +763,7 @@ export default function AuctionHomeScreen() {
   const activeFilterChips = useMemo(() => {
     const chips: string[] = [];
     if (filterStatus !== 'all') {
-      chips.push(filterStatus === 'live' ? 'Live' : filterStatus === 'scheduled' ? 'Scheduled' : 'Ended');
+      chips.push(filterStatus === 'live' ? 'Live' : filterStatus === 'scheduled' ? 'Upcoming' : 'Ended');
     }
     if (filterSort !== 'endingSoon') {
       chips.push(
@@ -982,7 +1012,7 @@ export default function AuctionHomeScreen() {
               />
             }
             onEndReached={loadMoreSearch}
-            onEndReachedThreshold={0.5}
+            onEndReachedThreshold={0.25}
           />
         ) : (
           <View style={styles.searchIdleContainer}>
@@ -1065,7 +1095,7 @@ export default function AuctionHomeScreen() {
               />
             }
             onEndReached={loadMoreFilters}
-            onEndReachedThreshold={0.5}
+            onEndReachedThreshold={0.25}
           />
         )}
 
@@ -1824,6 +1854,62 @@ export default function AuctionHomeScreen() {
         compactContext={compactHeaderContext}
         actions={headerActions}
       />
+      {/* Primary filter pills — prominent Live / Upcoming / Ended navigation */}
+      <View style={styles.primaryFilterBar}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.primaryFilterContent}
+        >
+          <Pressable
+            style={[
+              styles.primaryPill,
+              primaryFilterLiveActive && styles.primaryPillActive,
+            ]}
+            onPress={handlePrimaryFilterLive}
+            accessibilityRole="button"
+            accessibilityLabel="Filter live auctions"
+            accessibilityState={{ selected: primaryFilterLiveActive }}
+          >
+            <View style={[styles.primaryPillDot, { backgroundColor: primaryFilterLiveActive ? colors.textInverse : colors.danger }]} />
+            <Text style={[styles.primaryPillText, primaryFilterLiveActive && styles.primaryPillTextActive]}>Live</Text>
+          </Pressable>
+          <Pressable
+            style={[
+              styles.primaryPill,
+              primaryFilterUpcomingActive && styles.primaryPillActive,
+            ]}
+            onPress={handlePrimaryFilterUpcoming}
+            accessibilityRole="button"
+            accessibilityLabel="Filter upcoming auctions"
+            accessibilityState={{ selected: primaryFilterUpcomingActive }}
+          >
+            <Ionicons
+              name="time-outline"
+              size={15}
+              color={primaryFilterUpcomingActive ? colors.textInverse : colors.textSecondary}
+            />
+            <Text style={[styles.primaryPillText, primaryFilterUpcomingActive && styles.primaryPillTextActive]}>Upcoming</Text>
+          </Pressable>
+          <Pressable
+            style={[
+              styles.primaryPill,
+              primaryFilterEndedActive && styles.primaryPillActive,
+            ]}
+            onPress={handlePrimaryFilterEnded}
+            accessibilityRole="button"
+            accessibilityLabel="Filter ended auctions"
+            accessibilityState={{ selected: primaryFilterEndedActive }}
+          >
+            <Ionicons
+              name="checkmark-circle-outline"
+              size={15}
+              color={primaryFilterEndedActive ? colors.textInverse : colors.textSecondary}
+            />
+            <Text style={[styles.primaryPillText, primaryFilterEndedActive && styles.primaryPillTextActive]}>Ended</Text>
+          </Pressable>
+        </ScrollView>
+      </View>
       <ScrollView
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
@@ -1991,7 +2077,7 @@ const FilterSheet = memo(function FilterSheet({
               onPress={() => { haptics.tap(); setDraftStatus(opt); }}
             >
               <Text style={[styles.filterOptionText, draftStatus === opt && styles.filterOptionTextActive]}>
-                {opt === 'all' ? 'All' : opt === 'live' ? 'Live' : opt === 'scheduled' ? 'Scheduled' : 'Ended'}
+                {opt === 'all' ? 'All' : opt === 'live' ? 'Live' : opt === 'scheduled' ? 'Upcoming' : 'Ended'}
               </Text>
             </Pressable>
           ))}
@@ -2070,6 +2156,46 @@ function createStyles(colors: ThemeColors) {
     paddingBottom: Space.xxl + 24,
   },
 
+  // ── Primary filter pills (Live / Upcoming / Ended) ──
+  primaryFilterBar: {
+    paddingVertical: Space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  primaryFilterContent: {
+    paddingHorizontal: Space.md,
+    gap: Space.sm,
+    alignItems: 'center',
+  },
+  primaryPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.full,
+    backgroundColor: colors.surfaceAlt,
+    minHeight: 36,
+  },
+  primaryPillActive: {
+    backgroundColor: colors.brand,
+  },
+  primaryPillDot: {
+    width: Space.sm,
+    height: Space.sm,
+    borderRadius: Radius.full,
+  },
+  primaryPillText: {
+    fontSize: Type.bodyEmphasis.size,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
+  },
+  primaryPillTextActive: {
+    color: colors.textInverse,
+  },
+
   // ── Zone wrapper ──
   zoneWrap: {
     paddingHorizontal: Space.md,
@@ -2078,10 +2204,10 @@ function createStyles(colors: ThemeColors) {
 
   // ── Section title (no subtitle) ──
   sectionTitle: {
-    fontSize: 18,
-    lineHeight: 24,
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
     fontWeight: '700',
-    letterSpacing: -0.4,
+    letterSpacing: Type.subtitle.letterSpacing,
     color: colors.textPrimary,
     fontFamily: Typography.family.bold,
     marginBottom: Space.md,
@@ -2107,17 +2233,17 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.md,
   },
   railTitle: {
-    fontSize: 18,
+    fontSize: Type.subtitle.size,
     fontWeight: '700',
     color: colors.textPrimary,
     fontFamily: Typography.family.bold,
-    letterSpacing: -0.4,
+    letterSpacing: Type.subtitle.letterSpacing,
   },
   railCount: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     color: colors.textMuted,
     fontFamily: Typography.family.medium,
-    letterSpacing: 0.2,
+    letterSpacing: LetterSpacing.wide + 0.08,
   },
   railContent: {
     paddingHorizontal: Space.md,
@@ -2135,7 +2261,7 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
   },
   compositionEmptyText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
   },
@@ -2173,38 +2299,38 @@ function createStyles(colors: ThemeColors) {
     borderBottomColor: colors.border,
   },
   endingSoonImageWrap: {
-    width: 72,
-    height: 72,
+    width: Space.xxl + Space.xxl + Space.xs,
+    height: Space.xxl + Space.xxl + Space.xs,
     borderRadius: Radius.md,
     overflow: 'hidden',
   },
   endingSoonImage: {
-    width: 72,
-    height: 72,
+    width: Space.xxl + Space.xxl + Space.xs,
+    height: Space.xxl + Space.xxl + Space.xs,
   },
   endingSoonBody: {
     flex: 1,
   },
   endingSoonTitle: {
-    fontSize: 14,
-    lineHeight: 18,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.size + 4,
     fontWeight: '600',
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    letterSpacing: -0.2,
-    marginBottom: 3,
+    letterSpacing: Type.body.letterSpacing,
+    marginBottom: Space.xs / 2 + 1,
   },
   endingSoonPrice: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontWeight: '700',
     color: colors.textPrimary,
     fontFamily: Typography.family.bold,
     fontVariant: ['tabular-nums'],
-    letterSpacing: -0.3,
-    marginBottom: 2,
+    letterSpacing: Type.priceList.letterSpacing,
+    marginBottom: Space.xs / 2,
   },
   endingSoonBids: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
   },
@@ -2212,18 +2338,18 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'flex-end',
   },
   endingSoonTime: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontWeight: '700',
     color: colors.textSecondary,
     fontFamily: Typography.family.bold,
     fontVariant: ['tabular-nums'],
   },
   urgencyBar: {
-    width: 24,
-    height: 2,
-    borderRadius: 1,
+    width: Space.lg + 4,
+    height: Stroke.emphasis,
+    borderRadius: Radius.full,
     backgroundColor: colors.danger,
-    marginTop: 4,
+    marginTop: Space.xs,
   },
 
   // ── Horizontal rail ──
@@ -2236,7 +2362,7 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm,
   },
   categoryTile: {
-    height: 148,
+    height: Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl - 20,
     borderRadius: Radius.lg,
     overflow: 'hidden',
     backgroundColor: colors.surfaceAlt,
@@ -2250,11 +2376,11 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.md,
   },
   categoryTileName: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontWeight: '700',
     color: colors.textInverse,
     fontFamily: Typography.family.bold,
-    letterSpacing: -0.1,
+    letterSpacing: LetterSpacing.normal - 0.1,
   },
 
   // ── Upcoming rows ──
@@ -2270,45 +2396,45 @@ function createStyles(colors: ThemeColors) {
     borderBottomColor: colors.border,
   },
   upcomingImageWrap: {
-    width: 72,
-    height: 72,
+    width: Space.xxl + Space.xxl + Space.xs,
+    height: Space.xxl + Space.xxl + Space.xs,
     borderRadius: Radius.md,
     overflow: 'hidden',
   },
   upcomingImage: {
-    width: 72,
-    height: 72,
+    width: Space.xxl + Space.xxl + Space.xs,
+    height: Space.xxl + Space.xxl + Space.xs,
   },
   upcomingBody: {
     flex: 1,
-    gap: 1,
+    gap: Space.xs / 4,
   },
   upcomingDate: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontWeight: '600',
-    letterSpacing: 0.2,
+    letterSpacing: LetterSpacing.wide + 0.08,
     color: colors.textSecondary,
     fontFamily: Typography.family.semibold,
-    marginBottom: 2,
+    marginBottom: Space.xs / 2,
   },
   upcomingEyebrow: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     color: colors.textMuted,
     fontFamily: Typography.family.medium,
-    marginBottom: 1,
-    letterSpacing: 0.1,
+    marginBottom: Space.xs / 4,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   upcomingTitle: {
-    fontSize: 14,
-    lineHeight: 18,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.size + 4,
     fontWeight: '600',
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    letterSpacing: -0.2,
+    letterSpacing: Type.body.letterSpacing,
   },
   upcomingNotify: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2326,44 +2452,44 @@ function createStyles(colors: ThemeColors) {
     borderBottomColor: colors.border,
   },
   resultImageWrap: {
-    width: 60,
-    height: 60,
+    width: Space.xxl + Space.xl + Space.xl - 4,
+    height: Space.xxl + Space.xl + Space.xl - 4,
     borderRadius: Radius.md,
     overflow: 'hidden',
     backgroundColor: colors.surface,
   },
   resultImage: {
-    width: 60,
-    height: 60,
+    width: Space.xxl + Space.xl + Space.xl - 4,
+    height: Space.xxl + Space.xl + Space.xl - 4,
   },
   resultBody: {
     flex: 1,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   resultTitle: {
-    fontSize: 14,
-    lineHeight: 18,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.size + 4,
     fontWeight: '600',
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    letterSpacing: -0.2,
+    letterSpacing: Type.body.letterSpacing,
   },
   resultOutcome: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontWeight: '500',
     fontFamily: Typography.family.medium,
-    letterSpacing: 0.1,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   resultActionWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    gap: Space.xs / 2,
   },
   resultActionLabel: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
-    letterSpacing: 0.1,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
 
   // ── Empty market ──
@@ -2392,8 +2518,8 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
     borderRadius: Radius.md,
     paddingHorizontal: Space.md,
-    paddingVertical: 10,
-    fontSize: 15,
+    paddingVertical: Space.sm + 2,
+    fontSize: Type.bodyEmphasis.size,
     color: colors.textPrimary,
     fontFamily: Typography.family.medium,
     backgroundColor: colors.surfaceAlt,
@@ -2405,7 +2531,7 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.xl,
   },
   searchIdleHint: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
     textAlign: 'center',
@@ -2428,23 +2554,23 @@ function createStyles(colors: ThemeColors) {
     flex: 1,
   },
   filterResultTitle: {
-    fontSize: 17,
+    fontSize: Type.subtitle.size,
     fontWeight: '700',
     color: colors.textPrimary,
     fontFamily: Typography.family.bold,
   },
   filterResultCount: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     color: colors.textSecondary,
     fontFamily: Typography.family.regular,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
   filterChipsRow: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
   },
   filterChip: {
-    paddingVertical: 5,
+    paddingVertical: Space.xs + 1,
     paddingHorizontal: Space.md,
     borderRadius: Radius.full,
     backgroundColor: colors.surface,
@@ -2453,18 +2579,18 @@ function createStyles(colors: ThemeColors) {
     marginRight: Space.xs,
   },
   filterChipText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     color: colors.textPrimary,
     fontFamily: Typography.family.medium,
-    letterSpacing: 0.1,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   filterChipClear: {
-    paddingVertical: 4,
+    paddingVertical: Space.xs,
     paddingHorizontal: Space.sm,
     marginRight: Space.xs,
   },
   filterChipClearText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     color: colors.danger,
     fontFamily: Typography.family.medium,
   },
@@ -2474,16 +2600,16 @@ function createStyles(colors: ThemeColors) {
     padding: Space.lg,
   },
   filterSheetTitle: {
-    fontSize: 20,
+    fontSize: Type.priceList.size,
     fontWeight: '700',
     color: colors.textPrimary,
     fontFamily: Typography.family.bold,
     marginBottom: Space.lg,
   },
   filterSectionLabel: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontWeight: '600',
-    letterSpacing: 0.2,
+    letterSpacing: LetterSpacing.wide + 0.08,
     color: colors.textSecondary,
     fontFamily: Typography.family.semibold,
     marginBottom: Space.sm,
@@ -2498,11 +2624,11 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
   },
   filterOption: {
-    paddingVertical: 8,
+    paddingVertical: Space.sm,
     paddingHorizontal: Space.md,
     borderRadius: Radius.full,
     backgroundColor: colors.surface,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     marginRight: Space.sm,
   },
@@ -2514,7 +2640,7 @@ function createStyles(colors: ThemeColors) {
     opacity: 0.7,
   },
   filterOptionText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     color: colors.textPrimary,
     fontFamily: Typography.family.medium,
   },
@@ -2527,14 +2653,14 @@ function createStyles(colors: ThemeColors) {
     marginTop: Space.xl,
   },
   filterResetBtn: {
-    paddingVertical: 10,
+    paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.lg,
     borderRadius: Radius.md,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
   },
   filterResetText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     color: colors.textSecondary,
     fontFamily: Typography.family.medium,
   },
@@ -2547,7 +2673,7 @@ function createStyles(colors: ThemeColors) {
     marginLeft: Space.md,
   },
   filterApplyText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     color: colors.textInverse,
     fontFamily: Typography.family.semibold,
   },

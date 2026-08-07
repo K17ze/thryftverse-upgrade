@@ -6,7 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
@@ -140,7 +140,7 @@ function createStyles(colors: ThemeColors) {
   hotspotDot: {
     width: 10,
     height: 10,
-    borderRadius: 5,
+    borderRadius: Radius.sm,
     backgroundColor: 'rgba(255,255,255,0.9)',
     borderWidth: 2,
     borderColor: 'rgba(0,0,0,0.3)',
@@ -155,7 +155,7 @@ function createStyles(colors: ThemeColors) {
   },
   coverTitle: {
     fontFamily: Typography.family.bold,
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     color: '#fff',
     textShadowColor: 'rgba(0,0,0,0.4)',
     textShadowOffset: { width: 0, height: 1 },
@@ -165,11 +165,11 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 4,
+    marginTop: Space.xs,
   },
   creatorName: {
     fontFamily: Typography.family.medium,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     color: 'rgba(255,255,255,0.85)',
     textShadowColor: 'rgba(0,0,0,0.3)',
     textShadowOffset: { width: 0, height: 1 },
@@ -191,7 +191,7 @@ function createStyles(colors: ThemeColors) {
   },
   actionText: {
     fontFamily: Typography.family.medium,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     color: colors.textSecondary,
   },
   });

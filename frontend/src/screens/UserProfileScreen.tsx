@@ -1,4 +1,4 @@
-﻿import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { FlashList } from '@shopify/flash-list';
 import * as Clipboard from 'expo-clipboard';
 import Reanimated, {
@@ -28,7 +28,7 @@ import Reanimated, {
 import { useStore } from '../store/useStore';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { Space, Typography, DockConstants, Elevation, Radius } from '../theme/designTokens';
+import { Space, Typography, DockConstants, Elevation, Radius, Type, Control, LetterSpacing } from '../theme/designTokens';
 import {
   type PublicProfileStats,
   type PublicProfileViewer,
@@ -63,10 +63,11 @@ import { SellerResponseComposer } from '../components/profile/SellerResponseComp
 import { respondToReview } from '../services/reviewApi';
 import { ProfileMoreSheet, ProfileReportSheet, ProfileBlockConfirmSheet } from '../components/profile/ProfileSheets';
 import { PublicProfileConnectionsSheet } from '../components/profile/PublicProfileConnectionsSheet';
+import { SellerReputationCard } from '../components/seller/SellerReputationCard';
 
 const AnimatedFlashList: any = Reanimated.createAnimatedComponent(FlashList);
 
-type Props = StackScreenProps<RootStackParamList, 'UserProfile'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'UserProfile'>;
 
 const COVER_HEIGHT = 160;
 const GRID_GAP = 8;
@@ -482,6 +483,9 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         </View>
       ) : null}
 
+      {/* Seller reputation metrics — prominent trust display */}
+      <SellerReputationCard seller={sellerTrust ?? null} />
+
       {/* Tab rail â€” measures Y for sticky threshold */}
       <View onLayout={(e) => onTabRailLayout(e.nativeEvent.layout.y)}>
         <TabRail
@@ -850,32 +854,32 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   coverActionLayer: { position: 'absolute', top: 0, left: 0, right: 0, height: COVER_HEIGHT, zIndex: 8 },
   topUtilityRow: { position: 'absolute', left: 12, right: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  topUtilityRight: { flexDirection: 'row', gap: 8 },
+  topUtilityRight: { flexDirection: 'row', gap: Space.sm },
   topUtilityIconBtn: {
-    width: 44, height: 44, borderRadius: Radius.lg,
+    width: Control.hit, height: Control.hit, borderRadius: Radius.lg,
     backgroundColor: 'rgba(0,0,0,0.22)',
     alignItems: 'center', justifyContent: 'center',
   },
   collapsedHeader: {
     position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 8, height: COLLAPSED_BAR_HEIGHT,
+    paddingHorizontal: Space.sm, height: COLLAPSED_BAR_HEIGHT,
     borderBottomWidth: StyleSheet.hairlineWidth,
     ...Elevation.card,
   },
-  collapsedBackBtn: { width: 44, height: 44, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
-  collapsedCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4 },
-  collapsedAvatar: { width: 28, height: 28, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
+  collapsedBackBtn: { width: Control.hit, height: Control.hit, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
+  collapsedCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.xs },
+  collapsedAvatar: { width: Space.lg + Space.xs, height: Space.lg + Space.xs, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
   collapsedAvatarMonogram: {},
-  collapsedAvatarInitials: { fontSize: 12, fontFamily: Typography.family.bold },
-  collapsedTitle: { fontSize: 16, fontFamily: Typography.family.semibold, letterSpacing: -0.3, flexShrink: 1 },
-  collapsedRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  collapsedFollowBtn: { height: 44, paddingHorizontal: 18, borderRadius: Radius.lg, alignItems: 'center', justifyContent: 'center' },
+  collapsedAvatarInitials: { fontSize: Type.caption.size, fontFamily: Typography.family.bold },
+  collapsedTitle: { fontSize: Type.bodyLarge.size, fontFamily: Typography.family.semibold, letterSpacing: Type.bodyLarge.letterSpacing - 0.1, flexShrink: 1 },
+  collapsedRight: { flexDirection: 'row', alignItems: 'center', gap: Space.xs + 2 },
+  collapsedFollowBtn: { height: Control.hit, paddingHorizontal: Space.md + 2, borderRadius: Radius.lg, alignItems: 'center', justifyContent: 'center' },
   collapsedFollowingBtn: { borderWidth: StyleSheet.hairlineWidth },
   collapsedFollowActiveBtn: {},
-  collapsedFollowText: { fontSize: 13, fontFamily: Typography.family.semibold },
+  collapsedFollowText: { fontSize: Type.captionElevated.size, fontFamily: Typography.family.semibold },
   collapsedFollowActiveText: {},
-  collapsedIconBtn: { width: 44, height: 44, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
+  collapsedIconBtn: { width: Control.hit, height: Control.hit, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
   stickyRailWrap: {
     position: 'absolute', left: 0, right: 0, zIndex: 9,
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -885,7 +889,7 @@ const styles = StyleSheet.create({
   awayBanner: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 10,
+    gap: Space.sm + 2,
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
     paddingHorizontal: Space.md,
@@ -895,16 +899,16 @@ const styles = StyleSheet.create({
   },
   awayBannerTextWrap: {
     flex: 1,
-    gap: 2,
+    gap: Space.xs - 2,
   },
   awayBannerTitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
   },
   awayBannerSub: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    lineHeight: 17,
+    lineHeight: Type.caption.lineHeight + 1,
   },
   shopPoliciesSection: {
     paddingHorizontal: Space.md,
@@ -912,10 +916,10 @@ const styles = StyleSheet.create({
     paddingBottom: Space.sm,
   },
   shopPoliciesTitle: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     textTransform: 'uppercase',
-    letterSpacing: 0.7,
+    letterSpacing: LetterSpacing.caps - 0.12,
     marginBottom: Space.xs,
   },
   shopPoliciesGrid: {
@@ -926,13 +930,13 @@ const styles = StyleSheet.create({
   shopPolicyItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    gap: Space.xs + 1,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.xs + 1,
     borderRadius: Radius.md,
   },
   shopPolicyText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
   },
   featuredSection: {
@@ -942,27 +946,27 @@ const styles = StyleSheet.create({
   featuredHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: Space.xs + 1,
     paddingHorizontal: Space.md,
     marginBottom: Space.xs,
   },
   featuredTitle: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     textTransform: 'uppercase',
-    letterSpacing: 0.7,
+    letterSpacing: LetterSpacing.caps - 0.12,
   },
   featuredScroll: {
     paddingHorizontal: Space.md,
     gap: Space.sm,
   },
   featuredCard: {
-    width: 100,
-    gap: 4,
+    width: Space.xxl + Space.xxl + Space.xs,
+    gap: Space.xs,
   },
   featuredImage: {
-    width: 100,
-    height: 120,
+    width: Space.xxl + Space.xxl + Space.xs,
+    height: Space.xxl + Space.xxl + Space.lg,
     borderRadius: Radius.md,
   },
   featuredImagePlaceholder: {
@@ -970,12 +974,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   featuredPrice: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
   },
   listState: { alignItems: 'center', justifyContent: 'center', paddingVertical: Space.xl, paddingHorizontal: Space.md, gap: Space.sm },
-  listStateTitle: { fontSize: 15, fontFamily: Typography.family.semibold },
-  listStateSub: { fontSize: 13, fontFamily: Typography.family.regular, textAlign: 'center' },
+  listStateTitle: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.semibold },
+  listStateSub: { fontSize: Type.captionElevated.size, fontFamily: Typography.family.regular, textAlign: 'center' },
   loadMoreIndicator: { paddingVertical: Space.md, alignItems: 'center' },
   btnDisabled: { opacity: 0.5 },
 });

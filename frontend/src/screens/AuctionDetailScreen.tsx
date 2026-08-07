@@ -11,7 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Reanimated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -20,12 +20,13 @@ import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { haptics } from '../utils/haptics';
+import { HapticPatterns } from '../utils/hapticPatterns';
 import { useCurrencyContext } from '../context/CurrencyContext';
 import { parseApiError } from '../lib/apiClient';
 import { requestPushPermissionOnce } from '../lib/pushPermission';
 import { Meta, BodyEmphasis, Headline } from '../components/ui/Text';
 import { toIze, formatIzeAmount } from '../utils/currency';
-import { Space, Radius, Typography, Type, DockConstants } from '../theme/designTokens';
+import { Space, Radius, Typography, Type, DockConstants, LetterSpacing } from '../theme/designTokens';
 import {
   getAuctionDetail,
   placeAuctionBid,
@@ -43,7 +44,7 @@ import { BottomSheet } from '../components/BottomSheet';
 import { BidSheet } from '../components/ui/BidSheet';
 import { BuyNowSheet } from '../components/ui/BuyNowSheet';
 import { FullscreenMediaViewer } from '../components/product/FullscreenMediaViewer';
-import { RecommendationRail } from '../components/product';
+import { RecommendationRail, ProductDetailSkeleton } from '../components/product';
 import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
 import { ShareSheet } from '../components/ShareSheet';
 import { CommerceStickyDock, CommerceStateCanvas, CommerceRelatedRail, CategoryEvidence, CommerceMediaStage } from '../components/commerce';
@@ -100,7 +101,7 @@ import {
   ReserveStatusBadge,
 } from '../components/auction';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'AuctionDetail'>;
 
 export default function AuctionDetailScreen() {
@@ -250,6 +251,7 @@ export default function AuctionDetailScreen() {
     prevLifecycleRef.current = effectiveState;
   }, [effectiveState, fetchDetail, isTransitionRefreshing]);
 
+  // Compound haptic feedback for viewer-state transitions. Fires once on
   const handleRefresh = () => {
     setRefreshing(true);
     void fetchDetail();
@@ -462,6 +464,22 @@ export default function AuctionDetailScreen() {
   const isSettled = effectiveState === 'settled';
   const isTerminal = isEnded || isCancelled || isSettled;
   const viewerState = auction?.viewerState ?? 'not_participating';
+
+  // Compound haptic feedback when the viewer's auction outcome transitions
+  // into "outbid" (warning) and "won" (double celebration) so the
+  // user feels the auction outcome the moment the backend reflects it.
+  const prevViewerStateRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (prevViewerStateRef.current === viewerState) return;
+    if (viewerState === 'outbid' && prevViewerStateRef.current !== null) {
+      HapticPatterns.outbid();
+    }
+    if (viewerState === 'won' && prevViewerStateRef.current !== null) {
+      HapticPatterns.auctionWon();
+    }
+    prevViewerStateRef.current = viewerState;
+  }, [viewerState]);
+
   const isSeller = viewerState === 'seller';
   const buyNowAvailable = detailInput ? isBuyNowAvailable(detailInput, effectiveState ?? 'upcoming') : false;
   const reserveStatus = detailInput ? resolveReserveStatus(detailInput) : 'none';
@@ -575,8 +593,17 @@ export default function AuctionDetailScreen() {
 
   if (loading) {
     return (
-      <View style={styles.container}>
-        <CommerceStateCanvas state="loading" family="auction" />
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: Space.md }}
+          accessibilityLabel="Loading auction details"
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+        >
+          <ProductDetailSkeleton />
+        </ScrollView>
       </View>
     );
   }
@@ -639,6 +666,8 @@ export default function AuctionDetailScreen() {
         onScroll={scrollHandler}
         scrollEventThrottle={16}
         contentContainerStyle={{ paddingBottom: scrollBottomPadding }}
+        accessibilityElementsHidden={bidSheetVisible || buyNowSheetVisible || overflowVisible || bidHistorySheetVisible || rulesSheetVisible || mediaViewerVisible}
+        importantForAccessibility={bidSheetVisible || buyNowSheetVisible || overflowVisible || bidHistorySheetVisible || rulesSheetVisible || mediaViewerVisible ? 'no-hide-descendants' : 'auto'}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -774,6 +803,7 @@ export default function AuctionDetailScreen() {
                     viewerContext.treatment === 'restrained' && { color: colors.textSecondary },
                   ]}
                   numberOfLines={2}
+                  accessibilityLiveRegion="polite"
                 >
                   {viewerContext.title}
                   {viewerContext.subtitle ? `  ·  ${viewerContext.subtitle}` : ''}
@@ -1011,7 +1041,7 @@ export default function AuctionDetailScreen() {
             (() => {
               const topBid = formatBidActivityRow(bidActivity[0], 0, formatFromFiat, serverNowRef.current);
               return (
-                <View style={styles.bidActivityRow}>
+                <View style={styles.bidActivityRow} accessibilityLiveRegion="polite">
                   <View style={styles.bidActivityLeft}>
                     <Text style={[styles.bidActivityLabel, { color: colors.textSecondary }]} numberOfLines={1}>
                       Leading bid
@@ -1236,7 +1266,7 @@ export default function AuctionDetailScreen() {
                 label: stateAction.primary.label,
                 onPress: () => {
                   if (primaryType === 'placeBid' || primaryType === 'increaseBid' || primaryType === 'bidAgain') {
-                    haptics.press();
+                    HapticPatterns.bidPlaced();
                     openBidSheet();
                   } else if (primaryType === 'watchAuction') {
                     haptics.tap();
@@ -1290,6 +1320,7 @@ export default function AuctionDetailScreen() {
           }}
           accessibilityRole="button"
           accessibilityLabel={auction.isWatched ? 'Remove from watchlist' : 'Add to watchlist'}
+          accessibilityState={{ selected: auction.isWatched }}
         >
           <Ionicons
             name={auction.isWatched ? 'eye' : 'eye-outline'}
@@ -1320,6 +1351,7 @@ export default function AuctionDetailScreen() {
           }}
           accessibilityRole="button"
           accessibilityLabel={social.isSavedToCollection ? 'Saved to collection' : 'Save to collection'}
+          accessibilityState={{ selected: social.isSavedToCollection }}
         >
           <Ionicons
             name={social.isSavedToCollection ? 'bookmark' : 'bookmark-outline'}
@@ -1338,6 +1370,7 @@ export default function AuctionDetailScreen() {
           }}
           accessibilityRole="button"
           accessibilityLabel={social.isLiked ? 'Remove from wishlist' : 'Add to wishlist'}
+          accessibilityState={{ selected: social.isLiked }}
         >
           <Ionicons
             name={social.isLiked ? 'heart' : 'heart-outline'}
@@ -1828,8 +1861,8 @@ const styles = StyleSheet.create({
     gap: Space.md,
   },
   ruleNumber: {
-    width: 28,
-    height: 28,
+    width: Space.lg + Space.xs,
+    height: Space.lg + Space.xs,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1886,7 +1919,7 @@ const styles = StyleSheet.create({
   dockStateBadge: {
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: 0,
+    letterSpacing: LetterSpacing.normal,
   },
   overflowRow: {
     flexDirection: 'row',
@@ -1894,7 +1927,7 @@ const styles = StyleSheet.create({
     gap: Space.md,
     paddingVertical: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    minHeight: 48,
+    minHeight: Space.xxl,
   },
   overflowRowText: {
     fontSize: Type.body.size,
@@ -1935,7 +1968,7 @@ const styles = StyleSheet.create({
   viewerBadge: {
     borderRadius: Radius.sm,
     paddingHorizontal: Space.xs + 2,
-    paddingVertical: 2,
+    paddingVertical: Space.xs / 2,
   },
   viewerBadgeText: {
     fontSize: Type.meta.size,

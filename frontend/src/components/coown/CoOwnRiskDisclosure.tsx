@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Type, Typography } from '../../theme/designTokens';
+import { Space, Type, Typography, Radius } from '../../theme/designTokens';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import type { CoOwnRiskDisclosures } from '../../services/marketApi';
@@ -134,7 +134,7 @@ const styles = StyleSheet.create({
   riskDot: {
     width: 5,
     height: 5,
-    borderRadius: 3,
+    borderRadius: Radius.sm,
     marginTop: 7,
   },
   riskText: {

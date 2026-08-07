@@ -20,10 +20,10 @@ import {
   Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Control, LetterSpacing } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { EmptyState } from '../components/EmptyState';
@@ -35,7 +35,7 @@ import {
 import { RootStackParamList } from '../navigation/types';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
-type Props = StackScreenProps<RootStackParamList, 'EmailNotifications'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'EmailNotifications'>;
 
 interface CategoryConfig {
   key: keyof EmailPreferences;
@@ -329,8 +329,8 @@ function createStyles(colors: ThemeColors) {
       gap: Space.md,
     },
     heroIcon: {
-      width: 44,
-      height: 44,
+      width: Control.hit,
+      height: Control.hit,
       borderRadius: Radius.full,
       justifyContent: 'center',
       alignItems: 'center',
@@ -346,7 +346,7 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
-      marginTop: 2,
+      marginTop: Space.xs / 2,
     },
 
     // Section headers
@@ -360,14 +360,14 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
       textTransform: 'uppercase',
-      letterSpacing: 0.8,
+      letterSpacing: LetterSpacing.caps,
       opacity: 0.7,
     },
     sectionDescription: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
-      marginTop: 2,
+      marginTop: Space.xs / 2,
     },
 
     // Category cards
@@ -390,8 +390,8 @@ function createStyles(colors: ThemeColors) {
       borderBottomColor: colors.borderSubtle,
     },
     categoryIcon: {
-      width: 36,
-      height: 36,
+      width: Control.chrome,
+      height: Control.chrome,
       borderRadius: Radius.md,
       justifyContent: 'center',
       alignItems: 'center',
@@ -410,14 +410,14 @@ function createStyles(colors: ThemeColors) {
     lockedBadge: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 3,
+      gap: Space.xs - 1,
       backgroundColor: colors.surfaceAlt,
       borderRadius: Radius.full,
       paddingHorizontal: Space.xs + 2,
-      paddingVertical: 2,
+      paddingVertical: Space.xs / 2,
     },
     lockedText: {
-      fontSize: 10,
+      fontSize: Type.meta.size - 1,
       fontFamily: Typography.family.medium,
       color: colors.textMuted,
     },
@@ -425,8 +425,8 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.meta.size,
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
-      marginTop: 3,
-      lineHeight: 16,
+      marginTop: Space.xs - 1,
+      lineHeight: Type.caption.lineHeight,
     },
   });
 }

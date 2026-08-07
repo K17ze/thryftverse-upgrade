@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AgentIcon } from '../components/agents/AgentIcon';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -9,11 +9,11 @@ import { EmptyState } from '../components/EmptyState';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
-import { Space, Type, Typography } from '../theme/designTokens';
+import { Space, Type, Typography, Control, Stroke } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { fetchAiCapability, type AiCapabilitySummary } from '../services/aiTruthApi';
 
-type Props = StackScreenProps<RootStackParamList, 'BotDirectory'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'BotDirectory'>;
 type AgentCategory =
   | 'all'
   | 'assistant'
@@ -229,30 +229,30 @@ function createStyles(colors: ThemeColors) {
     paddingBottom: Space.xxl,
   },
   headerAction: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
   yourAgents: {
-    minHeight: 82,
+    minHeight: Space.xxl + Space.xl + 2,
     marginHorizontal: Space.md,
     marginTop: Space.sm,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
   leadingIcon: {
-    width: 32,
-    height: 44,
+    width: Control.chromeCompact,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
   yourAgentsCopy: {
     flex: 1,
-    gap: 3,
+    gap: Space.xs - 1,
   },
   yourAgentsTitle: {
     color: colors.textPrimary,
@@ -263,7 +263,7 @@ function createStyles(colors: ThemeColors) {
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
     fontSize: Type.caption.size,
-    lineHeight: 17,
+    lineHeight: Type.caption.lineHeight + 1,
   },
   sectionIntro: {
     paddingHorizontal: Space.md,
@@ -276,7 +276,7 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.subtitle.size,
   },
   sectionDetail: {
-    marginTop: 2,
+    marginTop: Space.xs - 2,
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
     fontSize: Type.caption.size,
@@ -287,13 +287,13 @@ function createStyles(colors: ThemeColors) {
   filters: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.sm,
-    gap: 9,
+    gap: Space.sm + 1,
   },
   filter: {
-    minHeight: 38,
+    minHeight: Control.chrome + 2,
     justifyContent: 'center',
-    paddingHorizontal: 6,
-    borderBottomWidth: 2,
+    paddingHorizontal: Space.xs + 2,
+    borderBottomWidth: Stroke.emphasis,
     borderBottomColor: 'transparent',
   },
   filterSelected: {
@@ -312,15 +312,15 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.md,
   },
   agentRow: {
-    minHeight: 104,
+    minHeight: Space.xxl + Space.xxl + Space.sm,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingVertical: 12,
+    gap: Space.md,
+    paddingVertical: Space.sm + 4,
   },
   agentCopy: {
     flex: 1,
-    gap: 4,
+    gap: Space.xs,
   },
   agentName: {
     color: colors.textPrimary,
@@ -331,12 +331,12 @@ function createStyles(colors: ThemeColors) {
     color: colors.textSecondary,
     fontFamily: Typography.family.regular,
     fontSize: Type.captionElevated.size,
-    lineHeight: 18,
+    lineHeight: Type.captionElevated.lineHeight,
   },
   agentMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: Space.xs + 1,
     overflow: 'hidden',
   },
   categoryText: {
@@ -364,7 +364,7 @@ function createStyles(colors: ThemeColors) {
   divider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.border,
-    marginLeft: 44,
+    marginLeft: Control.hit,
   },
   });
 }

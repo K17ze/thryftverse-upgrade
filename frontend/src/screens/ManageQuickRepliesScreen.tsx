@@ -1,17 +1,18 @@
 import React, { useMemo, useState } from 'react';
 import { View, Text, TextInput, StyleSheet, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { EmptyState } from '../components/EmptyState';
 import { useHaptic } from '../hooks/useHaptic';
 
-type Props = StackScreenProps<RootStackParamList, 'ManageQuickReplies'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'ManageQuickReplies'>;
 
 export default function ManageQuickRepliesScreen({ navigation, route }: Props) {
   const { role } = route.params;
@@ -87,11 +88,13 @@ export default function ManageQuickRepliesScreen({ navigation, route }: Props) {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Your replies</Text>
         {replies.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Ionicons name="chatbubble-ellipses-outline" size={32} color={colors.textMuted} />
-            <Text style={styles.emptyText}>No quick replies yet</Text>
-            <Text style={styles.emptySubtext}>Add one below to speed up your conversations</Text>
-          </View>
+          <EmptyState
+            icon="chatbubble-ellipses-outline"
+            title="No quick replies"
+            subtitle="Add one below to speed up your conversations"
+            ctaLabel="Add your first reply"
+            onCtaPress={handleAdd}
+          />
         ) : (
           <View style={styles.list}>
             {replies.map((reply, index) => (
@@ -211,7 +214,7 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       paddingVertical: Space.sm + 2,
       paddingHorizontal: Space.md,
-      minHeight: 52,
+      minHeight: Space.xxl + Space.xs,
       gap: Space.sm,
     },
     replyText: {
@@ -236,28 +239,12 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.sm,
       paddingHorizontal: Space.sm,
       paddingVertical: Space.xs + 2,
-      minHeight: 40,
+      minHeight: Space.xl + Space.sm,
     },
     divider: {
       height: StyleSheet.hairlineWidth,
       backgroundColor: colors.border,
       marginLeft: Space.md,
-    },
-    emptyState: {
-      alignItems: 'center',
-      paddingVertical: Space.xl,
-      gap: Space.xs,
-    },
-    emptyText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
-    emptySubtext: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-      textAlign: 'center',
     },
     addRow: {
       flexDirection: 'row',
@@ -266,8 +253,8 @@ function createStyles(colors: ThemeColors) {
     },
     addInput: {
       flex: 1,
-      minHeight: 44,
-      maxHeight: 100,
+      minHeight: Control.hit,
+      maxHeight: Space.xxl * 2 + Space.xs,
       borderRadius: Radius.md,
       backgroundColor: colors.surfaceAlt,
       paddingHorizontal: Space.sm + 4,
@@ -277,9 +264,9 @@ function createStyles(colors: ThemeColors) {
       color: colors.textPrimary,
     },
     addBtn: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
+      width: Control.hit,
+      height: Control.hit,
+      borderRadius: Radius.xxl,
       backgroundColor: colors.textPrimary,
       justifyContent: 'center',
       alignItems: 'center',

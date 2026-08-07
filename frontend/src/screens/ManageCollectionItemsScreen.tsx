@@ -7,7 +7,7 @@ import {
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
@@ -21,7 +21,7 @@ import { CachedImage } from '../components/CachedImage';
 import { EmptyState } from '../components/EmptyState';
 import { BodyEmphasis, Caption } from '../components/ui/Text';
 
-type Props = StackScreenProps<RootStackParamList, 'ManageCollectionItems'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'ManageCollectionItems'>;
 
 export default function ManageCollectionItemsScreen({ navigation, route }: Props) {
   const { colors } = useAppTheme();
@@ -181,15 +181,15 @@ function createStyles(colors: ThemeColors) {
       opacity: 0.5,
     },
     thumb: {
-      width: 56,
-      height: 56,
+      width: Space.xxl + Space.sm,
+      height: Space.xxl + Space.sm,
       borderRadius: Radius.sm,
       backgroundColor: colors.surfaceAlt,
       overflow: 'hidden',
     },
     thumbEmpty: {
-      width: 56,
-      height: 56,
+      width: Space.xxl + Space.sm,
+      height: Space.xxl + Space.sm,
       borderRadius: Radius.sm,
       backgroundColor: colors.surfaceAlt,
       justifyContent: 'center',
@@ -199,11 +199,11 @@ function createStyles(colors: ThemeColors) {
     },
     rowBody: {
       flex: 1,
-      gap: 2,
+      gap: Space.xs / 2,
     },
     removeBtn: {
-      width: 40,
-      height: 40,
+      width: Space.xl + Space.sm,
+      height: Space.xl + Space.sm,
       borderRadius: Radius.md,
       backgroundColor: colors.surfaceAlt,
       justifyContent: 'center',

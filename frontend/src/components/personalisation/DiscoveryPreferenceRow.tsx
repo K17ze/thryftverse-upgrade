@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography } from '../../theme/designTokens';
+import { Space, Typography, Type } from '../../theme/designTokens';
 
 interface DiscoveryPreferenceRowProps {
   icon: keyof typeof Ionicons.glyphMap;
@@ -54,20 +54,20 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   content: {
     flex: 1,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   title: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
   explanation: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },
   value: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
     color: colors.textSecondary,
     maxWidth: 120,

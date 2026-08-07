@@ -9,6 +9,7 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   reasoningEffort: 'medium',
   historyLimit: 16,
   starterPrompts: [],
+  confidenceThreshold: 0.6,
 };
 
 const MODELS = new Set(['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna']);
@@ -48,6 +49,9 @@ export function normalizeAgentConfig(value: unknown): AgentConfig {
         .filter(Boolean)
         .slice(0, 4)
       : [],
+    confidenceThreshold: Math.min(1, Math.max(0, Number.isFinite(Number(raw.confidenceThreshold))
+      ? Number(raw.confidenceThreshold)
+      : DEFAULT_AGENT_CONFIG.confidenceThreshold)),
   };
 }
 

@@ -2,7 +2,7 @@ import React, { memo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 import type { Listing } from '../../data/mockData';
 import { CachedImage } from '../CachedImage';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
@@ -146,32 +146,32 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 4,
+    marginBottom: Space.xs,
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
   },
   sectionTitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
     letterSpacing: 0.2,
   },
   bundleCountBadge: {
-    paddingHorizontal: 8,
+    paddingHorizontal: Space.sm,
     paddingVertical: 3,
     borderRadius: Radius.full,
     backgroundColor: `${colors.brand}12`,
   },
   bundleCountText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     color: colors.brand,
   },
   subtitle: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     lineHeight: 16,
@@ -206,7 +206,7 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
   },
   thumbPrice: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
     textAlign: 'center',
@@ -221,12 +221,12 @@ function createStyles(colors: ThemeColors) {
     borderTopColor: colors.border,
   },
   totalLabel: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
     color: colors.textSecondary,
   },
   totalValue: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
   },
@@ -234,7 +234,7 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
     marginTop: Space.sm,
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
@@ -246,7 +246,7 @@ function createStyles(colors: ThemeColors) {
     opacity: 0.7,
   },
   createBundleBtnText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.brand,
   },

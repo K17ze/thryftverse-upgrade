@@ -1,0 +1,1190 @@
+/**
+ * MoodboardEditorScreen — creative composition surface
+ *
+ * The editor is the authoring surface for a ThryftVerse Moodboard: a themed
+ * canvas where users arrange marketplace listings into an editorial collage.
+ *
+ * Layout:
+ *  - Canvas (top ~70% of screen) — themed background with pan/pinch/rotate items
+ *  - Bottom panel (~30%) — item picker rail; tap to add to canvas center
+ *  - Selected item shows delete + layer-order controls
+ *
+ * Truthful UI (AGENTS.md §11):
+ *  In demo mode (MOODBOARD_DEMO_MODE === true) the moodboard is stored in
+ *  memory only. A persistent "Demo mode" indicator communicates this honestly.
+ *  We never claim the board is shared, synced, or backed by a real backend.
+ *
+ * Gestures (react-native-gesture-handler is installed — see package.json):
+ *  - Pan to move an item (clamped to canvas bounds)
+ *  - Pinch to scale an item (0.4×–2.5×)
+ *  - Two-finger rotation
+ *  - Tap to select (reveals delete + layer controls)
+ *  - Long-press for layer order (bring to front / send to back)
+ *  Reanimated shared values drive the transforms; useReducedMotion disables
+ *  spring settle animations when the user has requested reduced motion.
+ */
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Dimensions,
+  ImageStyle,
+  ActivityIndicator,
+  Pressable,
+  LayoutChangeEvent,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  runOnJS,
+} from 'react-native-reanimated';
+
+import { useAppTheme } from '../theme/ThemeContext';
+import { Space, Radius, Type, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { NativeStackScreenProps, RootStackParamList } from '../navigation/types';
+import { AnimatedPressable } from '../components/AnimatedPressable';
+import { CachedImage } from '../components/CachedImage';
+import { HorizontalRail } from '../components/HorizontalRail';
+import { EmptyState } from '../components/EmptyState';
+import { PremiumSkeletonTile } from '../components/discover/PremiumSkeletonTile';
+import { OfflineBanner } from '../components/OfflineBanner';
+import { useHaptic } from '../hooks/useHaptic';
+import { useConnectivity } from '../hooks/useConnectivity';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import {
+  fetchMoodboardDetail,
+  fetchMoodboardThemes,
+  fetchPickerItems,
+  createMoodboard,
+  addItemToMoodboard,
+  removeItemFromMoodboard,
+  updateItemPosition,
+  reorderItem,
+  getThemeById,
+  MOODBOARD_DEMO_MODE,
+  type Moodboard,
+  type MoodboardItem,
+  type MoodboardItemPosition,
+  type MoodboardTheme,
+} from '../services/moodboardApi';
+
+type Props = NativeStackScreenProps<RootStackParamList, 'MoodboardEditor'>;
+
+// ── Layout constants ──
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+const CANVAS_HEIGHT_RATIO = 0.7;
+const CANVAS_HEIGHT = Math.round(SCREEN_H * CANVAS_HEIGHT_RATIO);
+const PICKER_TILE_SIZE = 72;
+const PICKER_TILE_GAP = Space.sm;
+const ITEM_BASE_SIZE = 120; // base pixel size of a canvas item at scale 1
+const MIN_SCALE = 0.4;
+const MAX_SCALE = 2.5;
+const DEFAULT_THEME_ID = 'theme-linen';
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Clamp a pixel position so the item center stays within the canvas. */
+function clampCenter(px: number, canvasSize: number, itemHalfPx: number): number {
+  const min = itemHalfPx;
+  const max = canvasSize - itemHalfPx;
+  return Math.max(min, Math.min(max, px));
+}
+
+/** Convert a normalised (0–1) position to a center-origin pixel position. */
+function normToPx(norm: number, canvasSize: number): number {
+  return norm * canvasSize;
+}
+
+/** Convert a center-origin pixel position to a normalised (0–1) value. */
+function pxToNorm(px: number, canvasSize: number): number {
+  return canvasSize > 0 ? px / canvasSize : 0;
+}
+
+// ---------------------------------------------------------------------------
+// Draggable canvas item — pan + pinch + rotation + tap + long-press
+//
+// Shared values are created HERE (per-item, at render time) to respect the
+// Rules of Hooks. The parent passes the initial position; the item owns its
+// gesture state and commits final positions via onPositionCommit.
+// ---------------------------------------------------------------------------
+interface CanvasItemProps {
+  item: MoodboardItem;
+  canvasWidth: number;
+  canvasHeight: number;
+  isSelected: boolean;
+  reducedMotion: boolean;
+  onSelect: (id: string) => void;
+  onPositionCommit: (id: string, position: MoodboardItemPosition) => void;
+  onLongPress: (id: string) => void;
+}
+
+const CanvasItem = React.memo(function CanvasItem({
+  item,
+  canvasWidth,
+  canvasHeight,
+  isSelected,
+  reducedMotion,
+  onSelect,
+  onPositionCommit,
+  onLongPress,
+}: CanvasItemProps) {
+  const { colors } = useAppTheme();
+  const halfBase = ITEM_BASE_SIZE / 2;
+
+  // Shared values — initialised from the service position (normalised → px)
+  const translateX = useSharedValue(normToPx(item.position.x, canvasWidth));
+  const translateY = useSharedValue(normToPx(item.position.y, canvasHeight));
+  const scale = useSharedValue(item.position.scale);
+  const rotation = useSharedValue(item.position.rotation);
+  const startX = useSharedValue(0);
+  const startY = useSharedValue(0);
+  const startScale = useSharedValue(1);
+  const startRotation = useSharedValue(0);
+
+  // Sync shared values when the service position changes externally (e.g. after
+  // a reorder or theme change that re-fetches the moodboard). We compare against
+  // the incoming item position and update if it differs from the current SV.
+  React.useEffect(() => {
+    const expectedX = normToPx(item.position.x, canvasWidth);
+    const expectedY = normToPx(item.position.y, canvasHeight);
+    if (Math.abs(translateX.value - expectedX) > 1) {
+      translateX.value = reducedMotion ? expectedX : withSpring(expectedX, { damping: 26, stiffness: 220 });
+    }
+    if (Math.abs(translateY.value - expectedY) > 1) {
+      translateY.value = reducedMotion ? expectedY : withSpring(expectedY, { damping: 26, stiffness: 220 });
+    }
+    if (Math.abs(scale.value - item.position.scale) > 0.01) {
+      scale.value = reducedMotion ? item.position.scale : withSpring(item.position.scale, { damping: 26, stiffness: 220 });
+    }
+    if (Math.abs(rotation.value - item.position.rotation) > 0.5) {
+      rotation.value = reducedMotion ? item.position.rotation : withSpring(item.position.rotation, { damping: 26, stiffness: 220 });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.position.x, item.position.y, item.position.scale, item.position.rotation, canvasWidth, canvasHeight, reducedMotion]);
+
+  // Commit the current transform to the service (on gesture end).
+  const commitPosition = useCallback(
+    (finalX: number, finalY: number, finalScale: number, finalRotation: number) => {
+      const halfPx = halfBase * finalScale;
+      const clampedX = clampCenter(finalX, canvasWidth, halfPx);
+      const clampedY = clampCenter(finalY, canvasHeight, halfPx);
+      translateX.value = reducedMotion ? clampedX : withSpring(clampedX, { damping: 26, stiffness: 220 });
+      translateY.value = reducedMotion ? clampedY : withSpring(clampedY, { damping: 26, stiffness: 220 });
+      const position: MoodboardItemPosition = {
+        x: pxToNorm(clampedX, canvasWidth),
+        y: pxToNorm(clampedY, canvasHeight),
+        scale: finalScale,
+        rotation: finalRotation,
+      };
+      onPositionCommit(item.id, position);
+    },
+    [canvasWidth, canvasHeight, halfBase, item.id, onPositionCommit, reducedMotion, translateX, translateY],
+  );
+
+  // Pan — move the item, clamped on end.
+  const panGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .minDistance(4)
+        .onStart(() => {
+          'worklet';
+          startX.value = translateX.value;
+          startY.value = translateY.value;
+        })
+        .onUpdate((e) => {
+          'worklet';
+          translateX.value = startX.value + e.translationX;
+          translateY.value = startY.value + e.translationY;
+        })
+        .onEnd((e) => {
+          'worklet';
+          const finalX = startX.value + e.translationX;
+          const finalY = startY.value + e.translationY;
+          runOnJS(commitPosition)(finalX, finalY, scale.value, rotation.value);
+        }),
+    [commitPosition, scale, rotation, startX, startY, translateX, translateY],
+  );
+
+  // Pinch — scale the item, clamped to [MIN_SCALE, MAX_SCALE].
+  const pinchGesture = useMemo(
+    () =>
+      Gesture.Pinch()
+        .onStart(() => {
+          'worklet';
+          startScale.value = scale.value;
+        })
+        .onUpdate((e) => {
+          'worklet';
+          const next = startScale.value * e.scale;
+          scale.value = Math.max(MIN_SCALE, Math.min(MAX_SCALE, next));
+        })
+        .onEnd(() => {
+          'worklet';
+          runOnJS(commitPosition)(translateX.value, translateY.value, scale.value, rotation.value);
+        }),
+    [commitPosition, scale, rotation, startScale, translateX, translateY],
+  );
+
+  // Rotation — two-finger rotation in degrees.
+  const rotationGesture = useMemo(
+    () =>
+      Gesture.Rotation()
+        .onStart(() => {
+          'worklet';
+          startRotation.value = rotation.value;
+        })
+        .onUpdate((e) => {
+          'worklet';
+          rotation.value = startRotation.value + (e.rotation * 180) / Math.PI;
+        })
+        .onEnd(() => {
+          'worklet';
+          runOnJS(commitPosition)(translateX.value, translateY.value, scale.value, rotation.value);
+        }),
+    [commitPosition, rotation, scale, startRotation, translateX, translateY],
+  );
+
+  // Tap — select the item.
+  const tapGesture = useMemo(
+    () =>
+      Gesture.Tap().onEnd(() => {
+        'worklet';
+        runOnJS(onSelect)(item.id);
+      }),
+    [item.id, onSelect],
+  );
+
+  // Long-press — reveal layer order controls.
+  const longPressGesture = useMemo(
+    () =>
+      Gesture.LongPress()
+        .minDuration(450)
+        .onEnd(() => {
+          'worklet';
+          runOnJS(onLongPress)(item.id);
+        }),
+    [item.id, onLongPress],
+  );
+
+  // Compose: simultaneous pan+pinch+rotate, racing with tap and long-press.
+  const composedGesture = useMemo(
+    () =>
+      Gesture.Race(
+        Gesture.Simultaneous(panGesture, pinchGesture, rotationGesture),
+        tapGesture,
+        longPressGesture,
+      ),
+    [longPressGesture, panGesture, pinchGesture, rotationGesture, tapGesture],
+  );
+
+  const animatedStyle = useAnimatedStyle(() => {
+    'worklet';
+    return {
+      transform: [
+        { translateX: translateX.value - halfBase },
+        { translateY: translateY.value - halfBase },
+        { scale: scale.value },
+        { rotate: `${rotation.value}deg` },
+      ],
+    };
+  });
+
+  const a11yLabel = `Canvas item: ${item.title}, ${item.price.toFixed(0)} pounds. ${isSelected ? 'Selected.' : 'Tap to select.'} Drag to move, pinch to resize, rotate with two fingers. Long-press for layer order.`;
+
+  return (
+    <GestureDetector gesture={composedGesture}>
+      <Reanimated.View
+        style={[styles.canvasItem, animatedStyle]}
+        accessibilityLabel={a11yLabel}
+        accessibilityRole="button"
+        accessibilityHint="Drag to move, pinch to resize, rotate with two fingers. Long-press for layer order."
+        accessible
+      >
+        <View
+          style={[
+            styles.canvasItemInner,
+            isSelected && styles.canvasItemInnerSelected,
+          ]}
+        >
+          <CachedImage
+            uri={item.imageUri}
+            style={{ width: ITEM_BASE_SIZE, height: ITEM_BASE_SIZE } as ImageStyle}
+            contentFit="cover"
+            priority="normal"
+          />
+        </View>
+      </Reanimated.View>
+    </GestureDetector>
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Picker tile — a listing thumbnail in the bottom rail
+// ---------------------------------------------------------------------------
+interface PickerTileProps {
+  item: MoodboardItem;
+  onPress: () => void;
+}
+
+const PickerTile = React.memo(function PickerTile({ item, onPress }: PickerTileProps) {
+  const { colors } = useAppTheme();
+  return (
+    <AnimatedPressable
+      style={[styles.pickerTile, { width: PICKER_TILE_SIZE }]}
+      onPress={onPress}
+      activeOpacity={0.85}
+      scaleValue={0.96}
+      accessibilityRole="button"
+      accessibilityLabel={`Add ${item.title}, ${item.price.toFixed(0)} pounds to moodboard`}
+      accessibilityHint="Adds this item to the center of the canvas"
+    >
+      <CachedImage
+        uri={item.imageUri}
+        style={styles.pickerTileImage as ImageStyle}
+        contentFit="cover"
+        priority="normal"
+      />
+      <Text style={styles.pickerTileTitle} numberOfLines={1}>
+        {item.title}
+      </Text>
+      <Text style={styles.pickerTilePrice} numberOfLines={1}>
+        £{item.price.toFixed(0)}
+      </Text>
+    </AnimatedPressable>
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Theme chip — selects the canvas background theme
+// ---------------------------------------------------------------------------
+interface ThemeChipProps {
+  theme: MoodboardTheme;
+  selected: boolean;
+  onPress: () => void;
+}
+
+const ThemeChip = React.memo(function ThemeChip({ theme, selected, onPress }: ThemeChipProps) {
+  const { colors } = useAppTheme();
+  return (
+    <AnimatedPressable
+      style={[
+        styles.themeChip,
+        { borderColor: colors.border, backgroundColor: colors.surface },
+        selected && { borderWidth: Stroke.emphasis, borderColor: colors.textPrimary, backgroundColor: colors.surfaceAlt },
+      ]}
+      onPress={onPress}
+      activeOpacity={0.85}
+      scaleValue={0.96}
+      accessibilityRole="button"
+      accessibilityLabel={`Theme: ${theme.label}${selected ? ', selected' : ''}`}
+      accessibilityHint="Sets the canvas background theme"
+    >
+      <View
+        style={[
+          styles.themeChipSwatch,
+          { backgroundColor: theme.backgroundColor, borderColor: theme.accentColor },
+        ]}
+      />
+      <Text
+        style={[
+          styles.themeChipLabel,
+          { color: selected ? colors.textPrimary : colors.textSecondary },
+          selected && styles.themeChipLabelSelected,
+        ]}
+        numberOfLines={1}
+      >
+        {theme.label}
+      </Text>
+    </AnimatedPressable>
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Selection control button — delete / layer order
+// ---------------------------------------------------------------------------
+interface SelectionControlProps {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  hint: string;
+  onPress: () => void;
+  destructive?: boolean;
+}
+
+const SelectionControl = React.memo(function SelectionControl({
+  icon,
+  label,
+  hint,
+  onPress,
+  destructive,
+}: SelectionControlProps) {
+  const { colors } = useAppTheme();
+  return (
+    <AnimatedPressable
+      style={[
+        styles.selectionControl,
+        { backgroundColor: colors.overlay },
+        destructive && { backgroundColor: colors.danger },
+      ]}
+      onPress={onPress}
+      activeOpacity={0.8}
+      scaleValue={0.94}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityHint={hint}
+    >
+      <Ionicons name={icon} size={20} color={destructive ? colors.textInverse : colors.textInverse} />
+    </AnimatedPressable>
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Main screen
+// ---------------------------------------------------------------------------
+export default function MoodboardEditorScreen({ route, navigation }: Props) {
+  const { colors, isDark } = useAppTheme();
+  const haptic = useHaptic();
+  const { isOffline } = useConnectivity();
+  const insets = useSafeAreaInsets();
+  const reducedMotion = useReducedMotion();
+  const styles = useStyles();
+
+  const moodboardId = route.params?.moodboardId;
+
+  // ── State ──
+  const [moodboard, setMoodboard] = useState<Moodboard | null>(null);
+  const [themes, setThemes] = useState<MoodboardTheme[]>([]);
+  const [pickerItems, setPickerItems] = useState<MoodboardItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [activeThemeId, setActiveThemeId] = useState<string>(DEFAULT_THEME_ID);
+  const [canvasWidth, setCanvasWidth] = useState(SCREEN_W);
+  const [canvasHeight, setCanvasHeight] = useState(CANVAS_HEIGHT);
+
+  const activeTheme = useMemo(
+    () => themes.find((t) => t.id === activeThemeId) ?? getThemeById(activeThemeId),
+    [themes, activeThemeId],
+  );
+
+  // ── Data loading ──
+  const loadAll = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [themeList, picker] = await Promise.all([
+        fetchMoodboardThemes(),
+        fetchPickerItems(),
+      ]);
+      setThemes(themeList);
+      setPickerItems(picker);
+
+      if (moodboardId) {
+        const mb = await fetchMoodboardDetail(moodboardId);
+        if (!mb) {
+          setError('This moodboard could not be found.');
+          return;
+        }
+        setMoodboard(mb);
+        setActiveThemeId(mb.theme);
+      } else {
+        // New moodboard — create immediately so the editor has a real entity.
+        const mb = await createMoodboard('Untitled moodboard', DEFAULT_THEME_ID);
+        setMoodboard(mb);
+        setActiveThemeId(mb.theme);
+      }
+    } catch {
+      setError('We couldn\u2019t load the moodboard editor. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [moodboardId]);
+
+  useEffect(() => {
+    void loadAll();
+  }, [loadAll]);
+
+  // ── Handlers ──
+  const handleGoBack = useCallback(() => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate('MoodboardHome');
+    }
+  }, [navigation]);
+
+  const handleSelect = useCallback(
+    (id: string) => {
+      haptic.selection();
+      setSelectedItemId((prev) => (prev === id ? null : id));
+    },
+    [haptic],
+  );
+
+  const handleLongPress = useCallback(
+    (id: string) => {
+      haptic.heavy();
+      setSelectedItemId(id);
+    },
+    [haptic],
+  );
+
+  const handlePositionCommit = useCallback(
+    async (id: string, position: MoodboardItemPosition) => {
+      if (!moodboard) return;
+      // Optimistic local update
+      setMoodboard((prev) =>
+        prev
+          ? {
+              ...prev,
+              items: prev.items.map((it) =>
+                it.id === id ? { ...it, position } : it,
+              ),
+              updatedAt: new Date().toISOString(),
+            }
+          : prev,
+      );
+      // Persist to the (demo) service
+      try {
+        await updateItemPosition(moodboard.id, id, position);
+      } catch {
+        // Silent — demo mode is in-memory; surface only if a real backend fails
+      }
+    },
+    [moodboard],
+  );
+
+  const handleAddItem = useCallback(
+    async (source: MoodboardItem) => {
+      if (!moodboard) return;
+      haptic.light();
+      setSaving(true);
+      try {
+        const added = await addItemToMoodboard(moodboard.id, source.listingId);
+        if (added) {
+          // Re-fetch to get the full updated item list with the new item
+          const mb = await fetchMoodboardDetail(moodboard.id);
+          if (mb) {
+            setMoodboard(mb);
+            setSelectedItemId(added.id);
+          }
+        }
+      } catch {
+        haptic.error();
+      } finally {
+        setSaving(false);
+      }
+    },
+    [haptic, moodboard],
+  );
+
+  const handleDeleteItem = useCallback(
+    async (id: string) => {
+      if (!moodboard) return;
+      haptic.warning();
+      setSaving(true);
+      setSelectedItemId(null);
+      try {
+        const ok = await removeItemFromMoodboard(moodboard.id, id);
+        if (ok) {
+          const mb = await fetchMoodboardDetail(moodboard.id);
+          if (mb) setMoodboard(mb);
+        }
+      } catch {
+        haptic.error();
+      } finally {
+        setSaving(false);
+      }
+    },
+    [haptic, moodboard],
+  );
+
+  const handleReorder = useCallback(
+    async (id: string, direction: 'front' | 'back') => {
+      if (!moodboard) return;
+      haptic.selection();
+      setSaving(true);
+      try {
+        const ok = await reorderItem(moodboard.id, id, direction);
+        if (ok) {
+          const mb = await fetchMoodboardDetail(moodboard.id);
+          if (mb) setMoodboard(mb);
+        }
+      } catch {
+        haptic.error();
+      } finally {
+        setSaving(false);
+      }
+    },
+    [haptic, moodboard],
+  );
+
+  const handleThemeChange = useCallback(
+    (themeId: string) => {
+      haptic.selection();
+      setActiveThemeId(themeId);
+      // Optimistic — theme is a local canvas property in demo mode
+      setMoodboard((prev) =>
+        prev ? { ...prev, theme: themeId, updatedAt: new Date().toISOString() } : prev,
+      );
+    },
+    [haptic],
+  );
+
+  const handleCanvasLayout = useCallback((e: LayoutChangeEvent) => {
+    const { width, height } = e.nativeEvent.layout;
+    if (width > 0 && height > 0) {
+      setCanvasWidth(width);
+      setCanvasHeight(height);
+    }
+  }, []);
+
+  const handleCanvasBackgroundPress = useCallback(() => {
+    // Tapping empty canvas deselects
+    setSelectedItemId(null);
+  }, []);
+
+  // ── Derived ──
+  const selectedItem = useMemo(
+    () => moodboard?.items.find((it) => it.id === selectedItemId) ?? null,
+    [moodboard, selectedItemId],
+  );
+
+  const canvasA11yLabel = useMemo(() => {
+    if (!moodboard || moodboard.items.length === 0) {
+      return 'Moodboard canvas, empty. Add items from the picker below.';
+    }
+    const count = moodboard.items.length;
+    if (selectedItem) {
+      return `Moodboard canvas with ${count} item${count === 1 ? '' : 's'}. Selected: ${selectedItem.title}.`;
+    }
+    return `Moodboard canvas with ${count} item${count === 1 ? '' : 's'}. Tap an item to select it.`;
+  }, [moodboard, selectedItem]);
+
+  // ── Loading state ──
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <ExpoStatusBar style={isDark ? 'light' : 'dark'} />
+        <View style={[styles.headerRow, { marginTop: insets.top }]}>
+          <View style={styles.backButtonPlaceholder} />
+          <Text style={styles.headerTitle}>Moodboard</Text>
+          <View style={styles.backButtonPlaceholder} />
+        </View>
+        <View style={styles.canvasSkeleton}>
+          <PremiumSkeletonTile width="100%" height="100%" borderRadius={Radius.lg} />
+        </View>
+        <View style={styles.pickerSkeletonRail}>
+          {Array.from({ length: 5 }).map((_, i) => (
+            <View key={i} style={[styles.pickerTile, { width: PICKER_TILE_SIZE }]}>
+              <PremiumSkeletonTile width={PICKER_TILE_SIZE} height={PICKER_TILE_SIZE} borderRadius={Radius.md} />
+              <PremiumSkeletonTile width="80%" height={10} borderRadius={Radius.sm} />
+              <PremiumSkeletonTile width={40} height={9} borderRadius={Radius.sm} />
+            </View>
+          ))}
+        </View>
+      </View>
+    );
+  }
+
+  // ── Error state ──
+  if (error && !moodboard) {
+    return (
+      <View style={styles.stateContainer}>
+        <ExpoStatusBar style={isDark ? 'light' : 'dark'} />
+        <EmptyState
+          icon="cloud-offline-outline"
+          title="Editor unavailable"
+          subtitle={error}
+          ctaLabel="Retry"
+          onCtaPress={() => void loadAll()}
+        />
+      </View>
+    );
+  }
+
+  return (
+    <GestureHandlerRootView style={styles.container}>
+      <ExpoStatusBar style={isDark ? 'light' : 'dark'} />
+
+      {/* Offline banner */}
+      {isOffline && (
+        <OfflineBanner message="Offline — changes are saved locally" />
+      )}
+
+      {/* Demo mode banner — truthful per AGENTS.md §11 */}
+      {MOODBOARD_DEMO_MODE && (
+        <View style={styles.demoBanner}>
+          <Ionicons name="information-circle-outline" size={13} color={colors.textSecondary} />
+          <Text style={styles.demoBannerText}>
+            Demo mode — moodboards are saved locally. Connect the backend to share publicly.
+          </Text>
+        </View>
+      )}
+
+      {/* ── Header ── */}
+      <View style={[styles.headerRow, { marginTop: insets.top }]}>
+        <AnimatedPressable
+          style={styles.backButton}
+          onPress={handleGoBack}
+          activeOpacity={0.7}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          accessibilityHint="Returns to the moodboard home"
+        >
+          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
+        </AnimatedPressable>
+        <Text style={styles.headerTitle} numberOfLines={1}>
+          {moodboard?.title ?? 'Moodboard'}
+        </Text>
+        <View style={styles.headerRightSpacer} />
+      </View>
+
+      {/* ── Canvas (top ~70%) ── */}
+      <Pressable
+        style={[styles.canvas, { backgroundColor: activeTheme.backgroundColor }]}
+        onLayout={handleCanvasLayout}
+        onPress={handleCanvasBackgroundPress}
+        accessibilityLabel={canvasA11yLabel}
+        accessibilityRole="image"
+      >
+        {/* Empty canvas prompt */}
+        {moodboard && moodboard.items.length === 0 && (
+          <View style={styles.canvasEmpty} pointerEvents="box-none">
+            <EmptyState
+              density="compact"
+              icon="create-outline"
+              title="Empty moodboard"
+              subtitle="Tap a listing below to place it on the canvas"
+              {...(pickerItems.length > 0
+                ? { ctaLabel: 'Add items', onCtaPress: () => void handleAddItem(pickerItems[0]) }
+                : {})}
+            />
+          </View>
+        )}
+
+        {/* Canvas items — rendered in layer order (array order = back→front) */}
+        {moodboard?.items.map((item) => (
+          <CanvasItem
+            key={item.id}
+            item={item}
+            canvasWidth={canvasWidth}
+            canvasHeight={canvasHeight}
+            isSelected={selectedItemId === item.id}
+            reducedMotion={reducedMotion}
+            onSelect={handleSelect}
+            onPositionCommit={handlePositionCommit}
+            onLongPress={handleLongPress}
+          />
+        ))}
+
+        {/* Selection controls — overlaid on canvas, above items */}
+        {selectedItem && (
+          <View style={styles.selectionControlsRow} pointerEvents="box-none">
+            <SelectionControl
+              icon="arrow-up"
+              label="Bring to front"
+              hint="Moves this item above all others"
+              onPress={() => void handleReorder(selectedItem.id, 'front')}
+            />
+            <SelectionControl
+              icon="arrow-down"
+              label="Send to back"
+              hint="Moves this item below all others"
+              onPress={() => void handleReorder(selectedItem.id, 'back')}
+            />
+            <SelectionControl
+              icon="trash-outline"
+              label="Remove from moodboard"
+              hint="Deletes this item from the canvas"
+              onPress={() => void handleDeleteItem(selectedItem.id)}
+              destructive
+            />
+          </View>
+        )}
+
+        {/* Saving indicator */}
+        {saving && (
+          <View style={styles.savingOverlay} pointerEvents="none">
+            <View style={styles.savingPill}>
+              <ActivityIndicator size="small" color={colors.textInverse} />
+              <Text style={styles.savingText}>Saving…</Text>
+            </View>
+          </View>
+        )}
+      </Pressable>
+
+      {/* ── Bottom panel (~30%) — picker + themes ── */}
+      <View style={[styles.bottomPanel, { paddingBottom: insets.bottom || Space.sm }]}>
+        {/* Theme selector rail */}
+        {themes.length > 0 && (
+          <View style={styles.themeRailWrap}>
+            <HorizontalRail
+              contentContainerStyle={styles.themeRailContent}
+              showsHorizontalScrollIndicator={false}
+              accessibilityLabel="Canvas theme selector"
+            >
+              {themes.map((theme) => (
+                <ThemeChip
+                  key={theme.id}
+                  theme={theme}
+                  selected={theme.id === activeThemeId}
+                  onPress={() => handleThemeChange(theme.id)}
+                />
+              ))}
+            </HorizontalRail>
+          </View>
+        )}
+
+        {/* Picker rail — items to add */}
+        <Text style={styles.pickerSectionLabel}>ADD TO CANVAS</Text>
+        {pickerItems.length > 0 ? (
+          <HorizontalRail
+            contentContainerStyle={styles.pickerRailContent}
+            showsHorizontalScrollIndicator={false}
+            accessibilityLabel="Items available to add"
+          >
+            {pickerItems.map((pickerItem) => (
+              <PickerTile
+                key={pickerItem.id}
+                item={pickerItem}
+                onPress={() => void handleAddItem(pickerItem)}
+              />
+            ))}
+          </HorizontalRail>
+        ) : (
+          <View style={styles.pickerEmpty}>
+            <Text style={styles.pickerEmptyText}>No items available to add</Text>
+          </View>
+        )}
+      </View>
+    </GestureHandlerRootView>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Static styles (no theme dependency)
+// ---------------------------------------------------------------------------
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  canvasItem: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+  },
+  canvasItemInner: {
+    width: ITEM_BASE_SIZE,
+    height: ITEM_BASE_SIZE,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+  },
+  canvasItemInnerSelected: {
+    borderWidth: Stroke.emphasis,
+  },
+  pickerTile: {
+    alignItems: 'flex-start',
+    gap: Space.xs / 2,
+  },
+  pickerTileImage: {
+    width: PICKER_TILE_SIZE,
+    height: PICKER_TILE_SIZE,
+    borderRadius: Radius.md,
+  } as ImageStyle,
+  pickerTileTitle: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+    letterSpacing: LetterSpacing.normal - 0.1,
+  },
+  pickerTilePrice: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+  },
+  themeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
+    borderRadius: Radius.full,
+    borderWidth: Stroke.standard,
+  },
+  themeChipLabel: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+  },
+  themeChipLabelSelected: {
+    fontFamily: Typography.family.semibold,
+  },
+  themeChipSwatch: {
+    width: Control.iconCompact,
+    height: Control.iconCompact,
+    borderRadius: Radius.full,
+    borderWidth: Stroke.standard,
+  },
+  selectionControlsRow: {
+    position: 'absolute',
+    bottom: Space.sm,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: Space.sm,
+  },
+  selectionControl: {
+    width: Control.hit,
+    height: Control.hit,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  savingOverlay: {
+    ...StyleSheet.absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  canvasEmpty: {
+    ...StyleSheet.absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.sm,
+  },
+  headerRightSpacer: {
+    width: Control.hit,
+  },
+  backButtonPlaceholder: {
+    width: Control.hit,
+  },
+  pickerSkeletonRail: {
+    flexDirection: 'row',
+    gap: PICKER_TILE_GAP,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.md,
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Themed styles (depend on useAppTheme colors)
+// ---------------------------------------------------------------------------
+function useStyles() {
+  const { colors } = useAppTheme();
+  return React.useMemo(
+    () =>
+      StyleSheet.create({
+        container: {
+          flex: 1,
+          backgroundColor: colors.background,
+        },
+        stateContainer: {
+          flex: 1,
+          backgroundColor: colors.background,
+          justifyContent: 'center',
+          alignItems: 'center',
+          paddingHorizontal: Space.lg,
+        },
+        demoBanner: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: Space.xs,
+          paddingHorizontal: Space.md,
+          paddingVertical: Space.sm,
+          backgroundColor: colors.surface,
+          borderBottomWidth: Stroke.hairline,
+          borderBottomColor: colors.borderSubtle,
+        },
+        demoBannerText: {
+          fontSize: Type.caption.size,
+          fontFamily: Typography.family.regular,
+          color: colors.textSecondary,
+          flex: 1,
+        },
+        headerRow: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          paddingHorizontal: Space.md,
+          paddingBottom: Space.sm,
+        },
+        backButton: {
+          width: Control.hit,
+          height: Control.hit,
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginLeft: -Space.xs,
+        },
+        headerTitle: {
+          fontSize: Type.subtitle.size,
+          lineHeight: Type.subtitle.lineHeight,
+          fontFamily: Typography.family.bold,
+          color: colors.textPrimary,
+          letterSpacing: LetterSpacing.tight,
+          flex: 1,
+          textAlign: 'center',
+        },
+        canvas: {
+          flex: 1,
+          marginHorizontal: Space.md,
+          borderRadius: Radius.lg,
+          overflow: 'hidden',
+          position: 'relative',
+        },
+        canvasItemInner: {
+          width: ITEM_BASE_SIZE,
+          height: ITEM_BASE_SIZE,
+          borderRadius: Radius.md,
+          overflow: 'hidden',
+          backgroundColor: colors.surfaceAlt,
+          borderColor: 'transparent',
+          borderWidth: 0,
+        },
+        canvasItemInnerSelected: {
+          borderColor: colors.textPrimary,
+          borderWidth: Stroke.emphasis,
+        },
+        selectionControl: {
+          width: Control.hit,
+          height: Control.hit,
+          borderRadius: Radius.full,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: colors.overlay,
+        },
+        savingPill: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: Space.sm,
+          paddingHorizontal: Space.md,
+          paddingVertical: Space.sm,
+          borderRadius: Radius.full,
+          backgroundColor: colors.brand,
+        },
+        savingText: {
+          fontSize: Type.bodyEmphasis.size,
+          fontFamily: Typography.family.semibold,
+          color: colors.textInverse,
+        },
+        bottomPanel: {
+          paddingTop: Space.md,
+          gap: Space.xs,
+          backgroundColor: colors.background,
+        },
+        themeRailWrap: {
+          marginBottom: Space.xs,
+        },
+        themeRailContent: {
+          paddingHorizontal: Space.md,
+          gap: Space.sm,
+        },
+        themeChip: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: Space.xs,
+          paddingHorizontal: Space.sm,
+          paddingVertical: Space.xs,
+          borderRadius: Radius.full,
+          borderWidth: Stroke.standard,
+        },
+        themeChipLabel: {
+          fontSize: Type.caption.size,
+          fontFamily: Typography.family.medium,
+        },
+        themeChipLabelSelected: {
+          fontFamily: Typography.family.semibold,
+        },
+        pickerSectionLabel: {
+          fontSize: Type.meta.size,
+          fontFamily: Typography.family.semibold,
+          color: colors.textMuted,
+          letterSpacing: LetterSpacing.caps,
+          paddingHorizontal: Space.md,
+          paddingBottom: Space.xs,
+        },
+        pickerRailContent: {
+          paddingHorizontal: Space.md,
+          gap: PICKER_TILE_GAP,
+        },
+        pickerTileImage: {
+          width: PICKER_TILE_SIZE,
+          height: PICKER_TILE_SIZE,
+          borderRadius: Radius.md,
+          backgroundColor: colors.surfaceAlt,
+        } as ImageStyle,
+        pickerTileTitle: {
+          fontSize: Type.caption.size,
+          fontFamily: Typography.family.medium,
+          color: colors.textPrimary,
+          letterSpacing: LetterSpacing.normal - 0.1,
+        },
+        pickerTilePrice: {
+          fontSize: Type.meta.size,
+          fontFamily: Typography.family.semibold,
+          color: colors.textSecondary,
+        },
+        pickerEmpty: {
+          paddingHorizontal: Space.md,
+          paddingVertical: Space.md,
+          alignItems: 'center',
+        },
+        pickerEmptyText: {
+          fontSize: Type.body.size,
+          fontFamily: Typography.family.regular,
+          color: colors.textMuted,
+        },
+        canvasSkeleton: {
+          flex: 1,
+          marginHorizontal: Space.md,
+          borderRadius: Radius.lg,
+          overflow: 'hidden',
+          backgroundColor: colors.surfaceAlt,
+        },
+        backButtonPlaceholder: {
+          width: Control.hit,
+        },
+        headerRightSpacer: {
+          width: Control.hit,
+        },
+        pickerSkeletonRail: {
+          flexDirection: 'row',
+          gap: PICKER_TILE_GAP,
+          paddingHorizontal: Space.md,
+          paddingVertical: Space.md,
+        },
+        pickerTile: {
+          alignItems: 'flex-start',
+          gap: Space.xs / 2,
+        },
+        canvasEmpty: {
+          ...StyleSheet.absoluteFill,
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: Space.sm,
+        },
+        selectionControlsRow: {
+          position: 'absolute',
+          bottom: Space.sm,
+          left: 0,
+          right: 0,
+          flexDirection: 'row',
+          justifyContent: 'center',
+          gap: Space.sm,
+        },
+        savingOverlay: {
+          ...StyleSheet.absoluteFill,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: `${colors.background}CC`,
+        },
+      }),
+    [colors],
+  );
+}

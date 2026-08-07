@@ -11,7 +11,7 @@ import Reanimated, { FadeInRight, FadeInLeft } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -25,7 +25,7 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 type Step = 0 | 1 | 2 | 3;
 
@@ -255,15 +255,15 @@ function createStyles(colors: ThemeColors) {
     paddingBottom: Space.md,
   },
   progressTrack: {
-    height: 4,
-    borderRadius: 2,
+    height: Space.xs,
+    borderRadius: Radius.sm,
     backgroundColor: colors.surfaceAlt,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
     backgroundColor: colors.textPrimary,
-    borderRadius: 2,
+    borderRadius: Radius.sm,
   },
   progressHeader: {
     flexDirection: 'row',
@@ -333,9 +333,9 @@ function createStyles(colors: ThemeColors) {
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    gap: Space.xs + 2,
+    paddingHorizontal: Space.md - 2,
+    paddingVertical: Space.sm + 2,
     borderRadius: Radius.full,
     backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,

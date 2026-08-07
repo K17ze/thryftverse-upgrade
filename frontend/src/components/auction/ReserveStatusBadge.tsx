@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { Space, Radius, Typography, Type } from '../../theme/designTokens';
 import { type ReserveStatus } from '../../utils/auctionDetailLogic';
 
 interface Props {
@@ -74,7 +74,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.1,
   },
   explanation: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
     lineHeight: 15,
   },

@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { Space, Radius, Typography, Type } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { OrderStatusStepper, OrderStepperStage } from '../orders/OrderStatusStepper';
@@ -265,18 +265,18 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: 2,
   },
   title: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
     letterSpacing: -0.2,
   },
   subtitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
   },
   timestamp: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     flexShrink: 0,
@@ -304,7 +304,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   itemTitle: {
     flex: 1,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
     color: colors.textPrimary,
     lineHeight: 17,
@@ -316,7 +316,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   trackingText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     letterSpacing: 0.1,
@@ -328,7 +328,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginTop: Space.xs,
   },
   nextStepText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
     color: colors.textSecondary,
     letterSpacing: 0.1,
@@ -342,13 +342,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderTopColor: colors.border,
   },
   orderIdText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
     letterSpacing: 0.3,
   },
   viewDetailsText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.brand,
   },

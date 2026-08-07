@@ -7,7 +7,7 @@ import Reanimated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Typography } from '../theme/designTokens';
+import { Typography, Space } from '../theme/designTokens';
 
 interface AnimatedBadgeProps {
   count: number;
@@ -59,7 +59,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     backgroundColor: colors.danger,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: Space.xs,
     position: 'absolute',
     top: -4,
     right: -4,

@@ -7,7 +7,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { Space, Radius, Typography, Type } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 
 interface PremiumActionFooterProps {
@@ -97,7 +97,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginBottom: Space.sm,
   },
   errorBannerText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: colors.danger,
     textAlign: 'center',
@@ -114,7 +114,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   primaryText: {
     color: colors.background,
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.bold,
   },
   secondaryBtn: {
@@ -128,7 +128,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   secondaryText: {
     color: colors.textSecondary,
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
   },
 });

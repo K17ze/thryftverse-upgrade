@@ -8,11 +8,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type } from '../theme/designTokens';
 import { AnimatedPressable } from './AnimatedPressable';
-import { Typography } from '../theme/designTokens';
 import { Caption, Headline } from './ui/Text';
 
+import { Space, Radius, Type, Typography } from '../theme/designTokens';
 interface AttachmentOption {
   id: string;
   icon: React.ComponentProps<typeof Ionicons>['name'];
@@ -174,7 +173,7 @@ function createStyles(colors: ThemeColors) {
       width: 40,
       height: 4,
       backgroundColor: colors.border,
-      borderRadius: 2,
+      borderRadius: Radius.sm,
       alignSelf: 'center',
       marginBottom: Space.lg - 4,
     },

@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { SellerTrustSummary, VerificationTier } from '../../platform/product';
 import { VERIFICATION_TIERS } from '../../platform/product';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography } from '../../theme/designTokens';
+import { Space, Typography, Radius, Type } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { ProfileTrustSignals } from './ProfileTrustSignals';
@@ -77,13 +77,14 @@ export function MyProfileIdentityHero({
             </View>
           )}
           <Pressable
-            style={styles.editAvatar}
+            style={styles.editAvatarHit}
             onPress={onEditAvatar}
-            hitSlop={8}
             accessibilityLabel="Edit profile photo"
             accessibilityRole="button"
           >
-            <Ionicons name="camera-outline" size={14} color={colors.textInverse} />
+            <View style={styles.editAvatarVisible}>
+              <Ionicons name="camera-outline" size={13} color={colors.textInverse} />
+            </View>
           </Pressable>
         </View>
 
@@ -176,7 +177,7 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   container: {
     paddingHorizontal: Space.md,
-    paddingTop: 4,
+    paddingTop: Space.xs,
     paddingBottom: 12,
   },
   identityTop: {
@@ -199,13 +200,19 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
     backgroundColor: colors.surfaceAlt,
   },
-  editAvatar: {
+  editAvatarHit: {
     position: 'absolute',
-    right: -1,
-    bottom: -1,
-    width: 29,
-    height: 29,
-    borderRadius: 15,
+    right: -10,
+    bottom: -10,
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editAvatarVisible: {
+    width: 24,
+    height: 24,
+    borderRadius: Radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.textPrimary,
@@ -219,68 +226,68 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'space-around',
     paddingLeft: Space.md,
-    transform: [{ translateY: 10 }],
+    marginTop: Space.xs,
   },
   stat: {
-    minWidth: 58,
+    minWidth: Space.xxl + Space.xl + Space.xs,
     alignItems: 'center',
-    gap: 1,
+    gap: Space.xs / 4,
   },
   statValue: {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: 17,
-    lineHeight: 21,
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
   },
   statLabel: {
     color: colors.textSecondary,
     fontFamily: Typography.family.regular,
-    fontSize: 12,
+    fontSize: Type.caption.size,
   },
   displayNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: Space.xs + 1,
   },
   displayName: {
     flexShrink: 1,
     color: colors.textPrimary,
     fontFamily: Typography.family.bold,
-    fontSize: 19,
-    letterSpacing: -0.35,
+    fontSize: Type.bodyLarge.size + 1,
+    letterSpacing: Type.bodyLarge.letterSpacing,
   },
   username: {
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     marginTop: 1,
   },
   bio: {
     color: colors.textPrimary,
     fontFamily: Typography.family.regular,
-    fontSize: 14,
+    fontSize: Type.body.size,
     lineHeight: 19,
-    marginTop: 8,
+    marginTop: Space.sm,
   },
   context: {
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     marginTop: 5,
   },
   actions: {
     flexDirection: 'row',
-    gap: 8,
-    marginTop: 13,
+    gap: Space.sm,
+    marginTop: Space.md + 1,
   },
   action: {
     flex: 1,
-    minHeight: 42,
+    minHeight: Space.xl + Space.sm + 2,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    borderRadius: 10,
+    gap: Space.xs + 2,
+    borderRadius: Radius.lg,
   },
   editAction: {
     backgroundColor: colors.textPrimary,
@@ -288,7 +295,7 @@ function createStyles(colors: ThemeColors) {
   editActionText: {
     color: colors.textInverse,
     fontFamily: Typography.family.semibold,
-    fontSize: 14,
+    fontSize: Type.body.size,
   },
   shareAction: {
     backgroundColor: colors.surfaceAlt,
@@ -296,7 +303,7 @@ function createStyles(colors: ThemeColors) {
   shareActionText: {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: 14,
+    fontSize: Type.body.size,
   },
   });
 }

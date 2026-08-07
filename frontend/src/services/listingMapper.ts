@@ -138,6 +138,7 @@ function normalizeSeller(row: BackendListingRow): ListingSeller | null {
       rating: typeof seller.rating === 'number' && Number.isFinite(seller.rating) ? seller.rating : null,
       reviewCount: typeof seller.reviewCount === 'number' && Number.isFinite(seller.reviewCount) ? seller.reviewCount : null,
       location: nonBlank(seller.location),
+      verified: typeof seller.verified === 'boolean' ? seller.verified : null,
     };
   }
   return null;

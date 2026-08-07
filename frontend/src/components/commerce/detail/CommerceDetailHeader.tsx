@@ -11,7 +11,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../../../theme/ThemeContext';
-import { Space, Typography } from '../../../theme/designTokens';
+import { Space, Typography, Type } from '../../../theme/designTokens';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 
 /**
@@ -173,7 +173,7 @@ const styles = StyleSheet.create({
   },
   title: {
     flex: 1,
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: -0.2,
     marginHorizontal: Space.xs,

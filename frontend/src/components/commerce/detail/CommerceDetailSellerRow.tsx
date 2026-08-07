@@ -211,12 +211,12 @@ const styles = StyleSheet.create({
   // glyph. Distinguishes institutional custodians from individual
   // sellers per spec 03_COOWN §2.
   avatarInitial: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.semibold,
   },
   identityText: {
     flexShrink: 1,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   nameRow: {
     flexDirection: 'row',

@@ -12,11 +12,11 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Space, Typography, Radius, Type } from '../theme/designTokens';
+import { Space, Typography, Radius, Type, Stroke, Control, LetterSpacing } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
@@ -37,7 +37,7 @@ const VERIFIED_LABEL = 'Verified';
 const UNVERIFIED_LABEL = 'Not verified';
 
 export default function EditProfileScreen() {
-  const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { show } = useToast();
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
@@ -589,13 +589,13 @@ function createStyles(colors: ThemeColors) {
   // ── Top-right Done button — visible pill ──
   saveBtn: {
     paddingHorizontal: Space.md,
-    height: 34,
+    height: Control.chrome - 2,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 44,
+    minWidth: Control.hit,
     backgroundColor: colors.surfaceAlt,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
   },
   saveBtnActive: {
@@ -603,7 +603,7 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.brand,
   },
   saveBtnText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textMuted,
   },
@@ -620,27 +620,27 @@ function createStyles(colors: ThemeColors) {
     paddingTop: Space.md,
   },
   identityAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: Control.hit,
+    height: Control.hit,
+    borderRadius: Radius.xxl,
   },
   identityAvatarText: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     textAlign: 'center',
-    lineHeight: 44,
+    lineHeight: Control.hit,
   },
   identityText: {
     flex: 1,
     minWidth: 0,
-    gap: 1,
+    gap: Space.xs / 4,
   },
   identityName: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
-    letterSpacing: -0.2,
+    letterSpacing: Type.body.letterSpacing,
   },
   identityHandle: {
     fontSize: Type.caption.size,
@@ -649,7 +649,7 @@ function createStyles(colors: ThemeColors) {
     letterSpacing: Type.caption.letterSpacing,
   },
   photoHint: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     paddingHorizontal: Space.md,
@@ -663,7 +663,7 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.md,
   },
   sectionLabel: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
     marginBottom: Space.sm - 2,
@@ -677,25 +677,25 @@ function createStyles(colors: ThemeColors) {
     marginBottom: 0,
   },
   fieldLabel: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
     color: colors.textSecondary,
-    marginBottom: 4,
+    marginBottom: Space.xs,
   },
   fieldSurface: {
     borderRadius: Radius.md + 2,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     backgroundColor: colors.surface,
     paddingHorizontal: Space.md - 2,
-    minHeight: 48,
+    minHeight: Space.xxl,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
   },
   fieldSurfaceFocused: {
     borderColor: colors.brand,
-    borderWidth: 1.5,
+    borderWidth: Stroke.standard + Stroke.hairline,
   },
   fieldSurfaceError: {
     borderColor: colors.danger,
@@ -703,50 +703,50 @@ function createStyles(colors: ThemeColors) {
   fieldSurfaceMultiline: {
     alignItems: 'flex-end',
     paddingVertical: Space.sm,
-    minHeight: 80,
+    minHeight: Space.xxl + Space.xl,
   },
   fieldInput: {
     flex: 1,
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.regular,
     color: colors.textPrimary,
-    paddingVertical: 8,
+    paddingVertical: Space.sm,
     paddingHorizontal: 0,
   },
   fieldInputMultiline: {
     flex: 1,
-    minHeight: 56,
-    lineHeight: 21,
+    minHeight: Space.xxl + Space.sm,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     paddingVertical: 0,
   },
   fieldCounter: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
-    paddingBottom: 2,
+    paddingBottom: Space.xs / 2,
   },
   fieldCounterError: {
     color: colors.danger,
   },
   fieldHelper: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
-    marginTop: 5,
-    lineHeight: 15,
+    marginTop: Space.xs + 1,
+    lineHeight: Type.meta.lineHeight + 1,
   },
   fieldError: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     color: colors.danger,
-    marginTop: 5,
-    lineHeight: 15,
+    marginTop: Space.xs + 1,
+    lineHeight: Type.meta.lineHeight + 1,
   },
 
   // ── Detail card (private details + security) ──
   detailCard: {
     borderRadius: Radius.lg,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     backgroundColor: colors.surface,
     overflow: 'hidden',
@@ -757,7 +757,7 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'space-between',
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.md - 2,
-    minHeight: 48,
+    minHeight: Space.xxl,
   },
   detailRowTouchable: {
     flexDirection: 'row',
@@ -765,15 +765,15 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'space-between',
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.md - 2,
-    minHeight: 48,
+    minHeight: Space.xxl,
   },
   detailLabel: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.regular,
     color: colors.textPrimary,
   },
   detailValue: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     flexShrink: 1,
@@ -799,11 +799,11 @@ function createStyles(colors: ThemeColors) {
   statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    gap: Space.xs,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs / 2 + 1,
     borderRadius: Radius.full,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
   },
   statusPillVerified: {
     backgroundColor: colors.surfaceAlt,
@@ -814,7 +814,7 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
   },
   statusPillText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
   },
 
@@ -824,31 +824,31 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.md - 2,
-    minHeight: 52,
+    minHeight: Space.xxl + Space.xs,
     gap: Space.sm,
   },
   pressableRowPressed: {
     backgroundColor: colors.surfaceAlt,
   },
   rowIconChip: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: Control.chromeCompact,
+    height: Control.chromeCompact,
+    borderRadius: Radius.xl,
     alignItems: 'center',
     justifyContent: 'center',
   },
   rowText: {
     flex: 1,
     minWidth: 0,
-    gap: 1,
+    gap: Space.xs / 4,
   },
   rowTitle: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
   rowSubtitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },
@@ -866,27 +866,27 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.sm + 4,
     paddingHorizontal: Space.md - 2,
     borderRadius: Radius.lg,
-    borderWidth: 1,
-    minHeight: 56,
+    borderWidth: Stroke.standard,
+    minHeight: Space.xxl + Space.sm,
   },
   accountIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: Control.chrome,
+    height: Control.chrome,
+    borderRadius: Radius.xxl,
     alignItems: 'center',
     justifyContent: 'center',
   },
   accountText: {
     flex: 1,
     minWidth: 0,
-    gap: 1,
+    gap: Space.xs / 4,
   },
   accountTitle: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
   },
   accountSubtitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
   },
 
@@ -904,9 +904,9 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.lg,
   },
   modalHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
+    width: Control.chrome,
+    height: Space.xs,
+    borderRadius: Radius.sm,
     backgroundColor: colors.border,
     alignSelf: 'center',
     marginBottom: Space.md,
@@ -915,11 +915,11 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
-    marginBottom: 2,
+    marginBottom: Space.xs / 2,
     letterSpacing: Type.subtitle.letterSpacing,
   },
   modalSubtitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     marginBottom: Space.md + 2,
@@ -930,29 +930,29 @@ function createStyles(colors: ThemeColors) {
   },
   modalBtnSecondary: {
     flex: 1,
-    height: 50,
+    height: Space.xxl + Space.xs / 2,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surfaceAlt,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
   },
   modalBtnPrimary: {
     flex: 1,
-    height: 50,
+    height: Space.xxl + Space.xs / 2,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.brand,
   },
   modalBtnSecondaryText: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
   modalBtnPrimaryText: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
     color: colors.textInverse,
   },

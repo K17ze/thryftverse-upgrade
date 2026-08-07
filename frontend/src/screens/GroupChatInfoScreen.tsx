@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { ChatInfoRow, ChatInfoSection } from '../components/chat/ChatInfoSection';
@@ -12,9 +12,9 @@ import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
-import { Radius, Space, Type, TypeStyles } from '../theme/designTokens';
+import { Control, Radius, Space, Type, TypeStyles } from '../theme/designTokens';
 
-type Props = StackScreenProps<RootStackParamList, 'GroupChatInfo'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'GroupChatInfo'>;
 
 export default function GroupChatInfoScreen({ navigation, route }: Props) {
   const { conversationId } = route.params;
@@ -252,8 +252,8 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
   },
   headerAction: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -263,8 +263,8 @@ function createStyles(colors: ThemeColors) {
     paddingBottom: Space.xs,
   },
   avatar: {
-    width: 76,
-    height: 76,
+    width: Space.xxl + Space.xl - Space.xs,
+    height: Space.xxl + Space.xl - Space.xs,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
@@ -274,7 +274,7 @@ function createStyles(colors: ThemeColors) {
   avatarText: {
     color: colors.textPrimary,
     fontFamily: TypeStyles.title.fontFamily,
-    fontSize: 25,
+    fontSize: Type.title.size + 1,
     letterSpacing: -0.5,
   },
   groupName: {
@@ -290,18 +290,18 @@ function createStyles(colors: ThemeColors) {
     color: colors.textSecondary,
     fontFamily: TypeStyles.body.fontFamily,
     fontSize: Type.captionElevated.size,
-    lineHeight: 19,
+    lineHeight: Type.captionElevated.size + 6,
     textAlign: 'center',
-    marginTop: 4,
+    marginTop: Space.xs,
   },
   identityMeta: {
     color: colors.textMuted,
     fontFamily: TypeStyles.body.fontFamily,
     fontSize: Type.caption.size,
-    marginTop: 5,
+    marginTop: Space.xs / 2 + 1,
   },
   quickActions: {
-    minHeight: 72,
+    minHeight: Space.xxl + Space.xxl + Space.xxl - 24,
     flexDirection: 'row',
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -309,10 +309,10 @@ function createStyles(colors: ThemeColors) {
   },
   quickAction: {
     flex: 1,
-    minHeight: 72,
+    minHeight: Space.xxl + Space.xxl + Space.xxl - 24,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 5,
+    gap: Space.xs / 2 + 1,
   },
   quickActionLabel: {
     color: colors.textSecondary,

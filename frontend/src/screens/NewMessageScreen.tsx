@@ -1,25 +1,27 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useBackendData } from '../context/BackendDataContext';
 import { searchUsers, UserSearchResult } from '../services/profileApi';
 import { createDmConversationOnApi } from '../services/chatApi';
+import { getAvailableAgents, deployAgent, type ChatAgent } from '../services/chatAgentsApi';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Radius, Type, TypeStyles, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, TypeStyles, Typography, Control } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
 import { CachedImage } from '../components/CachedImage';
 import { AppSearchBar } from '../components/ui/AppSearchBar';
 import { Caption, BodyEmphasis, Meta } from '../components/ui/Text';
 import { EmptyState } from '../components/EmptyState';
+import { ChatAgentPicker } from '../components/chat/ChatAgentPicker';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 
-type Props = StackScreenProps<RootStackParamList, 'NewMessage'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'NewMessage'>;
 
 interface ContactItem {
   userId: string;
@@ -43,7 +45,7 @@ export default function NewMessageScreen({ navigation, route }: Props) {
     searchBar: {
       backgroundColor: colors.surfaceAlt,
       borderRadius: Radius.full,
-      minHeight: 44,
+      minHeight: Control.hit,
     },
     quickActions: {
       paddingHorizontal: Space.md,
@@ -60,27 +62,27 @@ export default function NewMessageScreen({ navigation, route }: Props) {
       backgroundColor: colors.surfaceAlt,
     },
     quickActionIcon: {
-      width: 44,
-      height: 44,
+      width: Control.hit,
+      height: Control.hit,
       borderRadius: Radius.full,
       justifyContent: 'center',
       alignItems: 'center',
     },
     quickActionBody: {
       flex: 1,
-      gap: 1,
+      gap: Space.xs / 4,
     },
     quickActionBadge: {
-      minWidth: 20,
-      height: 20,
-      borderRadius: 10,
+      minWidth: Space.sm + 4,
+      height: Space.sm + 4,
+      borderRadius: Radius.lg,
       backgroundColor: colors.brand,
       justifyContent: 'center',
       alignItems: 'center',
-      paddingHorizontal: 6,
+      paddingHorizontal: Space.xs + 2,
     },
     quickActionBadgeText: {
-      fontSize: 11,
+      fontSize: Type.meta.size,
       fontFamily: Typography.family.bold,
       color: colors.textInverse,
     },
@@ -109,8 +111,8 @@ export default function NewMessageScreen({ navigation, route }: Props) {
       borderRadius: Radius.lg,
     },
     contactAvatar: {
-      width: 52,
-      height: 52,
+      width: Space.xl + Space.xl + 4,
+      height: Space.xl + Space.xl + 4,
       borderRadius: Radius.full,
       justifyContent: 'center',
       alignItems: 'center',
@@ -118,18 +120,18 @@ export default function NewMessageScreen({ navigation, route }: Props) {
       overflow: 'hidden',
     },
     contactAvatarImage: {
-      width: 52,
-      height: 52,
+      width: Space.xl + Space.xl + 4,
+      height: Space.xl + Space.xl + 4,
       borderRadius: Radius.full,
     },
     contactAvatarText: {
-      fontSize: 15,
+      fontSize: Type.bodyEmphasis.size,
       fontFamily: TypeStyles.title.fontFamily,
       color: colors.textPrimary,
     },
     rowBody: {
       flex: 1,
-      gap: 2,
+      gap: Space.xs / 2,
     },
     separator: {
       height: StyleSheet.hairlineWidth,
@@ -142,6 +144,7 @@ export default function NewMessageScreen({ navigation, route }: Props) {
   const haptic = useHaptic();
 
   const conversations = useStore((state) => state.conversations);
+  const upsertConversation = useStore((state) => state.upsertConversation);
   const preselectedUserId = route.params?.preselectedUserId;
   const preselectedDisplayName = route.params?.preselectedDisplayName;
   const currentUser = useStore((state) => state.currentUser);
@@ -152,6 +155,50 @@ export default function NewMessageScreen({ navigation, route }: Props) {
   const [searchQuery, setSearchQuery] = useState('');
   const [remoteResults, setRemoteResults] = useState<UserSearchResult[]>([]);
   const [isSearchingRemote, setIsSearchingRemote] = useState(false);
+  const [agentPickerVisible, setAgentPickerVisible] = useState(false);
+  const availableAgents = useMemo(() => getAvailableAgents(), []);
+
+  // Start a direct chat with an AI agent. Creates a local demo conversation
+  // (AGENTS.md §11 — truthful: the agent is demo-mode, clearly labelled).
+  const handleStartAgentChat = useCallback((agent: ChatAgent) => {
+    haptic.light();
+    const conversationId = `agent_dm_${agent.id}`;
+    // Deploy the agent via the chatAgentsApi so ChatScreen picks it up
+    // and generates suggestions/responses for this conversation.
+    deployAgent(conversationId, agent.type);
+    const existing = conversations.find((c) => c.id === conversationId);
+    if (existing) {
+      navigation.navigate('Chat', { conversationId, partnerUserId: agent.id });
+      setAgentPickerVisible(false);
+      return;
+    }
+    const now = new Date().toISOString();
+    upsertConversation({
+      id: conversationId,
+      type: 'dm',
+      title: agent.name,
+      avatar: undefined,
+      participantIds: [currentUser?.id ?? 'me', agent.id],
+      participantProfiles: [
+        { id: agent.id, username: agent.name, displayName: agent.name },
+      ],
+      botIds: [agent.id],
+      lastMessage: `Chat with ${agent.name} — demo mode`,
+      lastMessageTime: now,
+      unread: false,
+      messages: [{
+        id: `agent_intro_${Date.now()}`,
+        senderId: agent.id,
+        text: `Hi! I'm ${agent.name}, your AI ${agent.type.replace('_', ' ')}. I'm running in demo mode — I can suggest replies and help with ${agent.capabilities.join(', ').toLowerCase()}. What can I help you with?`,
+        timestamp: now,
+        isRead: true,
+        botId: agent.id,
+        isDemo: true,
+      } as any],
+    });
+    navigation.navigate('Chat', { conversationId, partnerUserId: agent.id });
+    setAgentPickerVisible(false);
+  }, [conversations, currentUser?.id, haptic, navigation, upsertConversation]);
 
   const recentContacts = useMemo<ContactItem[]>(() => {
     const seen = new Set<string>();
@@ -355,6 +402,30 @@ export default function NewMessageScreen({ navigation, route }: Props) {
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </AnimatedPressable>
 
+          {/* Chat with AI assistant — deploy a demo AI agent into a direct chat */}
+          <AnimatedPressable
+            style={styles.quickActionRow}
+            onPress={() => {
+              haptic.light();
+              setAgentPickerVisible(true);
+            }}
+            activeOpacity={0.85}
+            scaleValue={0.98}
+            hapticFeedback="light"
+            accessibilityLabel="Chat with AI assistant"
+            accessibilityHint="Start a conversation with an AI shopping, styling, or negotiation assistant"
+            accessibilityRole="button"
+          >
+            <View style={[styles.quickActionIcon, { backgroundColor: colors.brand + '14' }]}>
+              <Ionicons name="sparkles-outline" size={20} color={colors.brand} />
+            </View>
+            <View style={styles.quickActionBody}>
+              <BodyEmphasis numberOfLines={1}>Chat with AI assistant</BodyEmphasis>
+              <Caption color={colors.textMuted} numberOfLines={1}>Shop Scout, Style Muse, Deal Maker & more</Caption>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </AnimatedPressable>
+
           {/* Message requests (only if there are any) */}
           {messageRequests.length > 0 && (
             <AnimatedPressable
@@ -435,6 +506,14 @@ export default function NewMessageScreen({ navigation, route }: Props) {
           />
         ) : null
       )}
+
+      {/* AI Agent Picker — choose an AI assistant to start a direct chat with */}
+      <ChatAgentPicker
+        visible={agentPickerVisible}
+        onClose={() => setAgentPickerVisible(false)}
+        onDeploy={handleStartAgentChat}
+        deployedAgentIds={[]}
+      />
     </FlagshipScreen>
   );
 }

@@ -74,7 +74,7 @@ const styles = StyleSheet.create({
   stageDot: {
     width: 10,
     height: 10,
-    borderRadius: 5,
+    borderRadius: Radius.sm,
   },
   stageConnector: {
     flex: 1,

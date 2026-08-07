@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
@@ -71,7 +71,7 @@ export function CommercePartyStrip({
               <CachedImage
                 uri={party.avatar}
                 style={styles.avatar}
-                containerStyle={{ width: 48, height: 48, borderRadius: 24 }}
+                containerStyle={{ width: 48, height: 48, borderRadius: Radius.xxl }}
                 contentFit="cover"
               />
             ) : (
@@ -167,7 +167,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     padding: Space.md,
   },
   sectionTitle: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
     marginBottom: Space.sm,
@@ -189,18 +189,18 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   avatar: {
     width: 48,
     height: 48,
-    borderRadius: 24,
+    borderRadius: Radius.xxl,
   },
   avatarFallback: {
     width: 48,
     height: 48,
-    borderRadius: 24,
+    borderRadius: Radius.xxl,
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarFallbackText: {
-    fontSize: 20,
+    fontSize: Type.priceList.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
   },
@@ -213,12 +213,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: Space.xs,
   },
   username: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
   location: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     marginTop: 2,
@@ -227,10 +227,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 4,
-    marginTop: 4,
+    marginTop: Space.xs,
   },
   badge: {
-    paddingHorizontal: 8,
+    paddingHorizontal: Space.sm,
     paddingVertical: 2,
     backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.sm,
@@ -256,7 +256,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
   },
   followText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textInverse,
   },
@@ -274,7 +274,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: Space.xs,
   },
   messageText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
@@ -286,7 +286,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: 6,
   },
   factItem: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
   },
@@ -299,7 +299,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.textPrimary,
   },
   factsSeparator: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     color: colors.textMuted,
   },
 });

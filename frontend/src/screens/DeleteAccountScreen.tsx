@@ -10,12 +10,12 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useForm, Controller } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke, Control } from '../theme/designTokens';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
@@ -28,8 +28,10 @@ import { clearUserScopedQueryCache } from '../platform/server';
 import { AppButton } from '../components/ui/AppButton';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
+import { useBiometricGate } from '../hooks/useBiometricGate';
+import { BiometricGatePrompt } from '../components/security/BiometricGate';
 
-type Props = StackScreenProps<RootStackParamList, 'DeleteAccount'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'DeleteAccount'>;
 
 const DELETE_CONFIRM_PHRASE = 'DELETE';
 
@@ -66,6 +68,12 @@ export default function DeleteAccountScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
+
+  // ── Biometric gate (OWASP M5) ──
+  // Account deletion is irreversible. Require biometric re-authentication
+  // before showing the deletion form. The form itself still requires the
+  // password (server-side verification), so this is defence-in-depth.
+  const biometricGate = useBiometricGate();
 
   const [isDeleting, setIsDeleting] = React.useState(false);
   const [deleteError, setDeleteError] = React.useState<string | null>(null);
@@ -140,6 +148,35 @@ export default function DeleteAccountScreen({ navigation }: Props) {
     ],
     [],
   );
+
+  // Auto-prompt biometric once availability is confirmed.
+  React.useEffect(() => {
+    if (biometricGate.status === 'locked' && !biometricGate.isAuthenticating) {
+      void biometricGate.authenticate('Authenticate to delete your account');
+    }
+  }, [biometricGate.status, biometricGate.isAuthenticating, biometricGate.authenticate]);
+
+  // ── Biometric gate: block the deletion form until authenticated ──
+  if (biometricGate.status === 'pending' || biometricGate.status === 'locked') {
+    return (
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Delete account"
+            onBack={() => navigation.goBack()}
+          />
+        }
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      >
+        <BiometricGatePrompt
+          gate={biometricGate}
+          reason="Authenticate to delete your account"
+          onBack={() => navigation.goBack()}
+        />
+      </FlagshipScreen>
+    );
+  }
 
   return (
     <FlagshipScreen
@@ -385,7 +422,7 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     warningHero: {
       borderRadius: Radius.lg,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       padding: Space.md,
       marginBottom: Space.lg,
     },
@@ -396,8 +433,8 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.sm,
     },
     warningIcon: {
-      width: 36,
-      height: 36,
+      width: Control.chrome,
+      height: Control.chrome,
       borderRadius: Radius.full,
       alignItems: 'center',
       justifyContent: 'center',
@@ -414,7 +451,7 @@ function createStyles(colors: ThemeColors) {
     warningSubtitle: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
-      marginTop: 1,
+      marginTop: Space.xs - 3,
       letterSpacing: Type.caption.letterSpacing,
       lineHeight: Type.caption.lineHeight,
     },
@@ -446,10 +483,10 @@ function createStyles(colors: ThemeColors) {
       gap: Space.sm,
     },
     consequenceIcon: {
-      width: 24,
+      width: Space.lg,
       alignItems: 'center',
       justifyContent: 'center',
-      marginTop: 1,
+      marginTop: Space.xs - 3,
     },
     consequenceText: {
       flex: 1,
@@ -469,13 +506,13 @@ function createStyles(colors: ThemeColors) {
       lineHeight: Type.body.lineHeight,
     },
     textInput: {
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       borderRadius: Radius.xl,
       paddingVertical: Space.sm + 2,
       paddingHorizontal: Space.md,
       fontSize: Type.bodyEmphasis.size,
       fontFamily: Typography.family.medium,
-      minHeight: 48,
+      minHeight: Space.xxl,
     },
     fieldError: {
       fontSize: Type.caption.size,
@@ -490,7 +527,7 @@ function createStyles(colors: ThemeColors) {
     },
     reasonChip: {
       borderRadius: Radius.full,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       paddingVertical: Space.sm,
       paddingHorizontal: Space.md,
     },
@@ -510,7 +547,7 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       gap: Space.sm,
       borderRadius: Radius.md,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       paddingVertical: Space.sm,
       paddingHorizontal: Space.md,
       marginTop: Space.sm,

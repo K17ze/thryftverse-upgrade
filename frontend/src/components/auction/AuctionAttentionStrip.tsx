@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { Space, Radius, Typography, Type } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme } from '../../theme/ThemeContext';
@@ -146,13 +146,13 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: Typography.family.semibold,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     letterSpacing: -0.2,
     lineHeight: 17,
   },
   message: {
     fontFamily: Typography.family.regular,
-    fontSize: 11,
+    fontSize: Type.meta.size,
   },
   actionBtn: {
     paddingHorizontal: Space.sm + 4,
@@ -163,7 +163,7 @@ const styles = StyleSheet.create({
   },
   actionText: {
     fontFamily: Typography.family.semibold,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     letterSpacing: 0.2,
   },
 });

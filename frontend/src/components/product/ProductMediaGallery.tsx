@@ -24,7 +24,7 @@ import {
 } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 import { isVideoUri } from '../../utils/media';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -465,7 +465,7 @@ function createStyles(colors: ThemeColors) {
   },
   soldText: {
     color: colors.background,
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.bold,
     letterSpacing: 1,
   },
@@ -486,7 +486,7 @@ function createStyles(colors: ThemeColors) {
   controlBtn: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: Radius.xxl,
     backgroundColor: 'rgba(0,0,0,0.4)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -502,7 +502,7 @@ function createStyles(colors: ThemeColors) {
   },
   indexText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
   },
   videoBadge: {
@@ -511,15 +511,15 @@ function createStyles(colors: ThemeColors) {
     left: Space.md,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Space.xs,
     backgroundColor: 'rgba(0,0,0,0.55)',
-    paddingHorizontal: 10,
+    paddingHorizontal: Space.sm + 2,
     paddingVertical: 5,
     borderRadius: Radius.md,
   },
   videoBadgeText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
   },
   thumbnailStrip: {
@@ -530,7 +530,7 @@ function createStyles(colors: ThemeColors) {
   },
   thumbnailContent: {
     paddingHorizontal: Space.md,
-    gap: 6,
+    gap: Space.xs + 2,
   },
   thumbnail: {
     width: 40,
@@ -555,7 +555,7 @@ function createStyles(colors: ThemeColors) {
     right: 2,
     width: 14,
     height: 14,
-    borderRadius: 7,
+    borderRadius: Radius.md,
     backgroundColor: 'rgba(0,0,0,0.6)',
     alignItems: 'center',
     justifyContent: 'center',

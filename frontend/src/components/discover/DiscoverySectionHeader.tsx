@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Typography, Space } from '../../theme/designTokens';
+import { Typography, Space, Type } from '../../theme/designTokens';
 
 interface Props {
   kicker?: string;
@@ -40,7 +40,7 @@ export function DiscoverySectionHeader({
           accessibilityLabel={`${actionLabel} ${title}`}
         >
           <Text style={styles.actionLabel}>{actionLabel}</Text>
-          <Ionicons name="arrow-forward" size={14} color={colors.textPrimary} />
+          <Ionicons name="arrow-forward" size={14} color={colors.brand} />
         </AnimatedPressable>
       ) : null}
     </View>
@@ -62,7 +62,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   kicker: {
     fontFamily: Typography.family.medium,
-    fontSize: 11,
+    fontSize: Type.meta.size,
     color: colors.textMuted,
     marginBottom: 2,
     letterSpacing: 0.5,
@@ -70,7 +70,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   title: {
     fontFamily: Typography.family.bold,
-    fontSize: 20,
+    fontSize: Type.priceList.size,
     color: colors.textPrimary,
     letterSpacing: -0.4,
     lineHeight: 26,
@@ -80,14 +80,12 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     alignItems: 'center',
     gap: 4,
     paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    backgroundColor: colors.surfaceAlt,
+    paddingHorizontal: Space.xs,
   },
   actionLabel: {
     fontFamily: Typography.family.semibold,
-    fontSize: 12,
-    color: colors.textPrimary,
+    fontSize: Type.caption.size,
+    color: colors.brand,
     letterSpacing: -0.2,
   },
 });

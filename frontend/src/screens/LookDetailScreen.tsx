@@ -15,7 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
@@ -23,7 +23,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
-import { Type, Space, Radius, Typography } from '../theme/designTokens';
+import { Type, Space, Radius, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -36,7 +36,7 @@ import { Video, ResizeMode } from '../components/compat/Video';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'LookDetail'>;
 
 export default function LookDetailScreen() {
@@ -291,7 +291,7 @@ export default function LookDetailScreen() {
                   {isActive && listing && (
                     <Reanimated.View entering={FadeInDown.duration(180)} style={styles.tagTooltip}>
                       {listing.images?.[0] && (
-                        <CachedImage uri={listing.images[0]} style={styles.tagTooltipImg} containerStyle={{ borderRadius: 6 }} contentFit="cover" />
+                        <CachedImage uri={listing.images[0]} style={styles.tagTooltipImg} containerStyle={{ borderRadius: Radius.md }} contentFit="cover" />
                       )}
                       <View style={{ flex: 1 }}>
                         <Text style={styles.tagTooltipTitle} numberOfLines={1}>{listing.title}</Text>
@@ -400,7 +400,7 @@ export default function LookDetailScreen() {
           </Reanimated.View>
         )}
 
-        <View style={{ height: 40 }} />
+        <View style={{ height: Space.xl + Space.sm }} />
       </ScrollView>
 
       {/* Comments Sheet */}
@@ -474,22 +474,22 @@ function createStyles(colors: ThemeColors) {
   // Transparent 44pt hit targets — no circular chrome.
   // Glyph legibility comes from the text-shadow scrim below.
   backBtn: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerActions: { flexDirection: 'row', gap: Space.xs },
   headerBtn: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
   // Solid back button for loading/error states (no media behind)
   backBtnSolid: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -514,31 +514,31 @@ function createStyles(colors: ThemeColors) {
     bottom: 0,
     left: 0,
     right: 0,
-    height: 180,
+    height: Space.xxl * 3 + Space.xl + Space.xs,
   },
   hotspotWrap: {
     position: 'absolute',
-    width: 44,
-    height: 44,
-    marginLeft: -22,
-    marginTop: -22,
+    width: Control.hit,
+    height: Control.hit,
+    marginLeft: -(Space.lg - 2),
+    marginTop: -(Space.lg - 2),
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 3,
   },
   hotspotHalo: {
     position: 'absolute',
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: Space.xl - Space.xs,
+    height: Space.xl - Space.xs,
+    borderRadius: Radius.xl,
     backgroundColor: 'rgba(0,0,0,0.28)',
   },
   hotspotDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    width: Space.sm + Space.xs,
+    height: Space.sm + Space.xs,
+    borderRadius: Radius.md,
     backgroundColor: 'rgba(255,255,255,0.92)',
-    borderWidth: 2,
+    borderWidth: Stroke.emphasis,
     borderColor: 'rgba(0,0,0,0.18)',
   },
   hotspotDotActive: {
@@ -547,20 +547,20 @@ function createStyles(colors: ThemeColors) {
   },
   tagTooltip: {
     position: 'absolute',
-    top: 24,
-    left: -80,
-    width: 180,
+    top: Space.lg + 4,
+    left: -Space.xxl - Space.xxl - Space.xl - 8,
+    width: Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xl + 4,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: Space.sm,
     backgroundColor: 'rgba(0,0,0,0.88)',
-    borderRadius: 12,
-    padding: 8,
+    borderRadius: Radius.lg,
+    padding: Space.sm,
   },
-  tagTooltipImg: { width: 36, height: 36, borderRadius: 6, backgroundColor: colors.surfaceAlt },
-  tagTooltipTitle: { fontSize: 11, fontFamily: Typography.family.semibold, color: '#fff' },
-  tagTooltipPrice: { fontSize: 10, fontFamily: Typography.family.medium, color: 'rgba(255,255,255,0.7)' },
-  tagTooltipSold: { fontSize: 10, fontFamily: Typography.family.semibold, color: colors.danger },
+  tagTooltipImg: { width: Space.xl + 4, height: Space.xl + 4, borderRadius: Radius.md, backgroundColor: colors.surfaceAlt },
+  tagTooltipTitle: { fontSize: Type.meta.size, fontFamily: Typography.family.semibold, color: '#fff' },
+  tagTooltipPrice: { fontSize: Type.meta.size - 1, fontFamily: Typography.family.medium, color: 'rgba(255,255,255,0.7)' },
+  tagTooltipSold: { fontSize: Type.meta.size - 1, fontFamily: Typography.family.semibold, color: colors.danger },
 
   infoSection: {
     paddingHorizontal: Space.md,
@@ -571,34 +571,34 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     color: colors.textMuted,
-    letterSpacing: 0.8,
+    letterSpacing: LetterSpacing.caps,
     textTransform: 'uppercase',
-    marginBottom: -2,
+    marginBottom: -(Space.xs - 2),
   },
   caption: {
     fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     letterSpacing: Type.title.letterSpacing,
-    lineHeight: 30,
+    lineHeight: Type.title.size + 6,
   },
   creatorRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
   creatorAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: Space.xl + Space.sm,
+    height: Space.xl + Space.sm,
+    borderRadius: Radius.xxl,
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  creatorAvatarImg: { width: 40, height: 40, borderRadius: 20 },
-  creatorInfo: { gap: 2 },
+  creatorAvatarImg: { width: Space.xl + Space.sm, height: Space.xl + Space.sm, borderRadius: Radius.xxl },
+  creatorInfo: { gap: Space.xs - 2 },
   creatorName: {
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
@@ -624,7 +624,7 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
-    letterSpacing: -0.2,
+    letterSpacing: Type.body.letterSpacing,
   },
   trayCount: {
     fontSize: Type.meta.size,
@@ -636,12 +636,12 @@ function createStyles(colors: ThemeColors) {
     paddingRight: Space.md,
   },
   trayCard: {
-    width: 148,
-    gap: 6,
+    width: Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + 12,
+    gap: Space.xs + 2,
   },
   trayImgWrap: {
-    width: 148,
-    height: 184,
+    width: Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + 12,
+    height: Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + 8,
     borderRadius: Radius.lg,
     overflow: 'hidden',
     backgroundColor: colors.surfaceAlt,
@@ -663,7 +663,7 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
   trayCardPrice: {
     fontSize: Type.meta.size,

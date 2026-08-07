@@ -14,12 +14,12 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { haptics } from '../utils/haptics';
 import {
@@ -34,7 +34,7 @@ import { Switch } from 'react-native';
 import { AppButton } from '../components/ui/AppButton';
 
 type RouteT = RouteProp<RootStackParamList, 'DistributionHistory'>;
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 function formatDistributionAmount(minor: number): string {
   const major = minor / 100;
@@ -337,8 +337,8 @@ function createStyles(colors: ThemeColors) {
     padding: Space.md,
   },
   distIcon: {
-    width: 36,
-    height: 36,
+    width: Control.chrome,
+    height: Control.chrome,
     borderRadius: Radius.md,
     justifyContent: 'center',
     alignItems: 'center',
@@ -354,7 +354,7 @@ function createStyles(colors: ThemeColors) {
   distDate: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    marginTop: 2,
+    marginTop: Space.xs - 2,
     letterSpacing: Type.caption.letterSpacing,
   },
   amountBadge: {
@@ -399,8 +399,8 @@ function createStyles(colors: ThemeColors) {
     gap: Space.md,
   },
   dripIcon: {
-    width: 40,
-    height: 40,
+    width: Space.xl + 8,
+    height: Space.xl + 8,
     borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
@@ -416,8 +416,8 @@ function createStyles(colors: ThemeColors) {
   dripBody: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    marginTop: 2,
-    lineHeight: 18,
+    marginTop: Space.xs - 2,
+    lineHeight: Type.captionElevated.lineHeight,
   },
   dripAssetList: {
     borderTopWidth: StyleSheet.hairlineWidth,
@@ -436,9 +436,9 @@ function createStyles(colors: ThemeColors) {
     flex: 1,
   },
   dripAssetDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: Space.sm,
+    height: Space.sm,
+    borderRadius: Radius.sm,
   },
   dripAssetName: {
     fontSize: Type.caption.size,
@@ -448,10 +448,10 @@ function createStyles(colors: ThemeColors) {
   dripEnrolledBadge: {
     borderRadius: Radius.full,
     paddingHorizontal: Space.xs + 2,
-    paddingVertical: 2,
+    paddingVertical: Space.xs - 2,
   },
   dripEnrolledText: {
-    fontSize: 10,
+    fontSize: Type.meta.size - 1,
     fontFamily: Typography.family.semibold,
   },
   dripEmptyWrap: {
@@ -463,7 +463,7 @@ function createStyles(colors: ThemeColors) {
   dripEmpty: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    lineHeight: 16,
+    lineHeight: Type.caption.lineHeight,
     flex: 1,
   },
 });

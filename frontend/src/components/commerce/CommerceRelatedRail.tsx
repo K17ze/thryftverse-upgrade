@@ -1,9 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { CachedImage } from '../CachedImage';
+import { ImageEmptyGraphic } from '../ImageEmptyGraphic';
 
 export type RelatedItemMode = 'standard' | 'auction' | 'co_own';
 
@@ -67,9 +68,10 @@ export function CommerceRelatedRail({
                   contentFit="cover"
                 />
               ) : (
-                <View style={[styles.cardImagePlaceholder, { backgroundColor: colors.surfaceAlt }]}>
-                  <Ionicons name="image-outline" size={20} color={colors.textMuted} />
-                </View>
+                <ImageEmptyGraphic
+                  icon={(mode === 'auction' ? 'trophy-outline' : 'pricetag-outline') as keyof typeof Ionicons.glyphMap}
+                  style={[styles.cardImage, styles.cardImageContainer]}
+                />
               )}
 
               {item.badgeText ? (
@@ -136,7 +138,7 @@ const styles = StyleSheet.create({
   label: {
     paddingHorizontal: Space.md,
     marginBottom: Space.md,
-    fontSize: 17,
+    fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: -0.3,
   },
@@ -190,18 +192,18 @@ const styles = StyleSheet.create({
   cardTitle: {
     minHeight: 36,
     marginBottom: Space.xs,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     lineHeight: 18,
     fontFamily: Typography.family.medium,
   },
   cardPrice: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     lineHeight: 20,
     fontFamily: Typography.family.semibold,
   },
   cardIze: {
     marginTop: 1,
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
   },
   cardMeta: {

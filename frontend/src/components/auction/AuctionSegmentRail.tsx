@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable, LayoutChangeEvent } from 'react-nati
 import { ScrollView } from 'react-native-gesture-handler';
 import Reanimated, { useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Typography } from '../../theme/designTokens';
+import { Space, Typography, Type } from '../../theme/designTokens';
 import { haptics } from '../../utils/haptics';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
@@ -115,7 +115,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   label: {
     fontFamily: Typography.family.medium,
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     color: colors.textSecondary,
     letterSpacing: -0.2,
   },
@@ -125,7 +125,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   count: {
     fontFamily: Typography.family.regular,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     color: colors.textMuted,
     fontVariant: ['tabular-nums'],
   },

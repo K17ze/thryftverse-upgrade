@@ -98,7 +98,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     width: 3,
     alignSelf: 'stretch',
     backgroundColor: colors.brand,
-    borderRadius: 2,
+    borderRadius: Radius.sm,
     marginRight: Space.sm,
   },
   content: {
@@ -122,7 +122,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   indicatorBar: {
     width: 3,
     backgroundColor: colors.brand,
-    borderRadius: 2,
+    borderRadius: Radius.sm,
     marginRight: Space.sm,
   },
   indicatorContent: {

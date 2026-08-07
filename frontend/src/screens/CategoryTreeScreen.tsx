@@ -15,7 +15,7 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useToast } from '../context/ToastContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { Typography, Space, Radius } from '../theme/designTokens';
+import { Typography, Space, Radius, Type, Control, Stroke, LetterSpacing } from '../theme/designTokens';
 import { VisualCategoryTile } from '../components/discover/VisualCategoryTile';
 import { DiscoverySectionHeader } from '../components/discover/DiscoverySectionHeader';
 
@@ -147,25 +147,25 @@ function createStyles(colors: ThemeColors) {
       paddingBottom: Space.lg,
     },
     backBtn: {
-      width: 44,
-      height: 44,
+      width: Control.hit,
+      height: Control.hit,
       justifyContent: 'center',
       alignItems: 'flex-start',
       marginBottom: Space.sm,
     },
     editorialTitle: {
-      fontSize: 32,
+      fontSize: Type.display.size,
       fontFamily: Typography.family.bold,
       color: colors.textPrimary,
-      letterSpacing: -0.8,
-      lineHeight: 40,
+      letterSpacing: Type.display.letterSpacing - 0.3,
+      lineHeight: Type.display.lineHeight + 2,
     },
     editorialSubtitle: {
-      fontSize: 14,
+      fontSize: Type.body.size,
       fontFamily: Typography.family.medium,
       color: colors.textMuted,
       marginTop: Space.xs,
-      letterSpacing: 0.2,
+      letterSpacing: LetterSpacing.wide + 0.08,
     },
 
     viewAllRow: {
@@ -180,10 +180,10 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.xl,
     },
     viewAllText: {
-      fontSize: 16,
+      fontSize: Type.bodyLarge.size,
       fontFamily: Typography.family.bold,
       color: colors.background,
-      letterSpacing: 0.3,
+      letterSpacing: LetterSpacing.wide + 0.18,
     },
 
     gridWrap: {
@@ -208,15 +208,15 @@ function createStyles(colors: ThemeColors) {
     },
     subPill: {
       backgroundColor: colors.surface,
-      paddingHorizontal: 14,
-      paddingVertical: 8,
+      paddingHorizontal: Space.md - 2,
+      paddingVertical: Space.sm,
       borderRadius: Radius.full,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       borderColor: colors.border,
     },
     subPillText: {
       color: colors.textPrimary,
-      fontSize: 13,
+      fontSize: Type.captionElevated.size,
       fontFamily: Typography.family.medium,
     },
   });

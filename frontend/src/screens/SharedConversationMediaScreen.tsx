@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -18,7 +18,7 @@ import { isVideoUri } from '../utils/media';
 import { useHaptic } from '../hooks/useHaptic';
 import { EmptyState } from '../components/EmptyState';
 
-type Props = StackScreenProps<RootStackParamList, 'SharedConversationMedia'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'SharedConversationMedia'>;
 
 const GAP = 2;
 const COLS = 3;
@@ -159,11 +159,11 @@ function createStyles(colors: ThemeColors) {
       position: 'absolute',
       top: '50%',
       left: '50%',
-      marginTop: -14,
-      marginLeft: -14,
-      width: 28,
-      height: 28,
-      borderRadius: 14,
+      marginTop: -(Space.lg + 4) / 2,
+      marginLeft: -(Space.lg + 4) / 2,
+      width: Space.lg + 4,
+      height: Space.lg + 4,
+      borderRadius: Radius.xl,
       backgroundColor: 'rgba(0,0,0,0.55)',
       justifyContent: 'center',
       alignItems: 'center',

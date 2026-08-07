@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { Space, Radius, Typography, Type } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AppButton } from '../ui/AppButton';
 import { CachedImage } from '../CachedImage';
@@ -133,7 +133,7 @@ export function CoOwnAssetCard({
               <CachedImage uri={issuerAvatar} style={styles.issuerAvatar} contentFit="cover" />
             ) : (
               <View style={[styles.issuerAvatar, { backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }]}>
-                <Text style={{ fontSize: 10, fontFamily: Typography.family.bold, color: colors.textPrimary }}>
+                <Text style={{ fontSize: Type.meta.size - 2, fontFamily: Typography.family.bold, color: colors.textPrimary }}>
                   {issuerHandle.slice(0, 1).toUpperCase()}
                 </Text>
               </View>
@@ -223,7 +223,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 4,
+    marginBottom: Space.xs,
   },
   assetTitle: {
     flex: 1,
@@ -256,8 +256,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    minHeight: 34,
+    gap: Space.sm,
+    minHeight: Space.xl + Space.sm + 2,
     borderRadius: Radius.full,
     borderWidth: 1,
     borderColor: colors.border,
@@ -268,7 +268,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   issuerAvatar: {
     width: 18,
     height: 18,
-    borderRadius: 9,
+    borderRadius: Radius.lg,
   },
   issuerText: {
     flex: 1,
@@ -276,7 +276,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   messageBtn: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surfaceAlt,

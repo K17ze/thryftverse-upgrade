@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography } from '../../theme/designTokens';
+import { Space, Typography, Radius, Type } from '../../theme/designTokens';
 
 export interface OrderActionConfig {
   label: string;
@@ -121,7 +121,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     justifyContent: 'center',
     gap: Space.sm,
     minHeight: 48,
-    borderRadius: 10,
+    borderRadius: Radius.lg,
     paddingHorizontal: Space.md,
   },
   btnPrimary: {
@@ -139,7 +139,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     opacity: 0.5,
   },
   btnText: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
   },
   btnTextPrimary: {

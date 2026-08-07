@@ -4,7 +4,6 @@ import Reanimated, { useSharedValue, useAnimatedStyle, withSequence, withTiming,
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Type, Space } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
 import { useStore } from '../store/useStore';
@@ -13,9 +12,9 @@ import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { Typography } from '../theme/designTokens';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 
+import { Type, Space, Radius, Typography } from '../theme/designTokens';
 export default function SignUpScreen() {
   const navigation = useNavigation<any>();
   const { colors, isDark } = useAppTheme();
@@ -27,6 +26,9 @@ export default function SignUpScreen() {
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [usernameError, setUsernameError] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
   const reducedMotionEnabled = useReducedMotion();
   const canSubmit = username.trim().length > 0 && email.trim().length > 0 && password.length > 0 && !isSubmitting;
 
@@ -62,29 +64,38 @@ export default function SignUpScreen() {
 
     if (!normalizedUsername || !normalizedEmail || !password) {
       setErrorMsg('Please fill in all details.');
+      setUsernameError(!normalizedUsername ? 'Username is required.' : '');
+      setEmailError(!normalizedEmail ? 'Email is required.' : '');
+      setPasswordError(!password ? 'Password is required.' : '');
       shake();
       return;
     }
 
     if (normalizedUsername.length < 3) {
       setErrorMsg('Username must be at least 3 characters.');
+      setUsernameError('Username must be at least 3 characters.');
       shake();
       return;
     }
 
     if (!/^\S+@\S+\.\S+$/.test(normalizedEmail)) {
       setErrorMsg('Enter a valid email address.');
+      setEmailError('Enter a valid email address.');
       shake();
       return;
     }
 
     if (password.length < 8) {
       setErrorMsg('Password must be at least 8 characters.');
+      setPasswordError('Password must be at least 8 characters.');
       shake();
       return;
     }
 
     setErrorMsg('');
+    setUsernameError('');
+    setEmailError('');
+    setPasswordError('');
     setIsSubmitting(true);
 
     try {
@@ -133,7 +144,12 @@ export default function SignUpScreen() {
                 autoCorrect={false}
                 returnKeyType="next"
                 value={username}
-                onChangeText={setUsername}
+                errorText={usernameError || undefined}
+                onChangeText={(value) => {
+                  setUsername(value);
+                  if (errorMsg) setErrorMsg('');
+                  if (usernameError) setUsernameError('');
+                }}
                 containerStyle={styles.inputGroup}
               />
               <AppInput
@@ -144,7 +160,12 @@ export default function SignUpScreen() {
                 autoCorrect={false}
                 returnKeyType="next"
                 value={email}
-                onChangeText={setEmail}
+                errorText={emailError || undefined}
+                onChangeText={(value) => {
+                  setEmail(value);
+                  if (errorMsg) setErrorMsg('');
+                  if (emailError) setEmailError('');
+                }}
                 containerStyle={styles.inputGroup}
               />
               <AppInput
@@ -153,7 +174,12 @@ export default function SignUpScreen() {
                 secureTextEntry
                 returnKeyType="done"
                 value={password}
-                onChangeText={setPassword}
+                errorText={passwordError || undefined}
+                onChangeText={(value) => {
+                  setPassword(value);
+                  if (errorMsg) setErrorMsg('');
+                  if (passwordError) setPasswordError('');
+                }}
                 onSubmitEditing={() => {
                   Keyboard.dismiss();
                   if (canSubmit) {
@@ -203,7 +229,7 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   header: { paddingHorizontal: Space.md, paddingTop: Space.sm, paddingBottom: Space.lg },
-  backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  backBtn: { width: 44, height: 44, borderRadius: Radius.xxl, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
 
   keyboardWrap: { flex: 1 },
   content: { flex: 1 },
@@ -221,7 +247,7 @@ function createStyles(colors: ThemeColors) {
 
   footer: { paddingBottom: Space.sm, position: 'relative' },
   termsText: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textMuted, textAlign: 'center', marginBottom: Space.lg - 4, lineHeight: Type.caption.lineHeight + 2 },
-  errorText: { color: colors.danger, fontSize: 13, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: Space.md - 4 },
+  errorText: { color: colors.danger, fontSize: Type.captionElevated.size, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: Space.md - 4 },
   primaryBtn: { backgroundColor: colors.textPrimary, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
   primaryBtnDisabled: { opacity: 0.45 },
   primaryText: { color: colors.background, fontSize: Type.body.size + 2, fontFamily: Typography.family.bold },

@@ -153,7 +153,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   statusDot: {
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: Radius.sm,
   },
   statusText: {
     fontSize: Type.meta.size,
@@ -201,13 +201,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   allocationBarBg: {
     height: 6,
-    borderRadius: 3,
+    borderRadius: Radius.sm,
     backgroundColor: colors.surfaceAlt,
     overflow: 'hidden',
   },
   allocationBarFill: {
     height: 6,
-    borderRadius: 3,
+    borderRadius: Radius.sm,
     backgroundColor: colors.brand,
   },
   allocationText: {

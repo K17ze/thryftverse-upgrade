@@ -3,18 +3,18 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
   Pressable,
   ActivityIndicator,
   RefreshControl,
   TextInput,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Control, LetterSpacing } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { haptics } from '../utils/haptics';
@@ -423,7 +423,7 @@ export default function MyOrdersScreen() {
     if (!nextCursor && orders.length > 0) {
       return (
         <View style={styles.footerEnd}>
-          <Text style={styles.footerEndText}>No more orders</Text>
+          <Text style={styles.footerEndText}>All orders loaded</Text>
         </View>
       );
     }
@@ -539,13 +539,13 @@ export default function MyOrdersScreen() {
         </View>
       ) : null}
 
-      <FlatList
+      <FlashList
         data={groupedOrders}
         keyExtractor={(group) => group.key}
         renderItem={({ item: group }) => (
           <View>
             {renderGroupHeader(group.label)}
-            <FlatList
+            <FlashList
               data={group.data}
               keyExtractor={keyExtractor}
               renderItem={renderItem}
@@ -574,6 +574,8 @@ export default function MyOrdersScreen() {
             colors={[colors.textSecondary]}
           />
         }
+        // Performance: order history can be long; FlashList v2 handles
+        // recycling automatically.
       />
 
       <OrdersFilterSheet
@@ -603,33 +605,33 @@ function createStyles(colors: ThemeColors) {
     borderBottomColor: colors.border,
   },
   headerBack: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: 17,
+    fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
   headerFilterBtn: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
   needsActionBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
     paddingHorizontal: Space.md,
     paddingVertical: Space.xs,
     backgroundColor: colors.surface,
   },
   needsActionText: {
     flex: 1,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
     color: colors.brand,
   },
@@ -640,16 +642,16 @@ function createStyles(colors: ThemeColors) {
   searchInputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: Space.sm,
     paddingHorizontal: Space.md,
-    height: 40,
+    height: Control.chrome + Space.xs,
   },
   searchIcon: {
     marginLeft: 0,
   },
   searchInput: {
     flex: 1,
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: colors.textPrimary,
   },
@@ -661,12 +663,12 @@ function createStyles(colors: ThemeColors) {
     paddingBottom: Space.xs,
   },
   filterSummaryText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
   },
   clearFilterText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.brand,
   },
@@ -676,11 +678,11 @@ function createStyles(colors: ThemeColors) {
     paddingBottom: Space.xs,
   },
   groupHeaderText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: colors.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: 1.2,
+    letterSpacing: LetterSpacing.caps + 0.38,
   },
   listContent: {
     paddingBottom: Space.xl,
@@ -688,7 +690,7 @@ function createStyles(colors: ThemeColors) {
   separator: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.borderSubtle,
-    marginLeft: 104,
+    marginLeft: Space.xxl * 2 + Space.sm,
   },
   errorContainer: {
     alignItems: 'center',
@@ -697,27 +699,27 @@ function createStyles(colors: ThemeColors) {
     gap: Space.md,
   },
   errorTitle: {
-    fontSize: 18,
+    fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
   errorSubtitle: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     textAlign: 'center',
   },
   retryBtn: {
-    paddingVertical: 14,
+    paddingVertical: Space.md - 2,
     paddingHorizontal: Space.xl,
-    borderRadius: 10,
+    borderRadius: Radius.lg,
     backgroundColor: colors.brand,
-    minHeight: 48,
+    minHeight: Space.xxl,
     alignItems: 'center',
     justifyContent: 'center',
   },
   retryBtnText: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.semibold,
     color: colors.textInverse,
   },
@@ -725,11 +727,11 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: Space.sm,
     paddingVertical: Space.md,
   },
   footerLoadingText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },
@@ -737,16 +739,16 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: Space.sm,
     paddingVertical: Space.md,
   },
   footerErrorText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },
   retryLink: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: colors.brand,
   },
@@ -755,7 +757,7 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.md,
   },
   footerEndText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },

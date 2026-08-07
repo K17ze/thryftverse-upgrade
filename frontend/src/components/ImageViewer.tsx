@@ -17,6 +17,7 @@ import { SharedTransitionImage } from './SharedTransitionImage';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { isVideoUri } from '../utils/media';
 
+import { Radius } from '../theme/designTokens';
 const { width: W } = Dimensions.get('window');
 const MAX_ZOOM = 4;
 const MIN_ZOOM = 1;
@@ -270,7 +271,7 @@ const styles = StyleSheet.create({
   },
   dot: {
     height: 8,
-    borderRadius: 4,
+    borderRadius: Radius.sm,
     backgroundColor: '#ffffff',
   },
 });

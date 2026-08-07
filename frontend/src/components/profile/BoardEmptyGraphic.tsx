@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors, ActiveTheme } from '../../constants/colors';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 
 interface BoardEmptyGraphicProps {
   title: string;
@@ -77,7 +77,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 4,
     height: 4,
-    borderRadius: 2,
+    borderRadius: Radius.sm,
     backgroundColor: ActiveTheme === 'light' ? '#000' : '#fff',
   },
   center: {
@@ -101,13 +101,13 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: Typography.family.semibold,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     color: ActiveTheme === 'light' ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)',
     textAlign: 'center',
   },
   subtitle: {
     fontFamily: Typography.family.regular,
-    fontSize: 11,
+    fontSize: Type.meta.size,
     color: ActiveTheme === 'light' ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.35)',
     textAlign: 'center',
   },

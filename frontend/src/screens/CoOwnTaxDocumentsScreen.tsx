@@ -20,10 +20,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Control, LetterSpacing } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -34,7 +34,7 @@ import { EmptyState } from '../components/EmptyState';
 import { fetchCoOwnTaxDocument, type CoOwnTaxDocument } from '../services/marketApi';
 import { RootStackParamList } from '../navigation/types';
 
-type Props = StackScreenProps<RootStackParamList, 'CoOwnTaxDocuments'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'CoOwnTaxDocuments'>;
 
 function formatGbp(minor: number): string {
   const sign = minor < 0 ? '-' : '';
@@ -303,8 +303,8 @@ function createStyles(colors: ThemeColors) {
       gap: Space.md,
     },
     heroIconWrap: {
-      width: 44,
-      height: 44,
+      width: Control.hit,
+      height: Control.hit,
       borderRadius: Radius.full,
       backgroundColor: colors.brand,
       justifyContent: 'center',
@@ -321,7 +321,7 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
-      marginTop: 2,
+      marginTop: Space.xs / 2,
     },
     heroPnlWrap: {
       marginTop: Space.lg,
@@ -333,7 +333,7 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.medium,
       color: colors.textMuted,
       textTransform: 'uppercase',
-      letterSpacing: 0.8,
+      letterSpacing: LetterSpacing.caps,
     },
     heroPnlValue: {
       fontSize: Type.priceLarge.size,
@@ -344,10 +344,10 @@ function createStyles(colors: ThemeColors) {
     heroPnlBadge: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 4,
+      gap: Space.xs,
       borderRadius: Radius.full,
       paddingHorizontal: Space.sm + 2,
-      paddingVertical: 3,
+      paddingVertical: Space.xs - 1,
     },
     heroPnlBadgeText: {
       fontSize: Type.meta.size,
@@ -365,7 +365,7 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
       textTransform: 'uppercase',
-      letterSpacing: 0.8,
+      letterSpacing: LetterSpacing.caps,
       opacity: 0.7,
     },
 
@@ -387,8 +387,8 @@ function createStyles(colors: ThemeColors) {
       borderBottomWidth: StyleSheet.hairlineWidth,
     },
     summaryIconWrap: {
-      width: 32,
-      height: 32,
+      width: Control.chromeCompact,
+      height: Control.chromeCompact,
       borderRadius: Radius.md,
       backgroundColor: colors.surfaceAlt,
       justifyContent: 'center',
@@ -431,7 +431,7 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.meta.size,
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
-      marginTop: 2,
+      marginTop: Space.xs / 2,
     },
     breakdownValue: {
       fontSize: Type.body.size,
@@ -452,8 +452,8 @@ function createStyles(colors: ThemeColors) {
       padding: Space.md,
     },
     disclaimerIconWrap: {
-      width: 32,
-      height: 32,
+      width: Control.chromeCompact,
+      height: Control.chromeCompact,
       borderRadius: Radius.full,
       backgroundColor: colors.surfaceAlt,
       justifyContent: 'center',
@@ -464,13 +464,13 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
-      marginBottom: 2,
+      marginBottom: Space.xs / 2,
     },
     disclaimerText: {
       fontSize: Type.meta.size,
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
-      lineHeight: 16,
+      lineHeight: Type.caption.lineHeight,
     },
     generatedAt: {
       fontSize: Type.meta.size,

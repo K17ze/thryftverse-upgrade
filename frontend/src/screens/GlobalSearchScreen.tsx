@@ -18,7 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Motion } from '../constants/motion';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
@@ -42,14 +42,14 @@ import { ProductAnalytics } from '../platform/product/productAnalytics';
 import { useSavedSearchAlerts } from '../hooks/useSavedSearchAlerts';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
-/* ── New Discover Components ── */
+/* ΓöÇΓöÇ New Discover Components ΓöÇΓöÇ */
 import { HeroCarousel, HeroItem } from '../components/discover/HeroCarousel';
 import { EditorialSection } from '../components/discover/EditorialSection';
 import { FeaturedBoardCard, FeaturedBoard } from '../components/discover/FeaturedBoardCard';
 import { EditorialImageRow, EditorialImage } from '../components/discover/EditorialImageRow';
 import { Typography, Radius } from '../theme/designTokens';
 
-type Props = StackScreenProps<RootStackParamList, 'GlobalSearch'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'GlobalSearch'>;
 
 const RECENT_SEARCHES_KEY = '@thryftverse_recent_searches';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -69,13 +69,15 @@ interface RankedListing {
   reason: string;
 }
 
-type BrowseSortOption = 'Recommended' | 'Newest' | 'Price: Low to High' | 'Price: High to Low';
+type BrowseSortOption = 'Recommended' | 'Newest' | 'Price: Low to High' | 'Price: High to Low' | 'Most liked' | 'Ending soon';
 
 const DISCOVER_SORT_OPTIONS: BrowseSortOption[] = [
   'Recommended',
   'Newest',
   'Price: Low to High',
   'Price: High to Low',
+  'Most liked',
+  'Ending soon',
 ];
 
 // Colorful backgrounds for "Top Searches" cards
@@ -88,12 +90,12 @@ const TOP_SEARCH_CARDS = [
   { label: 'Minimal', color: '#E8DAEF', textColor: '#4A235A', image: '' },
 ];
 
-// Trending searches — curated popular terms shown in the focus state (Depop/Vinted pattern)
+// Trending searches ΓÇö curated popular terms shown in the focus state (Depop/Vinted pattern)
 const TRENDING_SEARCHES: string[] = [
   'Nike', 'Vintage', 'Y2K', 'Streetwear', 'Designer', 'Minimal', 'Summer', 'Denim',
 ];
 
-/* ── Editorial seed data ── */
+/* ΓöÇΓöÇ Editorial seed data ΓöÇΓöÇ */
 const HERO_ITEMS: HeroItem[] = [
   {
     id: 'hero1',
@@ -284,7 +286,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
             result.items.map((item) => ({
               id: item.id,
               title: item.title || 'Untitled listing',
-              // Safe brand fallback — never blank in the result rows.
+              // Safe brand fallback ΓÇö never blank in the result rows.
               brand: item.brand || (item.title ? item.title.split(' ').slice(0, 2).join(' ') : 'Thryftverse'),
               size: item.size || 'One size',
               condition: 'Very good' as const,
@@ -497,7 +499,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
     await AsyncStorage.removeItem(RECENT_SEARCHES_KEY);
   };
 
-  // Live search suggestions — derived from listing titles, brands, and categories
+  // Live search suggestions ΓÇö derived from listing titles, brands, and categories
   // that partially match the current query. Shown as a dropdown while typing.
   const searchSuggestions = useMemo(() => {
     const partial = query.trim().toLowerCase();
@@ -675,7 +677,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
   const masonryColumn1 = discoverListings.filter((_, i) => i % 2 === 0);
   const masonryColumn2 = discoverListings.filter((_, i) => i % 2 === 1);
 
-  /* ── Editorial helpers ── */
+  /* ΓöÇΓöÇ Editorial helpers ΓöÇΓöÇ */
   const handleEditorialImagePress = (id: string) => {
     navigation.push('ItemDetail', { itemId: id });
   };
@@ -818,10 +820,10 @@ export default function GlobalSearchScreen({ navigation }: Props) {
           renderSearchLoadingState()
         ) : (
           <>
-            {/* ═══════ DISCOVER LANDING (no query) ═══════ */}
+            {/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ DISCOVER LANDING (no query) ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */}
             {isDiscoverLanding && (
               <>
-                {/* ── FOCUS STATE: Clean recent + trending when search is focused ── */}
+                {/* ΓöÇΓöÇ FOCUS STATE: Clean recent + trending when search is focused ΓöÇΓöÇ */}
                 {isSearchFocused ? (
                   <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(220)}>
                     {/* Recent searches */}
@@ -903,12 +905,12 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                   </Reanimated.View>
                 ) : (
                 <>
-                {/* Hero Carousel — only when real imagery exists */}
+                {/* Hero Carousel ΓÇö only when real imagery exists */}
                 {HERO_ITEMS.some((h) => h.uri.trim().length > 0) && (
                   <HeroCarousel items={HERO_ITEMS.filter((h) => h.uri.trim().length > 0)} autoPlayInterval={6000} />
                 )}
 
-                {/* Explore featured boards — only when real imagery exists */}
+                {/* Explore featured boards ΓÇö only when real imagery exists */}
                 {FEATURED_BOARDS.some((b) => b.images.some((img) => img.trim().length > 0)) && (
                   <EditorialSection
                     kicker="Explore featured boards"
@@ -984,7 +986,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                               <Text style={[styles.savedSearchMeta, t.savedSearchMeta]}>
                                 {search.alertsEnabled ? 'Alerts on' : 'Alerts off'}
                                 {search.lastMatchCount != null && search.lastMatchCount > 0
-                                  ? ` · ${search.lastMatchCount} new`
+                                  ? ` ┬╖ ${search.lastMatchCount} new`
                                   : ''}
                               </Text>
                             </View>
@@ -1048,7 +1050,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                   </ScrollView>
                 </EditorialSection>
 
-                {/* Editorial image rows — only when real imagery exists */}
+                {/* Editorial image rows ΓÇö only when real imagery exists */}
                 {EDITORIAL_SECTIONS.filter((s) => s.images.some((img) => img.uri.trim().length > 0)).map((section) => (
                   <EditorialSection
                     key={section.id}
@@ -1128,7 +1130,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
               </>
             )}
 
-            {/* ═══════ SEARCH RESULTS (query entered) ═══════ */}
+            {/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ SEARCH RESULTS (query entered) ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */}
             {!isDiscoverLanding && (
               <>
                 {(lastError || searchError) ? (
@@ -1478,7 +1480,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
   },
 
-  // Focus state — trending pills (wrap layout, not horizontal scroll)
+  // Focus state ΓÇö trending pills (wrap layout, not horizontal scroll)
   trendingFocusWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',

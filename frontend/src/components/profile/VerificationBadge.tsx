@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type, Stroke } from '../../theme/designTokens';
 import { VERIFICATION_TIERS, VerificationTier } from '../../platform/product/listingDetailContract';
 
 /**
@@ -72,24 +72,24 @@ const styles = StyleSheet.create({
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Space.xs,
     paddingHorizontal: Space.sm,
-    paddingVertical: 3,
+    paddingVertical: Space.xs / 2 + 1,
     borderRadius: Radius.sm,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
   },
   pillText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: 0.1,
   },
   compact: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
+    gap: Space.xs / 2 + 1,
   },
   compactText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
     letterSpacing: 0.1,
   },

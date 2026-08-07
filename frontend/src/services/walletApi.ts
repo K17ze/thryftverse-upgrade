@@ -721,3 +721,39 @@ export async function getSellerWalletBalances(userId: string) {
     `/users/${encodeURIComponent(userId)}/wallet/balances`
   );
 }
+
+export interface WalletLedgerItem {
+  id: number;
+  walletId: string;
+  txId: string;
+  asset: string;
+  amount: number;
+  amountDisplay: number;
+  balanceAfter: number;
+  balanceAfterDisplay: number;
+  kind: string;
+  refType: string | null;
+  refId: string | null;
+  anchorValueInInr: number | null;
+  goldRateInrPerG: number | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+interface WalletLedgerResponse {
+  ok: true;
+  wallet: unknown;
+  items: WalletLedgerItem[];
+}
+
+export async function getWalletLedger(
+  userId: string,
+  options?: { asset?: 'ALL' | '1ZE' | 'FIAT'; limit?: number }
+) {
+  const params = new URLSearchParams();
+  params.set('asset', options?.asset ?? 'ALL');
+  params.set('limit', String(options?.limit ?? 100));
+  return fetchJson<WalletLedgerResponse>(
+    `/wallet/1ze/${encodeURIComponent(userId)}/ledger?${params.toString()}`
+  );
+}

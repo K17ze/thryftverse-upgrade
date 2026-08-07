@@ -1,0 +1,644 @@
+import React, { useMemo, useEffect, useState, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  RefreshControl,
+  ActivityIndicator,
+  Linking,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
+import { NativeStackScreenProps, RootStackParamList } from '../navigation/types';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
+import { Space, Radius, Type, Typography, Control, Stroke, LetterSpacing } from '../theme/designTokens';
+import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
+import { SettingsInfoBanner } from '../components/settings/SettingsInfoBanner';
+import { AnimatedPressable } from '../components/AnimatedPressable';
+import { useStore } from '../store/useStore';
+import { useToast } from '../context/ToastContext';
+import { useHaptic } from '../hooks/useHaptic';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useConnectivity } from '../hooks/useConnectivity';
+import { fetchKycStatus, type KycStatus } from '../services/complianceApi';
+import { parseApiError } from '../lib/apiClient';
+
+type Props = NativeStackScreenProps<RootStackParamList, 'VerificationStatus'>;
+
+// Effective verification status — merges local + backend into one of four states.
+type EffectiveStatus = 'unverified' | 'in_review' | 'verified' | 'rejected';
+
+interface TimelineStep {
+  label: string;
+  detail: string;
+  status: 'complete' | 'active' | 'pending';
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+}
+
+export default function VerificationStatusScreen({ navigation }: Props) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { show } = useToast();
+  const haptic = useHaptic();
+  const reducedMotionEnabled = useReducedMotion();
+  const { isOffline } = useConnectivity();
+
+  const currentUser = useStore((state) => state.currentUser);
+  const coOwnCompliance = useStore((state) => state.coOwnCompliance);
+
+  const [backendStatus, setBackendStatus] = useState<KycStatus | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadStatus = useCallback(async (silent = false) => {
+    if (!currentUser?.id) {
+      setIsLoading(false);
+      return;
+    }
+    if (!silent) setIsLoading(true);
+    setError(null);
+    try {
+      const res = await fetchKycStatus(currentUser.id);
+      setBackendStatus(res.kycStatus);
+    } catch (err) {
+      const isNetworkError = isOffline || (err instanceof Error && /network|fetch|timeout/i.test(err.message));
+      const parsed = parseApiError(err, isNetworkError ? 'You appear to be offline. Check your connection and try again.' : undefined);
+      setError(parsed.message);
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, [currentUser?.id, isOffline]);
+
+  useEffect(() => {
+    void loadStatus();
+  }, [loadStatus]);
+
+  const handleRefresh = useCallback(() => {
+    setIsRefreshing(true);
+    void loadStatus(true);
+  }, [loadStatus]);
+
+  // ── Derive effective status ──
+  const emailVerified = currentUser?.emailVerified ?? false;
+  const kycVerifiedLocal = coOwnCompliance.kycVerified;
+  const backendVerified = backendStatus?.status === 'verified';
+  const backendPending = backendStatus?.status === 'pending';
+  const backendRejected = backendStatus?.status === 'rejected';
+
+  const effectiveStatus: EffectiveStatus = useMemo(() => {
+    if (kycVerifiedLocal || backendVerified) return 'verified';
+    if (backendRejected) return 'rejected';
+    if (backendPending) return 'in_review';
+    return 'unverified';
+  }, [kycVerifiedLocal, backendVerified, backendRejected, backendPending]);
+
+  const handleStartVerification = useCallback(() => {
+    haptic.light();
+    navigation.navigate('Verification');
+  }, [navigation, haptic]);
+
+  const handleResubmit = useCallback(() => {
+    haptic.medium();
+    navigation.navigate('Verification');
+  }, [navigation, haptic]);
+
+  // ── Timeline ── derived from backend status fields + email
+  const timeline: TimelineStep[] = useMemo(() => {
+    const docStatus = backendStatus?.documentStatus ?? 'unsubmitted';
+    const livenessStatus = backendStatus?.livenessStatus ?? 'unsubmitted';
+
+    return [
+      {
+        label: 'Email confirmed',
+        detail: emailVerified ? 'Verified' : 'Pending — check your inbox',
+        status: emailVerified ? 'complete' : 'pending',
+        icon: emailVerified ? 'checkmark-circle' : 'mail-outline',
+      },
+      {
+        label: 'Identity details',
+        detail:
+          effectiveStatus === 'unverified'
+            ? 'Not started'
+            : 'Submitted',
+        status: effectiveStatus === 'unverified' ? 'pending' : 'complete',
+        icon: 'person-outline',
+      },
+      {
+        label: 'Document check',
+        detail:
+          docStatus === 'approved'
+            ? 'Approved'
+            : docStatus === 'submitted'
+            ? 'Submitted — under review'
+            : docStatus === 'rejected'
+            ? 'Rejected'
+            : 'Not submitted',
+        status:
+          docStatus === 'approved'
+            ? 'complete'
+            : docStatus === 'submitted'
+            ? 'active'
+            : docStatus === 'rejected'
+            ? 'pending'
+            : 'pending',
+        icon: 'card-outline',
+      },
+      {
+        label: 'Selfie & liveness',
+        detail:
+          livenessStatus === 'passed'
+            ? 'Passed'
+            : livenessStatus === 'pending'
+            ? 'Under review'
+            : livenessStatus === 'failed'
+            ? 'Failed — retake required'
+            : 'Not submitted',
+        status:
+          livenessStatus === 'passed'
+            ? 'complete'
+            : livenessStatus === 'pending'
+            ? 'active'
+            : 'pending',
+        icon: 'scan-outline',
+      },
+      {
+        label: 'Final review',
+        detail:
+          effectiveStatus === 'verified'
+            ? 'Approved'
+            : effectiveStatus === 'in_review'
+            ? 'In review'
+            : effectiveStatus === 'rejected'
+            ? 'Declined'
+            : 'Awaiting submission',
+        status:
+          effectiveStatus === 'verified'
+            ? 'complete'
+            : effectiveStatus === 'in_review'
+            ? 'active'
+            : 'pending',
+        icon: 'shield-checkmark-outline',
+      },
+    ];
+  }, [backendStatus, emailVerified, effectiveStatus]);
+
+  // ── States ──
+  if (isLoading) {
+    return (
+      <FlagshipScreen header={<FlagshipHeader title="Verification Status" onBack={() => navigation.goBack()} />}>
+        <FlagshipState variant="loading" title="Loading verification status..." />
+      </FlagshipScreen>
+    );
+  }
+
+  if (error && !backendStatus) {
+    return (
+      <FlagshipScreen header={<FlagshipHeader title="Verification Status" onBack={() => navigation.goBack()} />}>
+        <FlagshipState
+          variant="error"
+          title="Could not load status"
+          subtitle={error}
+          actionLabel="Try again"
+          onAction={() => void loadStatus()}
+        />
+      </FlagshipScreen>
+    );
+  }
+
+  return (
+    <FlagshipScreen
+      header={<FlagshipHeader title="Verification Status" onBack={() => navigation.goBack()} />}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+    >
+      <Reanimated.ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={colors.textMuted} />
+        }
+      >
+        {/* ── Status hero ── */}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+          <StatusHero status={effectiveStatus} colors={colors} styles={styles} rejectedReason={backendStatus && backendRejected ? undefined : undefined} />
+        </Reanimated.View>
+
+        {/* ── Status-specific content ── */}
+        {effectiveStatus === 'unverified' && (
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
+            <View style={[styles.panel, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[styles.panelTitle, { color: colors.textPrimary }]}>
+                Build buyer trust
+              </Text>
+              <Text style={[styles.panelBody, { color: colors.textSecondary }]}>
+                Verified sellers get a trust badge, higher listing visibility, and access to higher selling limits. The process takes a few minutes to complete and is typically reviewed within 24 hours.
+              </Text>
+              <AnimatedPressable
+                style={styles.primaryBtn}
+                onPress={handleStartVerification}
+                hapticFeedback="medium"
+                accessibilityRole="button"
+                accessibilityLabel="Start verification"
+              >
+                <Text style={styles.primaryBtnText}>Start verification</Text>
+              </AnimatedPressable>
+            </View>
+          </Reanimated.View>
+        )}
+
+        {effectiveStatus === 'in_review' && (
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
+            <View style={[styles.panel, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[styles.panelTitle, { color: colors.textPrimary }]}>
+                What we are checking
+              </Text>
+              <ReviewCheckItem icon="document-text-outline" text="Your identity details match the document provided" colors={colors} styles={styles} />
+              <ReviewCheckItem icon="scan-outline" text="Document is genuine and not tampered with" colors={colors} styles={styles} />
+              <ReviewCheckItem icon="happy-outline" text="Selfie matches the document photo" colors={colors} styles={styles} />
+              <ReviewCheckItem icon="shield-checkmark-outline" text="Sanctions and fraud screening" colors={colors} styles={styles} />
+              <View style={[styles.etaBanner, { backgroundColor: colors.surfaceAlt }]}>
+                <Ionicons name="time-outline" size={16} color={colors.warning} />
+                <Text style={[styles.etaText, { color: colors.textSecondary }]}>
+                  Estimated review time: within 24 hours
+                </Text>
+              </View>
+            </View>
+          </Reanimated.View>
+        )}
+
+        {effectiveStatus === 'verified' && (
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
+            <View style={[styles.panel, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[styles.panelTitle, { color: colors.textPrimary }]}>
+                Your verification benefits
+              </Text>
+              <BenefitItem icon="shield-checkmark" text="Verified seller badge on your profile and listings" colors={colors} styles={styles} />
+              <BenefitItem icon="trending-up-outline" text="Higher listing visibility in search and discovery" colors={colors} styles={styles} />
+              <BenefitItem icon="cube-outline" text="Higher selling limits and Co-Own eligibility" colors={colors} styles={styles} />
+              <BenefitItem icon="people-outline" text="Buyer trust — verified sellers sell faster" colors={colors} styles={styles} />
+            </View>
+          </Reanimated.View>
+        )}
+
+        {effectiveStatus === 'rejected' && (
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
+            <View style={[styles.panel, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[styles.panelTitle, { color: colors.textPrimary }]}>
+                Verification declined
+              </Text>
+              <Text style={[styles.panelBody, { color: colors.textSecondary }]}>
+                Your submission could not be verified. This can happen if the document was unclear, the selfie did not match, or details did not match our records. Please review and resubmit.
+              </Text>
+              <AnimatedPressable
+                style={styles.primaryBtn}
+                onPress={handleResubmit}
+                hapticFeedback="medium"
+                accessibilityRole="button"
+                accessibilityLabel="Resubmit verification"
+              >
+                <Text style={styles.primaryBtnText}>Resubmit verification</Text>
+              </AnimatedPressable>
+            </View>
+          </Reanimated.View>
+        )}
+
+        {/* ── Timeline ── */}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
+          <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
+            Verification timeline
+          </Text>
+          <View style={[styles.timelineCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            {timeline.map((step, i) => (
+              <TimelineRow
+                key={step.label}
+                step={step}
+                isLast={i === timeline.length - 1}
+                colors={colors}
+                styles={styles}
+              />
+            ))}
+          </View>
+        </Reanimated.View>
+
+        {/* ── Trust & privacy note ── */}
+        <SettingsInfoBanner
+          icon="lock-closed-outline"
+          text="Your verification data is encrypted, used only for identity checks, and deleted after review. It is never shared publicly."
+        />
+
+        <Pressable
+          style={styles.footerLink}
+          onPress={() => Linking.openURL('https://thryftverse.com/verification')}
+          accessibilityRole="link"
+          accessibilityLabel="Read the verification guide on the web"
+        >
+          <Text style={[styles.footerLinkText, { color: colors.brand }]}>
+            Read our verification guide
+          </Text>
+        </Pressable>
+      </Reanimated.ScrollView>
+    </FlagshipScreen>
+  );
+}
+
+// ── Status hero ──
+function StatusHero({
+  status,
+  colors,
+  styles,
+}: {
+  status: EffectiveStatus;
+  colors: ThemeColors;
+  styles: ReturnType<typeof createStyles>;
+  rejectedReason?: string;
+}) {
+  const config = STATUS_HERO_CONFIG[status];
+  const accentColor =
+    config.accent === 'success'
+      ? colors.success
+      : config.accent === 'warning'
+      ? colors.warning
+      : config.accent === 'danger'
+      ? colors.danger
+      : colors.brand;
+
+  return (
+    <View style={[styles.hero, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <View style={[styles.heroIcon, { backgroundColor: `${accentColor}18` }]}>
+        <Ionicons name={config.icon} size={28} color={accentColor} />
+      </View>
+      <View style={styles.heroBody}>
+        <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
+          {config.title}
+        </Text>
+        <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
+          {config.subtitle}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+const STATUS_HERO_CONFIG: Record<
+  EffectiveStatus,
+  { title: string; subtitle: string; icon: React.ComponentProps<typeof Ionicons>['name']; accent: 'brand' | 'success' | 'warning' | 'danger' }
+> = {
+  unverified: {
+    title: 'Not verified',
+    subtitle: 'Verify your identity to unlock seller benefits',
+    icon: 'alert-circle-outline',
+    accent: 'brand',
+  },
+  in_review: {
+    title: 'In review',
+    subtitle: 'We are checking your submission — typically within 24 hours',
+    icon: 'hourglass-outline',
+    accent: 'warning',
+  },
+  verified: {
+    title: 'Verified',
+    subtitle: 'Your identity is confirmed. You have the verified seller badge.',
+    icon: 'shield-checkmark',
+    accent: 'success',
+  },
+  rejected: {
+    title: 'Verification declined',
+    subtitle: 'Your submission could not be verified. You can resubmit.',
+    icon: 'close-circle-outline',
+    accent: 'danger',
+  },
+};
+
+// ── Sub-components ──
+function ReviewCheckItem({
+  icon,
+  text,
+  colors,
+  styles,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  text: string;
+  colors: ThemeColors;
+  styles: ReturnType<typeof createStyles>;
+}) {
+  return (
+    <View style={styles.checkRow}>
+      <Ionicons name={icon} size={18} color={colors.textMuted} />
+      <Text style={[styles.checkText, { color: colors.textSecondary }]}>{text}</Text>
+    </View>
+  );
+}
+
+function BenefitItem({
+  icon,
+  text,
+  colors,
+  styles,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  text: string;
+  colors: ThemeColors;
+  styles: ReturnType<typeof createStyles>;
+}) {
+  return (
+    <View style={styles.checkRow}>
+      <Ionicons name={icon} size={18} color={colors.success} />
+      <Text style={[styles.checkText, { color: colors.textPrimary }]}>{text}</Text>
+    </View>
+  );
+}
+
+function TimelineRow({
+  step,
+  isLast,
+  colors,
+  styles,
+}: {
+  step: TimelineStep;
+  isLast: boolean;
+  colors: ThemeColors;
+  styles: ReturnType<typeof createStyles>;
+}) {
+  const color =
+    step.status === 'complete'
+      ? colors.success
+      : step.status === 'active'
+      ? colors.warning
+      : colors.textMuted;
+
+  return (
+    <View style={[styles.timelineRow, isLast && styles.timelineRowLast]}>
+      <View style={styles.timelineMarkerCol}>
+        <View style={[styles.timelineDot, { borderColor: color }]}>
+          <Ionicons name={step.icon} size={14} color={color} />
+        </View>
+        {!isLast && <View style={[styles.timelineConnector, { backgroundColor: colors.borderSubtle }]} />}
+      </View>
+      <View style={styles.timelineBody}>
+        <Text style={[styles.timelineLabel, { color: colors.textPrimary }]}>{step.label}</Text>
+        <Text style={[styles.timelineDetail, { color }]}>{step.detail}</Text>
+      </View>
+    </View>
+  );
+}
+
+// ── Styles ──
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    scrollContent: {
+      paddingHorizontal: Space.md,
+      paddingTop: Space.sm,
+      paddingBottom: Space.xl,
+    },
+    hero: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.md,
+      padding: Space.md,
+      borderRadius: Radius.lg,
+      borderWidth: Stroke.standard,
+      marginBottom: Space.md,
+    },
+    heroIcon: {
+      width: Control.hit + Space.sm,
+      height: Control.hit + Space.sm,
+      borderRadius: Radius.full,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    heroBody: {
+      flex: 1,
+    },
+    heroTitle: {
+      fontSize: Type.subtitle.size,
+      fontFamily: Typography.family.bold,
+      letterSpacing: Type.subtitle.letterSpacing,
+      marginBottom: Space.xs / 2,
+    },
+    heroSubtitle: {
+      fontSize: Type.body.size,
+      fontFamily: Typography.family.regular,
+      lineHeight: Type.body.lineHeight,
+    },
+    panel: {
+      borderRadius: Radius.lg,
+      borderWidth: Stroke.standard,
+      padding: Space.md,
+      marginBottom: Space.md,
+      gap: Space.sm,
+    },
+    panelTitle: {
+      fontSize: Type.bodyEmphasis.size,
+      fontFamily: Typography.family.semibold,
+      letterSpacing: Type.bodyEmphasis.letterSpacing,
+    },
+    panelBody: {
+      fontSize: Type.body.size,
+      fontFamily: Typography.family.regular,
+      lineHeight: Type.body.lineHeight,
+    },
+    checkRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm,
+      paddingVertical: Space.xs / 2,
+    },
+    checkText: {
+      flex: 1,
+      fontSize: Type.body.size,
+      fontFamily: Typography.family.regular,
+      lineHeight: Type.body.lineHeight,
+    },
+    etaBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      paddingHorizontal: Space.sm,
+      paddingVertical: Space.xs + 2,
+      borderRadius: Radius.md,
+      marginTop: Space.xs,
+    },
+    etaText: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.medium,
+    },
+    primaryBtn: {
+      height: Control.hit + 2,
+      borderRadius: Radius.md,
+      backgroundColor: colors.brand,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: Space.xs,
+    },
+    primaryBtnText: {
+      fontSize: Type.body.size,
+      fontFamily: Typography.family.semibold,
+      color: colors.textInverse,
+    },
+    sectionLabel: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.semibold,
+      letterSpacing: LetterSpacing.wide,
+      textTransform: 'uppercase',
+      marginBottom: Space.sm,
+      marginLeft: Space.xs / 2,
+    },
+    timelineCard: {
+      borderRadius: Radius.lg,
+      borderWidth: Stroke.standard,
+      padding: Space.md,
+      marginBottom: Space.md,
+    },
+    timelineRow: {
+      flexDirection: 'row',
+      gap: Space.sm,
+      minHeight: Control.hit,
+    },
+    timelineRowLast: {
+      minHeight: 0,
+    },
+    timelineMarkerCol: {
+      width: Space.xl - Space.xs,
+      alignItems: 'center',
+    },
+    timelineDot: {
+      width: Space.xl - Space.xs,
+      height: Space.xl - Space.xs,
+      borderRadius: Radius.xl,
+      borderWidth: Stroke.standard + Stroke.hairline,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    timelineConnector: {
+      width: StyleSheet.hairlineWidth,
+      flex: 1,
+      minHeight: Space.md + Space.xs,
+      marginTop: Space.xs / 2,
+    },
+    timelineBody: {
+      flex: 1,
+      paddingBottom: Space.sm,
+    },
+    timelineLabel: {
+      fontSize: Type.body.size,
+      fontFamily: Typography.family.semibold,
+      letterSpacing: Type.body.letterSpacing,
+      marginBottom: Space.xs / 4,
+    },
+    timelineDetail: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+    },
+    footerLink: {
+      alignItems: 'center',
+      paddingVertical: Space.sm,
+    },
+    footerLinkText: {
+      fontSize: Type.body.size,
+      fontFamily: Typography.family.semibold,
+    },
+  });
+}

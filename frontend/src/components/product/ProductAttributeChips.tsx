@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 
 export interface ProductAttributeChipsProps {
   size?: string;
@@ -105,20 +105,20 @@ function createStyles(colors: ThemeColors) {
     marginBottom: 2,
   },
   chipLabel: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },
   chipGuideIcon: {
     width: 18,
     height: 18,
-    borderRadius: 9,
+    borderRadius: Radius.lg,
     backgroundColor: `${colors.brand}12`,
     alignItems: 'center',
     justifyContent: 'center',
   },
   chipValue: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },

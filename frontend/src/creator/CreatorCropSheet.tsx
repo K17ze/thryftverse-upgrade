@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Typography, Space, Radius } from '../theme/designTokens';
+import { Typography, Space, Radius, Type } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
@@ -329,42 +329,42 @@ const styles = StyleSheet.create({
     backgroundColor: '#0A0A0A',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    paddingTop: 8,
+    paddingTop: Space.sm,
     zIndex: 301,
     elevation: 24,
   },
   handleRow: {
     alignItems: 'center',
-    paddingTop: 8,
-    paddingBottom: 4,
+    paddingTop: Space.sm,
+    paddingBottom: Space.xs,
   },
   handle: {
     width: 36,
     height: 4,
-    borderRadius: 2,
+    borderRadius: Radius.sm,
   },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
   },
   cancelText: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.regular,
   },
   title: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.semibold,
   },
   applyText: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.semibold,
   },
   previewArea: {
     alignItems: 'center',
-    paddingVertical: 16,
+    paddingVertical: Space.md,
     backgroundColor: '#000',
   },
   previewFrame: {
@@ -426,17 +426,17 @@ const styles = StyleSheet.create({
   ratioRow: {
     flexDirection: 'row',
     gap: 8,
-    paddingHorizontal: 16,
+    paddingHorizontal: Space.md,
     paddingVertical: 12,
   },
   ratioPill: {
-    paddingHorizontal: 16,
+    paddingHorizontal: Space.md,
     paddingVertical: 10,
     borderRadius: Radius.full,
     borderWidth: 1,
   },
   ratioText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
   },
 });

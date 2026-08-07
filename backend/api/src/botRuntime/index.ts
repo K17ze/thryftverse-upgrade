@@ -9,6 +9,14 @@
  * 5. If handler returns shouldReply=true, insert a bot message.
  * 6. Publish realtime event for the bot message.
  * 7. Log audit event for command execution.
+ *
+ * 2026 enhancements:
+ * - Confidence scoring and human fallback are propagated from handler
+ *   results into the audit trail and bot message metadata.
+ * - Every response includes an `explanation` field in metadata so the
+ *   audit trail records the rationale behind each agent action.
+ * - AI agents can optionally stream responses via SSE, publishing partial
+ *   realtime events so the UI shows text as it arrives.
  */
 
 import type { PoolClient } from 'pg';
@@ -341,6 +349,7 @@ export async function executeBotCommand(
     targetBotId?: string; // optional: if provided, only try this bot
     command?: string; // optional: bypass text matching
     args?: string[]; // optional: bypass text matching
+    stream?: boolean; // optional: stream AI agent responses via realtime events
   }
 ): Promise<{ messageId: string | null; botId: string | null; text: string | null }> {
   const installs = await listActiveBotInstalls(client, input.conversationId);
@@ -367,6 +376,7 @@ export async function executeBotCommand(
       install.permissionsSnapshot.length === 0 ||
       install.permissionsSnapshot.includes('reply_in_chat');
 
+    const useStreaming = install.runtimeMode === 'ai' && input.stream === true;
     const handler = install.runtimeMode === 'ai'
       ? (await import('./openaiAgent.js')).executeOpenAiAgent
       : resolveBotHandler(install.botCategory);
@@ -432,6 +442,8 @@ export async function executeBotCommand(
         result = {
           text: `${install.botName} has reached its hourly usage limit for this account or conversation. Try again at the start of the next hour.`,
           shouldReply: true,
+          confidence: 1.0,
+          explanation: `Agent invocation was blocked by the per-hour quota guard (user remaining: ${aiQuota.userRemaining}, conversation remaining: ${aiQuota.conversationRemaining}). No provider request was made.`,
           metadata: {
             agentQuotaBlocked: true,
             userRemaining: aiQuota.userRemaining,
@@ -439,6 +451,23 @@ export async function executeBotCommand(
             resetsAt: aiQuota.resetsAt,
           },
         };
+      } else if (useStreaming) {
+        // Stream the AI response, publishing partial realtime events so
+        // the UI can render text as it arrives. The final assembled
+        // result (with confidence, explanation, usage) is returned.
+        const { streamOpenAiAgent } = await import('./openaiAgent.js');
+        const { publishRealtimeEvent } = await import('../lib/realtime.js');
+        result = await streamOpenAiAgent(ctx, (delta) => {
+          publishRealtimeEvent({
+            topic: `chat.conversation:${input.conversationId}`,
+            type: 'chat.agent.stream_delta',
+            payload: {
+              conversationId: input.conversationId,
+              botId: install.botId,
+              delta,
+            },
+          });
+        });
       } else {
         result = await handler(ctx);
       }
@@ -456,6 +485,8 @@ export async function executeBotCommand(
       result = {
         text: `${install.botName} could not respond right now. Please try again.`,
         shouldReply: true,
+        confidence: 0,
+        explanation: `Agent execution failed: ${error instanceof Error ? error.message.slice(0, 240) : 'unknown error'}. The response is a fallback error message, not a real agent reply.`,
         metadata: { agentError: true },
       };
     }
@@ -493,6 +524,9 @@ export async function executeBotCommand(
             resetsAt: aiQuota?.resetsAt ?? null,
             providerLatencyMs: result.metadata?.providerLatencyMs ?? null,
             attempt: result.metadata?.attempt ?? null,
+            confidence: result.confidence ?? null,
+            needsHumanReview: result.needsHumanReview ?? false,
+            confidenceSignals: result.metadata?.confidenceSignals ?? null,
           },
         });
       } catch (usageError) {
@@ -524,6 +558,8 @@ export async function executeBotCommand(
           runtimeMode: install.runtimeMode,
           replied: false,
           reason: !canReply ? 'missing reply_in_chat permission' : 'handler declined',
+          confidence: result.confidence ?? null,
+          explanation: result.explanation ?? null,
         },
       });
       return { messageId: null, botId: install.botId, text: null };
@@ -537,6 +573,9 @@ export async function executeBotCommand(
         ...result.metadata,
         botCommand: match.command,
         botArgs: match.args,
+        confidence: result.confidence ?? null,
+        explanation: result.explanation ?? null,
+        needsHumanReview: result.needsHumanReview ?? false,
       },
     });
 
@@ -551,6 +590,9 @@ export async function executeBotCommand(
         runtimeMode: install.runtimeMode,
         messageId: botMessage.id,
         executed: true,
+        confidence: result.confidence ?? null,
+        explanation: result.explanation ?? null,
+        needsHumanReview: result.needsHumanReview ?? false,
       },
     });
 
@@ -562,6 +604,8 @@ export async function executeBotCommand(
       metadata: {
         runtimeMode: install.runtimeMode,
         messageId: botMessage.id,
+        confidence: result.confidence ?? null,
+        needsHumanReview: result.needsHumanReview ?? false,
       },
     });
 
@@ -579,7 +623,14 @@ export async function executeBotCommand(
         senderUserId: null,
         senderBotId: install.botId,
         body: result.text,
-        metadata: { ...result.metadata, botCommand: match.command, botArgs: match.args },
+        metadata: {
+          ...result.metadata,
+          botCommand: match.command,
+          botArgs: match.args,
+          confidence: result.confidence ?? null,
+          explanation: result.explanation ?? null,
+          needsHumanReview: result.needsHumanReview ?? false,
+        },
         createdAt: botMessage.createdAt,
       },
     });

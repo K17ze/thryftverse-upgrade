@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, ActivityIndicator, RefreshControl }
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { RootStackParamList } from '../navigation/types';
@@ -15,7 +15,7 @@ import { useStore } from '../store/useStore';
 import { useSellerTrust } from '../platform/product';
 import { fetchUserListingsFromApi, ListingApiItem } from '../services/listingsApi';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 interface HubStat {
   icon: React.ComponentProps<typeof Ionicons>['name'];
@@ -105,11 +105,25 @@ export default function SellerHubScreen() {
       accessibilityLabel: 'View all your listings',
     },
     {
+      icon: 'grid-outline',
+      label: 'Inventory',
+      subtitle: 'Full inventory dashboard with filters and bulk actions',
+      onPress: () => navigation.navigate('InventoryManagement'),
+      accessibilityLabel: 'Open full inventory management',
+    },
+    {
       icon: 'bar-chart-outline',
       label: 'Analytics',
       subtitle: 'Views, likes, conversion and revenue',
       onPress: () => navigation.navigate('SellerAnalytics'),
       accessibilityLabel: 'View seller analytics dashboard',
+    },
+    {
+      icon: 'pulse-outline',
+      label: 'Creator Analytics',
+      subtitle: 'Content views, engagement and insights',
+      onPress: () => navigation.navigate('CreatorAnalyticsDashboard'),
+      accessibilityLabel: 'View creator analytics dashboard',
     },
     {
       icon: 'trophy-outline',
@@ -191,6 +205,32 @@ export default function SellerHubScreen() {
           </Reanimated.View>
         ) : null}
 
+        {/* Get Verified CTA — shown when seller is not yet verified */}
+        {sellerTrust && !sellerTrust.verified ? (
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(90)}>
+            <View style={[styles.verifyCta, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={styles.verifyCtaInfo}>
+                <Ionicons name="shield-checkmark-outline" size={20} color={colors.brand} />
+                <View style={styles.verifyCtaText}>
+                  <Text style={[styles.verifyCtaTitle, { color: colors.textPrimary }]}>Get verified</Text>
+                  <Text style={[styles.verifyCtaSubtitle, { color: colors.textMuted }]}>
+                    Build buyer trust with a verified badge
+                  </Text>
+                </View>
+              </View>
+              <AnimatedPressable
+                style={[styles.verifyCtaBtn, { backgroundColor: colors.brand }]}
+                onPress={() => navigation.navigate('KYCVerification')}
+                hapticFeedback="medium"
+                accessibilityRole="button"
+                accessibilityLabel="Start identity verification"
+              >
+                <Text style={[styles.verifyCtaBtnText, { color: colors.textInverse }]}>Start</Text>
+              </AnimatedPressable>
+            </View>
+          </Reanimated.View>
+        ) : null}
+
         {/* Analytics dashboard */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
           <View style={styles.sectionHeader}>
@@ -225,7 +265,7 @@ export default function SellerHubScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={action.accessibilityLabel}
               >
-                <View style={[styles.actionIconWrap, { backgroundColor: colors.brand + '15' }]}>
+                <View style={styles.actionIconWrap}>
                   <Ionicons name={action.icon} size={20} color={colors.brand} />
                 </View>
                 <View style={styles.actionInfo}>
@@ -270,8 +310,8 @@ function createStyles(colors: ThemeColors) {
     gap: Space.md,
   },
   heroIcon: {
-    width: 40,
-    height: 40,
+    width: Space.xl + Space.xs + 4,
+    height: Space.xl + Space.xs + 4,
     borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
@@ -285,7 +325,7 @@ function createStyles(colors: ThemeColors) {
   heroSubtitle: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    marginTop: 2,
+    marginTop: Space.xs - 2,
   },
   scrollContent: {
     paddingHorizontal: Space.md,
@@ -314,7 +354,7 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   statValue: {
     fontSize: Type.subtitle.size,
@@ -337,15 +377,15 @@ function createStyles(colors: ThemeColors) {
     borderWidth: StyleSheet.hairlineWidth,
   },
   actionIconWrap: {
-    width: 40,
-    height: 40,
+    width: Space.xl + Space.xs + 4,
+    height: Space.xl + Space.xs + 4,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
   actionInfo: {
     flex: 1,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   actionLabel: {
     fontSize: Type.body.size,
@@ -353,12 +393,50 @@ function createStyles(colors: ThemeColors) {
     color: colors.textPrimary,
   },
   actionSubtitle: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },
   ctaBtn: {
     marginTop: Space.lg,
+  },
+  verifyCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm + 2,
+    borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: Space.md,
+  },
+  verifyCtaInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    flex: 1,
+  },
+  verifyCtaText: {
+    flex: 1,
+    gap: Space.xs / 2,
+  },
+  verifyCtaTitle: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+  },
+  verifyCtaSubtitle: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+  },
+  verifyCtaBtn: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.md,
+  },
+  verifyCtaBtnText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.bold,
   },
   });
 }

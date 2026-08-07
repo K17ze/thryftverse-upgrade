@@ -156,7 +156,7 @@ function createStyles(colors: ThemeColors) {
   handle: {
     width: 36,
     height: 4,
-    borderRadius: 2,
+    borderRadius: Radius.sm,
     backgroundColor: 'rgba(0,0,0,0.15)',
     alignSelf: 'center',
     marginTop: Space.sm,
@@ -186,14 +186,14 @@ function createStyles(colors: ThemeColors) {
     marginTop: 2,
   },
   title: {
-    fontSize: 17,
+    fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     letterSpacing: -0.3,
     marginBottom: 2,
   },
   subtitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
     lineHeight: 17,
@@ -210,7 +210,7 @@ function createStyles(colors: ThemeColors) {
   },
   guidanceText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     lineHeight: 16,

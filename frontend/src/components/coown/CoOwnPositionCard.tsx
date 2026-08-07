@@ -399,7 +399,7 @@ const styles = StyleSheet.create({
   statusDot: {
     width: 7,
     height: 7,
-    borderRadius: 4,
+    borderRadius: Radius.sm,
   },
   statusText: {
     fontSize: Type.meta.size,

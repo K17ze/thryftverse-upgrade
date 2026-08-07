@@ -6,7 +6,7 @@ export interface CreatorTemplate {
   name: string;
   type: 'look' | 'poster';
   description: string;
-  category: 'featured' | 'announcement' | 'interactive' | 'story' | 'editorial' | 'sale';
+  category: 'featured' | 'announcement' | 'interactive' | 'story' | 'editorial' | 'sale' | 'moodboard';
   build: () => CreatorDocument;
 }
 
@@ -1017,6 +1017,101 @@ export const POSTER_TEMPLATES: CreatorTemplate[] = [
       updatedAt: new Date().toISOString(),
     }),
   },
+  // ── Moodboard templates ──
+  // Editorial collage-style posters for arranging multiple items into a
+  // themed moodboard. These are part of the poster creative tooling —
+  // users access them via the poster template browser's "Moodboard"
+  // category. Each template provides a different collage layout.
+  {
+    id: 'tpl_poster_moodboard_grid',
+    name: 'Moodboard Grid',
+    type: 'poster',
+    description: '2×2 editorial collage grid',
+    category: 'moodboard',
+    build: () => ({
+      id: createStableId('doc'),
+      type: 'poster',
+      version: 1,
+      canvas: { aspectRatio: 1, background: { type: 'color', value: '#f7f5f2' } },
+      pages: [page([
+        { ...baseLayer(createStableId('media'), 1), type: 'media', width: 0.42, height: 0.42, x: 0.28, y: 0.28, payload: { mediaUri: '', mediaType: 'image', contentFit: 'cover', opacity: 1 } },
+        { ...baseLayer(createStableId('media'), 2), type: 'media', width: 0.42, height: 0.42, x: 0.72, y: 0.28, payload: { mediaUri: '', mediaType: 'image', contentFit: 'cover', opacity: 1 } },
+        { ...baseLayer(createStableId('media'), 3), type: 'media', width: 0.42, height: 0.42, x: 0.28, y: 0.72, payload: { mediaUri: '', mediaType: 'image', contentFit: 'cover', opacity: 1 } },
+        { ...baseLayer(createStableId('media'), 4), type: 'media', width: 0.42, height: 0.42, x: 0.72, y: 0.72, payload: { mediaUri: '', mediaType: 'image', contentFit: 'cover', opacity: 1 } },
+      ], 0)],
+      metadata: { title: 'Moodboard Grid', caption: '', visibility: 'public', allowReplies: true, allowReactions: true, expiresInHours: 48, allowRemix: true },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }),
+  },
+  {
+    id: 'tpl_poster_moodboard_editorial',
+    name: 'Editorial Collage',
+    type: 'poster',
+    description: 'Asymmetric editorial collage with text',
+    category: 'moodboard',
+    build: () => ({
+      id: createStableId('doc'),
+      type: 'poster',
+      version: 1,
+      canvas: { aspectRatio: 0.8, background: { type: 'color', value: '#1a1a1a' } },
+      pages: [page([
+        { ...baseLayer(createStableId('media'), 1), type: 'media', width: 0.55, height: 0.6, x: 0.35, y: 0.3, payload: { mediaUri: '', mediaType: 'image', contentFit: 'cover', opacity: 1 } },
+        { ...baseLayer(createStableId('media'), 2), type: 'media', width: 0.3, height: 0.3, x: 0.78, y: 0.68, payload: { mediaUri: '', mediaType: 'image', contentFit: 'cover', opacity: 0.9 } },
+        { ...baseLayer(createStableId('text'), 3), type: 'text', width: 0.5, height: 0.06, x: 0.3, y: 0.78, payload: { text: 'Season Edit', textStyle: 'headline', textColor: '#C9A46A', alignment: 'left', opacity: 1 } },
+      ], 0)],
+      metadata: { title: 'Editorial Collage', caption: '', visibility: 'public', allowReplies: true, allowReactions: true, expiresInHours: 48, allowRemix: true },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }),
+  },
+  {
+    id: 'tpl_poster_moodboard_collection',
+    name: 'Collection Board',
+    type: 'poster',
+    description: 'Six-item collection moodboard',
+    category: 'moodboard',
+    build: () => ({
+      id: createStableId('doc'),
+      type: 'poster',
+      version: 1,
+      canvas: { aspectRatio: 1.2, background: { type: 'color', value: '#f0ede8' } },
+      pages: [page([
+        { ...baseLayer(createStableId('media'), 1), type: 'media', width: 0.28, height: 0.28, x: 0.2, y: 0.22, payload: { mediaUri: '', mediaType: 'image', contentFit: 'cover', opacity: 1 } },
+        { ...baseLayer(createStableId('media'), 2), type: 'media', width: 0.28, height: 0.28, x: 0.5, y: 0.22, payload: { mediaUri: '', mediaType: 'image', contentFit: 'cover', opacity: 1 } },
+        { ...baseLayer(createStableId('media'), 3), type: 'media', width: 0.28, height: 0.28, x: 0.8, y: 0.22, payload: { mediaUri: '', mediaType: 'image', contentFit: 'cover', opacity: 1 } },
+        { ...baseLayer(createStableId('media'), 4), type: 'media', width: 0.28, height: 0.28, x: 0.2, y: 0.5, payload: { mediaUri: '', mediaType: 'image', contentFit: 'cover', opacity: 1 } },
+        { ...baseLayer(createStableId('media'), 5), type: 'media', width: 0.28, height: 0.28, x: 0.5, y: 0.5, payload: { mediaUri: '', mediaType: 'image', contentFit: 'cover', opacity: 1 } },
+        { ...baseLayer(createStableId('media'), 6), type: 'media', width: 0.28, height: 0.28, x: 0.8, y: 0.5, payload: { mediaUri: '', mediaType: 'image', contentFit: 'cover', opacity: 1 } },
+        { ...baseLayer(createStableId('text'), 7), type: 'text', width: 0.6, height: 0.05, x: 0.5, y: 0.82, payload: { text: 'Curated Collection', textStyle: 'compact', textColor: '#666666', alignment: 'center', opacity: 1 } },
+      ], 0)],
+      metadata: { title: 'Collection Board', caption: '', visibility: 'public', allowReplies: true, allowReactions: true, expiresInHours: 48, allowRemix: true },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }),
+  },
+  {
+    id: 'tpl_poster_moodboard_inspiration',
+    name: 'Inspiration Wall',
+    type: 'poster',
+    description: 'Scattered inspiration wall collage',
+    category: 'moodboard',
+    build: () => ({
+      id: createStableId('doc'),
+      type: 'poster',
+      version: 1,
+      canvas: { aspectRatio: 0.75, background: { type: 'color', value: '#2a2a2a' } },
+      pages: [page([
+        { ...baseLayer(createStableId('media'), 1), type: 'media', width: 0.4, height: 0.5, x: 0.3, y: 0.28, rotation: -0.05, payload: { mediaUri: '', mediaType: 'image', contentFit: 'cover', opacity: 1 } },
+        { ...baseLayer(createStableId('media'), 2), type: 'media', width: 0.32, height: 0.4, x: 0.7, y: 0.32, rotation: 0.08, payload: { mediaUri: '', mediaType: 'image', contentFit: 'cover', opacity: 0.95 } },
+        { ...baseLayer(createStableId('media'), 3), type: 'media', width: 0.28, height: 0.28, x: 0.28, y: 0.72, rotation: 0.04, payload: { mediaUri: '', mediaType: 'image', contentFit: 'cover', opacity: 0.9 } },
+        { ...baseLayer(createStableId('text'), 4), type: 'text', width: 0.4, height: 0.05, x: 0.7, y: 0.78, payload: { text: 'Mood Board', textStyle: 'clean', textColor: '#C9A46A', alignment: 'right', opacity: 1 } },
+      ], 0)],
+      metadata: { title: 'Inspiration Wall', caption: '', visibility: 'public', allowReplies: true, allowReactions: true, expiresInHours: 48, allowRemix: true },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }),
+  },
 ];
 
 export const ALL_TEMPLATES: CreatorTemplate[] = [...LOOK_TEMPLATES, ...POSTER_TEMPLATES];
@@ -1039,6 +1134,7 @@ export const TEMPLATE_CATEGORIES: Array<{ key: TemplateCategory | 'all'; label: 
   { key: 'story', label: 'Story' },
   { key: 'sale', label: 'Sale' },
   { key: 'editorial', label: 'Editorial' },
+  { key: 'moodboard', label: 'Moodboard' },
 ];
 
 export function getTemplatesByCategory(type: 'look' | 'poster', category: TemplateCategory | 'all'): CreatorTemplate[] {

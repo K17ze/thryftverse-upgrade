@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -12,7 +12,7 @@ import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/fla
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 
-type Props = StackScreenProps<RootStackParamList, 'BalanceHistory'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'BalanceHistory'>;
 
 function formatDateLabel(createdAt: string): string {
   const d = new Date(createdAt);
@@ -149,8 +149,8 @@ function createStyles(colors: ThemeColors) {
     gap: Space.md,
   },
   heroIcon: {
-    width: 40,
-    height: 40,
+    width: Space.xl + Space.sm,
+    height: Space.xl + Space.sm,
     borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
@@ -164,7 +164,7 @@ function createStyles(colors: ThemeColors) {
   heroSubtitle: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
   card: { backgroundColor: colors.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, borderRadius: Radius.lg, overflow: 'hidden' },
   txRow: {
@@ -173,9 +173,9 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
   },
-  txIcon: { width: 38, height: 38, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center', marginRight: Space.sm },
+  txIcon: { width: Space.xl + Space.xs + 2, height: Space.xl + Space.xs + 2, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center', marginRight: Space.sm },
   txInfo: { flex: 1 },
-  txLabel: { fontSize: Type.body.size, fontFamily: Typography.family.medium, color: colors.textPrimary, marginBottom: 2 },
+  txLabel: { fontSize: Type.body.size, fontFamily: Typography.family.medium, color: colors.textPrimary, marginBottom: Space.xs / 2 },
   txDate: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textMuted },
   txAmount: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.bold },
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginHorizontal: Space.md },

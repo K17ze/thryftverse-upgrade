@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
+import { Radius, Type } from '../theme/designTokens';
 const COMMERCE_DETAIL = resolve(__dirname, '../components/commerce/detail');
 
 function readDetailComponent(name: string): string {
@@ -105,12 +106,13 @@ describe('commerce-detail family art direction (spec 05)', () => {
     it('compact density uses 26pt title', () => {
       const src = readDetailComponent('CommerceDetailIdentity');
       expect(src).toContain('titleCompact');
-      expect(src).toMatch(/fontSize: 26/);
+      // titleCompact uses Type.priceLarge.size - 2 (28 - 2 = 26pt)
+      expect(src).toMatch(/fontSize: Type\.priceLarge\.size - 2/);
     });
 
     it('standard density uses 28pt title', () => {
       const src = readDetailComponent('CommerceDetailIdentity');
-      expect(src).toMatch(/title:[\s\S]*fontSize: 28/);
+      expect(src).toMatch(/title:[\s\S]*fontSize: Type.priceLarge.size/);
     });
   });
 
@@ -154,7 +156,7 @@ describe('commerce-detail family art direction (spec 05)', () => {
     it('primary action uses full-pill radius (not 24)', () => {
       const src = readDetailComponent('CommerceDetailStateDock');
       expect(src).toContain('Radius.full');
-      expect(src).not.toMatch(/borderRadius: 24/);
+      expect(src).not.toMatch(/borderRadius: Radius.xxl/);
     });
 
     it('thumbnail uses medium Radius', () => {

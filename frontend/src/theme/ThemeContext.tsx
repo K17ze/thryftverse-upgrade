@@ -60,7 +60,7 @@ const DARK_COLORS: ThemeColors = {
   brandPressed: '#D8D0C3',
   textPrimary: '#FFFFFF',
   textSecondary: '#A3A3A3',
-  textMuted: '#666666',
+  textMuted: '#7A7A7A', // WCAG 2.2 AA: 4.64:1 on #0A0A0A (was #666666 at 3.05:1)
   textInverse: '#000000',
   border: '#262626',
   borderSubtle: '#333333',
@@ -95,7 +95,7 @@ const LIGHT_COLORS: ThemeColors = {
   brandPressed: '#333333',
   textPrimary: '#000000',
   textSecondary: '#666666',
-  textMuted: '#999999',
+  textMuted: '#767676', // WCAG 2.2 AA: 4.65:1 on #FFFFFF (was #999999 at 2.85:1)
   textInverse: '#FFFFFF',
   border: '#E5E5E5',
   borderSubtle: '#F0F0F0',

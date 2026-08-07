@@ -14,7 +14,7 @@ import type { SharedValue } from 'react-native-reanimated';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography, Radius } from '../../theme/designTokens';
+import { Space, Typography, Radius, Type } from '../../theme/designTokens';
 import { FlagshipProfileMedia } from '../flagship';
 import { isVideoUri } from '../../utils/media';
 import type { PublicProfileStats, PublicProfileViewer } from '../../services/profileApi';
@@ -418,7 +418,7 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
   },
   monogramText: {
-    fontSize: 28,
+    fontSize: Type.priceLarge.size,
     fontFamily: Typography.family.bold,
     color: colors.textSecondary,
     letterSpacing: -0.5,
@@ -452,13 +452,13 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
   },
   seamStatValue: {
-    fontSize: 17,
+    fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     letterSpacing: -0.3,
   },
   seamStatLabel: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     marginTop: 1,
@@ -471,7 +471,7 @@ function createStyles(colors: ThemeColors) {
     gap: Space.xs,
   },
   displayName: {
-    fontSize: 20,
+    fontSize: Type.priceList.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     letterSpacing: -0.4,
@@ -483,7 +483,7 @@ function createStyles(colors: ThemeColors) {
     marginTop: 2,
   },
   username: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
     marginBottom: Space.xs,
@@ -491,7 +491,7 @@ function createStyles(colors: ThemeColors) {
 
   // Biography
   bio: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: colors.textPrimary,
     lineHeight: 20,
@@ -500,7 +500,7 @@ function createStyles(colors: ThemeColors) {
 
   // Context line — no icons
   contextLine: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     marginBottom: Space.xs,
@@ -512,7 +512,7 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.xs,
   },
   websiteText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
     color: colors.textSecondary,
     textDecorationLine: 'underline',
@@ -527,17 +527,17 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.xs,
   },
   trustLink: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
   trustStatic: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },
   trustDot: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },
@@ -546,7 +546,7 @@ function createStyles(colors: ThemeColors) {
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: Space.sm,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     backgroundColor: colors.background,
@@ -564,7 +564,7 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
     backgroundColor: colors.background,
   },
-  followBtnText: { fontSize: 15, fontFamily: Typography.family.semibold },
+  followBtnText: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.semibold },
   followActiveBtnText: { color: colors.textInverse },
   followingBtnText: { color: colors.textPrimary },
   messageBtn: {
@@ -572,14 +572,14 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 7,
+    gap: Space.xs + 3,
     height: ACTION_HEIGHT,
     borderRadius: ACTION_RADIUS,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     backgroundColor: colors.background,
   },
-  messageBtnText: { fontSize: 15, fontFamily: Typography.family.semibold, color: colors.textPrimary },
+  messageBtnText: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
   moreBtn: {
     width: ACTION_HEIGHT,
     height: ACTION_HEIGHT,
@@ -595,14 +595,14 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 7,
+    gap: Space.xs + 3,
     height: ACTION_HEIGHT,
     borderRadius: ACTION_RADIUS,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     backgroundColor: colors.background,
   },
-  editProfileBtnText: { fontSize: 15, fontFamily: Typography.family.semibold, color: colors.textPrimary },
+  editProfileBtnText: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
   btnDisabled: { opacity: 0.5 },
   });
 }

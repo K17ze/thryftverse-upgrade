@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { Space, Radius, Typography, Type, Stroke } from '../../theme/designTokens';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useBackendData } from '../../context/BackendDataContext';
 import { KeyboardStickyView } from '../../platform/keyboard/KeyboardProvider';
@@ -102,7 +102,7 @@ export function OutfitPieceEditor({ tags, onTagsChange }: OutfitPieceEditorProps
                 contentFit="cover"
               />
             )}
-            <View style={{ flex: 1, gap: 2 }}>
+            <View style={{ flex: 1, gap: Space.xs / 2 }}>
               <Text style={styles.listingTitle} numberOfLines={1}>{listing.title}</Text>
               <Text style={styles.listingPrice}>£{listing.price}</Text>
             </View>
@@ -160,7 +160,7 @@ export function OutfitPieceEditor({ tags, onTagsChange }: OutfitPieceEditorProps
                         contentFit="cover"
                       />
                     )}
-                    <View style={{ flex: 1, gap: 2 }}>
+                    <View style={{ flex: 1, gap: Space.xs / 2 }}>
                       <Text style={styles.searchResultTitle} numberOfLines={1}>{item.title}</Text>
                       <Text style={styles.searchResultPrice}>£{item.price}</Text>
                     </View>
@@ -218,7 +218,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.lg,
   },
   emptyText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
     textAlign: 'center',
@@ -227,7 +227,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   pieceCard: {
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     padding: Space.md,
     gap: Space.sm,
@@ -240,15 +240,15 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   pieceDot: {
     width: 10,
     height: 10,
-    borderRadius: 5,
+    borderRadius: Radius.sm,
     backgroundColor: colors.brand,
   },
   labelInput: {
     flex: 1,
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.medium,
     color: colors.textPrimary,
-    paddingVertical: 4,
+    paddingVertical: Space.xs,
   },
   linkedListing: {
     flexDirection: 'row',
@@ -261,27 +261,27 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   listingThumb: {
     width: 40,
     height: 40,
-    borderRadius: 6,
+    borderRadius: Radius.md,
     backgroundColor: colors.surface,
   },
   listingTitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
   listingPrice: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.bold,
     color: colors.brand,
   },
   linkBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingVertical: 6,
+    gap: Space.xs + 2,
+    paddingVertical: Space.xs + 2,
   },
   linkBtnText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
     color: colors.textSecondary,
   },
@@ -292,40 +292,40 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.md,
     paddingHorizontal: Space.md,
-    paddingVertical: 8,
-    fontSize: 14,
+    paddingVertical: Space.sm,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
     color: colors.textPrimary,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
   },
   searchResult: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    paddingVertical: 6,
+    paddingVertical: Space.xs + 2,
   },
   searchResultThumb: {
     width: 36,
     height: 36,
-    borderRadius: 6,
+    borderRadius: Radius.md,
     backgroundColor: colors.surfaceAlt,
   },
   searchResultTitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
   searchResultPrice: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.bold,
     color: colors.brand,
   },
   noResults: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
     textAlign: 'center',
-    paddingVertical: 8,
+    paddingVertical: Space.sm,
   },
 });

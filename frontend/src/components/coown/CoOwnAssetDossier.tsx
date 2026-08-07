@@ -321,7 +321,7 @@ const styles = StyleSheet.create({
   provenanceDot: {
     width: 6,
     height: 6,
-    borderRadius: 3,
+    borderRadius: Radius.sm,
     marginTop: 6,
   },
   provenanceContent: {

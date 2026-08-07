@@ -11,7 +11,7 @@ import {
   Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { StackScreenProps } from '@react-navigation/stack';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { SlideInDown } from 'react-native-reanimated';
@@ -20,17 +20,17 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
 import type { RootStackParamList } from '../navigation/types';
 
-type Props = StackScreenProps<RootStackParamList, 'CreateCamera'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'CreateCamera'>;
 
 type CreateMode = 'visual-search' | 'look' | 'poster';
 
 const MODES: { key: CreateMode; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { key: 'visual-search', label: 'Search', icon: 'search-outline' },
   { key: 'look', label: 'Look', icon: 'shirt-outline' },
-  { key: 'poster', label: 'Story', icon: 'images-outline' },
+  { key: 'poster', label: 'Poster', icon: 'images-outline' },
 ];
 
 const MODE_CONTEXT: Record<CreateMode, string> = {
@@ -513,14 +513,14 @@ const s = StyleSheet.create({
     flexDirection: 'column',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
+    gap: Space.sm,
     zIndex: 10,
   },
   modeContextText: {
     fontFamily: Typography.family.medium,
     fontSize: Type.caption.size,
     color: 'rgba(255,255,255,0.6)',
-    letterSpacing: 0.3,
+    letterSpacing: LetterSpacing.wide + 0.18,
   },
   // ── Contextual tool cards (Start Blank / Gallery) ──
   // Premium semi-transparent dark cards over the camera feed — the standard
@@ -544,7 +544,7 @@ const s = StyleSheet.create({
     padding: Space.md,
     borderRadius: Radius.xl,
     backgroundColor: 'rgba(0,0,0,0.55)',
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: 'rgba(255,255,255,0.15)',
   },
   contextCardPressed: {
@@ -555,7 +555,7 @@ const s = StyleSheet.create({
     fontFamily: Typography.family.semibold,
     fontSize: Type.caption.size,
     color: '#fff',
-    letterSpacing: 0.2,
+    letterSpacing: LetterSpacing.wide + 0.08,
   },
   // ── Mode tabs with sliding indicator ──
   modeTabsContainer: {
@@ -573,22 +573,22 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: MODE_CHIP_HORIZONTAL_PADDING,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.xxl,
   },
   modeTabText: {
     fontFamily: Typography.family.semibold,
-    fontSize: 13,
-    letterSpacing: 0.3,
+    fontSize: Type.captionElevated.size,
+    letterSpacing: LetterSpacing.wide + 0.18,
   },
   // Sliding indicator — 4px bar under the active chip
   modeIndicator: {
     position: 'absolute',
     bottom: -2,
     left: 0,
-    height: 4,
+    height: Space.xs,
     backgroundColor: 'transparent',
-    borderRadius: 2,
+    borderRadius: Radius.sm,
   },
   // Mode-specific hint text
   modeHintText: {
@@ -597,12 +597,12 @@ const s = StyleSheet.create({
     color: 'rgba(255,255,255,0.55)',
     textAlign: 'center',
     marginTop: Space.xs,
-    letterSpacing: 0.2,
+    letterSpacing: LetterSpacing.wide + 0.08,
   },
   topIconBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: Control.hit,
+    height: Control.hit,
+    borderRadius: Radius.xxl,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -634,9 +634,9 @@ const s = StyleSheet.create({
     elevation: 16,
   },
   overflowGrabHandle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
+    width: Space.xl + Space.sm,
+    height: Space.xs,
+    borderRadius: Radius.sm,
     backgroundColor: 'rgba(0,0,0,0.15)',
     alignSelf: 'center',
     marginBottom: Space.md,
@@ -648,7 +648,7 @@ const s = StyleSheet.create({
     paddingVertical: Space.md,
   },
   overflowOptionIcon: {
-    width: 24,
+    width: Space.lg,
   },
   overflowOptionText: {
     fontFamily: Typography.family.medium,

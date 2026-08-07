@@ -7,12 +7,11 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Type, Space, Radius } from '../theme/designTokens';
 import { haptics } from '../utils/haptics';
-import { Typography } from '../theme/designTokens';
 import { AnimatedPressable } from './AnimatedPressable';
 import { PremiumToggle } from './settings/PremiumToggle';
 
+import { Type, Space, Radius, Typography } from '../theme/designTokens';
 export type SettingsCellVariant = 'default' | 'value' | 'toggle' | 'button' | 'destructive' | 'custom';
 
 interface SettingsCellProps {
@@ -226,7 +225,7 @@ function createStyles(colors: ThemeColors) {
     },
     title: {
       fontSize: Type.body.size,
-      fontFamily: 'Inter_500Medium',
+      fontFamily: Typography.family.medium,
       color: colors.textPrimary,
       letterSpacing: Type.body.letterSpacing,
       lineHeight: Type.body.lineHeight,
@@ -241,7 +240,7 @@ function createStyles(colors: ThemeColors) {
     },
     subtitle: {
       fontSize: Type.caption.size,
-      fontFamily: 'Inter_400Regular',
+      fontFamily: Typography.family.regular,
       color: colors.textMuted,
       marginTop: 2,
       lineHeight: Type.caption.lineHeight,
@@ -254,7 +253,7 @@ function createStyles(colors: ThemeColors) {
     },
     valueText: {
       fontSize: Type.body.size,
-      fontFamily: 'Inter_400Regular',
+      fontFamily: Typography.family.regular,
       color: colors.textMuted,
       maxWidth: 150,
       letterSpacing: Type.body.letterSpacing,
@@ -264,7 +263,7 @@ function createStyles(colors: ThemeColors) {
     },
     badge: {
       backgroundColor: colors.brand,
-      borderRadius: 10,
+      borderRadius: Radius.lg,
       minWidth: 20,
       height: 20,
       justifyContent: 'center',
@@ -273,13 +272,13 @@ function createStyles(colors: ThemeColors) {
     },
     badgeText: {
       fontSize: Type.caption.size,
-      fontFamily: 'Inter_600SemiBold',
+      fontFamily: Typography.family.semibold,
       color: '#FFFFFF',
       letterSpacing: Type.caption.letterSpacing,
     },
     sectionHeader: {
       fontSize: Type.meta.size,
-      fontFamily: 'Inter_600SemiBold',
+      fontFamily: Typography.family.semibold,
       color: colors.textMuted,
       marginHorizontal: Space.md,
       marginTop: Space.lg,
@@ -297,17 +296,17 @@ function createStyles(colors: ThemeColors) {
       // defaults
     },
     sectionHeader_low: {
-      fontFamily: 'Inter_500Medium',
+      fontFamily: Typography.family.medium,
       marginTop: Space.md,
     },
     sectionHeader_lowest: {
-      fontFamily: 'Inter_500Medium',
+      fontFamily: Typography.family.medium,
       color: `${colors.textMuted}99`,
       marginTop: Space.md,
     },
     sectionFooter: {
       fontSize: Type.caption.size,
-      fontFamily: 'Inter_400Regular',
+      fontFamily: Typography.family.regular,
       color: colors.textMuted,
       marginHorizontal: Space.md,
       marginTop: Space.sm,

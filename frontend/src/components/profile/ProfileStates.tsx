@@ -2,14 +2,9 @@ import React from 'react';
 import { View, Text, StyleSheet, StatusBar, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ActiveTheme, Colors } from '../../constants/colors';
-import { Space, Typography } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Space, Typography, Radius, Type } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
-
-const BG = Colors.background;
-const MUTED = Colors.textMuted;
-const TEXT = Colors.textPrimary;
-const SURFACE_ALT = Colors.surfaceAlt;
 
 const COVER_HEIGHT = 168;
 
@@ -23,9 +18,11 @@ interface BaseProps {
  */
 export function ProfileErrorState({ onRetry, onBack, coverHeight = COVER_HEIGHT }: BaseProps & { onRetry: () => void; onBack: () => void }) {
   const insets = useSafeAreaInsets();
+  const { colors, isDark } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   return (
     <View style={styles.container}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={BG} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <View style={[styles.coverSkeleton, { height: coverHeight }]} />
       <View pointerEvents="box-none" style={styles.coverActionLayer}>
         <View style={[styles.topUtilityRow, { top: Math.max(insets.top + 6, 14) }]}>
@@ -47,7 +44,7 @@ export function ProfileErrorState({ onRetry, onBack, coverHeight = COVER_HEIGHT 
         accessibilityRole="button"
         accessibilityLabel="Retry loading profile"
       >
-        <Ionicons name="cloud-offline-outline" size={40} color={MUTED} />
+        <Ionicons name="cloud-offline-outline" size={40} color={colors.textMuted} />
         <Text style={styles.stateText}>Unable to load profile</Text>
         <Text style={styles.stateSubtext}>Tap to retry</Text>
       </Pressable>
@@ -61,9 +58,11 @@ export function ProfileErrorState({ onRetry, onBack, coverHeight = COVER_HEIGHT 
  */
 export function ProfileUnavailableState({ onBack, coverHeight = COVER_HEIGHT }: BaseProps & { onBack: () => void }) {
   const insets = useSafeAreaInsets();
+  const { colors, isDark } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   return (
     <View style={styles.container}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={BG} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <View style={[styles.coverSkeleton, { height: coverHeight }]} />
       <View pointerEvents="box-none" style={styles.coverActionLayer}>
         <View style={[styles.topUtilityRow, { top: Math.max(insets.top + 6, 14) }]}>
@@ -80,7 +79,7 @@ export function ProfileUnavailableState({ onBack, coverHeight = COVER_HEIGHT }: 
         </View>
       </View>
       <View style={styles.stateContainer}>
-        <Ionicons name="person-outline" size={40} color={MUTED} />
+        <Ionicons name="person-outline" size={40} color={colors.textMuted} />
         <Text style={styles.stateText}>Profile unavailable</Text>
         <Text style={styles.stateSubtext}>This account may no longer be active.</Text>
       </View>
@@ -98,9 +97,11 @@ export function ProfileBlockedState({
   coverHeight = COVER_HEIGHT,
 }: BaseProps & { onBack: () => void; onShare: () => void }) {
   const insets = useSafeAreaInsets();
+  const { colors, isDark } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   return (
     <View style={styles.container}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={BG} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <View pointerEvents="box-none" style={styles.coverActionLayer}>
         <View style={[styles.topUtilityRow, { top: Math.max(insets.top + 6, 14) }]}>
           <AnimatedPressable
@@ -128,7 +129,7 @@ export function ProfileBlockedState({
       </View>
       <View style={[styles.coverSkeleton, { height: coverHeight }]} />
       <View style={styles.stateContainer}>
-        <Ionicons name="eye-off-outline" size={40} color={MUTED} />
+        <Ionicons name="eye-off-outline" size={40} color={colors.textMuted} />
         <Text style={styles.stateText}>You've been blocked</Text>
         <Text style={styles.stateSubtext}>This user blocked you from viewing their profile.</Text>
       </View>
@@ -136,9 +137,9 @@ export function ProfileBlockedState({
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG },
-  coverSkeleton: { backgroundColor: SURFACE_ALT },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
+  coverSkeleton: { backgroundColor: colors.surfaceAlt },
   coverActionLayer: {
     position: 'absolute',
     top: 0,
@@ -158,7 +159,7 @@ const styles = StyleSheet.create({
   topUtilityIconBtn: {
     width: 36,
     height: 36,
-    borderRadius: 10,
+    borderRadius: Radius.lg,
     backgroundColor: 'rgba(0,0,0,0.22)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -170,6 +171,6 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: Space.md,
   },
-  stateText: { fontSize: 16, fontFamily: Typography.family.semibold, color: TEXT },
-  stateSubtext: { fontSize: 14, fontFamily: Typography.family.regular, color: MUTED, textAlign: 'center' },
+  stateText: { fontSize: Type.bodyLarge.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
+  stateSubtext: { fontSize: Type.body.size, fontFamily: Typography.family.regular, color: colors.textMuted, textAlign: 'center' },
 });

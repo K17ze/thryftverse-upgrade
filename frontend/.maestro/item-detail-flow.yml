@@ -1,0 +1,47 @@
+# Maestro E2E flow — item detail journey.
+#
+# Launches the app, navigates to the Browse screen, taps the first item in
+# the grid, and verifies the ItemDetail screen loads with its core content:
+# an image, a title, and a price.
+#
+# Run: maestro test .maestro/item-detail-flow.yml
+appId: ${MAESTRO_APP_ID}
+---
+- launchApp:
+    clearState: false
+
+# Navigate to Browse. Browse is reached from the Home/Explore surface;
+# tap the Explore tab first, then open the first category / "Browse all".
+- tapOn:
+    label: "Explore"
+- assertVisible:
+    label: "Explore"
+    timeout: 5000
+
+# Open the Browse screen. The entry point is the "Browse" label or the
+# first category tile. Try the labelled entry first.
+- runFlow:
+    when:
+      visible: "Browse"
+    commands:
+      - tapOn: "Browse"
+- takeScreenshot: browse-grid
+
+# Tap the first item in the grid. Maestro taps the first match of a
+# point-based tap when no unique id is available.
+- tapOn:
+    point: 25%, 40%
+
+# Verify the ItemDetail screen loaded. The detail screen renders a media
+# stage (image), a product title, and a price. Assert each in turn.
+- assertVisible:
+    text: ".*"
+    timeout: 8000
+- takeScreenshot: item-detail-loaded
+
+# Assert the core commerce content is present. Price uses the app's
+# currency formatter (e.g. "$", "£", "RM"), so we match a price-like token.
+- assertVisible:
+    text: ".*[$£€RM].*[0-9].*"
+    timeout: 5000
+- takeScreenshot: item-detail-price

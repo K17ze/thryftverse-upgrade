@@ -16,7 +16,7 @@ export function WriteReviewSkeleton() {
         <SkeletonLoader width={56} height={56} borderRadius={Radius.md} />
         <View style={styles.orderInfo}>
           <SkeletonLoader width="80%" height={16} borderRadius={Radius.sm} />
-          <SkeletonLoader width={100} height={12} borderRadius={Radius.sm} style={{ marginTop: 8 }} />
+          <SkeletonLoader width={100} height={12} borderRadius={Radius.sm} style={{ marginTop: Space.sm }} />
         </View>
       </View>
 
@@ -35,8 +35,8 @@ export function WriteReviewSkeleton() {
         <SkeletonLoader width={180} height={11} borderRadius={Radius.sm} />
         <View style={[styles.inputCard, { backgroundColor: colors.surface }]}>
           <SkeletonLoader width="95%" height={13} borderRadius={Radius.sm} />
-          <SkeletonLoader width="88%" height={13} borderRadius={Radius.sm} style={{ marginTop: 8 }} />
-          <SkeletonLoader width="60%" height={13} borderRadius={Radius.sm} style={{ marginTop: 8 }} />
+          <SkeletonLoader width="88%" height={13} borderRadius={Radius.sm} style={{ marginTop: Space.sm }} />
+          <SkeletonLoader width="60%" height={13} borderRadius={Radius.sm} style={{ marginTop: Space.sm }} />
         </View>
       </View>
 

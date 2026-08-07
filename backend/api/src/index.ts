@@ -219,6 +219,8 @@ import { registerListingOfferRoutes } from './routes/listingOffers.js';
 import { registerChatComposerStateRoutes } from './routes/chatComposerState.js';
 import { registerAiTruthRoutes } from './routes/aiTruth.js';
 import { registerRecommendationRoutes } from './routes/recommendations.js';
+import { registerFraudDetectionRoutes } from './routes/fraudDetection.js';
+import { checkFraudNonBlocking } from './lib/fraudDetection.js';
 import {
   PRODUCT_RECOMMENDATION_POLICY_VERSION,
   scoreProductRecommendation,
@@ -244,6 +246,21 @@ import {
   failDomainOutboxEvent,
   type DomainOutboxEvent,
 } from './lib/domainOutbox.js';
+import {
+  getCachedSearchResult,
+  setCachedSearchResult,
+  getCachedOrRevalidate,
+  invalidateSearchCache,
+  trackQueryFrequency,
+  recordSearchAnalytics,
+  type SearchQueryParams,
+  type CachedSearchResult,
+} from './lib/searchCache.js';
+import {
+  searchIndex,
+  type IndexedListing,
+} from './lib/searchIndex.js';
+import { logger } from './lib/logger.js';
 
 const app = Fastify({
   logger: {
@@ -417,6 +434,47 @@ void app.register(rateLimit, {
   },
 });
 
+// ── User-based rate limiting for authenticated endpoints ─────────────
+// In addition to the global IP-based rate limit above, authenticated
+// requests are subject to a per-user limit (200 requests per minute by
+// default). This prevents a single compromised account from exhausting
+// API capacity even if it rotates across many IP addresses. The hook is
+// invoked after authentication so request.authUser is available.
+const USER_RATE_LIMIT_MAX = Number(process.env.USER_RATE_LIMIT_MAX) || 200;
+const USER_RATE_LIMIT_WINDOW = Number(process.env.USER_RATE_LIMIT_WINDOW) || 60;
+const userRateLimitHook = async (request: FastifyRequest, reply: FastifyReply) => {
+  const userId = request.authUser?.userId;
+  if (!userId) return; // Only applies to authenticated requests
+
+  const key = `user_rate:${userId}`;
+  const limit = USER_RATE_LIMIT_MAX;
+  const window = USER_RATE_LIMIT_WINDOW;
+
+  const current = await redis.incr(key);
+  if (current === 1) {
+    await redis.expire(key, window);
+  }
+  if (current > limit) {
+    reply.code(429).send({ error: 'Rate limit exceeded', retryAfter: window });
+  }
+};
+
+// ── Production auth gate for /documentation and /metrics ─────────────
+// In production, the Swagger UI (/documentation) and Prometheus metrics
+// (/metrics) endpoints expose operational detail that must not be publicly
+// accessible. When ADMIN_TOKEN is configured, requests must present it as a
+// Bearer token. In development the gate is skipped entirely.
+const isProduction = process.env.NODE_ENV === 'production';
+const docsAuthHook = async (request: FastifyRequest, reply: FastifyReply) => {
+  if (!isProduction) return; // Allow in development
+  const authHeader = request.headers.authorization;
+  const expectedToken = process.env.ADMIN_TOKEN;
+  if (!expectedToken) return; // If no token configured, allow (with warning)
+  if (authHeader !== `Bearer ${expectedToken}`) {
+    reply.code(401).send({ error: 'Unauthorized' });
+  }
+};
+
 // ── OpenAPI / Swagger auto-documentation ────────────────────────────
 // Registered BEFORE route definitions so @fastify/swagger can collect route
 // schemas and generate the OpenAPI 3.0 spec. The Swagger UI is served at
@@ -466,6 +524,10 @@ void app.register(swaggerUi, {
     deepLinking: true,
     displayRequestDuration: true,
     tryItOutEnabled: true,
+  },
+  // Gate the documentation UI behind admin auth in production.
+  uiHooks: {
+    onRequest: docsAuthHook,
   },
 });
 
@@ -1429,6 +1491,12 @@ app.addHook('preHandler', async (request, reply) => {
   }
 
   request.authUser = authUser;
+
+  // Apply per-user rate limiting after authentication succeeds.
+  await userRateLimitHook(request, reply);
+  if (reply.statusCode === 429) {
+    return reply;
+  }
 
   if (isUserTargetRoute(request.method, requestPath)) {
     return;
@@ -11209,7 +11277,9 @@ app.get('/health/ready', async (_request, reply) => {
   return body;
 });
 
-app.get('/metrics', async (_request, reply) => {
+app.get('/metrics', {
+  preHandler: [docsAuthHook],
+}, async (_request, reply) => {
   observeDatabasePool({ pool: 'primary', ...databasePoolSnapshot(db) });
   if (replicaConfigured) {
     observeDatabasePool({ pool: 'replica', ...databasePoolSnapshot(readDb) });
@@ -12531,6 +12601,26 @@ app.post(
         ipAddress: request.ip,
       }
     );
+
+    // Fraud check — non-blocking: score and log, don't reject unless high risk.
+    // This catches duplicate accounts from the same device (ban evasion) and
+    // bot-driven account creation velocity (AGENTS.md §11 — truthful signals).
+    try {
+      await checkFraudNonBlocking(
+        redis,
+        {
+          eventType: 'signup',
+          userId: user.id,
+          email,
+          headers: request.headers as Record<string, string | string[] | undefined>,
+          ip: request.ip,
+        },
+        undefined,
+        request.log,
+      );
+    } catch {
+      // Fraud check failures must never break signup (AGENTS.md §6).
+    }
 
     reply.code(201);
     return {
@@ -18564,12 +18654,162 @@ app.get('/search/listings', async (request) => {
   const querySchema = z.object({
     q: z.string().trim().min(2).max(120),
     limit: z.coerce.number().int().min(1).max(100).default(24),
+    category: z.string().min(1).optional(),
+    condition: z.string().min(1).optional(),
+    size: z.string().min(1).optional(),
+    priceMin: z.coerce.number().min(0).optional(),
+    priceMax: z.coerce.number().min(0).optional(),
+    sort: z.enum(['relevance', 'recent', 'price_asc', 'price_desc']).default('relevance'),
+    page: z.coerce.number().int().min(1).max(100).default(1),
   });
 
-  const { q, limit } = querySchema.parse(request.query);
-  const searchPolicyVersion = 'listing-search-postgres-v2.0';
+  const { q, limit, category, condition, size, priceMin, priceMax, sort, page } =
+    querySchema.parse(request.query);
+  const searchPolicyVersion = 'listing-search-postgres-v3.0';
+  const startTime = Date.now();
 
-  const result = await readDb.query<{
+  // Build cache params from the normalized query
+  const cacheParams: SearchQueryParams = {
+    q,
+    filters: {
+      category,
+      condition,
+      size,
+      priceMin,
+      priceMax,
+    },
+    sort,
+    page,
+    limit,
+  };
+
+  // ── Cache-first read with stale-while-revalidate ──
+  const revalidate = async (): Promise<void> => {
+    const freshResult = await computeSearchResults(
+      readDb, q, limit, category, condition, size, priceMin, priceMax, sort, page,
+      searchPolicyVersion,
+    );
+    await setCachedSearchResult(redis, cacheParams, freshResult);
+  };
+
+  const cached = await getCachedOrRevalidate(redis, cacheParams, revalidate);
+  if (cached) {
+    const responseTimeMs = Date.now() - startTime;
+    const zeroResults = cached.items.length === 0;
+
+    // Track analytics (fire-and-forget)
+    void recordSearchAnalytics(redis, {
+      query: q,
+      responseTimeMs,
+      zeroResults,
+      cacheHit: true,
+    });
+    void trackQueryFrequency(redis, q);
+
+    return {
+      ...cached,
+      fromCache: true,
+      responseTimeMs,
+    };
+  }
+
+  // ── Cache miss: compute results from DB ──
+  const computed = await computeSearchResults(
+    readDb, q, limit, category, condition, size, priceMin, priceMax, sort, page,
+    searchPolicyVersion,
+  );
+
+  const responseTimeMs = Date.now() - startTime;
+  const zeroResults = computed.items.length === 0;
+
+  // Cache the result (fire-and-forget, don't block response)
+  void setCachedSearchResult(redis, cacheParams, computed);
+
+  // Track analytics and query frequency (fire-and-forget)
+  void recordSearchAnalytics(redis, {
+    query: q,
+    responseTimeMs,
+    zeroResults,
+    cacheHit: false,
+  });
+  void trackQueryFrequency(redis, q);
+
+  return {
+    ...computed,
+    fromCache: false,
+    responseTimeMs,
+  };
+});
+
+/**
+ * Compute search results from the database. Extracted as a helper
+ * so it can be called both on cache miss and during background
+ * revalidation.
+ */
+async function computeSearchResults(
+  dbPool: typeof readDb,
+  q: string,
+  limit: number,
+  category: string | undefined,
+  condition: string | undefined,
+  size: string | undefined,
+  priceMin: number | undefined,
+  priceMax: number | undefined,
+  sort: string,
+  page: number,
+  searchPolicyVersion: string,
+): Promise<Omit<CachedSearchResult, 'cachedAt' | 'fromCache' | 'stale'>> {
+  const offset = (page - 1) * limit;
+
+  // Build dynamic WHERE clause for filters
+  const filterConditions: string[] = [];
+  const filterArgs: unknown[] = [];
+  let filterIdx = 2; // $1 is the query text
+
+  if (category) {
+    filterConditions.push(`l.category = $${filterIdx++}`);
+    filterArgs.push(category);
+  }
+  if (condition) {
+    filterConditions.push(`l.condition = $${filterIdx++}`);
+    filterArgs.push(condition);
+  }
+  if (size) {
+    filterConditions.push(`l.size = $${filterIdx++}`);
+    filterArgs.push(size);
+  }
+  if (priceMin !== undefined) {
+    filterConditions.push(`l.price_gbp >= $${filterIdx++}`);
+    filterArgs.push(priceMin);
+  }
+  if (priceMax !== undefined) {
+    filterConditions.push(`l.price_gbp <= $${filterIdx++}`);
+    filterArgs.push(priceMax);
+  }
+
+  const filterClause = filterConditions.length > 0
+    ? `AND ${filterConditions.join(' AND ')}`
+    : '';
+
+  // Determine ORDER BY based on sort option
+  let orderBy: string;
+  switch (sort) {
+    case 'recent':
+      orderBy = 'l.created_at DESC, l.id DESC';
+      break;
+    case 'price_asc':
+      orderBy = 'l.price_gbp ASC, l.id DESC';
+      break;
+    case 'price_desc':
+      orderBy = 'l.price_gbp DESC, l.id DESC';
+      break;
+    case 'relevance':
+    default:
+      orderBy = 'rank_score::numeric DESC, l.created_at DESC, l.id DESC';
+      break;
+  }
+
+  const result = await dbPool.query<{
     id: string;
     seller_id: string;
     title: string;
@@ -18601,10 +18841,11 @@ app.get('/search/listings', async (request) => {
           OR POSITION(lower($1) IN lower(COALESCE(l.size, ''))) > 0
           OR POSITION(lower($1) IN lower(COALESCE(l.condition, ''))) > 0
         )
-      ORDER BY rank_score::numeric DESC, l.created_at DESC, l.id DESC
-      LIMIT $2
+        ${filterClause}
+      ORDER BY ${orderBy}
+      LIMIT $${filterIdx} OFFSET $${filterIdx + 1}
     `,
-    [q, limit]
+    [q, ...filterArgs, limit, offset]
   );
 
   if (result.rowCount && result.rowCount > 0) {
@@ -18639,7 +18880,8 @@ app.get('/search/listings', async (request) => {
     };
   }
 
-  const fallback = await readDb.query<{
+  // Fallback: ILIKE search when full-text search returns nothing
+  const fallback = await dbPool.query<{
     id: string;
     seller_id: string;
     title: string;
@@ -18663,10 +18905,11 @@ app.get('/search/listings', async (request) => {
           OR POSITION(lower($1) IN lower(COALESCE(l.size, ''))) > 0
           OR POSITION(lower($1) IN lower(COALESCE(l.condition, ''))) > 0
         )
-      ORDER BY l.created_at DESC, l.id DESC
-      LIMIT $2
+        ${filterClause}
+      ORDER BY ${sort === 'price_asc' ? 'l.price_gbp ASC' : sort === 'price_desc' ? 'l.price_gbp DESC' : 'l.created_at DESC'}, l.id DESC
+      LIMIT $${filterIdx} OFFSET $${filterIdx + 1}
     `,
-    [q, limit]
+    [q, ...filterArgs, limit, offset]
   );
 
   return {
@@ -18699,6 +18942,81 @@ app.get('/search/listings', async (request) => {
         : null,
     })),
   };
+}
+
+// ── Autocomplete endpoint ─────────────────────────────────────────────────────
+
+app.get('/search/autocomplete', async (request) => {
+  const querySchema = z.object({
+    q: z.string().trim().min(1).max(120),
+    limit: z.coerce.number().int().min(1).max(20).default(8),
+  });
+
+  const { q, limit } = querySchema.parse(request.query);
+  const startTime = Date.now();
+
+  // Check autocomplete cache first
+  const { getCachedAutocomplete, setCachedAutocomplete } = await import('./lib/searchCache.js');
+  const cached = await getCachedAutocomplete(redis, q);
+  if (cached) {
+    return {
+      ok: true,
+      query: q,
+      suggestions: cached.slice(0, limit),
+      fromCache: true,
+      responseTimeMs: Date.now() - startTime,
+    };
+  }
+
+  // Query database for autocomplete suggestions
+  const result = await readDb.query<{ term: string; frequency: string }>(
+    `
+      SELECT term, COUNT(*)::text AS frequency
+      FROM (
+        SELECT lower(l.title) AS term
+        FROM listings l
+        WHERE l.status = 'active' AND lower(l.title) LIKE lower($1 || '%')
+        UNION ALL
+        SELECT lower(COALESCE(l.brand, '')) AS term
+        FROM listings l
+        WHERE l.status = 'active' AND lower(COALESCE(l.brand, '')) LIKE lower($1 || '%')
+        UNION ALL
+        SELECT lower(COALESCE(l.category, '')) AS term
+        FROM listings l
+        WHERE l.status = 'active' AND lower(COALESCE(l.category, '')) LIKE lower($1 || '%')
+      ) AS suggestions
+      WHERE term != ''
+      GROUP BY term
+      ORDER BY frequency DESC
+      LIMIT $2
+    `,
+    [q, limit]
+  );
+
+  const suggestions = result.rows.map((row) => ({
+    text: row.term,
+    type: 'query' as const,
+    score: Number(row.frequency),
+  }));
+
+  // Cache the suggestions (fire-and-forget)
+  void setCachedAutocomplete(redis, q, suggestions);
+
+  return {
+    ok: true,
+    query: q,
+    suggestions,
+    fromCache: false,
+    responseTimeMs: Date.now() - startTime,
+  };
+});
+
+// ── Search analytics endpoint ─────────────────────────────────────────────────
+
+app.get('/search/analytics', async () => {
+  const { getSearchAnalytics } = await import('./lib/searchCache.js');
+  const analytics = await getSearchAnalytics(redis, 5);
+  return { ok: true, analytics };
 });
 
 app.get('/feed/looks', async () => {
@@ -20496,7 +20814,33 @@ app.post('/listings', {
       }
     }
 
+    // Fraud check — non-blocking: score and log, don't reject unless high risk.
+    // Catches bulk listing creation (counterfeit/non-existent goods) and
+    // new-account listing velocity (AGENTS.md §11 — truthful signals).
+    try {
+      await checkFraudNonBlocking(
+        redis,
+        {
+          eventType: 'listing',
+          userId: actorUserId,
+          headers: request.headers as Record<string, string | string[] | undefined>,
+          ip: request.ip,
+          amountGbp: payload.priceGbp,
+        },
+        undefined,
+        request.log,
+      );
+    } catch {
+      // Fraud check failures must never break listing creation (AGENTS.md §6).
+    }
+
     reply.code(201);
+
+    // Invalidate search cache since listing data changed (fire-and-forget)
+    void invalidateSearchCache(redis).catch((cacheError) => {
+      app.log.error({ err: cacheError, listingId: payload.id }, 'Failed to invalidate search cache after listing upsert');
+    });
+
     return { ok: true, listingId: payload.id };
   } catch (error) {
     await client.query('ROLLBACK');
@@ -21930,6 +22274,11 @@ app.patch('/listings/:listingId', async (request, reply) => {
     }
   }
 
+  // Invalidate search cache since listing data changed (fire-and-forget)
+  void invalidateSearchCache(redis).catch((cacheError) => {
+    app.log.error({ err: cacheError, listingId }, 'Failed to invalidate search cache after listing update');
+  });
+
   return { ok: true, listingId, alertEvaluation };
 });
 
@@ -21962,6 +22311,11 @@ app.delete('/listings/:listingId', async (request, reply) => {
     `UPDATE listings SET status = 'deleted', updated_at = NOW() WHERE id = $1`,
     [listingId],
   );
+
+  // Invalidate search cache since listing data changed (fire-and-forget)
+  void invalidateSearchCache(redis).catch((cacheError) => {
+    app.log.error({ err: cacheError, listingId }, 'Failed to invalidate search cache after listing delete');
+  });
 
   return { ok: true };
 });
@@ -22483,6 +22837,8 @@ registerNotificationRoutes({
   queueUserNotification,
   toJsonString,
 });
+
+registerFraudDetectionRoutes({ app, redis });
 
 app.post('/secure-messages', async (request, reply) => {
   const bodySchema = z.object({
@@ -23388,6 +23744,25 @@ app.post('/chat/conversations/:conversationId/messages', {
     } catch (err) {
       request.log.error({ err, conversationId, actorUserId }, 'Bot runtime execution failed');
     }
+  }
+
+  // Fraud check — non-blocking: score and log, don't reject unless high risk.
+  // Catches message spam velocity and bot-driven messaging patterns
+  // (AGENTS.md §11 — truthful signals).
+  try {
+    await checkFraudNonBlocking(
+      redis,
+      {
+        eventType: 'message',
+        userId: actorUserId,
+        headers: request.headers as Record<string, string | string[] | undefined>,
+        ip: request.ip,
+      },
+      undefined,
+      request.log,
+    );
+  } catch {
+    // Fraud check failures must never break message sending (AGENTS.md §6).
   }
 
   reply.code(201);
@@ -47934,10 +48309,10 @@ const shutdown = async () => {
 
 process.on('uncaughtException', (err) => {
   if (err.message === 'Connection is closed.') {
-    console.warn('[uncaughtException] Redis connection closed (suppressed):', err.message);
+    logger.warn({ err: err.message }, '[uncaughtException] Redis connection closed (suppressed)');
     return;
   }
-  console.error('[uncaughtException] Fatal:', err);
+  logger.error({ err }, '[uncaughtException] Fatal');
   process.exit(1);
 });
 

@@ -8,16 +8,15 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useToast } from '../context/ToastContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { Space, Radius, Type } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Typography } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 
-type Props = StackScreenProps<RootStackParamList, 'About'>;
+import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
+type Props = NativeStackScreenProps<RootStackParamList, 'About'>;
 
 export default function AboutScreen({ navigation }: Props) {
   const { show } = useToast();
@@ -144,8 +143,8 @@ function createStyles(colors: ThemeColors) {
     flex: 1,
   },
   brandIcon: {
-    width: 64,
-    height: 64,
+    width: Space.xl + Space.xl,
+    height: Space.xl + Space.xl,
     borderRadius: Radius.lg,
     backgroundColor: colors.surface,
     justifyContent: 'center',
@@ -162,7 +161,7 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     letterSpacing: Type.caption.letterSpacing,
-    marginTop: 2,
+    marginTop: Space.xs - 2,
   },
   sectionLabel: {
     fontSize: Type.body.size,
@@ -183,7 +182,7 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     paddingVertical: Space.md,
     paddingHorizontal: Space.md,
-    minHeight: 56,
+    minHeight: Control.hit + Space.sm + Space.xs,
     gap: Space.sm + 4,
   },
   rowBorder: {
@@ -191,7 +190,7 @@ function createStyles(colors: ThemeColors) {
     borderBottomColor: colors.border,
   },
   rowIconWrap: {
-    width: 28,
+    width: Space.xl - Space.xs,
     alignItems: 'center',
     justifyContent: 'center',
   },

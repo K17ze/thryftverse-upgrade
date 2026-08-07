@@ -322,7 +322,7 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surfaceAlt,
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
     gap: Space.sm,
@@ -348,8 +348,8 @@ function createStyles(colors: ThemeColors) {
   },
   categoryChip: {
     paddingHorizontal: Space.md,
-    paddingVertical: 8,
-    borderRadius: 16,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.xl,
     marginRight: Space.xs,
   },
   categoryChipActive: {
@@ -388,7 +388,7 @@ function createStyles(colors: ThemeColors) {
   featuredCard: {
     width: SCREEN_W * 0.42,
     backgroundColor: colors.surface,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
     padding: Space.md,
     shadowColor: '#000',
     shadowOpacity: 0.06,
@@ -397,7 +397,7 @@ function createStyles(colors: ThemeColors) {
     elevation: 2,
   },
   featuredPreviewWrap: {
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
     marginBottom: Space.xs,
     position: 'relative',
@@ -461,7 +461,7 @@ function createStyles(colors: ThemeColors) {
   },
   templateCard: {
     flex: 1,
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
     padding: Space.xs,
@@ -470,7 +470,7 @@ function createStyles(colors: ThemeColors) {
   previewContainer: {
     alignItems: 'center',
     marginBottom: Space.xs,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     overflow: 'hidden',
   },
   templateName: {
