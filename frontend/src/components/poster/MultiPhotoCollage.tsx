@@ -45,15 +45,36 @@ export default function MultiPhotoCollage({ layout, photos, onPhotosChange, canv
     }
   };
 
-  const renderSlot = (slotIndex: number, slotStyle: any) => {
+  const renderSlot = (slotIndex: number, slotStyle: any, cellRadius: number = Radius.sm) => {
     const uri = photos[slotIndex];
     return (
-      <View key={slotIndex} style={[styles.slot, slotStyle]}>
+      <View
+        key={slotIndex}
+        style={[
+          styles.slot,
+          slotStyle,
+          { borderRadius: cellRadius },
+          !uri && styles.slotEmpty,
+        ]}
+      >
         {uri ? (
-          <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+          <Image
+            source={{ uri }}
+            style={[StyleSheet.absoluteFill, { borderRadius: cellRadius }]}
+            resizeMode="cover"
+          />
         ) : (
-          <Pressable style={styles.addBtn} onPress={() => handlePickPhoto(slotIndex)}>
-            <Ionicons name="add" size={28} color="rgba(255,255,255,0.7)" />
+          <Pressable
+            style={styles.addBtn}
+            onPress={() => handlePickPhoto(slotIndex)}
+            android_ripple={{ color: 'rgba(255,255,255,0.06)', radius: 60 }}
+            accessibilityLabel={`Add photo to slot ${slotIndex + 1}`}
+            accessibilityHint="Opens your photo library to choose a photo"
+            accessibilityRole="button"
+          >
+            <View style={styles.addCircle}>
+              <Ionicons name="add" size={22} color="rgba(255,255,255,0.75)" />
+            </View>
           </Pressable>
         )}
       </View>
@@ -104,12 +125,12 @@ export default function MultiPhotoCollage({ layout, photos, onPhotosChange, canv
       return (
         <View style={[StyleSheet.absoluteFill, { gap: slotGap, padding: 20, backgroundColor: '#fff' }]}>
           <View style={{ flex: 1, flexDirection: 'row', gap: slotGap }}>
-            {renderSlot(0, { flex: 1, borderRadius: Radius.sm })}
-            {renderSlot(1, { flex: 1, borderRadius: Radius.sm })}
+            {renderSlot(0, { flex: 1 })}
+            {renderSlot(1, { flex: 1 })}
           </View>
           <View style={{ flex: 1, flexDirection: 'row', gap: slotGap }}>
-            {renderSlot(2, { flex: 1, borderRadius: Radius.sm })}
-            {renderSlot(3, { flex: 1, borderRadius: Radius.sm })}
+            {renderSlot(2, { flex: 1 })}
+            {renderSlot(3, { flex: 1 })}
           </View>
         </View>
       );
@@ -121,10 +142,23 @@ export default function MultiPhotoCollage({ layout, photos, onPhotosChange, canv
 const styles = StyleSheet.create({
   slot: {
     overflow: 'hidden',
-    backgroundColor: 'rgba(0,0,0,0.25)',
+    backgroundColor: 'rgba(0,0,0,0.22)',
+  },
+  slotEmpty: {
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
   },
   addBtn: {
     flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.28)',
     alignItems: 'center',
     justifyContent: 'center',
   },

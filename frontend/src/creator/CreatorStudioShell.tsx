@@ -12,6 +12,7 @@ import {
   Platform,
   PanResponder,
   Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -317,6 +318,35 @@ function CreatorStudioInner() {
             }}
           />
         </View>
+
+        {/* ── Canvas loading overlay ──────────────────────────────────── */}
+        {/* Subtle progress indicator when loading a source look or draft.
+            Instagram shows a thin progress bar; we use a centered spinner
+            on the dark canvas — minimal, non-blocking, recedes once media
+            is ready. */}
+        {(isLoadingSourceLook || isLoadingDraft) && (
+          <View style={styles.canvasLoadingOverlay} pointerEvents="none">
+            <View style={styles.canvasLoadingPill}>
+              <ActivityIndicator size="small" color="#fff" />
+              <Text style={styles.canvasLoadingText}>Loading…</Text>
+            </View>
+          </View>
+        )}
+
+        {/* ── Empty canvas hint ───────────────────────────────────────── */}
+        {/* When the user starts blank, the canvas is empty. Instagram shows
+            a subtle prompt to begin creating. This hint recedes the moment
+            any layer is added. It sits behind all chrome (zIndex 40) and
+            does not intercept touches. */}
+        {!hasContent && !isLoadingSourceLook && !isLoadingDraft && entryComplete && !selectedLayer && (
+          <View style={styles.canvasEmptyHint} pointerEvents="none">
+            <Ionicons name="add-circle-outline" size={40} color="rgba(255,255,255,0.25)" />
+            <Text style={styles.canvasEmptyHintTitle}>Start creating</Text>
+            <Text style={styles.canvasEmptyHintBody}>
+              Use the tools below to add text, stickers, and media
+            </Text>
+          </View>
+        )}
       </View>
 
       {/* ── Top bar — transparent floating, gradient scrim (Instagram pattern) ── */}
@@ -355,33 +385,32 @@ function CreatorStudioInner() {
                 </View>
               </>
             ) : (
-              /* Default: Back · spacer · Preview · Publish (Instagram minimalism) */
+              /* Default: Close (X) · spacer · Next (Instagram minimalism) */
               <>
                 <View style={styles.topLeftGroup}>
                   <PressScale
                     onPress={handleBack}
                     style={styles.topBtn}
-                    accessibilityLabel="Back"
+                    accessibilityLabel="Close editor"
                   >
-                    <Ionicons name="chevron-back" size={26} color="#fff" />
+                    <Ionicons name="close" size={26} color="#fff" />
                   </PressScale>
+                  {/* Unsaved-changes dot — subtle indicator when the document
+                      has unsaved edits. Appears next to the close button as a
+                      small amber dot, communicating state without clutter. */}
+                  {isDirty && (
+                    <View style={styles.unsavedDot} />
+                  )}
                 </View>
 
                 <View style={styles.topRightGroup}>
                   <PressScale
-                    onPress={() => setShowPreview(true)}
-                    style={styles.topBtn}
-                    accessibilityLabel="Preview"
-                  >
-                    <Ionicons name="eye-outline" size={24} color="#fff" />
-                  </PressScale>
-                  <PressScale
                     onPress={() => setShowPublish(true)}
                     style={[styles.publishBtn, { backgroundColor: colors.brand }]}
-                    accessibilityLabel="Publish"
+                    accessibilityLabel="Next"
                     scale={0.97}
                   >
-                    <Text style={[styles.publishBtnText, { color: '#fff' }]}>Publish</Text>
+                    <Text style={[styles.publishBtnText, { color: '#fff' }]}>Next</Text>
                   </PressScale>
                 </View>
               </>
@@ -390,72 +419,70 @@ function CreatorStudioInner() {
         </View>
       </View>
 
-      {/* ── Page dots row (poster) — floating glass pill below top bar ──── */}
+      {/* ── Page segment bars (poster) — Instagram-style progress segments ── */}
+      {/* Thin horizontal bars at the very top of the viewport, identical to
+          Instagram Stories' story progress indicators. The active page is
+          filled white; inactive pages are translucent. Tapping a segment
+          switches pages; long-press opens page options. The add-page
+          control is a compact + button at the end of the row. */}
       {isPoster && document.pages.length > 1 && (
-        <View
-          style={[
-            styles.pageDotsFloat,
-            { top: insets.top + 56 + Space.sm },
-          ]}
-        >
-          <LiquidGlassBackdrop
-            intensity={40}
-            tint="dark"
-            absoluteFill={false}
-            style={styles.pageDotsPill}
-          >
+        <View style={[styles.pageSegmentsContainer, { top: insets.top + 6 }]}>
+          <View style={styles.pageSegmentsRow}>
             {document.pages.map((p, i) => (
-              <PressScale
+              <Pressable
                 key={p.id}
                 onPress={() => { selectLayer(null); setActivePageIndex(i); }}
                 onLongPress={() => setPageMenuIndex(i)}
-                style={styles.pageDotTarget}
+                style={styles.pageSegmentTarget}
                 accessibilityLabel={`Page ${i + 1}`}
                 accessibilityState={{ selected: i === activePageIndex }}
-                hitSlop={8}
+                hitSlop={{ top: 8, bottom: 8 }}
               >
-                {i === activePageIndex ? (
-                  <LinearGradient
-                    colors={[colors.brand, colors.brand]}
-                    style={styles.pageDotActive}
+                <View style={styles.pageSegmentTrack}>
+                  <View
+                    style={[
+                      styles.pageSegmentFill,
+                      {
+                        flex: i === activePageIndex ? 1 : 0,
+                        backgroundColor: i <= activePageIndex ? '#fff' : 'rgba(255,255,255,0.3)',
+                      },
+                    ]}
                   />
-                ) : (
-                  <View style={[styles.pageDot, { backgroundColor: 'rgba(255,255,255,0.5)' }]} />
-                )}
-              </PressScale>
+                </View>
+              </Pressable>
             ))}
-          </LiquidGlassBackdrop>
-
-          {/* Page count */}
-          <Text style={[styles.pageCountText, { color: 'rgba(255,255,255,0.85)' }]}>
-            {activePageIndex + 1}/{document.pages.length}
-          </Text>
-
-          {/* Add page button */}
-          {document.pages.length < 10 && (
-            <LiquidGlassBackdrop
-              intensity={40}
-              tint="dark"
-              absoluteFill={false}
-              style={styles.addPageBtn}
-            >
+            {/* Add page — compact + at end of segment row */}
+            {document.pages.length < 10 && (
               <PressScale
                 onPress={() => { selectLayer(null); addPage(); }}
-                style={styles.addPageBtnInner}
+                style={styles.pageSegmentAdd}
                 accessibilityLabel="Add page"
                 hitSlop={8}
               >
-                <Ionicons name="add" size={18} color="#fff" />
+                <Ionicons name="add" size={14} color="rgba(255,255,255,0.8)" />
               </PressScale>
-            </LiquidGlassBackdrop>
-          )}
+            )}
+          </View>
         </View>
       )}
 
+      {/* ── Bottom gradient scrim — grounds the tool dock visually ─────── */}
+      {/* A subtle dark-to-transparent gradient above the bottom rail so the
+          glass dock feels anchored to the canvas, not floating arbitrarily.
+          This mirrors the top scrim for visual symmetry. */}
+      <View style={styles.bottomScrimContainer} pointerEvents="none">
+        <LinearGradient
+          colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.35)', 'rgba(0,0,0,0.6)']}
+          style={styles.bottomScrim}
+        />
+      </View>
+
       {/* ── Floating bottom rail with Liquid Glass backdrop ──────────── */}
       {/* Premium glassmorphism: Liquid Glass on iOS 26+, BlurView fallback
-          elsewhere. The tool dock sits on top of this glass surface. */}
+          elsewhere. The tool dock sits on top of this glass surface. A
+          hairline top border grounds the glass against the canvas. */}
       <View style={[styles.bottomRailContainer, { paddingBottom: insets.bottom }]}>
+        <View style={styles.bottomRailHairline} />
         <LiquidGlassBackdrop intensity={50} tint="dark" absoluteFill={false} style={styles.bottomRailGlass}>
           {/* Opacity slider — appears when a layer is selected (Instagram pattern) */}
           {selectedLayer && (
@@ -536,6 +563,12 @@ function CreatorStudioInner() {
               onPress={() => { redo(); setShowOverflow(false); }}
             />
             <View style={[styles.overflowDivider, { backgroundColor: colors.border }]} />
+            <OverflowItem
+              icon="eye-outline"
+              label="Preview"
+              colors={colors}
+              onPress={() => { setShowPreview(true); setShowOverflow(false); }}
+            />
             <OverflowItem
               icon="at-outline"
               label="Mention"
@@ -943,27 +976,6 @@ const styles = StyleSheet.create({
     height: 140,
     zIndex: -1,
   },
-  topBarGradient: {
-    paddingHorizontal: Space.sm,
-    paddingBottom: Space.md,
-  },
-  // ── Page progress dots (Instagram-style segments) ──
-  pageDotsRow: {
-    flexDirection: 'row',
-    gap: 3,
-    paddingHorizontal: Space.xs,
-    paddingBottom: Space.sm + 2,
-  },
-  pageDotSegment: {
-    flex: 1,
-    height: 22,
-    borderRadius: Radius.full,
-    justifyContent: 'center',
-  },
-  pageDotFill: {
-    height: 3.5,
-    borderRadius: Radius.sm,
-  },
   // ── Top bar row ──
   topBarRow: {
     flexDirection: 'row',
@@ -993,19 +1005,6 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
     fontSize: Type.bodyEmphasis.size,
     color: '#fff',
-  },
-  statusText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: 'rgba(255,255,255,0.8)',
-  },
-  nextBtn: {
-    paddingHorizontal: 20,
-    height: 40,
-    borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   topRight: {
     flexDirection: 'row',
@@ -1042,86 +1041,103 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
     fontSize: Type.body.size,
   },
-  // ── Page dots floating pill ──
-  pageDotsFloat: {
+  // ── Page segment bars (Instagram-style story progress) ──
+  pageSegmentsContainer: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.sm,
-    zIndex: 90,
+    left: Space.sm,
+    right: Space.sm,
+    zIndex: 110,
   },
-  pageDotsPill: {
+  pageSegmentsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 4,
+  },
+  pageSegmentTarget: {
+    flex: 1,
+    height: 14,
+    justifyContent: 'center',
+  },
+  pageSegmentTrack: {
+    height: 3,
     borderRadius: Radius.full,
-    paddingHorizontal: Space.md,
-    paddingVertical: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 6,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    overflow: 'hidden',
+    flexDirection: 'row',
   },
-  pageDotTarget: {
-    width: 32,
-    height: 32,
-    alignItems: 'center',
+  pageSegmentFill: {
+    height: 3,
+    borderRadius: Radius.full,
+  },
+  pageSegmentAdd: {
+    width: 22,
+    height: 22,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(255,255,255,0.15)',
     justifyContent: 'center',
+    alignItems: 'center',
   },
-  pageDot: {
+  // ── Canvas loading overlay ──
+  canvasLoadingOverlay: {
+    ...StyleSheet.absoluteFill,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 50,
+  },
+  canvasLoadingPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingHorizontal: Space.lg,
+    paddingVertical: Space.md,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+  },
+  canvasLoadingText: {
+    fontFamily: Typography.family.medium,
+    fontSize: Type.caption.size,
+    color: 'rgba(255,255,255,0.85)',
+  },
+  // ── Empty canvas hint ──
+  canvasEmptyHint: {
+    ...StyleSheet.absoluteFill,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 40,
+    gap: Space.xs,
+  },
+  canvasEmptyHintTitle: {
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.bodyEmphasis.size,
+    color: 'rgba(255,255,255,0.45)',
+    marginTop: Space.sm,
+  },
+  canvasEmptyHintBody: {
+    fontFamily: Typography.family.regular,
+    fontSize: Type.caption.size,
+    color: 'rgba(255,255,255,0.3)',
+    textAlign: 'center',
+  },
+  // ── Unsaved changes dot ──
+  unsavedDot: {
     width: 7,
     height: 7,
     borderRadius: Radius.full,
+    backgroundColor: '#C9A46A',
+    marginLeft: -Space.xs,
+    marginTop: Space.xs + 2,
   },
-  pageDotActive: {
-    width: 10,
-    height: 10,
-    borderRadius: Radius.full,
-  },
-  pageCountText: {
-    fontFamily: Typography.family.medium,
-    fontSize: Type.meta.size,
-  },
-  addPageBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  addPageBtnInner: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  nextBtnText: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyEmphasis.size,
-    color: '#000',
-  },
-  // ── Add page floating button ──
-  addPageFloat: {
+  // ── Bottom gradient scrim ──
+  bottomScrimContainer: {
     position: 'absolute',
-    right: Space.sm,
-    zIndex: 90,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 180,
+    zIndex: 95,
   },
-  addPageFloatGradient: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
+  bottomScrim: {
+    flex: 1,
   },
   // ── Floating bottom rail (Liquid Glass) ──
   bottomRailContainer: {
@@ -1130,6 +1146,10 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 100,
+  },
+  bottomRailHairline: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(255,255,255,0.12)',
   },
   bottomRailGlass: {
     flex: 1,

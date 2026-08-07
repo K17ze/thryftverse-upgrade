@@ -13,7 +13,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Radius } from '../../theme/designTokens';
+import { Radius, Stroke } from '../../theme/designTokens';
+import { AnimatedPressable } from '../AnimatedPressable';
 import { KeyboardStickyView } from '../../platform/keyboard/KeyboardProvider';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -210,8 +211,9 @@ export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, 
                 left: layer.x,
                 top: layer.y,
                 backgroundColor: layer.backgroundColor,
-                borderColor: isEditing ? '#fff' : isSelected ? 'rgba(255,255,255,0.5)' : 'transparent',
-                borderWidth: isEditing ? 2 : isSelected ? 1.5 : 0,
+                borderColor: isEditing ? '#fff' : isSelected ? 'rgba(255,255,255,0.6)' : 'transparent',
+                borderWidth: isEditing ? Stroke.emphasis : isSelected ? Stroke.standard : 0,
+                borderStyle: isSelected && !isEditing ? 'dashed' : 'solid',
                 transform: [{ rotate: `${layer.rotation}deg` }],
               },
             ]}
@@ -257,8 +259,10 @@ export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, 
                 style={styles.deleteLayerBtn}
                 onPress={() => removeLayer(layer.id)}
                 hitSlop={8}
+                accessibilityLabel="Delete text layer"
+                accessibilityRole="button"
               >
-                <Ionicons name="close-circle" size={20} color={colors.danger} />
+                <Ionicons name="close" size={14} color="#fff" />
               </Pressable>
             )}
           </View>
@@ -267,10 +271,19 @@ export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, 
 
       {/* Add text button (only when text tool active) */}
       {isActive && (
-        <Pressable style={styles.addTextBtn} onPress={addLayer} hitSlop={12}>
-          <Ionicons name="add" size={20} color="#fff" />
+        <AnimatedPressable
+          style={styles.addTextBtn}
+          onPress={addLayer}
+          scaleValue={0.94}
+          activeOpacity={0.8}
+          hapticFeedback="light"
+          hitSlop={12}
+          accessibilityLabel="Add text layer"
+          accessibilityHint="Adds a new text overlay to the poster"
+        >
+          <Ionicons name="add" size={18} color="#fff" />
           <Text style={styles.addTextLabel}>Add Text</Text>
-        </Pressable>
+        </AnimatedPressable>
       )}
 
       {/* Controls panel (only when text tool active + editing) */}
@@ -280,13 +293,19 @@ export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, 
           pointerEvents="box-none"
         >
           <View style={styles.controlsPanel}>
-            {/* Font family */}
+            {/* Font family — horizontal scroll */}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.fontRow}>
               {FONT_OPTIONS.map((f) => (
-                <Pressable
+                <AnimatedPressable
                   key={f.key}
                   style={[styles.fontPill, activeLayer.fontFamily === f.key && styles.fontPillActive]}
                   onPress={() => updateLayer(activeLayer.id, { fontFamily: f.key })}
+                  scaleValue={0.94}
+                  activeOpacity={0.8}
+                  hapticFeedback="selection"
+                  accessibilityLabel={`${f.label} font`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: activeLayer.fontFamily === f.key }}
                 >
                   <Text
                     style={[
@@ -297,43 +316,23 @@ export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, 
                   >
                     {f.label}
                   </Text>
-                </Pressable>
+                </AnimatedPressable>
               ))}
             </ScrollView>
 
-            {/* Size controls */}
-            <View style={styles.sizeRow}>
-              <Pressable style={styles.sizeBtn} onPress={() => adjustFontSize(-2)}>
-                <Text style={styles.sizeBtnText}>A-</Text>
-              </Pressable>
-              <Text style={styles.sizeValue}>{activeLayer.fontSize}px</Text>
-              <Pressable style={styles.sizeBtn} onPress={() => adjustFontSize(2)}>
-                <Text style={styles.sizeBtnText}>A+</Text>
-              </Pressable>
-            </View>
-
-            {/* Alignment */}
-            <View style={styles.alignRow}>
-              {(['left', 'center', 'right'] as TextAlignment[]).map((a) => (
-                <Pressable
-                  key={a}
-                  style={[styles.alignBtn, activeLayer.alignment === a && styles.alignBtnActive]}
-                  onPress={() => updateLayer(activeLayer.id, { alignment: a })}
-                >
-                  <Text style={{ fontSize: 16, color: activeLayer.alignment === a ? colors.brand : colors.textMuted, fontFamily: 'Inter_700Bold' }}>
-                    {a === 'left' ? 'L' : a === 'center' ? 'C' : 'R'}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-
-            {/* Text colors */}
+            {/* Text colors — row of color dots */}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.colorRow}>
               {COLOR_OPTIONS.map((c) => (
-                <Pressable
+                <AnimatedPressable
                   key={c}
                   style={[styles.colorOrb, { backgroundColor: c }, activeLayer.color === c && styles.colorOrbActive]}
                   onPress={() => updateLayer(activeLayer.id, { color: c })}
+                  scaleValue={0.88}
+                  activeOpacity={0.7}
+                  hapticFeedback="selection"
+                  accessibilityLabel={`Text color ${c}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: activeLayer.color === c }}
                 >
                   {activeLayer.color === c && (
                     <Ionicons
@@ -342,31 +341,103 @@ export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, 
                       color={c === '#ffffff' || c === '#c7c7cc' || c === '#e2d5c2' || c === '#d4b896' || c === '#b8d4c0' || c === '#d4b8c0' ? '#000' : '#fff'}
                     />
                   )}
-                </Pressable>
+                </AnimatedPressable>
               ))}
             </ScrollView>
 
-            {/* Background colors */}
+            {/* Background colors — row of bg dots */}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.colorRow}>
               {BG_OPTIONS.map((c, i) => (
-                <Pressable
+                <AnimatedPressable
                   key={i}
                   style={[
                     styles.bgOrb,
-                    { backgroundColor: c || 'transparent', borderColor: c ? 'transparent' : colors.border },
+                    { backgroundColor: c || 'transparent', borderColor: c ? 'transparent' : 'rgba(255,255,255,0.25)' },
                     activeLayer.backgroundColor === c && styles.bgOrbActive,
                   ]}
                   onPress={() => updateLayer(activeLayer.id, { backgroundColor: c })}
+                  scaleValue={0.88}
+                  activeOpacity={0.7}
+                  hapticFeedback="selection"
+                  accessibilityLabel={c ? `Background color ${c}` : 'No background'}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: activeLayer.backgroundColor === c }}
                 >
-                  {!c && <Ionicons name="close" size={12} color={colors.textMuted} />}
-                </Pressable>
+                  {!c && <Ionicons name="close" size={12} color="rgba(255,255,255,0.6)" />}
+                </AnimatedPressable>
               ))}
             </ScrollView>
 
-            {/* Done */}
-            <Pressable style={styles.doneBtn} onPress={() => setEditingId(null)}>
+            {/* Size + Alignment — combined row */}
+            <View style={styles.toolRow}>
+              {/* Alignment controls */}
+              <View style={styles.alignGroup}>
+                {(['left', 'center', 'right'] as TextAlignment[]).map((a) => (
+                  <AnimatedPressable
+                    key={a}
+                    style={[styles.alignBtn, activeLayer.alignment === a && styles.alignBtnActive]}
+                    onPress={() => updateLayer(activeLayer.id, { alignment: a })}
+                    scaleValue={0.9}
+                    activeOpacity={0.7}
+                    hapticFeedback="selection"
+                    accessibilityLabel={`Align ${a}`}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: activeLayer.alignment === a }}
+                  >
+                    <Text
+                      style={[
+                        styles.alignBtnText,
+                        activeLayer.alignment === a && styles.alignBtnTextActive,
+                      ]}
+                    >
+                      {a === 'left' ? 'L' : a === 'center' ? 'C' : 'R'}
+                    </Text>
+                  </AnimatedPressable>
+                ))}
+              </View>
+
+              {/* Divider */}
+              <View style={styles.toolDivider} />
+
+              {/* Size controls */}
+              <View style={styles.sizeGroup}>
+                <AnimatedPressable
+                  style={styles.sizeBtn}
+                  onPress={() => adjustFontSize(-2)}
+                  scaleValue={0.9}
+                  activeOpacity={0.7}
+                  hapticFeedback="light"
+                  accessibilityLabel="Decrease font size"
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.sizeBtnTextSmall}>A</Text>
+                </AnimatedPressable>
+                <AnimatedPressable
+                  style={styles.sizeBtn}
+                  onPress={() => adjustFontSize(2)}
+                  scaleValue={0.9}
+                  activeOpacity={0.7}
+                  hapticFeedback="light"
+                  accessibilityLabel="Increase font size"
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.sizeBtnTextLarge}>A</Text>
+                </AnimatedPressable>
+              </View>
+            </View>
+
+            {/* Done — primary action */}
+            <AnimatedPressable
+              style={styles.doneBtn}
+              onPress={() => setEditingId(null)}
+              scaleValue={0.96}
+              activeOpacity={0.85}
+              hapticFeedback="light"
+              accessibilityLabel="Done editing text"
+              accessibilityRole="button"
+            >
               <Text style={styles.doneBtnText}>Done</Text>
-            </Pressable>
+            </AnimatedPressable>
           </View>
         </KeyboardStickyView>
       )}
@@ -378,9 +449,9 @@ function createStyles(colors: any) {
   return StyleSheet.create({
   textBubble: {
     position: 'absolute',
-    borderRadius: Radius.lg,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    borderRadius: Radius.sm,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     maxWidth: SCREEN_W - 40,
     alignItems: 'center',
   },
@@ -399,10 +470,14 @@ function createStyles(colors: any) {
   },
   deleteLayerBtn: {
     position: 'absolute',
-    top: -10,
-    right: -10,
-    backgroundColor: '#fff',
-    borderRadius: Radius.lg,
+    top: -8,
+    right: -8,
+    width: 22,
+    height: 22,
+    borderRadius: Radius.full,
+    backgroundColor: colors.danger,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   addTextBtn: {
     position: 'absolute',
@@ -411,10 +486,10 @@ function createStyles(colors: any) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(0,0,0,0.6)',
     borderRadius: Radius.full,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
   },
   addTextLabel: {
     color: '#fff',
@@ -428,95 +503,56 @@ function createStyles(colors: any) {
     right: 0,
   },
   controlsPanel: {
-    backgroundColor: 'rgba(0,0,0,0.85)',
+    backgroundColor: 'rgba(0,0,0,0.88)',
     borderTopLeftRadius: Radius.xxl,
     borderTopRightRadius: Radius.xxl,
     paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingTop: 14,
     paddingBottom: 28,
     gap: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.08)',
   },
   fontRow: {
     flexDirection: 'row',
-    gap: 10,
-    paddingBottom: 4,
+    gap: 8,
+    paddingBottom: 2,
   },
   fontPill: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: Radius.lg,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(255,255,255,0.08)',
   },
   fontPillActive: {
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: 'rgba(255,255,255,0.22)',
   },
   fontPillText: {
-    color: 'rgba(255,255,255,0.7)',
+    color: 'rgba(255,255,255,0.65)',
     fontSize: 14,
   },
   fontPillTextActive: {
     color: '#fff',
   },
-  sizeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 16,
-  },
-  sizeBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sizeBtnText: {
-    color: '#fff',
-    fontSize: 16,
-    fontFamily: 'Inter_700Bold',
-  },
-  sizeValue: {
-    color: '#fff',
-    fontSize: 14,
-    fontFamily: 'Inter_600SemiBold',
-    minWidth: 48,
-    textAlign: 'center',
-  },
-  alignRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 12,
-  },
-  alignBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: Radius.lg,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  alignBtnActive: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-  },
   colorRow: {
     flexDirection: 'row',
     gap: 10,
-    paddingBottom: 4,
-    paddingTop: 4,
+    paddingBottom: 2,
+    paddingTop: 2,
   },
   colorOrb: {
     width: 32,
     height: 32,
     borderRadius: Radius.full,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   colorOrbActive: {
     borderWidth: 2,
     borderColor: '#fff',
+    transform: [{ scale: 1.08 }],
   },
   bgOrb: {
     width: 32,
@@ -529,16 +565,75 @@ function createStyles(colors: any) {
   bgOrbActive: {
     borderWidth: 2,
     borderColor: '#fff',
+    transform: [{ scale: 1.08 }],
+  },
+  toolRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    paddingTop: 2,
+  },
+  alignGroup: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  alignBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  alignBtnActive: {
+    backgroundColor: 'rgba(255,255,255,0.22)',
+  },
+  alignBtnText: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 15,
+    fontFamily: 'Inter_700Bold',
+  },
+  alignBtnTextActive: {
+    color: '#fff',
+  },
+  toolDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+  },
+  sizeGroup: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  sizeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sizeBtnTextSmall: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 13,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  sizeBtnTextLarge: {
+    color: '#fff',
+    fontSize: 18,
+    fontFamily: 'Inter_700Bold',
   },
   doneBtn: {
     alignSelf: 'center',
     backgroundColor: colors.brand,
-    borderRadius: Radius.xl,
-    paddingHorizontal: 32,
+    borderRadius: Radius.full,
+    paddingHorizontal: 40,
     paddingVertical: 12,
+    marginTop: 2,
   },
   doneBtnText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 15,
     fontFamily: 'Inter_700Bold',
   },

@@ -22,6 +22,7 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { Motion } from '../theme/motionTokens';
 import type { RootStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CreateCamera'>;
@@ -91,7 +92,7 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
     }
     Animated.timing(opacity, {
       toValue: 1,
-      duration: 240,
+      duration: Motion.duration.normal,
       useNativeDriver: false,
       easing: Easing.out(Easing.ease),
     }).start();
@@ -141,8 +142,8 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
     // Crossfade the camera content on mode change
     if (!reducedMotion) {
       Animated.sequence([
-        Animated.timing(modeTransition, { toValue: 0, duration: 100, useNativeDriver: true }),
-        Animated.timing(modeTransition, { toValue: 1, duration: 160, useNativeDriver: true }),
+        Animated.timing(modeTransition, { toValue: 0, duration: Motion.duration.fast, useNativeDriver: true }),
+        Animated.timing(modeTransition, { toValue: 1, duration: Motion.duration.normal, useNativeDriver: true }),
       ]).start();
     }
     setMode(MODES[nextIndex].key);
@@ -175,8 +176,8 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
     AccessibilityInfo.announceForAccessibility(`Switched to ${modeLabel} mode`);
     if (!reducedMotion) {
       Animated.sequence([
-        Animated.timing(modeTransition, { toValue: 0, duration: 100, useNativeDriver: true }),
-        Animated.timing(modeTransition, { toValue: 1, duration: 160, useNativeDriver: true }),
+        Animated.timing(modeTransition, { toValue: 0, duration: Motion.duration.fast, useNativeDriver: true }),
+        Animated.timing(modeTransition, { toValue: 1, duration: Motion.duration.normal, useNativeDriver: true }),
       ]).start();
     }
     setMode(newMode);
@@ -274,8 +275,10 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
           s.modeBar,
           {
             // Position ABOVE the bottom bar (bottom bar is ~140pt tall
-            // including safe area padding + shutter + gallery thumbnail)
-            bottom: Math.max(insets.bottom, 16) + 156,
+            // including safe area padding + shutter + gallery thumbnail).
+            // Kept tight to the shutter so the mode switcher reads as part
+            // of the capture cluster, not a disconnected floating deck.
+            bottom: Math.max(insets.bottom, 16) + 132,
             opacity,
           },
         ]}
@@ -294,7 +297,7 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
               accessibilityLabel="Start with blank canvas"
               accessibilityRole="button"
             >
-              <Ionicons name="create-outline" size={32} color="#fff" />
+              <Ionicons name="create-outline" size={18} color="#fff" />
               <Text style={s.contextCardText} numberOfLines={1}>Start Blank</Text>
             </Pressable>
 
@@ -304,7 +307,7 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
               accessibilityLabel="Upload from gallery"
               accessibilityRole="button"
             >
-              <Ionicons name="images-outline" size={32} color="#fff" />
+              <Ionicons name="images-outline" size={18} color="#fff" />
               <Text style={s.contextCardText} numberOfLines={1}>Gallery</Text>
             </Pressable>
           </View>
@@ -315,6 +318,19 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
 
         {/* Mode chips with animated sliding indicator */}
         <View style={s.modeTabsContainer}>
+          {/* Sliding white pill — sits behind the active chip for a clean,
+              Instagram-style active state. Chips themselves are transparent
+              text-only targets so the pill reads as the selection. */}
+          <Animated.View
+            style={[
+              s.modeIndicator,
+              {
+                transform: [{ translateX: modeIndicatorX }],
+                width: modeIndicatorWidth,
+              },
+            ]}
+            pointerEvents="none"
+          />
           <View style={s.modeTabsRow}>
             {MODES.map((m, index) => {
               const isActive = mode === m.key;
@@ -323,7 +339,6 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
                   key={m.key}
                   style={({ pressed }) => [
                     s.modeTab,
-                    { backgroundColor: isActive ? colors.brand : colors.surfaceAlt },
                     pressed && s.controlPressed,
                   ]}
                   onLayout={(e) => {
@@ -344,7 +359,7 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
                   <Text
                     style={[
                       s.modeTabText,
-                      { color: isActive ? colors.textInverse : colors.textSecondary },
+                      { color: isActive ? '#000' : 'rgba(255,255,255,0.9)' },
                     ]}
                     numberOfLines={1}
                   >
@@ -354,25 +369,13 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
               );
             })}
           </View>
-          {/* Sliding indicator — sits under the active chip */}
-          <Animated.View
-            style={[
-              s.modeIndicator,
-              {
-                backgroundColor: colors.brand,
-                transform: [{ translateX: modeIndicatorX }],
-                width: modeIndicatorWidth,
-              },
-            ]}
-            pointerEvents="none"
-          />
         </View>
 
         {/* Mode-specific hint text */}
         <Text style={s.modeHintText}>{MODE_HINT[mode]}</Text>
       </Animated.View>
     );
-  }, [colors.brand, colors.surfaceAlt, colors.textInverse, colors.textSecondary, handleBlankCanvas, handleGallery, handleModeChange, insets.bottom, mode, modeIndicatorX, modeIndicatorWidth, opacity]);
+  }, [handleBlankCanvas, handleGallery, handleModeChange, insets.bottom, mode, modeIndicatorX, modeIndicatorWidth, opacity]);
 
   const renderOverflowButton = useCallback(() => (
     <View style={s.topRightRow}>
@@ -398,7 +401,7 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
         accessibilityRole="button"
         accessibilityState={{ expanded: showOverflow }}
       >
-        <Ionicons name="ellipsis-horizontal" size={24} color="#fff" />
+        <Ionicons name="ellipsis-horizontal" size={22} color="#fff" />
       </Pressable>
     </View>
   ), [haptic, showOverflow, showGrid]);
@@ -452,8 +455,8 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
               style={[s.overflowSheet, { backgroundColor: colors.surface, paddingBottom: Math.max(insets.bottom, Space.md) }]}
               entering={reducedMotion ? undefined : SlideInDown.duration(280)}
             >
-            {/* Grab handle */}
-            <View style={s.overflowGrabHandle} />
+            {/* Grab handle — neutral, visible on both light/dark sheets */}
+            <View style={[s.overflowGrabHandle, { backgroundColor: colors.border }]} />
 
             {/* Contextual creator tools */}
             {contextualTools.map((tool) => (
@@ -555,33 +558,31 @@ const s = StyleSheet.create({
     letterSpacing: LetterSpacing.wide + 0.18,
   },
   // ── Contextual tool cards (Start Blank / Gallery) ──
-  // Premium semi-transparent dark cards over the camera feed — the standard
-  // pattern for camera overlays (Instagram/Snapchat). White text + icon for
-  // legibility against any camera background. Subtle white border defines
-  // the card edge without adding a heavy surface.
+  // Minimal semi-transparent pills over the camera feed — lighter than the
+  // previous full-width cards so they read as quick entry points, not heavy
+  // panels. Instagram keeps camera overlays small and unobtrusive.
   contextCardsRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     gap: Space.sm,
     marginBottom: Space.sm,
-    width: '100%',
   },
   contextCard: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Space.sm,
-    padding: Space.md,
-    borderRadius: Radius.xl,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderWidth: Stroke.standard,
-    borderColor: 'rgba(255,255,255,0.15)',
+    gap: Space.xs,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderWidth: Stroke.hairline,
+    borderColor: 'rgba(255,255,255,0.12)',
   },
   contextCardPressed: {
     opacity: 0.7,
-    transform: [{ scale: 0.95 }],
+    transform: [{ scale: 0.96 }],
   },
   contextCardText: {
     fontFamily: Typography.family.semibold,
@@ -605,22 +606,24 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: MODE_CHIP_HORIZONTAL_PADDING,
-    paddingVertical: Space.sm,
+    paddingVertical: Space.sm + 2,
     borderRadius: Radius.xxl,
+    zIndex: 1,
   },
   modeTabText: {
     fontFamily: Typography.family.semibold,
     fontSize: Type.captionElevated.size,
     letterSpacing: LetterSpacing.wide + 0.18,
   },
-  // Sliding indicator — 4px bar under the active chip
+  // Sliding white pill — fills the active chip area from behind for a
+  // clean Instagram-style selection. Chips are transparent text targets.
   modeIndicator: {
     position: 'absolute',
-    bottom: -2,
+    top: 0,
+    bottom: 0,
     left: 0,
-    height: Space.xs,
-    backgroundColor: 'transparent',
-    borderRadius: Radius.sm,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: Radius.xxl,
   },
   // Mode-specific hint text
   modeHintText: {
@@ -659,7 +662,7 @@ const s = StyleSheet.create({
     bottom: 0,
     left: '33.33%',
     width: 1,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: 'rgba(255,255,255,0.28)',
   },
   gridLineVerticalRight: {
     position: 'absolute',
@@ -667,7 +670,7 @@ const s = StyleSheet.create({
     bottom: 0,
     left: '66.66%',
     width: 1,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: 'rgba(255,255,255,0.28)',
   },
   gridLineHorizontalTop: {
     position: 'absolute',
@@ -675,7 +678,7 @@ const s = StyleSheet.create({
     right: 0,
     top: '33.33%',
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: 'rgba(255,255,255,0.28)',
   },
   gridLineHorizontalBottom: {
     position: 'absolute',
@@ -683,7 +686,7 @@ const s = StyleSheet.create({
     right: 0,
     top: '66.66%',
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: 'rgba(255,255,255,0.28)',
   },
   // ── Overflow bottom sheet ──
   overflowRoot: {
@@ -712,7 +715,6 @@ const s = StyleSheet.create({
     width: Space.xl + Space.sm,
     height: Space.xs,
     borderRadius: Radius.sm,
-    backgroundColor: 'rgba(0,0,0,0.15)',
     alignSelf: 'center',
     marginBottom: Space.md,
   },
@@ -720,10 +722,11 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    paddingVertical: Space.md,
+    paddingVertical: Space.md + 2,
   },
   overflowOptionIcon: {
     width: Space.lg,
+    textAlign: 'center',
   },
   overflowOptionText: {
     fontFamily: Typography.family.medium,

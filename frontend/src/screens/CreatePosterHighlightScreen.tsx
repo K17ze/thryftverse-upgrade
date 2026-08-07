@@ -7,6 +7,7 @@ import {
   TextInput,
   ActivityIndicator,
   FlatList,
+  ScrollView,
   Dimensions,
   AccessibilityInfo,
 } from 'react-native';
@@ -33,6 +34,8 @@ type Props = NativeStackScreenProps<RootStackParamList, 'CreatePosterHighlight'>
 const { width: SCREEN_W } = Dimensions.get('window');
 const NUM_COLS = 3;
 const THUMB_SIZE = (SCREEN_W - Space.md * 2 - Space.sm * (NUM_COLS - 1)) / NUM_COLS;
+const COVER_PREVIEW_W = 120;
+const COVER_THUMB_W = 52;
 
 export default function CreatePosterHighlightScreen({ navigation, route }: Props) {
   const { colors, isDark } = useAppTheme();
@@ -49,6 +52,7 @@ export default function CreatePosterHighlightScreen({ navigation, route }: Props
   const [selectedFrames, setSelectedFrames] = React.useState<Map<string, string>>(new Map());
   // Cover frame ID — defaults to the first selected frame, can be changed independently
   const [coverFrameId, setCoverFrameId] = React.useState<string | null>(null);
+  const [isTitleFocused, setIsTitleFocused] = React.useState(false);
 
   // Load all archived stories to pick frames from
   React.useEffect(() => {
@@ -92,6 +96,13 @@ export default function CreatePosterHighlightScreen({ navigation, route }: Props
     }
     return frames;
   }, [stories]);
+
+  // Selected frame objects in selection order — used by the cover selector
+  const selectedFrameList = React.useMemo(() => {
+    return Array.from(selectedFrames.keys())
+      .map((key) => allFrames.find((f) => f.key === key))
+      .filter((f): f is NonNullable<typeof f> => f !== undefined);
+  }, [selectedFrames, allFrames]);
 
   const toggleFrame = (key: string, frameId: string) => {
     haptic.selection();
@@ -296,12 +307,14 @@ export default function CreatePosterHighlightScreen({ navigation, route }: Props
       {/* Title input */}
       <View style={styles.titleSection}>
         <TextInput
-          style={styles.titleInput}
+          style={[styles.titleInput, isTitleFocused && styles.titleInputFocused]}
           placeholder="Highlight name"
           placeholderTextColor={colors.textMuted}
           value={title}
           onChangeText={setTitle}
           maxLength={40}
+          onFocus={() => setIsTitleFocused(true)}
+          onBlur={() => setIsTitleFocused(false)}
           accessibilityLabel="Highlight title"
           accessibilityHint="Enter a title for your highlight"
         />
@@ -309,32 +322,73 @@ export default function CreatePosterHighlightScreen({ navigation, route }: Props
       </View>
 
       {/* Cover preview — shows the selected cover frame.
-          Long-press any selected frame in the grid below to change the cover. */}
+          Tap a thumbnail in the horizontal strip below to change the cover.
+          Long-press a selected frame in the grid as a shortcut. */}
       {coverFrameId && (() => {
         const coverFrame = allFrames.find((f) => f.frameId === coverFrameId);
         if (!coverFrame) return null;
         return (
           <View style={styles.coverSection}>
             <Text style={styles.coverSectionLabel}>Cover</Text>
-            <View style={styles.coverPreview}>
-              {coverFrame.mediaUrl ? (
-                <CachedImage
-                  uri={coverFrame.mediaUrl}
-                  style={styles.coverPreviewImage}
-                  contentFit="cover"
-                  containerStyle={{ borderRadius: Radius.md, overflow: 'hidden' }}
-                />
-              ) : (
-                <View style={[styles.coverPreviewImage, { backgroundColor: coverFrame.backgroundColor || colors.surfaceAlt }]}>
-                  <Text style={styles.thumbPlaceholder} numberOfLines={2}>{coverFrame.caption || 'Text'}</Text>
+            <View style={styles.coverPreviewWrap}>
+              <View style={styles.coverPreview}>
+                {coverFrame.mediaUrl ? (
+                  <CachedImage
+                    uri={coverFrame.mediaUrl}
+                    style={styles.coverPreviewImage}
+                    contentFit="cover"
+                    containerStyle={{ borderRadius: Radius.md, overflow: 'hidden' }}
+                  />
+                ) : (
+                  <View style={[styles.coverPreviewImage, { backgroundColor: coverFrame.backgroundColor || colors.surfaceAlt }]}>
+                    <Text style={styles.thumbPlaceholder} numberOfLines={2}>{coverFrame.caption || 'Text'}</Text>
+                  </View>
+                )}
+                <View style={styles.coverPreviewBadge}>
+                  <Ionicons name="star" size={12} color={colors.textInverse} />
+                  <Text style={styles.coverPreviewBadgeText}>Cover</Text>
                 </View>
-              )}
-              <View style={styles.coverPreviewBadge}>
-                <Ionicons name="star" size={12} color={colors.textInverse} />
-                <Text style={styles.coverPreviewBadgeText}>Cover</Text>
               </View>
-              <Text style={styles.coverHint}>Long-press a selected frame to change</Text>
             </View>
+            {selectedFrameList.length > 1 && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.coverSelector}
+                accessibilityRole="list"
+                accessibilityLabel="Cover selector — choose a frame for the cover"
+              >
+                {selectedFrameList.map((frame) => {
+                  const isCover = coverFrameId === frame.frameId;
+                  return (
+                    <AnimatedPressable
+                      key={frame.key}
+                      onPress={() => setCover(frame.frameId)}
+                      style={[styles.coverThumbWrap, isCover && styles.coverThumbActive]}
+                      scaleValue={0.94}
+                      hapticFeedback="light"
+                      accessibilityLabel={`Set cover to this frame${isCover ? ', current cover' : ''}`}
+                      accessibilityHint="Sets this frame as the highlight cover"
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: isCover }}
+                    >
+                      {frame.mediaUrl ? (
+                        <CachedImage
+                          uri={frame.mediaUrl}
+                          style={styles.coverThumb}
+                          contentFit="cover"
+                          containerStyle={{ borderRadius: Radius.sm, overflow: 'hidden' }}
+                        />
+                      ) : (
+                        <View style={[styles.coverThumb, { backgroundColor: frame.backgroundColor || colors.surfaceAlt }]}>
+                          <Text style={styles.coverThumbText} numberOfLines={2}>{frame.caption || 'Text'}</Text>
+                        </View>
+                      )}
+                    </AnimatedPressable>
+                  );
+                })}
+              </ScrollView>
+            )}
           </View>
         );
       })()}
@@ -425,6 +479,9 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.lg,
       paddingHorizontal: Space.md,
       backgroundColor: colors.surfaceAlt,
+    },
+    titleInputFocused: {
+      borderColor: colors.brand,
     },
     titleCount: {
       fontSize: Type.caption.size,
@@ -528,12 +585,15 @@ function createStyles(colors: ThemeColors) {
       color: colors.textSecondary,
       paddingBottom: Space.xs,
     },
+    coverPreviewWrap: {
+      alignItems: 'center',
+      paddingVertical: Space.xs,
+    },
     coverPreview: {
       position: 'relative',
-      alignItems: 'center',
     },
     coverPreviewImage: {
-      width: THUMB_SIZE,
+      width: COVER_PREVIEW_W,
       aspectRatio: 9 / 16,
       borderRadius: Radius.md,
       justifyContent: 'center',
@@ -541,8 +601,8 @@ function createStyles(colors: ThemeColors) {
     },
     coverPreviewBadge: {
       position: 'absolute',
-      bottom: 4,
-      left: 4,
+      bottom: 6,
+      left: 6,
       flexDirection: 'row',
       alignItems: 'center',
       gap: 2,
@@ -561,12 +621,36 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.semibold,
       color: colors.textInverse,
     },
-    coverHint: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-      marginTop: Space.xs,
+    coverSelector: {
+      gap: Space.xs,
+      paddingVertical: Space.sm,
+      alignItems: 'center',
+    },
+    coverThumbWrap: {
+      width: COVER_THUMB_W,
+      aspectRatio: 9 / 16,
+      borderRadius: Radius.sm,
+      borderWidth: Stroke.standard,
+      borderColor: 'transparent',
+      overflow: 'hidden',
+    },
+    coverThumbActive: {
+      borderWidth: Stroke.emphasis,
+      borderColor: colors.brand,
+    },
+    coverThumb: {
+      width: '100%',
+      height: '100%',
+      borderRadius: Radius.sm,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    coverThumbText: {
+      fontSize: 9,
+      fontFamily: Typography.family.medium,
+      color: colors.textSecondary,
       textAlign: 'center',
+      padding: 3,
     },
     skeletonGrid: {
       flexDirection: 'row',

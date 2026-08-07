@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Radius, Space, Type, Control, Stroke } from '../../theme/designTokens';
+import { Motion } from '../../theme/motionTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
 
@@ -39,9 +40,56 @@ interface StickerPickerProps {
   onStickerSelect: (sticker: StickerItem) => void;
 }
 
-const EMOJIS = ['🔥', '❤️', '😂', '😍', '👀', '✨', '🎉', '💯', '🙌', '⚡', '🌟', '💥', '🏷️', '📌', '🚀', '💎'];
-const EMOJI_SIZE = 32;
+const EMOJI_DATA: Array<{ emoji: string; keywords: string[] }> = [
+  { emoji: '🔥', keywords: ['fire', 'hot', 'lit', 'flame', 'trending'] },
+  { emoji: '❤️', keywords: ['heart', 'love', 'red', 'romance'] },
+  { emoji: '😂', keywords: ['laugh', 'funny', 'lol', 'joy'] },
+  { emoji: '😍', keywords: ['love', 'heart eyes', 'adore', 'smitten'] },
+  { emoji: '👀', keywords: ['eyes', 'look', 'watch', 'see'] },
+  { emoji: '✨', keywords: ['sparkle', 'shine', 'magic', 'stars'] },
+  { emoji: '🎉', keywords: ['party', 'celebrate', 'confetti', 'festive'] },
+  { emoji: '💯', keywords: ['hundred', 'perfect', '100', 'approval'] },
+  { emoji: '🙌', keywords: ['praise', 'hands up', 'celebrate', 'yes'] },
+  { emoji: '⚡', keywords: ['lightning', 'fast', 'energy', 'bolt'] },
+  { emoji: '🌟', keywords: ['star', 'shine', 'bright', 'featured'] },
+  { emoji: '💥', keywords: ['boom', 'explosion', 'impact', 'bang'] },
+  { emoji: '🏷️', keywords: ['tag', 'label', 'price', 'sale'] },
+  { emoji: '📌', keywords: ['pin', 'location', 'mark', 'save'] },
+  { emoji: '🚀', keywords: ['rocket', 'launch', 'fast', 'growth'] },
+  { emoji: '💎', keywords: ['diamond', 'gem', 'jewel', 'valuable'] },
+  { emoji: '🛍️', keywords: ['shopping', 'bag', 'purchase', 'retail'] },
+  { emoji: '👗', keywords: ['dress', 'fashion', 'clothing', 'wear'] },
+  { emoji: '👟', keywords: ['shoe', 'sneaker', 'footwear', 'run'] },
+  { emoji: '👜', keywords: ['bag', 'purse', 'handbag', 'accessory'] },
+  { emoji: '💰', keywords: ['money', 'cash', 'profit', 'deal'] },
+  { emoji: '🤑', keywords: ['money', 'rich', 'profit', 'cash'] },
+  { emoji: '😍', keywords: ['love', 'heart', 'adore'] },
+  { emoji: '🤩', keywords: ['excited', 'star', 'amazing', 'wow'] },
+  { emoji: '😎', keywords: ['cool', 'sunglasses', 'chill', 'swag'] },
+  { emoji: '🤔', keywords: ['think', 'question', 'hmm', 'wonder'] },
+  { emoji: '😱', keywords: ['shock', 'scream', 'wow', 'surprised'] },
+  { emoji: '😭', keywords: ['cry', 'sad', 'tears', 'emotional'] },
+  { emoji: '🥺', keywords: ['pleading', 'cute', 'beg', 'sad'] },
+  { emoji: '😏', keywords: ['smirk', 'smug', 'flirt', 'cheeky'] },
+  { emoji: '👍', keywords: ['thumbs up', 'yes', 'approve', 'good'] },
+  { emoji: '👎', keywords: ['thumbs down', 'no', 'disapprove', 'bad'] },
+  { emoji: '👏', keywords: ['clap', 'applause', 'praise', 'well done'] },
+  { emoji: '🤝', keywords: ['handshake', 'deal', 'agreement', 'partnership'] },
+  { emoji: '✅', keywords: ['check', 'done', 'complete', 'verified'] },
+  { emoji: '❌', keywords: ['cross', 'no', 'cancel', 'wrong'] },
+  { emoji: '⭐', keywords: ['star', 'rating', 'review', 'favorite'] },
+  { emoji: '🏆', keywords: ['trophy', 'win', 'champion', 'first'] },
+  { emoji: '🎁', keywords: ['gift', 'present', 'free', 'bonus'] },
+  { emoji: '🆕', keywords: ['new', 'fresh', 'latest', 'just in'] },
+  { emoji: '🆓', keywords: ['free', 'no cost', 'gratis'] },
+  { emoji: '💰', keywords: ['money', 'cash', 'deal', 'price'] },
+  { emoji: '🏷️', keywords: ['tag', 'label', 'sale', 'price'] },
+];
 
+const EMOJI_SIZE = 38;
+
+// Shape swatch colors are sticker payload (persisted with the sticker and
+// rendered over media), so they stay hardcoded rather than mapped to tokens.
 const SHAPES: Array<{ icon: React.ComponentProps<typeof Ionicons>['name']; label: string; color: string }> = [
   { icon: 'heart', label: 'Heart', color: '#7B0E1E' },
   { icon: 'star', label: 'Star', color: '#C9A46A' },
@@ -101,16 +149,24 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
   const [countdownTime, setCountdownTime] = React.useState('');
   const [countdownEndLabel, setCountdownEndLabel] = React.useState('');
 
+  // Emoji search
+  const [emojiSearch, setEmojiSearch] = React.useState('');
+  const filteredEmojis = React.useMemo(() => {
+    const q = emojiSearch.trim().toLowerCase();
+    if (!q) return EMOJI_DATA.map((e) => e.emoji);
+    return EMOJI_DATA.filter((e) => e.keywords.some((k) => k.includes(q))).map((e) => e.emoji);
+  }, [emojiSearch]);
+
   React.useEffect(() => {
     if (visible) {
       Animated.parallel([
         Animated.spring(translateY, { toValue: 0, useNativeDriver: true, friction: 8 }),
-        Animated.timing(backdropOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+        Animated.timing(backdropOpacity, { toValue: 1, duration: Motion.duration.normal, useNativeDriver: true }),
       ]).start();
     } else {
       Animated.parallel([
         Animated.spring(translateY, { toValue: DRAWER_HEIGHT, useNativeDriver: true, friction: 8 }),
-        Animated.timing(backdropOpacity, { toValue: 0, duration: 150, useNativeDriver: true }),
+        Animated.timing(backdropOpacity, { toValue: 0, duration: Motion.duration.fast, useNativeDriver: true }),
       ]).start();
     }
   }, [visible]);
@@ -118,6 +174,9 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
   const handleMentionSubmit = () => {
     const text = mentionInput.trim().replace(/^@/, '');
     if (text) {
+      // `color` is sticker payload data persisted with the sticker and rendered
+      // over media, so it stays hardcoded (not a theme token) — white text on
+      // imagery must remain white in both themes.
       onStickerSelect({ id: `mention_${Date.now()}`, type: 'mention', content: `@${text}`, color: '#fff' });
       setMentionInput('');
       onClose();
@@ -246,6 +305,33 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
           <View style={styles.handle} />
         </View>
 
+        {/* Search bar */}
+        <View style={styles.searchWrap}>
+          <Ionicons name="search" size={16} color={colors.textMuted} />
+          <TextInput
+            style={styles.searchInput}
+            value={emojiSearch}
+            onChangeText={setEmojiSearch}
+            placeholder="Search stickers"
+            placeholderTextColor={colors.textMuted}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="search"
+            accessibilityLabel="Search stickers"
+            accessibilityHint="Search for emoji stickers by keyword"
+          />
+          {emojiSearch.length > 0 && (
+            <Pressable
+              onPress={() => setEmojiSearch('')}
+              hitSlop={8}
+              accessibilityLabel="Clear search"
+              accessibilityRole="button"
+            >
+              <Ionicons name="close-circle" size={16} color={colors.textMuted} />
+            </Pressable>
+          )}
+        </View>
+
         {/* Tabs */}
         <ScrollView
           horizontal
@@ -260,8 +346,8 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
                 key={t}
                 style={[styles.tab, tab === t && styles.tabActive]}
                 onPress={() => setTab(t)}
-                scaleValue={0.97}
-                activeOpacity={0.85}
+                scaleValue={0.96}
+                activeOpacity={0.8}
                 hapticFeedback="light"
                 accessibilityLabel={`${t} sticker tab`}
                 accessibilityRole="tab"
@@ -279,23 +365,30 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
           {tab === 'emoji' && (
             <View style={styles.emojiGrid}>
-              {EMOJIS.map((emoji) => (
-                <AnimatedPressable
-                  key={emoji}
-                  style={styles.emojiBtn}
-                  onPress={() => {
-                    onStickerSelect({ id: `emoji_${Date.now()}`, type: 'emoji', content: emoji });
-                    onClose();
-                  }}
-                  scaleValue={0.97}
-                  activeOpacity={0.85}
-                  hapticFeedback="light"
-                  accessibilityLabel={`Emoji ${emoji}`}
-                  accessibilityHint="Adds this emoji sticker to the frame"
-                >
-                  <Text style={styles.emojiText}>{emoji}</Text>
-                </AnimatedPressable>
-              ))}
+              {filteredEmojis.length > 0 ? (
+                filteredEmojis.map((emoji, idx) => (
+                  <AnimatedPressable
+                    key={`${emoji}_${idx}`}
+                    style={styles.emojiBtn}
+                    onPress={() => {
+                      onStickerSelect({ id: `emoji_${Date.now()}`, type: 'emoji', content: emoji });
+                      onClose();
+                    }}
+                    scaleValue={0.9}
+                    activeOpacity={0.7}
+                    hapticFeedback="light"
+                    accessibilityLabel={`Emoji ${emoji}`}
+                    accessibilityHint="Adds this emoji sticker to the frame"
+                  >
+                    <Text style={styles.emojiText}>{emoji}</Text>
+                  </AnimatedPressable>
+                ))
+              ) : (
+                <View style={styles.emptyState}>
+                  <Ionicons name="search-outline" size={28} color={colors.textMuted} />
+                  <Text style={styles.emptyStateText}>No stickers found</Text>
+                </View>
+              )}
             </View>
           )}
 
@@ -310,14 +403,14 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
                   value={mentionInput}
                   onChangeText={setMentionInput}
                   placeholder="username"
-                  placeholderTextColor="rgba(255,255,255,0.35)"
+                  placeholderTextColor={colors.textMuted}
                   autoCapitalize="none"
                   autoCorrect={false}
                   onSubmitEditing={handleMentionSubmit}
                   returnKeyType="done"
                 />
-                <AnimatedPressable style={styles.inputAction} onPress={handleMentionSubmit} scaleValue={0.97} activeOpacity={0.85} hapticFeedback="light" accessibilityLabel="Add mention sticker" accessibilityHint="Adds the mention as a sticker to the frame">
-                  <Ionicons name="arrow-forward" size={18} color="#fff" />
+                <AnimatedPressable style={styles.inputAction} onPress={handleMentionSubmit} scaleValue={0.96} activeOpacity={0.8} hapticFeedback="light" accessibilityLabel="Add mention sticker" accessibilityHint="Adds the mention as a sticker to the frame">
+                  <Ionicons name="arrow-forward" size={18} color={colors.textPrimary} />
                 </AnimatedPressable>
               </View>
 
@@ -330,14 +423,14 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
                   value={hashtagInput}
                   onChangeText={setHashtagInput}
                   placeholder="thriftfind"
-                  placeholderTextColor="rgba(255,255,255,0.35)"
+                  placeholderTextColor={colors.textMuted}
                   autoCapitalize="none"
                   autoCorrect={false}
                   onSubmitEditing={handleHashtagSubmit}
                   returnKeyType="done"
                 />
-                <AnimatedPressable style={styles.inputAction} onPress={handleHashtagSubmit} scaleValue={0.97} activeOpacity={0.85} hapticFeedback="light" accessibilityLabel="Add hashtag sticker" accessibilityHint="Adds the hashtag as a sticker to the frame">
-                  <Ionicons name="arrow-forward" size={18} color="#fff" />
+                <AnimatedPressable style={styles.inputAction} onPress={handleHashtagSubmit} scaleValue={0.96} activeOpacity={0.8} hapticFeedback="light" accessibilityLabel="Add hashtag sticker" accessibilityHint="Adds the hashtag as a sticker to the frame">
+                  <Ionicons name="arrow-forward" size={18} color={colors.textPrimary} />
                 </AnimatedPressable>
               </View>
 
@@ -357,8 +450,8 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
                     });
                     onClose();
                   }}
-                  scaleValue={0.97}
-                  activeOpacity={0.85}
+                  scaleValue={0.96}
+                  activeOpacity={0.8}
                   hapticFeedback="light"
                   accessibilityLabel={`Preset poll ${p.q}`}
                   accessibilityHint="Adds this poll sticker to the frame"
@@ -382,8 +475,8 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
                       onStickerSelect({ id: `question_${Date.now()}`, type: 'question', content: q });
                       onClose();
                     }}
-                    scaleValue={0.97}
-                    activeOpacity={0.85}
+                    scaleValue={0.96}
+                    activeOpacity={0.8}
                     hapticFeedback="light"
                     accessibilityLabel={`Preset question ${q}`}
                     accessibilityHint="Adds this question sticker to the frame"
@@ -401,8 +494,8 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
                     key={c.label}
                     style={styles.pillBtn}
                     onPress={() => handleCountdownSelect(c.hours)}
-                    scaleValue={0.97}
-                    activeOpacity={0.85}
+                    scaleValue={0.96}
+                    activeOpacity={0.8}
                     hapticFeedback="light"
                     accessibilityLabel={`Set countdown to ${c.label}`}
                     accessibilityHint="Adds this countdown sticker to the frame"
@@ -426,15 +519,15 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
                   });
                   onClose();
                 }}
-                scaleValue={0.97}
-                activeOpacity={0.85}
+                scaleValue={0.96}
+                activeOpacity={0.8}
                 hapticFeedback="light"
                 accessibilityLabel="Add location sticker"
                 accessibilityHint="Adds a location sticker to the frame"
               >
-                <Ionicons name="location" size={18} color="#fff" />
+                <Ionicons name="location" size={18} color={colors.textPrimary} />
                 <Text style={styles.locationText}>Add location</Text>
-                <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.4)" />
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
               </AnimatedPressable>
 
               {/* Time sticker — current time/date */}
@@ -453,8 +546,8 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
                     });
                     onClose();
                   }}
-                  scaleValue={0.97}
-                  activeOpacity={0.85}
+                  scaleValue={0.96}
+                  activeOpacity={0.8}
                   hapticFeedback="light"
                   accessibilityLabel="Add current time sticker"
                   accessibilityHint="Adds the current time as a sticker to the frame"
@@ -474,8 +567,8 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
                     });
                     onClose();
                   }}
-                  scaleValue={0.97}
-                  activeOpacity={0.85}
+                  scaleValue={0.96}
+                  activeOpacity={0.8}
                   hapticFeedback="light"
                   accessibilityLabel="Add today's date sticker"
                   accessibilityHint="Adds today's date as a sticker to the frame"
@@ -505,8 +598,8 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
                       });
                       onClose();
                     }}
-                    scaleValue={0.97}
-                    activeOpacity={0.85}
+                    scaleValue={0.96}
+                    activeOpacity={0.8}
                     hapticFeedback="light"
                     accessibilityLabel={`Add ${w.label} weather sticker`}
                     accessibilityHint="Adds this weather sticker to the frame"
@@ -528,12 +621,14 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
                     onStickerSelect({ id: `shape_${Date.now()}`, type: 'shape', content: shape.icon, color: shape.color });
                     onClose();
                   }}
-                  scaleValue={0.97}
-                  activeOpacity={0.85}
+                  scaleValue={0.9}
+                  activeOpacity={0.7}
                   hapticFeedback="light"
                   accessibilityLabel={`Shape ${shape.label}`}
                   accessibilityHint="Adds this shape sticker to the frame"
                 >
+                  {/* White glyph on the shape's own content color — intentional
+                      contrast over a colored swatch, kept white in both themes. */}
                   <Ionicons name={shape.icon} size={Control.icon} color="#fff" />
                   <Text style={styles.shapeLabel}>{shape.label}</Text>
                 </AnimatedPressable>
@@ -549,7 +644,7 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
                 value={pollQuestion}
                 onChangeText={setPollQuestion}
                 placeholder="Ask a question..."
-                placeholderTextColor="rgba(255,255,255,0.35)"
+                placeholderTextColor={colors.textMuted}
                 maxLength={200}
                 accessibilityLabel="Poll question input"
               />
@@ -561,7 +656,7 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
                 value={pollOption1}
                 onChangeText={setPollOption1}
                 placeholder="First option"
-                placeholderTextColor="rgba(255,255,255,0.35)"
+                placeholderTextColor={colors.textMuted}
                 maxLength={80}
                 accessibilityLabel="Poll option 1"
               />
@@ -572,7 +667,7 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
                 value={pollOption2}
                 onChangeText={setPollOption2}
                 placeholder="Second option"
-                placeholderTextColor="rgba(255,255,255,0.35)"
+                placeholderTextColor={colors.textMuted}
                 maxLength={80}
                 accessibilityLabel="Poll option 2"
               />
@@ -592,8 +687,8 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
                 style={[styles.addToFrameBtn, (!pollQuestion.trim() || !pollOption1.trim() || !pollOption2.trim()) && styles.addToFrameBtnDisabled]}
                 onPress={handlePollSubmit}
                 disabled={!pollQuestion.trim() || !pollOption1.trim() || !pollOption2.trim()}
-                scaleValue={0.97}
-                activeOpacity={0.85}
+                scaleValue={0.96}
+                activeOpacity={0.8}
                 hapticFeedback="light"
                 accessibilityLabel="Add poll to frame"
                 accessibilityRole="button"
@@ -612,7 +707,7 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
                 value={quizQuestion}
                 onChangeText={setQuizQuestion}
                 placeholder="Ask a quiz question..."
-                placeholderTextColor="rgba(255,255,255,0.35)"
+                placeholderTextColor={colors.textMuted}
                 maxLength={200}
                 accessibilityLabel="Quiz question input"
               />
@@ -624,8 +719,8 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
                   <AnimatedPressable
                     onPress={() => setQuizCorrectIndex(i)}
                     style={[styles.correctCircle, quizCorrectIndex === i && styles.correctCircleActive]}
-                    scaleValue={0.97}
-                    activeOpacity={0.85}
+                    scaleValue={0.96}
+                    activeOpacity={0.8}
                     hapticFeedback="light"
                     accessibilityLabel={`Mark option ${i + 1} as correct`}
                     accessibilityRole="button"
@@ -638,7 +733,7 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
                     value={opt}
                     onChangeText={(v) => handleQuizOptionChange(i, v)}
                     placeholder={`Option ${i + 1}`}
-                    placeholderTextColor="rgba(255,255,255,0.35)"
+                    placeholderTextColor={colors.textMuted}
                     maxLength={80}
                     accessibilityLabel={`Quiz option ${i + 1}`}
                   />
@@ -646,14 +741,14 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
                     <AnimatedPressable
                       onPress={() => handleQuizRemoveOption(i)}
                       style={styles.removeOptionBtn}
-                      scaleValue={0.97}
-                      activeOpacity={0.85}
+                      scaleValue={0.96}
+                      activeOpacity={0.8}
                       hapticFeedback="light"
                       accessibilityLabel={`Remove option ${i + 1}`}
                       accessibilityRole="button"
                       accessibilityHint="Removes this quiz option"
                     >
-                      <Ionicons name="close-circle" size={20} color="rgba(255,255,255,0.4)" />
+                      <Ionicons name="close-circle" size={20} color={colors.textMuted} />
                     </AnimatedPressable>
                   )}
                 </View>
@@ -663,14 +758,14 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
                 <AnimatedPressable
                   style={styles.addOptionBtn}
                   onPress={handleQuizAddOption}
-                  scaleValue={0.97}
-                  activeOpacity={0.85}
+                  scaleValue={0.96}
+                  activeOpacity={0.8}
                   hapticFeedback="light"
                   accessibilityLabel="Add quiz option"
                   accessibilityRole="button"
                   accessibilityHint="Adds another option to the quiz"
                 >
-                  <Ionicons name="add-circle-outline" size={18} color="rgba(255,255,255,0.6)" />
+                  <Ionicons name="add-circle-outline" size={18} color={colors.textSecondary} />
                   <Text style={styles.addOptionText}>Add option</Text>
                 </AnimatedPressable>
               )}
@@ -683,7 +778,7 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
                     <View key={i} style={styles.previewOptionRow}>
                       <View style={[styles.previewOption, i === quizCorrectIndex && styles.previewOptionCorrect]}>
                         <Text style={styles.previewOptionText}>{opt}</Text>
-                        {i === quizCorrectIndex && <Ionicons name="checkmark-circle" size={14} color="#215634" />}
+                        {i === quizCorrectIndex && <Ionicons name="checkmark-circle" size={14} color={colors.success} />}
                       </View>
                     </View>
                   ))}
@@ -694,8 +789,8 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
                 style={[styles.addToFrameBtn, (!quizQuestion.trim() || quizOptions.filter((o) => o.trim()).length < 2) && styles.addToFrameBtnDisabled]}
                 onPress={handleQuizSubmit}
                 disabled={!quizQuestion.trim() || quizOptions.filter((o) => o.trim()).length < 2}
-                scaleValue={0.97}
-                activeOpacity={0.85}
+                scaleValue={0.96}
+                activeOpacity={0.8}
                 hapticFeedback="light"
                 accessibilityLabel="Add quiz to frame"
                 accessibilityRole="button"
@@ -714,7 +809,7 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
                 value={questionText}
                 onChangeText={setQuestionText}
                 placeholder="Ask me anything..."
-                placeholderTextColor="rgba(255,255,255,0.35)"
+                placeholderTextColor={colors.textMuted}
                 maxLength={200}
                 multiline
                 accessibilityLabel="Question input"
@@ -724,7 +819,7 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
               {/* Preview */}
               {questionText.trim().length > 0 && (
                 <View style={styles.previewCard}>
-                  <Ionicons name="help-circle-outline" size={20} color="rgba(255,255,255,0.5)" />
+                  <Ionicons name="help-circle-outline" size={20} color={colors.textMuted} />
                   <Text style={styles.previewTitle}>{questionText}</Text>
                 </View>
               )}
@@ -733,8 +828,8 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
                 style={[styles.addToFrameBtn, !questionText.trim() && styles.addToFrameBtnDisabled]}
                 onPress={handleQuestionSubmit}
                 disabled={!questionText.trim()}
-                scaleValue={0.97}
-                activeOpacity={0.85}
+                scaleValue={0.96}
+                activeOpacity={0.8}
                 hapticFeedback="light"
                 accessibilityLabel="Add question to frame"
                 accessibilityRole="button"
@@ -753,7 +848,7 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
                 value={countdownLabel}
                 onChangeText={setCountdownLabel}
                 placeholder="e.g. Sale ends in..."
-                placeholderTextColor="rgba(255,255,255,0.35)"
+                placeholderTextColor={colors.textMuted}
                 maxLength={60}
                 accessibilityLabel="Countdown label input"
               />
@@ -765,7 +860,7 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
                 value={countdownDate}
                 onChangeText={setCountdownDate}
                 placeholder="2025-12-31"
-                placeholderTextColor="rgba(255,255,255,0.35)"
+                placeholderTextColor={colors.textMuted}
                 autoCapitalize="none"
                 accessibilityLabel="Countdown target date"
               />
@@ -776,7 +871,7 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
                 value={countdownTime}
                 onChangeText={setCountdownTime}
                 placeholder="23:59"
-                placeholderTextColor="rgba(255,255,255,0.35)"
+                placeholderTextColor={colors.textMuted}
                 autoCapitalize="none"
                 accessibilityLabel="Countdown target time"
               />
@@ -787,7 +882,7 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
                 value={countdownEndLabel}
                 onChangeText={setCountdownEndLabel}
                 placeholder="Ended!"
-                placeholderTextColor="rgba(255,255,255,0.35)"
+                placeholderTextColor={colors.textMuted}
                 maxLength={60}
                 accessibilityLabel="Countdown end label"
               />
@@ -800,8 +895,8 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
                     key={c.label}
                     style={styles.pillBtn}
                     onPress={() => handleCountdownSelect(c.hours)}
-                    scaleValue={0.97}
-                    activeOpacity={0.85}
+                    scaleValue={0.96}
+                    activeOpacity={0.8}
                     hapticFeedback="light"
                     accessibilityLabel={`Set countdown to ${c.label}`}
                     accessibilityRole="button"
@@ -815,7 +910,7 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
               {/* Preview */}
               {countdownLabel.trim().length > 0 && countdownDate.length > 0 && (
                 <View style={styles.previewCard}>
-                  <Ionicons name="time-outline" size={20} color="#9b0202" />
+                  <Ionicons name="time-outline" size={20} color={colors.danger} />
                   <Text style={styles.previewTitle}>{countdownLabel}</Text>
                   <Text style={styles.previewSubtitle}>{countdownDate}{countdownTime ? ` ${countdownTime}` : ''}</Text>
                 </View>
@@ -825,8 +920,8 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
                 style={[styles.addToFrameBtn, (!countdownLabel.trim() || !countdownDate) && styles.addToFrameBtnDisabled]}
                 onPress={handleCountdownSubmit}
                 disabled={!countdownLabel.trim() || !countdownDate}
-                scaleValue={0.97}
-                activeOpacity={0.85}
+                scaleValue={0.96}
+                activeOpacity={0.8}
                 hapticFeedback="light"
                 accessibilityLabel="Add countdown to frame"
                 accessibilityRole="button"
@@ -846,7 +941,7 @@ function createStyles(colors: any) {
   return StyleSheet.create({
   backdrop: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: colors.overlay,
   },
   drawer: {
     position: 'absolute',
@@ -859,38 +954,55 @@ function createStyles(colors: any) {
     borderTopRightRadius: Radius.xxl,
     overflow: 'hidden',
     paddingBottom: Space.lg,
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: -8 },
     shadowOpacity: 0.22,
     shadowRadius: 20,
     elevation: 24,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.06)',
+    borderTopColor: colors.borderSubtle,
   },
   handleRow: {
     alignItems: 'center',
     paddingTop: 10,
-    paddingBottom: 6,
+    paddingBottom: 8,
   },
   handle: {
-    width: 40,
-    height: 5,
-    borderRadius: Radius.sm,
-    backgroundColor: colors.textMuted + '80',
+    width: 36,
+    height: 4,
+    borderRadius: Radius.full,
+    backgroundColor: colors.textMuted + '60',
+  },
+  searchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    paddingHorizontal: 14,
+    height: 38,
+    borderRadius: Radius.full,
+    backgroundColor: colors.surfaceAlt,
+  },
+  searchInput: {
+    flex: 1,
+    color: colors.textPrimary,
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
+    padding: 0,
   },
   tabScroll: {
-    paddingBottom: 10,
+    paddingBottom: 12,
   },
   tabRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 6,
     paddingHorizontal: 16,
   },
   tab: {
-    paddingHorizontal: Space.md + Space.xs,
-    paddingVertical: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm - 2,
     borderRadius: Radius.full,
-    backgroundColor: colors.surfaceAlt,
   },
   tabActive: {
     backgroundColor: colors.brand,
@@ -898,7 +1010,7 @@ function createStyles(colors: any) {
   tabText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: colors.textSecondary,
+    color: colors.textMuted,
   },
   tabTextActive: {
     color: colors.textInverse,
@@ -911,39 +1023,45 @@ function createStyles(colors: any) {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Space.sm,
-    paddingTop: 8,
+    paddingTop: 4,
   },
   emojiBtn: {
-    width: 52,
-    height: 52,
+    width: 56,
+    height: 56,
     borderRadius: Radius.xl,
-    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
   emojiText: {
     fontSize: EMOJI_SIZE,
   },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    gap: 10,
+  },
+  emptyStateText: {
+    color: colors.textMuted,
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.medium,
+  },
   inputSection: {
     paddingTop: 8,
   },
   sectionLabel: {
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: 'rgba(255,255,255,0.5)',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: 10,
+    color: colors.textSecondary,
+    marginBottom: 8,
   },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surfaceAlt,
-    borderRadius: Radius.lg,
-    borderWidth: Stroke.standard,
-    borderColor: colors.border,
+    borderRadius: Radius.full,
     paddingHorizontal: Space.md,
-    height: Control.hit,
+    height: 42,
   },
   inputPrefix: {
     fontSize: 16,
@@ -959,18 +1077,18 @@ function createStyles(colors: any) {
     padding: 0,
   },
   inputAction: {
-    width: 32,
-    height: 32,
+    width: 30,
+    height: 30,
     borderRadius: Radius.full,
-    backgroundColor: colors.surfaceAlt,
+    backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
   },
   presetCard: {
     backgroundColor: colors.surfaceAlt,
-    borderRadius: Radius.xl,
+    borderRadius: Radius.lg,
     padding: 14,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   presetText: {
     color: colors.textPrimary,
@@ -988,10 +1106,10 @@ function createStyles(colors: any) {
     gap: 8,
   },
   pill: {
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: Radius.lg,
+    backgroundColor: colors.surface,
+    borderRadius: Radius.full,
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingVertical: 6,
   },
   pillText: {
     color: colors.textSecondary,
@@ -1000,13 +1118,13 @@ function createStyles(colors: any) {
   },
   pillBtn: {
     backgroundColor: colors.surfaceAlt,
-    borderRadius: Radius.lg,
-    paddingHorizontal: 14,
+    borderRadius: Radius.full,
+    paddingHorizontal: 16,
     paddingVertical: 8,
   },
   pillBtnText: {
     color: colors.textPrimary,
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: Typography.family.medium,
   },
   locationCard: {
@@ -1017,7 +1135,7 @@ function createStyles(colors: any) {
     paddingVertical: 12,
     borderRadius: Radius.lg,
     backgroundColor: colors.surfaceAlt,
-    marginTop: 8,
+    marginTop: 4,
   },
   locationText: {
     flex: 1,
@@ -1029,33 +1147,28 @@ function createStyles(colors: any) {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 12,
-    paddingTop: 8,
-    justifyContent: 'center',
+    paddingTop: 4,
+    justifyContent: 'flex-start',
   },
   shapeBtn: {
-    width: 64,
-    height: 64,
+    width: 68,
+    height: 68,
     borderRadius: Radius.lg,
-    backgroundColor: colors.surfaceAlt,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: 4,
   },
   shapeLabel: {
     color: colors.textPrimary,
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowColor: `${colors.shadow}66`,
     textShadowRadius: 4,
   },
   fullInput: {
     backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.lg,
-    borderWidth: Stroke.standard,
-    borderColor: colors.border,
-    paddingHorizontal: Space.md + Space.xs,
+    paddingHorizontal: Space.md,
     paddingVertical: Space.sm + Space.xs,
     color: colors.textPrimary,
     fontSize: Type.bodyEmphasis.size,
@@ -1072,10 +1185,10 @@ function createStyles(colors: any) {
   },
   previewCard: {
     backgroundColor: colors.surfaceAlt,
-    borderRadius: Radius.xl,
-    padding: 16,
-    marginTop: 16,
-    marginBottom: 12,
+    borderRadius: Radius.lg,
+    padding: 14,
+    marginTop: 14,
+    marginBottom: 8,
     gap: 8,
   },
   previewTitle: {
@@ -1099,15 +1212,15 @@ function createStyles(colors: any) {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: Radius.lg,
+    backgroundColor: colors.surface,
+    borderRadius: Radius.full,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
   previewOptionCorrect: {
-    backgroundColor: 'rgba(33,86,52,0.4)',
+    backgroundColor: `${colors.success}66`,
     borderWidth: 1,
-    borderColor: '#215634',
+    borderColor: colors.success,
   },
   previewOptionText: {
     color: colors.textPrimary,
@@ -1117,7 +1230,7 @@ function createStyles(colors: any) {
   },
   addToFrameBtn: {
     backgroundColor: colors.brand,
-    borderRadius: Radius.lg,
+    borderRadius: Radius.full,
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: 8,
@@ -1148,16 +1261,14 @@ function createStyles(colors: any) {
     justifyContent: 'center',
   },
   correctCircleActive: {
-    backgroundColor: '#215634',
-    borderColor: '#215634',
+    backgroundColor: colors.success,
+    borderColor: colors.success,
   },
   quizOptionInput: {
     flex: 1,
     backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.lg,
-    borderWidth: Stroke.standard,
-    borderColor: colors.border,
-    paddingHorizontal: Space.md + Space.xs,
+    paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
     color: colors.textPrimary,
     fontSize: Type.bodyEmphasis.size,
