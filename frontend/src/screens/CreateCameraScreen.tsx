@@ -9,6 +9,7 @@ import {
   Easing,
   PanResponder,
   Modal,
+  AccessibilityInfo,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -72,6 +73,7 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
 
   const [mode, setMode] = useState<CreateMode>(initialMode);
   const [showOverflow, setShowOverflow] = useState(false);
+  const [showGrid, setShowGrid] = useState(false);
   const opacity = useRef(new Animated.Value(0)).current;
   const modeTransition = useRef(new Animated.Value(1)).current;
 
@@ -135,6 +137,7 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
     const nextIndex = currentIndex + direction;
     if (nextIndex < 0 || nextIndex >= MODES.length) return;
     haptic.selection();
+    AccessibilityInfo.announceForAccessibility(`Switched to ${MODES[nextIndex].label} mode`);
     // Crossfade the camera content on mode change
     if (!reducedMotion) {
       Animated.sequence([
@@ -168,6 +171,8 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
 
   const handleModeChange = useCallback((newMode: CreateMode) => {
     haptic.selection();
+    const modeLabel = MODES.find((m) => m.key === newMode)?.label ?? newMode;
+    AccessibilityInfo.announceForAccessibility(`Switched to ${modeLabel} mode`);
     if (!reducedMotion) {
       Animated.sequence([
         Animated.timing(modeTransition, { toValue: 0, duration: 100, useNativeDriver: true }),
@@ -370,16 +375,33 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
   }, [colors.brand, colors.surfaceAlt, colors.textInverse, colors.textSecondary, handleBlankCanvas, handleGallery, handleModeChange, insets.bottom, mode, modeIndicatorX, modeIndicatorWidth, opacity]);
 
   const renderOverflowButton = useCallback(() => (
-    <Pressable
-      style={({ pressed }) => [s.topIconBtn, pressed && s.controlPressed]}
-      onPress={() => { haptic.light(); setShowOverflow((value) => !value); }}
-      accessibilityLabel="More create options"
-      accessibilityRole="button"
-      accessibilityState={{ expanded: showOverflow }}
-    >
-      <Ionicons name="ellipsis-horizontal" size={24} color="#fff" />
-    </Pressable>
-  ), [haptic, showOverflow]);
+    <View style={s.topRightRow}>
+      {/* Grid overlay toggle — rule of thirds composition aid */}
+      <Pressable
+        style={({ pressed }) => [s.topIconBtn, pressed && s.controlPressed]}
+        onPress={() => {
+          haptic.patterns.toggle();
+          setShowGrid((g) => !g);
+          AccessibilityInfo.announceForAccessibility(showGrid ? 'Grid hidden' : 'Grid shown');
+        }}
+        accessibilityLabel={showGrid ? 'Hide grid overlay' : 'Show grid overlay'}
+        accessibilityHint="Toggles rule-of-thirds composition grid"
+        accessibilityRole="button"
+        accessibilityState={{ selected: showGrid }}
+      >
+        <Ionicons name={showGrid ? 'grid' : 'grid-outline'} size={22} color="#fff" />
+      </Pressable>
+      <Pressable
+        style={({ pressed }) => [s.topIconBtn, pressed && s.controlPressed]}
+        onPress={() => { haptic.light(); setShowOverflow((value) => !value); }}
+        accessibilityLabel="More create options"
+        accessibilityRole="button"
+        accessibilityState={{ expanded: showOverflow }}
+      >
+        <Ionicons name="ellipsis-horizontal" size={24} color="#fff" />
+      </Pressable>
+    </View>
+  ), [haptic, showOverflow, showGrid]);
 
   return (
     <View style={s.container} {...panResponder.panHandlers}>
@@ -398,6 +420,16 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
           renderTopRightAccessory={renderOverflowButton}
         />
       </Animated.View>
+
+      {/* Rule-of-thirds grid overlay — composition aid, toggled by grid button */}
+      {showGrid && (
+        <View style={s.gridOverlay} pointerEvents="none">
+          <View style={s.gridLineVerticalLeft} />
+          <View style={s.gridLineVerticalRight} />
+          <View style={s.gridLineHorizontalTop} />
+          <View style={s.gridLineHorizontalBottom} />
+        </View>
+      )}
 
       {showOverflow && (
         <Modal
@@ -609,6 +641,49 @@ const s = StyleSheet.create({
   controlPressed: {
     opacity: 0.7,
     transform: [{ scale: 0.97 }],
+  },
+  // Top-right row — grid toggle + overflow button
+  topRightRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  // Rule-of-thirds grid overlay — semi-transparent white lines
+  gridOverlay: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 5,
+  },
+  gridLineVerticalLeft: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: '33.33%',
+    width: 1,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+  },
+  gridLineVerticalRight: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: '66.66%',
+    width: 1,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+  },
+  gridLineHorizontalTop: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: '33.33%',
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+  },
+  gridLineHorizontalBottom: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: '66.66%',
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.3)',
   },
   // ── Overflow bottom sheet ──
   overflowRoot: {

@@ -10,6 +10,7 @@ import {
   Image,
   Alert,
   ActivityIndicator,
+  AccessibilityInfo,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -40,6 +41,7 @@ import type {
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
+import { HapticPatterns } from '../utils/hapticPatterns';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Type, Typography, Space, Radius, Control, LetterSpacing } from '../theme/designTokens';
 import { Motion } from '../theme/motionTokens';
@@ -200,25 +202,46 @@ export default function PosterViewerScreen() {
     setProgress(0);
     if (!activeStory) return;
     if (frameIndex < activeStory.frames.length - 1) {
+      haptic.selection();
       setFrameIndex(frameIndex + 1);
+      AccessibilityInfo.announceForAccessibility(
+        `Frame ${frameIndex + 2} of ${activeStory.frames.length}`
+      );
     } else if (storyIndex < stories.length - 1) {
+      haptic.selection();
+      const nextStory = stories[storyIndex + 1];
+      const nextCreator = nextStory?.creator?.username ?? nextStory?.creatorId ?? '';
       setStoryIndex(storyIndex + 1);
       setFrameIndex(0);
+      AccessibilityInfo.announceForAccessibility(
+        `Now viewing ${nextCreator}'s poster. Frame 1 of ${nextStory?.frames.length ?? 1}`
+      );
     }
     // At the last frame of the last story, do NOT auto-exit.
     // Instagram/Snapchat pattern: user must manually swipe down or tap X.
     // The progress timer simply stops advancing.
-  }, [activeStory, frameIndex, storyIndex, stories.length]);
+  }, [activeStory, frameIndex, storyIndex, stories.length, stories, haptic]);
 
   const goPrevFrame = React.useCallback(() => {
     setProgress(0);
     if (frameIndex > 0) {
+      haptic.selection();
       setFrameIndex(frameIndex - 1);
+      AccessibilityInfo.announceForAccessibility(
+        `Frame ${frameIndex} of ${activeStory?.frames.length ?? 1}`
+      );
     } else if (storyIndex > 0) {
+      haptic.selection();
+      const prevStory = stories[storyIndex - 1];
+      const prevCreator = prevStory?.creator?.username ?? prevStory?.creatorId ?? '';
+      const prevFrameCount = prevStory?.frames.length ?? 1;
       setStoryIndex(storyIndex - 1);
-      setFrameIndex(Math.max(0, (stories[storyIndex - 1]?.frames.length ?? 1) - 1));
+      setFrameIndex(Math.max(0, prevFrameCount - 1));
+      AccessibilityInfo.announceForAccessibility(
+        `Now viewing ${prevCreator}'s poster. Frame ${prevFrameCount} of ${prevFrameCount}`
+      );
     }
-  }, [frameIndex, storyIndex, stories]);
+  }, [frameIndex, storyIndex, stories, activeStory, haptic]);
 
   // ── 3D cube transition between stories ──────────────────────────────
   // Instagram-style 3D perspective transition. When the story index changes,
@@ -554,7 +577,7 @@ export default function PosterViewerScreen() {
   }, [activeStory, haptic, navigation]);
 
   const handleSwipeDismiss = React.useCallback(() => {
-    haptic.light();
+    haptic.heavy();
     navigation.goBack();
   }, [haptic, navigation]);
 
@@ -602,7 +625,9 @@ export default function PosterViewerScreen() {
     haptic.light();
     try {
       await setPosterFrameReaction(activeFrame.id, reaction);
+      AccessibilityInfo.announceForAccessibility('Reaction sent');
     } catch {
+      haptic.error();
       show('Failed to set reaction', 'error');
     }
   }, [activeFrame, haptic, show]);
@@ -627,7 +652,7 @@ export default function PosterViewerScreen() {
     const now = Date.now();
     if (now - lastHeartBurstRef.current < DOUBLE_TAP_DEBOUNCE_MS) return;
     lastHeartBurstRef.current = now;
-    haptic.medium();
+    HapticPatterns.like();
     setHeartBurst({
       id: ++heartBurstIdRef.current,
       x,
@@ -687,12 +712,14 @@ export default function PosterViewerScreen() {
   const handleLongPressStart = React.useCallback(() => {
     didLongPressRef.current = true;
     setIsPaused(true);
-    haptic.light();
+    haptic.medium();
+    AccessibilityInfo.announceForAccessibility('Paused');
   }, [haptic]);
 
   const handleLongPressEnd = React.useCallback(() => {
     if (didLongPressRef.current) {
       setIsPaused(false);
+      AccessibilityInfo.announceForAccessibility('Resumed');
     }
   }, []);
 
@@ -764,8 +791,11 @@ export default function PosterViewerScreen() {
     try {
       const replyId = `reply_${typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36)}`;
       await createPosterReply(activeFrame.id, { id: replyId, body: text });
+      haptic.success();
       show('Reply sent', 'success');
+      AccessibilityInfo.announceForAccessibility('Reply sent');
     } catch {
+      haptic.error();
       show('Failed to send reply', 'error');
     }
   };
@@ -1022,6 +1052,18 @@ export default function PosterViewerScreen() {
           </AnimatedPressable>
 
           <View style={styles.topControlRow}>
+            <AnimatedPressable
+              style={styles.topIconBtn}
+              onPress={() => { haptic.patterns.toggle(); setIsMuted((m) => !m); }}
+              activeOpacity={0.85}
+              scaleValue={0.97}
+              hapticFeedback="light"
+              accessibilityLabel={isMuted ? 'Unmute sound' : 'Mute sound'}
+              accessibilityRole="button"
+              accessibilityHint="Toggles audio playback for video frames"
+            >
+              <Ionicons name={isMuted ? 'volume-mute-outline' : 'volume-high-outline'} size={20} color="#fff" />
+            </AnimatedPressable>
             <AnimatedPressable
               style={styles.topIconBtn}
               onPress={handleCopyLink}

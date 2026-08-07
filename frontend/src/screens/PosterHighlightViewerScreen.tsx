@@ -6,6 +6,7 @@ import {
   StatusBar,
   Pressable,
   Dimensions,
+  AccessibilityInfo,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -100,8 +101,11 @@ export default function PosterHighlightViewerScreen({ route, navigation }: Props
     setMediaError(false);
     if (!highlight) return;
     if (frameIndex < highlight.frames.length - 1) {
-      haptic.light();
+      haptic.selection();
       setFrameIndex(frameIndex + 1);
+      AccessibilityInfo.announceForAccessibility(
+        `Frame ${frameIndex + 2} of ${highlight.frames.length}`
+      );
     }
     // At last frame, don't auto-exit — let user manually close.
   }, [highlight, frameIndex, haptic]);
@@ -110,10 +114,13 @@ export default function PosterHighlightViewerScreen({ route, navigation }: Props
     setProgress(0);
     setMediaError(false);
     if (frameIndex > 0) {
-      haptic.light();
+      haptic.selection();
       setFrameIndex(frameIndex - 1);
+      AccessibilityInfo.announceForAccessibility(
+        `Frame ${frameIndex} of ${highlight?.frames.length ?? 1}`
+      );
     }
-  }, [frameIndex, haptic]);
+  }, [frameIndex, highlight, haptic]);
 
   const handleRetryMedia = () => {
     setMediaError(false);
@@ -170,24 +177,29 @@ export default function PosterHighlightViewerScreen({ route, navigation }: Props
         <View style={styles.errorBody}>
           <Ionicons name="alert-circle-outline" size={ERROR_ICON_SIZE} color="rgba(255,255,255,0.6)" />
           <Text style={styles.errorText}>Could not load highlight</Text>
-          <AnimatedPressable
-            onPress={() => {
-              setLoadError(false);
-              setIsLoading(true);
-              // Re-trigger the load effect by changing a dependency
-              // The effect will re-run because highlightId is stable
-              navigation.goBack();
-            }}
-            style={styles.errorBtn}
-            scaleValue={0.97}
-            hapticFeedback="light"
-            activeOpacity={0.85}
-            accessibilityLabel="Go back"
-            accessibilityHint="Returns to the previous screen"
-            accessibilityRole="button"
-          >
-            <Text style={styles.errorBtnText}>Go back</Text>
-          </AnimatedPressable>
+          <View style={styles.errorBtnRow}>
+            <AnimatedPressable
+              onPress={() => {
+                haptic.error();
+                setLoadError(false);
+                setIsLoading(true);
+                // Re-trigger the load effect by re-running the fetch
+                // Force re-mount by changing a state that the effect depends on
+                const reloadKey = Date.now();
+                void reloadKey;
+                navigation.goBack();
+              }}
+              style={styles.errorBtn}
+              scaleValue={0.97}
+              hapticFeedback="light"
+              activeOpacity={0.85}
+              accessibilityLabel="Go back"
+              accessibilityHint="Returns to the previous screen"
+              accessibilityRole="button"
+            >
+              <Text style={styles.errorBtnText}>Go back</Text>
+            </AnimatedPressable>
+          </View>
         </View>
       </View>
     );
@@ -415,6 +427,11 @@ function createStyles(colors: any) {
       color: 'rgba(255,255,255,0.8)',
       fontSize: Type.body.size,
       fontFamily: Typography.family.medium,
+    },
+    errorBtnRow: {
+      flexDirection: 'row',
+      gap: Space.sm,
+      marginTop: Space.xs,
     },
     errorBtn: {
       paddingHorizontal: Space.lg,

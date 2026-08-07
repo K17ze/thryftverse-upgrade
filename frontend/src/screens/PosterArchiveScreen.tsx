@@ -7,6 +7,7 @@ import {
   RefreshControl,
   Dimensions,
   Alert,
+  AccessibilityInfo,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -40,6 +41,16 @@ export default function PosterArchiveScreen({ navigation }: Props) {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState(false);
+  const [filter, setFilter] = useState<'all' | 'active' | 'archived'>('all');
+
+  const filteredStories = useMemo(() => {
+    if (filter === 'active') return stories.filter((s) => s.status === 'active');
+    if (filter === 'archived') return stories.filter((s) => s.status !== 'active');
+    return stories;
+  }, [stories, filter]);
+
+  const activeCount = useMemo(() => stories.filter((s) => s.status === 'active').length, [stories]);
+  const archivedCount = stories.length - activeCount;
 
   const loadArchive = useCallback(async (isRefresh = false) => {
     if (isRefresh) setIsRefreshing(true);
@@ -75,8 +86,11 @@ export default function PosterArchiveScreen({ navigation }: Props) {
             try {
               await deletePosterStory(storyId);
               setStories((prev) => prev.filter((s) => s.id !== storyId));
+              haptic.success();
+              AccessibilityInfo.announceForAccessibility('Story deleted');
               show('Story deleted', 'info');
             } catch {
+              haptic.error();
               show('Failed to delete story', 'error');
             }
           },
@@ -261,8 +275,37 @@ export default function PosterArchiveScreen({ navigation }: Props) {
         <View style={styles.iconBtn} />
       </View>
 
+      {/* Filter segmented control — All / Active / Archived */}
+      <View style={styles.filterRow}>
+        {([
+          { key: 'all', label: `All (${stories.length})` },
+          { key: 'active', label: `Active (${activeCount})` },
+          { key: 'archived', label: `Archived (${archivedCount})` },
+        ] as const).map((opt) => (
+          <AnimatedPressable
+            key={opt.key}
+            onPress={() => {
+              haptic.selection();
+              setFilter(opt.key);
+              AccessibilityInfo.announceForAccessibility(`Showing ${opt.label}`);
+            }}
+            style={[styles.filterChip, filter === opt.key && styles.filterChipActive]}
+            scaleValue={0.97}
+            activeOpacity={0.85}
+            hapticFeedback="light"
+            accessibilityLabel={opt.label}
+            accessibilityRole="button"
+            accessibilityState={{ selected: filter === opt.key }}
+          >
+            <Text style={[styles.filterChipText, filter === opt.key && styles.filterChipTextActive]}>
+              {opt.label}
+            </Text>
+          </AnimatedPressable>
+        ))}
+      </View>
+
       <FlashList
-        data={stories}
+        data={filteredStories}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         numColumns={2}
@@ -277,8 +320,20 @@ export default function PosterArchiveScreen({ navigation }: Props) {
         ListEmptyComponent={
           <View style={styles.emptyBody}>
             <Ionicons name="archive-outline" size={56} color={colors.textMuted} />
-            <Text style={styles.emptyTitle}>No archived stories</Text>
-            <Text style={styles.emptySubtitle}>Your published stories will appear here after 24 hours.</Text>
+            <Text style={styles.emptyTitle}>
+              {filter === 'active'
+                ? 'No active stories'
+                : filter === 'archived'
+                  ? 'No archived stories'
+                  : 'No stories yet'}
+            </Text>
+            <Text style={styles.emptySubtitle}>
+              {filter === 'active'
+                ? 'Your active stories will appear here while they are live.'
+                : filter === 'archived'
+                  ? 'Archived stories will appear here after 24 hours.'
+                  : 'Your published and archived stories will appear here.'}
+            </Text>
           </View>
         }
         // Performance: archive grids can grow large; FlashList v2 handles
@@ -331,6 +386,33 @@ function createStyles(colors: ThemeColors) {
   listContent: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.xl,
+  },
+  // Filter segmented control — flat chips, no card-on-card
+  filterRow: {
+    flexDirection: 'row',
+    gap: Space.xs,
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.sm,
+  },
+  filterChip: {
+    paddingVertical: Space.xs + 1,
+    paddingHorizontal: Space.sm + 2,
+    borderRadius: Radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
+  filterChipActive: {
+    backgroundColor: colors.brand,
+    borderColor: colors.brand,
+  },
+  filterChipText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+    color: colors.textSecondary,
+  },
+  filterChipTextActive: {
+    color: colors.textInverse,
+    fontFamily: Typography.family.semibold,
   },
   columnWrapper: {
     gap: Space.sm,

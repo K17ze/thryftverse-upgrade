@@ -34,6 +34,8 @@ export const Motion = {
     success: { damping: 12, stiffness: 120, mass: 1.0 },
     // Shared element transition — smooth, no overshoot
     sharedElement: { damping: 26, stiffness: 200, mass: 1.0 },
+    // Urgent attention pulse — unread indicators, alerts (tight, lively)
+    urgency: { damping: 14, stiffness: 220, mass: 0.9 },
   },
 
   // Easing curves (for non-spring animations)

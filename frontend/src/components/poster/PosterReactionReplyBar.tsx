@@ -6,6 +6,7 @@ import {
   TextInput,
   ScrollView,
   ActivityIndicator,
+  AccessibilityInfo,
 } from 'react-native';
 import Reanimated, {
   useSharedValue,
@@ -90,6 +91,7 @@ export function PosterReactionReplyBar({
   const [showReactions, setShowReactions] = useState(false);
   const [showQuickReplies, setShowQuickReplies] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [isInputFocused, setIsInputFocused] = useState(false);
 
   // Reanimated shared values for reaction tray entry
   const trayScaleSV = useSharedValue(0);
@@ -101,12 +103,14 @@ export function PosterReactionReplyBar({
     setIsSending(true);
     try {
       onReply(trimmed);
+      haptic.success();
+      AccessibilityInfo.announceForAccessibility('Reply sent');
       setReplyText('');
       setShowQuickReplies(false);
     } finally {
       setIsSending(false);
     }
-  }, [replyText, isSending, onReply]);
+  }, [replyText, isSending, onReply, haptic]);
 
   const toggleReactions = useCallback(() => {
     if (!showReactions) {
@@ -126,6 +130,8 @@ export function PosterReactionReplyBar({
   }, [showReactions, trayScaleSV, trayOpacitySV, haptic]);
 
   const handleQuickReply = (text: string) => {
+    haptic.selection();
+    AccessibilityInfo.announceForAccessibility('Quick reply sent');
     onReply(text);
     setShowQuickReplies(false);
   };
@@ -206,8 +212,10 @@ export function PosterReactionReplyBar({
               onPress={() => {
                 if (viewerReaction === r.type) {
                   onRemoveReaction();
+                  AccessibilityInfo.announceForAccessibility(`${r.label} reaction removed`);
                 } else {
                   onReaction(r.type);
+                  AccessibilityInfo.announceForAccessibility(`${r.label} reaction sent`);
                 }
                 setShowReactions(false);
               }}
@@ -273,7 +281,7 @@ export function PosterReactionReplyBar({
         )}
 
         {allowReplies && (
-          <View style={styles.replyInputWrap}>
+          <View style={[styles.replyInputWrap, isInputFocused && styles.replyInputWrapFocused]}>
             {/* True frosted-glass pill (Liquid Glass on iOS 26, BlurView
                 fallback elsewhere) replacing the flat semi-transparent
                 fill. The hairline border remains for glass-edge depth. */}
@@ -292,13 +300,20 @@ export function PosterReactionReplyBar({
                 setReplyText(text);
                 setShowQuickReplies(text.length === 0);
               }}
-              onFocus={() => setShowQuickReplies(replyText.length === 0)}
-              onBlur={() => setShowQuickReplies(false)}
+              onFocus={() => {
+                setShowQuickReplies(replyText.length === 0);
+                setIsInputFocused(true);
+              }}
+              onBlur={() => {
+                setShowQuickReplies(false);
+                setIsInputFocused(false);
+              }}
               maxLength={REPLY_MAX_LENGTH}
               returnKeyType="send"
               onSubmitEditing={handleSendReply}
               editable={!isSending}
               accessibilityLabel="Reply to story"
+              accessibilityHint="Type a reply and press send"
             />
             {showCounter && (
               <Text
@@ -458,6 +473,11 @@ function createStyles(colors: any) {
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: 'rgba(255,255,255,0.25)',
       overflow: 'hidden',
+    },
+    // Focus state — brighter border (1pt) per stroke grammar §4
+    replyInputWrapFocused: {
+      borderColor: 'rgba(255,255,255,0.55)',
+      borderWidth: 1,
     },
     // Glass background layer for the reply input pill.
     replyInputGlass: {

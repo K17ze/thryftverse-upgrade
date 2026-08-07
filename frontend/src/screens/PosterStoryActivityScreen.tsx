@@ -6,6 +6,7 @@ import {
   StatusBar,
   RefreshControl,
   LayoutChangeEvent,
+  AccessibilityInfo,
 } from 'react-native';
 import Reanimated, {
   useSharedValue,
@@ -92,6 +93,7 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
   const handleTabPress = useCallback((key: 'viewers' | 'reactions' | 'replies') => {
     haptic.selection();
     setActiveTab(key);
+    AccessibilityInfo.announceForAccessibility(`Showing ${key}`);
     const layout = tabLayoutsRef.current[key];
     if (layout) {
       tabIndicatorX.value = withSpring(layout.x, spring.entrance);
@@ -139,7 +141,12 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
       ? Math.round((completedViewers / viewerCount) * 100)
       : 0;
 
-    return { viewerCount, reactionCount, replyCount, totalEngagement, completionRate, totalFrames };
+    // Engagement rate: (reactions + replies) / viewers * 100
+    const engagementRate = viewerCount > 0
+      ? Math.round((totalEngagement / viewerCount) * 1000) / 10 // 1 decimal place
+      : 0;
+
+    return { viewerCount, reactionCount, replyCount, totalEngagement, completionRate, totalFrames, engagementRate };
   }, [activity]);
 
   const tabs = [
@@ -227,7 +234,7 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
   const renderSummaryHeader = () => {
     if (!activity) return null;
     return (
-      <View style={styles.summaryCard} accessibilityLabel="Story summary">
+      <View style={styles.summaryCard} accessibilityLabel={`Story summary: ${summary.viewerCount} viewers, ${summary.reactionCount} reactions, ${summary.replyCount} replies, ${summary.engagementRate}% engagement rate, ${summary.completionRate}% completion`}>
         <View style={styles.summaryMetric}>
           <Text style={styles.summaryMetricValue}>{summary.viewerCount}</Text>
           <Text style={styles.summaryMetricLabel}>Viewers</Text>
@@ -241,6 +248,11 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
         <View style={styles.summaryMetric}>
           <Text style={styles.summaryMetricValue}>{summary.replyCount}</Text>
           <Text style={styles.summaryMetricLabel}>Replies</Text>
+        </View>
+        <View style={styles.summaryDivider} />
+        <View style={styles.summaryMetric}>
+          <Text style={styles.summaryMetricValue}>{summary.engagementRate}%</Text>
+          <Text style={styles.summaryMetricLabel}>Engagement</Text>
         </View>
         <View style={styles.summaryDivider} />
         <View style={styles.summaryMetric}>

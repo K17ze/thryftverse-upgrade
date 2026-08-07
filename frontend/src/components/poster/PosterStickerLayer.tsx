@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, ViewStyle } from 'react-native';
+import { View, Text, StyleSheet, ViewStyle, AccessibilityInfo } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, {
@@ -147,6 +147,9 @@ function DraggableSticker({
     } else {
       selectionOpacity.value = withSpring(0, Motion.spring.entrance);
       handleScale.value = withSpring(0, Motion.spring.entrance);
+    }
+    if (isSelected) {
+      AccessibilityInfo.announceForAccessibility('Sticker selected');
     }
   }, [isSelected, reducedMotion, selectionOpacity, handleScale]);
 
@@ -308,7 +311,10 @@ function DraggableSticker({
                   scaleValue={0.97}
                   activeOpacity={0.85}
                   hapticFeedback="medium"
-                  onPress={() => onDelete(sticker.id)}
+                  onPress={() => {
+                    onDelete(sticker.id);
+                    AccessibilityInfo.announceForAccessibility('Sticker deleted');
+                  }}
                   accessibilityLabel="Delete sticker"
                   accessibilityHint="Removes this sticker from the frame"
                   accessibilityRole="button"

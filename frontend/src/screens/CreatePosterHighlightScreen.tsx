@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   FlatList,
   Dimensions,
+  AccessibilityInfo,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -93,6 +94,7 @@ export default function CreatePosterHighlightScreen({ navigation, route }: Props
   }, [stories]);
 
   const toggleFrame = (key: string, frameId: string) => {
+    haptic.selection();
     setSelectedFrames((prev) => {
       const next = new Map(prev);
       if (next.has(key)) {
@@ -105,10 +107,12 @@ export default function CreatePosterHighlightScreen({ navigation, route }: Props
           }
           return currCover;
         });
+        AccessibilityInfo.announceForAccessibility(`Frame deselected, ${next.size} total selected`);
       } else {
         next.set(key, frameId);
         // If this is the first selected frame, set it as the cover
         setCoverFrameId((currCover) => currCover ?? frameId);
+        AccessibilityInfo.announceForAccessibility(`Frame selected, ${next.size} total selected`);
       }
       return next;
     });
@@ -118,7 +122,9 @@ export default function CreatePosterHighlightScreen({ navigation, route }: Props
   const setCover = (frameId: string) => {
     // Only allow setting cover from selected frames
     if (Array.from(selectedFrames.values()).includes(frameId)) {
+      haptic.light();
       setCoverFrameId(frameId);
+      AccessibilityInfo.announceForAccessibility('Cover image set');
     }
   };
 
@@ -150,9 +156,12 @@ export default function CreatePosterHighlightScreen({ navigation, route }: Props
         frameIds,
       });
 
+      haptic.success();
+      AccessibilityInfo.announceForAccessibility('Highlight created');
       show('Highlight created', 'success');
       navigation.goBack();
     } catch {
+      haptic.error();
       show('Failed to create highlight', 'error');
     } finally {
       setIsSaving(false);
